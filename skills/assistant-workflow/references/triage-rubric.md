@@ -45,6 +45,11 @@ bind its exact existing-system evidence ref or `not_applicable` preparation
 basis, promote an initially small implementation to at least `medium`, select
 `harness_capable=true` and strict control, then require the existing pre-Build
 Done Contract, Harness Recipe, and runtime-ref gates.
+For `implement_only`, an accepted
+`approved_feature_preparation_qa_acceptance_obligation` is explicit QA
+evidence: bind its exact existing-system evidence ref or `not_applicable`
+preparation basis, set `qa_evaluation_mode=required`, and preserve the object
+through the existing post-Build Code Reviewer then QA Evaluator route.
 
 | Intensity | Use when |
 |---|---|
@@ -52,7 +57,9 @@ Done Contract, Harness Recipe, and runtime-ref gates.
 | `standard` | Ordinary medium+ source-changing work when `harness_capable=false` and `qa_evaluation_mode=not_required`. |
 | `strict` | High/critical risk, or—only when `execution_intent != prepare_only`—`harness_capable == true`, `qa_evaluation_mode == required`, explicit harness/QA acceptance, or trace/replay. |
 
-Never infer `strict` from size/delegation.
+Never infer `strict` from size/delegation. Small strict or required-QA execution
+selects `completion_tiers.small_elevated`: strict checkpoints and typed terminal
+review/QA evidence apply, while medium+ decomposition artifacts remain prohibited.
 
 ## Candidate Scope Scan
 

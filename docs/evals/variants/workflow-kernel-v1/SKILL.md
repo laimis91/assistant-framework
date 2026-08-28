@@ -23,7 +23,8 @@ Phase: `references/phases.md`; routing:
 
 - `delegation` before dispatch for indexed role/trigger fields.
 v4 uses `subagent_trigger_scope`; `verification_command` is non-empty argv
-`string[]`; assistant-review v6: Reviewer/QA packets.
+`string[]`; persisted Reviewer/QA wrappers bind current
+`producer_schema_version` and rebuild on mismatch.
 
 ## Execution
 

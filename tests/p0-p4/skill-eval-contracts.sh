@@ -146,6 +146,145 @@ EOF
 EOF
 }
 
+p0p4_write_assistant_review_batch_response() {
+    local response_path="$1"
+    local summary="$2"
+    local result="$3"
+    local coverage_complete="$4"
+    local batch_status="$5"
+    local include_finding="$6"
+
+    jq -n \
+        --arg summary "$summary" \
+        --arg result "$result" \
+        --arg batch_status "$batch_status" \
+        --argjson coverage_complete "$coverage_complete" \
+        --argjson include_finding "$include_finding" '
+        def finding:
+          {aggregate_finding_id: "aggregate-1", finding_id: "review_pass:pass-runtime:finding-1", source_finding_ids: ["review_pass:pass-runtime:finding-1"], source_provenance: [{source_kind: "review_pass", source_id: "pass-runtime"}], locus: "response barrier", file: "src/review.ts", line: 1, invariant: "all required pass evidence is aggregated", failure_mechanism: "later runtime finding", severity: "must-fix", description: "Later runtime/lifecycle finding", evidence: "later pass evidence", smallest_useful_fix: "Preserve the runtime invariant.", confidence_pct: 90};
+        def coverage_gap_id:
+          "coverage-gap:batch-1:pass-runtime:scope-1:runtime";
+        {
+          summary: $summary,
+          final_summary: {
+            reviewed_scope: ["src/review.ts"],
+            rounds: 1,
+            final_review_snapshot_id: "snapshot-1",
+            final_snapshot_identity: {basis: "diff_digest", value: "digest-1", captured_at: "2026-08-28T00:00:00Z", scope_manifest_digest: "manifest-1"},
+            coverage_complete: $coverage_complete,
+            coverage_ledger: [
+              {batch_id: "batch-1", review_snapshot_id: "snapshot-1", review_pass_id: "pass-contract", perspective: "contract_and_test_oracle", coverage_obligation: "contract", assigned_scope: ["scope-1"], scope_item_id: "scope-1", applicable_concern: "contract", terminal_state: "completed", coverage_status: "complete", evidence: "contract evidence"},
+              ({batch_id: "batch-1", review_snapshot_id: "snapshot-1", review_pass_id: "pass-runtime", perspective: "runtime_lifecycle_and_failure_paths", coverage_obligation: "runtime", assigned_scope: ["scope-1"], scope_item_id: "scope-1", applicable_concern: "runtime", terminal_state: (if $coverage_complete then "completed" elif $batch_status == "invalidated" then "invalidated" else "timed_out" end), coverage_status: (if $coverage_complete then "complete" elif $batch_status == "invalidated" then "invalidated" else "incomplete" end), evidence: "runtime evidence"} | if $coverage_complete then . else .coverage_gap_id = coverage_gap_id end)
+            ],
+            batch_summaries: [{started_batch_ordinal: 1, batch_id: "batch-1", review_snapshot_id: "snapshot-1", snapshot_identity: {basis: "diff_digest", value: "digest-1", captured_at: "2026-08-28T00:00:00Z", scope_manifest_digest: "manifest-1"}, batch_status: $batch_status, expected_response_count: 2, terminal_response_count: (if $batch_status == "complete" then 2 else 1 end), aggregate_rubric_recomputed: ($batch_status == "complete")}],
+            aggregation_ledger: (if $include_finding then [{source_provenance: [{source_kind: "review_pass", source_id: "pass-runtime"}], source_finding_ids: ["review_pass:pass-runtime:finding-1"], aggregate_finding_id: "aggregate-1", disposition: "retained", rationale: "Validated later-pass finding."}] elif $coverage_complete then [] else [{source_provenance: [{source_kind: "review_pass", source_id: "pass-runtime"}], source_coverage_gap_ids: [coverage_gap_id], disposition: "coverage_gap", rationale: "The current runtime tuple is incomplete."}] end),
+            aggregated_findings: (if $include_finding then [finding] else [] end),
+            result: $result,
+            fixed_items: [],
+            remaining_items: (if $result == "HAS_REMAINING_ITEMS" then [{severity: "must-fix", file: "src/review.ts", description: "Review cannot claim completion.", reason_unresolved: "Coverage or finding remains."}] else [] end),
+            coverage_gaps: (if $coverage_complete then [] else ["Current batch lacks complete terminal coverage."] end),
+            nits: []
+          }
+        }
+        | if $result == "CLEAN" or $result == "ISSUES_FIXED" then .final_summary.evidence_bounded_claim = "No material findings within the reviewed scope and available evidence" else . end
+    ' >"$response_path"
+}
+
+p0p4_add_assistant_review_audit_report() {
+    local response_path="$1"
+    local output_path="$2"
+
+    jq '
+        .audit_report = {
+          coverage_complete: .final_summary.coverage_complete,
+          batch_summaries: .final_summary.batch_summaries,
+          coverage_ledger_ref: "final_summary.coverage_ledger",
+          findings: [.final_summary.aggregated_findings[] | {
+            severity, file, line, description, aggregate_finding_id, finding_id,
+            source_finding_ids, source_provenance, confidence_pct, locus,
+            invariant, failure_mechanism, evidence, smallest_useful_fix
+          }],
+          summary: "All expected responses were aggregated without source mutation."
+        }
+    ' "$response_path" >"$output_path"
+    mv "$output_path" "$response_path"
+}
+
+p0p4_write_assistant_review_qa_response() {
+    local response_path="$1"
+    local summary="$2"
+    local final_verdict="$3"
+    local result="$4"
+    local requested_scope_status="$5"
+    local execution_prerequisite_status="$6"
+    local blocked="$7"
+
+    jq -n \
+        --arg summary "$summary" \
+        --arg final_verdict "$final_verdict" \
+        --arg result "$result" \
+        --arg requested_scope_status "$requested_scope_status" \
+        --arg execution_prerequisite_status "$execution_prerequisite_status" \
+        --argjson blocked "$blocked" '
+        {
+          summary: $summary,
+          qa_evaluation_result: {
+            rounds: 1,
+            final_verdict: $final_verdict,
+            result: $result,
+            acceptance_findings: (if $result == "CLEAN" then [] else [{severity: "blocker", criterion: "Carried obligation", evidence: "prep-42 evidence", impact: "Acceptance cannot be claimed.", recommendation: "Recover the exact evidence.", disposition: "remaining"}] end),
+            approved_feature_preparation_qa_acceptance_obligation_result: {
+              requested_scope_status: $requested_scope_status,
+              requested_scope_evidence: "checkout confirmation evidence",
+              execution_prerequisite_status: $execution_prerequisite_status,
+              execution_prerequisite_evidence: "build evidence",
+              requested_scope: "checkout-confirmation",
+              execution_prerequisite: "build-passed",
+              feature_preparation_scope: "existing_system",
+              source_feature_preparation_evidence_ref: "prep-42"
+            },
+            qa_scorecard: {
+              acceptance_coverage: (if $result == "CLEAN" then 5 else 1 end),
+              evidence_strength: (if $result == "CLEAN" then 5 else (if $blocked then 1 else 3 end) end),
+              domain_quality: 5,
+              final_readiness: (if $result == "CLEAN" then 5 else 1 end),
+              weighted_score: (if $result == "CLEAN" then 5 else (if $blocked then 1.80 else 2.30 end) end),
+              rationale: {acceptance_coverage: "Acceptance evidence was evaluated.", evidence_strength: "Evidence strength is recorded.", domain_quality: "not_applicable", final_readiness: "Readiness follows the terminal result."}
+            },
+            score_progression: [{round: 1, weighted_score: (if $result == "CLEAN" then 5 else (if $blocked then 1.80 else 2.30 end) end), failed_acceptance_count: (if $result == "CLEAN" then 0 else 1 end), delta: "initial", drift_status: "NOT_APPLICABLE"}],
+            evidence: [{source: "build verification", detail: "Evidence was evaluated for the carried obligation."}]
+          }
+        }
+        | if $blocked then .qa_evaluation_result.open_questions = ["Recover unavailable evidence."] else . end
+    ' >"$response_path"
+}
+
+p0p4_write_assistant_review_architecture_pack_response() {
+    local response_path="$1"
+    local summary="$2"
+    local finding_summary="$3"
+    local include_challenge_evidence="${4:-false}"
+
+    jq -n --arg summary "$summary" --arg finding_summary "$finding_summary" --argjson include_challenge_evidence "$include_challenge_evidence" '
+        {
+          summary: $summary,
+          architecture_decision_pack_review: {
+            freshness_and_facts: "Current facts are insufficient to accept the Pack.",
+            material_questions_and_invalidators: "The unresolved Pack evidence remains a material question.",
+            independent_challenge_evidence: "missing independent challenge evidence",
+            ownership_dependency_and_lifecycle_boundary: "Blocked pending the missing Pack evidence.",
+            design_pressure_checks: "Blocked pending the missing Pack evidence.",
+            semantic_type_and_primitive_exception_ledger: "not_applicable",
+            quality_scenario_falsifiability: "Blocked pending the missing Pack evidence.",
+            compatibility_and_extension_seam: "Blocked pending the missing Pack evidence.",
+            verification_handoff_and_rollback: "Recover the missing Pack evidence before review continues.",
+            architecture_pack_findings_summary: $finding_summary
+          }
+        }
+        | if $include_challenge_evidence then . else del(.architecture_decision_pack_review.independent_challenge_evidence) end
+    ' >"$response_path"
+}
+
 p0p4_write_skill_eval_responses() {
     local output_dir="$1"
     local omit_skill="${2:-}"
@@ -206,6 +345,12 @@ p0p4_write_skill_eval_responses() {
                     medium-implement-only-consumes-not-applicable-preparation-harness-obligation)
                         build_medium_implement_only_not_applicable_harness_handoff_response "$response_path" "$required_summary"
                         ;;
+                    medium-implement-only-consumes-preparation-qa-obligation)
+                        build_medium_implement_only_qa_handoff_response "$response_path" "$required_summary"
+                        ;;
+                    medium-implement-only-consumes-not-applicable-preparation-qa-obligation)
+                        build_medium_implement_only_not_applicable_qa_handoff_response "$response_path" "$required_summary"
+                        ;;
                     large-prepare-only-terminal-route)
                         build_large_prepare_only_terminal_response "$response_path" "$required_summary"
                         ;;
@@ -235,8 +380,8 @@ p0p4_write_skill_eval_responses() {
                     progressive-collaborative-contributor-evidence)
                         jq -n '{decision_item: {interaction_mode: "collaborative"}, decision_resolution: {contributor_evidence: [{contributor_role: "agent", contribution: "analysis", evidence_ref: "analysis-ref"}, {contributor_role: "human_or_user", contribution: "decision", evidence_ref: "decision-ref"}]}, route_clear: true}' >"$response_path"
                         ;;
-                    standard-pack-review-result-retains-checklist)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, review_result: {canonical_result_ref: "journal#final-summary", canonical_contract: "assistant-review/contracts/output.yaml#final_summary", delegation_path_ref: "journal#review-delegation", delegation_contract: "assistant-review/contracts/output.yaml#review_delegation_path", architecture_decision_pack_review_ref: "journal#pack-review", architecture_decision_pack_review_contract: "assistant-review/contracts/output.yaml#architecture_decision_pack_review", validation_status: "validated"}}' >"$response_path"
+                    standard-pack-review-result-retains-checklist|light-pack-review-result-retains-current-snapshot|incomplete-review-blocks-clean-final-handoff|blocked-qa-blocks-clean-final-handoff|rejected-qa-blocks-clean-final-handoff|fulfilled-preparation-qa-obligation-allows-completion|fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion|qa-reject-source-fix-requires-rebuild-review-before-resume|qa-reject-unchanged-source-allows-resume-with-digest-equality|small-strict-blocked-qa-requires-terminal-projection|small-required-rejected-qa-requires-terminal-projection|stale-assistant-review-version-invalidates-persisted-results)
+                        build_workflow_review_lifecycle_eval_response "$id" "$response_path" "$required_summary"
                         ;;
                     architecture-pack-*-blocks)
                         expected_missing_field="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.structured_json_assertions[] | select(.path == ["validation_result", "missing_field"]) | .expected' "$fixture_file")"
@@ -252,13 +397,63 @@ p0p4_write_skill_eval_responses() {
                 && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
                 case "$id" in
                     standalone-high-risk-record-without-challenge-remains-review-intensive)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive"}, validation_result: {status: "blocked", missing_field: "independent_challenge_evidence", evidence_or_gap: "The standalone ADR lacks the independent challenge evidence required by review_intensive mode."}}' >"$response_path"
+                        p0p4_write_assistant_review_architecture_pack_response "$response_path" "$required_summary" "Blocked: independent_challenge_evidence is missing for review_intensive mode." true
+                        jq '.architecture_design_mode = "review_intensive" | .architecture_decision_pack = {mode: "review_intensive"}' "$response_path" >"${response_path}.architecture"
+                        mv "${response_path}.architecture" "$response_path"
                         ;;
                     architecture-pack-empty-review-evidence-blocks)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, validation_result: {status: "blocked", missing_field: "boundaries_and_dependencies_or_design_pressure_checks", evidence_or_gap: "The compact Pack projection contains empty Pack review evidence."}}' >"$response_path"
+                        p0p4_write_assistant_review_architecture_pack_response "$response_path" "$required_summary" "Blocked: boundaries_and_dependencies_or_design_pressure_checks is empty."
                         ;;
                     architecture-pack-selected-design-recovery-blocks)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, validation_result: {status: "blocked", missing_field: "selected_design_evidence", evidence_or_gap: "The current Pack reference does not recover the selected decision evidence."}}' >"$response_path"
+                        p0p4_write_assistant_review_architecture_pack_response "$response_path" "$required_summary" "Blocked: selected_design_evidence is not recoverable from the current Pack reference."
+                        ;;
+                    audit-batch-waits-for-all-pass-results)
+                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "HAS_REMAINING_ITEMS" true complete true
+                        p0p4_add_assistant_review_audit_report "$response_path" "${response_path}.audit"
+                        ;;
+                    incomplete-review-batch-never-cleans)
+                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "HAS_REMAINING_ITEMS" false incomplete false
+                        ;;
+                    post-fix-review-uses-fresh-snapshot-batch)
+                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "ISSUES_FIXED" true complete false
+                        jq '.final_summary.rounds = 2
+                            | .final_summary.batch_summaries = [
+                                {started_batch_ordinal: 1, batch_id: "batch-0", review_snapshot_id: "snapshot-0", snapshot_identity: {basis: "diff_digest", value: "digest-0", captured_at: "2026-08-28T00:00:00Z", scope_manifest_digest: "manifest-0"}, batch_status: "invalidated", expected_response_count: 2, terminal_response_count: 1, aggregate_rubric_recomputed: false},
+                                (.final_summary.batch_summaries[0] | .started_batch_ordinal = 2)
+                              ]
+                            | .final_summary.additional_round_reasons = [{round: 2, reason: "changed_files", evidence_ref: "fix-1", detail: "The fix created a fresh final snapshot for re-review."}]
+                            | .final_summary.fixed_items = [{severity: "must-fix", file: "src/review.ts", description: "The original finding was fixed before the fresh batch.", fixed_in_round: 1}]
+                            | .final_summary.coverage_ledger = ((.final_summary.coverage_ledger | map(.batch_id = "batch-0" | .review_snapshot_id = "snapshot-0" | .terminal_state = "invalidated" | .coverage_status = "invalidated" | .evidence = "Invalidated by source mutation.")) + .final_summary.coverage_ledger)' "$response_path" >"${response_path}.post-fix"
+                        mv "${response_path}.post-fix" "$response_path"
+                        ;;
+                    audit-spec-review-fail-continues-complete-batch)
+                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "HAS_REMAINING_ITEMS" true complete true
+                        jq '.final_summary.aggregated_findings += [(.final_summary.aggregated_findings[0]
+                            | .aggregate_finding_id = "aggregate-spec-1"
+                            | .finding_id = "spec_review:finding-1"
+                            | .source_finding_ids = ["spec_review:finding-1"]
+                            | .source_provenance = [{source_kind: "spec_review", source_id: "spec-review-1"}]
+                            | .description = "Spec Review mismatch")]
+                            | .final_summary.aggregation_ledger += [{source_provenance: [{source_kind: "spec_review", source_id: "spec-review-1"}], source_finding_ids: ["spec_review:finding-1"], aggregate_finding_id: "aggregate-spec-1", disposition: "retained", rationale: "Retained Spec Review finding."}]' "$response_path" >"${response_path}.spec"
+                        mv "${response_path}.spec" "$response_path"
+                        p0p4_add_assistant_review_audit_report "$response_path" "${response_path}.audit"
+                        ;;
+                    in-flight-mutation-invalidates-review-batch)
+                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "HAS_REMAINING_ITEMS" false invalidated false
+                        ;;
+                    trivial-audit-uses-two-isolated-passes)
+                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "CLEAN" true complete false
+                        jq '.review_delegation_path = {subagent_policy_state: "subagents_unavailable", subagent_execution_mode: "direct_fallback", subagent_trigger_scope: ["small audit"], fresh_context_evidence: "fresh direct-fallback context"}' "$response_path" >"${response_path}.trivial"
+                        mv "${response_path}.trivial" "$response_path"
+                        ;;
+                    qa-obligation-echo-fulfills-exact-binding)
+                        p0p4_write_assistant_review_qa_response "$response_path" "$required_summary" accepted CLEAN fulfilled met false
+                        ;;
+                    qa-obligation-blocks-missing-or-mismatched-binding)
+                        p0p4_write_assistant_review_qa_response "$response_path" "$required_summary" rejected HAS_REMAINING_ITEMS failed missing false
+                        ;;
+                    qa-obligation-blocked-when-required-evidence-is-unavailable)
+                        p0p4_write_assistant_review_qa_response "$response_path" "$required_summary" blocked BLOCKED blocked blocked true
                         ;;
                     *)
                         fail "unhandled structured assistant-review eval case: $id"
@@ -1142,6 +1337,638 @@ else
     fail "skill eval runner --responses did not pass generated all-required response set: $(grep -E '^(FAIL|Summary:)' "$passing_response_output" | paste -sd ' | ' -)"
 fi
 
+test_start "assistant-review runtime grader rejects malformed canonical envelopes and claims"
+assistant_review_runtime_mutation_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-review-runtime.XXXXXX")"
+p0p4_register_cleanup "$assistant_review_runtime_mutation_output"
+assistant_review_runtime_mutation_failures=()
+while IFS='|' read -r assistant_review_case_id assistant_review_mutation; do
+    assistant_review_response="$passing_response_dir/assistant-review/$assistant_review_case_id.txt"
+    cp "$assistant_review_response" "$assistant_review_response.original"
+    jq "$assistant_review_mutation" "$assistant_review_response" >"$assistant_review_runtime_mutation_output"
+    mv "$assistant_review_runtime_mutation_output" "$assistant_review_response"
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review >"$passing_response_output" 2>&1 \
+        || ! grep -Fq $'FAIL\tassistant-review\t'"$assistant_review_case_id" "$passing_response_output" \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
+        assistant_review_runtime_mutation_failures+=("$assistant_review_case_id")
+    fi
+    mv "$assistant_review_response.original" "$assistant_review_response"
+done <<'EOF_ASSISTANT_REVIEW_RUNTIME_MUTATIONS'
+trivial-audit-uses-two-isolated-passes|del(.final_summary.final_snapshot_identity)
+trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger += [{}]
+trivial-audit-uses-two-isolated-passes|.final_summary.batch_summaries[0].batch_id = true
+trivial-audit-uses-two-isolated-passes|.final_summary.invented = true
+trivial-audit-uses-two-isolated-passes|.final_summary.evidence_bounded_claim = "No material findings within the reviewed scope and available evidence."
+qa-obligation-blocked-when-required-evidence-is-unavailable|.qa_evaluation_result.qa_scorecard.weighted_score = 2.30 | .qa_evaluation_result.score_progression[0].weighted_score = 2.30
+qa-obligation-blocked-when-required-evidence-is-unavailable|.qa_evaluation_result.score_progression += [{}]
+qa-obligation-blocked-when-required-evidence-is-unavailable|.qa_evaluation_result.evidence[0].source = true
+EOF_ASSISTANT_REVIEW_RUNTIME_MUTATIONS
+if [[ "${#assistant_review_runtime_mutation_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review runtime grader accepted malformed canonical envelopes or claims: ${assistant_review_runtime_mutation_failures[*]}"
+fi
+
+test_start "assistant-review runtime grader enforces v7 lifecycle correlations and QA truth tables"
+assistant_review_r9_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-review-r9.XXXXXX")"
+p0p4_register_cleanup "$assistant_review_r9_output"
+assistant_review_r9_failures=()
+while IFS='|' read -r assistant_review_r9_label assistant_review_case_id assistant_review_r9_mutation; do
+    assistant_review_response="$passing_response_dir/assistant-review/$assistant_review_case_id.txt"
+    cp "$assistant_review_response" "$assistant_review_response.original"
+    jq "$assistant_review_r9_mutation" "$assistant_review_response" >"$assistant_review_r9_output"
+    mv "$assistant_review_r9_output" "$assistant_review_response"
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review >"$passing_response_output" 2>&1 \
+        || ! grep -Fq $'FAIL\tassistant-review\t'"$assistant_review_case_id" "$passing_response_output" \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
+        assistant_review_r9_failures+=("$assistant_review_r9_label")
+    fi
+    mv "$assistant_review_response.original" "$assistant_review_response"
+done <<'EOF_ASSISTANT_REVIEW_R9_MUTATIONS'
+final-current-snapshot|audit-batch-waits-for-all-pass-results|.final_summary.final_review_snapshot_id = "foreign-snapshot"
+identity-nonblank|audit-batch-waits-for-all-pass-results|.final_summary.final_snapshot_identity.value = ""
+identity-current-batch|trivial-audit-uses-two-isolated-passes|.final_summary.final_snapshot_identity.value = "foreign-digest"
+reviewed-scope-nonblank|audit-batch-waits-for-all-pass-results|.final_summary.reviewed_scope = [""]
+incomplete-coverage-result|incomplete-review-batch-never-cleans|.final_summary.coverage_ledger[1].coverage_status = "complete"
+coverage-gap-id-omitted|incomplete-review-batch-never-cleans|del(.final_summary.coverage_ledger[1].coverage_gap_id)
+coverage-gap-ledger-omitted|incomplete-review-batch-never-cleans|.final_summary.aggregation_ledger = []
+coverage-gap-ledger-mismatch|incomplete-review-batch-never-cleans|.final_summary.aggregation_ledger[0].source_coverage_gap_ids = ["coverage-gap:foreign"]
+round-ordinal-additional-reason|post-fix-review-uses-fresh-snapshot-batch|.final_summary.rounds = 3 | .final_summary.batch_summaries += [{started_batch_ordinal:3,batch_id:"batch-2",review_snapshot_id:"snapshot-2",snapshot_identity:{basis:"diff_digest",value:"digest-2",captured_at:"2026-08-28T00:00:00Z",scope_manifest_digest:"manifest-2"},batch_status:"complete",expected_response_count:2,terminal_response_count:2,aggregate_rubric_recomputed:true}] | .final_summary.final_review_snapshot_id = "snapshot-2" | .final_summary.final_snapshot_identity = {basis:"diff_digest",value:"digest-2",captured_at:"2026-08-28T00:00:00Z",scope_manifest_digest:"manifest-2"} | .final_summary.coverage_ledger |= map(if .batch_id == "batch-1" then .batch_id = "batch-2" | .review_snapshot_id = "snapshot-2" else . end)
+round-batch-length|post-fix-review-uses-fresh-snapshot-batch|.final_summary.batch_summaries = [.final_summary.batch_summaries[1]]
+batch-identity-unique|post-fix-review-uses-fresh-snapshot-batch|.final_summary.batch_summaries[0].batch_id = .final_summary.batch_summaries[1].batch_id
+batch-terminal-count|audit-spec-review-fail-continues-complete-batch|.final_summary.batch_summaries[0].terminal_response_count = 1
+batch-rubric-recomputed|trivial-audit-uses-two-isolated-passes|.final_summary.batch_summaries[0].aggregate_rubric_recomputed = false
+invalidated-result|in-flight-mutation-invalidates-review-batch|.final_summary.result = "CLEAN" | .final_summary.coverage_complete = true | del(.final_summary.coverage_gaps) | .final_summary.evidence_bounded_claim = "No material findings within the reviewed scope and available evidence"
+incomplete-current-clean|incomplete-review-batch-never-cleans|.final_summary.result = "CLEAN"
+retained-must-fix-clean|audit-batch-waits-for-all-pass-results|.final_summary.result = "CLEAN" | .final_summary.evidence_bounded_claim = "No material findings within the reviewed scope and available evidence"
+clean-with-material-remaining|trivial-audit-uses-two-isolated-passes|.final_summary.remaining_items = [{severity:"must-fix",file:"src/review.ts",description:"Still open.",reason_unresolved:"Not fixed."}]
+clean-with-coverage-gap|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_gaps = ["Still incomplete."]
+issues-fixed-without-fixes|trivial-audit-uses-two-isolated-passes|.final_summary.result = "ISSUES_FIXED"
+issues-fixed-with-material-remaining|post-fix-review-uses-fresh-snapshot-batch|.final_summary.remaining_items = [{severity:"should-fix",file:"src/review.ts",description:"Still open.",reason_unresolved:"Not fixed."}]
+issues-fixed-with-coverage-gap|post-fix-review-uses-fresh-snapshot-batch|.final_summary.coverage_gaps = ["Still incomplete."]
+clean-with-session-fix|trivial-audit-uses-two-isolated-passes|.final_summary.fixed_items = [{severity:"must-fix",file:"src/review.ts",description:"Fixed.",fixed_in_round:1}]
+has-remaining-with-only-nit|trivial-audit-uses-two-isolated-passes|.final_summary.result = "HAS_REMAINING_ITEMS" | del(.final_summary.evidence_bounded_claim) | .final_summary.aggregated_findings = [{aggregate_finding_id:"aggregate-nit",finding_id:"review_pass:pass-contract:nit-1",source_finding_ids:["review_pass:pass-contract:nit-1"],source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],locus:"comment",file:"src/review.ts",invariant:"style",failure_mechanism:"cosmetic",severity:"nit",description:"Cosmetic.",evidence:"line 1",smallest_useful_fix:"Optional.",confidence_pct:90}] | .final_summary.aggregation_ledger = [{source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],source_finding_ids:["review_pass:pass-contract:nit-1"],aggregate_finding_id:"aggregate-nit",disposition:"retained",rationale:"Nit only."}] | .final_summary.remaining_items = []
+audit-findings-unclosed|audit-batch-waits-for-all-pass-results|.audit_report.findings = []
+coverage-evidence|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger[0].evidence = ""
+coverage-tuple-duplicate|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger += [.final_summary.coverage_ledger[0]]
+coverage-pass-count|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger[1].review_pass_id = "pass-contract"
+round2-reason-not-changed-files|post-fix-review-uses-fresh-snapshot-batch|.final_summary.additional_round_reasons[0].reason = "unresolved_finding"
+qa-rounds-progression|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.rounds = 2
+qa-round-eleven|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.rounds = 11
+qa-progression-round|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.score_progression[0].round = 2
+qa-half-step|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.qa_scorecard.acceptance_coverage = 4.7 | .qa_evaluation_result.qa_scorecard.weighted_score = 4.91 | .qa_evaluation_result.score_progression[0].weighted_score = 4.91
+qa-quarter-step|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.qa_scorecard.acceptance_coverage = 4.25 | .qa_evaluation_result.qa_scorecard.weighted_score = 4.84 | .qa_evaluation_result.score_progression[0].weighted_score = 4.84
+qa-out-of-range|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.qa_scorecard.final_readiness = 5.5 | .qa_evaluation_result.qa_scorecard.weighted_score = 5.13 | .qa_evaluation_result.score_progression[0].weighted_score = 5.13
+qa-negative-failed-count|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.score_progression[0].failed_acceptance_count = -1
+qa-success-obligation|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.requested_scope_status = "failed"
+qa-success-blocker|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.acceptance_findings = [{severity:"blocker",criterion:"Acceptance",evidence:"evidence",impact:"blocked",disposition:"remaining"}]
+qa-accepted-with-concern|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.acceptance_findings = [{severity:"concern",criterion:"Acceptance",evidence:"evidence",impact:"not accepted",disposition:"remaining"}]
+qa-verdict-result|qa-obligation-blocks-missing-or-mismatched-binding|.qa_evaluation_result.final_verdict = "accepted"
+qa-rejected-without-failure|qa-obligation-blocks-missing-or-mismatched-binding|.qa_evaluation_result.acceptance_findings = [] | .qa_evaluation_result.score_progression[0].failed_acceptance_count = 0
+qa-source-binding|qa-obligation-blocks-missing-or-mismatched-binding|.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.requested_scope = "wrong-scope"
+qa-evidence-ref-binding|qa-obligation-blocks-missing-or-mismatched-binding|.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.source_feature_preparation_evidence_ref = "wrong-ref"
+qa-feature-scope-binding|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.feature_preparation_scope = "not_applicable" | del(.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.source_feature_preparation_evidence_ref) | .qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.source_preparation_basis = "not_applicable"
+qa-both-source-bindings|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.source_preparation_basis = "not_applicable"
+qa-unknown-rubric|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.selected_domain_rubrics = ["invented_rubric"] | .qa_evaluation_result.domain_quality_scores = [{rubric_ref:"invented_rubric",dimension:"quality",score:5,action:"accepted",evidence:"evidence"}]
+qa-selected-rubric-without-scores|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.selected_domain_rubrics = ["documentation_quality"]
+qa-unscoped-domain-scores|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.domain_quality_scores = [{rubric_ref:"documentation_quality",dimension:"quality",score:5,action:"accepted",evidence:"evidence"}]
+qa-unscoped-domain-not-neutral|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.qa_scorecard.domain_quality = 4.5 | .qa_evaluation_result.qa_scorecard.weighted_score = 4.9 | .qa_evaluation_result.score_progression[0].weighted_score = 4.9
+qa-unscoped-domain-rationale|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.qa_scorecard.rationale.domain_quality = "No rubric was selected."
+qa-domain-score-closure|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.selected_domain_rubrics = ["documentation_quality","developer_experience"] | .qa_evaluation_result.domain_quality_scores = [{rubric_ref:"documentation_quality",dimension:"quality",score:5,action:"accepted",evidence:"evidence"}]
+qa-domain-not-applicable-score|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.selected_domain_rubrics = ["documentation_quality"] | .qa_evaluation_result.domain_quality_scores = [{rubric_ref:"documentation_quality",dimension:"quality",score:4.5,action:"not_applicable",evidence:"Generic evidence."}]
+qa-round1-delta|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.score_progression[0].delta = "+0.50"
+qa-derived-regression-status|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.rounds = 3 | .qa_evaluation_result.qa_scorecard.acceptance_coverage = 5 | .qa_evaluation_result.qa_scorecard.evidence_strength = 3 | .qa_evaluation_result.qa_scorecard.domain_quality = 5 | .qa_evaluation_result.qa_scorecard.final_readiness = 3 | .qa_evaluation_result.qa_scorecard.weighted_score = 4 | .qa_evaluation_result.score_progression = [{round:1,weighted_score:5,failed_acceptance_count:2,delta:"initial",drift_status:"NEUTRAL"},{round:2,weighted_score:4.5,failed_acceptance_count:1,delta:"-0.50",drift_status:"GENUINE"},{round:3,weighted_score:4,failed_acceptance_count:0,delta:"-0.50",drift_status:"GENUINE"}]
+qa-triggered-pivot|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.score_progression[0].drift_status = "STAGNATION"
+qa-blocked-tuple|qa-obligation-blocked-when-required-evidence-is-unavailable|.qa_evaluation_result.qa_scorecard.weighted_score = 1.81 | .qa_evaluation_result.score_progression[0].weighted_score = 1.81
+EOF_ASSISTANT_REVIEW_R9_MUTATIONS
+if [[ "${#assistant_review_r9_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review runtime grader accepted v7 lifecycle or QA truth-table mutations: ${assistant_review_r9_failures[*]}"
+fi
+
+test_start "assistant-review runtime grader uses decimal-safe QA half-up rounding"
+assistant_review_decimal_response="$passing_response_dir/assistant-review/qa-obligation-echo-fulfills-exact-binding.txt"
+cp "$assistant_review_decimal_response" "$assistant_review_decimal_response.original"
+jq '.qa_evaluation_result.qa_scorecard.acceptance_coverage = 4.5 | .qa_evaluation_result.qa_scorecard.evidence_strength = 4.5 | .qa_evaluation_result.qa_scorecard.domain_quality = 5 | .qa_evaluation_result.qa_scorecard.final_readiness = 5 | .qa_evaluation_result.qa_scorecard.weighted_score = 4.73 | .qa_evaluation_result.score_progression[0].weighted_score = 4.73' "$assistant_review_decimal_response" >"$assistant_review_r9_output"
+mv "$assistant_review_r9_output" "$assistant_review_decimal_response"
+if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review >"$passing_response_output" 2>&1 \
+    && grep -Fq $'PASS\tassistant-review\tqa-obligation-echo-fulfills-exact-binding' "$passing_response_output" \
+    && grep -Fq 'structured_json_assertion_failures=0' "$passing_response_output"; then
+    pass
+else
+    fail "assistant-review runtime grader did not accept exact 4.725=>4.73 QA half-up rounding"
+fi
+mv "$assistant_review_decimal_response.original" "$assistant_review_decimal_response"
+
+test_start "assistant-review QA score formula has exhaustive half-unit parity"
+if ruby -rbigdecimal -e '
+  weights = [30, 25, 20, 25]
+  count = 0
+  (2..10).to_a.repeated_permutation(4) do |units|
+    integer_scaled = (units.zip(weights).sum { |unit, weight| unit * weight } + 1) / 2
+    decimal_score = units.zip(weights).sum { |unit, weight| BigDecimal(unit.to_s) * weight / 200 }
+    decimal_scaled = decimal_score * 100
+    decimal_half_up = decimal_scaled.floor + (decimal_scaled.frac >= BigDecimal("0.5") ? 1 : 0)
+    abort "half-unit score mismatch: #{units.inspect}" unless integer_scaled == decimal_half_up
+    count += 1
+  end
+  abort "missing 4.725=>4.73 witness" unless ([9, 9, 10, 10].zip(weights).sum { |unit, weight| unit * weight } + 1) / 2 == 473
+  abort "unexpected combination count" unless count == 6561
+'; then
+    pass
+else
+    fail "assistant-review QA half-unit score formula diverges from decimal half-up rounding"
+fi
+
+test_start "assistant-review QA validates both obligation evidence-binding branches"
+assistant_review_not_applicable_response="$passing_response_dir/assistant-review/qa-obligation-echo-fulfills-exact-binding.txt"
+cp "$assistant_review_not_applicable_response" "$assistant_review_not_applicable_response.original"
+jq '.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.feature_preparation_scope = "not_applicable"
+    | del(.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.source_feature_preparation_evidence_ref)
+    | .qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.source_preparation_basis = "not_applicable"' "$assistant_review_not_applicable_response" >"$assistant_review_r9_output"
+mv "$assistant_review_r9_output" "$assistant_review_not_applicable_response"
+if assistant_review_lifecycle_semantics_valid "not-applicable-binding-unit" "$assistant_review_not_applicable_response"; then
+    pass
+else
+    fail "assistant-review QA rejected the valid not_applicable evidence-binding branch"
+fi
+mv "$assistant_review_not_applicable_response.original" "$assistant_review_not_applicable_response"
+
+test_start "assistant-review QA accepts a canonical non-blocking concern and scoped-domain projection"
+assistant_review_concern_response="$passing_response_dir/assistant-review/qa-obligation-echo-fulfills-exact-binding.txt"
+cp "$assistant_review_concern_response" "$assistant_review_concern_response.original"
+jq '.qa_evaluation_result.final_verdict = "accepted_with_concerns"
+    | .qa_evaluation_result.acceptance_findings = [{severity:"concern",criterion:"Documentation",evidence:"The limitation is documented.",impact:"Non-blocking limitation.",disposition:"remaining"}]
+    | .qa_evaluation_result.selected_domain_rubrics = ["documentation_quality"]
+    | .qa_evaluation_result.domain_quality_scores = [{rubric_ref:"documentation_quality",dimension:"accuracy",score:5,action:"accepted_with_concerns",evidence:"The scoped limitation is documented."}]' "$assistant_review_concern_response" >"$assistant_review_r9_output"
+mv "$assistant_review_r9_output" "$assistant_review_concern_response"
+if assistant_review_lifecycle_semantics_valid "qa-obligation-echo-fulfills-exact-binding" "$assistant_review_concern_response"; then
+    pass
+else
+    fail "assistant-review QA rejected a valid accepted_with_concerns/domain-rubric projection"
+fi
+mv "$assistant_review_concern_response.original" "$assistant_review_concern_response"
+
+test_start "assistant-review QA derives deltas and only pivots on consecutive regressions"
+assistant_review_nonconsecutive_response="$passing_response_dir/assistant-review/qa-obligation-echo-fulfills-exact-binding.txt"
+cp "$assistant_review_nonconsecutive_response" "$assistant_review_nonconsecutive_response.original"
+jq '.qa_evaluation_result.rounds = 4
+    | .qa_evaluation_result.qa_scorecard.acceptance_coverage = 5
+    | .qa_evaluation_result.qa_scorecard.evidence_strength = 4
+    | .qa_evaluation_result.qa_scorecard.domain_quality = 5
+    | .qa_evaluation_result.qa_scorecard.final_readiness = 4
+    | .qa_evaluation_result.qa_scorecard.weighted_score = 4.5
+    | .qa_evaluation_result.score_progression = [
+        {round:1,weighted_score:5,failed_acceptance_count:2,delta:"initial",drift_status:"NEUTRAL"},
+        {round:2,weighted_score:4.5,failed_acceptance_count:2,delta:"-0.50",drift_status:"REGRESSION"},
+        {round:3,weighted_score:5,failed_acceptance_count:1,delta:"+0.50",drift_status:"GENUINE"},
+        {round:4,weighted_score:4.5,failed_acceptance_count:0,delta:"-0.50",drift_status:"REGRESSION"}
+      ]
+    | del(.qa_evaluation_result.pivot_restart_signal)' "$assistant_review_nonconsecutive_response" >"$assistant_review_r9_output"
+mv "$assistant_review_r9_output" "$assistant_review_nonconsecutive_response"
+if assistant_review_lifecycle_semantics_valid "qa-obligation-echo-fulfills-exact-binding" "$assistant_review_nonconsecutive_response"; then
+    pass
+else
+    fail "assistant-review QA rejected valid derived deltas with nonconsecutive regressions"
+fi
+mv "$assistant_review_nonconsecutive_response.original" "$assistant_review_nonconsecutive_response"
+
+test_start "assistant-review QA requires a pivot for consecutive terminal regressions"
+assistant_review_regression_response="$passing_response_dir/assistant-review/qa-obligation-echo-fulfills-exact-binding.txt"
+cp "$assistant_review_regression_response" "$assistant_review_regression_response.original"
+jq '.qa_evaluation_result.rounds = 3
+    | .qa_evaluation_result.qa_scorecard.acceptance_coverage = 5
+    | .qa_evaluation_result.qa_scorecard.evidence_strength = 3
+    | .qa_evaluation_result.qa_scorecard.domain_quality = 5
+    | .qa_evaluation_result.qa_scorecard.final_readiness = 3
+    | .qa_evaluation_result.qa_scorecard.weighted_score = 4
+    | .qa_evaluation_result.score_progression = [
+        {round:1,weighted_score:5,failed_acceptance_count:2,delta:"initial",drift_status:"NEUTRAL"},
+        {round:2,weighted_score:4.5,failed_acceptance_count:1,delta:"-0.50",drift_status:"REGRESSION"},
+        {round:3,weighted_score:4,failed_acceptance_count:0,delta:"-0.50",drift_status:"REGRESSION"}
+      ]
+    | .qa_evaluation_result.pivot_restart_signal = {trigger:"repeated_REGRESSION",affected_round:3,evidence:[{source:"score_progression",detail:"Rounds 2 and 3 are consecutive regressions."}],recommended_recovery_focus:"Re-evaluate the failed acceptance path."}' "$assistant_review_regression_response" >"$assistant_review_r9_output"
+mv "$assistant_review_r9_output" "$assistant_review_regression_response"
+if assistant_review_lifecycle_semantics_valid "qa-obligation-echo-fulfills-exact-binding" "$assistant_review_regression_response"; then
+    pass
+else
+    fail "assistant-review QA rejected a valid consecutive-regression pivot signal"
+fi
+mv "$assistant_review_regression_response.original" "$assistant_review_regression_response"
+
+test_start "workflow grader validates normalized assistant-review producer envelopes"
+workflow_envelope_failures=()
+while IFS='|' read -r workflow_case_id workflow_mutation; do
+    workflow_response="$passing_response_dir/assistant-workflow/$workflow_case_id.txt"
+    cp "$workflow_response" "$workflow_response.original"
+    jq "$workflow_mutation" "$workflow_response" >"$assistant_review_r9_output"
+    mv "$assistant_review_r9_output" "$workflow_response"
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
+        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$workflow_case_id" "$passing_response_output" \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
+        workflow_envelope_failures+=("$workflow_case_id:$workflow_mutation")
+    fi
+    mv "$workflow_response.original" "$workflow_response"
+done <<'EOF_WORKFLOW_PRODUCER_ENVELOPE_MUTATIONS'
+fulfilled-preparation-qa-obligation-allows-completion|del(.canonical_qa_result.artifact.score_progression[0].delta)
+fulfilled-preparation-qa-obligation-allows-completion|.canonical_final_summary.artifact.final_snapshot_identity.value = "foreign-digest"
+fulfilled-preparation-qa-obligation-allows-completion|.canonical_qa_result.artifact.final_verdict = "accepted" | .canonical_qa_result.artifact.result = "HAS_REMAINING_ITEMS"
+fulfilled-preparation-qa-obligation-allows-completion|.canonical_qa_result.artifact.pivot_restart_signal = {trigger:"pivot",affected_round:1,evidence:[{source:"invented",detail:"No pivot was triggered."}],recommended_recovery_focus:"none"}
+qa-reject-source-fix-requires-rebuild-review-before-resume|del(.current_qa_delegation_path.artifact.fresh_context_evidence)
+EOF_WORKFLOW_PRODUCER_ENVELOPE_MUTATIONS
+if [[ "${#workflow_envelope_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow grader accepted producer-invalid assistant-review envelopes: ${workflow_envelope_failures[*]}"
+fi
+
+test_start "fixture validation resolves every assertion path operand against assistant-review contracts"
+assertion_path_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-assertion-paths.XXXXXX")"
+assertion_path_skill="$assertion_path_root/assistant-review"
+assertion_path_err="$assertion_path_root/validation.err"
+p0p4_register_cleanup "$assertion_path_root"
+mkdir -p "$assertion_path_skill/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" "$assertion_path_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-review/contracts" "$assertion_path_skill/contracts"
+cp "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" "$assertion_path_skill/evals/cases.json"
+assertion_path_failures=()
+for assertion_mutation in \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals","path":["final_summary","invented"],"expected":"x"}]' \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"path_absent","path":["final_summary","invented"]}]' \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals_path","path":["final_summary","result"],"other_path":["final_summary","invented"]}]' \
+    '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"required_when_equals","when_path":["final_summary","invented"],"value":"CLEAN","path":["final_summary","evidence_bounded_claim"],"expected_type":"string"}]'; do
+    jq "$assertion_mutation" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$assertion_path_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$assertion_path_skill" >/dev/null 2>"$assertion_path_err" \
+        || ! grep -Fq "undeclared assertion path" "$assertion_path_err"; then
+        assertion_path_failures+=("$assertion_mutation")
+    fi
+done
+jq '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"path_absent","path":["final_summary","additional_round_reasons"]}]' "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$assertion_path_skill/evals/cases.json"
+if ! "$skill_eval_runner" --validate-fixture --skill "$assertion_path_skill" >/dev/null 2>"$assertion_path_err"; then
+    assertion_path_failures+=("conditional path_absent")
+fi
+jq '(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"path_absent","path":["final_summary","result"]}]' "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$assertion_path_skill/evals/cases.json"
+if "$skill_eval_runner" --validate-fixture --skill "$assertion_path_skill" >/dev/null 2>"$assertion_path_err" \
+    || ! grep -Fq "required field used by path_absent" "$assertion_path_err"; then
+    assertion_path_failures+=("required path_absent")
+fi
+if [[ "${#assertion_path_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "fixture validation did not enforce declared assertion paths: ${assertion_path_failures[*]}"
+fi
+
+test_start "workflow fixture validation rejects undeclared triage assertion operands"
+workflow_assertion_path_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-workflow-assertion-paths.XXXXXX")"
+workflow_assertion_path_skill="$workflow_assertion_path_root/assistant-workflow"
+workflow_assertion_path_err="$workflow_assertion_path_root/validation.err"
+p0p4_register_cleanup "$workflow_assertion_path_root"
+mkdir -p "$workflow_assertion_path_skill/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$workflow_assertion_path_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$workflow_assertion_path_skill/contracts"
+workflow_assertion_path_failures=()
+while IFS='|' read -r workflow_assertion_operand workflow_assertion_mutation; do
+    jq "$workflow_assertion_mutation" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$workflow_assertion_path_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$workflow_assertion_path_skill" >/dev/null 2>"$workflow_assertion_path_err" \
+        || ! grep -Fq "undeclared assertion path" "$workflow_assertion_path_err"; then
+        workflow_assertion_path_failures+=("$workflow_assertion_operand")
+    fi
+done <<'EOF_WORKFLOW_ASSERTION_OPERANDS'
+path|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals","path":["triage_result","invented_field"],"expected":"x"}]
+path_absent|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"path_absent","path":["triage_result","invented_field"]}]
+other_path|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals_path","path":["triage_result","task_type"],"other_path":["triage_result","invented_field"]}]
+when_path|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"required_when_equals","when_path":["triage_result","invented_field"],"value":"feature","path":["triage_result","task_type"],"expected_type":"string"}]
+field|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_field_values_exact","path":["triage_result","required_agents"],"field":"invented_field","expected_values":["x"]}]
+fields|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_items_nonempty_fields","path":["triage_result","required_agents"],"fields":["invented_field"]}]
+EOF_WORKFLOW_ASSERTION_OPERANDS
+if [[ "${#workflow_assertion_path_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow fixture validation accepted undeclared triage assertion operands: ${workflow_assertion_path_failures[*]}"
+fi
+
+test_start "fixture validation rejects unknown roots across every assertion operand"
+unknown_root_failures=()
+while IFS='|' read -r unknown_root_operand unknown_root_mutation; do
+    jq "$unknown_root_mutation" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$workflow_assertion_path_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$workflow_assertion_path_skill" >/dev/null 2>"$workflow_assertion_path_err" \
+        || ! grep -Fq "unknown assertion root" "$workflow_assertion_path_err"; then
+        unknown_root_failures+=("$unknown_root_operand")
+    fi
+done <<'EOF_UNKNOWN_ASSERTION_ROOTS'
+path|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals","path":["invented_root"],"expected":"x"}]
+path_absent|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"path_absent","path":["invented_root"]}]
+other_path|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals_path","path":["triage_result","task_type"],"other_path":["invented_root"]}]
+when_path|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"required_when_equals","when_path":["invented_root"],"value":"feature","path":["triage_result","task_type"],"expected_type":"string"}]
+field|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_field_values_exact","path":["invented_root"],"field":"value","expected_values":["x"]}]
+fields|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_items_nonempty_fields","path":["invented_root"],"fields":["value"]}]
+EOF_UNKNOWN_ASSERTION_ROOTS
+if [[ "${#unknown_root_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "fixture validation accepted unknown assertion roots: ${unknown_root_failures[*]}"
+fi
+
+test_start "fixture validation rejects assertion literals outside resolved enums"
+impossible_literal_failures=()
+while IFS='|' read -r impossible_operator impossible_mutation; do
+    jq "$impossible_mutation" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$workflow_assertion_path_skill/evals/cases.json"
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill "$workflow_assertion_path_skill" >/dev/null 2>"$workflow_assertion_path_err" \
+        || ! grep -Fq "assertion literal outside contract schema" "$workflow_assertion_path_err"; then
+        impossible_literal_failures+=("$impossible_operator")
+    fi
+done <<'EOF_IMPOSSIBLE_ASSERTION_LITERALS'
+equals|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"equals","path":["triage_result","size"],"expected":"bogus"}]
+one_of|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"one_of","path":["triage_result","size"],"expected_values":["small","bogus"]}]
+array_field_values_exact|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_field_values_exact","path":["architecture_mapping_evidence","design_pressure_checks"],"field":"concern","expected_values":["bogus"]}]
+array_object_values_exact|(.cases[0].machine_expectations.structured_json_assertions) = [{"operator":"array_object_values_exact","path":["architecture_mapping_evidence","design_pressure_checks"],"fields":["concern","status","evidence_or_gap","source_ref"],"expected_objects":[{"concern":"bogus","status":"observed","evidence_or_gap":"evidence","source_ref":"source"}]}]
+EOF_IMPOSSIBLE_ASSERTION_LITERALS
+if [[ "${#impossible_literal_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "fixture validation accepted impossible enum literals: ${impossible_literal_failures[*]}"
+fi
+
+test_start "assistant-review eval artifact assertions resolve through the canonical output schema"
+if ruby -rjson -ryaml -e '
+  output = YAML.load_file(ARGV.fetch(0))
+  fixture = JSON.parse(File.read(ARGV.fetch(1)))
+  artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
+  producer_case_ids = %w[
+    audit-batch-waits-for-all-pass-results
+    incomplete-review-batch-never-cleans
+    post-fix-review-uses-fresh-snapshot-batch
+    audit-spec-review-fail-continues-complete-batch
+    in-flight-mutation-invalidates-review-batch
+    trivial-audit-uses-two-isolated-passes
+    qa-obligation-echo-fulfills-exact-binding
+    qa-obligation-blocks-missing-or-mismatched-binding
+    qa-obligation-blocked-when-required-evidence-is-unavailable
+  ]
+  resolve = lambda do |path|
+    field = artifacts[path.fetch(0)]
+    path.drop(1).each do |segment|
+      if segment.is_a?(Numeric)
+        field = nil unless field&.fetch("type", "")&.end_with?("[]")
+      else
+        field = field&.fetch("object_fields", [])&.find { |candidate| candidate["name"] == segment }
+      end
+    end
+    field
+  end
+  valid_enum_values = lambda do |field, assertion|
+    enum_values = field["enum_values"]
+    return true unless enum_values
+    asserted = case assertion.fetch("operator")
+               when "equals" then [assertion["expected"]]
+               when "one_of", "array_field_values_exact" then assertion.fetch("expected_values")
+               when "array_object_values_exact" then assertion.fetch("expected_objects").map { |object| object[field.fetch("name")] }
+               else []
+               end
+    asserted.all? { |value| enum_values.include?(value) }
+  end
+  valid = fixture.fetch("cases").select { |test_case| producer_case_ids.include?(test_case.fetch("id")) }.all? do |test_case|
+    assertions = test_case.dig("machine_expectations", "structured_json_assertions") || []
+    !assertions.empty? && assertions.all? do |assertion|
+      field = resolve.call(assertion.fetch("path"))
+      next false unless field
+      operands = [assertion["path"]]
+      operands << assertion["other_path"] if assertion["other_path"]
+      operands << assertion["when_path"] if assertion["when_path"]
+      next false unless operands.all? { |path| resolve.call(path) }
+      next false if assertion["operator"] == "path_absent" && field["required"] == true
+      if assertion["field"]
+        field = field.fetch("object_fields", []).find { |candidate| candidate["name"] == assertion["field"] }
+        next field && valid_enum_values.call(field, assertion)
+      elsif assertion["fields"]
+        child_fields = assertion["fields"].map { |name| field.fetch("object_fields", []).find { |candidate| candidate["name"] == name } }
+        next child_fields.all? && child_fields.all? { |child| valid_enum_values.call(child, assertion) }
+      end
+      field && valid_enum_values.call(field, assertion)
+    end
+  end
+  exit valid ? 0 : 1
+' "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"; then
+    pass
+else
+    fail "assistant-review eval assertions use undeclared artifact paths, fields, or enum values"
+fi
+
+assistant_review_final_summary_has_v7_envelope() {
+    local response_path="$1"
+    local expected_review_batch_status="$2"
+
+    jq -e --arg expected_review_batch_status "$expected_review_batch_status" '
+        def required_fields($fields):
+            . as $object | (($fields - ($object | keys)) | length == 0);
+        . as $response
+        | (.final_summary | type == "object")
+        and ($response.final_summary | required_fields(["reviewed_scope", "rounds", "final_review_snapshot_id", "final_snapshot_identity", "coverage_complete", "coverage_ledger", "batch_summaries", "aggregation_ledger", "aggregated_findings", "result", "fixed_items", "nits"]))
+        and (.final_summary.reviewed_scope | type == "array" and length > 0)
+        and (.final_summary.rounds | type == "number")
+        and (.final_summary.final_review_snapshot_id | type == "string")
+        and (.final_summary.final_snapshot_identity | type == "object"
+            and required_fields(["basis", "value", "captured_at", "scope_manifest_digest"])
+            and (.basis as $basis | ["git_revision", "diff_digest", "content_digest", "task_or_pr_revision"] | index($basis)))
+        and (.final_summary.coverage_complete | type == "boolean")
+        and (.final_summary.coverage_ledger | type == "array" and length > 0)
+        and all(.final_summary.coverage_ledger[]; type == "object"
+            and required_fields(["batch_id", "review_snapshot_id", "review_pass_id", "perspective", "coverage_obligation", "assigned_scope", "scope_item_id", "applicable_concern", "terminal_state", "coverage_status", "evidence"])
+            and (.terminal_state as $terminal_state | ["completed", "needs_context", "blocked", "timed_out", "failed", "invalidated"] | index($terminal_state))
+            and (.coverage_status as $coverage_status | ["complete", "incomplete", "invalidated"] | index($coverage_status)))
+        and (.final_summary.batch_summaries | type == "array" and length > 0)
+        and (.final_summary.batch_summaries[-1].batch_status == $expected_review_batch_status)
+        and all(.final_summary.batch_summaries[]; type == "object"
+            and required_fields(["started_batch_ordinal", "batch_id", "review_snapshot_id", "batch_status", "expected_response_count", "terminal_response_count", "aggregate_rubric_recomputed"])
+            and (.batch_status as $batch_status | ["complete", "incomplete", "invalidated"] | index($batch_status)))
+        and (.final_summary.aggregation_ledger | type == "array")
+        and all(.final_summary.aggregation_ledger[]; type == "object"
+            and required_fields(["source_provenance", "disposition", "rationale"])
+            and (.disposition as $disposition | ["retained", "merged", "observation", "rejected_invalid", "coverage_gap"] | index($disposition)))
+        and (.final_summary.aggregated_findings | type == "array")
+        and all(.final_summary.aggregated_findings[]; type == "object"
+            and required_fields(["aggregate_finding_id", "finding_id", "source_finding_ids", "source_provenance", "locus", "file", "invariant", "failure_mechanism", "severity", "description", "evidence", "smallest_useful_fix", "confidence_pct"])
+            and (.severity as $severity | ["must-fix", "should-fix", "nit"] | index($severity)))
+        and (["CLEAN", "ISSUES_FIXED", "HAS_REMAINING_ITEMS"] | index($response.final_summary.result))
+        and (.final_summary.fixed_items | type == "array")
+        and (.final_summary.nits | type == "array")
+        and (if $response.final_summary.result == "HAS_REMAINING_ITEMS" then ($response.final_summary.remaining_items | type == "array") else true end)
+        and (if $response.final_summary.coverage_complete then true else ($response.final_summary.coverage_gaps | type == "array" and length > 0) end)
+        and (if $response.final_summary.result == "CLEAN" or $response.final_summary.result == "ISSUES_FIXED" then ($response.final_summary.evidence_bounded_claim | type == "string") else true end)
+    ' "$response_path" >/dev/null
+}
+
+assistant_review_qa_has_v7_envelope() {
+    local response_path="$1"
+    local requires_open_questions="$2"
+
+    jq -e --argjson requires_open_questions "$requires_open_questions" '
+        def required_fields($fields):
+            . as $object | (($fields - ($object | keys)) | length == 0);
+        . as $response
+        | (.qa_evaluation_result | type == "object")
+        and ($response.qa_evaluation_result | required_fields(["rounds", "final_verdict", "result", "acceptance_findings", "approved_feature_preparation_qa_acceptance_obligation_result", "qa_scorecard", "score_progression", "evidence"]))
+        and (.qa_evaluation_result.rounds | type == "number")
+        and (["accepted", "accepted_with_concerns", "rejected", "blocked"] | index($response.qa_evaluation_result.final_verdict))
+        and (["CLEAN", "ISSUES_FIXED", "HAS_REMAINING_ITEMS", "BLOCKED"] | index($response.qa_evaluation_result.result))
+        and (.qa_evaluation_result.acceptance_findings | type == "array")
+        and all(.qa_evaluation_result.acceptance_findings[]; type == "object"
+            and required_fields(["severity", "criterion", "evidence", "impact", "disposition"])
+            and (.severity as $severity | ["blocker", "concern", "observation"] | index($severity))
+            and (.disposition as $disposition | ["resolved", "remaining", "not_applicable"] | index($disposition)))
+        and (.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result | type == "object"
+            and required_fields(["requested_scope_status", "requested_scope_evidence", "execution_prerequisite_status", "execution_prerequisite_evidence", "requested_scope", "execution_prerequisite", "feature_preparation_scope", "source_feature_preparation_evidence_ref"])
+            and (.requested_scope_status as $requested_scope_status | ["fulfilled", "blocked", "failed"] | index($requested_scope_status))
+            and (.execution_prerequisite_status as $execution_prerequisite_status | ["met", "missing", "blocked"] | index($execution_prerequisite_status))
+            and (.feature_preparation_scope == "existing_system"))
+        and (.qa_evaluation_result.qa_scorecard | type == "object"
+            and required_fields(["acceptance_coverage", "evidence_strength", "domain_quality", "final_readiness", "weighted_score", "rationale"])
+            and (.rationale | type == "object" and required_fields(["acceptance_coverage", "evidence_strength", "domain_quality", "final_readiness"])))
+        and (.qa_evaluation_result.score_progression | type == "array" and length > 0)
+        and all(.qa_evaluation_result.score_progression[]; type == "object"
+            and required_fields(["round", "weighted_score", "failed_acceptance_count", "drift_status"])
+            and (.drift_status as $drift_status | ["GENUINE", "SUSPICIOUS", "DRIFT", "REGRESSION", "STAGNATION", "NEUTRAL", "NOT_APPLICABLE"] | index($drift_status)))
+        and (.qa_evaluation_result.evidence | type == "array" and length > 0)
+        and all(.qa_evaluation_result.evidence[]; type == "object" and required_fields(["source", "detail"]))
+        and (if $requires_open_questions then ($response.qa_evaluation_result.open_questions | type == "array" and length > 0) else true end)
+    ' "$response_path" >/dev/null
+}
+
+test_start "assistant-review batch and deferred-QA evals use canonical v7 output envelopes"
+assistant_review_envelope_failures=()
+while IFS='|' read -r assistant_review_case_id assistant_review_batch_status; do
+    assistant_review_response="$passing_response_dir/assistant-review/$assistant_review_case_id.txt"
+    if ! assistant_review_final_summary_has_v7_envelope "$assistant_review_response" "$assistant_review_batch_status"; then
+        assistant_review_envelope_failures+=("$assistant_review_case_id:final_summary")
+    fi
+done <<'EOF_ASSISTANT_REVIEW_FINAL_SUMMARIES'
+audit-batch-waits-for-all-pass-results|complete
+incomplete-review-batch-never-cleans|incomplete
+post-fix-review-uses-fresh-snapshot-batch|complete
+audit-spec-review-fail-continues-complete-batch|complete
+in-flight-mutation-invalidates-review-batch|invalidated
+trivial-audit-uses-two-isolated-passes|complete
+EOF_ASSISTANT_REVIEW_FINAL_SUMMARIES
+for assistant_review_case_id in audit-batch-waits-for-all-pass-results audit-spec-review-fail-continues-complete-batch; do
+    assistant_review_response="$passing_response_dir/assistant-review/$assistant_review_case_id.txt"
+    if ! jq -e '
+        def required_fields($fields):
+            . as $object | (($fields - ($object | keys)) | length == 0);
+        . as $response
+        | (.audit_report | type == "object")
+        and ($response.audit_report | required_fields(["coverage_complete", "batch_summaries", "coverage_ledger_ref", "findings", "summary"]))
+        and (.audit_report.coverage_complete | type == "boolean")
+        and (.audit_report.batch_summaries | type == "array" and length > 0)
+        and (.audit_report.coverage_ledger_ref | type == "string")
+        and (.audit_report.findings | type == "array")
+        and all(.audit_report.findings[]; type == "object"
+            and required_fields(["severity", "file", "description", "aggregate_finding_id", "finding_id", "source_finding_ids", "source_provenance", "confidence_pct", "locus", "invariant", "failure_mechanism", "evidence", "smallest_useful_fix"])
+            and (.severity as $severity | ["must-fix", "should-fix", "nit"] | index($severity)))
+        and (.final_summary.fixed_items == [])
+    ' "$assistant_review_response" >/dev/null; then
+        assistant_review_envelope_failures+=("$assistant_review_case_id:audit")
+    fi
+done
+for assistant_review_case_id in qa-obligation-echo-fulfills-exact-binding qa-obligation-blocks-missing-or-mismatched-binding; do
+    if ! assistant_review_qa_has_v7_envelope "$passing_response_dir/assistant-review/$assistant_review_case_id.txt" false; then
+        assistant_review_envelope_failures+=("$assistant_review_case_id:qa")
+    fi
+done
+if ! assistant_review_qa_has_v7_envelope "$passing_response_dir/assistant-review/qa-obligation-blocked-when-required-evidence-is-unavailable.txt" true; then
+    assistant_review_envelope_failures+=("qa-obligation-blocked-when-required-evidence-is-unavailable:qa")
+fi
+if [[ "${#assistant_review_envelope_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review evals do not use canonical v7 envelopes: ${assistant_review_envelope_failures[*]}"
+fi
+
+test_start "assistant-review batch and deferred-QA structured evals reject false-pass mutations"
+review_structured_mutation_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-review-structured.XXXXXX")"
+p0p4_register_cleanup "$review_structured_mutation_output"
+review_structured_mutation_failures=()
+while IFS='|' read -r review_case_id review_mutation; do
+    review_response="$passing_response_dir/assistant-review/$review_case_id.txt"
+    cp "$review_response" "$review_response.original"
+    jq "$review_mutation" "$review_response" >"$review_structured_mutation_output"
+    mv "$review_structured_mutation_output" "$review_response"
+    if [[ "$(count_structured_json_assertion_failures "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" "$review_case_id" "$review_response")" -eq 0 ]]; then
+        review_structured_mutation_failures+=("$review_case_id")
+    fi
+    mv "$review_response.original" "$review_response"
+done <<'EOF_REVIEW_STRUCTURED_MUTATIONS'
+audit-batch-waits-for-all-pass-results|.final_summary.batch_summaries[0].terminal_response_count = 1
+incomplete-review-batch-never-cleans|.final_summary.result = "CLEAN"
+post-fix-review-uses-fresh-snapshot-batch|.final_summary.batch_summaries = [{"started_batch_ordinal":1,"batch_id":"batch-1","review_snapshot_id":"snapshot-1","batch_status":"complete","expected_response_count":2,"terminal_response_count":2,"aggregate_rubric_recomputed":true}]
+audit-spec-review-fail-continues-complete-batch|.audit_report.findings = []
+in-flight-mutation-invalidates-review-batch|.final_summary.batch_summaries[0].batch_status = "complete"
+trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger = [.final_summary.coverage_ledger[0]]
+qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result.source_feature_preparation_evidence_ref = "prep-99"
+qa-obligation-blocks-missing-or-mismatched-binding|.qa_evaluation_result.final_verdict = "accepted"
+qa-obligation-blocked-when-required-evidence-is-unavailable|.qa_evaluation_result.result = "CLEAN"
+EOF_REVIEW_STRUCTURED_MUTATIONS
+if [[ "${#review_structured_mutation_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review structured evals accepted false-pass mutations: ${review_structured_mutation_failures[*]}"
+fi
+
+test_start "assistant-review canonical envelopes reject missing and invented-only fields"
+review_schema_mutation_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-review-schema.XXXXXX")"
+p0p4_register_cleanup "$review_schema_mutation_output"
+review_schema_mutation_failures=()
+while IFS='|' read -r review_case_id review_batch_status review_mutation review_envelope; do
+    review_response="$passing_response_dir/assistant-review/$review_case_id.txt"
+    cp "$review_response" "$review_response.original"
+    jq "$review_mutation" "$review_response" >"$review_schema_mutation_output"
+    mv "$review_schema_mutation_output" "$review_response"
+    case "$review_envelope" in
+        final_summary)
+            if assistant_review_final_summary_has_v7_envelope "$review_response" "$review_batch_status"; then
+                review_schema_mutation_failures+=("$review_case_id")
+            fi
+            ;;
+        qa)
+            if assistant_review_qa_has_v7_envelope "$review_response" false; then
+                review_schema_mutation_failures+=("$review_case_id")
+            fi
+            ;;
+        qa_blocked)
+            if assistant_review_qa_has_v7_envelope "$review_response" true; then
+                review_schema_mutation_failures+=("$review_case_id")
+            fi
+            ;;
+        audit)
+            if jq -e '
+                def required_fields($fields):
+                    . as $object | (($fields - ($object | keys)) | length == 0);
+                . as $response
+                | (.audit_report | type == "object")
+                and ($response.audit_report | required_fields(["coverage_complete", "batch_summaries", "coverage_ledger_ref", "findings", "summary"]))
+                and (.audit_report.findings | type == "array")
+                and (.final_summary.fixed_items == [])
+            ' "$review_response" >/dev/null; then
+                review_schema_mutation_failures+=("$review_case_id")
+            fi
+            ;;
+    esac
+    mv "$review_response.original" "$review_response"
+done <<'EOF_REVIEW_SCHEMA_MUTATIONS'
+audit-batch-waits-for-all-pass-results|complete|del(.final_summary.aggregated_findings) | .final_summary.findings = []|final_summary
+incomplete-review-batch-never-cleans|incomplete|del(.final_summary.coverage_ledger) | .final_summary.coverage = []|final_summary
+post-fix-review-uses-fresh-snapshot-batch|complete|del(.final_summary.batch_summaries) | .review_batch = {expected_pass_count: 2}|final_summary
+audit-spec-review-fail-continues-complete-batch|complete|del(.audit_report.findings) | .audit_report.aggregate_findings = []|audit
+in-flight-mutation-invalidates-review-batch|invalidated|del(.final_summary.batch_summaries) | .final_summary.batch_state = "invalidated"|final_summary
+qa-obligation-echo-fulfills-exact-binding|unused|del(.qa_evaluation_result.qa_scorecard) | .qa_evaluation_result.score = 5|qa
+qa-obligation-blocks-missing-or-mismatched-binding|unused|del(.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result) | .qa_evaluation_result.obligation = {}|qa
+qa-obligation-blocked-when-required-evidence-is-unavailable|unused|del(.qa_evaluation_result.open_questions) | .qa_evaluation_result.blocker_reason = "unavailable"|qa_blocked
+EOF_REVIEW_SCHEMA_MUTATIONS
+if [[ "${#review_schema_mutation_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review canonical envelopes accepted missing or invented-only fields: ${review_schema_mutation_failures[*]}"
+fi
+
 test_start "workflow inspected evidence accepts empty and useful search refs"
 viewing_response="$passing_response_dir/assistant-workflow/viewing-route-preserves-active-behavior.txt"
 viewing_original="$passing_response_dir/assistant-workflow/viewing-route-preserves-active-behavior.original.txt"
@@ -1162,6 +1989,17 @@ mv "$viewing_variant_output" "$viewing_response"
 if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
     || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
     fail "workflow inspected evidence accepted a response without search_or_access_refs"
+else
+    pass
+fi
+cp "$viewing_original" "$viewing_response"
+
+test_start "VIEWING preparation grader rejects a malformed additional evidence row"
+jq '.feature_preparation_evidence.items += [{}]' "$viewing_response" >"$viewing_variant_output"
+mv "$viewing_variant_output" "$viewing_response"
+if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
+    || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
+    fail "VIEWING preparation accepted a malformed additional evidence row"
 else
     pass
 fi
@@ -2239,6 +3077,59 @@ else
     fail "future-QA obligation mutations were not rejected by every carrying case: ${future_qa_mutation_failures[*]}"
 fi
 
+test_start "actual grader rejects lost, broadened, stale, and unrouted approved QA obligations"
+approved_qa_mutation_failures=()
+for approved_qa_case_and_builder in \
+    "medium-implement-only-consumes-preparation-qa-obligation build_medium_implement_only_qa_handoff_response existing_system" \
+    "medium-implement-only-consumes-not-applicable-preparation-qa-obligation build_medium_implement_only_not_applicable_qa_handoff_response not_applicable"; do
+    approved_qa_case_id="${approved_qa_case_and_builder%% *}"
+    approved_qa_case_and_builder="${approved_qa_case_and_builder#* }"
+    approved_qa_builder="${approved_qa_case_and_builder%% *}"
+    approved_qa_route="${approved_qa_case_and_builder#* }"
+    approved_qa_mutations=(
+        'del(.approved_feature_preparation_qa_acceptance_obligation)'
+        '(.approved_feature_preparation_qa_acceptance_obligation.requested_scope) = "Run unrelated QA." | (.implementation_steps[0].feature_preparation_qa_acceptance_obligation.requested_scope) = "Run unrelated QA."'
+        '(.approved_feature_preparation_qa_acceptance_obligation.execution_prerequisite) = "Run before Build." | (.implementation_steps[0].feature_preparation_qa_acceptance_obligation.execution_prerequisite) = "Run before Build."'
+        '(.triage_result.qa_evaluation_mode) = "not_required"'
+        '(.triage_result.controller_intensity) = "standard"'
+        '(.triage_result.workflow_state_mode) = "inline"'
+        '(.completion_policy.controller_intensity) = "standard"'
+        '(.completion_policy.workflow_state_mode) = "inline"'
+        '(.triage_result.harness_capable) = true'
+        '(.triage_result.required_gates) = ["requirements/scope/verification recorded"]'
+        '(.triage_result.required_agents) = ["bounded executor", "Code Reviewer"]'
+        '(.triage_result.subagent_trigger_scope) = ["Build bounded executor"]'
+        '(.implementation_steps[0].feature_preparation_harness_obligation) = {requested_scope:"invented"}'
+        'del(.implementation_steps[0].feature_preparation_qa_acceptance_obligation)'
+        '.implementation_steps += [{slice_id:"unbound-step"}]'
+    )
+    if [[ "$approved_qa_route" == "existing_system" ]]; then
+        approved_qa_mutations+=(
+            'del(.approved_feature_preparation_evidence_ref)'
+            'del(.implementation_steps[0].feature_preparation_evidence_ref)'
+            '(.approved_feature_preparation_qa_acceptance_obligation.source_preparation_basis) = "not_applicable" | (.implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_preparation_basis) = "not_applicable"'
+            '(.approved_feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref) = "prep/stale" | (.implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref) = "prep/stale"'
+        )
+    else
+        approved_qa_mutations+=(
+            '(.approved_feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref) = "prep/stale" | (.implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref) = "prep/stale"'
+            'del(.approved_feature_preparation_qa_acceptance_obligation.source_preparation_basis)'
+            'del(.implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_preparation_basis)'
+        )
+    fi
+    if ! run_isolated_workflow_routing_mutations \
+        "$approved_qa_case_id" \
+        "$approved_qa_builder" \
+        "${approved_qa_mutations[@]}"; then
+        approved_qa_mutation_failures+=("$approved_qa_case_id:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+    fi
+done
+if [[ ${#approved_qa_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "approved QA obligation mutations were not rejected by every transition case: ${approved_qa_mutation_failures[*]}"
+fi
+
 test_start "actual grader rejects invented harness obligations in every no-harness preparation case"
 invented_harness_failures=()
 for no_harness_case_and_builder in \
@@ -2554,6 +3445,61 @@ else
     fail "path_absent structured assertions do not enforce exact absent-field semantics: ${path_absent_failures[*]}"
 fi
 
+test_start "absent_or_empty_array structured assertions accept only omitted or empty arrays"
+absent_or_empty_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-absent-or-empty.XXXXXX")"
+absent_or_empty_skill="$absent_or_empty_root/assistant-eval-absent-or-empty"
+absent_or_empty_responses="$absent_or_empty_root/responses"
+absent_or_empty_output="$absent_or_empty_root/absent-or-empty.out"
+absent_or_empty_err="$absent_or_empty_root/validation.err"
+p0p4_register_cleanup "$absent_or_empty_root"
+p0p4_write_skill_eval_fixture "$absent_or_empty_skill"
+jq '.cases[0].machine_expectations.structured_json_assertions = [{"operator":"absent_or_empty_array","path":["evidence","domain_scores"]}]' "$absent_or_empty_skill/evals/cases.json" >"$absent_or_empty_root/cases.json"
+mv "$absent_or_empty_root/cases.json" "$absent_or_empty_skill/evals/cases.json"
+cp "$absent_or_empty_skill/evals/cases.json" "$absent_or_empty_root/valid-cases.json"
+mkdir -p "$absent_or_empty_responses/assistant-eval-absent-or-empty"
+absent_or_empty_failures=()
+if ! "$skill_eval_runner" --validate-fixture --skill "$absent_or_empty_skill" > /dev/null 2>"$absent_or_empty_err"; then
+    absent_or_empty_failures+=("valid fixture: $(cat "$absent_or_empty_err")")
+else
+    for accepted_response in \
+        '{"fixture":"fixture required fixture first fixture second","evidence":{}}' \
+        '{"fixture":"fixture required fixture first fixture second","evidence":{"domain_scores":[]}}'; do
+        printf '%s\n' "$accepted_response" >"$absent_or_empty_responses/assistant-eval-absent-or-empty/fixture-case.txt"
+        if ! "$skill_eval_runner" --responses "$absent_or_empty_responses" --skill "$absent_or_empty_skill" >"$absent_or_empty_output" 2>&1 \
+            || ! grep -Fq "structured_json_assertion_failures=0" "$absent_or_empty_output"; then
+            absent_or_empty_failures+=("rejected valid response $accepted_response")
+        fi
+    done
+    for rejected_response in \
+        '{"fixture":"fixture required fixture first fixture second","evidence":{"domain_scores":null}}' \
+        '{"fixture":"fixture required fixture first fixture second","evidence":{"domain_scores":[1]}}' \
+        '{"fixture":"fixture required fixture first fixture second","evidence":{"domain_scores":{}}}'; do
+        printf '%s\n' "$rejected_response" >"$absent_or_empty_responses/assistant-eval-absent-or-empty/fixture-case.txt"
+        if "$skill_eval_runner" --responses "$absent_or_empty_responses" --skill "$absent_or_empty_skill" >"$absent_or_empty_output" 2>&1 \
+            || ! grep -Fq "structured_json_assertion_failures=1" "$absent_or_empty_output"; then
+            absent_or_empty_failures+=("accepted invalid response $rejected_response")
+        fi
+    done
+fi
+for invalid_assertion in \
+    '{"operator":"absent_or_empty_array","path":[]}' \
+    '{"operator":"absent_or_empty_array","path":"evidence.domain_scores"}' \
+    '{"operator":"absent_or_empty_array","path":["evidence",-1]}'; do
+    jq --argjson assertion "$invalid_assertion" '(.cases[0].machine_expectations.structured_json_assertions) = [$assertion]' "$absent_or_empty_root/valid-cases.json" >"$absent_or_empty_root/invalid.json"
+    mv "$absent_or_empty_root/invalid.json" "$absent_or_empty_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$absent_or_empty_skill" > /dev/null 2>"$absent_or_empty_err"; then
+        absent_or_empty_failures+=("unsafe fixture $invalid_assertion")
+    elif ! grep -Fq "structured_json_assertions" "$absent_or_empty_err"; then
+        absent_or_empty_failures+=("unclear schema error for $invalid_assertion")
+    fi
+    cp "$absent_or_empty_root/valid-cases.json" "$absent_or_empty_skill/evals/cases.json"
+done
+if [[ ${#absent_or_empty_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "absent_or_empty_array semantics are incomplete: ${absent_or_empty_failures[*]}"
+fi
+
 test_start "one_of and unordered exact object assertions are bounded and correlation-safe"
 object_values_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-object-values.XXXXXX")"
 object_values_skill="$object_values_root/assistant-eval-object-values"
@@ -2608,7 +3554,7 @@ for malformed_assertion in \
     '{"operator":"one_of","path":["confidence"],"expected_values":[{}]}' \
     '{"operator":"array_object_values_exact","path":["items"],"fields":["concern","concern"],"expected_objects":[{"concern":"one"}]}' \
     '{"operator":"array_object_values_exact","path":["items"],"fields":["concern","item_id"],"expected_objects":[{"concern":"one"}]}' \
-    '{"operator":"array_object_values_exact","path":["items"],"fields":["concern"],"expected_objects":[{"concern":{"unsafe":true}}]}'; do
+    '{"operator":"array_object_values_exact","path":["items"],"fields":["concern"],"expected_objects":[{"concern":{"unsafe":{"nested":true}}}]}'; do
     jq --argjson assertion "$malformed_assertion" '(.cases[0].machine_expectations.structured_json_assertions) = [$assertion]' "$object_values_root/valid-cases.json" >"$object_values_root/invalid.json"
     mv "$object_values_root/invalid.json" "$object_values_skill/evals/cases.json"
     if "$skill_eval_runner" --validate-fixture --skill "$object_values_skill" >/dev/null 2>"$object_values_err"; then
@@ -3000,17 +3946,20 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`empty_array`' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'requires the target path to resolve to an empty array' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `equals_path`,' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`,' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`array_type` requires the target path to resolve to an array and permits an empty array.' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`path_absent`' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`array_object_values_exact`' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'In this exhaustive fixed operator list, `path_absent` passes only when its target' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'path cannot resolve; a present `null` value is present and therefore fails.' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`absent_or_empty_array` passes when its target path is unresolved or resolves to' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq 'an empty array; a present `null`, non-array, or non-empty array fails.' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'unordered exact multiset against bounded `expected_objects`, preserving the' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`one_of` permits at most 32 scalar values. `array_object_values_exact` permits' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'at most 16 unique fields and 32 expected objects; absent projected fields fail,' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'while a present `null` matches only a present `null`.' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`path_absent` passes only when its valid JSON path cannot be resolved' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq '`path_absent` accepts only absence; present `null` fails.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq '`absent_or_empty_array` accepts only absence or `[]`; `null` and other values fail.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq '`array_object_values_exact` projects every target-array object' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq 'at most 16 unique projected fields and 32 expected objects' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq 'unordered multiset, preserves field correlation, and treats' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
@@ -3023,7 +3972,7 @@ else
 fi
 
 test_start "skill eval docs enumerate the exact canonical structured operator list"
-expected_structured_operator_names='equals one_of nonempty_string nonempty_array empty_array array_type array_nonblank_strings path_absent equals_path required_when_equals array_field_values_exact array_object_values_exact array_items_nonempty_fields array_items_nonempty_array_fields'
+expected_structured_operator_names='equals one_of nonempty_string nonempty_array empty_array array_type array_nonblank_strings path_absent absent_or_empty_array equals_path required_when_equals array_field_values_exact array_object_values_exact array_items_nonempty_fields array_items_nonempty_array_fields'
 structured_operator_list_is_exact() {
     local document="$1" source_kind="$2" paragraph actual
     case "$source_kind" in

@@ -11,8 +11,8 @@ skill: assistant-workflow
 # full medium+ harness. Artifact definitions below remain the source of truth;
 # these tiers define which artifacts are required by default for each class.
 # controller_intensity maps onto these tiers and gate_tiers: light -> small,
-# standard -> ordinary medium+ non-harness, strict -> large/critical or
-# explicit strict/harness/QA criteria.
+# standard -> ordinary medium+, strict -> small_elevated for small work and
+# large_critical otherwise.
 completion_tiers:
   preparation_only:
     execution_intent: prepare_only
@@ -23,9 +23,17 @@ completion_tiers:
   small:
     controller_intensity: light
     required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment]
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment]
     review_gate: "fresh review after relevant validation; full independent review only when risk or another trigger promotes the work"
     checkpoint_policy: "an inline scope/check summary is enough; include an inline plan only when plan_mode=inline. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
+  small_elevated:
+    condition: "execution_intent != prepare_only and size == small and (controller_intensity == strict or qa_evaluation_mode == required)"
+    controller_intensity: strict
+    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, validation_results, spec_review_result, review_result, final_handoff]
+    conditional_artifacts: [test_results, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, manual_test_steps, manual_verification_result]
+    prohibited_artifacts: [fresh_review_result, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary]
+    review_gate: "typed canonical review and required QA terminal state; no medium+ slice evidence"
+    checkpoint_policy: "strict phase checkpoints without decomposition artifacts"
   medium:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
@@ -44,7 +52,7 @@ artifacts:
   - name: triage_result
     type: object
     required: conditional
-    condition: "size in [medium, large, mega] or risk_tier in [high, critical]"
+    condition: "execution_intent != prepare_only and (size in [medium, large, mega] or risk_tier in [high, critical] or controller_intensity == strict or qa_evaluation_mode == required)"
     validation: "Contains task_type, risk_tier, size, controller_intensity, plan_mode, execution_intent, qa_evaluation_mode, harness_capable, architecture_design_mode and trigger reasons, build_execution_lane, workflow_state_mode, required_gates, required_agents, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan selected during Triage"
     on_fail: "Return to TRIAGE and populate task_type, risk_tier, size, controller_intensity, plan_mode, execution_intent, qa_evaluation_mode, harness_capable, architecture design mode/reasons, build_execution_lane, workflow_state_mode, required_gates, required_agents or fallback roles, subagent policy state, execution mode, trigger scope, search_mode, and candidate_scope_scan"
     object_fields:
@@ -65,7 +73,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [light, standard, strict]
-        validation: "Maps to completion_tiers and gate_tiers. standard is used for ordinary medium+ non-harness work and does not require Done Contract, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation by default. For execution_intent != prepare_only, strict requires independent strict, harness, or QA criteria; preparation-only QA/harness requests remain typed future obligations and do not select strict. Do not infer strict from size=medium+ or delegation alone."
+        validation: "Maps to completion_tiers and gate_tiers. standard is used for ordinary medium+ non-harness work and does not require Done Contract, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation by default. For execution_intent != prepare_only, strict requires independent strict, harness, or QA criteria; small strict/required-QA work selects small_elevated without medium+ slices. Preparation-only QA/harness requests remain typed future obligations and do not select strict. Do not infer strict from size=medium+ or delegation alone."
       - name: plan_mode
         type: enum
         required: true
@@ -348,8 +356,8 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only and controller_intensity == light"
     description: "Compact review performed after relevant validation with fresh attention to carried Discover scope/criteria, any applicable inline plan, changed files, and acceptance criteria."
-    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected. When an Architecture Decision Pack applies, canonical_result_ref and architecture_decision_pack_review_ref resolve to validated canonical assistant-review outputs without requiring a review_delegation_path."
-    on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work."
+    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected. When an Architecture Decision Pack applies, canonical_result_ref, producer_schema_version, final_review_snapshot_id, final_snapshot_identity_ref, final_snapshot_identity, and architecture_decision_pack_review_ref resolve to validated canonical assistant-review outputs without requiring a review_delegation_path; the alias and identity bind the same final_summary and exact current final batch."
+    on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work. For an applicable Pack, bind final_snapshot_identity_ref to the validated final_summary's exact current final-batch identity before marking validation_status=validated."
     object_fields:
       - name: result
         type: enum
@@ -376,6 +384,42 @@ artifacts:
         required: conditional
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         validation: "Must equal assistant-review/contracts/output.yaml#final_summary"
+      - name: producer_schema_version
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        validation: "Equals skills/assistant-review/contracts/index.yaml#schema_version at validation time."
+      - name: final_review_snapshot_id
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        validation: "Equals canonical_result_ref.final_review_snapshot_id and the current final batch review_material_snapshot.review_snapshot_id, and identifies the batch bound by final_snapshot_identity."
+      - name: final_snapshot_identity_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Stable ref to canonical_result_ref.final_snapshot_identity"
+        validation: "Resolves within the same validated assistant-review final_summary to final_snapshot_identity, which equals the current final batch review_material_snapshot.snapshot_identity; final_review_snapshot_id exactly equals the current final batch review_material_snapshot.review_snapshot_id."
+      - name: final_snapshot_identity
+        type: object
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Exact identity projection used to reject stale or foreign light-review bindings"
+        validation: "Equals canonical_result_ref.final_snapshot_identity and the current final batch review_material_snapshot.snapshot_identity; final_review_snapshot_id exactly identifies this identity and equals the current final batch review_material_snapshot.review_snapshot_id."
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
       - name: architecture_decision_pack_review_ref
         type: string
         required: conditional
@@ -396,10 +440,10 @@ artifacts:
   - name: review_result
     type: object
     required: conditional
-    condition: "execution_intent != prepare_only and (controller_intensity in [standard, strict] or risk_tier in [high, critical])"
+    condition: "execution_intent != prepare_only and (controller_intensity in [standard, strict] or risk_tier in [high, critical] or qa_evaluation_mode == required)"
     description: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. Workflow consumes validated references to canonical assistant-review artifacts and does not restate their schemas."
-    validation: "canonical_result_ref resolves to a validated assistant-review final_summary; delegation_path_ref resolves to its review_delegation_path; both declare their exact canonical contracts. When an Architecture Decision Pack applies, architecture_decision_pack_review_ref resolves to its canonical Pack review and declares that exact contract. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
-    on_fail: "Load and follow assistant-review, validate its final_summary, review_delegation_path, and applicable Architecture Decision Pack review, and record stable refs plus exact canonical contracts before Review completes."
+    validation: "canonical_result_ref resolves to a validated assistant-review final_summary produced under producer_schema_version equal to skills/assistant-review/contracts/index.yaml#schema_version; final_review_snapshot_id, final_snapshot_identity_ref, and final_snapshot_identity resolve within that same final_summary and equal its exact current final batch; delegation_path_ref resolves to its review_delegation_path. When a Pack applies, architecture_decision_pack_review_ref resolves to its canonical Pack review. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
+    on_fail: "Load and follow assistant-review, validate its final_summary, exact current final-batch final_snapshot_identity, review_delegation_path, and applicable Architecture Decision Pack review, and record stable refs plus exact canonical contracts before Review completes."
     object_fields:
       - name: canonical_result_ref
         type: string
@@ -409,6 +453,38 @@ artifacts:
         type: string
         required: true
         validation: "Must equal assistant-review/contracts/output.yaml#final_summary"
+      - name: producer_schema_version
+        type: string
+        required: true
+        validation: "Equals skills/assistant-review/contracts/index.yaml#schema_version at validation time."
+      - name: final_review_snapshot_id
+        type: string
+        required: true
+        validation: "Equals canonical_result_ref.final_review_snapshot_id and the current final batch review_material_snapshot.review_snapshot_id, and identifies the batch bound by final_snapshot_identity."
+      - name: final_snapshot_identity_ref
+        type: string
+        required: true
+        description: "Stable ref to canonical_result_ref.final_snapshot_identity"
+        validation: "Resolves within the same validated assistant-review final_summary to final_snapshot_identity, which equals the current final batch review_material_snapshot.snapshot_identity; final_review_snapshot_id exactly equals the current final batch review_material_snapshot.review_snapshot_id."
+      - name: final_snapshot_identity
+        type: object
+        required: true
+        description: "Exact identity projection used to reject stale or foreign canonical review bindings"
+        validation: "Equals canonical_result_ref.final_snapshot_identity and the current final batch review_material_snapshot.snapshot_identity; final_review_snapshot_id exactly identifies this identity and equals the current final batch review_material_snapshot.review_snapshot_id."
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
       - name: delegation_path_ref
         type: string
         required: true
@@ -438,7 +514,7 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only and qa_evaluation_mode == required"
     description: "Workflow reference wrapper for canonical assistant-review QA artifacts. QA evaluation does not replace review_result."
-    validation: "canonical_result_ref resolves to a validated assistant-review qa_evaluation_result; delegation_path_ref resolves to its qa_evaluation_delegation_path; both declare their exact canonical contracts."
+    validation: "canonical_result_ref resolves to a validated assistant-review qa_evaluation_result produced under producer_schema_version equal to skills/assistant-review/contracts/index.yaml#schema_version; delegation_path_ref resolves to its qa_evaluation_delegation_path. When a deferred feature-preparation QA obligation is carried, approved_feature_preparation_qa_acceptance_obligation_result_ref resolves within that canonical result and every successful pair—accepted or accepted_with_concerns with CLEAN or ISSUES_FIXED—requires requested_scope_status=fulfilled, execution_prerequisite_status=met, and the exact carried source binding."
     on_fail: "Load and follow the assistant-review QA loop, validate its canonical QA result and delegation path, and record stable refs. Do not substitute Code Reviewer findings for QA evaluation."
     object_fields:
       - name: canonical_result_ref
@@ -449,6 +525,15 @@ artifacts:
         type: string
         required: true
         validation: "Must equal assistant-review/contracts/output.yaml#qa_evaluation_result"
+      - name: producer_schema_version
+        type: string
+        required: true
+        validation: "Equals skills/assistant-review/contracts/index.yaml#schema_version at validation time."
+      - name: approved_feature_preparation_qa_acceptance_obligation_result_ref
+        type: string
+        required: conditional
+        condition: "approved_feature_preparation_qa_acceptance_obligation is carried"
+        validation: "Resolves within canonical_result_ref to approved_feature_preparation_qa_acceptance_obligation_result with the exact carried payload and source binding."
       - name: delegation_path_ref
         type: string
         required: true
@@ -461,11 +546,77 @@ artifacts:
         type: enum
         required: true
         enum_values: [validated]
+      - name: rejection_recovery
+        type: object
+        required: conditional
+        condition: "a prior canonical QA result was rejected and workflow proposes another QA round"
+        validation: "QA rejection followed by a source fix requires source_digest_comparison=changed, unequal pre/post digests, passed Build validation, rehash evidence carrying the exact post-fix snapshot identity, and a fresh complete assistant-review batch bound to that identity before QA resumes. Reuse without Build/review is allowed only for source_digest_comparison=equal, exactly equal pre/post digests, explicit digest-equality evidence, and absence of changed-path Build/fresh-review fields."
+        object_fields:
+          - name: rejected_qa_result_ref
+            type: string
+            required: true
+          - name: pre_fix_source_digest
+            type: string
+            required: true
+          - name: post_fix_source_digest
+            type: string
+            required: true
+          - name: source_digest_comparison
+            type: enum
+            required: true
+            enum_values: [changed, equal]
+          - name: digest_equality_evidence_ref
+            type: string
+            required: conditional
+            condition: "source_digest_comparison == equal"
+            validation: "Explicit digest-equality evidence proving no source mutation occurred."
+          - name: build_validation_ref
+            type: string
+            required: conditional
+            condition: "source_digest_comparison == changed"
+            validation: "Resolves to passed post-fix Build validation."
+          - name: rehash_evidence_ref
+            type: string
+            required: true
+            validation: "Resolves to the post-rejection digest comparison; on the changed path its typed post_fix_snapshot_identity exactly equals fresh_review_snapshot_identity, the fresh canonical final_summary identity, and the current final-batch identity."
+          - name: fresh_review_result_ref
+            type: string
+            required: conditional
+            condition: "source_digest_comparison == changed"
+            validation: "Resolves to a fresh assistant-review final_summary for the post-fix identity."
+          - name: fresh_review_snapshot_identity
+            type: object
+            required: conditional
+            condition: "source_digest_comparison == changed"
+            validation: "Equals the rehash evidence post_fix_snapshot_identity, post-fix current final-batch identity, and fresh review final_summary identity."
+            object_fields:
+              - name: basis
+                type: enum
+                required: true
+                enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+              - name: value
+                type: string
+                required: true
+              - name: captured_at
+                type: string
+                required: true
+              - name: scope_manifest_digest
+                type: string
+                required: true
+          - name: fresh_review_coverage_complete
+            type: boolean
+            required: conditional
+            condition: "source_digest_comparison == changed"
+            validation: "Must be true and equal the fresh canonical final_summary.coverage_complete."
+          - name: qa_resume_authorized
+            type: boolean
+            required: true
+            validation: "True only after the changed path has passed Build, rehash, and fresh complete review evidence, or the equal path has explicit digest-equality evidence."
 
   - name: spec_review_result
     type: object
     required: conditional
-    condition: "execution_intent != prepare_only and (size in [medium, large, mega] or risk_tier in [high, critical])"
+    condition: "execution_intent != prepare_only and (size in [medium, large, mega] or risk_tier in [high, critical] or controller_intensity == strict or qa_evaluation_mode == required)"
     validation: >
       Dedicated Stage 1 spec compliance result from references/prompts/spec-review.md.
       Must be distinct from assistant-review quality findings. At completion, status must
@@ -553,6 +704,19 @@ artifacts:
         required: conditional
         condition: "build_execution_lane == bounded_executor"
         validation: "Contains executor dispatch/direct evidence, valid RED when TDD applies, changed files, focused verification, and regression evidence"
+        object_fields:
+          - name: executor_ref
+            type: string
+            required: true
+          - name: changed_files
+            type: string[]
+            required: true
+          - name: focused_verification
+            type: string
+            required: true
+          - name: regression_evidence
+            type: string
+            required: true
       - name: separated_worker_evidence
         type: object
         required: conditional
@@ -563,6 +727,20 @@ artifacts:
         required: conditional
         condition: "execution_mode == delegated"
         validation: "Each required role has dispatch and result evidence in the phase that owns it; reviewer evidence is emitted during Review, not Build."
+        object_fields:
+          - name: role
+            type: string
+            required: true
+          - name: phase_owner
+            type: enum
+            required: true
+            enum_values: [BUILD, REVIEW]
+          - name: dispatch_ref
+            type: string
+            required: true
+          - name: result_ref
+            type: string
+            required: true
       - name: direct_fallback_reason
         type: enum
         required: conditional
@@ -578,6 +756,17 @@ artifacts:
         required: conditional
         condition: "execution_mode == direct_fallback"
         validation: "Contains equivalent selected-lane Build evidence and separately labeled Review-owned Code Reviewer evidence."
+        object_fields:
+          - name: role
+            type: string
+            required: true
+          - name: phase_owner
+            type: enum
+            required: true
+            enum_values: [BUILD, REVIEW]
+          - name: result_ref
+            type: string
+            required: true
       - name: per_slice_dispatch_evidence
         type: object[]
         required: conditional
@@ -659,6 +848,37 @@ artifacts:
         required: true
         min_items: 1
         on_missing: fail
+      - name: assistant_review_packet_compatibility
+        type: object
+        required: conditional
+        condition: "persisted review_result, fresh_review_result, or qa_evaluation_result refs exist"
+        validation: "Compares every persisted producer_schema_version with skills/assistant-review/contracts/index.yaml#schema_version. Exact equality is current; any mismatch invalidates the persisted canonical result, delegation, snapshot, Pack-review, and QA refs before resume and selects the required current-contract rebuild route without inferring another packet shape."
+        object_fields:
+          - name: persisted_producer_schema_versions
+            type: string[]
+            required: true
+            min_items: 1
+            validation: "Exact producer_schema_version values recorded on persisted workflow review/QA wrappers."
+          - name: current_producer_schema_version
+            type: string
+            required: true
+            validation: "Equals skills/assistant-review/contracts/index.yaml#schema_version."
+          - name: status
+            type: enum
+            required: true
+            enum_values: [current, invalidated]
+          - name: invalidated_refs
+            type: string[]
+            required: conditional
+            condition: "status == invalidated"
+            min_items: 1
+            validation: "Lists every stale canonical result, delegation, snapshot, Pack-review, and QA ref cleared by the mismatch."
+          - name: rebuild_route
+            type: enum
+            required: conditional
+            condition: "status == invalidated"
+            enum_values: [rerun_review, rerun_qa, rerun_review_and_qa]
+            validation: "Selects exactly the current assistant-review lanes needed to replace the invalidated refs."
       - name: exact_next_action
         type: string
         required: true
@@ -1229,9 +1449,9 @@ artifacts:
   - name: final_handoff
     type: object
     required: conditional
-    condition: "execution_intent != prepare_only and size in [medium, large, mega]"
+    condition: "execution_intent != prepare_only and (size in [medium, large, mega] or controller_intensity == strict or qa_evaluation_mode == required)"
     description: "Document-owned reconstructable developer handoff defined by references/final-handoff.md; Review emits review_result but never this artifact"
-    validation: "Includes changed behavior/areas, architecture decisions and rationale, conditional Architecture Decision Pack reference, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual scenarios or explicit N/A, compatibility/regression surfaces, limitations/untested areas, rollback/recovery when relevant, and an evidence-bounded review claim"
+    validation: "Includes changed behavior/areas, architecture decisions and rationale, conditional Architecture Decision Pack reference, rejected alternatives/tradeoffs, requirement evidence, automated verification, manual scenarios or explicit N/A, compatibility/regression surfaces, limitations/untested areas, rollback/recovery when relevant, and a canonical review-completion projection that governs the evidence-bounded or explicit remaining/blocker claim"
     on_fail: "Load references/final-handoff.md and complete every required section before workflow completion"
     object_fields:
       - name: changed_behavior_and_areas
@@ -1285,10 +1505,127 @@ artifacts:
         type: string
         required: true
         on_missing: fail
+      - name: review_completion
+        type: object
+        required: true
+        description: "Exact completion projection from canonical assistant-review review and applicable QA results"
+        validation: "Binds the same review_result canonical final_summary ref, producer version, result, coverage_complete, eligible evidence-bounded claim, exact final_review_snapshot_id, final_snapshot_identity ref/object, and applicable typed QA terminal state. completion_disposition=complete only when review is CLEAN or ISSUES_FIXED with complete coverage and required QA is accepted or accepted_with_concerns with CLEAN or ISSUES_FIXED. When a deferred QA obligation is carried, every successful pair additionally requires requested_scope_status=fulfilled, execution_prerequisite_status=met, exact result ref, and verified exact source binding. HAS_REMAINING_ITEMS, incomplete coverage, rejected/blocked QA, QA HAS_REMAINING_ITEMS/BLOCKED, or blocked/failed obligation fulfillment selects remaining_items or blocked."
+        object_fields:
+          - name: canonical_result_ref
+            type: string
+            required: true
+            validation: "Equals review_result.canonical_result_ref and resolves to the validated assistant-review final_summary."
+          - name: canonical_contract
+            type: string
+            required: true
+            validation: "Equals review_result.canonical_contract and assistant-review/contracts/output.yaml#final_summary."
+          - name: review_producer_schema_version
+            type: string
+            required: true
+            validation: "Equals review_result.producer_schema_version and current skills/assistant-review/contracts/index.yaml#schema_version."
+          - name: result
+            type: enum
+            required: true
+            enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS]
+            validation: "Equals canonical_result_ref.result."
+          - name: coverage_complete
+            type: boolean
+            required: true
+            validation: "Equals canonical_result_ref.coverage_complete."
+          - name: evidence_bounded_claim
+            type: string
+            required: conditional
+            condition: "result in [CLEAN, ISSUES_FIXED] and coverage_complete == true"
+            validation: "Equals canonical_result_ref.evidence_bounded_claim and exactly: \"No material findings within the reviewed scope and available evidence\"."
+          - name: final_snapshot_identity_ref
+            type: string
+            required: true
+            validation: "Equals review_result.final_snapshot_identity_ref and resolves within canonical_result_ref."
+          - name: final_review_snapshot_id
+            type: string
+            required: true
+            validation: "Equals review_result.final_review_snapshot_id, canonical_result_ref.final_review_snapshot_id, and the current final batch review_material_snapshot.review_snapshot_id, and identifies the batch bound by final_snapshot_identity."
+          - name: final_snapshot_identity
+            type: object
+            required: true
+            validation: "Equals review_result.final_snapshot_identity, canonical_result_ref.final_snapshot_identity, and the current final batch review_material_snapshot.snapshot_identity; final_review_snapshot_id exactly identifies this canonical identity."
+            object_fields:
+              - name: basis
+                type: enum
+                required: true
+                enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+              - name: value
+                type: string
+                required: true
+              - name: captured_at
+                type: string
+                required: true
+              - name: scope_manifest_digest
+                type: string
+                required: true
+          - name: qa_evaluation_result_ref
+            type: string
+            required: conditional
+            condition: "qa_evaluation_mode == required"
+            validation: "Equals qa_evaluation_result.canonical_result_ref."
+          - name: qa_contract
+            type: string
+            required: conditional
+            condition: "qa_evaluation_mode == required"
+            validation: "Equals qa_evaluation_result.canonical_contract and assistant-review/contracts/output.yaml#qa_evaluation_result."
+          - name: qa_producer_schema_version
+            type: string
+            required: conditional
+            condition: "qa_evaluation_mode == required"
+            validation: "Equals qa_evaluation_result.producer_schema_version and current skills/assistant-review/contracts/index.yaml#schema_version."
+          - name: qa_final_verdict
+            type: enum
+            required: conditional
+            condition: "qa_evaluation_mode == required"
+            enum_values: [accepted, accepted_with_concerns, rejected, blocked]
+            validation: "Equals the canonical qa_evaluation_result final_verdict."
+          - name: qa_result
+            type: enum
+            required: conditional
+            condition: "qa_evaluation_mode == required"
+            enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS, BLOCKED]
+            validation: "Equals the canonical qa_evaluation_result result."
+          - name: approved_feature_preparation_qa_acceptance_obligation_result_ref
+            type: string
+            required: conditional
+            condition: "approved_feature_preparation_qa_acceptance_obligation is carried"
+            validation: "Equals qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result_ref and resolves within the canonical QA result."
+          - name: qa_obligation_requested_scope_status
+            type: enum
+            required: conditional
+            condition: "approved_feature_preparation_qa_acceptance_obligation is carried"
+            enum_values: [fulfilled, blocked, failed]
+            validation: "Equals the canonical obligation result requested_scope_status; every accepted or accepted_with_concerns plus CLEAN or ISSUES_FIXED success pair requires fulfilled."
+          - name: qa_obligation_execution_prerequisite_status
+            type: enum
+            required: conditional
+            condition: "approved_feature_preparation_qa_acceptance_obligation is carried"
+            enum_values: [met, missing, blocked]
+            validation: "Equals the canonical obligation result execution_prerequisite_status; every accepted or accepted_with_concerns plus CLEAN or ISSUES_FIXED success pair requires met."
+          - name: qa_obligation_source_binding_verified
+            type: boolean
+            required: conditional
+            condition: "approved_feature_preparation_qa_acceptance_obligation is carried"
+            validation: "True only when requested_scope, execution_prerequisite, feature_preparation_scope, and exactly one source_feature_preparation_evidence_ref or source_preparation_basis match the carried obligation unchanged."
+          - name: completion_disposition
+            type: enum
+            required: true
+            enum_values: [complete, remaining_items, blocked]
+            validation: "complete requires result in [CLEAN, ISSUES_FIXED], coverage_complete=true, and required QA in an accepted or accepted_with_concerns plus CLEAN or ISSUES_FIXED state. A carried QA obligation additionally requires requested_scope_status=fulfilled, execution_prerequisite_status=met, and qa_obligation_source_binding_verified=true. remaining_items is required for HAS_REMAINING_ITEMS, coverage_complete=false, rejected QA, QA HAS_REMAINING_ITEMS, or failed obligation scope. blocked is required for blocked QA, QA BLOCKED, or blocked/missing obligation prerequisite."
+          - name: remaining_or_blocker_summary
+            type: string
+            required: conditional
+            condition: "completion_disposition in [remaining_items, blocked]"
+            validation: "Explicitly states the remaining review coverage/items or QA blocker and the required next action."
       - name: review_claim
         type: string
         required: true
-        validation: "Evidence-bounded to reviewed scope and available evidence; does not claim proof of correctness"
+        validation: "When review_completion.completion_disposition=complete, equals review_completion.evidence_bounded_claim and exactly: \"No material findings within the reviewed scope and available evidence\". When disposition is remaining_items or blocked, explicitly states the remaining items or blocker and must not use the clean no-material-findings claim. Does not claim proof of correctness."
         on_missing: fail
 
   - name: task_journal
@@ -2575,7 +2912,7 @@ artifacts:
         required: conditional
         condition: "an explicit qa or acceptance request was supplied during prepare_only"
         description: "Typed deferred QA/acceptance work that cannot activate execution during preparation"
-        validation: "Records the exact requested QA/acceptance scope and the future execution prerequisite; it is absent when no explicit QA/acceptance request exists and cannot be inferred from generic readiness wording."
+        validation: "Records the exact requested QA/acceptance scope and the future execution prerequisite; it is absent when no explicit QA/acceptance request exists and cannot be inferred from generic readiness wording. Later implement_only preserves both payload fields exactly as approved_feature_preparation_qa_acceptance_obligation, adds exactly one existing-system evidence-ref or typed not_applicable source binding, sets qa_evaluation_mode=required, and carries the enriched object through the post-Build Code Reviewer then QA Evaluator acceptance lane."
         on_missing: fail
         object_fields:
           - name: requested_scope
@@ -2802,15 +3139,16 @@ artifacts:
 # Before printing --- WORKFLOW COMPLETE ---, verify:
 # 1. execution_intent=prepare_only selects completion_tiers.preparation_only and returns feature_preparation_result plus every applicable preparation artifact (including feature_preparation_evidence for existing_system); it excludes Build, changed-file, test, review, and final-handoff claims. Otherwise all required artifacts for the selected completion tier are present and controller_intensity matches the selected tier.
 # 2. When execution_intent != prepare_only, test_results.failed == 0 when tests ran; validation_results contains at least one result=passed entry for completed implementation workflows. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason.
-# 3. When execution_intent != prepare_only and (size is medium/large/mega or risk_tier is high/critical): spec_review_result.status == PASS and required_fixes are empty or resolved
-# 4. When execution_intent != prepare_only and (size is medium/large/mega or risk_tier is high/critical): review_result contains validated canonical result and delegation-path refs to assistant-review output artifacts, plus architecture_decision_pack_review_ref and its exact canonical contract when a Pack applies
-# 5. If execution_intent != prepare_only and qa_evaluation_mode=required: qa_evaluation_result contains validated canonical result and delegation-path refs after build/test and code-review evidence; QA evaluation does not replace review_result
+# 3. When execution_intent != prepare_only and (size is medium/large/mega, risk_tier is high/critical, controller_intensity is strict, or qa_evaluation_mode=required): spec_review_result.status == PASS and required_fixes are empty or resolved
+# 4. When execution_intent != prepare_only and (size is medium/large/mega, risk_tier is high/critical, controller_intensity is strict, or qa_evaluation_mode=required): review_result contains validated canonical result and delegation-path refs, plus final_snapshot_identity_ref and final_snapshot_identity exactly bound to the same assistant-review final_summary and current final batch; an applicable Pack also carries architecture_decision_pack_review_ref and its exact canonical contract
+# 5. If execution_intent != prepare_only and qa_evaluation_mode=required: qa_evaluation_result contains validated canonical result and delegation-path refs after build/test and code-review evidence; QA evaluation does not replace review_result. A rejected, HAS_REMAINING_ITEMS, blocked, or BLOCKED QA terminal state prevents clean workflow completion.
 # 6. When execution_intent != prepare_only, for medium+ tasks, slice_verification_summary has one VERIFIED entry per slice
 # 7. candidate_search_result exists when search_mode == candidate_search, includes search_exit_summary, and any plan_deviation is approved before Build
 # 8. workflow_experiment_ledger exists only for explicit workflow experiments; loop_readiness_assessment exists only before explicit repeat/optimization loops or a second/sequential progressive decision activation and includes retry_or_empty_result_handling, tool_error_handling, and low_confidence_escalation
 # 9. Loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness_capable or QA criteria independently apply
 # 10. When execution_intent != prepare_only, medium+ harness-capable work has harness_run_state, trace_ledger, replay_packet, pivot_restart_decision when triggered, and artifact_reference_ledger current before completion or handoff. controller_intensity=standard with harness_capable=false does not require these artifacts.
 # 11. manual_verification_result exists only when manual_verification_mode=required; user_approval exists only when that scoped check depends on user observation. Metrics never block completion.
+# 12. For medium+, strict, or required-QA work, final_handoff.review_completion binds current producer versions, canonical review/QA terminal state, exact alias/identity, and carried obligation result. WORKFLOW COMPLETE requires completion_disposition=complete; otherwise report the blocker without a clean claim.
 # If any check fails, do NOT print --- WORKFLOW COMPLETE ---. State what is missing.
   - name: verified_skill_distillation
     type: object

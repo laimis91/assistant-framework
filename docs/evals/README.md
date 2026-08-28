@@ -175,6 +175,14 @@ local Codex login, isolated temporary Git workspaces, `--ephemeral`,
 fixture, and JSONL events. The runtime prompt
 contains only setup context and the user request. Expected behavior, pass
 criteria, fail signals, and machine grading anchors remain hidden from Codex.
+When an execute selection includes `viewing-route-technical-preparation`, the
+adapter additionally requires a working `node --test` capability before it
+persists a run plan or invokes Codex because it validates that case's trusted
+seed fixture with Node's test runner. A bounded capability probe fails closed
+before output admission or model calls; Python 3 supervises that probe so its
+entire process group is reaped if Node hangs. This conditional prerequisite is separate from the
+Node.js 22 and Ajv requirement for contract-suite validation; plan-only runs
+and execute selections that omit the VIEWING case do not require it.
 Skill-local `evals/` directories are excluded from materialized variants, and
 the native `.agents/skills/assistant-workflow` copy is exposed. Seeded Git baselines
 make unexpected created, changed, or deleted paths measurable; review-only
@@ -655,7 +663,7 @@ tools/evals/run-skill-evals.sh --activation-results /tmp/clarify-activation-resu
 Cases may additionally define `machine_expectations.structured_json_assertions`.
 For these per-skill cases, the response must contain exactly one valid JSON
 value. The local grader applies only the fixed provider-neutral operators:
-`equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `equals_path`,
+`equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`,
 `required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, and
 `array_items_nonempty_fields`, and `array_items_nonempty_array_fields`. Assertion paths are JSON arrays for safe
 `getpath` access. They are grader-only declarations, never executable fixture
@@ -669,6 +677,8 @@ array whose every member is a nonblank string.
 `array_type` requires the target path to resolve to an array and permits an empty array. `array_nonblank_strings` requires every member to be a nonblank string and a required boolean `allow_empty` declares whether an empty array is valid.
 In this exhaustive fixed operator list, `path_absent` passes only when its target
 path cannot resolve; a present `null` value is present and therefore fails.
+`absent_or_empty_array` passes when its target path is unresolved or resolves to
+an empty array; a present `null`, non-array, or non-empty array fails.
 `one_of` requires exact membership in its bounded declared scalar values.
 `array_object_values_exact` compares each target object’s declared `fields` as
 an unordered exact multiset against bounded `expected_objects`, preserving the

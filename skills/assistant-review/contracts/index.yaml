@@ -1,4 +1,4 @@
-schema_version: "6.0"
+schema_version: "7.0"
 contract: index
 skill: assistant-review
 
@@ -19,7 +19,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, qa_evaluation_mode]
+        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, harness_capable, qa_evaluation_mode, feature_preparation_scope, approved_feature_preparation_qa_acceptance_obligation]
     budget_words: 5000
   current_round:
     selectors:
@@ -33,7 +33,7 @@ load_sets:
         path: contracts/phase-gates.yaml
         section: invariants
         key: id
-        names: [INV0, INV1, INV2, INV3, INV4, INV5, INV6, INV7, INV8, INV9, INV10, INV11, INV_QA1, INV_QA2, INV_QA3, INV_QA4]
+        names: [INV0, INV1, INV2, INV3, INV4, INV_BATCH, INV5, INV6, INV7, INV8, INV9, INV10, INV11, INV_QA1, INV_QA2, INV_QA3, INV_QA4]
     budget_words: 12000
   selected_handoff:
     selectors:

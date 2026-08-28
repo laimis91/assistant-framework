@@ -14,7 +14,7 @@
   },
   "bindings": {
     "skill": "assistant-workflow",
-    "candidate_skill_sha256": "b00c75f3f429263b657e27a7d1198e92cbad02ee52d60ba2e0df4391262824bb",
+    "candidate_skill_sha256": "0319ccd589a1eac0a9dc2822dae250e766bd0ddfac3ffffda45b9e7e116e5750",
     "activation_cases_sha256": "5351a926cf0b1e97fb9a5ce4a480c545be4aea1a2a52ea4d3b9f6497b222fc71"
   },
   "results": [

@@ -43,7 +43,7 @@ DSPy replaces hand-written prompts with **signatures** — typed declarations of
 
 **Enforcement for skills:**
 - Every skill MUST declare typed `InputField` and `OutputField` equivalents in YAML
-- Field types: `string`, `int`, `boolean`, `enum`, `string[]`, `object`, `object[]`
+- Field types: `string`, `int`, `boolean`, `enum`, `string[]`, `object`, `object[]`, `float`, `file`, `jsonl_line`
 - Enum fields MUST list all valid values — no open-ended enums
 - Descriptions are not optional — they scope what the agent should produce
 
@@ -199,10 +199,12 @@ The root `SKILL.md` must tell the agent to read the index first, load only the s
 
 ### Field schema
 
+`float`, `file`, and `jsonl_line` are supported repository extensions.
+
 ```yaml
 fields:
   - name: field_name            # identifier (snake_case)
-    type: string                # string | int | boolean | enum | string[] | object | object[]
+    type: string                # string|int|boolean|enum|string[]|object|object[]|float|file|jsonl_line
     required: true              # true | false | conditional
     condition: "when..."        # only when required=conditional
     description: "what this is" # human-readable purpose
@@ -466,7 +468,7 @@ shapes native description routing and is separate from response-grade `.cases`.
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 
-Per-skill cases may optionally add `machine_expectations.structured_json_assertions` when substring anchors cannot safely prove a typed response shape. Use only the fixed provider-neutral operators `equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `equals_path`, `required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, `array_items_nonempty_fields`, and `array_items_nonempty_array_fields`. `array_type` requires the path to resolve to an array and permits an empty array. `array_nonblank_strings` requires a present string array whose every member is nonblank; its required boolean `allow_empty` controls whether zero members are valid. `path_absent` passes only when its valid JSON path cannot be resolved; a present `null` is present and therefore fails. `one_of` requires the target value to exactly equal one bounded declared scalar value. `array_object_values_exact` projects every target-array object to its bounded explicit `fields` list and compares those tuples as an unordered exact multiset against `expected_objects`; this preserves each declared field correlation without making object order significant. `array_items_nonempty_fields` requires a non-empty target array and non-empty string values for every listed field in every object. `array_items_nonempty_array_fields` requires a non-empty target array and a non-empty array of nonblank string values for every listed field in every object. Paths must be non-empty JSON arrays of string object keys or non-negative integer array indexes. A selected structured case requires exactly one valid JSON response value. These declarations are grader-only data, never executable instructions: do not permit arbitrary jq, code, expressions, or fixture-provided operators outside this fixed set.
+Per-skill cases may optionally add `machine_expectations.structured_json_assertions` when substring anchors cannot safely prove a typed response shape. Use only the fixed provider-neutral operators `equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`, `required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, `array_items_nonempty_fields`, and `array_items_nonempty_array_fields`. `array_type` accepts arrays, including empty. `array_nonblank_strings` requires a string array of nonblank members; `allow_empty` controls zero members. `path_absent` accepts only absence; present `null` fails. `absent_or_empty_array` accepts only absence or `[]`; `null` and other values fail. `one_of` requires exact membership in bounded scalars. `array_object_values_exact` projects every target-array object to its bounded explicit `fields` list and compares those tuples as an unordered exact multiset against `expected_objects`; this preserves each declared field correlation without making object order significant. `array_items_nonempty_fields` requires a non-empty target array and non-empty string values for every listed field in every object. `array_items_nonempty_array_fields` requires a non-empty target array and a non-empty array of nonblank string values for every listed field in every object. Paths must be non-empty JSON arrays of string object keys or non-negative integer array indexes. A selected structured case requires exactly one valid JSON response value. These declarations are grader-only data, never executable instructions: do not permit arbitrary jq, code, expressions, or fixture-provided operators outside this fixed set.
 
 `one_of` accepts at most 32 declared scalar values. `array_object_values_exact`
 accepts at most 16 unique projected fields and 32 expected objects; it compares

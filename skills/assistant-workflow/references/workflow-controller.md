@@ -88,6 +88,8 @@ file centralizes decision boundaries that cut across phase details while
   `harness_capable=true`, `qa_evaluation_mode=required`, trace/replay criteria,
   explicit harness/QA criteria, or explicit strict control. Risk/project criteria may still select strict preparation for
   `prepare_only`, but a QA or harness request alone must not select strict.
+- Otherwise-small strict or required-QA execution selects the `small_elevated`
+  completion tier; it does not fabricate medium+ slices.
 - Do not infer `strict`, `harness_capable=true`, or required QA from
   size=medium+ or delegation alone.
 - During `prepare_only`, always treat `harness_capable` as false and retain an
@@ -104,6 +106,16 @@ file centralizes decision boundaries that cut across phase details while
   `medium`, set `harness_capable=true`, load the harness controller, and complete
   the existing Done Contract, Harness Recipe, and runtime-ref gates before Build.
   Preserve its three approved payload fields exactly, add exactly one applicable preparation-source binding, and carry the resulting enriched obligation unchanged through task packets and verification handoffs.
+- For `implement_only`, an accepted
+  `approved_feature_preparation_qa_acceptance_obligation` is explicit QA scope:
+  preserve its two approved payload fields exactly, bind the approved evidence
+  ref for `existing_system` or `source_preparation_basis=not_applicable`, set
+  `qa_evaluation_mode=required`, and carry it unchanged through task packets,
+  Build, verification, Code Reviewer evidence, and the existing QA Evaluator
+  acceptance context. It does not imply harness capability or a pre-Build gate.
+  At completion, accepted or accepted-with-concerns QA is non-complete unless
+  the exact obligation result records fulfilled scope, met prerequisite, and
+  the unchanged applicable source binding.
 - Treat `qa_evaluation_mode=not_required` unless `execution_intent != prepare_only` and explicit QA/acceptance
   evaluation, accepted Done Contract, harness-capable acceptance scope,
   domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance applies.

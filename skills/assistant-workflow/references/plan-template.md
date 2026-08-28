@@ -46,6 +46,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
 - Feature preparation scope: [not_applicable | existing_system]
 - Feature preparation evidence ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise N/A]
+- Feature preparation QA/acceptance obligation: [required exact approved object when the preparation result contains future_qa_acceptance_obligation; include requested_scope, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise N/A]
 - Architecture Decision Pack: [fresh pack ref, or N/A with concrete reason]
 - QA evaluation mode: [carry triage value: not_required | optional | required]
 - Harness capable: [carry triage value: true | false]
@@ -292,6 +293,7 @@ Use the Executable Task Packet structure above for each approved slice. Order pa
 - Plan/readiness result: [implementation steps or the exact evidence gap/conflict]
 - Product questions: [only rows admitted by the canonical evidence matrix]
 - Future QA/acceptance obligation: [`feature_preparation_result.future_qa_acceptance_obligation` or N/A]
+- Approved QA/acceptance obligation: [`approved_feature_preparation_qa_acceptance_obligation` for implement_only; preserve requested_scope and execution_prerequisite plus exactly one source binding; set `qa_evaluation_mode=required` and route post-Build Code Reviewer then QA Evaluator, or N/A]
 - Future harness obligation: [`feature_preparation_result.future_harness_obligation` or N/A; preparation keeps `harness_capable=false`]
 
 For `prepare_only`, return `feature_preparation_result` instead of an execution

@@ -210,9 +210,10 @@ review_router="$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-rou
 review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
 for file_and_term in \
     "$review_loop::Infer review mode before review or mutation" \
-    "$review_loop::Run only in review-fix mode" \
+    "$review_loop::run only in" \
     "$review_loop::evidence-backed must-fix and should-fix items" \
-    "$review_loop::In audit mode, record the mismatch as a finding and exit without source mutation or Reviewer dispatch" \
+    "$review_loop::Dispatch every planned read-only Reviewer pass" \
+    "$review_loop::never expose the mismatch details to discovery siblings" \
     "$review_loop::Return it to the composing workflow for planning or approval" \
     "$review_router::Before Stage 1 Spec Review or source inspection/mutation" \
     "$review_router::only when review-fix authority is explicit or carried by the" \
@@ -230,7 +231,7 @@ done
 if ! jq -e '
     def case($id): .cases[] | select(.id == $id);
     (case("audit-one-pass").expected_behavior | index("Reports findings and residual risk without edits.")) and
-    (case("audit-spec-review-fail-is-read-only").expected_behavior | index("Exits without source mutation or Reviewer dispatch.")) and
+    (case("audit-spec-review-fail-is-read-only").expected_behavior | index("Dispatches every planned read-only Reviewer pass and exits without repair, Build, or source-mutation dispatch.")) and
     (case("review-fix-loop-handles-findings").expected_behavior | index("Uses the user\u0027s explicit source-modification authorization to resolve mode=review-fix.")) and
     (case("workflow-carried-authorization-allows-bounded-review-fix").expected_behavior | index("Resolves mode=review-fix from carried active approved workflow authorization.")) and
     (case("ambiguous-standalone-review-asks-before-review-or-mutation").expected_behavior | index("Asks exactly: Should I only report findings, or also implement and verify fixes?")) and
@@ -573,6 +574,62 @@ if [[ "${#thinking_delegation_proof_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-thinking delegation fallback must carry trigger or policy-block evidence: ${thinking_delegation_proof_failures[*]}"
+fi
+
+test_start "assistant-review v7 prompts preserve deferred-QA and security-specialist routing"
+review_v7_prompt_failures=()
+qa_evaluator_agents=(
+    "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md"
+    "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml"
+)
+for review_agent in "${qa_evaluator_agents[@]}"; do
+    for review_term in \
+        "approved_feature_preparation_qa_acceptance_obligation_result" \
+        "requested_scope_status" \
+        "execution_prerequisite_status" \
+        "accepted_with_concerns" \
+        "HAS_REMAINING_ITEMS"; do
+        if ! grep -Fq "$review_term" "$review_agent"; then
+            review_v7_prompt_failures+=("${review_agent#$FRAMEWORK_DIR/}: missing $review_term")
+        fi
+    done
+done
+for reviewer_agent in \
+    "$FRAMEWORK_DIR/agents/claude/code-reviewer.md" \
+    "$FRAMEWORK_DIR/agents/claude/reviewer.md" \
+    "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml" \
+    "$FRAMEWORK_DIR/agents/codex/reviewer.toml"; do
+    for review_term in \
+        "risk_selected_specialist" \
+        "assistant-security" \
+        "canonical Reviewer schema"; do
+        if ! grep -Fq "$review_term" "$reviewer_agent"; then
+            review_v7_prompt_failures+=("${reviewer_agent#$FRAMEWORK_DIR/}: missing $review_term")
+        fi
+    done
+done
+for review_term in \
+    "assistant-review contracts are v7" \
+    "Persisted v6 batch packets are invalidated and rebuilt" \
+    "risk_selected_specialist" \
+    "assistant-security checklist/perspective"; do
+    if ! grep -Fq "$review_term" "$review_skill"; then
+        review_v7_prompt_failures+=("skills/assistant-review/SKILL.md: missing $review_term")
+    fi
+done
+if [[ "$(grep -F 'weighted_score = ' "$review_rubric" | wc -l | tr -d ' ')" -ne 1 ]] \
+    || ! grep -Fq 'Example: correctness=4, quality=3.5, architecture=4, security=5, coverage=3' "$review_rubric" \
+    || ! grep -Fq '= (4 * 0.30) + (3.5 * 0.20) + (4 * 0.20) + (5 * 0.15) + (3 * 0.15)' "$review_rubric" \
+    || ! grep -Fq '= 1.20 + 0.70 + 0.80 + 0.75 + 0.45' "$review_rubric" \
+    || ! grep -Fq '= 3.90 → REFINE' "$review_rubric" \
+    || ! grep -Fq '  weighted_score: 3.90' "$review_rubric" \
+    || ! grep -Fq '(4.0 * 0.30) + (3.5 * 0.20)' "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md"; then
+    review_v7_prompt_failures+=("assistant-review rubric arithmetic is not canonically 3.90")
+fi
+if [[ "${#review_v7_prompt_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review v7 prompt/rubric parity failed: ${review_v7_prompt_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

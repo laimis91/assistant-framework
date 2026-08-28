@@ -577,6 +577,17 @@ handoffs:
           - {name: execution_prerequisite, type: string, required: true}
           - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
           - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+      - name: feature_preparation_qa_acceptance_obligation
+        type: object
+        required: conditional
+        condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
+        description: "Accepted future QA/acceptance obligation constraining decomposition"
+        validation: "Its two approved payload fields match feature_preparation_result.future_qa_acceptance_obligation exactly; it adds exactly one feature_preparation_evidence_ref binding for existing_system or source_preparation_basis=not_applicable without an evidence ref, sets qa_evaluation_mode=required, and carries that enriched consumer object unchanged through the post-Build Code Reviewer then QA Evaluator lane"
+        object_fields:
+          - {name: requested_scope, type: string, required: true}
+          - {name: execution_prerequisite, type: string, required: true}
+          - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+          - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
       - name: context_map
         type: string
         required: true
@@ -815,6 +826,17 @@ handoffs:
         object_fields:
           - {name: requested_scope, type: string, required: true}
           - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+          - {name: execution_prerequisite, type: string, required: true}
+          - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+          - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+      - name: feature_preparation_qa_acceptance_obligation
+        type: object
+        required: conditional
+        condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
+        description: "Accepted future QA/acceptance obligation used to produce task packets"
+        validation: "Its two approved payload fields match feature_preparation_result.future_qa_acceptance_obligation exactly; it adds exactly one feature_preparation_evidence_ref binding for existing_system or source_preparation_basis=not_applicable without an evidence ref, sets qa_evaluation_mode=required, and carries that enriched consumer object unchanged through the post-Build Code Reviewer then QA Evaluator lane"
+        object_fields:
+          - {name: requested_scope, type: string, required: true}
           - {name: execution_prerequisite, type: string, required: true}
           - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
           - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
@@ -1088,6 +1110,17 @@ handoffs:
             object_fields:
               - {name: requested_scope, type: string, required: true}
               - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+              - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+              - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+          - name: feature_preparation_qa_acceptance_obligation
+            type: object
+            required: conditional
+            condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
+            description: "Accepted future QA/acceptance obligation carried unchanged into this executable packet"
+            validation: "Binds to feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable without an evidence ref, sets qa_evaluation_mode=required, and requires the existing post-Build Code Reviewer then QA Evaluator lane"
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
               - {name: execution_prerequisite, type: string, required: true}
               - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
               - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
@@ -1398,6 +1431,17 @@ handoffs:
           - {name: execution_prerequisite, type: string, required: true}
           - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
           - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+      - name: feature_preparation_qa_acceptance_obligation
+        type: object
+        required: conditional
+        condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
+        description: "Accepted future QA/acceptance obligation constraining this Build handoff"
+        validation: "Matches the enriched approved input and task packet unchanged: the two original payload fields remain exact and exactly one evidence-ref or not_applicable source binding is present; qa_evaluation_mode=required and the existing post-Build Code Reviewer then QA Evaluator lane is required"
+        object_fields:
+          - {name: requested_scope, type: string, required: true}
+          - {name: execution_prerequisite, type: string, required: true}
+          - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+          - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
       - name: current_task_packet
         type: object
         required: conditional
@@ -1447,6 +1491,17 @@ handoffs:
             object_fields:
               - {name: requested_scope, type: string, required: true}
               - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+              - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+              - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+          - name: feature_preparation_qa_acceptance_obligation
+            type: object
+            required: conditional
+            condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
+            description: "Accepted future QA/acceptance obligation carried by this Build task packet"
+            validation: "Matches the enriched Build handoff unchanged: requested_scope and execution_prerequisite remain exact and exactly one applicable preparation-source binding is present; this task retains qa_evaluation_mode=required and the post-Build QA route"
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
               - {name: execution_prerequisite, type: string, required: true}
               - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
               - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
@@ -1930,6 +1985,17 @@ handoffs:
           - {name: execution_prerequisite, type: string, required: true}
           - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
           - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+      - name: feature_preparation_qa_acceptance_obligation
+        type: object
+        required: conditional
+        condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
+        description: "Accepted future QA/acceptance obligation constraining verification"
+        validation: "Matches the enriched Build handoff unchanged: the two original payload fields remain exact and exactly one evidence-ref or not_applicable source binding is present; verification retains qa_evaluation_mode=required and the post-Build Code Reviewer then QA Evaluator route"
+        object_fields:
+          - {name: requested_scope, type: string, required: true}
+          - {name: execution_prerequisite, type: string, required: true}
+          - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+          - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
       - name: current_task_packet
         type: object
         required: conditional
@@ -1975,6 +2041,17 @@ handoffs:
             object_fields:
               - {name: requested_scope, type: string, required: true}
               - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+              - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+              - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+          - name: feature_preparation_qa_acceptance_obligation
+            type: object
+            required: conditional
+            condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
+            description: "Accepted future QA/acceptance obligation carried by the verification task packet"
+            validation: "Matches the enriched CodeWriter packet unchanged: requested_scope and execution_prerequisite remain exact and exactly one applicable preparation-source binding is present; this task retains qa_evaluation_mode=required and the post-Build QA route"
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
               - {name: execution_prerequisite, type: string, required: true}
               - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
               - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}

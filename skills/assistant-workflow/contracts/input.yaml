@@ -323,10 +323,10 @@ fields:
     required: false
     enum_values: [not_required, optional, required]
     description: "QA mode."
-    validation: "prepare_only -> not_required plus feature_preparation_result.future_qa_acceptance_obligation. Use required when the user explicitly requests QA/acceptance evaluation or harness_capable == true and acceptance evaluation is in scope. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work. Use not_required for ordinary medium+ code-review-only/source-changing work."
+    validation: "prepare_only -> not_required plus feature_preparation_result.future_qa_acceptance_obligation. For implement_only, a present approved_feature_preparation_qa_acceptance_obligation is an additional required positive trigger. Use required when the user explicitly requests QA/acceptance evaluation or harness_capable == true and acceptance evaluation is in scope. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work. Use not_required for ordinary medium+ code-review-only/source-changing work."
     default: not_required
     on_missing: infer
-    infer_from: "prepare_only -> not_required plus feature_preparation_result.future_qa_acceptance_obligation; otherwise validation triggers -> required, helpful -> optional, else not_required."
+    infer_from: "For implement_only, approved_feature_preparation_qa_acceptance_obligation -> required; preserve prepare_only as not_required. Otherwise validation triggers -> required, helpful -> optional, else not_required."
 
   - name: search_mode
     type: enum
@@ -535,6 +535,32 @@ fields:
         type: string[]
         required: true
         min_items: 1
+      - name: execution_prerequisite
+        type: string
+        required: true
+      - name: source_feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        validation: "Equals the approved evidence ref."
+      - name: source_preparation_basis
+        type: enum
+        required: conditional
+        condition: "feature_preparation_scope == not_applicable"
+        enum_values: [not_applicable]
+        validation: "Records the exact non-existing-system preparation basis without fabricating an evidence ref."
+
+  - name: approved_feature_preparation_qa_acceptance_obligation
+    type: object
+    required: conditional
+    condition: "execution_intent == implement_only and the approved feature_preparation_result contains future_qa_acceptance_obligation"
+    description: "Accepted deferred QA/acceptance scope for implementation-only work"
+    validation: "Its two approved payload fields (requested_scope and execution_prerequisite) exactly match feature_preparation_result.future_qa_acceptance_obligation. Triage adds exactly one preparation-source binding: existing_system requires source_feature_preparation_evidence_ref equal to approved_feature_preparation_evidence_ref and forbids source_preparation_basis; not_applicable requires source_preparation_basis=not_applicable and forbids source_feature_preparation_evidence_ref. The enriched consumer object sets qa_evaluation_mode=required and routes the existing post-Build, post-Code-Reviewer QA Evaluator lane; it never activates QA during prepare_only. Carry that enriched object unchanged through plan, task packet, Build, verification, review, and assistant-review acceptance context. Absent when no future_qa_acceptance_obligation was approved."
+    on_missing: fail
+    object_fields:
+      - name: requested_scope
+        type: string
+        required: true
       - name: execution_prerequisite
         type: string
         required: true

@@ -1,3 +1,323 @@
+validate_assertion_contract_paths() {
+    local fixture_file="$1"
+    local skill_name="$2"
+    local contracts_dir
+    local contract_error
+
+    contracts_dir="$(cd "$(dirname "$fixture_file")/.." && pwd)/contracts"
+    [[ -d "$contracts_dir" ]] || return 0
+
+    contract_error="$(ruby -rjson -ryaml - "$fixture_file" "$skill_name" "$contracts_dir" "$REPO_ROOT" 2>&1 <<'RUBY'
+fixture = JSON.parse(File.read(ARGV.fetch(0)))
+skill_name = ARGV.fetch(1)
+contracts_dir = ARGV.fetch(2)
+repo_root = ARGV.fetch(3)
+
+roots = Hash.new { |hash, key| hash[key] = [] }
+add_root = lambda do |field|
+  roots[field.fetch("name")] << field if field.is_a?(Hash) && field["name"].is_a?(String)
+end
+
+load_contract_roots = lambda do |directory, include_non_output_roots|
+  output_path = File.join(directory, "output.yaml")
+  YAML.load_file(output_path).fetch("artifacts", []).each { |artifact| add_root.call(artifact) } if File.file?(output_path)
+  next unless include_non_output_roots
+
+  input_path = File.join(directory, "input.yaml")
+  YAML.load_file(input_path).fetch("fields", []).each { |field| add_root.call(field) } if File.file?(input_path)
+
+  handoffs_path = File.join(directory, "handoffs.yaml")
+  next unless File.file?(handoffs_path)
+
+  walk_handoffs = lambda do |node|
+    case node
+    when Hash
+      node.each do |key, value|
+        if %w[context_fields return_fields].include?(key) && value.is_a?(Array)
+          value.each { |field| add_root.call(field) }
+        else
+          walk_handoffs.call(value)
+        end
+      end
+    when Array
+      node.each { |value| walk_handoffs.call(value) }
+    end
+  end
+  walk_handoffs.call(YAML.load_file(handoffs_path))
+end
+
+load_contract_roots.call(contracts_dir, skill_name == "assistant-review")
+
+# Explicitly bounded roots that eval fixtures may project outside their output
+# artifacts. This is deliberately not a pool of every input or handoff field.
+eval_only_root_registry = {
+  "assistant-docs" => [
+    { "kind" => "input_field", "name" => "architecture_decision_pack_status" },
+    { "kind" => "input_field", "name" => "architecture_design_mode" },
+    { "kind" => "input_field", "name" => "feature_preparation_evidence_status" },
+    { "kind" => "input_field", "name" => "feature_preparation_scope" }
+  ],
+  "assistant-workflow" => [
+    { "kind" => "input_field", "name" => "approved_feature_preparation_evidence_ref" },
+    { "kind" => "input_field", "name" => "approved_feature_preparation_harness_obligation" },
+    { "kind" => "input_field", "name" => "approved_feature_preparation_qa_acceptance_obligation" },
+    { "kind" => "input_field", "name" => "architecture_design_mode" },
+    { "kind" => "input_field", "name" => "execution_intent" },
+    { "kind" => "input_field", "name" => "feature_preparation_scope" },
+    { "kind" => "handoff_field", "name" => "architecture_mapping_evidence" },
+    { "kind" => "handoff_field", "name" => "implementation_steps" },
+    { "kind" => "output_child", "artifact" => "triage_result", "name" => "size" }
+  ]
+}
+
+find_named_fields = lambda do |node, name, matches|
+  case node
+  when Hash
+    matches << node if node["name"] == name
+    node.each_value { |value| find_named_fields.call(value, name, matches) }
+  when Array
+    node.each { |value| find_named_fields.call(value, name, matches) }
+  end
+end
+
+eval_only_root_registry.fetch(skill_name, []).each do |selector|
+  selected = case selector.fetch("kind")
+             when "input_field"
+               input = YAML.load_file(File.join(contracts_dir, "input.yaml"))
+               input.fetch("fields", []).select { |field| field["name"] == selector.fetch("name") }
+             when "handoff_field"
+               matches = []
+               find_named_fields.call(YAML.load_file(File.join(contracts_dir, "handoffs.yaml")), selector.fetch("name"), matches)
+               matches
+             when "output_child"
+               output = YAML.load_file(File.join(contracts_dir, "output.yaml"))
+               artifact = output.fetch("artifacts", []).find { |field| field["name"] == selector.fetch("artifact") }
+               artifact ? artifact.fetch("object_fields", []).select { |field| field["name"] == selector.fetch("name") } : []
+             else
+               []
+             end
+  unless selected.length == 1
+    warn "eval-only root registry selector must resolve exactly once: #{selector.to_json}"
+    exit 1
+  end
+  add_root.call(selected.first)
+end
+
+final_snapshot_identity_schema = {
+  "name" => "final_snapshot_identity",
+  "type" => "object",
+  "required" => true,
+  "object_fields" => [
+    { "name" => "basis", "type" => "enum", "required" => true, "enum_values" => %w[git_revision diff_digest content_digest task_or_pr_revision] },
+    { "name" => "value", "type" => "string", "required" => true },
+    { "name" => "captured_at", "type" => "string", "required" => true },
+    { "name" => "scope_manifest_digest", "type" => "string", "required" => true }
+  ]
+}
+inline_eval_only_roots = {
+  "assistant-workflow" => [
+    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["7.0"] }] },
+    { "name" => "current_final_batch", "type" => "object", "required" => false, "object_fields" => [{ "name" => "review_snapshot_id", "type" => "string", "required" => true }, final_snapshot_identity_schema] },
+    { "name" => "harness_entry_state", "type" => "object", "required" => false },
+    {
+      "name" => "plan", "type" => "object", "required" => false,
+      "object_fields" => [
+        { "name" => "tier", "type" => "enum", "required" => true, "enum_values" => %w[small medium large mega] },
+        {
+          "name" => "triage_result", "type" => "object", "required" => true,
+          "object_fields" => [
+            { "name" => "qa_evaluation_mode", "type" => "enum", "required" => true, "enum_values" => %w[not_required required] },
+            { "name" => "harness_capable", "type" => "boolean", "required" => true },
+            { "name" => "build_execution_lane", "type" => "enum", "required" => true, "enum_values" => %w[bounded_executor separated_workers] },
+            { "name" => "workflow_state_mode", "type" => "enum", "required" => true, "enum_values" => %w[inline journal] }
+          ]
+        }
+      ]
+    },
+    {
+      "name" => "post_fix_build_validation", "type" => "object", "required" => false,
+      "object_fields" => [
+        { "name" => "ref", "type" => "string", "required" => true },
+        { "name" => "status", "type" => "enum", "required" => true, "enum_values" => ["passed"] },
+        { "name" => "source_digest", "type" => "string", "required" => true },
+        { "name" => "evidence", "type" => "string", "required" => true }
+      ]
+    },
+    {
+      "name" => "post_rejection_digest_evidence", "type" => "object", "required" => false,
+      "object_fields" => [
+        { "name" => "ref", "type" => "string", "required" => true },
+        { "name" => "comparison", "type" => "enum", "required" => true, "enum_values" => %w[changed equal] },
+        { "name" => "pre_fix_source_digest", "type" => "string", "required" => true },
+        { "name" => "post_fix_source_digest", "type" => "string", "required" => true },
+        final_snapshot_identity_schema.merge("name" => "post_fix_snapshot_identity", "required" => false)
+      ]
+    },
+    { "name" => "task_packet", "type" => "object", "required" => false },
+    { "name" => "task_packets", "type" => "object[]", "required" => false },
+    {
+      "name" => "validation_result", "type" => "object", "required" => false,
+      "object_fields" => [
+        { "name" => "status", "type" => "enum", "required" => true, "enum_values" => ["blocked"] },
+        { "name" => "missing_field", "type" => "string", "required" => true },
+        { "name" => "evidence_or_gap", "type" => "string", "required" => true }
+      ]
+    },
+    { "name" => "workflow_complete", "type" => "enum", "required" => false, "enum_values" => ["--- WORKFLOW COMPLETE ---"] }
+  ]
+}
+inline_eval_only_roots.fetch(skill_name, []).each { |field| add_root.call(field) }
+
+external_producer_root_aliases = {
+  "assistant-workflow" => {
+    "canonical_final_summary" => { "producer_skill" => "assistant-review", "artifact" => "final_summary", "absent_paths" => [["artifact", "canonical_result_ref"], ["artifact", "canonical_contract"], ["artifact", "final_snapshot_identity_ref"], ["artifact", "approved_feature_preparation_qa_acceptance_obligation_result_ref"]] },
+    "fresh_canonical_final_summary" => { "producer_skill" => "assistant-review", "artifact" => "final_summary", "absent_paths" => [["artifact", "canonical_result_ref"], ["artifact", "canonical_contract"], ["artifact", "final_snapshot_identity_ref"], ["artifact", "approved_feature_preparation_qa_acceptance_obligation_result_ref"]] },
+    "canonical_qa_result" => { "producer_skill" => "assistant-review", "artifact" => "qa_evaluation_result", "absent_paths" => [["artifact", "canonical_result_ref"], ["artifact", "canonical_contract"], ["artifact", "final_snapshot_identity_ref"], ["artifact", "approved_feature_preparation_qa_acceptance_obligation_result_ref"]] },
+    "current_canonical_qa_result" => { "producer_skill" => "assistant-review", "artifact" => "qa_evaluation_result", "absent_paths" => [["artifact", "canonical_result_ref"], ["artifact", "canonical_contract"], ["artifact", "final_snapshot_identity_ref"], ["artifact", "approved_feature_preparation_qa_acceptance_obligation_result_ref"]] },
+    "prior_canonical_qa_result" => { "producer_skill" => "assistant-review", "artifact" => "qa_evaluation_result", "absent_paths" => [["artifact", "canonical_result_ref"], ["artifact", "canonical_contract"], ["artifact", "final_snapshot_identity_ref"], ["artifact", "approved_feature_preparation_qa_acceptance_obligation_result_ref"]] },
+    "current_qa_delegation_path" => { "producer_skill" => "assistant-review", "artifact" => "qa_evaluation_delegation_path", "absent_paths" => [] }
+  }
+}
+external_absent_paths = Hash.new { |hash, key| hash[key] = [] }
+
+wrap_external_artifact = lambda do |name, artifact|
+  {
+    "name" => name,
+    "type" => "object",
+    "object_fields" => [
+      { "name" => "ref", "type" => "string", "required" => true },
+      { "name" => "contract", "type" => "string", "required" => true },
+      {
+        "name" => "artifact",
+        "type" => artifact.fetch("type", "object"),
+        "required" => true,
+        "object_fields" => artifact.fetch("object_fields", [])
+      }
+    ]
+  }
+end
+
+external_producer_root_aliases.fetch(skill_name, {}).each do |alias_name, alias_config|
+  producer_skill = alias_config.fetch("producer_skill")
+  artifact_name = alias_config.fetch("artifact")
+  producer_output = File.join(repo_root, "skills", producer_skill, "contracts", "output.yaml")
+  next unless File.file?(producer_output)
+
+  artifact = YAML.load_file(producer_output).fetch("artifacts", []).find { |item| item["name"] == artifact_name }
+  if artifact.is_a?(Hash)
+    add_root.call(wrap_external_artifact.call(alias_name, artifact))
+    external_absent_paths[alias_name] = alias_config.fetch("absent_paths")
+  end
+end
+
+resolve = lambda do |path|
+  candidates = roots[path.first]
+  return [] if candidates.empty?
+
+  path.drop(1).each do |segment|
+    candidates = candidates.flat_map do |field|
+      if segment.is_a?(Numeric)
+        field["type"].is_a?(String) && field["type"].end_with?("[]") ? [field] : []
+      elsif segment.is_a?(String)
+        field.fetch("object_fields", []).select { |child| child["name"] == segment }
+      else
+        []
+      end
+    end
+    break if candidates.empty?
+  end
+  candidates
+end
+
+path_operands = lambda do |assertion|
+  operands = [["path", assertion["path"]]]
+  operands << ["other_path", assertion["other_path"]] if assertion.key?("other_path")
+  operands << ["when_path", assertion["when_path"]] if assertion.key?("when_path")
+  operands << ["field", assertion["path"] + [0, assertion["field"]]] if assertion["field"].is_a?(String) && assertion["path"].is_a?(Array)
+  if assertion["fields"].is_a?(Array) && assertion["path"].is_a?(Array)
+    assertion["fields"].each { |field| operands << ["fields", assertion["path"] + [0, field]] if field.is_a?(String) }
+  end
+  if assertion["expected_objects"].is_a?(Array) && assertion["path"].is_a?(Array)
+    assertion["expected_objects"].each do |object|
+      object.each_key { |field| operands << ["expected_objects", assertion["path"] + [0, field]] } if object.is_a?(Hash)
+    end
+  end
+  operands
+end
+
+literal_valid = lambda do |field, value|
+  case field["type"]
+  when "string", "file", "jsonl_line" then value.is_a?(String)
+  when "int" then value.is_a?(Integer)
+  when "float" then value.is_a?(Numeric)
+  when "boolean" then value == true || value == false
+  when "enum" then value.is_a?(String) && field.fetch("enum_values", []).include?(value)
+  when "string[]" then value.is_a?(Array) && value.all? { |item| item.is_a?(String) }
+  when "object" then value.is_a?(Hash)
+  when "object[]" then value.is_a?(Array) && value.all? { |item| item.is_a?(Hash) }
+  else false
+  end
+end
+
+admitted_literal = lambda do |path, value|
+  resolve.call(path).any? { |field| literal_valid.call(field, value) }
+end
+
+fixture.fetch("cases", []).each do |test_case|
+  Array(test_case.dig("machine_expectations", "structured_json_assertions")).each_with_index do |assertion, index|
+    path_operands.call(assertion).each do |operand, path|
+      unless path.is_a?(Array) && path.first.is_a?(String)
+        warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] invalid assertion path #{operand}: #{path.to_json}"
+        exit 1
+      end
+      unless roots.key?(path.first)
+        warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] unknown assertion root #{operand}: #{path.first.to_json}"
+        exit 1
+      end
+
+      resolved = resolve.call(path)
+      next if resolved.empty? && assertion["operator"] == "path_absent" && operand == "path" && external_absent_paths[path.first].include?(path.drop(1))
+
+      absence_allowed = assertion["operator"] != "path_absent" || operand != "path" || resolved.any? { |field| field["required"] != true || field["condition"].is_a?(String) }
+      next if !resolved.empty? && absence_allowed
+
+      reason = resolved.empty? ? "undeclared" : "required field used by path_absent"
+      warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] #{reason} assertion path #{operand}: #{path.to_json}"
+      exit 1
+    end
+
+    literal_error = case assertion["operator"]
+                    when "equals"
+                      !admitted_literal.call(assertion["path"], assertion["expected"])
+                    when "one_of"
+                      !Array(assertion["expected_values"]).all? { |value| admitted_literal.call(assertion["path"], value) }
+                    when "array_field_values_exact"
+                      field_path = assertion["path"] + [0, assertion["field"]]
+                      !Array(assertion["expected_values"]).all? { |value| admitted_literal.call(field_path, value) }
+                    when "array_object_values_exact"
+                      !Array(assertion["expected_objects"]).all? do |object|
+                        object.is_a?(Hash) && object.all? { |field, value| admitted_literal.call(assertion["path"] + [0, field], value) }
+                      end
+                    when "required_when_equals"
+                      !admitted_literal.call(assertion["when_path"], assertion["value"])
+                    else
+                      false
+                    end
+    if literal_error
+      warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] assertion literal outside contract schema"
+      exit 1
+    end
+  end
+end
+RUBY
+)" || true
+
+    if [[ -n "$contract_error" ]]; then
+        echo "$(display_path "$fixture_file"): $contract_error" >&2
+        exit 1
+    fi
+}
+
 validate_fixture() {
     local fixture_file="$1"
     local skill_name="$2"
@@ -167,7 +487,8 @@ validate_fixture() {
           or (type == "array" and all(.[]; type == "string" or type == "number" or type == "boolean"));
 
         def object_tuple_value:
-          equality_value or type == "null";
+          equality_value or type == "null"
+          or (type == "object" and length > 0 and length <= 16 and all(.[]; scalar));
 
         def scalar_array($maximum):
           type == "array" and length > 0 and length <= $maximum
@@ -198,7 +519,7 @@ validate_fixture() {
             if (.path? | json_path | not) or (.expected_values? | scalar_array(32) | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid one_of assertion"
             else empty end
-          elif .operator == "nonempty_string" or .operator == "nonempty_array" or .operator == "empty_array" or .operator == "array_type" or .operator == "path_absent" then
+          elif .operator == "nonempty_string" or .operator == "nonempty_array" or .operator == "empty_array" or .operator == "array_type" or .operator == "path_absent" or .operator == "absent_or_empty_array" then
             if (.path? | json_path | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid \(.operator) path"
             else empty end
@@ -338,6 +659,8 @@ validate_fixture() {
         echo "$(display_path "$fixture_file"): $validation_error" >&2
         exit 1
     fi
+
+    validate_assertion_contract_paths "$fixture_file" "$skill_name"
 }
 
 validate_all_fixtures() {

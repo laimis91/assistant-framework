@@ -526,6 +526,60 @@ validate_contract_index() {
 }
 
 # Keep legacy contract validation unchanged unless the optional progressive index exists.
+validate_contract_field_types() {
+    local contract_file="$1"
+    local type_kind field_type type_nodes
+
+    if ! type_nodes="$(ruby -ryaml -e '
+      document = YAML.load_file(ARGV.fetch(0))
+      type_kind = lambda do |value|
+        case value
+        when String then "string"
+        when TrueClass, FalseClass then "boolean"
+        when Numeric then "number"
+        when NilClass then "null"
+        when Array then "array"
+        when Hash then "object"
+        else value.class.to_s
+        end
+      end
+      walk_fields = lambda do |node|
+        case node
+        when Hash
+          if node.key?("type")
+            value = node.fetch("type")
+            puts "#{type_kind.call(value)}|#{value}" if value.is_a?(String)
+            puts "#{type_kind.call(value)}|" unless value.is_a?(String)
+          end
+          walk_fields.call(node["object_fields"]) if node.key?("object_fields")
+        when Array
+          node.each { |item| walk_fields.call(item) }
+        end
+      end
+      walk_fields.call(document["fields"])
+      walk_fields.call(document["artifacts"])
+      Array(document["handoffs"]).each do |handoff|
+        next unless handoff.is_a?(Hash)
+        %w[context_fields return_fields].each { |name| walk_fields.call(handoff[name]) }
+      end
+    ' "$contract_file" 2>&1)"; then
+        record_error "CONTRACT_FIELD_TYPE" "$contract_file" "cannot structurally parse contract field types: $type_nodes"
+        return
+    fi
+
+    while IFS='|' read -r type_kind field_type; do
+        [[ -n "$type_kind" ]] || continue
+        if [[ "$type_kind" != "string" ]]; then
+            record_error "CONTRACT_FIELD_TYPE" "$contract_file" "uses non-string field type '$type_kind'; allowed types must be canonical strings: string, int, float, boolean, enum, string[], object, object[], file, jsonl_line"
+            continue
+        fi
+        case "$field_type" in
+            string|int|float|boolean|enum|'string[]'|object|'object[]'|file|jsonl_line) ;;
+            *) record_error "CONTRACT_FIELD_TYPE" "$contract_file" "uses unsupported field type '$field_type'; allowed: string, int, float, boolean, enum, string[], object, object[], file, jsonl_line" ;;
+        esac
+    done <<< "$type_nodes"
+}
+
 validate_contract_file() {
     local contract_file="$1"
     local skill_name="$2"
@@ -535,6 +589,7 @@ validate_contract_file() {
     case "$contract_name" in
         input|output|phase-gates|handoffs)
             validate_contract_header "$contract_file" "$contract_name" "$skill_name"
+            validate_contract_field_types "$contract_file"
             validate_enum_values "$contract_file"
 
             if [[ "$contract_name" == "input" ]]; then
@@ -549,6 +604,7 @@ validate_contract_file() {
         *)
             record_error "CONTRACT_UNKNOWN" "$contract_file" "unknown contract file; expected input.yaml, output.yaml, phase-gates.yaml, or handoffs.yaml"
             validate_contract_header "$contract_file" "$contract_name" "$skill_name"
+            validate_contract_field_types "$contract_file"
             validate_enum_values "$contract_file"
             ;;
     esac

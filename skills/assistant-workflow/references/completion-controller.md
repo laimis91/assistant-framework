@@ -5,11 +5,24 @@ final distillation. Load after Review. Manual verification may still be pending
 only when `manual_verification_mode=required`.
 
 Document is the sole owner of `final_handoff`; Review supplies `review_result`
-and verification evidence but does not create the handoff. For medium+ work,
+and verification evidence but does not create the handoff. For medium+, strict,
+or required-QA work,
 load `references/final-handoff.md` and complete its reconstructable developer
 handoff. Requirement evidence comes from
 `references/requirement-acceptance-map.md`; every accepted requirement is
 passed or explicitly excluded with approval.
+
+Before completion, bind `final_handoff.review_completion` to the validated
+canonical assistant-review `final_summary` and applicable QA result, including
+current producer versions, the exact final-batch alias/identity, and any carried
+QA-obligation result. A review `HAS_REMAINING_ITEMS`,
+`coverage_complete=false`, rejected QA, QA `HAS_REMAINING_ITEMS`, blocked QA,
+or QA `BLOCKED` cannot use the no-material-findings claim and cannot print
+`--- WORKFLOW COMPLETE ---`; return explicit remaining-item or blocker wording
+plus the next action.
+
+This typed terminal projection is required for medium+ work and for every strict
+or required-QA execution, including otherwise-small work.
 
 ## Document Paths
 
@@ -94,7 +107,8 @@ explicit project policy, or a user request. When required, print:
 --- WORKFLOW COMPLETE ---
 ```
 
-Otherwise, finish with a concise natural completion update that includes the
+Otherwise, finish with a concise natural completion update only when the same
+completion gates and review-completion disposition pass; include the
 required output evidence without exact marker ceremony. Medium+ concision does
 not permit dropping architecture decisions, requirement evidence, developer
 test scenarios, limitations, or rollback notes from the final handoff.

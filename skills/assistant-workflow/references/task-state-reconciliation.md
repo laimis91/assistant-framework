@@ -22,6 +22,8 @@ Record or recover:
 3. Inspect the current repository root, branch, HEAD, worktree, and relevant
    artifact evidence when available.
 4. Compare task identity, goal, repository identity, and verified milestone.
+   For persisted review/QA wrappers, compare each `producer_schema_version`
+   with `skills/assistant-review/contracts/index.yaml#schema_version`.
 5. Classify the state as `active | stale | superseded | completed`.
 6. Resume only an `active` state. Repair `stale`, archive or replace
    `superseded`, and do not restart `completed` work without a new request.
@@ -34,7 +36,10 @@ Record or recover:
 - `active`: goal and repository identity still match and no newer evidence
   invalidates the recorded next action.
 - `stale`: the goal still applies, but repository identity, progress, or
-  verification evidence changed. Refresh the state before continuing.
+  verification evidence changed, or a persisted assistant-review producer
+  version differs. Invalidate every affected canonical result, delegation,
+  snapshot, Pack-review, and QA ref; rerun review, QA, or both under the current
+  contract before continuing. Do not infer another packet shape.
 - `superseded`: a newer user request or approved plan replaced the recorded
   objective or scope. Create/reconcile state for the newer task.
 - `completed`: repository and verification evidence show the recorded goal is

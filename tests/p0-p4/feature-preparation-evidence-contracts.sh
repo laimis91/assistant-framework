@@ -88,6 +88,9 @@ if ruby -ryaml -e '
   approved_harness = input_fields.fetch("approved_feature_preparation_harness_obligation")
   approved_harness_fields = approved_harness.fetch("object_fields").map { |field| field.fetch("name") }
   approved_harness_field_map = approved_harness.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  approved_qa = input_fields.fetch("approved_feature_preparation_qa_acceptance_obligation")
+  approved_qa_fields = approved_qa.fetch("object_fields").map { |field| field.fetch("name") }
+  approved_qa_field_map = approved_qa.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
 
   artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
   evidence = artifacts.fetch("feature_preparation_evidence")
@@ -136,21 +139,28 @@ if ruby -ryaml -e '
   scoped_handoffs = %w[orchestrator_to_architect_decompose orchestrator_to_architect orchestrator_to_code_writer orchestrator_to_builder_tester].all? do |name|
     fields = handoff_map.fetch(name).fetch("context_fields").to_h { |field| [field.fetch("name"), field] }
     harness_fields = fields.fetch("feature_preparation_harness_obligation").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+    qa_fields = fields.fetch("feature_preparation_qa_acceptance_obligation").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
     fields.fetch("feature_preparation_scope").fetch("enum_values") == %w[not_applicable existing_system] &&
       fields.fetch("feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
       fields.fetch("feature_preparation_harness_obligation").fetch("type") == "object" &&
       harness_fields.fetch("source_feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
-      harness_fields.fetch("source_preparation_basis")["condition"] == "feature_preparation_scope == not_applicable"
+      harness_fields.fetch("source_preparation_basis")["condition"] == "feature_preparation_scope == not_applicable" &&
+      fields.fetch("feature_preparation_qa_acceptance_obligation").fetch("type") == "object" &&
+      qa_fields.fetch("source_feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
+      qa_fields.fetch("source_preparation_basis")["condition"] == "feature_preparation_scope == not_applicable"
   end
   architect_steps = handoff_map.fetch("orchestrator_to_architect").fetch("return_fields").find { |field| field["name"] == "implementation_steps" }
   architect_step_ref = architect_steps.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_ref" }
   architect_step_harness = architect_steps.fetch("object_fields").find { |field| field["name"] == "feature_preparation_harness_obligation" }
+  architect_step_qa = architect_steps.fetch("object_fields").find { |field| field["name"] == "feature_preparation_qa_acceptance_obligation" }
   code_writer_packet = handoff_map.fetch("orchestrator_to_code_writer").fetch("context_fields").find { |field| field["name"] == "current_task_packet" }
   code_writer_ref = code_writer_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_ref" }
   code_writer_harness = code_writer_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_harness_obligation" }
+  code_writer_qa = code_writer_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_qa_acceptance_obligation" }
   builder_packet = handoff_map.fetch("orchestrator_to_builder_tester").fetch("context_fields").find { |field| field["name"] == "current_task_packet" }
   builder_ref = builder_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_evidence_ref" }
   builder_harness = builder_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_harness_obligation" }
+  builder_qa = builder_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_qa_acceptance_obligation" }
 
   valid = scope.fetch("validation").include?("prepare_only or end_to_end") &&
     approved_ref["required"] == "conditional" &&
@@ -162,6 +172,12 @@ if ruby -ryaml -e '
     approved_harness_field_map.fetch("source_feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
     approved_harness_field_map.fetch("source_preparation_basis")["condition"] == "feature_preparation_scope == not_applicable" &&
     approved_harness_field_map.fetch("source_preparation_basis")["enum_values"] == ["not_applicable"] &&
+    approved_qa["required"] == "conditional" &&
+    approved_qa["condition"].include?("execution_intent == implement_only") &&
+    approved_qa_fields == %w[requested_scope execution_prerequisite source_feature_preparation_evidence_ref source_preparation_basis] &&
+    approved_qa_field_map.fetch("source_feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
+    approved_qa_field_map.fetch("source_preparation_basis")["condition"] == "feature_preparation_scope == not_applicable" &&
+    approved_qa_field_map.fetch("source_preparation_basis")["enum_values"] == ["not_applicable"] &&
     evidence["condition"] == "execution_intent in [prepare_only, end_to_end] and feature_preparation_scope == existing_system" &&
     implementation["type"] == "object" &&
     implementation_fields.fetch("status").fetch("enum_values") == %w[inspected inspected_absent inaccessible] &&
@@ -173,19 +189,21 @@ if ruby -ryaml -e '
     test_results["required"] == "conditional" &&
     test_results["condition"] == "execution_intent != prepare_only and (runnable tests exist or task changes behavior)" &&
     pack_ref && pack_ref["condition"] == "feature_preparation_scope == existing_system" &&
-    discover_gate && discover_gate["condition"] == "feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present" &&
+    discover_gate && discover_gate["condition"] == "feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present or approved_feature_preparation_qa_acceptance_obligation is present" &&
     discover_gate.fetch("check").include?("approved_feature_preparation_evidence_ref") &&
     plan_gate && plan_gate["condition"] == "feature_preparation_scope == existing_system" &&
     invariant && invariant["condition"] == "feature_preparation_scope == existing_system" &&
     entry_names.include?("execution_intent") &&
     preparation_names.include?("approved_feature_preparation_evidence_ref") &&
     preparation_names.include?("approved_feature_preparation_harness_obligation") &&
-    skill.include?("any carried `approved_feature_preparation_harness_obligation` (including `feature_preparation_scope=not_applicable`)") &&
+    preparation_names.include?("approved_feature_preparation_qa_acceptance_obligation") &&
+    skill.include?("approved_feature_preparation_harness_obligation` or `approved_feature_preparation_qa_acceptance_obligation") &&
     skill.include?("typed `not_applicable` source binding before Decompose, Plan, or Build") &&
     invariant_names.include?("INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY") &&
     scoped_handoffs &&
     [architect_step_ref, code_writer_ref, builder_ref].all? { |field| field && field["condition"] == "feature_preparation_scope == existing_system" } &&
     [architect_step_harness, code_writer_harness, builder_harness].all? { |field| field && field["type"] == "object" } &&
+    [architect_step_qa, code_writer_qa, builder_qa].all? { |field| field && field["type"] == "object" } &&
     tiers &&
     preparation_tier.fetch("required_artifacts") == %w[completion_policy validation_results feature_preparation_result] &&
     !preparation_tier.fetch("required_artifacts").any? { |artifact| %w[triage_result feature_preparation_evidence final_handoff changed_files test_results review_result].include?(artifact) } &&
@@ -1262,6 +1280,7 @@ if ruby -ryaml -e '
   candidate_fields = candidates.fetch("object_fields").to_h { |entry| [entry.fetch("name"), entry] }
   input_names = thinking_input.fetch("fields").map { |entry| entry.fetch("name") }
   routing_fields = workflow_input.fetch("fields").to_h { |entry| [entry.fetch("name"), entry] }
+  approved_qa_fields = routing_fields.fetch("approved_feature_preparation_qa_acceptance_obligation").fetch("object_fields").to_h { |entry| [entry.fetch("name"), entry] }
   valid = fields.fetch("future_qa_acceptance_obligation").fetch("required") == "conditional" &&
     fields.fetch("future_qa_acceptance_obligation").fetch("condition").include?("qa") &&
     fields.fetch("future_harness_obligation").fetch("required") == "conditional" &&
@@ -1274,8 +1293,13 @@ if ruby -ryaml -e '
     routing_fields.fetch("required_agents").fetch("validation").include?("future_harness_obligation") &&
     routing_fields.fetch("harness_capable").fetch("validation").include?("prepare_only, always false") &&
     routing_fields.fetch("harness_capable").fetch("infer_from").include?("future_harness_obligation") &&
-    routing_fields.fetch("qa_evaluation_mode").fetch("validation").include?("feature_preparation_result.future_qa_acceptance_obligation") &&
-    routing_fields.fetch("qa_evaluation_mode").fetch("infer_from").include?("feature_preparation_result.future_qa_acceptance_obligation") &&
+    routing_fields.fetch("qa_evaluation_mode").fetch("validation").include?("approved_feature_preparation_qa_acceptance_obligation") &&
+    routing_fields.fetch("qa_evaluation_mode").fetch("infer_from").include?("approved_feature_preparation_qa_acceptance_obligation") &&
+    routing_fields.fetch("approved_feature_preparation_qa_acceptance_obligation").fetch("condition").include?("implement_only") &&
+    approved_qa_fields.fetch("requested_scope").fetch("required") == true &&
+    approved_qa_fields.fetch("execution_prerequisite").fetch("required") == true &&
+    approved_qa_fields.fetch("source_feature_preparation_evidence_ref").fetch("condition").include?("existing_system") &&
+    approved_qa_fields.fetch("source_preparation_basis").fetch("condition").include?("not_applicable") &&
     preparation_reference.include?("feature_preparation_result.future_qa_acceptance_obligation") &&
     preparation_reference.include?("feature_preparation_result.future_harness_obligation") &&
     !preparation_reference.include?("open_decisions`, `implementation_implications`, and/or") &&

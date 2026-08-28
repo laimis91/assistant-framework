@@ -59,7 +59,7 @@ gates:
         on_fail: "Assess risk tier using impact, uncertainty, reversibility, security/data exposure, and behavior parity criteria"
 
       - id: T_CONTROLLER_INTENSITY
-        check: "controller_intensity is set to light, standard, or strict; ordinary medium+ non-harness work uses standard. For execution_intent != prepare_only, strict requires high/critical risk, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria. For prepare_only, risk/project criteria may select strict preparation; QA or harness requests alone must not."
+        check: "controller_intensity is set to light, standard, or strict; ordinary medium+ non-harness work uses standard. For execution_intent != prepare_only, strict requires high/critical risk, harness_capable == true, qa_evaluation_mode == required, or explicit trace/replay/harness/QA criteria. An approved_feature_preparation_qa_acceptance_obligation atomically requires strict, journal state, qa_evaluation_mode=required, and the selected Build lane plus Code Reviewer and QA Evaluator route. For prepare_only, risk/project criteria may select strict preparation; QA or harness requests alone must not."
         on_fail: "Reapply completion_tiers/gate_tiers without size/delegation inference. For prepare_only, retain risk/project-selected strict, force QA/harness inactive, and carry requests only in feature_preparation_result.future_qa_acceptance_obligation or future_harness_obligation."
 
       - id: T_ADAPTIVE_COMPLETION_MODES
@@ -90,7 +90,7 @@ gates:
         on_fail: "Remove execution gates/roles, force QA/harness inactive, retain preparation evidence/roles, and record explicit future work in typed feature_preparation_result obligations."
 
       - id: T_QA_EVALUATOR
-        check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to the selected Build lane roles and Code Reviewer or Reviewer compatibility. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
+        check: "When qa_evaluation_mode == required: required_agents includes QA Evaluator in addition to the selected Build lane roles and Code Reviewer or Reviewer compatibility. An approved_feature_preparation_qa_acceptance_obligation is an additional required positive trigger and requires qa_evaluation_mode=required, controller_intensity=strict, workflow_state_mode=journal, and that exact route. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
         condition: "execution_intent != prepare_only and qa_evaluation_mode == required"
         on_fail: "Add QA Evaluator as a Review-phase role, or record qa_evaluation_mode=not_required with a concrete reason when QA is not applicable. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
 
@@ -160,9 +160,9 @@ gates:
         on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
 
       - id: D_FEATURE_PREPARATION_EVIDENCE
-        check: "Existing-system prepare_only/end_to_end completes feature_preparation_evidence before questions, Plan, or Build; existing-system implement_only resolves approved_feature_preparation_evidence_ref. approved_feature_preparation_harness_obligation preserves the three approved payload fields exactly, adds exactly one applicable preparation source binding (that evidence ref for existing_system, or source_preparation_basis=not_applicable with no evidence ref), and carries the enriched consumer object unchanged downstream. It promotes an initially small implementation to at least medium, sets harness_capable=true, and completes the Done Contract/Harness Recipe plus runtime-ref gate before Build. The stable identity feature_preparation_evidence.ref is carried unchanged to plans, packets, Packs, diagrams, and docs. Every Pack behavior claim or Product question has exactly one stable {evidence_ref, item_id, claim_or_question} binding; missing, extra, duplicate, stale, or mismatched bindings block it. Product question admissibility fails closed: requirements/design silence is insufficient; inspect implementation and relevant tests; existing observable behavior defaults to preservation unless explicitly changed; inaccessible evidence is evidence_gap, contradiction is source_conflict, and a new route/scope for existing behavior is existing_behavior_to_preserve + implementation_gap."
-        condition: "feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present"
-        on_fail: "Prepare by tracing behavior/tests when applicable, classifying each row, preserving the evidence id or exact not_applicable basis, and replacing unsupported Product questions with the correct gap/conflict. Implement only after the applicable source binding and any harness obligation resolve exactly and the harness entry gate passes."
+        check: "Existing-system prepare_only/end_to_end completes feature_preparation_evidence before questions, Plan, or Build; existing-system implement_only resolves approved_feature_preparation_evidence_ref. approved_feature_preparation_harness_obligation preserves the three approved payload fields exactly, adds exactly one applicable preparation source binding (that evidence ref for existing_system, or source_preparation_basis=not_applicable with no evidence ref), and carries the enriched consumer object unchanged downstream. approved_feature_preparation_qa_acceptance_obligation preserves its two approved payload fields exactly, adds exactly one applicable preparation source binding, sets qa_evaluation_mode=required, and carries the enriched object unchanged through the existing post-Build Code Reviewer then QA Evaluator lane. The harness obligation promotes an initially small implementation to at least medium. The QA obligation preserves small size unless independent size or risk criteria promote it. Set harness_capable=true and complete the pre-Build Done Contract/Harness Recipe runtime-ref gate only for harness work. The stable identity feature_preparation_evidence.ref is carried unchanged to plans, packets, Packs, diagrams, and docs. Every Pack behavior claim or Product question has exactly one stable {evidence_ref, item_id, claim_or_question} binding; missing, extra, duplicate, stale, or mismatched bindings block it. Product question admissibility fails closed: requirements/design silence is insufficient; inspect implementation and relevant tests; existing observable behavior defaults to preservation unless explicitly changed; inaccessible evidence is evidence_gap, contradiction is source_conflict, and a new route/scope for existing behavior is existing_behavior_to_preserve + implementation_gap."
+        condition: "feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present or approved_feature_preparation_qa_acceptance_obligation is present"
+        on_fail: "Prepare by tracing behavior/tests when applicable, classifying each row, preserving the evidence id or exact not_applicable basis, and replacing unsupported Product questions with the correct gap/conflict. Implement only after the applicable source binding and any deferred obligation resolve exactly; apply the pre-Build harness gate only for harness work and the post-Build QA lane only for QA work."
 
       - id: D_PROGRESSIVE_DISCOVERY_HOLD
         check: "When progressive_discovery_state in [mapping, resolving, route_clear, blocked], typed progressive state must remain in Discover and prohibits Decompose, Plan, Build, project/source mutation, external writes, branch creation, and credential-location recording. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."
@@ -576,42 +576,56 @@ gates:
 
       - id: R1
         check: "Structured Spec Review completed by loading and following references/prompts/spec-review.md; latest Spec Review entry has Result: PASS and records missing acceptance criteria, extra scope, changed files mismatch, verification evidence mismatch, and required fixes"
-        condition: "controller_intensity in [standard, strict]"
+        condition: "controller_intensity in [standard, strict] or qa_evaluation_mode == required"
         on_fail: "Run Stage 1 Spec Review using references/prompts/spec-review.md, record the structured spec compliance result, fix any FAIL items, and re-run until Result: PASS before quality review."
 
       - id: R1A
         check: "Quality Review entries do not substitute for Spec Review; Stage 1 spec compliance result is present before Stage 2 quality review starts"
-        condition: "controller_intensity in [standard, strict]"
+        condition: "controller_intensity in [standard, strict] or qa_evaluation_mode == required"
         on_fail: "Run the distinct Spec Review first. Do not count assistant-review, Quality Review, or legacy Review entries as spec compliance."
 
       - id: R2
-        check: "Quality Review completed by loading and following assistant-review SKILL.md and contracts; canonical assistant-review final_summary and review_delegation_path are validated at review_result refs, and an applicable Pack also records architecture_decision_pack_review_ref"
-        condition: "controller_intensity in [standard, strict]"
-        on_fail: "Load and follow assistant-review SKILL.md and contracts. assistant-review owns Reviewer dispatch and return validation; record only validated canonical result refs in workflow, including architecture_decision_pack_review_ref when a Pack applies."
+        check: "Quality Review completed by loading and following assistant-review SKILL.md; review_result binds current producer_schema_version, canonical final_summary, exact final_review_snapshot_id, final_snapshot_identity_ref/object, review_delegation_path, and applicable Pack review."
+        condition: "controller_intensity in [standard, strict] or qa_evaluation_mode == required"
+        on_fail: "Run assistant-review, then bind its current producer version, exact canonical batch identity and alias, delegation path, and applicable Pack review."
+
+      - id: R_ASSISTANT_REVIEW_SCHEMA_VERSION
+        check: "Every consumed review/QA wrapper producer_schema_version exactly equals skills/assistant-review/contracts/index.yaml#schema_version. A persisted mismatch invalidates its canonical result, delegation, snapshot, Pack-review, and QA refs and requires the selected current-contract rebuild route."
+        on_fail: "Clear mismatched refs, record task_state_reconciliation.assistant_review_packet_compatibility=invalidated, and rerun review, QA, or both under the current assistant-review contract."
 
       - id: R_LIGHT_FRESH_REVIEW
-        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence; when an Architecture Decision Pack applies, fresh_review_result records validated canonical assistant-review final_summary and architecture_decision_pack_review refs without requiring review_delegation_path for direct fallback"
+        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence; when an Architecture Decision Pack applies, fresh_review_result records validated canonical assistant-review final_summary, exact current final-batch final_snapshot_identity ref and object, and architecture_decision_pack_review refs without requiring review_delegation_path for direct fallback"
         condition: "controller_intensity == light"
-        on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence. For an applicable Pack, validate and record its canonical assistant-review final_summary and architecture_decision_pack_review refs; do not require review_delegation_path for light direct fallback."
+        on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence. For an applicable Pack, validate and record its canonical assistant-review final_summary, exact current final-batch final_snapshot_identity, and architecture_decision_pack_review refs; do not require review_delegation_path for light direct fallback."
 
       - id: R2A_CODE_REVIEWER_DISTINCT
-        check: "After Build completes, Review owns and records independent Code Reviewer dispatch/result evidence, or fresh direct-fallback review evidence, in subagent_evidence plus validated canonical assistant-review result refs in review_result. Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence."
+        check: "After Build completes, Review owns and records independent Code Reviewer dispatch/result evidence, or fresh direct-fallback review evidence, in subagent_evidence plus validated canonical assistant-review result and final_snapshot_identity refs in review_result. Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence."
         condition: "execution_intent != prepare_only and (controller_intensity in [standard, strict] or qa_evaluation_mode == required)"
-        on_fail: "Run the Review-owned assistant-review lane after Build, validate its canonical outputs, and populate review_result refs plus subagent_evidence.code_reviewer_evidence. Keep QA Evaluator entries separate."
+        on_fail: "Run the Review-owned assistant-review lane after Build, validate its canonical outputs and exact current final-batch final_snapshot_identity, then populate review_result refs plus subagent_evidence.code_reviewer_evidence. Keep QA Evaluator entries separate."
 
       - id: R_QA_EVALUATION
-        check: "When qa_evaluation_mode is required: assistant-review owns QAEvaluator dispatch and return validation after build/test and Code Reviewer evidence; workflow records validated canonical qa_evaluation_result and qa_evaluation_delegation_path refs"
+        check: "Required QA runs through assistant-review after Build and Code Reviewer evidence; workflow records current producer version plus validated canonical QA-result and delegation refs."
         condition: "execution_intent != prepare_only and qa_evaluation_mode == required"
         on_fail: "Load and follow assistant-review QA contracts. assistant-review owns QAEvaluator dispatch and return validation; do not complete Review until workflow holds validated canonical QA result refs or assistant-review reports a canonical blocked result."
+
+      - id: R_QA_OBLIGATION_RESULT
+        check: "When a deferred QA obligation is carried, every accepted or accepted_with_concerns plus CLEAN or ISSUES_FIXED pair has requested_scope_status=fulfilled, execution_prerequisite_status=met, and exact unchanged obligation/source binding."
+        condition: "approved_feature_preparation_qa_acceptance_obligation is carried"
+        on_fail: "Treat the obligation as remaining or blocked; preserve its exact source binding and do not complete the workflow."
+
+      - id: R_QA_REJECTION_SOURCE_FIX_REFRESH
+        check: "After QA rejection, changed means unequal digests plus Build, rehash, and fresh complete review; equal means identical digests plus explicit equality evidence and no changed-path fields."
+        condition: "a prior canonical QA result was rejected and another QA round is proposed"
+        on_fail: "Return to Build, validate the fix, rehash, and run a fresh complete assistant-review batch; bypass only with explicit digest-equality evidence."
 
       - id: R_PIVOT_RESTART_DECISION
         check: "Review or QA STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric/domain action pivot records an orchestrator-owned pivot_restart_decision before another fix, review, QA, or build dispatch; round 10 remains terminal and never creates round 11 behavior"
         on_fail: "Pause Review, create pivot_restart_decision with trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Update Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger when harness-capable before continuing."
 
       - id: R3
-        check: "Review emits review_result with canonical_result_ref, canonical_contract=assistant-review/contracts/output.yaml#final_summary, delegation_path_ref, delegation_contract=assistant-review/contracts/output.yaml#review_delegation_path, conditional architecture_decision_pack_review_ref with architecture_decision_pack_review_contract=assistant-review/contracts/output.yaml#architecture_decision_pack_review, and validation_status=validated; developer handoff creation remains in Document"
+        check: "Review emits validated review_result with current producer_schema_version, canonical final-summary/delegation contracts and refs, exact final_review_snapshot_id, exact final_snapshot_identity ref/object, and conditional canonical Pack-review refs; Document owns the developer handoff."
         condition: "controller_intensity in [standard, strict] or risk_tier in [high, critical]"
-        on_fail: "Complete assistant-review, validate its canonical result, delegation-path, and applicable Pack-review artifacts, record workflow refs, then continue to Document for developer handoff creation"
+        on_fail: "Complete current-contract assistant-review, validate its exact current batch alias/identity and applicable refs, then continue to Document."
 
       - id: R_REQUIREMENT_COVERAGE
         check: "Every accepted requirement_id has passed evidence or an explicit approved exclusion with reason before Review completes"
@@ -675,13 +689,18 @@ gates:
         check: "If work produced a repeatable workflow, recurring lesson, user-requested reusable procedure, or skill/constraint candidate: verified_skill_distillation exists and verifier_result is approved before promotion, or promotion_decision is skip with rationale"
         on_fail: "Load references/verified-skill-distillation.md, create the distillation packet, and send it to an independent verifier before saving any reusable skill or constraint"
 
+      - id: DOC_REVIEW_TERMINAL_STATE
+        check: "final_handoff.review_completion binds current producer versions, canonical result and coverage_complete, exact alias/identity, qa_final_verdict/result, and carried obligation. HAS_REMAINING_ITEMS, incomplete coverage, or failed QA/obligation cannot complete; record remaining_items or blocked with next action."
+        condition: "size in [medium, large, mega] or controller_intensity == strict or qa_evaluation_mode == required"
+        on_fail: "Rebuild final_handoff.review_completion from the validated canonical review_result and applicable qa_evaluation_result. Do not use the clean claim; report the remaining review items, coverage gap, rejected QA, or QA blocker and its next action."
+
       - id: DOC3
-        check: "'--- WORKFLOW COMPLETE ---' is only printed AFTER all DOCUMENT assertions pass"
-        on_fail: "Do not print workflow complete until all document assertions pass"
+        check: "'--- WORKFLOW COMPLETE ---' is printed only after all DOCUMENT assertions pass and final_handoff.review_completion.completion_disposition is complete when final_handoff applies"
+        on_fail: "Do not print workflow complete until all Document assertions pass and the applicable final handoff disposition is complete; for remaining_items or blocked, return that explicit status and next action instead."
 
       - id: DOC_FINAL_HANDOFF
-        check: "For medium+ tasks final_handoff exists and every accepted requirement_id is linked to passed evidence or an approved exclusion"
-        condition: "size in [medium, large, mega]"
+        check: "final_handoff exists, exactly binds canonical review/QA completion evidence, and traces accepted requirements when required."
+        condition: "size in [medium, large, mega] or controller_intensity == strict or qa_evaluation_mode == required"
         on_fail: "Load references/final-handoff.md and references/requirement-acceptance-map.md, complete the handoff and traceability evidence, then re-run Document gates"
 
       - id: DOC4
@@ -723,9 +742,9 @@ gates:
 # ─────────────────────────────────────────────
 invariants:
   - id: INV_TASK_STATE_FRESHNESS
-    check: "Persisted task state is treated as a claim and reconciled against the newest user request and current repository evidence before its next action is used; only classification=active may resume"
+    check: "Persisted task state is reconciled against newest intent, repository evidence, and current assistant-review producer schema; only active state with current review/QA wrappers may resume."
     scope: all_phases
-    on_fail: "Load references/task-state-reconciliation.md, classify active/stale/superseded/completed, repair the state, and discard its unchecked next action"
+    on_fail: "Reconcile state; invalidate mismatched assistant-review refs and rebuild them under the current contract before resume."
 
   - id: INV1
     check: "Constraints list is never reduced — only grows. Removing a constraint requires explicit user instruction."

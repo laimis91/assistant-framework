@@ -23,8 +23,10 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 - Candidate Search is reserved for explicit alternatives, open-ended architecture/design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or reviewer-requested pivots.
 - Triggered Architecture Decision Packs are source-backed and fresh. `prepare_only` retains Discover-only Pack context through Preparation Completion; `execution_intent != prepare_only` continues through Plan binding, task packets, Build, handoff, and Review.
 - Behavior changes default tests-first or carry explicit validation in the same Build step.
-- Existing-system prep inspects sources, code, and tests. `prepare_only` ends at Preparation Completion without code claims; an explicitly requested readiness Plan is always inline and never waits. Existing-system readiness carries the exact unchanged feature-evidence ref; `not_applicable` readiness carries `preparation_basis=not_applicable` and no feature-evidence ref. A deferred harness request remains inactive during preparation, then a later `implement_only` workflow consumes its exact approved obligation, sets `harness_capable=true`, and satisfies the pre-Build harness gate. Product questions need evidence.
+- Existing-system prep inspects sources, code, and tests. `prepare_only` ends without implementation claims; optional readiness planning is inline. Carry exact feature evidence or a `not_applicable` basis plus inactive future harness/QA obligations into `implement_only`, then activate their gates. Product questions require evidence.
 - Review, QA, and security routing apply when triggered.
+- Medium+ final handoff binds canonical review/QA state and exact snapshot;
+  remaining items, incomplete coverage, or rejected/blocked QA forbid completion.
 - Medium+ output follows `references/final-handoff.md`; prepare_only returns readiness and next implementation state.
 
 ## Constraints
@@ -47,7 +49,7 @@ Canonical contracts are authoritative. Read `contracts/index.yaml` first, valida
 
 - `entry`: load entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
 - `architecture_design`: load `references/architecture-decision-pack.md` when `architecture_design_mode != not_applicable`; use its typed artifact before Decompose or Plan and retain its reference through Review.
-- `feature_preparation`: for repository-grounded preparation, existing behavior, or any carried `approved_feature_preparation_harness_obligation` (including `feature_preparation_scope=not_applicable`), load `references/feature-preparation-evidence.md`; resolve the applicable evidence ref or typed `not_applicable` source binding before Decompose, Plan, or Build and retain it in downstream artifacts.
+- `feature_preparation`: for repository-grounded preparation, existing behavior, or any carried `approved_feature_preparation_harness_obligation` or `approved_feature_preparation_qa_acceptance_obligation` (including `feature_preparation_scope=not_applicable`), load `references/feature-preparation-evidence.md`; resolve the applicable evidence ref or typed `not_applicable` source binding before Decompose, Plan, or Build and retain it in downstream artifacts. A carried QA obligation uses only the existing post-Build, post-Code-Reviewer QA Evaluator lane.
 - `progressive_discovery`: load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, either durable marker is pending/consumed or active/closed, or `progressive_artifact_retention_state=terminally_archived`; durable markers route even when the retention state is missing or invalid. `terminally_archived` releases the durable artifacts only with the typed `progressive_terminal_archival` tombstone and explicit final archival/termination evidence, never merely `Task state: completed`, and cannot revert.
 - `delegation`: load role and trigger fields when roles may be required and before any subagent dispatch.
 - `current_phase`: active `contracts/phase-gates.yaml` at transition.
@@ -69,8 +71,12 @@ and reapproval. Direct-user, applicable
 `subagent_trigger_scope` and dispatch without
 separate permission question. Explicit opt-out, unavailability, or
 exact policy block uses evidenced fallback. `verification_command` is non-empty
-argv `string[]`; assistant-review v6 owns Reviewer/QAEvaluator handoffs and
-returns `final_summary` / `qa_evaluation_result`; the `reviewed_scope` is non-empty.
+argv `string[]`; assistant-review owns Reviewer/QAEvaluator handoffs and returns
+`final_summary` / `qa_evaluation_result`. Persisted wrappers record current
+`skills/assistant-review/contracts/index.yaml#schema_version`; mismatch
+invalidates their refs and reruns the required current-contract lane without
+guessing packet shape. Workflow validates exact current-batch alias/identity;
+`reviewed_scope` is non-empty.
 
 ## Visible Checkpoints
 

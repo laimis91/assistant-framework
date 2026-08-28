@@ -4,9 +4,15 @@
 # when subagent_execution_mode=delegated. Direct fallback uses the same review
 # fields as local evidence without spawning a subagent.
 
-schema_version: "6.0"
+schema_version: "7.0"
 contract: handoffs
 skill: assistant-review
+# v7 migration: a persisted v6 packet is invalidated and rebuilt from a freshly
+# rehashed v7 snapshot before it can produce CLEAN or ISSUES_FIXED. Preserve a
+# legacy closure ledger by normalizing UTF-8 NFC(description) as UTF-8 bytes,
+# SHA-256 hashing it, and using legacy-v6:<fixed_in_round>:<first-24-hex>;
+# non-colliding records use that base ID; every colliding record appends
+# :<ordinal>, starting at 1 in original packet position within its group.
 
 worker_status_protocol:
   description: "Reviewer returns include a compact status packet while preserving the findings/rubric schema."
@@ -22,25 +28,23 @@ worker_status_protocol:
   packet_rules:
     - "status is required on every Reviewer return."
     - "reviewed_scope is required and non-empty on every Reviewer return."
-    - "findings, summary, and verdict remain required and are not replaced by status."
+    - "findings, summary, coverage_entries, and verdict remain required and are not replaced by status."
+    - "Every expected review pass reaches a terminal state before aggregation; the first response never establishes batch coverage."
     - "evidence is required to support the verdict and any findings."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
+    - "Persisted v6 packets are invalidated and rebuilt under v7; UTF-8 NFC legacy IDs use SHA-256 base IDs, un-suffixed when non-colliding and :<ordinal>-suffixed for every colliding record in original packet order."
     - "status is required on every QAEvaluator return."
-    - "QAEvaluator returns acceptance_findings, qa_scorecard, final_verdict, result, evidence, and score_progression or score_entry; selected_domain_rubrics and domain_quality_scores are required only when scoped domain rubrics are selected. QA evaluation does not replace Reviewer/code-reviewer findings."
+    - "QAEvaluator returns acceptance_findings, qa_scorecard, final_verdict, result, evidence, and every-round score_entry; score_progression is optional history. Selected_domain_rubrics and domain_quality_scores are required only when scoped. QA does not replace Reviewer/code-reviewer findings."
     - "Reviewer and QAEvaluator may return pivot_restart_signal for PIVOT, STAGNATION, repeated DRIFT, or repeated REGRESSION; the orchestrator owns the final pivot_restart_decision."
 
 # Boundary records point to canonical handoff fields without duplicating them.
-# Dispatch and return validation are separate load boundaries so the Reviewer
-# does not receive its own return schema in the worker context.
 dispatch_context_bundles:
   - name: fresh_reviewer_context
     phase: REVIEW_STEP
-    selected_dispatch_context_ref: "handoffs.orchestrator_to_reviewer.context_fields"
-    activation: "Resolve only when a Reviewer pass begins. Standalone review first produces Spec Review PASS against user request/scope without requiring a task journal; workflow-composed review consumes carried Spec PASS and build/test refs. Never resolve at assistant-review entry."
+    selected_dispatch_context_ref: "handoffs.orchestrator_to_reviewer.reviewer_pass_context_fields"
     review_evidence_pointer:
-      required_refs: [spec_review_pass_ref, review_material_snapshot_ref, build_test_verification_ref]
-      validation: "Spec Review pointer proves PASS. build_test_verification_ref is real/current when fix/build is in scope; explicit not_applicable is accepted only for audit_only, read_only, or no_build_scope before any source fix."
-    context_fields_from_dispatch: [review_preparation_mode, spec_review_pass_ref, build_test_verification_ref, review_material_snapshot, scope_size, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, review_focus, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, rubric_required]
+      required_refs: [pre_batch_criteria_ref, review_material_snapshot, build_test_verification_ref]
+    context_fields_from_dispatch: [review_preparation_mode, pre_batch_criteria_ref, build_test_verification_ref, review_material_snapshot, batch_id, review_pass_id, review_attempt_id, review_perspective, assigned_scope, coverage_obligations, review_focus, scope_size, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, rubric_required]
     worker_references:
       - path: references/review-principles.md
         sections: [all]
@@ -54,13 +58,18 @@ dispatch_context_bundles:
             condition: "agentic_loop_safety_review_required is true"
           - name: Architecture Decision Pack Review Checklist
             condition: "architecture_decision_pack_review_required is true"
-        exclusion: "Every untriggered checklist section is excluded; include none when all four checklist flags are false."
+        exclusion: "Triggered only."
       - path: references/review-rubric.md
         sections: [all]
-        condition: "scope_size in [medium, large] or rubric_required is true"
-    direct_fallback: "Create the same fresh bounded bundle only when the local review pass begins, record isolation evidence, and do not claim a Reviewer dispatch."
-    excludes: [handoffs.orchestrator_to_reviewer.return_fields, qa_evaluator_context, qa_evaluator_return_validation]
-    return_schema_policy: "Defer orchestrator_to_reviewer.return_fields until reviewer_return_validation after the Reviewer or direct-fallback result exists."
+        condition: "medium/large scope or rubric_required"
+    direct_fallback: "Sibling-blind; two passes."
+    excludes: [review_batch, pre_batch_findings, sibling_outputs]
+    worker_return_schema_selector:
+      return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
+      source_path: "contracts/handoffs.yaml"
+      resolution: "Worker recursively loads named handoff return_fields (bounded keys); worker_return_schema equals schema identified by return_schema_ref before response; else NEEDS_CONTEXT, no partial result."
+      recursive_shape: "Recursive required/conditional fields, types, enums, and cardinality."
+      excludes: "No sibling/batch state."
     budget_words: 5653
     budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5653 words."
 
@@ -68,14 +77,19 @@ dispatch_context_bundles:
     phase: QA_EVALUATION_STEP
     selected_dispatch_context_ref: "handoffs.orchestrator_to_qa_evaluator.context_fields"
     activation: "Resolve only when qa_evaluation_mode is required and build/test plus Code Reviewer or Reviewer compatibility evidence exists."
-    return_schema_policy: "Defer orchestrator_to_qa_evaluator.return_fields until qa_evaluator_return_validation after a QA result exists."
+    worker_return_schema_selector:
+      return_schema_ref: "handoffs.orchestrator_to_qa_evaluator.return_fields"
+      source_path: "contracts/handoffs.yaml"
+      resolution: "Worker recursively loads named handoff return_fields (bounded keys); worker_return_schema equals schema identified by return_schema_ref before response; else NEEDS_CONTEXT, no partial result."
+      recursive_shape: "Recursive required/conditional fields, types, enums, and cardinality."
+      excludes: "No sibling/batch state."
 
 return_validation_bundles:
   - name: reviewer_return_validation
     phase: REVIEW_STEP
     return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
     activation: "Resolve only after the Reviewer or direct-fallback result exists and before EVALUATE."
-    validation: "Validate status, round, non-empty reviewed_scope, findings, summary, evidence, applicable checklist/principle checks including architecture_decision_pack_checks when triggered, canonical architecture_design_mode equals architecture_decision_pack.mode, review_intensive independent challenge evidence, verdict, rubric scores when required, and pivot_restart_signal when applicable."
+    validation: "Validate batch_id, review_pass_id, review_attempt_id against the active dispatch, review_snapshot_id, perspective, terminal pass state, non-empty reviewed_scope, assigned scope/obligation membership, structured finding aggregation keys, coverage_entries, summary, evidence, applicable checklist/principle checks including architecture_decision_pack_checks when triggered, canonical architecture_design_mode equals architecture_decision_pack.mode, review_intensive independent challenge evidence, verdict, rubric scores when required, and pivot_restart_signal when applicable."
     dispatch_context_excluded: true
 
   - name: qa_evaluator_return_validation
@@ -94,7 +108,7 @@ handoffs:
     from: Orchestrator
     to: Reviewer
     phase: REVIEW_STEP
-    notes: "Fresh Reviewer dispatch each round for medium+ scope when subagent_execution_mode=delegated. For direct_fallback, preserve the same fields as local review evidence without spawning. For trivial/small, self-review is acceptable."
+    notes: "Each review round is one frozen-snapshot batch. Dispatch independent narrow, sibling-blind passes; never treat one broad pass as sufficient coverage. For direct_fallback, preserve the same fields as local evidence without spawning."
 
     context_fields:
       - name: review_preparation_mode
@@ -106,8 +120,14 @@ handoffs:
       - name: spec_review_pass_ref
         type: string
         required: true
-        description: "Pointer to the current Spec Review PASS recorded before Reviewer dispatch"
-        validation: "Standalone points to Spec Review against user request/review scope; workflow_composed points to carried Spec PASS. FAIL or missing evidence blocks dispatch."
+        description: "Pointer to the current Spec Review result recorded against the user request/review scope before batch planning"
+        validation: "Standalone points to Spec Review against user request/review scope; workflow_composed points to carried Spec PASS. In audit, an evidence-backed FAIL is retained as an aggregate finding and does not block the frozen read-only batch."
+
+      - name: pre_batch_criteria_ref
+        type: string
+        required: true
+        description: "Sanitized Spec Review scope and criterion pointer supplied to a fresh Reviewer pass."
+        validation: "May identify scope and review criterion but excludes pre_batch_findings, mismatch description, evidence, severity, and any sibling output."
 
       - name: build_test_verification_ref
         type: object
@@ -131,7 +151,7 @@ handoffs:
         type: object
         required: true
         description: "The material available to review, captured as a scope snapshot rather than assuming a diff"
-        validation: "Non-empty. Must include enough material to support concrete file/content findings."
+        validation: "Non-empty and immutable for one batch; recompute the current scope-manifest/content identity at the response barrier and immediately before final exit. Any mismatch invalidates the batch and blocks CLEAN or ISSUES_FIXED."
         object_fields:
           - name: kind
             type: enum
@@ -151,11 +171,345 @@ handoffs:
             required: false
             default: []
             description: "Known files covered by the snapshot"
+          - name: scope_manifest
+            type: object[]
+            required: true
+            min_items: 1
+            description: "Stable reviewable items whose digest and obligations define coverage for this snapshot"
+            validation: "Every item has a stable id, locator, content digest, and applicable concerns; snapshot_identity.scope_manifest_digest binds this exact manifest."
+            object_fields:
+              - name: scope_item_id
+                type: string
+                required: true
+                validation: "Unique within this ordered scope_manifest."
+              - name: locator
+                type: string
+                required: true
+              - name: content_digest
+                type: string
+                required: true
+              - name: applicable_concerns
+                type: string[]
+                required: true
+                min_items: 1
+                validation: "Unique concern identifiers for this scope_item_id."
           - name: source_ref
             type: string
             required: false
             default: null
             description: "Optional PR URL, task journal path, command, or user-provided label"
+          - name: review_snapshot_id
+            type: string
+            required: true
+            description: "Frozen snapshot identifier echoed by every pass"
+          - name: snapshot_identity
+            type: object
+            required: true
+            description: "Reproducible identity evidence used to invalidate the batch after material mutation"
+            object_fields:
+              - name: basis
+                type: enum
+                required: true
+                enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+              - name: value
+                type: string
+                required: true
+              - name: captured_at
+                type: string
+                required: true
+              - name: scope_manifest_digest
+                type: string
+                required: true
+                description: "Digest of the ordered scope_manifest and its content digests"
+
+      - name: review_batch
+        type: object
+        required: true
+        description: "Plan and ledger envelope for one frozen-snapshot review batch"
+        validation: "Contains the proportional independent-pass topology and no more than six required responses. The orchestrator waits for every expected pass terminal state before aggregation, fixes, or exit."
+        object_fields:
+          - name: batch_id
+            type: string
+            required: true
+          - name: review_snapshot_id
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [planned, dispatched, collecting, complete, incomplete, invalidated]
+          - name: topology
+            type: object
+            required: true
+            validation: "trivial/small=2 independent discovery passes; medium=3; large=4; an optional triggered security specialist and post-fix closure verification may raise required responses to a maximum of 6; one retry is permitted per transient or schema-invalid pass."
+            object_fields:
+              - name: discovery_pass_count
+                type: int
+                required: true
+                validation: "Must equal the length of topology.canonical_discovery_perspectives for scope_size."
+              - name: canonical_discovery_perspectives
+                type: object
+                required: true
+                description: "Canonical distinct discovery perspectives; expected_passes derives from this set, never a self-declared count alone."
+                validation: "Each list is unique and exact: trivial_small=2, medium=3, large=4. Every canonical discovery perspective has exactly one expected_passes record and no discovery record lies outside the scope-size list; specialist and closure are additive only."
+                object_fields:
+                  - name: trivial_small
+                    type: string[]
+                    required: true
+                    min_items: 2
+                    max_items: 2
+                    enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths]
+                    validation: "Values are unique and exactly this canonical set."
+                  - name: medium
+                    type: string[]
+                    required: true
+                    min_items: 3
+                    max_items: 3
+                    enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers]
+                    validation: "Values are unique and exactly this canonical set."
+                  - name: large
+                    type: string[]
+                    required: true
+                    min_items: 4
+                    max_items: 4
+                    enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse]
+                    validation: "Values are unique and exactly this canonical set."
+              - name: security_specialist_triggered
+                type: boolean
+                required: true
+              - name: closure_verification_required
+                type: boolean
+                required: true
+                validation: "True only for a post-fix batch with previously_fixed items pending verification"
+              - name: max_required_responses
+                type: int
+                required: true
+                validation: "Equals expected_passes length and is <= 6."
+              - name: max_repair_attempts_per_pass
+                type: int
+                required: true
+                validation: "one retry for a transient or schema-invalid response"
+          - name: expected_passes
+            type: object[]
+            required: true
+            min_items: 2
+            max_items: 6
+            validation: "For discovery perspectives, exactly one pass exists for each canonical_discovery_perspectives value for scope_size, with no duplicate, missing, or extra discovery perspective; discovery_pass_count equals that canonical set cardinality. security_specialist_triggered requires exactly one risk_selected_specialist pass dispatched through Code Reviewer with review_focus=[security] and the assistant-security checklist/perspective; false forbids it. closure_verification_required likewise requires exactly one closure_verification pass; false forbids it."
+            object_fields:
+              - name: review_pass_id
+                type: string
+                required: true
+                validation: "Unique within expected_passes."
+              - name: perspective
+                type: enum
+                required: true
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+              - name: assigned_scope
+                type: string[]
+                required: true
+                min_items: 1
+                validation: "Values are unique, every id belongs to review_material_snapshot.scope_manifest, and independent passes may overlap on the same item for distinct required perspectives."
+              - name: coverage_obligations
+                type: string[]
+                required: true
+                min_items: 1
+                validation: "Values are unique, every obligation is explicit for this pass, and every obligation receives terminal coverage evidence."
+              - name: prior_finding_visibility
+                type: enum
+                required: true
+                enum_values: [none, closure_ledger]
+                validation: "closure_ledger only when perspective == closure_verification; discovery perspectives are sibling-blind and prior-finding-blind"
+          - name: required_coverage_tuples
+            type: object[]
+            required: true
+            min_items: 1
+            description: "Manifest-derived required coverage, one tuple per expected pass, assigned item, applicable concern, perspective, and obligation."
+            validation: "Exactly derives as a unique exact multiset from review_material_snapshot.scope_manifest applicable_concerns, topology.canonical_discovery_perspectives, every expected pass assignment, and its coverage_obligations; overlapping items require independent tuples for every assigned perspective and obligation."
+            object_fields:
+              - name: review_pass_id
+                type: string
+                required: true
+              - name: scope_item_id
+                type: string
+                required: true
+              - name: applicable_concern
+                type: string
+                required: true
+              - name: review_perspective
+                type: enum
+                required: true
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+              - name: coverage_obligation
+                type: string
+                required: true
+                validation: "Belongs to this review_pass_id coverage_obligations."
+          - name: pre_batch_findings
+            type: object[]
+            required: false
+            default: []
+            description: "Orchestrator-owned retained findings from work that predates the batch, such as an audit Spec Review FAIL; never dispatched to discovery passes."
+            validation: "Every finding has typed provenance. Discovery contexts receive only pre_batch_criteria_ref, never these finding details."
+            object_fields:
+              - name: source_kind
+                type: enum
+                required: true
+                enum_values: [spec_review, review_pass]
+              - name: source_id
+                type: string
+                required: true
+              - name: finding
+                type: object
+                required: true
+                description: "Retained evidence-backed finding for lossless aggregate union."
+                object_fields:
+                  - name: severity
+                    type: enum
+                    required: true
+                    enum_values: [must-fix, should-fix, nit]
+                  - name: file
+                    type: string
+                    required: true
+                  - name: line
+                    type: int
+                    required: false
+                  - name: description
+                    type: string
+                    required: true
+                  - name: finding_id
+                    type: string
+                    required: true
+                    validation: "Unique source_finding_id in the source_kind/source_id namespace; review_pass findings retain their review_pass_id namespace."
+                  - name: locus
+                    type: string
+                    required: true
+                  - name: invariant
+                    type: string
+                    required: true
+                  - name: failure_mechanism
+                    type: string
+                    required: true
+                  - name: evidence
+                    type: string
+                    required: true
+                  - name: smallest_useful_fix
+                    type: string
+                    required: true
+                  - name: confidence_pct
+                    type: int
+                    required: true
+                    validation: "For source_kind=review_pass preserve the source evidence-calibrated value. For source_kind=spec_review, derive it from explicit retained evidence on the same scale and never invent unsupported confidence."
+              - name: confidence_derivation
+                type: enum
+                required: conditional
+                condition: "source_kind == spec_review"
+                enum_values: [explicit_evidence_derivation]
+                validation: "Required for Spec Review because its source does not report confidence_pct directly; identifies the evidence-backed derivation rather than a fabricated default."
+          - name: pass_attempt_ledger
+            type: object[]
+            required: true
+            min_items: 0
+            description: "Orchestrator-owned lifecycle ledger for expected passes; empty while planned, partial while collecting, and terminal only at the response barrier."
+            validation: "planned/dispatched allow empty or pending zero-attempt records; collecting allows a partial subset. Each pass keeps one or two ordered dispatch attempts. Response-backed completed, needs_context, and blocked terminal states have exactly one active_terminal response event for active_terminal_attempt_id; timed_out, failed, and invalidated may have zero active responses only with typed failure evidence. Stale/duplicate replies never satisfy the barrier. pass_repair_guard allows at most one transient/schema repair; after exhaustion record failed or timed_out and continue incomplete aggregation."
+            object_fields:
+              - name: review_pass_id
+                type: string
+                required: true
+              - name: active_terminal_attempt_id
+                type: string
+                required: conditional
+                condition: "terminal barrier"
+                validation: "References the active dispatch attempt used for terminal accounting. For response-backed completed, needs_context, or blocked it has exactly one active_terminal response event; timed_out, failed, or invalidated may have none only with typed failure evidence. It is absent before the terminal barrier."
+              - name: attempts
+                type: object[]
+                required: true
+                min_items: 0
+                validation: "Length is 1..2; attempt_count values are exactly contiguous 1..length and review_attempt_id values are unique in dispatch order. Response-backed terminal states require exactly one active_terminal response event for active_terminal_attempt_id; non-response lifecycle failures require typed failure evidence instead."
+                object_fields:
+                  - name: review_attempt_id
+                    type: string
+                    required: true
+                    validation: "Unique dispatch attempt identifier for this review_pass_id."
+                  - name: attempt_count
+                    type: int
+                    required: true
+                    validation: ">= 0 and <= 2"
+                  - name: record_state
+                    type: enum
+                    required: true
+                    enum_values: [pending, terminal]
+                  - name: failure_evidence
+                    type: string
+                    required: conditional
+                    condition: "record_state == terminal and terminal_state in [needs_context, blocked, timed_out, failed, invalidated]"
+                    validation: "Non-empty typed failure evidence whenever failure_kind is present; required for timed_out, failed, and invalidated."
+                  - name: failure_kind
+                    type: enum
+                    required: conditional
+                    condition: "record_state == terminal and terminal_state in [timed_out, failed, invalidated]"
+                    enum_values: [timeout, transport, schema_invalid, source_mutation]
+                    description: "Orchestrator-owned classification for a terminal state that has no required active response."
+                  - name: terminal_state
+                    type: enum
+                    required: conditional
+                    condition: "record_state == terminal"
+                    enum_values: [completed, needs_context, blocked, timed_out, failed, invalidated]
+                  - name: repair_disposition
+                    type: enum
+                    required: conditional
+                    condition: "record_state == terminal"
+                    enum_values: [not_needed, repaired, exhausted]
+                  - name: response_events
+                    type: object[]
+                    required: true
+                    min_items: 0
+                    validation: "Pending attempts have no active_terminal event. Each event references this dispatch attempt; response-backed completed, needs_context, and blocked terminal states have exactly one active_terminal event, while timed_out, failed, and invalidated have zero active_terminal events and typed failure_kind/failure_evidence. stale/duplicate events are audited and cannot satisfy the barrier."
+                    object_fields:
+                      - name: response_event_id
+                        type: string
+                        required: true
+                      - name: dispatch_attempt_id
+                        type: string
+                        required: true
+                        validation: "Equals this attempt review_attempt_id."
+                      - name: disposition
+                        type: enum
+                        required: true
+                        enum_values: [active_terminal, stale, duplicate]
+
+      - name: batch_id
+        type: string
+        required: true
+        description: "Frozen review batch identifier"
+
+      - name: review_pass_id
+        type: string
+        required: true
+        description: "Unique pass identifier from review_batch.expected_passes"
+
+      - name: review_attempt_id
+        type: string
+        required: true
+        description: "Active unique dispatch attempt for this pass; stale or duplicate responses cannot satisfy the barrier."
+
+      - name: review_perspective
+        type: enum
+        required: true
+        enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+        description: "Narrow purpose for this sibling-blind pass; it does not make the overall batch verdict"
+
+      - name: assigned_scope
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Only this pass's scope_manifest ids; never sibling assignments or outputs."
+        validation: "Exactly matches this review_pass_id assignment in review_batch.expected_passes and every id belongs to review_material_snapshot.scope_manifest."
+
+      - name: coverage_obligations
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Only this pass's explicit coverage obligations."
+        validation: "Exactly matches this review_pass_id obligations in review_batch.expected_passes."
 
       - name: scope_size
         type: enum
@@ -192,8 +546,10 @@ handoffs:
 
       - name: previously_fixed
         type: object[]
-        required: true
-        description: "Items fixed in prior rounds — Reviewer MUST NOT re-report these"
+        required: conditional
+        condition: "review_perspective == closure_verification"
+        min_items: 1
+        description: "Closure ledger supplied only to the closure_verification pass; discovery perspectives receive an empty list and no prior findings. Re-report incomplete or regressed fixes with their original finding_id."
         object_fields:
           - name: description
             type: string
@@ -202,6 +558,14 @@ handoffs:
             type: int
             required: true
             validation: ">= 1 and <= 10"
+          - name: finding_id
+            type: string
+            required: true
+            validation: "New entries require finding_id; legacy missing IDs are normalized deterministically before closure dispatch."
+          - name: closure_status
+            type: enum
+            required: false
+            enum_values: [pending_verification, verified_closed, regressed, incomplete]
 
       - name: finding_filter_policy
         type: string
@@ -219,6 +583,7 @@ handoffs:
         type: string[]
         required: false
         description: "Specific areas to focus on if the orchestrator wants targeted review. The default review focus still includes the clean-code principle lens from references/review-principles.md."
+        validation: "Pass-scoped projection: every value applies only to this review_pass_id, assigned_scope, coverage_obligations, and review_perspective; it excludes sibling or pre-batch findings."
         examples:
           - "security"
           - "error handling"
@@ -286,18 +651,75 @@ handoffs:
         description: "Whether the reviewer must return rubric scores (default: true for medium+ scope)"
         notes: "Set to false for trivial/small scope single-round clean passes."
 
+    reviewer_pass_context_fields:
+      derived_from: "dispatch_context_bundles.fresh_reviewer_context.context_fields_from_dispatch"
+      validation: "Exact pass-only projection: listed fields plus bounded return-schema selector; excludes review_batch, pre_batch_findings, sibling outputs, return fields; preserves budget."
+
     return_fields:
       - name: status
         type: enum
         required: true
         enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]
-        description: "Worker status packet result; DONE requires verdict=clean with no must-fix or should-fix findings"
+        description: "Worker status packet result."
+        validation: "Truth table: DONE => completed plus verdict=clean and no must-fix/should-fix findings; DONE_WITH_CONCERNS => completed plus verdict has_must_fix, has_should_fix, or has_nits_only and at least one finding; NEEDS_CONTEXT => needs_context plus verdict=not_assessed and no findings; BLOCKED => blocked plus verdict=not_assessed and no findings."
 
       - name: round
         type: int
         required: true
         description: "Echo back the round number for tracking"
         validation: ">= 1 and <= 10"
+
+      - name: batch_id
+        type: string
+        required: true
+        description: "Echo back the frozen review batch identifier"
+
+      - name: review_snapshot_id
+        type: string
+        required: true
+        description: "Echo back the frozen snapshot identifier"
+
+      - name: snapshot_identity
+        type: object
+        required: true
+        description: "Echo back the complete frozen snapshot identity, including the scope_manifest digest"
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
+
+      - name: review_pass_id
+        type: string
+        required: true
+        description: "Echo back the independent pass identifier"
+
+      - name: review_attempt_id
+        type: string
+        required: true
+        description: "Echo back the active dispatch attempt identifier."
+
+      - name: review_perspective
+        type: enum
+        required: true
+        enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+        description: "Echo back the pass perspective"
+
+      - name: pass_completion_state
+        type: enum
+        required: true
+        enum_values: [completed, needs_context, blocked]
+        description: "Reviewer-owned completion report. Truth table is enforced with status, verdict, findings, coverage_entries, and open_questions. The orchestrator maps it to ledger terminal_state; only the orchestrator records timed_out, failed, or invalidated lifecycle failures."
 
       - name: reviewed_scope
         type: string[]
@@ -308,7 +730,7 @@ handoffs:
       - name: findings
         type: object[]
         required: true
-        description: "All evidence-backed findings that satisfy the finding_filter_policy for this round"
+        description: "All evidence-backed findings that satisfy the finding_filter_policy for this round; empty only for DONE clean or NEEDS_CONTEXT/BLOCKED not_assessed returns."
         object_fields:
           - name: severity
             type: enum
@@ -334,6 +756,87 @@ handoffs:
             type: string
             required: false
             description: "Concrete fix suggestion when applicable"
+          - name: finding_id
+            type: string
+            required: true
+            description: "Stable source finding identifier in the review_pass_id namespace for deterministic aggregation."
+            validation: "Unique within this Reviewer return and in the review_pass_id namespace."
+          - name: locus
+            type: string
+            required: true
+            description: "Concrete affected location or behavior boundary used for conservative aggregation"
+          - name: invariant
+            type: string
+            required: true
+            description: "Broken contract or behavior that the finding demonstrates"
+          - name: failure_mechanism
+            type: string
+            required: true
+            description: "How the evidence causes the invariant to fail; prose similarity is insufficient"
+          - name: evidence
+            type: string
+            required: true
+            description: "Concrete source or execution evidence for this finding"
+          - name: smallest_useful_fix
+            type: string
+            required: true
+            description: "Smallest durable corrective change; suggestion remains a compatibility alias"
+
+      - name: coverage_entries
+        type: object[]
+        required: true
+        min_items: 0
+        description: "Pass-level coverage evidence. A clean local pass still records what it inspected."
+        object_fields:
+          - name: scope_item_id
+            type: string
+            required: true
+            validation: "Belongs to this pass assigned_scope and review_material_snapshot.scope_manifest."
+          - name: applicable_concern
+            type: string
+            required: true
+            validation: "Belongs to scope_item_id applicable_concerns in review_material_snapshot.scope_manifest."
+          - name: review_perspective
+            type: enum
+            required: true
+            enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+            validation: "Equals this pass review_perspective and one required_coverage_tuples member."
+          - name: coverage_obligation
+            type: string
+            required: true
+            validation: "Must be one of this pass coverage_obligations and a required_coverage_tuples member."
+          - name: status
+            type: enum
+            required: true
+            enum_values: [inspected_no_risk, finding, blocked, not_applicable]
+            validation: "Only inspected_no_risk or finding completes a required tuple. blocked creates incomplete coverage; not_applicable is invalid for a generated required tuple."
+          - name: finding_ids
+            type: string[]
+            required: conditional
+            condition: "status == finding"
+            min_items: 1
+            validation: "Every id links to a retained actionable finding. A schema-invalid return creates a coverage gap and incomplete coverage; it cannot discard a validated finding."
+          - name: evidence
+            type: string
+            required: true
+
+      - name: closure_results
+        type: object[]
+        required: conditional
+        condition: "review_perspective == closure_verification"
+        min_items: 1
+        validation: "Exact set equality with pending previously_fixed aggregate_finding_id values; missing, incomplete, or regressed IDs remain aggregate findings and block CLEAN."
+        object_fields:
+          - name: aggregate_finding_id
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [verified_closed, regressed, incomplete]
+          - name: evidence
+            type: string
+            required: true
 
       - name: observations
         type: object[]
@@ -353,7 +856,7 @@ handoffs:
       - name: summary
         type: string
         required: true
-        description: "1-paragraph overall assessment of code quality"
+        description: "Pass-level summary for only the assigned scope; it cannot imply batch cleanliness or the final review result."
         validation: "Non-empty. Must reference specific patterns observed, not generic praise. When no must-fix or should-fix finding exists, use 'No material findings within the reviewed scope and available evidence' rather than presenting clean as proof of correctness."
 
       - name: evidence
@@ -371,7 +874,7 @@ handoffs:
 
       - name: agentic_loop_safety_checks
         type: object
-        required: false
+        required: conditional
         condition: "agentic_loop_safety_review_required is true"
         description: "Compact confirmation that agentic loop safety review was applied"
         object_fields:
@@ -406,7 +909,7 @@ handoffs:
 
       - name: behavioral_contract_checks
         type: object
-        required: false
+        required: conditional
         condition: "behavioral_contract_review_required is true"
         description: "Compact confirmation that behavioral contract review was applied"
         object_fields:
@@ -437,7 +940,7 @@ handoffs:
 
       - name: semantic_contract_checks
         type: object
-        required: false
+        required: conditional
         condition: "semantic_contract_review_required is true"
         description: "Compact confirmation that semantic contract review was applied"
         object_fields:
@@ -600,17 +1103,18 @@ handoffs:
       - name: verdict
         type: enum
         required: true
-        enum_values: [clean, has_must_fix, has_should_fix, has_nits_only]
-        description: "Overall result for this round"
+        enum_values: [clean, has_must_fix, has_should_fix, has_nits_only, not_assessed]
+        description: "pass-level verdict for this assigned scope only; it cannot imply batch cleanliness or the final review result."
         validation: >
           clean: findings is empty or contains only items below threshold.
           has_must_fix: at least one finding with severity=must-fix.
           has_should_fix: no must-fix, but at least one should-fix.
           has_nits_only: only nit-level findings.
+          not_assessed: status is NEEDS_CONTEXT or BLOCKED, pass_completion_state matches it, and findings is empty.
 
       - name: open_questions
         type: string[]
-        required: false
+        required: conditional
         condition: "status in [NEEDS_CONTEXT, BLOCKED]"
         description: "Questions or blocker details the orchestrator must resolve"
 
@@ -676,7 +1180,7 @@ handoffs:
 
       - name: pivot_restart_signal
         type: object
-        required: false
+        required: conditional
         condition: "rubric_scores.action == PIVOT or score tracking detects STAGNATION, repeated DRIFT, or repeated REGRESSION"
         description: "Signal that the review loop needs orchestrator-owned pivot/restart handling before another fix/review dispatch."
         object_fields:
@@ -704,7 +1208,7 @@ handoffs:
             required: true
             description: "Lowest-scoring dimensions, stale-context concern, or blocker evidence the orchestrator should consider"
 
-    on_missing_field: "In delegated mode, re-dispatch Reviewer. In direct fallback mode, complete the local review evidence before continuing. status, findings, evidence, and verdict are never optional — a review without them is not a review."
+    on_missing_field: "Use the orchestrator-owned pass_repair_guard: at most one transient/schema repair per pass. After exhaustion, record failed or timed_out with typed failure_kind/failure_evidence and aggregate the coverage gap. In direct fallback mode, complete the local review evidence before continuing. status, findings, evidence, and verdict are never optional — a review without them is not a review."
 
   # ─────────────────────────────────────────────
   # Orchestrator → QAEvaluator (per QA round)
@@ -713,9 +1217,44 @@ handoffs:
     from: Orchestrator
     to: QAEvaluator
     phase: QA_EVALUATION_STEP
-    notes: "Runs after build/test evidence and Code Reviewer or Reviewer compatibility evidence. QA evaluation is an acceptance lane and does not replace code-reviewer."
+    notes: "Runs after build/test evidence and a fresh complete Code Reviewer or Reviewer compatibility batch. QA evaluation is an acceptance lane and does not replace code-reviewer."
 
     context_fields:
+      - name: feature_preparation_scope
+        type: enum
+        required: conditional
+        condition: "approved_feature_preparation_qa_acceptance_obligation is carried from workflow"
+        enum_values: [not_applicable, existing_system]
+        description: "Workflow's typed discriminator for the unchanged carried QA obligation."
+        validation: "Matches the carried workflow feature_preparation_scope and selects exactly one obligation source binding."
+        on_missing: fail
+
+      - name: approved_feature_preparation_qa_acceptance_obligation
+        type: object
+        required: conditional
+        condition: "approved_feature_preparation_qa_acceptance_obligation is carried from workflow"
+        description: "Carried unchanged QA obligation."
+        validation: "Carry the approved workflow payload unchanged: exactly one source binding requires QA and blocks missing prerequisite/evidence."
+        on_missing: fail
+        object_fields:
+          - name: requested_scope
+            type: string
+            required: true
+          - name: execution_prerequisite
+            type: string
+            required: true
+          - name: source_feature_preparation_evidence_ref
+            type: string
+            required: conditional
+            condition: "feature_preparation_scope == existing_system"
+            validation: "Equals the approved evidence ref."
+          - name: source_preparation_basis
+            type: enum
+            required: conditional
+            condition: "feature_preparation_scope == not_applicable"
+            enum_values: [not_applicable]
+            validation: "Records the exact non-existing-system preparation basis without fabricating an evidence ref."
+
       - name: done_contract
         type: object
         required: conditional
@@ -786,7 +1325,7 @@ handoffs:
         type: object
         required: true
         description: "Final Code Reviewer or Reviewer compatibility result that QA must not replace"
-        validation: "Names the review role used, final result, review rounds, and remaining code-review risks if any"
+        validation: "Names the review role used, final result, review rounds, remaining code-review risks, and the fresh complete final review batch. QA rehashes source immediately before dispatch; source mutation requires validation, invalidation, and a fresh complete review batch before QA resumes. The only bypass is exact digest equality of review_snapshot_id and all final snapshot identity fields."
         object_fields:
           - name: role
             type: enum
@@ -799,6 +1338,18 @@ handoffs:
             type: int
             required: true
             validation: ">= 1 and <= 10"
+          - name: final_review_snapshot_id
+            type: string
+            required: true
+            validation: "Exactly equals the current complete batch review_snapshot_id."
+          - name: final_snapshot_identity
+            type: object
+            required: true
+            description: "Exact identity from the current complete final review batch."
+          - name: coverage_complete
+            type: boolean
+            required: true
+            validation: "True before QA dispatch."
           - name: remaining_risks
             type: string[]
             required: true
@@ -886,6 +1437,56 @@ handoffs:
           - name: recommendation
             type: string
             required: false
+          - name: disposition
+            type: enum
+            required: true
+            enum_values: [resolved, remaining, not_applicable]
+            validation: "not_applicable is allowed only for an unscoped criterion."
+
+      - name: approved_feature_preparation_qa_acceptance_obligation_result
+        type: object
+        required: conditional
+        condition: "approved_feature_preparation_qa_acceptance_obligation is carried from workflow"
+        validation: "Echoes the carried requested_scope, execution_prerequisite, feature_preparation_scope, and exactly one conditional source binding unchanged; every successful pair accepted|accepted_with_concerns with CLEAN|ISSUES_FIXED requires requested_scope_status=fulfilled, execution_prerequisite_status=met, and requested-scope/prerequisite evidence. Otherwise final_verdict/result is rejected/HAS_REMAINING_ITEMS or blocked/BLOCKED."
+        object_fields:
+          - name: requested_scope_status
+            type: enum
+            required: true
+            enum_values: [fulfilled, blocked, failed]
+          - name: requested_scope_evidence
+            type: string
+            required: true
+          - name: execution_prerequisite_status
+            type: enum
+            required: true
+            enum_values: [met, missing, blocked]
+          - name: execution_prerequisite_evidence
+            type: string
+            required: true
+          - name: requested_scope
+            type: string
+            required: true
+            validation: "Equals approved_feature_preparation_qa_acceptance_obligation.requested_scope."
+          - name: execution_prerequisite
+            type: string
+            required: true
+            validation: "Equals approved_feature_preparation_qa_acceptance_obligation.execution_prerequisite."
+          - name: feature_preparation_scope
+            type: enum
+            required: true
+            enum_values: [not_applicable, existing_system]
+            validation: "Equals carried feature_preparation_scope."
+          - name: source_feature_preparation_evidence_ref
+            type: string
+            required: conditional
+            condition: "feature_preparation_scope == existing_system"
+            validation: "Equals carried source_feature_preparation_evidence_ref."
+          - name: source_preparation_basis
+            type: enum
+            required: conditional
+            condition: "feature_preparation_scope == not_applicable"
+            enum_values: [not_applicable]
+            validation: "Equals carried source_preparation_basis."
 
       - name: qa_scorecard
         type: object
@@ -911,7 +1512,7 @@ handoffs:
           - name: weighted_score
             type: float
             required: true
-            validation: "Calculated from the compact QA scorecard dimensions"
+            validation: "weighted_score = round_half_up((acceptance_coverage * 0.30) + (evidence_strength * 0.25) + (domain_quality * 0.20) + (final_readiness * 0.25), 2 decimal places)"
           - name: rationale
             type: object
             required: true
@@ -934,7 +1535,7 @@ handoffs:
         required: false
         condition: "domain_context or rubric_refs is present, or acceptance criteria / Done Contract require subjective/product/UX/docs/DX/UI/domain craft evaluation"
         description: "Rubric families selected from references/domain-rubrics.md for this QA round"
-        validation: "Every selected family is tied to acceptance criteria, Done Contract, domain_context, or explicit rubric_refs. Empty or omitted when no scoped domain rubric applies."
+        validation: "Every selected family is one of [ui_visual_design, ux_product_acceptance, documentation_quality, developer_experience, domain_specific_craft] and is tied to acceptance criteria, Done Contract, domain_context, or explicit rubric_refs. Empty or omitted when no scoped domain rubric applies."
 
       - name: domain_quality_scores
         type: object[]
@@ -1007,15 +1608,17 @@ handoffs:
           - name: delta
             type: string
             required: true
+            validation: "Round 1 is exactly initial. Later rounds are the exact signed two-decimal weighted_score change from the immediately preceding round."
           - name: drift_status
             type: enum
             required: true
             enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL, NOT_APPLICABLE]
+            validation: "Derived from the adjacent score and failed_acceptance_count movement; repeated DRIFT/REGRESSION means consecutive terminal transitions only."
 
       - name: score_progression
         type: object[]
         required: false
-        description: "Full QA score progression when the evaluator has prior round history"
+        description: "Canonical QA score projection when the evaluator has prior-round history"
         object_fields:
           - name: round
             type: int
@@ -1027,10 +1630,15 @@ handoffs:
           - name: failed_acceptance_count
             type: int
             required: true
+          - name: delta
+            type: string
+            required: true
+            validation: "Round 1 is exactly initial. Later rounds are the exact signed two-decimal weighted_score change from the immediately preceding round."
           - name: drift_status
             type: enum
             required: true
             enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL, NOT_APPLICABLE]
+            validation: "Derived from the adjacent score and failed_acceptance_count movement; repeated DRIFT/REGRESSION means consecutive terminal transitions only."
 
       - name: open_questions
         type: string[]
@@ -1040,7 +1648,7 @@ handoffs:
 
       - name: pivot_restart_signal
         type: object
-        required: false
+        required: conditional
         condition: "score_entry.drift_status == STAGNATION, repeated QA DRIFT/REGRESSION is detected, or any scoped domain_quality_scores action == pivot"
         description: "Signal that the QA loop needs orchestrator-owned pivot/restart handling before another QA/build dispatch."
         object_fields:
@@ -1062,7 +1670,7 @@ handoffs:
           - name: affected_round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: ">= 1 and <= 10; exactly equals current return round."
           - name: recommended_recovery_focus
             type: string
             required: true
@@ -1074,15 +1682,16 @@ handoffs:
 # Validation behavior:
 # 1. Before delegated dispatch or direct-fallback review: verify all required context_fields are populated
 # 2. Build finding_filter_policy from round number and hard-cap rules; do not compute numeric confidence tiers
-# 3. After return: verify status, findings[], summary, evidence, and verdict are all present
+# 3. After each return: enforce the Reviewer status/pass_completion_state/verdict/findings/coverage_entries/open_questions truth table; verify batch_id, review_pass_id, review_attempt_id, review_snapshot_id, summary, and evidence. Response-backed terminals have exactly one active response; the orchestrator owns timed_out/failed/invalidated typed terminal failures.
 # 4. Move speculative or low-evidence items to observations; findings require file/line evidence, concrete impact, and a smallest useful fix
-# 5. Filter any findings that match previously_fixed descriptions
+# 5. Do not suppress previously_fixed findings blindly: verify closure; report incomplete or regressed fixes with their original finding_id
 # 6. If rubric_required: verify rubric_scores is present with all dimensions
 # 7. If rubric_required: verify weighted_score matches the dimension * weight calculation
 # 8. If quality_principles_required: verify the Reviewer applied references/review-principles.md
 # 9. If pivot_restart_signal is present, stop the current loop path until the orchestrator records pivot_restart_decision; do not silently continue.
 # 10. If round >= 3, require additional_round_reason backed by new evidence; score below threshold alone is invalid
-# 11. If round == 10, exit with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 11
+# 11. Wait until every expected review pass reaches terminal accounting: completed, needs_context, and blocked are response-backed; timed_out, failed, and invalidated may have zero response only with typed failure evidence. Current incomplete or invalidated coverage maps to HAS_REMAINING_ITEMS, never CLEAN or ISSUES_FIXED.
+# 12. If round == 10, exit after its complete batch with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 11
 # 12. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
 # 13. If qa_evaluation_mode=required, run orchestrator_to_qa_evaluator after build/test and code-review evidence; include debate_record when Done Contract exists; never treat QA evaluation as a replacement for Reviewer/code-reviewer.
 # 14. If QA round == 10, return accepted, accepted_with_concerns, rejected, or blocked with remaining failed acceptance items; never start QA round 11.

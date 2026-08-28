@@ -687,6 +687,51 @@ build_medium_implement_only_not_applicable_harness_handoff_response() {
     mv "$temporary_response" "$response_path"
 }
 
+build_medium_implement_only_qa_handoff_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_medium_implement_only_harness_handoff_response "$response_path" "$summary"
+    jq '
+        def qa_obligation: {
+          requested_scope: "Run the explicitly requested QA/acceptance evaluation.",
+          execution_prerequisite: "Run after Build and Code Reviewer evidence in the approved implementation workflow.",
+          source_feature_preparation_evidence_ref: "prep/medium-feature"
+        };
+        .approved_feature_preparation_qa_acceptance_obligation = qa_obligation
+        | .implementation_steps[0].feature_preparation_qa_acceptance_obligation = qa_obligation
+        | del(.approved_feature_preparation_harness_obligation, .done_contract, .harness_recipe, .harness_run_state, .trace_ledger, .replay_packet)
+        | del(.implementation_steps[0].feature_preparation_harness_obligation, .implementation_steps[0].done_contract_ref, .implementation_steps[0].harness_recipe_ref)
+        | .completion_policy.selection_reason = "The accepted deferred QA obligation activates the existing post-Build acceptance route."
+        | .triage_result.harness_capable = false
+        | .decomposition_plan_review.dependency_order = "Build -> Code Reviewer -> QA Evaluator."
+        | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "approved feature-preparation evidence", "post-Build Code Reviewer evidence", "QA Evaluator acceptance evidence"]
+        | .plan_document = "Approved implementation plan plan/implementation-transition: execute the single viewing-route-effects packet, then run Code Reviewer and QA Evaluator evidence; Build not started."
+        | .artifact_reference_ledger |= map(select(.artifact_id == "task-packet" or .artifact_id == "verification-evidence"))
+        | .implementation_steps[0].artifact_refs = .artifact_reference_ledger
+        | .validation_results = [{command_or_check:"approved deferred QA routing",result:"passed",evidence:"QA obligation is source-bound and routed after Build and Code Reviewer evidence."}]
+        | .phase_checkpoints = ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
+}
+
+build_medium_implement_only_not_applicable_qa_handoff_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_medium_implement_only_qa_handoff_response "$response_path" "$summary"
+    jq '
+        .feature_preparation_scope = "not_applicable"
+        | del(.approved_feature_preparation_evidence_ref, .approved_feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref)
+        | .approved_feature_preparation_qa_acceptance_obligation.source_preparation_basis = "not_applicable"
+        | .implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_preparation_basis = "not_applicable"
+        | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "approved not_applicable preparation basis", "post-Build Code Reviewer evidence", "QA Evaluator acceptance evidence"]
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
+}
+
 build_viewing_route_prepare_only_response() {
     local response_path="$1"
     local summary="$2"
@@ -1020,4 +1065,339 @@ build_small_end_to_end_response() {
           fresh_review_result: {result: "PASS", reviewed_scope: "src/route.ts and test/route_test.ts", findings: [], evidence: "Fresh focused review found no remaining issues."}
         }
     ' >"$response_path"
+}
+
+build_workflow_review_lifecycle_eval_response() {
+    local case_id="$1"
+    local response_path="$2"
+    local summary="$3"
+    local identity='{"basis":"diff_digest","value":"current-review-snapshot","captured_at":"2026-08-26T10:00:00Z","scope_manifest_digest":"current-scope-digest"}'
+    local final_summary_defaults qa_result_defaults
+    final_summary_defaults="$(jq -cn --argjson identity "$identity" '
+      {
+        reviewed_scope:["workflow terminal evidence"],
+        rounds:1,
+        final_review_snapshot_id:"review-current",
+        final_snapshot_identity:$identity,
+        coverage_complete:true,
+        coverage_ledger:[{
+          batch_id:"batch-current",
+          review_snapshot_id:"review-current",
+          review_pass_id:"pass-consumer",
+          perspective:"workflow consumer integration",
+          coverage_obligation:"terminal evidence binding",
+          assigned_scope:["workflow terminal evidence"],
+          scope_item_id:"workflow-terminal-evidence",
+          applicable_concern:"canonical producer consumption",
+          terminal_state:"completed",
+          coverage_status:"complete",
+          evidence:"Focused lifecycle validation passed."
+        },{
+          batch_id:"batch-current",
+          review_snapshot_id:"review-current",
+          review_pass_id:"pass-failure-paths",
+          perspective:"workflow failure paths",
+          coverage_obligation:"fail-closed terminal evidence",
+          assigned_scope:["workflow terminal evidence"],
+          scope_item_id:"workflow-terminal-evidence",
+          applicable_concern:"canonical producer failure handling",
+          terminal_state:"completed",
+          coverage_status:"complete",
+          evidence:"Focused lifecycle mutation validation passed."
+        }],
+        batch_summaries:[{
+          started_batch_ordinal:1,
+          batch_id:"batch-current",
+          review_snapshot_id:"review-current",
+          snapshot_identity:$identity,
+          batch_status:"complete",
+          expected_response_count:2,
+          terminal_response_count:2,
+          aggregate_rubric_recomputed:true
+        }],
+        aggregation_ledger:[],
+        aggregated_findings:[],
+        result:"CLEAN",
+        evidence_bounded_claim:"No material findings within the reviewed scope and available evidence",
+        fixed_items:[],
+        nits:[]
+      }
+    ')"
+    qa_result_defaults="$(jq -cn '
+      {
+        rounds:1,
+        final_verdict:"accepted",
+        result:"CLEAN",
+        acceptance_findings:[],
+        qa_scorecard:{
+          acceptance_coverage:5,
+          evidence_strength:5,
+          domain_quality:5,
+          final_readiness:5,
+          weighted_score:5,
+          rationale:{
+            acceptance_coverage:"All scoped acceptance criteria passed.",
+            evidence_strength:"Focused validation provides direct acceptance evidence.",
+            domain_quality:"not_applicable: no scoped domain rubric applies.",
+            final_readiness:"No blocking acceptance item remains."
+          }
+        },
+        score_progression:[{round:1,weighted_score:5,failed_acceptance_count:0,delta:"initial",drift_status:"NEUTRAL"}],
+        evidence:[{source:"focused lifecycle validation",detail:"Canonical review and QA wrapper evidence passed."}]
+      }
+    ')"
+
+    case "$case_id" in
+        standard-pack-review-result-retains-checklist)
+            jq -n --arg summary "$summary" --argjson identity "$identity" '
+              {summary:$summary,current_assistant_review_contract:{schema_version:"7.0"},canonical_final_summary:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity},current_final_batch:{review_snapshot_id:"review-current",final_snapshot_identity:$identity},review_result:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",producer_schema_version:"7.0",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,delegation_path_ref:"journal#review-delegation",delegation_contract:"assistant-review/contracts/output.yaml#review_delegation_path",architecture_decision_pack_review_ref:"journal#pack-review",architecture_decision_pack_review_contract:"assistant-review/contracts/output.yaml#architecture_decision_pack_review",validation_status:"validated"}}' >"$response_path"
+            ;;
+        light-pack-review-result-retains-current-snapshot)
+            jq -n --arg summary "$summary" --argjson identity "$identity" '
+              {summary:$summary,current_assistant_review_contract:{schema_version:"7.0"},canonical_final_summary:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity},current_final_batch:{review_snapshot_id:"review-current",final_snapshot_identity:$identity},fresh_review_result:{result:"PASS",reviewed_scope:"changed workflow contract surface",findings:[],evidence:"focused validation passed",canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",producer_schema_version:"7.0",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,architecture_decision_pack_review_ref:"journal#pack-review",architecture_decision_pack_review_contract:"assistant-review/contracts/output.yaml#architecture_decision_pack_review",validation_status:"validated"}}' >"$response_path"
+            ;;
+        incomplete-review-blocks-clean-final-handoff)
+            jq -n --arg summary "$summary" --argjson identity "$identity" '
+              {summary:$summary,current_assistant_review_contract:{schema_version:"7.0"},canonical_final_summary:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",final_review_snapshot_id:"review-current",result:"HAS_REMAINING_ITEMS",coverage_complete:false,final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity},current_final_batch:{review_snapshot_id:"review-current",final_snapshot_identity:$identity},review_result:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",producer_schema_version:"7.0",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,delegation_path_ref:"journal#review-delegation",delegation_contract:"assistant-review/contracts/output.yaml#review_delegation_path",validation_status:"validated"},final_handoff:{changed_behavior_and_areas:["Review completion routing"],architecture_decisions_and_rationale:["assistant-review remains canonical"],rejected_alternatives_and_tradeoffs:["Do not duplicate the review schema"],requirement_evidence:["Canonical review terminal evidence"],automated_verification:["Focused contract suite"],manual_test_scenarios:["N/A: contract-only change"],compatibility_and_regression_surfaces:["final_review_snapshot_id compatibility alias"],known_limitations_and_untested_areas:["No runtime application surface"],rollback_or_recovery:"Revert the workflow contract projection.",review_completion:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",review_producer_schema_version:"7.0",result:"HAS_REMAINING_ITEMS",coverage_complete:false,final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,completion_disposition:"remaining_items",remaining_or_blocker_summary:"Review has remaining items or incomplete coverage; resolve the remaining review items."},review_claim:"Review has remaining items or incomplete coverage; workflow completion is blocked."}}' >"$response_path"
+            ;;
+        blocked-qa-blocks-clean-final-handoff|rejected-qa-blocks-clean-final-handoff)
+            local qa_verdict qa_result disposition blocker review_claim
+            if [[ "$case_id" == blocked-* ]]; then
+                qa_verdict="blocked"; qa_result="BLOCKED"; disposition="blocked"
+                blocker="QA is blocked; resolve the stated QA blocker."
+                review_claim="QA is blocked; workflow completion is blocked until the stated QA blocker is resolved."
+            else
+                qa_verdict="rejected"; qa_result="HAS_REMAINING_ITEMS"; disposition="remaining_items"
+                blocker="QA rejected acceptance; resolve the remaining QA items and rerun evaluation."
+                review_claim="QA has remaining acceptance items; workflow completion is blocked until they are resolved."
+            fi
+            jq -n --arg summary "$summary" --argjson identity "$identity" --arg verdict "$qa_verdict" --arg result "$qa_result" --arg disposition "$disposition" --arg blocker "$blocker" --arg review_claim "$review_claim" '
+              {summary:$summary,current_assistant_review_contract:{schema_version:"7.0"},canonical_final_summary:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",final_review_snapshot_id:"review-current",result:"CLEAN",coverage_complete:true,evidence_bounded_claim:"No material findings within the reviewed scope and available evidence",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity},canonical_qa_result:{canonical_result_ref:"journal#qa-result",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",final_verdict:$verdict,result:$result},current_final_batch:{review_snapshot_id:"review-current",final_snapshot_identity:$identity},review_result:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",producer_schema_version:"7.0",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,delegation_path_ref:"journal#review-delegation",delegation_contract:"assistant-review/contracts/output.yaml#review_delegation_path",validation_status:"validated"},qa_evaluation_result:{canonical_result_ref:"journal#qa-result",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",producer_schema_version:"7.0",delegation_path_ref:"journal#qa-delegation",delegation_contract:"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path",validation_status:"validated"},final_handoff:{changed_behavior_and_areas:["Review completion routing"],architecture_decisions_and_rationale:["assistant-review remains canonical"],rejected_alternatives_and_tradeoffs:["Do not duplicate the review schema"],requirement_evidence:["Canonical review and QA terminal evidence"],automated_verification:["Focused contract suite"],manual_test_scenarios:["N/A: contract-only change"],compatibility_and_regression_surfaces:["final_review_snapshot_id compatibility alias"],known_limitations_and_untested_areas:["No runtime application surface"],rollback_or_recovery:"Revert the workflow contract projection.",review_completion:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",review_producer_schema_version:"7.0",result:"CLEAN",coverage_complete:true,evidence_bounded_claim:"No material findings within the reviewed scope and available evidence",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,qa_evaluation_result_ref:"journal#qa-result",qa_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",qa_producer_schema_version:"7.0",qa_final_verdict:$verdict,qa_result:$result,completion_disposition:$disposition,remaining_or_blocker_summary:$blocker},review_claim:$review_claim}}' >"$response_path"
+            ;;
+        fulfilled-preparation-qa-obligation-allows-completion|fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion)
+            local qa_verdict qa_result source_binding obligation_binding preparation_scope
+            if [[ "$case_id" == fulfilled-not-applicable-* ]]; then
+                qa_verdict="accepted_with_concerns"; qa_result="ISSUES_FIXED"
+                preparation_scope="not_applicable"
+                source_binding='{"source_preparation_basis":"not_applicable"}'
+                obligation_binding='{"source_preparation_basis":"not_applicable"}'
+            else
+                qa_verdict="accepted"; qa_result="CLEAN"
+                preparation_scope="existing_system"
+                source_binding='{"source_feature_preparation_evidence_ref":"prep/viewing-route"}'
+                obligation_binding='{"source_feature_preparation_evidence_ref":"prep/viewing-route"}'
+            fi
+            jq -n --arg summary "$summary" --argjson identity "$identity" --arg verdict "$qa_verdict" --arg result "$qa_result" --arg scope "$preparation_scope" --argjson source "$source_binding" --argjson obligation "$obligation_binding" '
+              {summary:$summary,feature_preparation_scope:$scope,current_assistant_review_contract:{schema_version:"7.0"},canonical_final_summary:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",final_review_snapshot_id:"review-current",result:"CLEAN",coverage_complete:true,evidence_bounded_claim:"No material findings within the reviewed scope and available evidence",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity},current_final_batch:{review_snapshot_id:"review-current",final_snapshot_identity:$identity},review_result:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",producer_schema_version:"7.0",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,delegation_path_ref:"journal#review-delegation",delegation_contract:"assistant-review/contracts/output.yaml#review_delegation_path",validation_status:"validated"},approved_feature_preparation_qa_acceptance_obligation:({requested_scope:"Run the requested acceptance QA.",execution_prerequisite:"Implementation and tests are complete."}+$obligation),canonical_qa_result:({canonical_result_ref:"journal#qa-result",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",final_verdict:$verdict,result:$result,approved_feature_preparation_qa_acceptance_obligation_result_ref:"journal#qa-result/obligation",approved_feature_preparation_qa_acceptance_obligation_result:({requested_scope_status:"fulfilled",requested_scope_evidence:"Acceptance criteria were evaluated.",execution_prerequisite_status:"met",execution_prerequisite_evidence:"Implementation and tests passed.",requested_scope:"Run the requested acceptance QA.",execution_prerequisite:"Implementation and tests are complete.",feature_preparation_scope:$scope}+$source)}),qa_evaluation_result:{canonical_result_ref:"journal#qa-result",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",producer_schema_version:"7.0",approved_feature_preparation_qa_acceptance_obligation_result_ref:"journal#qa-result/obligation",delegation_path_ref:"journal#qa-delegation",delegation_contract:"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path",validation_status:"validated"},final_handoff:{changed_behavior_and_areas:["Deferred QA acceptance routing"],architecture_decisions_and_rationale:["assistant-review remains canonical"],rejected_alternatives_and_tradeoffs:["Do not duplicate the QA schema"],requirement_evidence:["Canonical obligation result"],automated_verification:["Focused contract suite"],manual_test_scenarios:["N/A: contract-only change"],compatibility_and_regression_surfaces:["Both preparation source branches"],known_limitations_and_untested_areas:["No runtime application surface"],rollback_or_recovery:"Revert the workflow projection.",review_completion:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",review_producer_schema_version:"7.0",result:"CLEAN",coverage_complete:true,evidence_bounded_claim:"No material findings within the reviewed scope and available evidence",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,qa_evaluation_result_ref:"journal#qa-result",qa_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",qa_producer_schema_version:"7.0",qa_final_verdict:$verdict,qa_result:$result,approved_feature_preparation_qa_acceptance_obligation_result_ref:"journal#qa-result/obligation",qa_obligation_requested_scope_status:"fulfilled",qa_obligation_execution_prerequisite_status:"met",qa_obligation_source_binding_verified:true,completion_disposition:"complete"},review_claim:"No material findings within the reviewed scope and available evidence"},workflow_complete:"--- WORKFLOW COMPLETE ---"}' >"$response_path"
+            ;;
+        qa-reject-source-fix-requires-rebuild-review-before-resume)
+            jq -n --arg summary "$summary" --argjson identity "$identity" '
+              {summary:$summary,current_assistant_review_contract:{schema_version:"7.0"},prior_canonical_qa_result:{canonical_result_ref:"journal#qa-rejected",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",final_verdict:"rejected",result:"HAS_REMAINING_ITEMS"},fresh_canonical_final_summary:{canonical_result_ref:"journal#review-post-fix",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",final_review_snapshot_id:"review-current",coverage_complete:true,final_snapshot_identity:$identity},current_final_batch:{review_snapshot_id:"review-current",final_snapshot_identity:$identity},post_fix_build_validation:{ref:"validation#post-fix",status:"passed",source_digest:"post-fix-digest",evidence:"Post-fix Build validation passed against the rehashed source."},post_rejection_digest_evidence:{ref:"digest#post-fix",comparison:"changed",pre_fix_source_digest:"pre-fix-digest",post_fix_source_digest:"post-fix-digest",post_fix_snapshot_identity:$identity},current_canonical_qa_result:{canonical_result_ref:"journal#qa-resumed",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",final_verdict:"accepted",result:"CLEAN"},current_qa_delegation_path:{ref:"journal#qa-delegation",contract:"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path",artifact:{subagent_policy_state:"delegation_triggered",subagent_execution_mode:"delegated",subagent_trigger_scope:["post-rejection QA resume"],fresh_context_evidence:"Fresh QAEvaluator context after post-fix review."}},qa_evaluation_result:{canonical_result_ref:"journal#qa-resumed",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",producer_schema_version:"7.0",delegation_path_ref:"journal#qa-delegation",delegation_contract:"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path",validation_status:"validated",rejection_recovery:{rejected_qa_result_ref:"journal#qa-rejected",pre_fix_source_digest:"pre-fix-digest",post_fix_source_digest:"post-fix-digest",source_digest_comparison:"changed",build_validation_ref:"validation#post-fix",rehash_evidence_ref:"digest#post-fix",fresh_review_result_ref:"journal#review-post-fix",fresh_review_snapshot_identity:$identity,fresh_review_coverage_complete:true,qa_resume_authorized:true}}}' >"$response_path"
+            ;;
+        qa-reject-unchanged-source-allows-resume-with-digest-equality)
+            jq -n --arg summary "$summary" '
+              {summary:$summary,current_assistant_review_contract:{schema_version:"7.0"},prior_canonical_qa_result:{canonical_result_ref:"journal#qa-rejected",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",final_verdict:"rejected",result:"HAS_REMAINING_ITEMS"},post_rejection_digest_evidence:{ref:"digest#equal-source",comparison:"equal",pre_fix_source_digest:"unchanged-source-digest",post_fix_source_digest:"unchanged-source-digest"},current_canonical_qa_result:{canonical_result_ref:"journal#qa-resumed",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",final_verdict:"accepted",result:"CLEAN"},current_qa_delegation_path:{ref:"journal#qa-delegation",contract:"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path",artifact:{subagent_policy_state:"delegation_triggered",subagent_execution_mode:"delegated",subagent_trigger_scope:["unchanged-source QA resume"],fresh_context_evidence:"Fresh QAEvaluator context after digest-equality validation."}},qa_evaluation_result:{canonical_result_ref:"journal#qa-resumed",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",producer_schema_version:"7.0",delegation_path_ref:"journal#qa-delegation",delegation_contract:"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path",validation_status:"validated",rejection_recovery:{rejected_qa_result_ref:"journal#qa-rejected",pre_fix_source_digest:"unchanged-source-digest",post_fix_source_digest:"unchanged-source-digest",source_digest_comparison:"equal",digest_equality_evidence_ref:"digest#equal-source",rehash_evidence_ref:"digest#equal-source",qa_resume_authorized:true}}}' >"$response_path"
+            ;;
+        small-strict-blocked-qa-requires-terminal-projection|small-required-rejected-qa-requires-terminal-projection)
+            local qa_verdict qa_result disposition blocker
+            if [[ "$case_id" == small-strict-* ]]; then
+                qa_verdict="blocked"; qa_result="BLOCKED"; disposition="blocked"; blocker="QA is blocked; resolve the QA blocker."
+            else
+                qa_verdict="rejected"; qa_result="HAS_REMAINING_ITEMS"; disposition="remaining_items"; blocker="QA has remaining acceptance items; resolve and rerun QA."
+            fi
+            jq -n --arg summary "$summary" --argjson identity "$identity" --arg verdict "$qa_verdict" --arg result "$qa_result" --arg disposition "$disposition" --arg blocker "$blocker" '
+              {summary:$summary,triage_result:{size:"small",controller_intensity:"strict",qa_evaluation_mode:"required"},current_assistant_review_contract:{schema_version:"7.0"},canonical_final_summary:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",final_review_snapshot_id:"review-current",result:"CLEAN",coverage_complete:true,evidence_bounded_claim:"No material findings within the reviewed scope and available evidence",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity},canonical_qa_result:{canonical_result_ref:"journal#qa-result",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",final_verdict:$verdict,result:$result},current_final_batch:{review_snapshot_id:"review-current",final_snapshot_identity:$identity},review_result:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",producer_schema_version:"7.0",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,delegation_path_ref:"journal#review-delegation",delegation_contract:"assistant-review/contracts/output.yaml#review_delegation_path",validation_status:"validated"},qa_evaluation_result:{canonical_result_ref:"journal#qa-result",canonical_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",producer_schema_version:"7.0",delegation_path_ref:"journal#qa-delegation",delegation_contract:"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path",validation_status:"validated"},final_handoff:{changed_behavior_and_areas:["Small elevated completion routing"],architecture_decisions_and_rationale:["Use typed terminal projection"],rejected_alternatives_and_tradeoffs:["Do not fabricate medium slices"],requirement_evidence:["Canonical review and QA state"],automated_verification:["Focused contract suite"],manual_test_scenarios:["N/A: contract-only change"],compatibility_and_regression_surfaces:["Small strict and required-QA work"],known_limitations_and_untested_areas:["No runtime application surface"],rollback_or_recovery:"Revert the workflow projection.",review_completion:{canonical_result_ref:"journal#final-summary",canonical_contract:"assistant-review/contracts/output.yaml#final_summary",review_producer_schema_version:"7.0",result:"CLEAN",coverage_complete:true,evidence_bounded_claim:"No material findings within the reviewed scope and available evidence",final_review_snapshot_id:"review-current",final_snapshot_identity_ref:"journal#final-summary/final-snapshot-identity",final_snapshot_identity:$identity,qa_evaluation_result_ref:"journal#qa-result",qa_contract:"assistant-review/contracts/output.yaml#qa_evaluation_result",qa_producer_schema_version:"7.0",qa_final_verdict:$verdict,qa_result:$result,completion_disposition:$disposition,remaining_or_blocker_summary:$blocker},review_claim:($blocker + " Workflow completion is blocked.")}}' >"$response_path"
+            ;;
+        stale-assistant-review-version-invalidates-persisted-results)
+            jq -n --arg summary "$summary" '
+              {summary:$summary,task_state_reconciliation:{classification:"stale",assistant_review_packet_compatibility:{persisted_producer_schema_versions:["6.0"],current_producer_schema_version:"7.0",status:"invalidated",invalidated_refs:["review_result.canonical_result_ref","review_result.delegation_path_ref","review_result.final_snapshot_identity_ref","review_result.architecture_decision_pack_review_ref","qa_evaluation_result.canonical_result_ref","qa_evaluation_result.delegation_path_ref","qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result_ref"],rebuild_route:"rerun_review_and_qa"},exact_next_action:"Rerun the current assistant-review review and QA lanes, then rebuild workflow wrappers."}}' >"$response_path"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    if [[ "$case_id" == fulfilled-preparation-* \
+        || "$case_id" == fulfilled-not-applicable-* \
+        || "$case_id" == small-strict-* \
+        || "$case_id" == small-required-* ]]; then
+        jq --arg case_id "$case_id" '
+          . + {
+            completion_policy: {
+              controller_intensity:"strict",
+              build_execution_lane:"bounded_executor",
+              plan_mode:"none",
+              architecture_design_mode:"not_applicable",
+              workflow_state_mode:"journal",
+              manual_verification_mode:"not_required",
+              selection_reason:"Required acceptance QA elevates terminal evidence without adding medium decomposition."
+            },
+            triage_result: {
+              task_type:"feature",
+              risk_tier:"low",
+              size:"small",
+              controller_intensity:"strict",
+              plan_mode:"none",
+              execution_intent:"implement_only",
+              qa_evaluation_mode:"required",
+              harness_capable:false,
+              architecture_design_mode:"not_applicable",
+              architecture_design_trigger_reasons:["not_applicable: no material architecture boundary changes"],
+              build_execution_lane:"bounded_executor",
+              workflow_state_mode:"journal",
+              manual_verification_mode:"not_required",
+              required_gates:["Spec Review","Build validation","Code Reviewer","QA Evaluator"],
+              required_agents:["Bounded Executor","Code Reviewer","QA Evaluator"],
+              subagent_policy_state:"subagents_unavailable",
+              subagent_execution_mode:"direct_fallback",
+              subagent_trigger_scope:["source-changing strict required-QA implementation"],
+              search_mode:"lightweight",
+              candidate_scope_scan:{
+                likely_touched_paths:["skills/assistant-workflow"],
+                symbols_or_terms_searched:["deferred QA obligation"],
+                adjacent_surfaces:["workflow contracts and evals"],
+                confidence:"high",
+                unknowns:[]
+              }
+            },
+            phase_checkpoints:[
+              "--- PHASE: TRIAGE ---",
+              "--- PHASE: DISCOVER ---",
+              "--- PHASE: DISCOVER COMPLETE ---",
+              "--- PHASE: SPEC REVIEW ---",
+              "--- PHASE: SPEC REVIEW COMPLETE ---",
+              "--- PHASE: BUILD ---",
+              "--- PHASE: BUILD COMPLETE ---",
+              "--- PHASE: REVIEW ---",
+              "--- PHASE: REVIEW COMPLETE ---",
+              "--- PHASE: DOCUMENT ---",
+              "--- PHASE: DOCUMENT COMPLETE ---"
+            ],
+            changed_files:[{path:"skills/assistant-workflow/contracts/output.yaml",change_type:"modified",description:"Carries strict required-QA completion evidence."}],
+            test_results:{passed:1,failed:0,skipped:0},
+            validation_results:[{command_or_check:"focused workflow completion contracts",result:"passed",evidence:"The strict required-QA lifecycle case and mutations passed."}],
+            spec_review_result:{
+              status:"PASS",
+              scope_reviewed:"Strict required-QA completion obligations and terminal projection.",
+              missing_acceptance_criteria:[],
+              extra_scope:[],
+              changed_files_mismatch:[],
+              verification_evidence_mismatch:[],
+              required_fixes:[]
+            },
+            subagent_evidence:{
+              execution_mode:"direct_fallback",
+              required_roles:["Bounded Executor","Code Reviewer","QA Evaluator"],
+              build_execution_lane:"bounded_executor",
+              bounded_executor_evidence:{
+                executor_ref:"direct-fallback#bounded-executor",
+                changed_files:["skills/assistant-workflow/contracts/output.yaml"],
+                focused_verification:"passed",
+                regression_evidence:"passed"
+              },
+              direct_fallback_reason:"subagents_unavailable",
+              direct_fallback_role_evidence:[
+                {role:"Bounded Executor",phase_owner:"BUILD",result_ref:"validation#bounded-executor"},
+                {role:"Code Reviewer",phase_owner:"REVIEW",result_ref:"journal#final-summary"},
+                {role:"QA Evaluator",phase_owner:"REVIEW",result_ref:"journal#qa-result"}
+              ],
+              code_reviewer_evidence:{phase_owner:"REVIEW",reviewer_ref:"journal#review-delegation",result_ref:"journal#final-summary"},
+              qa_evaluator_evidence:{qa_evaluator_result:"journal#qa-result",qa_evaluator_direct_evidence:"Fresh direct-fallback QA evidence."}
+            }
+          }
+          | if .feature_preparation_scope == "existing_system" then
+              .approved_feature_preparation_evidence_ref = "prep/viewing-route"
+            else . end
+          | if ($case_id == "fulfilled-preparation-qa-obligation-allows-completion" or $case_id == "fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion") then .
+            else
+              .triage_result.execution_intent = "end_to_end"
+              | .triage_result.subagent_policy_state = "delegation_triggered"
+              | .triage_result.subagent_execution_mode = "delegated"
+              | .triage_result.subagent_trigger_scope = ["source-changing strict required-QA end-to-end execution"]
+              | .subagent_evidence.execution_mode = "delegated"
+              | del(.subagent_evidence.direct_fallback_reason, .subagent_evidence.direct_fallback_role_evidence)
+              | .subagent_evidence.delegated_dispatch_results = [
+                  {role:"Bounded Executor",phase_owner:"BUILD",dispatch_ref:"dispatch#bounded-executor",result_ref:"validation#bounded-executor"},
+                  {role:"Code Reviewer",phase_owner:"REVIEW",dispatch_ref:"dispatch#code-reviewer",result_ref:"journal#final-summary"},
+                  {role:"QA Evaluator",phase_owner:"REVIEW",dispatch_ref:"dispatch#qa-evaluator",result_ref:"journal#qa-result"}
+                ]
+              | .subagent_evidence.qa_evaluator_evidence.qa_evaluator_direct_evidence = "Fresh delegated QA evidence."
+            end
+        ' "$response_path" >"$response_path.complete"
+        mv "$response_path.complete" "$response_path"
+    fi
+
+    jq --argjson final_defaults "$final_summary_defaults" --argjson qa_defaults "$qa_result_defaults" '
+      def qa_weighted_score($acceptance; $strength; $domain; $readiness):
+        (((
+          ($acceptance * 0.30) +
+          ($strength * 0.25) +
+          ($domain * 0.20) +
+          ($readiness * 0.25)
+        ) * 100 + 0.500000001 | floor) / 100);
+      def final_summary_envelope:
+        . as $old
+        | ($final_defaults + ($old | del(.canonical_result_ref, .canonical_contract, .final_snapshot_identity_ref))) as $artifact
+        | {
+            ref:$old.canonical_result_ref,
+            contract:$old.canonical_contract,
+            artifact:(
+              if $artifact.coverage_complete == true then $artifact
+              else $artifact
+                | del(.evidence_bounded_claim)
+                | .coverage_ledger[1].terminal_state = "failed"
+                | .coverage_ledger[1].coverage_status = "incomplete"
+                | .coverage_ledger[1].coverage_gap_id = "coverage-gap:batch-current:pass-failure-paths"
+                | .coverage_ledger[1].evidence = "The final review batch has unresolved coverage."
+                | .batch_summaries[0].batch_status = "incomplete"
+                | .batch_summaries[0].terminal_response_count = 1
+                | .batch_summaries[0].aggregate_rubric_recomputed = false
+                | .aggregation_ledger = [{
+                    source_provenance:[{source_kind:"review_pass",source_id:"pass-failure-paths"}],
+                    source_pass_ids:["pass-failure-paths"],
+                    source_coverage_gap_ids:["coverage-gap:batch-current:pass-failure-paths"],
+                    disposition:"coverage_gap",
+                    rationale:"The failed final-batch pass leaves an unresolved coverage gap."
+                  }]
+                | .coverage_gaps = ["The final review batch has unresolved coverage."]
+                | .remaining_items = [{severity:"must-fix",file:"skills/assistant-workflow/contracts/output.yaml",description:"Complete the missing review coverage.",reason_unresolved:"The final batch reported incomplete coverage."}]
+              end
+            )
+          };
+      def qa_result_envelope:
+        . as $old
+        | {
+            ref:$old.canonical_result_ref,
+            contract:$old.canonical_contract,
+            artifact:(
+              $qa_defaults + ($old | del(.canonical_result_ref, .canonical_contract, .approved_feature_preparation_qa_acceptance_obligation_result_ref))
+              | if .final_verdict == "rejected" then
+                  .acceptance_findings = [{severity:"concern",criterion:"Acceptance remains unsatisfied.",evidence:"The rejected QA result identifies the failed criterion.",impact:"Workflow completion remains blocked.",disposition:"remaining"}]
+                  | .qa_scorecard = {acceptance_coverage:2,evidence_strength:4,domain_quality:5,final_readiness:2,weighted_score:qa_weighted_score(2;4;5;2),rationale:{acceptance_coverage:"A scoped acceptance criterion remains unsatisfied.",evidence_strength:"The failed criterion has direct verification evidence.",domain_quality:"not_applicable: no scoped domain rubric applies.",final_readiness:"The remaining acceptance item blocks readiness."}}
+                  | .score_progression[0].weighted_score = qa_weighted_score(2;4;5;2)
+                  | .score_progression[0].failed_acceptance_count = 1
+                elif .final_verdict == "accepted_with_concerns" then
+                  .acceptance_findings = [{severity:"concern",criterion:"Acceptance passed with a documented limitation.",evidence:"The limitation is non-blocking and remains documented.",impact:"The remaining concern does not block completion.",disposition:"remaining"}]
+                  | .qa_scorecard = {acceptance_coverage:4.5,evidence_strength:5,domain_quality:5,final_readiness:4.5,weighted_score:qa_weighted_score(4.5;5;5;4.5),rationale:{acceptance_coverage:"Acceptance passed with one documented non-blocking limitation.",evidence_strength:"Direct acceptance evidence supports the result.",domain_quality:"not_applicable: no scoped domain rubric applies.",final_readiness:"The limitation is documented and non-blocking."}}
+                  | .score_progression[0].weighted_score = qa_weighted_score(4.5;5;5;4.5)
+                  | .score_progression[0].failed_acceptance_count = 0
+                elif .final_verdict == "blocked" then
+                  .acceptance_findings = []
+                  | .qa_scorecard = {acceptance_coverage:1,evidence_strength:1,domain_quality:5,final_readiness:1,weighted_score:qa_weighted_score(1;1;5;1),rationale:{acceptance_coverage:"Acceptance could not be completed while QA is blocked.",evidence_strength:"Required acceptance evidence is unavailable.",domain_quality:"not_applicable: no scoped domain rubric applies.",final_readiness:"The unresolved QA blocker prevents readiness."}}
+                  | .score_progression[0].weighted_score = qa_weighted_score(1;1;5;1)
+                  | .score_progression[0].failed_acceptance_count = 0
+                else
+                  .acceptance_findings = []
+                  | .score_progression[0].failed_acceptance_count = 0
+                end
+              | if .final_verdict == "blocked" then .open_questions = ["Resolve the QA blocker before resuming completion."] else . end
+            )
+          };
+      if has("canonical_final_summary") then .canonical_final_summary |= final_summary_envelope else . end
+      | if has("fresh_canonical_final_summary") then .fresh_canonical_final_summary |= final_summary_envelope else . end
+      | if has("canonical_qa_result") then .canonical_qa_result |= qa_result_envelope else . end
+      | if has("prior_canonical_qa_result") then .prior_canonical_qa_result |= qa_result_envelope else . end
+      | if has("current_canonical_qa_result") then .current_canonical_qa_result |= qa_result_envelope else . end
+    ' "$response_path" >"$response_path.normalized"
+    mv "$response_path.normalized" "$response_path"
 }

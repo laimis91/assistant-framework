@@ -2,7 +2,7 @@
 # Resolve these fields before entering the review loop.
 # The agent determines scope from user request context, git state, or task journal.
 
-schema_version: "6.0"
+schema_version: "7.0"
 contract: input
 skill: assistant-review
 
@@ -25,7 +25,7 @@ fields:
     type: object
     required: true
     description: "The material available to review, captured as a scope snapshot rather than assuming a diff"
-    validation: "Non-empty. Must include enough material to support concrete file/content findings."
+    validation: "Non-empty and immutable for one review batch. Must include enough material to support concrete file/content findings plus a review_snapshot_id and snapshot_identity that detect source mutation."
     on_missing: fail
     notes: "Generated from review_scope: git diff for changes, file contents for files, task/PR snapshot, or user-provided content."
     object_fields:
@@ -47,11 +47,57 @@ fields:
         required: false
         default: []
         description: "Known files covered by the snapshot"
+      - name: scope_manifest
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Stable reviewable items whose digest and obligations define coverage for this snapshot"
+        validation: "Every item has a stable id, locator, content digest, and applicable concerns; snapshot_identity.scope_manifest_digest binds this exact manifest."
+        object_fields:
+          - name: scope_item_id
+            type: string
+            required: true
+            validation: "Unique within this ordered scope_manifest."
+          - name: locator
+            type: string
+            required: true
+          - name: content_digest
+            type: string
+            required: true
+          - name: applicable_concerns
+            type: string[]
+            required: true
+            min_items: 1
+            validation: "Unique concern identifiers for this scope_item_id."
       - name: source_ref
         type: string
         required: false
         default: null
         description: "Optional PR URL, task journal path, command, or user-provided label"
+      - name: review_snapshot_id
+        type: string
+        required: true
+        description: "Stable identifier for the frozen material reviewed by one batch"
+        validation: "Unique for the material contents and retained on every pass return."
+      - name: snapshot_identity
+        type: object
+        required: true
+        description: "Reproducible identity evidence used to invalidate the batch after material mutation"
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
 
   - name: scope_size
     type: enum
@@ -80,10 +126,10 @@ fields:
     required: false
     enum_values: [delegated, direct_fallback, not_applicable]
     description: "How Reviewer responsibility is executed"
-    validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires delegation_opted_out, subagents_unavailable, or policy_disallowed plus fresh review context evidence; not_applicable applies to trivial/small self-review"
+    validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires opted_out, unavailable, policy_disallowed, or trivial/small isolated multi-pass evidence only when no applicable delegation trigger applies; not_applicable never collapses an audit batch to one self-review"
     default: not_applicable
     on_missing: infer
-    infer_from: "For medium+ scope use delegated when applicable instructions trigger Reviewer subagents. Use direct_fallback when the user explicitly opts out, subagents are unavailable after real failure or supported configuration proof, or policy disallows spawning. Use not_applicable for trivial/small self-review."
+    infer_from: "Use delegated when an applicable trigger requires Reviewer subagents, including trivial/small scope. Absent an applicable trigger, use direct_fallback for opt-out, unavailability, policy blocks, or trivial/small two-pass isolation. Use not_applicable only when no review batch is required."
 
   - name: subagent_trigger_scope
     type: string[]
@@ -120,22 +166,51 @@ fields:
     required: false
     enum_values: [not_required, optional, required]
     description: "Whether the independent QA evaluation loop should run after code-review/build evidence"
-    validation: "QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
+    validation: "QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work. A carried approved_feature_preparation_qa_acceptance_obligation also requires QA."
     default: not_required
     on_missing: infer
     infer_from: >
-      Use required only for QA required positive triggers: explicit QA/acceptance evaluation request,
-      accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped
-      UI/visual/product/UX/docs/DX acceptance.
-      Use required when the user explicitly requests QA/acceptance evaluation, an accepted Done
-      Contract exists, harness_capable == true and acceptance evaluation is in scope, the task is
-      domain-scored, or scoped UI/visual/product/UX/docs/DX acceptance applies.
-      QA non-triggers: template labels/placeholders, generic acceptance criteria labels,
-      optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+
-      code-review-only/source-changing work.
-      Use optional when acceptance material exists but the orchestrator has not marked QA as required.
-      Use not_required for ordinary medium+ code-review-only/source-changing work with no separate
-      acceptance evidence need.
+      Use required when the user explicitly requests QA/acceptance evaluation, an accepted Done Contract exists,
+      harness_capable == true and acceptance evaluation is in scope, the task is domain-scored, or scoped UI/visual/product/UX/docs/DX acceptance applies.
+      Use required for a carried approved_feature_preparation_qa_acceptance_obligation.
+      Use optional when acceptance material exists but QA is not required.
+      Use not_required for ordinary medium+ code-review-only/source-changing work.
+
+  - name: feature_preparation_scope
+    type: enum
+    required: false
+    enum_values: [not_applicable, existing_system]
+    description: "Whether the task prepares a feature against behavior already implemented in the repository"
+    validation: "existing_system is required for prepare_only or end_to_end feature/spike work that can affect an existing user-visible route, scope, selection, highlight, focus, side effect, or compatibility behavior. For implement_only, carry existing_system when the approved packet was prepared against such behavior."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use existing_system when technical preparation concerns an existing repository behavior or route. Otherwise use not_applicable."
+
+  - name: approved_feature_preparation_qa_acceptance_obligation
+    type: object
+    required: conditional
+    condition: "approved_feature_preparation_qa_acceptance_obligation is carried from workflow"
+    description: "Carried unchanged QA obligation."
+    validation: "Carry the approved workflow payload unchanged: exactly one source binding requires QA and blocks missing prerequisite/evidence."
+    on_missing: fail
+    object_fields:
+      - name: requested_scope
+        type: string
+        required: true
+      - name: execution_prerequisite
+        type: string
+        required: true
+      - name: source_feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        validation: "Equals the approved evidence ref."
+      - name: source_preparation_basis
+        type: enum
+        required: conditional
+        condition: "feature_preparation_scope == not_applicable"
+        enum_values: [not_applicable]
+        validation: "Records the exact non-existing-system preparation basis without fabricating an evidence ref."
 
   - name: done_contract
     type: object
@@ -449,7 +524,7 @@ fields:
   - name: previously_fixed
     type: object[]
     required: false
-    description: "Items already fixed in prior review loops (carries over from workflow Build/Review)"
+    description: "Items fixed in prior review batches; retained for closure verification rather than blanket finding suppression"
     default: []
     object_fields:
       - name: description
@@ -459,6 +534,40 @@ fields:
         type: int
         required: true
         validation: ">= 1 and <= 10"
+      - name: finding_id
+        type: string
+        required: conditional
+        condition: "entry was created under v7"
+        description: "Stable aggregate finding identifier. A persisted v6 record missing this value is migrated only through persisted_v6_packet_migration before rebuilding the batch."
+      - name: closure_status
+        type: enum
+        required: false
+        enum_values: [pending_verification, verified_closed, regressed, incomplete]
+        description: "Latest re-review closure state; regressed or incomplete items remain reportable"
+
+  - name: persisted_v6_packet_migration
+    type: object
+    required: conditional
+    condition: "persisted review packet was created under v6"
+    description: "Explicit compatibility migration for a persisted v6 review packet before v7 can use its historical ledger."
+    validation: "Invalidate every carried v6 batch and rebuild from a freshly rehashed v7 snapshot; a v6 packet cannot produce CLEAN or ISSUES_FIXED. For legacy previously_fixed records missing finding_id, normalize UTF-8 NFC(description) to UTF-8 bytes, SHA-256 it, and use legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use that base ID; every colliding record appends :<ordinal>, where ordinals start at 1 and follow original packet position within its collision group."
+    on_missing: fail
+    object_fields:
+      - name: source_schema_version
+        type: enum
+        required: true
+        enum_values: ["6.0"]
+      - name: batch_disposition
+        type: enum
+        required: true
+        enum_values: [invalidated_rebuild_required]
+      - name: rebuilt_review_snapshot_id
+        type: string
+        required: true
+      - name: rebuilt_snapshot_identity
+        type: object
+        required: true
+        description: "Fresh v7 identity captured after invalidation and rehash."
 
 # Validation behavior:
 # 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required before entering the loop

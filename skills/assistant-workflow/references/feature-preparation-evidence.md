@@ -96,6 +96,14 @@ and/or `recommended_next_step`. When an explicit QA/acceptance evaluation was
 requested, keep it only in
 `feature_preparation_result.future_qa_acceptance_obligation` while preparation
 uses `qa_evaluation_mode=not_required`.
+Later `implement_only` preserves `requested_scope` and
+`execution_prerequisite` exactly as
+`approved_feature_preparation_qa_acceptance_obligation`, then adds exactly one
+source binding: the evidence ref for `existing_system`, or
+`source_preparation_basis=not_applicable` without an evidence ref for
+`not_applicable`. It sets `qa_evaluation_mode=required` and carries the
+resulting enriched object unchanged through the task packet, Build,
+verification, and the existing post-Build Code Reviewer then QA Evaluator lane.
 When an explicit harness request or accepted independent harness evidence was
 supplied, keep it only in `feature_preparation_result.future_harness_obligation`
 with the exact requested scope, non-empty evidence basis, and the prerequisite

@@ -39,11 +39,13 @@ CONTEXT_BUDGET_EVIDENCE_HASH=""
 RUN_PLAN_HASH=""
 ACTIVE_CHILD_PID=""
 ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=false
+ACTIVE_NODE_PROBE_DIR=""
 ACTIVE_CHILD_GRACE_SECONDS=5
 PROTECTED_STATE_REQUIRES_EXPLICIT_RECOVERY=false
 EVALUATION_STARTED_AT=0
 MAX_INCOMPLETE_PAIRS=1
 FAILURE_DIAGNOSTIC_MAX_BYTES=4194304
+VIEWING_NODE_TEST_PROBE_TIMEOUT_SECONDS=10
 ACTIVATION_OBSERVATIONS_FILE=""
 ACTIVATION_OBSERVATIONS_SHA256=""
 ACTIVATION_OBSERVATION_SUMMARY='{"supplied":false,"evidence_class":"not_supplied","manual_native_admissible":false}'
@@ -132,6 +134,95 @@ PY
 require_python3_for_manual_activation_observation_freshness() {
     command -v python3 >/dev/null 2>&1 \
         || die "python3 is required to validate manual native activation observation freshness."
+}
+
+require_viewing_node_test_capability() {
+    command -v node >/dev/null 2>&1 \
+        || die "--execute with viewing-route-technical-preparation requires Node.js for its trusted seed-fixture test before run-plan persistence or model calls."
+    command -v python3 >/dev/null 2>&1 \
+        || die "--execute with viewing-route-technical-preparation requires Python 3 to bound and reap its node --test capability probe before run-plan persistence or model calls."
+
+    local probe_dir probe_file probe_pid probe_passed=false
+    probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/viewing-node-test-probe.XXXXXX")" \
+        || die "Could not create the private VIEWING node --test capability probe."
+    ACTIVE_NODE_PROBE_DIR="$probe_dir"
+    probe_file="$probe_dir/capability.test.js"
+    printf '%s\n' \
+        "const test = require('node:test');" \
+        "test('node --test capability', () => {});" >"$probe_file"
+
+    ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=false
+    python3 - "$probe_file" "$VIEWING_NODE_TEST_PROBE_TIMEOUT_SECONDS" <<'PY' &
+import os
+import signal
+import subprocess
+import sys
+import time
+
+probe_file, timeout_seconds = sys.argv[1], int(sys.argv[2])
+process = None
+
+def stop_process_group():
+    if process is None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=0.1)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        pass
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        for _ in range(50):
+            try:
+                os.killpg(process.pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.01)
+    if process.poll() is None:
+        process.wait()
+
+def interrupted(signum, _frame):
+    stop_process_group()
+    raise SystemExit(128 + signum)
+
+signal.signal(signal.SIGINT, interrupted)
+signal.signal(signal.SIGTERM, interrupted)
+process = subprocess.Popen(
+    ["node", "--test", probe_file],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    start_new_session=True,
+)
+exit_code = 1
+try:
+    exit_code = process.wait(timeout=timeout_seconds)
+except subprocess.TimeoutExpired:
+    exit_code = 1
+finally:
+    stop_process_group()
+raise SystemExit(0 if exit_code == 0 else 1)
+PY
+    probe_pid=$!
+    ACTIVE_CHILD_PID="$probe_pid"
+    if wait "$probe_pid"; then
+        probe_passed=true
+    fi
+    ACTIVE_CHILD_PID=""
+    rm -rf "$probe_dir"
+    ACTIVE_NODE_PROBE_DIR=""
+
+    [[ "$probe_passed" == true ]] \
+        || die "--execute with viewing-route-technical-preparation requires a working node --test capability; the bounded prerequisite probe failed before run-plan persistence or model calls."
 }
 
 materialized_candidate_skill_sha256() {
@@ -826,6 +917,10 @@ cleanup_all() {
     terminate_active_child || return 1
     cleanup_raw_root
     release_output_lease
+    if [[ -n "$ACTIVE_NODE_PROBE_DIR" && -d "$ACTIVE_NODE_PROBE_DIR" ]]; then
+        rm -rf "$ACTIVE_NODE_PROBE_DIR"
+    fi
+    ACTIVE_NODE_PROBE_DIR=""
     if [[ -n "$WORK_ROOT" && -d "$WORK_ROOT" ]]; then
         rm -rf "$WORK_ROOT"
     fi
@@ -916,6 +1011,18 @@ selected_case_ids() {
         seen_ids+="$case_id,"
         printf '%s\n' "$case_id"
     done
+}
+
+selected_cases_include() {
+    local required_case_id="$1"
+    local selected_case_id
+    local selected_case_list
+
+    selected_case_list="$(selected_case_ids)" || return 1
+    while IFS= read -r selected_case_id; do
+        [[ "$selected_case_id" == "$required_case_id" ]] && return 0
+    done <<<"$selected_case_list"
+    return 1
 }
 
 blind_prompt_for_case() {
@@ -3425,6 +3532,8 @@ if [[ "$RESUME" == false && -e "$OUTPUT_DIR" ]]; then
 fi
 validate_contract_test_hook_environment
 trap cleanup_all EXIT
+trap 'handle_signal 130' INT
+trap 'handle_signal 143' TERM
 
 baseline_overlay="$(resolve_overlay_file "$BASELINE_VARIANT")"
 candidate_overlay="$(resolve_overlay_file "$CANDIDATE_VARIANT")"
@@ -3435,12 +3544,13 @@ fi
 validate_candidate_manifest
 validate_synthetic_fixture
 selected_case_ids >/dev/null
+if [[ "$MODE" == "execute" ]] && selected_cases_include "viewing-route-technical-preparation"; then
+    require_viewing_node_test_capability
+fi
 preflight_macos_seatbelt
 acquire_output_lease
 WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/codex-framework-eval-variants.XXXXXX")"
 chmod 700 "$WORK_ROOT"
-trap 'handle_signal 130' INT
-trap 'handle_signal 143' TERM
 snapshot_activation_observations
 baseline_dir="$WORK_ROOT/baseline"
 candidate_dir="$WORK_ROOT/candidate"

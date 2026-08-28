@@ -83,11 +83,11 @@ weighted_score = (correctness * 0.30) + (quality * 0.20) + (architecture * 0.20)
                + (security * 0.15) + (coverage * 0.15)
 ```
 
-Example: correctness=4, quality=4, architecture=3, security=5, coverage=3
+Example: correctness=4, quality=3.5, architecture=4, security=5, coverage=3
 ```
-= (4 * 0.30) + (4 * 0.20) + (3 * 0.20) + (5 * 0.15) + (3 * 0.15)
-= 1.20 + 0.80 + 0.60 + 0.75 + 0.45
-= 3.80 → REFINE
+= (4 * 0.30) + (3.5 * 0.20) + (4 * 0.20) + (5 * 0.15) + (3 * 0.15)
+= 1.20 + 0.70 + 0.80 + 0.75 + 0.45
+= 3.90 → REFINE
 ```
 
 ## Threshold Actions
@@ -146,7 +146,7 @@ rubric_scores:
   architecture: 4.0
   security: 5.0
   test_coverage: 3.0
-  weighted_score: 3.85
+  weighted_score: 3.90
   action: REFINE
   score_justification:
     correctness: "All CRUD operations correct. Edge case: bulk delete with empty list not handled (line 45)."

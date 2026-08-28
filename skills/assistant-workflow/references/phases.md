@@ -395,12 +395,18 @@ For standard/strict work, run the stages in order:
    and QAEvaluator packet schemas and any Reviewer compatibility routing.
 3. Print `>> Stage 3: QA Evaluation - loading assistant-review references/qa-evaluation-loop.md` only when QA is required.
 
-After review, enforce the applicable status gate and write `review_result` as
-validated canonical assistant-review result/delegation refs plus
+After review, write `review_result` with current producer version, canonical
+result/delegation refs, exact `final_review_snapshot_id`, and final identity
+ref/object resolving within that result to the exact current final batch, plus
 `architecture_decision_pack_review_ref` when a Pack applies and the
 Verification Summary. Review owns independent reviewer evidence; it does
 not create the developer handoff. Wait only when `manual_verification_mode=required`; optional manual
 steps do not block and `not_required` proceeds directly to Document.
+
+If QA rejects and a source fix follows, return to Build. Passed Build
+validation, rehash evidence, and a fresh complete assistant-review batch on the
+post-fix identity are required before QA resumes; reuse requires equal pre/post
+digests, explicit equality evidence, and no changed-path fields.
 
 Print: `--- PHASE: REVIEW COMPLETE ---`
 
@@ -410,7 +416,8 @@ Print: `--- PHASE: REVIEW COMPLETE ---`
 
 Print: `--- PHASE: DOCUMENT ---`
 
-Load `references/completion-controller.md` and, for medium+ work,
+Load `references/completion-controller.md` and, for medium+, strict, or
+required-QA work,
 `references/final-handoff.md`. They own small/full Document paths,
 metrics JSON format, final harness refresh, the sole developer handoff creation
 step, and Verified Skill Distillation routing.
@@ -420,7 +427,10 @@ optional and non-blocking. Refresh harness runtime artifacts only when
 `harness_capable=true`.
 
 Print: `--- PHASE: DOCUMENT COMPLETE ---`
-Print: `--- WORKFLOW COMPLETE ---`
+Print `--- WORKFLOW COMPLETE ---` only when every Document assertion passes and
+the applicable `final_handoff.review_completion.completion_disposition` is
+`complete`. For remaining review items, incomplete coverage, rejected or
+blocked QA, return the explicit non-complete status and next action instead.
 
 ## Phase: Preparation Completion
 
@@ -446,3 +456,11 @@ without an evidence ref for `not_applicable`, promotes an initially small
 implementation to at least `medium`, sets `harness_capable=true`, and completes
 the existing Done Contract, Harness Recipe, and runtime-ref entry gates before
 Build.
+When the preparation result carries `future_qa_acceptance_obligation`, the
+later approved `implement_only` workflow consumes it as
+`approved_feature_preparation_qa_acceptance_obligation`, preserves its two
+payload fields exactly, binds the existing-system evidence ref or typed
+`not_applicable` basis, sets `qa_evaluation_mode=required`, and carries it
+unchanged through the packet, Build, verification, Code Reviewer, and the
+existing QA Evaluator acceptance context. This does not activate QA during
+preparation or add a pre-Build harness gate.

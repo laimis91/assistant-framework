@@ -4,6 +4,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
+source "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 workflow_skill="$workflow_dir/SKILL.md"
@@ -15,6 +16,7 @@ workflow_handoffs="$workflow_dir/contracts/handoffs.yaml"
 phases_reference="$workflow_dir/references/phases.md"
 review_router="$workflow_dir/references/review-qa-router.md"
 assistant_review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+assistant_review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
 candidate_skill="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/SKILL.md"
 docs_dir="$FRAMEWORK_DIR/skills/assistant-docs"
 docs_input_contract="$docs_dir/contracts/input.yaml"
@@ -59,7 +61,7 @@ fresh_review_field_has_property() {
 fresh_review_pack_refs_are_declared() {
     local file="$1"
     local field
-    for field in canonical_result_ref architecture_decision_pack_review_ref; do
+    for field in canonical_result_ref final_snapshot_identity_ref architecture_decision_pack_review_ref; do
         fresh_review_field_has_property "$file" "$field" 'type: string' \
             && fresh_review_field_has_property "$file" "$field" 'required: conditional' \
             && fresh_review_field_has_property "$file" "$field" 'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
@@ -663,6 +665,7 @@ elif ! grep -Fq -- '- name: orchestrator_to_reviewer' "$assistant_review_handoff
     fail "assistant-review is missing a canonical Reviewer or QAEvaluator handoff"
 elif ! grep -Fq 'assistant-review/contracts/output.yaml#final_summary' <<<"$review_result_block" \
     || ! grep -Fq 'canonical_result_ref' <<<"$review_result_block" \
+    || ! grep -Fq 'final_snapshot_identity_ref' <<<"$review_result_block" \
     || ! grep -Fq 'validation_status' <<<"$review_result_block"; then
     fail "workflow review_result is not a validated reference to canonical assistant-review final_summary"
 elif grep -Eq 'reviewed_scope|review_evidence|quality_review_status|review_rounds|must_fix_resolved|should_fix_resolved' <<<"$review_result_block"; then
@@ -680,6 +683,100 @@ else
     pass
 fi
 
+test_start "workflow review wrappers bind the canonical final snapshot identity"
+if ruby -ryaml -e '
+    producer = YAML.load_file(ARGV.fetch(0)).fetch("artifacts")
+    final_summary = producer.find { |artifact| artifact["name"] == "final_summary" }
+    final_identity = final_summary.fetch("object_fields").find { |field| field["name"] == "final_snapshot_identity" }
+    expected_shape = {
+      "basis" => "enum",
+      "value" => "string",
+      "captured_at" => "string",
+      "scope_manifest_digest" => "string"
+    }
+    producer_shape = final_identity.fetch("object_fields").to_h { |field| [field.fetch("name"), field.fetch("type")] }
+
+    consumer = YAML.load_file(ARGV.fetch(1)).fetch("artifacts")
+    review_result = consumer.find { |artifact| artifact["name"] == "review_result" }
+    fresh_review_result = consumer.find { |artifact| artifact["name"] == "fresh_review_result" }
+    review_ref = review_result.fetch("object_fields").find { |field| field["name"] == "final_snapshot_identity_ref" }
+    fresh_ref = fresh_review_result.fetch("object_fields").find { |field| field["name"] == "final_snapshot_identity_ref" }
+    review_identity = review_result.fetch("object_fields").find { |field| field["name"] == "final_snapshot_identity" }
+    fresh_identity = fresh_review_result.fetch("object_fields").find { |field| field["name"] == "final_snapshot_identity" }
+    exact_binding = lambda do |field|
+      field["type"] == "string" &&
+        !field.key?("object_fields") &&
+        field.fetch("validation").include?("current final batch review_material_snapshot.snapshot_identity") &&
+        field.fetch("validation").include?("current final batch review_material_snapshot.review_snapshot_id")
+    end
+    exact_identity = lambda do |field|
+      field && field["type"] == "object" &&
+        field.fetch("object_fields").to_h { |nested| [nested.fetch("name"), nested.fetch("type")] } == expected_shape &&
+        field.fetch("validation").include?("canonical_result_ref.final_snapshot_identity") &&
+        field.fetch("validation").include?("current final batch review_material_snapshot.snapshot_identity")
+    end
+
+    producer_basis = final_identity.fetch("object_fields").find { |field| field["name"] == "basis" }
+    valid = final_identity["required"] == true && producer_shape == expected_shape &&
+      producer_basis.fetch("enum_values") == %w[git_revision diff_digest content_digest task_or_pr_revision] &&
+      review_ref["required"] == true && exact_binding.call(review_ref) &&
+      review_identity["required"] == true && exact_identity.call(review_identity) &&
+      fresh_ref["required"] == "conditional" &&
+      fresh_ref["condition"] == "architecture_design_mode in [lightweight, required, review_intensive]" &&
+      exact_binding.call(fresh_ref) &&
+      fresh_identity["required"] == "conditional" &&
+      fresh_identity["condition"] == "architecture_design_mode in [lightweight, required, review_intensive]" &&
+      exact_identity.call(fresh_identity)
+    exit valid ? 0 : 1
+' "$assistant_review_output" "$output_contract" \
+    && grep -Fq 'final_snapshot_identity_ref' "$phase_gates" \
+    && grep -Fq 'final_snapshot_identity_ref' "$review_router"; then
+    pass
+else
+    fail "workflow wrappers do not validate the exact canonical current final-batch snapshot identity"
+fi
+
+test_start "final handoff binds review and QA terminal state before completion"
+if ruby -ryaml -e '
+    artifacts = YAML.load_file(ARGV.fetch(0)).fetch("artifacts")
+    producer_artifacts = YAML.load_file(ARGV.fetch(1)).fetch("artifacts")
+    producer_summary = producer_artifacts.find { |artifact| artifact["name"] == "final_summary" }
+    producer_claim = producer_summary.fetch("object_fields")
+      .find { |field| field["name"] == "evidence_bounded_claim" }
+      .fetch("validation").delete_prefix("Exactly: ")
+    exact_claim_marker = "exactly: \"#{producer_claim}\""
+    final_handoff = artifacts.find { |artifact| artifact["name"] == "final_handoff" }
+    fields = final_handoff.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+    completion = fields["review_completion"]
+    exit 1 unless completion && completion["type"] == "object" && completion["required"] == true
+    completion_fields = completion.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+    required = %w[
+      canonical_result_ref canonical_contract result coverage_complete
+      final_snapshot_identity_ref final_snapshot_identity completion_disposition
+    ]
+    qa = %w[qa_evaluation_result_ref qa_contract qa_final_verdict qa_result]
+    valid = required.all? { |name| completion_fields.key?(name) } &&
+      qa.all? { |name| completion_fields[name] && completion_fields[name]["required"] == "conditional" } &&
+      completion_fields.fetch("result").fetch("enum_values") == %w[CLEAN ISSUES_FIXED HAS_REMAINING_ITEMS] &&
+      completion_fields.fetch("completion_disposition").fetch("enum_values") == %w[complete remaining_items blocked] &&
+      completion_fields.key?("evidence_bounded_claim") &&
+      completion_fields.fetch("evidence_bounded_claim").fetch("validation").include?(exact_claim_marker) &&
+      completion_fields.key?("remaining_or_blocker_summary") &&
+      fields.fetch("review_claim").fetch("validation").include?(exact_claim_marker) &&
+      fields.fetch("review_claim").fetch("validation").include?("remaining items or blocker")
+    exit valid ? 0 : 1
+' "$output_contract" "$assistant_review_output" \
+    && grep -Fq 'HAS_REMAINING_ITEMS' "$phase_gates" \
+    && grep -Fq 'coverage_complete' "$phase_gates" \
+    && grep -Fq 'qa_final_verdict' "$phase_gates" \
+    && grep -Fq 'Do not print workflow complete' "$phase_gates" \
+    && grep -Fq 'HAS_REMAINING_ITEMS' "$workflow_dir/references/final-handoff.md" \
+    && grep -Fq 'BLOCKED' "$workflow_dir/references/completion-controller.md"; then
+    pass
+else
+    fail "final_handoff or Document gates permit a clean claim or WORKFLOW COMPLETE with incomplete review or blocked QA"
+fi
+
 test_start "canonical review_result gate does not block the light fresh-review lane"
 r3_block="$(awk '
     $0 == "      - id: R3" { inside = 1 }
@@ -694,6 +791,7 @@ elif ! grep -Fq 'controller_intensity == light' <<<"$(phase_block REVIEW)" \
     || ! grep -Fq 'R_LIGHT_FRESH_REVIEW' <<<"$(phase_block REVIEW)"; then
     fail "Review phase no longer preserves the distinct light fresh-review lane"
 elif ! grep -Fq 'assistant-review/contracts/output.yaml#final_summary' <<<"$fresh_review_block" \
+    || ! grep -Fq 'final_snapshot_identity_ref' <<<"$fresh_review_block" \
     || ! grep -Fq 'assistant-review/contracts/output.yaml#architecture_decision_pack_review' <<<"$fresh_review_block" \
     || ! grep -Fq 'validation_status' <<<"$fresh_review_block"; then
     fail "light Pack fresh_review_result does not retain validated canonical assistant-review output refs"
@@ -707,9 +805,9 @@ else
     pass
 fi
 
-test_start "light Pack fresh_review_result declares both conditional canonical references"
+test_start "light Pack fresh_review_result declares every conditional canonical reference"
 fresh_review_ref_missing=()
-for field in canonical_result_ref architecture_decision_pack_review_ref; do
+for field in canonical_result_ref final_snapshot_identity_ref architecture_decision_pack_review_ref; do
     for property in \
         'type: string' \
         'required: conditional' \
@@ -729,7 +827,7 @@ test_start "light Pack fresh_review_result rejects independent canonical-referen
 fresh_review_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-light-pack-ref.XXXXXX")"
 p0p4_register_cleanup "$fresh_review_mutation_dir"
 fresh_review_mutation_failures=()
-for omitted in canonical_result_ref architecture_decision_pack_review_ref canonical_result_ref,architecture_decision_pack_review_ref; do
+for omitted in canonical_result_ref final_snapshot_identity_ref architecture_decision_pack_review_ref canonical_result_ref,final_snapshot_identity_ref,architecture_decision_pack_review_ref; do
     mutated_output="$fresh_review_mutation_dir/${omitted//,/-}.yaml"
     without_fresh_review_pack_refs "$output_contract" "$mutated_output" "$omitted"
     if fresh_review_pack_refs_are_declared "$mutated_output"; then
@@ -772,7 +870,7 @@ fi
 
 test_start "promotable workflow overlay preserves optional Plan ownership and v4 migration semantics"
 candidate_missing=()
-for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'assistant-review v6' 'subagent_trigger_scope' '- `delegation` before dispatch for indexed role/trigger fields.' 'Build repair' 'Document is the sole owner'; do
+for term in 'plan_mode' 'none' 'inline' 'approval_required' 'verification_command' 'producer_schema_version' 'subagent_trigger_scope' '- `delegation` before dispatch for indexed role/trigger fields.' 'Build repair' 'Document is the sole owner'; do
     if ! grep -Fq -- "$term" "$candidate_skill"; then
         candidate_missing+=("$term")
     fi
@@ -1094,7 +1192,10 @@ run_pack_structured_eval() {
     jq '.cases = [.cases[] | select(.id == "architecture-pack-resists-premature-abstraction")]' "$fixture" >"$temporary_skill/evals/cases.json"
     printf '%s\n' "$response" >"$responses_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.txt"
     if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill" 2>&1)"; then
-        [[ "$expected_status" == "FAIL" ]] || return 1
+        if [[ "$expected_status" != "FAIL" ]]; then
+            printf '%s\n' "$runner_output" >&2
+            return 1
+        fi
     elif [[ "$expected_status" == "FAIL" ]]; then
         return 1
     fi
@@ -1367,6 +1468,36 @@ run_standard_pack_review_eval() {
         && grep -Fq "Summary: total=1 passed=$([[ "$expected_status" == "PASS" ]] && echo 1 || echo 0) failed=$([[ "$expected_status" == "PASS" ]] && echo 0 || echo 1)" <<<"$runner_output"
 }
 
+run_workflow_case_eval() {
+    local fixture="$1"
+    local case_id="$2"
+    local response="$3"
+    local expected_status="$4"
+    local eval_root
+    local temporary_skill
+    local responses_dir
+    local runner_output
+
+    eval_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-focused-eval.XXXXXX")"
+    p0p4_register_cleanup "$eval_root"
+    temporary_skill="$eval_root/assistant-workflow"
+    responses_dir="$eval_root/responses"
+    mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
+    cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$temporary_skill/SKILL.md"
+    jq --arg case_id "$case_id" '.cases = [.cases[] | select(.id == $case_id)]' "$fixture" >"$temporary_skill/evals/cases.json"
+    printf '%s\n' "$response" >"$responses_dir/assistant-workflow/$case_id.txt"
+    if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill" 2>&1)"; then
+        if [[ "$expected_status" != "FAIL" ]]; then
+            printf '%s\n' "$runner_output" >&2
+            return 1
+        fi
+    elif [[ "$expected_status" == "FAIL" ]]; then
+        return 1
+    fi
+    grep -Fq $'\tassistant-workflow\t'"$case_id" <<<"$runner_output" \
+        && grep -Fq "Summary: total=1 passed=$([[ "$expected_status" == "PASS" ]] && echo 1 || echo 0) failed=$([[ "$expected_status" == "PASS" ]] && echo 0 || echo 1)" <<<"$runner_output"
+}
+
 test_start "workflow v11 standard reviews retain validated Pack checklist references"
 standard_pack_review_failures=()
 review_result_block="$(contract_field_block "$output_contract" review_result)"
@@ -1382,7 +1513,7 @@ if ! grep -A8 -F -- '- name: architecture_decision_pack_review_contract' <<<"$re
 fi
 for file_and_term in \
     "$phase_gates::architecture_decision_pack_review_ref" \
-    "$review_router::Standard/strict Pack-backed \`review_result\` must also record validated refs" \
+    "$review_router::Pack-backed \`review_result\` must also record validated refs" \
     "$workflow_dir/references/phases.md::architecture_decision_pack_review_ref"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
@@ -1397,8 +1528,11 @@ fi
 if ! jq -e '
     .cases[] | select(.id == "standard-pack-review-result-retains-checklist") |
     (.prompt | contains("Return the complete response as one valid JSON object")) and
-    (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["review_result","canonical_result_ref"]})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals_path","path":["review_result","canonical_result_ref"],"other_path":["canonical_final_summary","ref"]})) and
     (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["review_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#final_summary"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["review_result","final_snapshot_identity_ref"],"expected":"journal#final-summary/final-snapshot-identity"})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals_path","path":["review_result","final_snapshot_identity"],"other_path":["canonical_final_summary","artifact","final_snapshot_identity"]})) and
+    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals_path","path":["canonical_final_summary","artifact","final_snapshot_identity"],"other_path":["current_final_batch","final_snapshot_identity"]})) and
     (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["review_result","delegation_path_ref"]})) and
     (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["review_result","delegation_contract"],"expected":"assistant-review/contracts/output.yaml#review_delegation_path"})) and
     (.machine_expectations.structured_json_assertions | any(. == {"operator":"nonempty_string","path":["review_result","architecture_decision_pack_review_ref"]})) and
@@ -1413,13 +1547,18 @@ if ! ruby -ryaml -e '
     standard_pack_review_failures+=("workflow v11 does not cover every canonical contract header")
 fi
 standard_review_required_summary="$(jq -r '.cases[] | select(.id == "standard-pack-review-result-retains-checklist") | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
-standard_review_valid="$(jq -n --arg summary "$standard_review_required_summary" '{summary: $summary, review_result: {canonical_result_ref: "journal#final-summary", canonical_contract: "assistant-review/contracts/output.yaml#final_summary", delegation_path_ref: "journal#review-delegation", delegation_contract: "assistant-review/contracts/output.yaml#review_delegation_path", architecture_decision_pack_review_ref: "journal#pack-review", architecture_decision_pack_review_contract: "assistant-review/contracts/output.yaml#architecture_decision_pack_review", validation_status: "validated"}}')"
+standard_review_response_file="$(mktemp)"
+p0p4_register_cleanup "$standard_review_response_file"
+build_workflow_review_lifecycle_eval_response "standard-pack-review-result-retains-checklist" "$standard_review_response_file" "$standard_review_required_summary"
+standard_review_valid="$(<"$standard_review_response_file")"
 if ! run_standard_pack_review_eval "$workflow_dir/evals/cases.json" "$standard_review_valid" PASS; then
     standard_pack_review_failures+=("actual eval runner rejects the complete standard Pack review wrapper")
 fi
 for mutation in \
     'del(.review_result.canonical_result_ref)' \
     'del(.review_result.canonical_contract)' \
+    'del(.review_result.final_snapshot_identity_ref)' \
+    'del(.review_result.final_snapshot_identity)' \
     'del(.review_result.delegation_path_ref)' \
     'del(.review_result.delegation_contract)'; do
     unsafe_standard_review="$(jq "$mutation" <<<"$standard_review_valid")"
@@ -1431,6 +1570,1226 @@ if [[ ${#standard_pack_review_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "workflow standard Pack review retention gaps: ${standard_pack_review_failures[*]}"
+fi
+
+test_start "standard and light Pack evals reject stale foreign and mismatched final snapshot bindings"
+snapshot_binding_failures=()
+for lane in standard light; do
+    if [[ "$lane" == "standard" ]]; then
+        case_id="standard-pack-review-result-retains-checklist"
+        wrapper="review_result"
+    else
+        case_id="light-pack-review-result-retains-current-snapshot"
+        wrapper="fresh_review_result"
+    fi
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$valid_response" PASS; then
+        snapshot_binding_failures+=("$lane valid exact binding rejected")
+        continue
+    fi
+    for mutation in \
+        ".${wrapper}.final_snapshot_identity.value = \"stale-review-snapshot\"" \
+        ".${wrapper}.canonical_result_ref = \"journal#foreign-summary\"" \
+        ".${wrapper}.canonical_contract = \"foreign-review/contracts/output.yaml#final_summary\"" \
+        ".${wrapper}.producer_schema_version = \"6.0\"" \
+        ".${wrapper}.final_review_snapshot_id = \"foreign-review\"" \
+        ".${wrapper}.final_snapshot_identity_ref = \"journal#foreign-summary/final-snapshot-identity\"" \
+        '.current_final_batch.review_snapshot_id = "newer-review"' \
+        '.current_final_batch.final_snapshot_identity.value = "newer-review-snapshot"' \
+        ".${wrapper}.final_snapshot_identity = null | .canonical_final_summary.artifact.final_snapshot_identity = null | .current_final_batch.final_snapshot_identity = null" \
+        ".${wrapper}.final_snapshot_identity = \"not-an-identity\" | .canonical_final_summary.artifact.final_snapshot_identity = \"not-an-identity\" | .current_final_batch.final_snapshot_identity = \"not-an-identity\"" \
+        ".${wrapper}.final_snapshot_identity = {} | .canonical_final_summary.artifact.final_snapshot_identity = {} | .current_final_batch.final_snapshot_identity = {}" \
+        "del(.${wrapper}.final_snapshot_identity.scope_manifest_digest, .canonical_final_summary.artifact.final_snapshot_identity.scope_manifest_digest, .current_final_batch.final_snapshot_identity.scope_manifest_digest)" \
+        ".${wrapper}.canonical_result_ref = null | .canonical_final_summary.ref = null" \
+        ".${wrapper}.canonical_result_ref = \" \" | .canonical_final_summary.ref = \" \"" \
+        ".${wrapper}.final_snapshot_identity_ref = null" \
+        ".${wrapper}.final_snapshot_identity_ref = \" \"" \
+        ".${wrapper}.final_snapshot_identity.basis = \"unknown_basis\" | .canonical_final_summary.artifact.final_snapshot_identity.basis = \"unknown_basis\" | .current_final_batch.final_snapshot_identity.basis = \"unknown_basis\""; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            snapshot_binding_failures+=("$lane accepted $mutation")
+        fi
+    done
+done
+if [[ ${#snapshot_binding_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "workflow final snapshot binding eval gaps: ${snapshot_binding_failures[*]}"
+fi
+
+test_start "incomplete review and failed QA require contract-complete non-clean final handoffs"
+terminal_handoff_failures=()
+terminal_case_count="$(jq '[.cases[] | select(.id == "incomplete-review-blocks-clean-final-handoff" or .id == "blocked-qa-blocks-clean-final-handoff" or .id == "rejected-qa-blocks-clean-final-handoff")] | length' "$workflow_dir/evals/cases.json")"
+if [[ "$terminal_case_count" != "3" ]]; then
+    terminal_handoff_failures+=("expected incomplete, blocked-QA, and rejected-QA terminal cases")
+fi
+for case_id in incomplete-review-blocks-clean-final-handoff blocked-qa-blocks-clean-final-handoff rejected-qa-blocks-clean-final-handoff; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$valid_response" PASS; then
+        terminal_handoff_failures+=("$case_id valid blocked handoff rejected")
+        continue
+    fi
+    unsafe_response="$(jq '.final_handoff.review_completion.completion_disposition = "complete" | .final_handoff.review_claim = "No material findings within the reviewed scope and available evidence" | .workflow_complete = "--- WORKFLOW COMPLETE ---"' <<<"$valid_response")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+        terminal_handoff_failures+=("$case_id accepted clean claim and WORKFLOW COMPLETE")
+    fi
+    if [[ "$case_id" == "incomplete-review-blocks-clean-final-handoff" ]]; then
+        semantic_state_mutations=(
+            '.canonical_final_summary.artifact.result = "CLEAN" | .final_handoff.review_completion.result = "CLEAN"'
+            '.canonical_final_summary.artifact.coverage_complete = true | .final_handoff.review_completion.coverage_complete = true'
+        )
+    elif [[ "$case_id" == "blocked-qa-blocks-clean-final-handoff" ]]; then
+        semantic_state_mutations=(
+            '.canonical_final_summary.artifact.result = "HAS_REMAINING_ITEMS" | .final_handoff.review_completion.result = "HAS_REMAINING_ITEMS"'
+            '.canonical_final_summary.artifact.coverage_complete = false | .final_handoff.review_completion.coverage_complete = false'
+            '.canonical_final_summary.artifact.evidence_bounded_claim = "Different claim" | .final_handoff.review_completion.evidence_bounded_claim = "Different claim"'
+            '.canonical_final_summary.artifact.evidence_bounded_claim += "." | .final_handoff.review_completion.evidence_bounded_claim += "."'
+            '.canonical_qa_result.artifact.final_verdict = "accepted" | .final_handoff.review_completion.qa_final_verdict = "accepted"'
+            '.canonical_qa_result.artifact.result = "CLEAN" | .final_handoff.review_completion.qa_result = "CLEAN"'
+        )
+    else
+        semantic_state_mutations=(
+            '.canonical_final_summary.artifact.result = "HAS_REMAINING_ITEMS" | .final_handoff.review_completion.result = "HAS_REMAINING_ITEMS"'
+            '.canonical_final_summary.artifact.coverage_complete = false | .final_handoff.review_completion.coverage_complete = false'
+            '.canonical_final_summary.artifact.evidence_bounded_claim = "Different claim" | .final_handoff.review_completion.evidence_bounded_claim = "Different claim"'
+            '.canonical_final_summary.artifact.evidence_bounded_claim += "." | .final_handoff.review_completion.evidence_bounded_claim += "."'
+            '.canonical_qa_result.artifact.final_verdict = "accepted" | .final_handoff.review_completion.qa_final_verdict = "accepted"'
+            '.canonical_qa_result.artifact.result = "CLEAN" | .final_handoff.review_completion.qa_result = "CLEAN"'
+        )
+    fi
+    for mutation in "${semantic_state_mutations[@]}"; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            terminal_handoff_failures+=("$case_id accepted coordinated state mutation $mutation")
+        fi
+    done
+    for mutation in \
+        'del(.final_handoff.changed_behavior_and_areas)' \
+        'del(.final_handoff.architecture_decisions_and_rationale)' \
+        'del(.final_handoff.rejected_alternatives_and_tradeoffs)' \
+        'del(.final_handoff.requirement_evidence)' \
+        'del(.final_handoff.automated_verification)' \
+        'del(.final_handoff.manual_test_scenarios)' \
+        'del(.final_handoff.compatibility_and_regression_surfaces)' \
+        'del(.final_handoff.known_limitations_and_untested_areas)' \
+        'del(.final_handoff.rollback_or_recovery)' \
+        'del(.review_result.canonical_result_ref)' \
+        'del(.review_result.canonical_contract)' \
+        'del(.review_result.final_snapshot_identity_ref)' \
+        'del(.review_result.final_snapshot_identity)' \
+        'del(.review_result.delegation_path_ref)' \
+        'del(.review_result.delegation_contract)' \
+        'del(.review_result.validation_status)' \
+        'del(.final_handoff.review_completion.canonical_result_ref)' \
+        'del(.final_handoff.review_completion.canonical_contract)' \
+        'del(.final_handoff.review_completion.result)' \
+        'del(.final_handoff.review_completion.coverage_complete)' \
+        'del(.final_handoff.review_completion.final_snapshot_identity_ref)' \
+        'del(.final_handoff.review_completion.final_snapshot_identity)' \
+        'del(.final_handoff.review_completion.completion_disposition)' \
+        'del(.final_handoff.review_completion.remaining_or_blocker_summary)' \
+        '.canonical_final_summary.ref = null | .review_result.canonical_result_ref = null | .final_handoff.review_completion.canonical_result_ref = null' \
+        '.canonical_final_summary.ref = " " | .review_result.canonical_result_ref = " " | .final_handoff.review_completion.canonical_result_ref = " "' \
+        '.review_result.final_snapshot_identity_ref = null | .final_handoff.review_completion.final_snapshot_identity_ref = null' \
+        '.review_result.final_snapshot_identity_ref = " " | .final_handoff.review_completion.final_snapshot_identity_ref = " "' \
+        '.final_handoff.review_completion.remaining_or_blocker_summary = "x"'; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            terminal_handoff_failures+=("$case_id accepted $mutation")
+        fi
+    done
+    for field in \
+        changed_behavior_and_areas \
+        architecture_decisions_and_rationale \
+        rejected_alternatives_and_tradeoffs \
+        requirement_evidence \
+        automated_verification \
+        manual_test_scenarios \
+        compatibility_and_regression_surfaces \
+        known_limitations_and_untested_areas; do
+        for invalid_value in '[null]' '[" "]'; do
+            unsafe_response="$(jq --arg field "$field" --argjson invalid_value "$invalid_value" '.final_handoff[$field] = $invalid_value' <<<"$valid_response")"
+            if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+                terminal_handoff_failures+=("$case_id accepted $field=$invalid_value")
+            fi
+        done
+    done
+    if [[ "$case_id" != "incomplete-review-blocks-clean-final-handoff" ]]; then
+        for mutation in \
+            'del(.canonical_final_summary.artifact.evidence_bounded_claim)' \
+            'del(.qa_evaluation_result.canonical_result_ref)' \
+            'del(.qa_evaluation_result.canonical_contract)' \
+            'del(.qa_evaluation_result.delegation_path_ref)' \
+            'del(.qa_evaluation_result.delegation_contract)' \
+            'del(.qa_evaluation_result.validation_status)' \
+            'del(.final_handoff.review_completion.evidence_bounded_claim)' \
+            'del(.final_handoff.review_completion.qa_evaluation_result_ref)' \
+            'del(.final_handoff.review_completion.qa_contract)' \
+            'del(.final_handoff.review_completion.qa_final_verdict)' \
+            'del(.final_handoff.review_completion.qa_result)' \
+            '.final_handoff.review_completion.canonical_result_ref = "journal#foreign-summary"' \
+            '.final_handoff.review_completion.qa_evaluation_result_ref = "journal#foreign-qa-result"' \
+            '.canonical_qa_result.ref = null | .qa_evaluation_result.canonical_result_ref = null | .final_handoff.review_completion.qa_evaluation_result_ref = null' \
+            '.canonical_qa_result.ref = " " | .qa_evaluation_result.canonical_result_ref = " " | .final_handoff.review_completion.qa_evaluation_result_ref = " "'; do
+            unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+            if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+                terminal_handoff_failures+=("$case_id accepted $mutation")
+            fi
+        done
+    fi
+done
+if [[ ${#terminal_handoff_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "workflow final handoff terminal-state gaps: ${terminal_handoff_failures[*]}"
+fi
+
+test_start "workflow preserves canonical snapshot basis and compatibility alias identity"
+if ruby -ryaml -e '
+    producer_input = YAML.load_file(ARGV.fetch(0)).fetch("fields")
+    snapshot = producer_input.find { |field| field["name"] == "review_material_snapshot" }
+      .fetch("object_fields").find { |field| field["name"] == "snapshot_identity" }
+    canonical_basis = snapshot.fetch("object_fields").find { |field| field["name"] == "basis" }
+    expected = %w[git_revision diff_digest content_digest task_or_pr_revision]
+    exit 1 unless canonical_basis["type"] == "enum" && canonical_basis["enum_values"] == expected
+
+    artifacts = YAML.load_file(ARGV.fetch(1)).fetch("artifacts")
+    identity_fields = []
+    visit = lambda do |value|
+      case value
+      when Array
+        value.each { |item| visit.call(item) }
+      when Hash
+        identity_fields << value if value["name"] == "final_snapshot_identity"
+        value.each_value { |child| visit.call(child) }
+      end
+    end
+    visit.call(artifacts)
+    exit 1 unless identity_fields.length >= 3
+    exit 1 unless identity_fields.all? do |identity|
+      basis = identity.fetch("object_fields").find { |field| field["name"] == "basis" }
+      basis && basis["type"] == "enum" && basis["enum_values"] == expected
+    end
+
+    wrappers = %w[fresh_review_result review_result].map { |name| artifacts.find { |artifact| artifact["name"] == name } }
+    final_handoff = artifacts.find { |artifact| artifact["name"] == "final_handoff" }
+    wrappers << final_handoff.fetch("object_fields").find { |field| field["name"] == "review_completion" }
+    exit 1 unless wrappers.all? do |wrapper|
+      alias_field = wrapper.fetch("object_fields").find { |field| field["name"] == "final_review_snapshot_id" }
+      validation = alias_field && alias_field["validation"].to_s
+      validation.include?("canonical_result_ref.final_review_snapshot_id") &&
+        validation.include?("current final batch review_material_snapshot.review_snapshot_id") &&
+        validation.include?("final_snapshot_identity")
+    end
+' "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml" "$output_contract"; then
+    pass
+else
+    fail "workflow snapshot identity loses the canonical basis enum or permits an unbound compatibility alias"
+fi
+
+test_start "deferred QA obligation gates every successful review and QA pair"
+if ruby -ryaml -e '
+    artifacts = YAML.load_file(ARGV.fetch(0)).fetch("artifacts")
+    qa_wrapper = artifacts.find { |artifact| artifact["name"] == "qa_evaluation_result" }
+    qa_fields = qa_wrapper.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+    final_handoff = artifacts.find { |artifact| artifact["name"] == "final_handoff" }
+    completion = final_handoff.fetch("object_fields").find { |field| field["name"] == "review_completion" }
+    completion_fields = completion.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+    required = %w[
+      approved_feature_preparation_qa_acceptance_obligation_result_ref
+      qa_obligation_requested_scope_status
+      qa_obligation_execution_prerequisite_status
+      qa_obligation_source_binding_verified
+    ]
+    valid = qa_fields.key?("approved_feature_preparation_qa_acceptance_obligation_result_ref") &&
+      required.all? { |name| completion_fields.key?(name) } &&
+      completion_fields.fetch("qa_obligation_requested_scope_status").fetch("enum_values") == %w[fulfilled blocked failed] &&
+      completion_fields.fetch("qa_obligation_execution_prerequisite_status").fetch("enum_values") == %w[met missing blocked] &&
+      completion.fetch("validation").include?("accepted_with_concerns") &&
+      completion.fetch("validation").include?("ISSUES_FIXED") &&
+      completion.fetch("validation").include?("requested_scope_status=fulfilled") &&
+      completion.fetch("validation").include?("execution_prerequisite_status=met")
+    exit valid ? 0 : 1
+' "$output_contract" \
+    && jq -e '
+      [.cases[].id] as $ids |
+      ($ids | index("fulfilled-preparation-qa-obligation-allows-completion")) != null and
+      ($ids | index("fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion")) != null
+    ' "$workflow_dir/evals/cases.json" >/dev/null; then
+    pass
+else
+    fail "workflow permits a deferred-QA success pair without an exact fulfilled obligation result"
+fi
+
+test_start "terminal review consumers anchor canonical v7 and complete endpoint shapes"
+canonical_review_schema_version="$(ruby -ryaml -e 'print YAML.load_file(ARGV.fetch(0)).fetch("schema_version")' "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml")"
+terminal_shape_failures=()
+for case_id in \
+    standard-pack-review-result-retains-checklist \
+    light-pack-review-result-retains-current-snapshot \
+    incomplete-review-blocks-clean-final-handoff \
+    blocked-qa-blocks-clean-final-handoff \
+    rejected-qa-blocks-clean-final-handoff \
+    fulfilled-preparation-qa-obligation-allows-completion \
+    fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion \
+    small-strict-blocked-qa-requires-terminal-projection \
+    small-required-rejected-qa-requires-terminal-projection; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$valid_response" PASS; then
+        terminal_shape_failures+=("$case_id rejects its canonical baseline")
+        continue
+    fi
+
+    for mutation in \
+        '.current_assistant_review_contract.schema_version = "6.0" | .review_result.producer_schema_version = "6.0" | .fresh_review_result.producer_schema_version = "6.0" | .qa_evaluation_result.producer_schema_version = "6.0" | .final_handoff.review_completion.review_producer_schema_version = "6.0" | .final_handoff.review_completion.qa_producer_schema_version = "6.0"' \
+        '.canonical_final_summary.artifact.final_review_snapshot_id = " " | .current_final_batch.review_snapshot_id = " " | .review_result.final_review_snapshot_id = " " | .fresh_review_result.final_review_snapshot_id = " " | .final_handoff.review_completion.final_review_snapshot_id = " "' \
+        '.canonical_final_summary.artifact.final_snapshot_identity.value = " " | .current_final_batch.final_snapshot_identity.value = " " | .review_result.final_snapshot_identity.value = " " | .fresh_review_result.final_snapshot_identity.value = " " | .final_handoff.review_completion.final_snapshot_identity.value = " "' \
+        '.canonical_final_summary.artifact.final_snapshot_identity.captured_at = null | .current_final_batch.final_snapshot_identity.captured_at = null | .review_result.final_snapshot_identity.captured_at = null | .fresh_review_result.final_snapshot_identity.captured_at = null | .final_handoff.review_completion.final_snapshot_identity.captured_at = null' \
+        '.canonical_final_summary.artifact.final_snapshot_identity.scope_manifest_digest = null | .current_final_batch.final_snapshot_identity.scope_manifest_digest = null | .review_result.final_snapshot_identity.scope_manifest_digest = null | .fresh_review_result.final_snapshot_identity.scope_manifest_digest = null | .final_handoff.review_completion.final_snapshot_identity.scope_manifest_digest = null' \
+        'del(.review_result.delegation_contract, .review_result.validation_status)' \
+        '.review_result.canonical_contract = "foreign-review/contracts/output.yaml#final_summary" | .canonical_final_summary.contract = "foreign-review/contracts/output.yaml#final_summary" | .final_handoff.review_completion.canonical_contract = "foreign-review/contracts/output.yaml#final_summary"' \
+        '.review_result.canonical_contract = "foreign-review/contracts/output.yaml#final_summary" | .final_handoff.review_completion.canonical_contract = "foreign-review/contracts/output.yaml#final_summary"' \
+        'del(.qa_evaluation_result.delegation_contract, .qa_evaluation_result.validation_status)' \
+        '.qa_evaluation_result.canonical_contract = "foreign-review/contracts/output.yaml#qa_evaluation_result" | .canonical_qa_result.contract = "foreign-review/contracts/output.yaml#qa_evaluation_result" | .final_handoff.review_completion.qa_contract = "foreign-review/contracts/output.yaml#qa_evaluation_result"'; do
+        if [[ "$mutation" == *'.review_result.delegation_contract'* || "$mutation" == *'.review_result.canonical_contract'* ]] \
+            && ! jq -e 'has("review_result")' <<<"$valid_response" >/dev/null; then
+            continue
+        fi
+        if [[ "$mutation" == *'.qa_evaluation_result.delegation_contract'* || "$mutation" == *'.qa_evaluation_result.canonical_contract'* ]] \
+            && ! jq -e 'has("qa_evaluation_result")' <<<"$valid_response" >/dev/null; then
+            continue
+        fi
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            terminal_shape_failures+=("$case_id accepts endpoint mutation $mutation")
+        fi
+    done
+done
+if [[ "$canonical_review_schema_version" == "7.0" && ${#terminal_shape_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "terminal review consumer endpoint gaps: canonical=$canonical_review_schema_version ${terminal_shape_failures[*]}"
+fi
+
+test_start "canonical review evidence uses producer-faithful envelopes"
+producer_envelope_failures=()
+for case_id in \
+    standard-pack-review-result-retains-checklist \
+    light-pack-review-result-retains-current-snapshot \
+    incomplete-review-blocks-clean-final-handoff \
+    blocked-qa-blocks-clean-final-handoff \
+    rejected-qa-blocks-clean-final-handoff \
+    fulfilled-preparation-qa-obligation-allows-completion \
+    fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion \
+    small-strict-blocked-qa-requires-terminal-projection \
+    small-required-rejected-qa-requires-terminal-projection; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    if ! ruby -rjson -ryaml -e '
+      response = JSON.parse(File.read(ARGV.fetch(0)))
+      producer = YAML.load_file(ARGV.fetch(1)).fetch("artifacts")
+      required_names = lambda do |artifact_name|
+        producer.find { |artifact| artifact.fetch("name") == artifact_name }
+          .fetch("object_fields").select { |field| field["required"] == true }.map { |field| field.fetch("name") }
+      end
+      validate = lambda do |envelope_name, artifact_name, expected_contract|
+        envelope = response.fetch(envelope_name)
+        raise unless envelope.keys.sort == %w[artifact contract ref]
+        raise unless envelope.fetch("ref").is_a?(String) && !envelope.fetch("ref").strip.empty?
+        raise unless envelope.fetch("contract") == expected_contract
+        artifact = envelope.fetch("artifact")
+        raise unless required_names.call(artifact_name).all? { |name| artifact.key?(name) }
+        forbidden = %w[canonical_result_ref canonical_contract final_snapshot_identity_ref approved_feature_preparation_qa_acceptance_obligation_result_ref]
+        raise unless (artifact.keys & forbidden).empty?
+      end
+      validate.call("canonical_final_summary", "final_summary", "assistant-review/contracts/output.yaml#final_summary")
+      if response.key?("canonical_qa_result")
+        validate.call("canonical_qa_result", "qa_evaluation_result", "assistant-review/contracts/output.yaml#qa_evaluation_result")
+      end
+    ' "$response_file" "$assistant_review_output"; then
+        producer_envelope_failures+=("$case_id uses a consumer-augmented canonical producer object")
+    fi
+    if ! jq -e '
+      if has("canonical_final_summary") then
+        .canonical_final_summary.artifact as $summary |
+        ($summary.batch_summaries[-1].review_snapshot_id == $summary.final_review_snapshot_id) and
+        ($summary.batch_summaries[-1].snapshot_identity == $summary.final_snapshot_identity)
+      else true end
+      and
+      if has("canonical_qa_result") then
+        .canonical_qa_result.artifact as $qa |
+        (all($qa.score_progression[]; (.delta | type == "string" and length > 0))) and
+        (if $qa.final_verdict == "accepted_with_concerns" then
+          any($qa.acceptance_findings[]; .severity == "concern" and .disposition == "remaining")
+        else true end)
+      else true end
+    ' "$response_file" >/dev/null; then
+        producer_envelope_failures+=("$case_id violates canonical batch identity or QA progression/concern semantics")
+    fi
+done
+
+for case_id in standard-pack-review-result-retains-checklist fulfilled-preparation-qa-obligation-allows-completion qa-reject-source-fix-requires-rebuild-review-before-resume; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    if [[ "$case_id" == qa-reject-* ]]; then
+        final_prefix='fresh_canonical_final_summary'
+    else
+        final_prefix='canonical_final_summary'
+    fi
+    for field in reviewed_scope rounds coverage_ledger batch_summaries aggregation_ledger aggregated_findings fixed_items nits; do
+        unsafe_response="$(jq --arg prefix "$final_prefix" --arg field "$field" 'del(.[$prefix].artifact[$field])' <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            producer_envelope_failures+=("$case_id accepts canonical final summary without $field")
+        fi
+    done
+    for mutation in \
+        ".${final_prefix}.artifact.result = \"UNKNOWN\"" \
+        ".${final_prefix}.artifact.coverage_complete = \"true\"" \
+        ".${final_prefix}.artifact.rounds = 2" \
+        ".${final_prefix}.artifact.coverage_ledger[0].terminal_state = \"failed\"" \
+        ".${final_prefix}.artifact.coverage_ledger[0].coverage_status = \"incomplete\"" \
+        ".${final_prefix}.artifact.coverage_ledger[0].assigned_scope = [\"foreign scope\"]" \
+        ".${final_prefix}.artifact.coverage_ledger[0].review_pass_id = \"pass-failure-paths\"" \
+        ".${final_prefix}.artifact.batch_summaries[0].started_batch_ordinal = 2" \
+        ".${final_prefix}.artifact.batch_summaries[0].expected_response_count = 3" \
+        ".${final_prefix}.artifact.batch_summaries[0].terminal_response_count = 3" \
+        ".${final_prefix}.artifact.batch_summaries[0].aggregate_rubric_recomputed = false" \
+        ".${final_prefix}.artifact.batch_summaries[0].batch_status = \"incomplete\"" \
+        ".${final_prefix}.artifact.batch_summaries[0] |= del(.snapshot_identity)" \
+        ".${final_prefix}.artifact.batch_summaries[0].snapshot_identity.value = \"foreign-batch-digest\"" \
+        ".${final_prefix}.artifact.batch_summaries += [{}]" \
+        ".${final_prefix}.artifact.aggregation_ledger += [{}]" \
+        ".${final_prefix}.artifact.aggregated_findings += [{}]" \
+        ".${final_prefix}.artifact.fixed_items += [{}]" \
+        ".${final_prefix}.artifact.nits += [{}]" \
+        ".${final_prefix}.artifact.coverage_ledger[0] |= del(.evidence)" \
+        ".${final_prefix}.artifact.batch_summaries[0] |= del(.expected_response_count)"; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            producer_envelope_failures+=("$case_id accepts malformed canonical final-summary nested evidence")
+        fi
+    done
+    unsafe_response="$(jq --arg prefix "$final_prefix" '.[$prefix].artifact.canonical_result_ref = "consumer-only"' <<<"$valid_response")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+        producer_envelope_failures+=("$case_id accepts consumer metadata inside canonical final summary")
+    fi
+
+    if [[ "$case_id" == fulfilled-* ]]; then
+        for field in rounds acceptance_findings qa_scorecard score_progression evidence; do
+            unsafe_response="$(jq --arg field "$field" 'del(.canonical_qa_result.artifact[$field])' <<<"$valid_response")"
+            if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+                producer_envelope_failures+=("$case_id accepts canonical QA result without $field")
+            fi
+        done
+        for mutation in \
+            '.canonical_qa_result.artifact.rounds = 2' \
+            '.canonical_qa_result.artifact.score_progression[0].round = 2' \
+            '.canonical_qa_result.artifact.score_progression[0].weighted_score = 2' \
+            '.canonical_qa_result.artifact.score_progression[0].failed_acceptance_count = 1' \
+            'del(.canonical_qa_result.artifact.score_progression[0].delta)' \
+            '.canonical_qa_result.artifact.pivot_restart_signal = {trigger:"pivot",evidence:[{source:"untriggered",detail:"No canonical pivot trigger exists."}],affected_round:1,recommended_recovery_focus:"none"}' \
+            '.canonical_qa_result.artifact.selected_domain_rubrics = ["product"] | del(.canonical_qa_result.artifact.domain_quality_scores)' \
+            '.canonical_qa_result.artifact.acceptance_findings += [{}]' \
+            '.canonical_qa_result.artifact.score_progression += [{}]' \
+            'del(.canonical_qa_result.artifact.qa_scorecard.weighted_score)' \
+            'del(.canonical_qa_result.artifact.score_progression[0].drift_status)' \
+            'del(.canonical_qa_result.artifact.evidence[0].detail)'; do
+            unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+            if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+                producer_envelope_failures+=("$case_id accepts malformed canonical QA nested evidence")
+            fi
+        done
+        unsafe_response="$(jq '.canonical_qa_result.artifact.canonical_contract = "consumer-only"' <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            producer_envelope_failures+=("$case_id accepts consumer metadata inside canonical QA result")
+        fi
+    fi
+done
+
+required_summary="$(jq -r '.cases[] | select(.id == "qa-reject-source-fix-requires-rebuild-review-before-resume") | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+response_file="$(mktemp)"
+p0p4_register_cleanup "$response_file"
+build_workflow_review_lifecycle_eval_response qa-reject-source-fix-requires-rebuild-review-before-resume "$response_file" "$required_summary"
+valid_response="$(<"$response_file")"
+for mutation in \
+    'del(.fresh_canonical_final_summary.artifact.result)' \
+    'del(.fresh_canonical_final_summary.artifact.coverage_complete)' \
+    'del(.fresh_canonical_final_summary.artifact.evidence_bounded_claim)' \
+    'del(.prior_canonical_qa_result.artifact.result)' \
+    '.prior_canonical_qa_result.artifact.score_progression += [{}]'; do
+    unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" qa-reject-source-fix-requires-rebuild-review-before-resume "$unsafe_response" FAIL; then
+        producer_envelope_failures+=("recovery accepts incomplete canonical producer evidence: $mutation")
+    fi
+done
+
+for case_and_prefix in \
+    "rejected-qa-blocks-clean-final-handoff canonical_qa_result" \
+    "fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion canonical_qa_result" \
+    "qa-reject-source-fix-requires-rebuild-review-before-resume prior_canonical_qa_result" \
+    "qa-reject-unchanged-source-allows-resume-with-digest-equality prior_canonical_qa_result" \
+    "small-required-rejected-qa-requires-terminal-projection canonical_qa_result"; do
+    disposition_case_id="${case_and_prefix%% *}"
+    disposition_prefix="${case_and_prefix#* }"
+    required_summary="$(jq -r --arg case_id "$disposition_case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$disposition_case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    for mutation in \
+        ".${disposition_prefix}.artifact.acceptance_findings[0] |= del(.disposition)" \
+        ".${disposition_prefix}.artifact.acceptance_findings[0].disposition = \"unknown\"" \
+        ".${disposition_prefix}.artifact.acceptance_findings[0].disposition = \"resolved\""; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$disposition_case_id" "$unsafe_response" FAIL; then
+            producer_envelope_failures+=("$disposition_case_id accepts malformed canonical QA finding disposition")
+        fi
+    done
+done
+
+for recovery_case_id in \
+    qa-reject-source-fix-requires-rebuild-review-before-resume \
+    qa-reject-unchanged-source-allows-resume-with-digest-equality; do
+    required_summary="$(jq -r --arg case_id "$recovery_case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$recovery_case_id" "$response_file" "$required_summary"
+    unsafe_response="$(jq '.current_canonical_qa_result.artifact.final_verdict = "accepted" | .current_canonical_qa_result.artifact.result = "BLOCKED"' "$response_file")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$recovery_case_id" "$unsafe_response" FAIL; then
+        producer_envelope_failures+=("$recovery_case_id accepts accepted/BLOCKED current canonical QA evidence")
+    fi
+done
+
+for case_and_prefix in \
+    "fulfilled-preparation-qa-obligation-allows-completion canonical_qa_result" \
+    "fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion canonical_qa_result" \
+    "qa-reject-source-fix-requires-rebuild-review-before-resume prior_canonical_qa_result" \
+    "qa-reject-unchanged-source-allows-resume-with-digest-equality prior_canonical_qa_result" \
+    "small-strict-blocked-qa-requires-terminal-projection canonical_qa_result" \
+    "small-required-rejected-qa-requires-terminal-projection canonical_qa_result"; do
+    score_case_id="${case_and_prefix%% *}"
+    score_prefix="${case_and_prefix#* }"
+    required_summary="$(jq -r --arg case_id "$score_case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$score_case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    if ! jq -e --arg prefix "$score_prefix" '
+      .[$prefix].artifact as $qa |
+      $qa.qa_scorecard as $score |
+      (((
+        ($score.acceptance_coverage * 0.30) +
+        ($score.evidence_strength * 0.25) +
+        ($score.domain_quality * 0.20) +
+        ($score.final_readiness * 0.25)
+      ) * 100 + 0.500000001 | floor) / 100) as $expected |
+      $score.weighted_score == $expected and
+      $qa.score_progression[-1].weighted_score == $expected
+    ' <<<"$valid_response" >/dev/null; then
+        producer_envelope_failures+=("$score_case_id carries a QA weighted score that violates the canonical formula")
+    fi
+    for mutation in \
+        ".${score_prefix}.artifact.qa_scorecard |= del(.rationale)" \
+        ".${score_prefix}.artifact.qa_scorecard.rationale |= del(.domain_quality)" \
+        ".${score_prefix}.artifact.qa_scorecard |= (.acceptance_coverage = 9 | .evidence_strength = 9 | .domain_quality = 9 | .final_readiness = 9 | .weighted_score = 9) | .${score_prefix}.artifact.score_progression[0].weighted_score = 9" \
+        ".${score_prefix}.artifact.qa_scorecard |= (.acceptance_coverage = 1.25 | .evidence_strength = 1.25 | .domain_quality = 1.25 | .final_readiness = 1.25 | .weighted_score = 1.25) | .${score_prefix}.artifact.score_progression[0].weighted_score = 1.25"; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$score_case_id" "$unsafe_response" FAIL; then
+            producer_envelope_failures+=("$score_case_id accepts malformed canonical QA scorecard semantics")
+        fi
+    done
+    with_empty_domain_arrays="$(jq --arg prefix "$score_prefix" '.[$prefix].artifact.selected_domain_rubrics = [] | .[$prefix].artifact.domain_quality_scores = []' <<<"$valid_response")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$score_case_id" "$with_empty_domain_arrays" PASS; then
+        producer_envelope_failures+=("$score_case_id rejects producer-valid empty no-domain arrays")
+    fi
+    with_nonempty_domain_array="$(jq --arg prefix "$score_prefix" '.[$prefix].artifact.selected_domain_rubrics = ["product"]' <<<"$valid_response")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$score_case_id" "$with_nonempty_domain_array" FAIL; then
+        producer_envelope_failures+=("$score_case_id accepts a selected rubric in a no-domain case")
+    fi
+done
+
+for case_id in \
+    fulfilled-preparation-qa-obligation-allows-completion \
+    fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion \
+    qa-reject-source-fix-requires-rebuild-review-before-resume \
+    qa-reject-unchanged-source-allows-resume-with-digest-equality \
+    small-strict-blocked-qa-requires-terminal-projection \
+    small-required-rejected-qa-requires-terminal-projection; do
+    if ! jq -e --arg case_id "$case_id" '
+      .cases[] | select(.id == $case_id) |
+      (.setup_context | join(" ")) as $setup |
+      [.machine_expectations.structured_json_assertions[]
+        | select(.operator == "equals" and (.path[-2]? == "qa_scorecard" or .path[-3]? == "qa_scorecard") and (.expected | type) == "number")
+        | "\(.path[0]) \(.path[-1])=\(.expected)"] as $facts |
+      ($facts | length > 0) and all($facts[]; . as $fact | $setup | contains($fact))
+    ' "$workflow_dir/evals/cases.json" >/dev/null; then
+        producer_envelope_failures+=("$case_id hides exact QA score literals outside setup_context")
+    fi
+done
+if ! jq -e '
+  (.cases[] | select(.id == "qa-reject-source-fix-requires-rebuild-review-before-resume") | .setup_context | join(" ")) as $changed |
+  (.cases[] | select(.id == "qa-reject-unchanged-source-allows-resume-with-digest-equality") | .setup_context | join(" ")) as $equal |
+  ($changed | contains("pre-fix-digest") and contains("post-fix-digest")) and
+  ($equal | contains("digest#equal-source") and contains("unchanged-source-digest"))
+' "$workflow_dir/evals/cases.json" >/dev/null; then
+    producer_envelope_failures+=("QA recovery cases hide exact digest literals outside setup_context")
+fi
+
+for case_id in incomplete-review-blocks-clean-final-handoff blocked-qa-blocks-clean-final-handoff; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    if [[ "$case_id" == incomplete-* ]]; then
+        if ! jq -e '
+          .canonical_final_summary.artifact.aggregation_ledger == [{
+            source_provenance:[{source_kind:"review_pass",source_id:"pass-failure-paths"}],
+            source_pass_ids:["pass-failure-paths"],
+            source_coverage_gap_ids:["coverage-gap:batch-current:pass-failure-paths"],
+            disposition:"coverage_gap",
+            rationale:"The failed final-batch pass leaves an unresolved coverage gap."
+          }]
+        ' <<<"$valid_response" >/dev/null; then
+            producer_envelope_failures+=("$case_id omits the canonical coverage-gap aggregation disposition")
+        else
+            for mutation in \
+                'del(.canonical_final_summary.artifact.aggregation_ledger[0])' \
+                '.canonical_final_summary.artifact.aggregation_ledger[0].source_provenance[0].source_id = "foreign-pass"' \
+                '.canonical_final_summary.artifact.aggregation_ledger[0].source_coverage_gap_ids = ["coverage-gap:foreign"]' \
+                '.canonical_final_summary.artifact.aggregation_ledger[0].disposition = "observation"'; do
+                unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+                if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+                    producer_envelope_failures+=("$case_id accepts malformed coverage-gap aggregation evidence: $mutation")
+                fi
+            done
+        fi
+        unsafe_response="$(jq 'del(.canonical_final_summary.artifact.coverage_gaps, .canonical_final_summary.artifact.remaining_items)' <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            producer_envelope_failures+=("$case_id accepts incomplete coverage without gaps and remaining items")
+        fi
+    else
+        unsafe_response="$(jq 'del(.canonical_qa_result.artifact.open_questions)' <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            producer_envelope_failures+=("$case_id accepts blocked QA without open questions")
+        fi
+    fi
+done
+if [[ ${#producer_envelope_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "canonical producer envelope gaps: ${producer_envelope_failures[*]}"
+fi
+
+test_start "workflow eval assertion operands resolve through the bounded shared schema registry"
+assertion_schema_failure=""
+if ! (
+    source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-common.sh"
+    source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"
+    REPO_ROOT="$FRAMEWORK_DIR"
+    validate_assertion_contract_paths "$workflow_dir/evals/cases.json" assistant-workflow
+); then
+    assertion_schema_failure="canonical workflow assertions do not resolve"
+fi
+
+unknown_root_fixture="$(mktemp "$workflow_dir/evals/.cases-mutated.XXXXXX")"
+p0p4_register_cleanup "$unknown_root_fixture"
+jq '.cases[0].machine_expectations.structured_json_assertions += [{"operator":"path_absent","path":["invented_root","invented"]}]' \
+    "$workflow_dir/evals/cases.json" >"$unknown_root_fixture"
+if (
+    source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-common.sh"
+    source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"
+    REPO_ROOT="$FRAMEWORK_DIR"
+    validate_assertion_contract_paths "$unknown_root_fixture" assistant-workflow
+) >/dev/null 2>&1; then
+    assertion_schema_failure="${assertion_schema_failure:+$assertion_schema_failure; }invented assertion root is accepted"
+fi
+
+if [[ -z "$assertion_schema_failure" ]]; then
+    pass
+else
+    fail "$assertion_schema_failure"
+fi
+
+test_start "strict required-QA baselines satisfy the active small-elevated tier and lifecycle"
+small_elevated_fixture_failures=()
+for case_id in \
+    fulfilled-preparation-qa-obligation-allows-completion \
+    fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion \
+    small-strict-blocked-qa-requires-terminal-projection \
+    small-required-rejected-qa-requires-terminal-projection; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    setup_context="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .setup_context | join(" ")' "$workflow_dir/evals/cases.json")"
+    if ! jq -e '
+      .completion_policy.build_execution_lane == "bounded_executor" and
+      .completion_policy.workflow_state_mode == "journal" and
+      .triage_result.risk_tier == "low" and
+      .triage_result.build_execution_lane == "bounded_executor" and
+      .triage_result.workflow_state_mode == "journal" and
+      (.triage_result.architecture_design_trigger_reasons | type == "array" and length > 0) and
+      (.triage_result.subagent_trigger_scope | type == "array" and length > 0)
+    ' <<<"$valid_response" >/dev/null; then
+        small_elevated_fixture_failures+=("$case_id baseline uses contract-invalid strict lifecycle routing")
+    fi
+    if [[ "$case_id" == fulfilled-preparation-* ]]; then
+        for required_setup_phrase in "approved implementation packet" "bounded-executor" "Subagents are unavailable" "localized reversible low-risk"; do
+            if [[ "$setup_context" != *"$required_setup_phrase"* ]]; then
+                small_elevated_fixture_failures+=("$case_id setup omits $required_setup_phrase")
+            fi
+        done
+        if ! jq -e '.triage_result.execution_intent == "implement_only" and .triage_result.subagent_policy_state == "subagents_unavailable" and .triage_result.subagent_execution_mode == "direct_fallback"' <<<"$valid_response" >/dev/null; then
+            small_elevated_fixture_failures+=("$case_id does not match its approved-packet direct-fallback route")
+        fi
+        if ! jq -e '.approved_feature_preparation_evidence_ref == "prep/viewing-route"' <<<"$valid_response" >/dev/null; then
+            small_elevated_fixture_failures+=("$case_id omits the approved existing-system preparation evidence ref")
+        fi
+        unsafe_response="$(jq 'del(.approved_feature_preparation_evidence_ref)' <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            small_elevated_fixture_failures+=("$case_id accepts a missing approved existing-system preparation evidence ref")
+        fi
+    elif [[ "$case_id" == fulfilled-not-applicable-* ]]; then
+        for required_setup_phrase in "approved implementation packet" "bounded-executor" "Subagents are unavailable" "localized reversible low-risk"; do
+            if [[ "$setup_context" != *"$required_setup_phrase"* ]]; then
+                small_elevated_fixture_failures+=("$case_id setup omits $required_setup_phrase")
+            fi
+        done
+        if ! jq -e '.triage_result.execution_intent == "implement_only" and .triage_result.subagent_policy_state == "subagents_unavailable" and .triage_result.subagent_execution_mode == "direct_fallback"' <<<"$valid_response" >/dev/null; then
+            small_elevated_fixture_failures+=("$case_id does not match its approved-packet direct-fallback route")
+        fi
+        if jq -e 'has("approved_feature_preparation_evidence_ref")' <<<"$valid_response" >/dev/null; then
+            small_elevated_fixture_failures+=("$case_id invents an existing-system preparation evidence ref")
+        fi
+        unsafe_response="$(jq '.approved_feature_preparation_evidence_ref = "prep/foreign"' <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            small_elevated_fixture_failures+=("$case_id accepts an invented existing-system preparation evidence ref")
+        fi
+    else
+        for required_setup_phrase in "end_to_end" "bounded-executor" "delegated" "localized reversible low-risk"; do
+            if [[ "$setup_context" != *"$required_setup_phrase"* ]]; then
+                small_elevated_fixture_failures+=("$case_id setup omits $required_setup_phrase")
+            fi
+        done
+        if ! jq -e '.triage_result.execution_intent == "end_to_end" and .triage_result.subagent_policy_state == "delegation_triggered" and .triage_result.subagent_execution_mode == "delegated"' <<<"$valid_response" >/dev/null; then
+            small_elevated_fixture_failures+=("$case_id does not match its generic end-to-end delegated route")
+        fi
+    fi
+    unsafe_response="$(jq '
+      .completion_policy.build_execution_lane = "inline_direct"
+      | .completion_policy.workflow_state_mode = "inline"
+      | .triage_result.execution_intent = "end_to_end"
+      | .triage_result.architecture_design_trigger_reasons = []
+      | .triage_result.build_execution_lane = "inline_direct"
+      | .triage_result.workflow_state_mode = "inline"
+      | .triage_result.subagent_policy_state = "not_required"
+      | .triage_result.subagent_execution_mode = "not_applicable"
+      | .triage_result.subagent_trigger_scope = []
+      | del(.subagent_evidence)
+    ' <<<"$valid_response")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+        small_elevated_fixture_failures+=("$case_id accepts the prior end-to-end inline no-subagent control")
+    fi
+    for required_root in completion_policy triage_result phase_checkpoints changed_files test_results validation_results spec_review_result subagent_evidence review_result final_handoff qa_evaluation_result; do
+        if ! jq -e --arg root "$required_root" 'has($root)' <<<"$valid_response" >/dev/null; then
+            small_elevated_fixture_failures+=("$case_id baseline omits $required_root")
+            continue
+        fi
+        unsafe_response="$(jq --arg root "$required_root" 'del(.[$root])' <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            small_elevated_fixture_failures+=("$case_id accepts missing $required_root")
+        fi
+    done
+    for required_path in \
+        'completion_policy.controller_intensity' \
+        'completion_policy.build_execution_lane' \
+        'completion_policy.plan_mode' \
+        'completion_policy.architecture_design_mode' \
+        'completion_policy.workflow_state_mode' \
+        'completion_policy.manual_verification_mode' \
+        'completion_policy.selection_reason' \
+        'triage_result.task_type' \
+        'triage_result.risk_tier' \
+        'triage_result.size' \
+        'triage_result.controller_intensity' \
+        'triage_result.plan_mode' \
+        'triage_result.execution_intent' \
+        'triage_result.qa_evaluation_mode' \
+        'triage_result.harness_capable' \
+        'triage_result.architecture_design_mode' \
+        'triage_result.architecture_design_trigger_reasons' \
+        'triage_result.build_execution_lane' \
+        'triage_result.workflow_state_mode' \
+        'triage_result.manual_verification_mode' \
+        'triage_result.required_gates' \
+        'triage_result.required_agents' \
+        'triage_result.subagent_policy_state' \
+        'triage_result.subagent_execution_mode' \
+        'triage_result.subagent_trigger_scope' \
+        'triage_result.search_mode' \
+        'triage_result.candidate_scope_scan.likely_touched_paths' \
+        'triage_result.candidate_scope_scan.symbols_or_terms_searched' \
+        'triage_result.candidate_scope_scan.adjacent_surfaces' \
+        'triage_result.candidate_scope_scan.confidence' \
+        'triage_result.candidate_scope_scan.unknowns' \
+        'subagent_evidence.execution_mode' \
+        'subagent_evidence.required_roles' \
+        'subagent_evidence.build_execution_lane' \
+        'subagent_evidence.bounded_executor_evidence.executor_ref' \
+        'subagent_evidence.bounded_executor_evidence.changed_files' \
+        'subagent_evidence.bounded_executor_evidence.focused_verification' \
+        'subagent_evidence.bounded_executor_evidence.regression_evidence' \
+        'subagent_evidence.direct_fallback_reason' \
+        'subagent_evidence.direct_fallback_role_evidence' \
+        'subagent_evidence.delegated_dispatch_results' \
+        'subagent_evidence.code_reviewer_evidence.phase_owner' \
+        'subagent_evidence.code_reviewer_evidence.reviewer_ref' \
+        'subagent_evidence.code_reviewer_evidence.result_ref' \
+        'subagent_evidence.qa_evaluator_evidence.qa_evaluator_result' \
+        'subagent_evidence.qa_evaluator_evidence.qa_evaluator_direct_evidence' \
+        'changed_files.0.path' \
+        'changed_files.0.change_type' \
+        'changed_files.0.description' \
+        'test_results.passed' \
+        'test_results.failed' \
+        'test_results.skipped' \
+        'validation_results.0.command_or_check' \
+        'validation_results.0.result' \
+        'validation_results.0.evidence' \
+        'spec_review_result.status' \
+        'spec_review_result.scope_reviewed' \
+        'spec_review_result.missing_acceptance_criteria' \
+        'spec_review_result.extra_scope' \
+        'spec_review_result.changed_files_mismatch' \
+        'spec_review_result.verification_evidence_mismatch' \
+        'spec_review_result.required_fixes'; do
+        if [[ "$case_id" == small-* ]] && [[ "$required_path" == subagent_evidence.direct_fallback_* ]]; then
+            continue
+        fi
+        if [[ "$case_id" == fulfilled-* ]] && [[ "$required_path" == "subagent_evidence.delegated_dispatch_results" ]]; then
+            continue
+        fi
+        unsafe_response="$(jq --arg path "$required_path" 'delpaths([($path | split(".") | map(if test("^[0-9]+$") then tonumber else . end))])' <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            small_elevated_fixture_failures+=("$case_id accepts missing $required_path")
+        fi
+    done
+done
+if [[ ${#small_elevated_fixture_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "small-elevated fixture completeness gaps: ${small_elevated_fixture_failures[*]}"
+fi
+
+test_start "Discover sizing distinguishes harness promotion from deferred QA"
+if grep -Fq 'The harness obligation promotes an initially small implementation to at least medium' "$phase_gates" \
+    && grep -Fq 'The QA obligation preserves small size unless independent size or risk criteria promote it' "$phase_gates"; then
+    pass
+else
+    fail "Discover still promotes QA-only small work to medium"
+fi
+
+test_start "QA rejection source fixes require Build revalidation rehash and fresh review"
+qa_result_block="$(contract_field_block "$output_contract" qa_evaluation_result)"
+if grep -Fq -- '- name: rejection_recovery' <<<"$qa_result_block" \
+    && grep -Fq 'source_digest_comparison' <<<"$qa_result_block" \
+    && grep -Fq 'build_validation_ref' <<<"$qa_result_block" \
+    && grep -Fq 'rehash_evidence_ref' <<<"$qa_result_block" \
+    && grep -Fq 'fresh_review_result_ref' <<<"$qa_result_block" \
+    && grep -Fq 'fresh_review_coverage_complete' <<<"$qa_result_block" \
+    && grep -Fq 'explicit digest-equality evidence' <<<"$qa_result_block" \
+    && grep -Fq 'R_QA_REJECTION_SOURCE_FIX_REFRESH' "$phase_gates" \
+    && grep -Fq 'QA rejection followed by a source fix' "$review_router" \
+    && jq -e '.cases[] | select(.id == "qa-reject-source-fix-requires-rebuild-review-before-resume")' "$workflow_dir/evals/cases.json" >/dev/null; then
+    pass
+else
+    fail "workflow can resume QA after a rejected-QA source fix without fresh Build and review evidence"
+fi
+
+test_start "small strict or required-QA execution requires typed terminal completion projection"
+final_handoff_block="$(contract_field_block "$output_contract" final_handoff)"
+review_result_block="$(contract_field_block "$output_contract" review_result)"
+if ruby -ryaml -e '
+    tiers = YAML.load_file(ARGV.fetch(0)).fetch("completion_tiers")
+    tier = tiers.fetch("small_elevated")
+    required = tier.fetch("required_artifacts")
+    prohibited = tier.fetch("prohibited_artifacts")
+    expected_required = %w[phase_checkpoints review_result final_handoff]
+    expected_conditional = %w[qa_evaluation_result]
+    expected_prohibited = %w[decomposition_plan_review slice_manifest single_slice_rationale slice_verification_summary]
+    valid = tier.fetch("condition").include?("size == small") &&
+      tier.fetch("condition").include?("controller_intensity == strict or qa_evaluation_mode == required") &&
+      expected_required.all? { |name| required.include?(name) } &&
+      expected_conditional.all? { |name| tier.fetch("conditional_artifacts").include?(name) } &&
+      expected_prohibited.all? { |name| prohibited.include?(name) }
+    exit valid ? 0 : 1
+' "$output_contract" \
+    && grep -Fq 'size in [medium, large, mega] or controller_intensity == strict or qa_evaluation_mode == required' <<<"$final_handoff_block" \
+    && grep -Fq 'controller_intensity in [standard, strict] or risk_tier in [high, critical] or qa_evaluation_mode == required' <<<"$review_result_block" \
+    && grep -Eq 'conditional_artifacts: \[[^]]*review_result[^]]*qa_evaluation_result' "$output_contract" \
+    && grep -Fq 'size in [medium, large, mega] or controller_intensity == strict or qa_evaluation_mode == required' "$phase_gates" \
+    && jq -e '
+      [.cases[].id] as $ids |
+      ($ids | index("small-strict-blocked-qa-requires-terminal-projection")) != null and
+      ($ids | index("small-required-rejected-qa-requires-terminal-projection")) != null
+    ' "$workflow_dir/evals/cases.json" >/dev/null; then
+    pass
+else
+    fail "small strict or required-QA execution can omit the typed review/QA terminal projection"
+fi
+
+test_start "persisted assistant-review packets invalidate on producer schema mismatch"
+review_result_block="$(contract_field_block "$output_contract" review_result)"
+qa_result_block="$(contract_field_block "$output_contract" qa_evaluation_result)"
+task_reconciliation_block="$(contract_field_block "$output_contract" task_state_reconciliation)"
+if grep -Fq -- '- name: producer_schema_version' <<<"$review_result_block" \
+    && grep -Fq -- '- name: producer_schema_version' <<<"$qa_result_block" \
+    && grep -Fq -- '- name: assistant_review_packet_compatibility' <<<"$task_reconciliation_block" \
+    && grep -Fq 'skills/assistant-review/contracts/index.yaml#schema_version' <<<"$task_reconciliation_block" \
+    && grep -Fq 'invalidated_refs' <<<"$task_reconciliation_block" \
+    && grep -Fq 'rerun_review_and_qa' <<<"$task_reconciliation_block" \
+    && grep -Fq 'R_ASSISTANT_REVIEW_SCHEMA_VERSION' "$phase_gates" \
+    && grep -Fq 'producer_schema_version' "$workflow_dir/references/task-state-reconciliation.md" \
+    && jq -e '.cases[] | select(.id == "stale-assistant-review-version-invalidates-persisted-results")' "$workflow_dir/evals/cases.json" >/dev/null; then
+    pass
+else
+    fail "workflow resumes persisted assistant-review results without producer-version invalidation and rebuild routing"
+fi
+
+test_start "deferred QA evals reject blocked and failed obligation mutations in both source branches"
+deferred_qa_eval_failures=()
+for case_id in \
+    fulfilled-preparation-qa-obligation-allows-completion \
+    fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$valid_response" PASS; then
+        deferred_qa_eval_failures+=("$case_id rejects fulfilled obligation")
+        continue
+    fi
+    for status in blocked failed; do
+        unsafe_response="$(jq --arg status "$status" '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.requested_scope_status = $status | .final_handoff.review_completion.qa_obligation_requested_scope_status = $status' <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            deferred_qa_eval_failures+=("$case_id accepts requested_scope_status=$status")
+        fi
+    done
+    unsafe_response="$(jq '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.execution_prerequisite_status = "blocked" | .final_handoff.review_completion.qa_obligation_execution_prerequisite_status = "blocked"' <<<"$valid_response")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+        deferred_qa_eval_failures+=("$case_id accepts blocked prerequisite")
+    fi
+    for mutation in \
+        '.canonical_final_summary.ref = " " | .review_result.canonical_result_ref = " " | .final_handoff.review_completion.canonical_result_ref = " "' \
+        '.canonical_final_summary.artifact.result = "HAS_REMAINING_ITEMS" | .final_handoff.review_completion.result = "HAS_REMAINING_ITEMS"' \
+        '.canonical_final_summary.artifact.coverage_complete = false | .final_handoff.review_completion.coverage_complete = false' \
+        '.canonical_final_summary.artifact.evidence_bounded_claim = "different claim" | .final_handoff.review_completion.evidence_bounded_claim = "different claim"' \
+        '.canonical_qa_result.artifact.final_verdict = "blocked" | .final_handoff.review_completion.qa_final_verdict = "blocked"' \
+        '.canonical_qa_result.artifact.result = "BLOCKED" | .final_handoff.review_completion.qa_result = "BLOCKED"' \
+        'del(.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.requested_scope_evidence)' \
+        '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.requested_scope = "different scope"' \
+        'del(.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.execution_prerequisite_evidence)' \
+        '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.execution_prerequisite = "different prerequisite"' \
+        '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.feature_preparation_scope = "greenfield"' \
+        '.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result_ref = "journal#foreign-obligation"' \
+        '.final_handoff.review_completion.approved_feature_preparation_qa_acceptance_obligation_result_ref = "journal#foreign-obligation"'; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            deferred_qa_eval_failures+=("$case_id accepts $mutation")
+        fi
+    done
+    for mutation in \
+        'del(.canonical_final_summary.ref)' \
+        'del(.review_result.canonical_result_ref)' \
+        'del(.canonical_qa_result.ref)' \
+        'del(.qa_evaluation_result.canonical_result_ref)' \
+        'del(.final_handoff.review_completion.canonical_result_ref)' \
+        'del(.final_handoff.review_completion.qa_evaluation_result_ref)' \
+        'del(.review_result.final_snapshot_identity_ref)' \
+        'del(.review_result.delegation_path_ref)' \
+        'del(.qa_evaluation_result.delegation_path_ref)' \
+        'del(.final_handoff.review_completion.final_snapshot_identity_ref)' \
+        '.canonical_final_summary.ref = null | .review_result.canonical_result_ref = null | .final_handoff.review_completion.canonical_result_ref = null' \
+        '.canonical_qa_result.ref = " " | .qa_evaluation_result.canonical_result_ref = " " | .final_handoff.review_completion.qa_evaluation_result_ref = " "' \
+        '.canonical_final_summary.ref = "journal#foreign-summary"' \
+        '.final_handoff.review_completion.canonical_result_ref = "journal#foreign-summary"' \
+        '.canonical_qa_result.artifact.final_verdict = "blocked"' \
+        '.final_handoff.review_completion.qa_final_verdict = "blocked"'; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            deferred_qa_eval_failures+=("$case_id accepts endpoint/projection mutation $mutation")
+        fi
+    done
+    if [[ "$case_id" == fulfilled-preparation-* ]]; then
+        for mutation in \
+            '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.source_feature_preparation_evidence_ref = "prep/foreign"' \
+            '.approved_feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref = "prep/foreign" | .canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.source_feature_preparation_evidence_ref = "prep/foreign"' \
+            '.approved_feature_preparation_qa_acceptance_obligation.source_preparation_basis = "not_applicable"' \
+            '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.source_preparation_basis = "not_applicable"'; do
+            unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+            if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+                deferred_qa_eval_failures+=("$case_id accepts existing-system source mutation $mutation")
+            fi
+        done
+    else
+        for mutation in \
+            '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.source_preparation_basis = "other"' \
+            '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.source_feature_preparation_evidence_ref = "prep/foreign"' \
+            '.approved_feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref = "prep/foreign" | .canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.source_feature_preparation_evidence_ref = "prep/foreign"'; do
+            unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+            if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+                deferred_qa_eval_failures+=("$case_id accepts not-applicable source mutation $mutation")
+            fi
+        done
+    fi
+done
+if [[ ${#deferred_qa_eval_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "deferred QA obligation eval gaps: ${deferred_qa_eval_failures[*]}"
+fi
+
+test_start "deferred QA handoffs require Build then Code Reviewer then QA Evaluator"
+qa_handoff_route_failures=()
+for case_and_builder in \
+    "medium-implement-only-consumes-preparation-qa-obligation build_medium_implement_only_qa_handoff_response" \
+    "medium-implement-only-consumes-not-applicable-preparation-qa-obligation build_medium_implement_only_not_applicable_qa_handoff_response"; do
+    qa_handoff_case_id="${case_and_builder%% *}"
+    qa_handoff_builder="${case_and_builder#* }"
+    required_summary="$(jq -r --arg case_id "$qa_handoff_case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    "$qa_handoff_builder" "$response_file" "$required_summary"
+    qa_handoff_response="$(<"$response_file")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$qa_handoff_case_id" "$qa_handoff_response" PASS; then
+        qa_handoff_route_failures+=("$qa_handoff_case_id rejects the Build -> Code Reviewer -> QA Evaluator route")
+        continue
+    fi
+    unsafe_response="$(jq '.decomposition_plan_review.dependency_order = "Accept harness gate, then execute the single route-behavior packet."' <<<"$qa_handoff_response")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$qa_handoff_case_id" "$unsafe_response" FAIL; then
+        qa_handoff_route_failures+=("$qa_handoff_case_id accepts inherited harness dependency order")
+    fi
+done
+if [[ ${#qa_handoff_route_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "deferred QA dependency-order eval gaps: ${qa_handoff_route_failures[*]}"
+fi
+
+test_start "QA rejection source-fix eval rejects stale lifecycle evidence"
+qa_recovery_case="qa-reject-source-fix-requires-rebuild-review-before-resume"
+required_summary="$(jq -r --arg case_id "$qa_recovery_case" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+response_file="$(mktemp)"
+p0p4_register_cleanup "$response_file"
+build_workflow_review_lifecycle_eval_response "$qa_recovery_case" "$response_file" "$required_summary"
+qa_recovery_valid="$(<"$response_file")"
+qa_recovery_failures=()
+if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$qa_recovery_case" "$qa_recovery_valid" PASS; then
+    qa_recovery_failures+=("valid post-fix recovery rejected")
+fi
+if ! jq -e '
+  .post_rejection_digest_evidence.post_fix_snapshot_identity == .fresh_canonical_final_summary.artifact.final_snapshot_identity and
+  .post_rejection_digest_evidence.post_fix_snapshot_identity == .current_final_batch.final_snapshot_identity and
+  .post_rejection_digest_evidence.post_fix_snapshot_identity == .qa_evaluation_result.rejection_recovery.fresh_review_snapshot_identity
+' <<<"$qa_recovery_valid" >/dev/null; then
+    qa_recovery_failures+=("valid recovery lacks a trusted post-rehash snapshot identity binding")
+fi
+for mutation in \
+    'del(.prior_canonical_qa_result.ref)' \
+    'del(.qa_evaluation_result.rejection_recovery.rejected_qa_result_ref)' \
+    '.prior_canonical_qa_result.ref = " " | .qa_evaluation_result.rejection_recovery.rejected_qa_result_ref = " "' \
+    '.qa_evaluation_result.rejection_recovery.rejected_qa_result_ref = "journal#foreign-qa"' \
+    'del(.qa_evaluation_result.rejection_recovery.pre_fix_source_digest)' \
+    'del(.qa_evaluation_result.rejection_recovery.post_fix_source_digest)' \
+    '.qa_evaluation_result.rejection_recovery.post_fix_source_digest = "pre-fix-digest"' \
+    'del(.qa_evaluation_result.rejection_recovery.build_validation_ref)' \
+    'del(.qa_evaluation_result.rejection_recovery.rehash_evidence_ref)' \
+    'del(.post_fix_build_validation)' \
+    'del(.post_rejection_digest_evidence)' \
+    'del(.post_rejection_digest_evidence.post_fix_snapshot_identity)' \
+    '.qa_evaluation_result.rejection_recovery.build_validation_ref = "validation#foreign"' \
+    '.post_fix_build_validation.ref = "validation#foreign"' \
+    '.qa_evaluation_result.rejection_recovery.rehash_evidence_ref = "digest#foreign"' \
+    '.post_rejection_digest_evidence.ref = "digest#foreign"' \
+    'del(.qa_evaluation_result.delegation_contract)' \
+    'del(.qa_evaluation_result.validation_status)' \
+    '.qa_evaluation_result.producer_schema_version = "6.0"' \
+    'del(.fresh_canonical_final_summary.ref)' \
+    'del(.fresh_canonical_final_summary.artifact.final_review_snapshot_id)' \
+    'del(.fresh_canonical_final_summary.artifact.evidence_bounded_claim)' \
+    'del(.current_canonical_qa_result)' \
+    'del(.current_qa_delegation_path)' \
+    '.qa_evaluation_result.canonical_result_ref = "journal#foreign-qa"' \
+    '.current_canonical_qa_result.ref = "journal#foreign-qa"' \
+    '.qa_evaluation_result.delegation_path_ref = "journal#foreign-qa-delegation"' \
+    '.current_qa_delegation_path.ref = "journal#foreign-qa-delegation"' \
+    'del(.qa_evaluation_result.rejection_recovery.fresh_review_result_ref)' \
+    '.fresh_canonical_final_summary.ref = " " | .qa_evaluation_result.rejection_recovery.fresh_review_result_ref = " "' \
+    '.qa_evaluation_result.rejection_recovery.fresh_review_result_ref = "journal#foreign-review"' \
+    '.qa_evaluation_result.rejection_recovery.fresh_review_coverage_complete = false' \
+    '.fresh_canonical_final_summary.artifact.coverage_complete = false' \
+    '.fresh_canonical_final_summary.artifact.final_snapshot_identity.value = " " | .current_final_batch.final_snapshot_identity.value = " " | .qa_evaluation_result.rejection_recovery.fresh_review_snapshot_identity.value = " "' \
+    '.fresh_canonical_final_summary.artifact.final_snapshot_identity.captured_at = null | .current_final_batch.final_snapshot_identity.captured_at = null | .qa_evaluation_result.rejection_recovery.fresh_review_snapshot_identity.captured_at = null' \
+    '.fresh_canonical_final_summary.artifact.final_snapshot_identity.scope_manifest_digest = null | .current_final_batch.final_snapshot_identity.scope_manifest_digest = null | .qa_evaluation_result.rejection_recovery.fresh_review_snapshot_identity.scope_manifest_digest = null' \
+    '.current_final_batch.final_snapshot_identity.value = "stale"' \
+    '.fresh_canonical_final_summary.artifact.final_snapshot_identity.value = "stale-review-digest" | .current_final_batch.final_snapshot_identity.value = "stale-review-digest" | .qa_evaluation_result.rejection_recovery.fresh_review_snapshot_identity.value = "stale-review-digest"' \
+    '.qa_evaluation_result.rejection_recovery.qa_resume_authorized = false'; do
+    unsafe_response="$(jq "$mutation" <<<"$qa_recovery_valid")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$qa_recovery_case" "$unsafe_response" FAIL; then
+        qa_recovery_failures+=("accepted $mutation")
+    fi
+done
+if [[ ${#qa_recovery_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "QA rejection recovery eval gaps: ${qa_recovery_failures[*]}"
+fi
+
+test_start "QA rejection unchanged-source recovery requires explicit digest equality evidence"
+qa_equal_recovery_case="qa-reject-unchanged-source-allows-resume-with-digest-equality"
+required_summary="$(jq -r --arg case_id "$qa_equal_recovery_case" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+response_file="$(mktemp)"
+p0p4_register_cleanup "$response_file"
+build_workflow_review_lifecycle_eval_response "$qa_equal_recovery_case" "$response_file" "$required_summary"
+qa_equal_recovery_valid="$(<"$response_file")"
+qa_equal_recovery_failures=()
+if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$qa_equal_recovery_case" "$qa_equal_recovery_valid" PASS; then
+    qa_equal_recovery_failures+=("valid equal-digest recovery rejected")
+fi
+for mutation in \
+    'del(.qa_evaluation_result.rejection_recovery.digest_equality_evidence_ref)' \
+    '.qa_evaluation_result.rejection_recovery.digest_equality_evidence_ref = " "' \
+    '.qa_evaluation_result.rejection_recovery.pre_fix_source_digest = "foreign-digest"' \
+    '.qa_evaluation_result.rejection_recovery.post_fix_source_digest = "foreign-digest"' \
+    'del(.post_rejection_digest_evidence)' \
+    '.post_rejection_digest_evidence.ref = "digest#foreign"' \
+    '.qa_evaluation_result.rejection_recovery.source_digest_comparison = "changed"' \
+    '.qa_evaluation_result.rejection_recovery.qa_resume_authorized = false' \
+    'del(.current_canonical_qa_result)' \
+    'del(.current_qa_delegation_path)' \
+    '.qa_evaluation_result.canonical_result_ref = "journal#foreign-qa"' \
+    '.current_canonical_qa_result.ref = "journal#foreign-qa"' \
+    '.qa_evaluation_result.delegation_path_ref = "journal#foreign-qa-delegation"' \
+    '.current_qa_delegation_path.ref = "journal#foreign-qa-delegation"' \
+    '.qa_evaluation_result.rejection_recovery.build_validation_ref = "validation#stale"' \
+    '.qa_evaluation_result.rejection_recovery.fresh_review_result_ref = "journal#stale-review"' \
+    '.qa_evaluation_result.rejection_recovery.fresh_review_coverage_complete = true'; do
+    unsafe_response="$(jq "$mutation" <<<"$qa_equal_recovery_valid")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$qa_equal_recovery_case" "$unsafe_response" FAIL; then
+        qa_equal_recovery_failures+=("accepted $mutation")
+    fi
+done
+if [[ ${#qa_equal_recovery_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "QA unchanged-source equality recovery eval gaps: ${qa_equal_recovery_failures[*]}"
+fi
+
+test_start "small strict and required-QA evals reject missing terminal projection"
+small_terminal_failures=()
+for case_id in small-strict-blocked-qa-requires-terminal-projection small-required-rejected-qa-requires-terminal-projection; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$valid_response" PASS; then
+        small_terminal_failures+=("$case_id valid non-complete state rejected")
+        continue
+    fi
+    for mutation in \
+        'del(.final_handoff)' \
+        'del(.final_handoff.changed_behavior_and_areas)' \
+        'del(.canonical_final_summary.ref)' \
+        'del(.review_result.canonical_result_ref)' \
+        'del(.canonical_qa_result.ref)' \
+        'del(.qa_evaluation_result.canonical_result_ref)' \
+        'del(.final_handoff.review_completion.canonical_result_ref)' \
+        'del(.final_handoff.review_completion.qa_evaluation_result_ref)' \
+        'del(.review_result.final_snapshot_identity_ref)' \
+        'del(.review_result.delegation_path_ref)' \
+        'del(.qa_evaluation_result.delegation_path_ref)' \
+        'del(.final_handoff.review_completion.final_snapshot_identity_ref)' \
+        'del(.final_handoff.review_completion.final_snapshot_identity)' \
+        '.canonical_final_summary.ref = null | .review_result.canonical_result_ref = null | .final_handoff.review_completion.canonical_result_ref = null' \
+        '.canonical_qa_result.ref = " " | .qa_evaluation_result.canonical_result_ref = " " | .final_handoff.review_completion.qa_evaluation_result_ref = " "' \
+        '.canonical_final_summary.ref = "journal#foreign-summary"' \
+        '.final_handoff.review_completion.canonical_result_ref = "journal#foreign-summary"' \
+        '.canonical_qa_result.artifact.final_verdict = "accepted"' \
+        '.final_handoff.review_completion.qa_final_verdict = "accepted"' \
+        '.review_result.producer_schema_version = "6.0"' \
+        '.final_handoff.review_completion.final_review_snapshot_id = "foreign-review"' \
+        '.final_handoff.review_completion.qa_producer_schema_version = "6.0"' \
+        '.final_handoff.review_completion.completion_disposition = "complete"' \
+        '.workflow_complete = "--- WORKFLOW COMPLETE ---"'; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            small_terminal_failures+=("$case_id accepted $mutation")
+        fi
+    done
+    if [[ "$case_id" == small-strict-* ]]; then
+        contradictory_claim='.final_handoff.review_completion.remaining_or_blocker_summary = "No blocker remains; acceptance is complete." | .final_handoff.review_claim = "No material findings; workflow is complete."'
+    else
+        contradictory_claim='.final_handoff.review_completion.remaining_or_blocker_summary = "All acceptance items passed." | .final_handoff.review_claim = "No material findings; workflow is complete."'
+    fi
+    unsafe_response="$(jq "$contradictory_claim" <<<"$valid_response")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+        small_terminal_failures+=("$case_id accepted contradictory clean terminal wording")
+    fi
+done
+if [[ ${#small_terminal_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "small terminal projection eval gaps: ${small_terminal_failures[*]}"
+fi
+
+test_start "resume eval rejects active or current state on producer version mismatch"
+version_case="stale-assistant-review-version-invalidates-persisted-results"
+required_summary="$(jq -r --arg case_id "$version_case" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+response_file="$(mktemp)"
+p0p4_register_cleanup "$response_file"
+build_workflow_review_lifecycle_eval_response "$version_case" "$response_file" "$required_summary"
+version_valid="$(<"$response_file")"
+version_failures=()
+if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$version_case" "$version_valid" PASS; then
+    version_failures+=("valid invalidation route rejected")
+fi
+for mutation in \
+    '.task_state_reconciliation.classification = "active"' \
+    '.task_state_reconciliation.assistant_review_packet_compatibility.status = "current"' \
+    'del(.task_state_reconciliation.assistant_review_packet_compatibility.invalidated_refs)' \
+    '.task_state_reconciliation.assistant_review_packet_compatibility.invalidated_refs |= .[0:-1]' \
+    '.task_state_reconciliation.assistant_review_packet_compatibility.invalidated_refs += ["unrelated.ref"]' \
+    'del(.task_state_reconciliation.assistant_review_packet_compatibility.rebuild_route)'; do
+    unsafe_response="$(jq "$mutation" <<<"$version_valid")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$version_case" "$unsafe_response" FAIL; then
+        version_failures+=("accepted $mutation")
+    fi
+done
+if [[ ${#version_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review version-resume eval gaps: ${version_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

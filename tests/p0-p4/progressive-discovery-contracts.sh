@@ -380,6 +380,12 @@ write_workflow_eval_responses() {
                 medium-implement-only-consumes-not-applicable-preparation-harness-obligation)
                     build_medium_implement_only_not_applicable_harness_handoff_response "$response_path" "$required_summary"
                     ;;
+                medium-implement-only-consumes-preparation-qa-obligation)
+                    build_medium_implement_only_qa_handoff_response "$response_path" "$required_summary"
+                    ;;
+                medium-implement-only-consumes-not-applicable-preparation-qa-obligation)
+                    build_medium_implement_only_not_applicable_qa_handoff_response "$response_path" "$required_summary"
+                    ;;
                 large-prepare-only-terminal-route)
                     build_large_prepare_only_terminal_response "$response_path" "$required_summary"
                     ;;
@@ -409,8 +415,8 @@ write_workflow_eval_responses() {
                 progressive-collaborative-contributor-evidence)
                     jq -n '{decision_item: {interaction_mode: "collaborative"}, decision_resolution: {contributor_evidence: [{contributor_role: "agent", contribution: "analysis", evidence_ref: "analysis-ref"}, {contributor_role: "human_or_user", contribution: "decision", evidence_ref: "decision-ref"}]}, route_clear: true}' >"$response_path"
                     ;;
-                standard-pack-review-result-retains-checklist)
-                    jq -n --arg summary "$required_summary" '{summary: $summary, review_result: {canonical_result_ref: "journal#final-summary", canonical_contract: "assistant-review/contracts/output.yaml#final_summary", delegation_path_ref: "journal#review-delegation", delegation_contract: "assistant-review/contracts/output.yaml#review_delegation_path", architecture_decision_pack_review_ref: "journal#pack-review", architecture_decision_pack_review_contract: "assistant-review/contracts/output.yaml#architecture_decision_pack_review", validation_status: "validated"}}' >"$response_path"
+                standard-pack-review-result-retains-checklist|light-pack-review-result-retains-current-snapshot|incomplete-review-blocks-clean-final-handoff|blocked-qa-blocks-clean-final-handoff|rejected-qa-blocks-clean-final-handoff|fulfilled-preparation-qa-obligation-allows-completion|fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion|qa-reject-source-fix-requires-rebuild-review-before-resume|qa-reject-unchanged-source-allows-resume-with-digest-equality|small-strict-blocked-qa-requires-terminal-projection|small-required-rejected-qa-requires-terminal-projection|stale-assistant-review-version-invalidates-persisted-results)
+                    build_workflow_review_lifecycle_eval_response "$case_id" "$response_path" "$required_summary"
                     ;;
                 architecture-pack-*-blocks)
                     expected_missing_field="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.structured_json_assertions[] | select(.path == ["validation_result", "missing_field"]) | .expected' "$fixture")"

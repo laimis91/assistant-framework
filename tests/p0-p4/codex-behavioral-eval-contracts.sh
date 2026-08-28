@@ -3571,7 +3571,31 @@ else
     fail "manual activation freshness does not preflight its Python prerequisite before timestamp validation"
 fi
 
-test_start "activation observations bind the rendered candidate, exact cases, and current native provenance"
+test_start "VIEWING execute preflights working node --test before run-plan persistence while plan-only and other cases remain Node-free"
+if ruby -e '
+  runner = File.read(ARGV.fetch(0))
+  readme = File.read(ARGV.fetch(1))
+  validation = runner.index("selected_case_ids >/dev/null")
+  node_guard = runner.index("require_viewing_node_test_capability", validation)
+  admission = runner.index("\nacquire_output_lease\nWORK_ROOT", node_guard)
+  valid = !validation.nil? && !node_guard.nil? && !admission.nil? &&
+    validation < node_guard && node_guard < admission &&
+    runner.include?("requires a working node --test capability") &&
+    runner.include?("VIEWING_NODE_TEST_PROBE_TIMEOUT_SECONDS") &&
+    runner.include?("start_new_session=True") && runner.include?("os.killpg") &&
+    runner.include?("[[ \"$MODE\" == \"execute\" ]] && selected_cases_include \"viewing-route-technical-preparation\"") &&
+    !runner.include?("selected_case_ids | grep -Fxq") &&
+    readme.include?("adapter additionally requires a working `node --test` capability") &&
+    readme.include?("bounded capability probe") &&
+    readme.include?("entire process group is reaped") &&
+    readme.include?("plan-only runs") && readme.include?("omit the VIEWING case")
+  exit valid ? 0 : 1
+' "$runner" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    pass
+else
+    fail "VIEWING execute Node preflight is missing, late, or documented as an unconditional prerequisite"
+fi
+
 activation_cases_sha="$(jq -cS '.activation_cases' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" | test_sha256_stream)"
 manual_activation_observation="$fixture_root/manual-native-activation-observation.json"
 activation_now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -3627,6 +3651,237 @@ else
     fail "plan-only Python freshness preflight did not remain manual-observation-specific: ${pythonless_failures[*]}"
 fi
 
+test_start "VIEWING Node prerequisite is execute-only and precedes output admission or calls"
+nodeless_bin="$fixture_root/nodeless-bin"
+mkdir -p "$nodeless_bin"
+cp -R "$pythonless_bin/." "$nodeless_bin/"
+for nodeless_command in git id kill ps readlink rmdir sleep tail touch xargs; do
+    nodeless_command_path="$(command -v "$nodeless_command" 2>/dev/null || true)"
+    [[ -z "$nodeless_command_path" || -e "$nodeless_bin/$nodeless_command" ]] \
+        || ln -s "$nodeless_command_path" "$nodeless_bin/$nodeless_command"
+done
+nodeless_python3_path="$(command -v python3 2>/dev/null || true)"
+if [[ -n "$nodeless_python3_path" ]]; then
+    ln -s "$nodeless_python3_path" "$nodeless_bin/python3"
+fi
+nodeless_viewing_execute_output="$fixture_root/nodeless-viewing-execute-output"
+nodeless_all_execute_output="$fixture_root/nodeless-all-execute-output"
+nodeless_viewing_plan_output="$fixture_root/nodeless-viewing-plan-output"
+nodeless_nonview_execute_output="$fixture_root/nodeless-nonview-execute-output"
+nodeless_viewing_execute_error="$fixture_root/nodeless-viewing-execute-error.txt"
+nodeless_all_execute_error="$fixture_root/nodeless-all-execute-error.txt"
+nodeless_nonview_execute_error="$fixture_root/nodeless-nonview-execute-error.txt"
+nodeless_node_error='Error: --execute with viewing-route-technical-preparation requires Node.js for its trusted seed-fixture test before run-plan persistence or model calls.'
+nodeless_failures=()
+if [[ -e "$nodeless_bin/node" || -z "$nodeless_python3_path" ]]; then
+    nodeless_failures+=("fixture")
+fi
+rm -f "$capture"/*
+if PATH="$nodeless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$nodeless_viewing_execute_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$nodeless_viewing_execute_error"; then
+    nodeless_failures+=("viewing-execute-succeeded")
+elif ! grep -Fxq "$nodeless_node_error" "$nodeless_viewing_execute_error" \
+    || [[ -e "$nodeless_viewing_execute_output/run-plan.json" || -e "$nodeless_viewing_execute_output/.evaluation-lease" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+    nodeless_failures+=("viewing-execute-admission-or-call")
+fi
+rm -f "$capture"/*
+if PATH="$nodeless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases all --repeats 1 --output "$nodeless_all_execute_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$nodeless_all_execute_error"; then
+    nodeless_failures+=("all-execute-succeeded")
+elif ! grep -Fxq "$nodeless_node_error" "$nodeless_all_execute_error" \
+    || [[ -e "$nodeless_all_execute_output/run-plan.json" || -e "$nodeless_all_execute_output/.evaluation-lease" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+    nodeless_failures+=("all-execute-admission-or-call")
+fi
+broken_node_bin="$fixture_root/broken-node-bin"
+cp -R "$nodeless_bin" "$broken_node_bin"
+cat >"$broken_node_bin/node" <<'BROKEN_NODE'
+#!/bin/sh
+exit 1
+BROKEN_NODE
+chmod +x "$broken_node_bin/node"
+broken_node_output="$fixture_root/broken-node-viewing-output"
+broken_node_error="$fixture_root/broken-node-viewing-error.txt"
+broken_node_capability_error='Error: --execute with viewing-route-technical-preparation requires a working node --test capability; the bounded prerequisite probe failed before run-plan persistence or model calls.'
+rm -f "$capture"/*
+if PATH="$broken_node_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$broken_node_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$broken_node_error"; then
+    nodeless_failures+=("broken-node-test-capability-succeeded")
+elif ! grep -Fxq "$broken_node_capability_error" "$broken_node_error" \
+    || [[ -e "$broken_node_output/run-plan.json" || -e "$broken_node_output/.evaluation-lease" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+    nodeless_failures+=("broken-node-test-capability-admission-or-call")
+fi
+hang_node_bin="$fixture_root/hang-node-bin"
+cp -R "$nodeless_bin" "$hang_node_bin"
+hang_node_child_pid_file="$fixture_root/hang-node-child.pid"
+cat >"$hang_node_bin/node" <<'HANG_NODE'
+#!/bin/sh
+set -eu
+child_pid_file="${FAKE_NODE_PROBE_CHILD_PID_FILE:?}"
+if [ -n "${FAKE_NODE_PROBE_LEADER_PID_FILE:-}" ]; then
+    printf '%s\n' "$$" >"$FAKE_NODE_PROBE_LEADER_PID_FILE"
+fi
+(
+    trap '' TERM
+    exec tail -f /dev/null
+) &
+printf '%s\n' "$!" >"$child_pid_file"
+exec tail -f /dev/null
+HANG_NODE
+chmod +x "$hang_node_bin/node"
+hang_node_output="$fixture_root/hang-node-viewing-output"
+hang_node_error="$fixture_root/hang-node-viewing-error.txt"
+hang_node_started_at="$(date +%s)"
+rm -f "$capture"/* "$hang_node_child_pid_file"
+if PATH="$hang_node_bin" FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_NODE_PROBE_CHILD_PID_FILE="$hang_node_child_pid_file" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$hang_node_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$hang_node_error"; then
+    nodeless_failures+=("hanging-node-test-capability-succeeded")
+else
+    hang_node_elapsed_seconds="$(( $(date +%s) - hang_node_started_at ))"
+    hang_node_child_pid="$(cat "$hang_node_child_pid_file" 2>/dev/null || true)"
+    if ! grep -Fxq "$broken_node_capability_error" "$hang_node_error" \
+        || [[ "$hang_node_elapsed_seconds" -gt 15 ]] \
+        || [[ -e "$hang_node_output/run-plan.json" || -e "$hang_node_output/.evaluation-lease" ]] \
+        || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]] \
+        || [[ ! "$hang_node_child_pid" =~ ^[0-9]+$ ]] \
+        || kill -0 "$hang_node_child_pid" 2>/dev/null; then
+        nodeless_failures+=("hanging-node-test-capability-timeout-admission-or-child")
+    fi
+    [[ ! "$hang_node_child_pid" =~ ^[0-9]+$ ]] || kill -KILL "$hang_node_child_pid" 2>/dev/null || true
+fi
+signal_node_tmp="$fixture_root/signal-node-tmp"
+signal_node_output="$fixture_root/signal-node-output"
+signal_node_error="$fixture_root/signal-node-error.txt"
+signal_node_child_pid_file="$fixture_root/signal-node-child.pid"
+signal_node_leader_pid_file="$fixture_root/signal-node-leader.pid"
+mkdir -p "$signal_node_tmp"
+rm -f "$capture"/* "$signal_node_child_pid_file" "$signal_node_leader_pid_file"
+TMPDIR="$signal_node_tmp" PATH="$hang_node_bin" FAKE_CODEX_CAPTURE_DIR="$capture" \
+    FAKE_NODE_PROBE_CHILD_PID_FILE="$signal_node_child_pid_file" \
+    FAKE_NODE_PROBE_LEADER_PID_FILE="$signal_node_leader_pid_file" \
+    "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$signal_node_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$signal_node_error" &
+signal_runner_pid=$!
+for _ in $(seq 1 100); do
+    [[ -s "$signal_node_child_pid_file" && -s "$signal_node_leader_pid_file" ]] && break
+    kill -0 "$signal_runner_pid" 2>/dev/null || break
+    sleep 0.05
+done
+signal_node_child_pid="$(cat "$signal_node_child_pid_file" 2>/dev/null || true)"
+signal_node_leader_pid="$(cat "$signal_node_leader_pid_file" 2>/dev/null || true)"
+kill -TERM "$signal_runner_pid" 2>/dev/null || true
+if wait "$signal_runner_pid"; then signal_runner_status=0; else signal_runner_status=$?; fi
+for _ in $(seq 1 100); do
+    child_live=false
+    leader_live=false
+    [[ ! "$signal_node_child_pid" =~ ^[0-9]+$ ]] || ! kill -0 "$signal_node_child_pid" 2>/dev/null || child_live=true
+    [[ ! "$signal_node_leader_pid" =~ ^[0-9]+$ ]] || ! kill -0 "$signal_node_leader_pid" 2>/dev/null || leader_live=true
+    [[ "$child_live" == false && "$leader_live" == false ]] && break
+    sleep 0.05
+done
+if [[ "$signal_runner_status" -ne 143 \
+    || ! "$signal_node_child_pid" =~ ^[0-9]+$ \
+    || ! "$signal_node_leader_pid" =~ ^[0-9]+$ \
+    || "$child_live" == true \
+    || "$leader_live" == true \
+    || -e "$signal_node_output/run-plan.json" || -e "$signal_node_output/.evaluation-lease" \
+    || "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 \
+    || -n "$(find "$signal_node_tmp" -mindepth 1 -maxdepth 1 -name 'viewing-node-test-probe.*' -print -quit)" ]]; then
+    nodeless_failures+=("signal-node-test-capability-admission-or-descendant")
+fi
+[[ ! "$signal_node_child_pid" =~ ^[0-9]+$ ]] || kill -KILL "$signal_node_child_pid" 2>/dev/null || true
+[[ ! "$signal_node_leader_pid" =~ ^[0-9]+$ ]] || kill -KILL "$signal_node_leader_pid" 2>/dev/null || true
+rm -f "$capture"/*
+real_node_path="$(command -v node 2>/dev/null || true)"
+for leader_exit in success nonzero; do
+    leader_node_bin="$fixture_root/${leader_exit}-leader-node-bin"
+    cp -R "$nodeless_bin" "$leader_node_bin"
+    leader_child_pid_file="$fixture_root/${leader_exit}-leader-node-child.pid"
+    cat >"$leader_node_bin/node" <<'LEADER_EXIT_NODE'
+#!/bin/sh
+set -eu
+if [ "${2:-}" != "" ] && [ "${2##*/}" = "capability.test.js" ]; then
+    (
+        trap '' TERM
+        exec tail -f /dev/null
+    ) &
+    printf '%s\n' "$!" >"${FAKE_NODE_PROBE_CHILD_PID_FILE:?}"
+    if [ "${FAKE_NODE_PROBE_EXIT_CODE:?}" = "0" ]; then
+        exit 0
+    fi
+    exit 1
+fi
+exec "${FAKE_REAL_NODE:?}" "$@"
+LEADER_EXIT_NODE
+    chmod +x "$leader_node_bin/node"
+    leader_output="$fixture_root/${leader_exit}-leader-node-output"
+    leader_error="$fixture_root/${leader_exit}-leader-node-error.txt"
+    rm -f "$capture"/* "$leader_child_pid_file"
+    if [[ "$leader_exit" == success ]]; then
+        leader_exit_code=0
+        if ! PATH="$leader_node_bin" FAKE_REAL_NODE="$real_node_path" FAKE_NODE_PROBE_CHILD_PID_FILE="$leader_child_pid_file" FAKE_NODE_PROBE_EXIT_CODE="$leader_exit_code" FAKE_CODEX_CAPTURE_DIR="$capture" \
+            "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+            --cases viewing-route-technical-preparation --repeats 1 --output "$leader_output" \
+            --codex-bin "$fake_codex" >/dev/null 2>"$leader_error"; then
+            nodeless_failures+=("success-leader-run")
+        fi
+    else
+        leader_exit_code=1
+        if PATH="$leader_node_bin" FAKE_REAL_NODE="$real_node_path" FAKE_NODE_PROBE_CHILD_PID_FILE="$leader_child_pid_file" FAKE_NODE_PROBE_EXIT_CODE="$leader_exit_code" FAKE_CODEX_CAPTURE_DIR="$capture" \
+            "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+            --cases viewing-route-technical-preparation --repeats 1 --output "$leader_output" \
+            --codex-bin "$fake_codex" >/dev/null 2>"$leader_error"; then
+            nodeless_failures+=("nonzero-leader-succeeded")
+        elif ! grep -Fxq "$broken_node_capability_error" "$leader_error" \
+            || [[ -e "$leader_output/run-plan.json" || -e "$leader_output/.evaluation-lease" ]] \
+            || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+            nodeless_failures+=("nonzero-leader-admission-or-call")
+        fi
+    fi
+    leader_child_pid="$(cat "$leader_child_pid_file" 2>/dev/null || true)"
+    if [[ ! "$leader_child_pid" =~ ^[0-9]+$ ]] || kill -0 "$leader_child_pid" 2>/dev/null; then
+        nodeless_failures+=("${leader_exit}-leader-descendant-live")
+    fi
+    [[ ! "$leader_child_pid" =~ ^[0-9]+$ ]] || kill -KILL "$leader_child_pid" 2>/dev/null || true
+    [[ ! -e "$leader_output/.evaluation-lease" ]] || nodeless_failures+=("${leader_exit}-leader-lease-retained")
+done
+rm -f "$capture"/*
+if ! PATH="$nodeless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$nodeless_viewing_plan_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    || [[ ! -f "$nodeless_viewing_plan_output/run-plan.json" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+    nodeless_failures+=("viewing-plan")
+fi
+rm -f "$capture"/*
+if ! PATH="$nodeless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$nodeless_nonview_execute_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$nodeless_nonview_execute_error" \
+    || grep -Fxq "$nodeless_node_error" "$nodeless_nonview_execute_error" \
+    || [[ ! -f "$nodeless_nonview_execute_output/run-plan.json" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 2 ]]; then
+    nodeless_failures+=("nonview-execute")
+fi
+if [[ ${#nodeless_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING Node preflight did not preserve execute-only admission behavior: ${nodeless_failures[*]}"
+fi
+
+test_start "activation observations bind the rendered candidate, exact cases, and current native provenance"
 activation_static_output="$fixture_root/activation-static-output"
 activation_manual_plan_output="$fixture_root/activation-manual-plan-output"
 activation_manual_output="$fixture_root/activation-manual-output"
