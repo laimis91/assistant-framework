@@ -38,6 +38,50 @@ readonly FEATURE_PREP_CASE_MANIFEST=(
     'large-strict-prepare-only-readiness-plan|large|inline'
 )
 
+p0p4_filter_workflow_eval_cases() {
+    local source="$1"
+    local destination="$2"
+    shift 2
+    local case_ids
+
+    case_ids="$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(length > 0))')"
+    jq --argjson case_ids "$case_ids" '
+        .cases |= map(select(.id as $case_id | $case_ids | index($case_id)))
+        | if .canonical_review_batch_expectations == null then .
+          else
+            (.canonical_review_batch_expectations.case_template_refs | with_entries(
+              select(.key as $case_id | $case_ids | index($case_id))
+            )) as $case_template_refs
+            | if ($case_template_refs | length) == 0 then
+                del(.canonical_review_batch_expectations, .canonical_review_snapshot_expectations, .canonical_review_closure_expectations)
+              else
+                .canonical_review_batch_expectations.case_template_refs = $case_template_refs
+                | (.canonical_review_batch_expectations.case_requirements | with_entries(
+                    select(.key as $case_id | $case_ids | index($case_id))
+                  )) as $case_requirements
+                | ($case_template_refs | to_entries | map(.value) | unique) as $template_refs
+                | .canonical_review_batch_expectations.case_requirements = $case_requirements
+                | .canonical_review_batch_expectations.templates |= with_entries(
+                    select(.key as $template_ref | $template_refs | index($template_ref))
+                  )
+                | .canonical_review_batch_expectations.scope_manifests |= with_entries(
+                    select(.key as $template_ref | $template_refs | index($template_ref))
+                  )
+                | if .canonical_review_snapshot_expectations == null then .
+                  else .canonical_review_snapshot_expectations |= with_entries(
+                    select(.key as $case_id | $case_ids | index($case_id))
+                  )
+                  end
+                | if .canonical_review_closure_expectations == null then .
+                  else .canonical_review_closure_expectations |= with_entries(
+                    select(.key as $case_id | $case_ids | index($case_id))
+                  )
+                  end
+              end
+          end
+    ' "$source" >"$destination"
+}
+
 manifest_case_records() {
     printf '%s\n' "${FEATURE_PREP_CASE_MANIFEST[@]}"
 }
@@ -1102,6 +1146,8 @@ build_workflow_review_lifecycle_eval_response() {
           ],
           required_coverage_tuples:[
             {review_pass_id:"pass-consumer",scope_item_id:"workflow-terminal-evidence",applicable_concern:"canonical producer consumption",review_perspective:"contract_and_test_oracle",coverage_obligation:"terminal evidence binding"},
+            {review_pass_id:"pass-consumer",scope_item_id:"workflow-terminal-evidence",applicable_concern:"canonical producer failure handling",review_perspective:"contract_and_test_oracle",coverage_obligation:"terminal evidence binding"},
+            {review_pass_id:"pass-failure-paths",scope_item_id:"workflow-terminal-evidence",applicable_concern:"canonical producer consumption",review_perspective:"runtime_lifecycle_and_failure_paths",coverage_obligation:"fail-closed terminal evidence"},
             {review_pass_id:"pass-failure-paths",scope_item_id:"workflow-terminal-evidence",applicable_concern:"canonical producer failure handling",review_perspective:"runtime_lifecycle_and_failure_paths",coverage_obligation:"fail-closed terminal evidence"}
           ]
         },
@@ -1118,6 +1164,32 @@ build_workflow_review_lifecycle_eval_response() {
           coverage_status:"complete",
           coverage_disposition:"inspected_no_risk",
           evidence:"Focused lifecycle validation passed."
+        },{
+          batch_id:"batch-current",
+          review_snapshot_id:"review-current",
+          review_pass_id:"pass-consumer",
+          perspective:"contract_and_test_oracle",
+          coverage_obligation:"terminal evidence binding",
+          assigned_scope:["workflow-terminal-evidence"],
+          scope_item_id:"workflow-terminal-evidence",
+          applicable_concern:"canonical producer failure handling",
+          terminal_state:"completed",
+          coverage_status:"complete",
+          coverage_disposition:"inspected_no_risk",
+          evidence:"Focused consumer failure-handling validation passed."
+        },{
+          batch_id:"batch-current",
+          review_snapshot_id:"review-current",
+          review_pass_id:"pass-failure-paths",
+          perspective:"runtime_lifecycle_and_failure_paths",
+          coverage_obligation:"fail-closed terminal evidence",
+          assigned_scope:["workflow-terminal-evidence"],
+          scope_item_id:"workflow-terminal-evidence",
+          applicable_concern:"canonical producer consumption",
+          terminal_state:"completed",
+          coverage_status:"complete",
+          coverage_disposition:"inspected_no_risk",
+          evidence:"Focused failure-path consumer validation passed."
         },{
           batch_id:"batch-current",
           review_snapshot_id:"review-current",
@@ -1403,7 +1475,27 @@ build_workflow_review_lifecycle_eval_response() {
         ) * 100 + 0.500000001 | floor) / 100);
       def final_summary_envelope:
         . as $old
-        | ($final_defaults + ($old | del(.canonical_result_ref, .canonical_contract, .final_snapshot_identity_ref))) as $artifact
+        | (($final_defaults + ($old | del(.canonical_result_ref, .canonical_contract, .final_snapshot_identity_ref)))
+          | if .final_batch_plan.topology.closure_verification_required then
+              .final_batch_plan.required_coverage_tuples += [
+                {review_pass_id:"pass-consumer",scope_item_id:"workflow-terminal-evidence",applicable_concern:"canonical producer failure handling",review_perspective:"contract_and_test_oracle",coverage_obligation:"terminal evidence binding"},
+                {review_pass_id:"pass-failure-paths",scope_item_id:"workflow-terminal-evidence",applicable_concern:"canonical producer consumption",review_perspective:"runtime_lifecycle_and_failure_paths",coverage_obligation:"fail-closed terminal evidence"}
+              ]
+              | .coverage_ledger += [
+                {batch_id:"batch-current",review_snapshot_id:"review-current",review_pass_id:"pass-consumer",perspective:"contract_and_test_oracle",coverage_obligation:"terminal evidence binding",assigned_scope:["workflow-terminal-evidence"],scope_item_id:"workflow-terminal-evidence",applicable_concern:"canonical producer failure handling",terminal_state:"completed",coverage_status:"complete",coverage_disposition:"inspected_no_risk",evidence:"Closure consumer pass covered producer failure handling."},
+                {batch_id:"batch-current",review_snapshot_id:"review-current",review_pass_id:"pass-failure-paths",perspective:"runtime_lifecycle_and_failure_paths",coverage_obligation:"fail-closed terminal evidence",assigned_scope:["workflow-terminal-evidence"],scope_item_id:"workflow-terminal-evidence",applicable_concern:"canonical producer consumption",terminal_state:"completed",coverage_status:"complete",coverage_disposition:"inspected_no_risk",evidence:"Closure failure-path pass covered producer consumption."}
+              ]
+              | .final_batch_plan.required_coverage_tuples |= sort_by(
+                  if .review_pass_id == "pass-consumer" then 0
+                  elif .review_pass_id == "pass-failure-paths" then 1
+                  else 2 end,
+                  .applicable_concern)
+              | .coverage_ledger |= sort_by(
+                  if .review_pass_id == "pass-consumer" then 0
+                  elif .review_pass_id == "pass-failure-paths" then 1
+                  else 2 end,
+                  .applicable_concern)
+            else . end) as $artifact
         | {
             ref:$old.canonical_result_ref,
             contract:$old.canonical_contract,
@@ -1412,18 +1504,23 @@ build_workflow_review_lifecycle_eval_response() {
               elif $artifact.coverage_complete == true then $artifact
               else $artifact
                 | del(.evidence_bounded_claim)
+                | .coverage_ledger[0].terminal_state = "failed"
+                | .coverage_ledger[0].coverage_status = "incomplete"
+                | .coverage_ledger[0].coverage_disposition = "incomplete"
+                | .coverage_ledger[0].coverage_gap_id = "coverage-gap:batch-current:pass-consumer:canonical-producer-consumption"
+                | .coverage_ledger[0].evidence = "The final review batch has unresolved coverage."
                 | .coverage_ledger[1].terminal_state = "failed"
                 | .coverage_ledger[1].coverage_status = "incomplete"
                 | .coverage_ledger[1].coverage_disposition = "incomplete"
-                | .coverage_ledger[1].coverage_gap_id = "coverage-gap:batch-current:pass-failure-paths"
+                | .coverage_ledger[1].coverage_gap_id = "coverage-gap:batch-current:pass-consumer:canonical-producer-failure-handling"
                 | .coverage_ledger[1].evidence = "The final review batch has unresolved coverage."
                 | .batch_summaries[0].batch_status = "incomplete"
                 | .batch_summaries[0].terminal_response_count = 1
                 | .batch_summaries[0].aggregate_rubric_recomputed = false
                 | .aggregation_ledger = [{
-                    source_provenance:[{source_kind:"review_pass",source_id:"pass-failure-paths"}],
-                    source_pass_ids:["pass-failure-paths"],
-                    source_coverage_gap_ids:["coverage-gap:batch-current:pass-failure-paths"],
+                    source_provenance:[{source_kind:"review_pass",source_id:"pass-consumer"}],
+                    source_pass_ids:["pass-consumer"],
+                    source_coverage_gap_ids:["coverage-gap:batch-current:pass-consumer:canonical-producer-consumption","coverage-gap:batch-current:pass-consumer:canonical-producer-failure-handling"],
                     disposition:"coverage_gap",
                     rationale:"The failed final-batch pass leaves an unresolved coverage gap."
                   }]

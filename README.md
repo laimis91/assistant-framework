@@ -273,6 +273,9 @@ Roslyn-based analyzer that scores method complexity. Used by the workflow skill'
 Source validator for first-class skill metadata and contract structure:
 
 Requires Ruby with Psych/YAML support (`ruby -ryaml`) for contract parsing.
+The skill-eval runner requires Ruby with JSON and Psych/YAML support
+(`ruby -rjson -ryaml`); per-skill response grading additionally requires
+BigDecimal (`ruby -rbigdecimal`).
 
 ```bash
 tools/skills/validate-skills.sh

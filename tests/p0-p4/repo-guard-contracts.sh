@@ -43,11 +43,11 @@ validate_ruby_prerequisite = lambda do |job, job_name, contract_step_name|
     next false unless step.is_a?(Hash) && step["name"] == "Verify runner prerequisites"
     run = step["run"]
     run.is_a?(String) && run.lines.any? { |line| line.strip == "command -v ruby" } &&
-      run.lines.any? { |line| line.strip.start_with?("ruby -ryaml -e ") }
+      run.lines.any? { |line| line.strip.start_with?("ruby -rjson -ryaml -rbigdecimal -e ") }
   end
   contract_index = steps.index { |step| step.is_a?(Hash) && step["name"] == contract_step_name }
   if prerequisite_indexes.empty?
-    errors << "#{job_name} must verify Ruby with Psych/YAML support"
+    errors << "#{job_name} must verify Ruby with JSON, Psych/YAML, and BigDecimal support"
   elsif contract_index && prerequisite_indexes.none? { |index| index < contract_index }
     errors << "#{job_name} Ruby/Psych verification must precede #{contract_step_name}"
   end
@@ -189,7 +189,7 @@ block = <<YAML
       - name: Verify runner prerequisites
         run: |
           command -v ruby
-          ruby -ryaml -e '\''abort "Psych/YAML unavailable" unless defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file)'\''
+          ruby -rjson -ryaml -rbigdecimal -e '\''abort "Ruby JSON, Psych/YAML, or BigDecimal unavailable" unless defined?(JSON) && defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file) && defined?(BigDecimal)'\''
 
 YAML
 index = contents.rindex(block)
@@ -320,14 +320,14 @@ if [[ ! -f "$framework_validation_workflow" ]]; then
     ruby_setup_failures+=("missing .github/workflows/framework-validation.yml")
 else
     ruby_verify_count="$(grep -Ec '^[[:space:]]+command -v ruby[[:space:]]*$' "$framework_validation_workflow" || true)"
-    psych_verify_count="$(grep -Ec '^[[:space:]]+ruby -ryaml -e ' "$framework_validation_workflow" || true)"
+psych_verify_count="$(grep -Ec '^[[:space:]]+ruby -rjson -ryaml -rbigdecimal -e ' "$framework_validation_workflow" || true)"
     first_ruby_verify_line="$(grep -nF -- "command -v ruby" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
     aggregate_contract_line="$(grep -nF -- "./tests/test-p0-p4-contracts.sh" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
     second_ruby_verify_line="$(grep -nF -- "command -v ruby" "$framework_validation_workflow" | sed -n '2s/:.*//p' || true)"
     shard_contract_line="$(grep -nF -- 'bash "tests/p0-p4/${{ matrix.suite }}"' "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
 
     [[ "$ruby_verify_count" -eq 2 ]] || ruby_setup_failures+=("framework-validation.yml: both contract jobs must verify Ruby")
-    [[ "$psych_verify_count" -eq 2 ]] || ruby_setup_failures+=("framework-validation.yml: both contract jobs must verify Psych/YAML")
+    [[ "$psych_verify_count" -eq 2 ]] || ruby_setup_failures+=("framework-validation.yml: both contract jobs must verify Ruby JSON, Psych/YAML, and BigDecimal")
     if [[ -z "$first_ruby_verify_line" || -z "$aggregate_contract_line" ]] \
         || ! (( first_ruby_verify_line < aggregate_contract_line )); then
         ruby_setup_failures+=("framework-validation.yml: Ruby verification must precede aggregate contracts")
@@ -351,8 +351,9 @@ fi
 if ! grep -Fq "parallel source-changing packets require runtime proof of isolated workspaces" "$FRAMEWORK_DIR/README.md"; then
     readme_contract_failures+=("missing isolated-workspace proof gate")
 fi
-if ! grep -Fq "Ruby with Psych/YAML support" "$FRAMEWORK_DIR/README.md"; then
-    readme_contract_failures+=("missing Ruby Psych/YAML validator prerequisite")
+if ! grep -Fq "skill-eval runner requires Ruby with JSON and Psych/YAML support" "$FRAMEWORK_DIR/README.md" \
+    || ! grep -Fq "ruby -rbigdecimal" "$FRAMEWORK_DIR/README.md"; then
+    readme_contract_failures+=("missing Ruby JSON/Psych/YAML/BigDecimal evaluator prerequisite")
 fi
 if [[ "${#readme_contract_failures[@]}" -eq 0 ]]; then
     pass

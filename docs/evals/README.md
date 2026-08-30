@@ -543,8 +543,9 @@ skills/<skill>/evals/cases.json
 
 `tools/evals/run-skill-evals.sh` validates, lists, emits, and locally grades
 those skill fixtures with the same provider-neutral constraints as the framework
-instruction eval runner. It uses local shell and `jq` only; it does not call
-provider SDKs, model APIs, or network services.
+instruction eval runner. Operational modes require local shell, `jq`, and Ruby
+with JSON plus Psych/YAML support; response grading also requires Ruby
+BigDecimal. It does not call provider SDKs, model APIs, or network services.
 
 This slice now covers all 14 first-class `assistant-*` skills. Local-only Unity
 skills remain excluded from the default inventory unless `--include-local` is

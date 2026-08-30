@@ -186,33 +186,27 @@ assistant_review_artifact_schema_valid() {
     local explicit_artifact_name="${3:-}"
     local response_root="${4:-}"
     local repository_root="${REPO_ROOT:-${FRAMEWORK_DIR:?FRAMEWORK_DIR or REPO_ROOT is required}}"
+    local fixture_file="${5:-$repository_root/skills/assistant-review/evals/cases.json}"
 
-    ruby -rjson -ryaml - "$repository_root/skills/assistant-review/contracts/output.yaml" "$response_path" "$id" "$explicit_artifact_name" "$response_root" <<'RUBY'
+    ruby -rjson -ryaml - "$repository_root/skills/assistant-review/contracts/output.yaml" "$fixture_file" "$response_path" "$id" "$explicit_artifact_name" "$response_root" <<'RUBY'
 contract = YAML.load_file(ARGV.fetch(0))
-response = JSON.parse(File.read(ARGV.fetch(1)))
-case_id = ARGV.fetch(2)
-explicit_artifact_name = ARGV.fetch(3)
-response_root = ARGV.fetch(4)
+fixture = JSON.parse(File.read(ARGV.fetch(1)))
+response = JSON.parse(File.read(ARGV.fetch(2)))
+case_id = ARGV.fetch(3)
+explicit_artifact_name = ARGV.fetch(4)
+response_root = ARGV.fetch(5)
 artifacts = contract.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
 
-qa_cases = %w[
-  qa-obligation-echo-fulfills-exact-binding
-  qa-obligation-blocks-missing-or-mismatched-binding
-  qa-obligation-blocked-when-required-evidence-is-unavailable
-]
-audit_cases = %w[
-  audit-batch-waits-for-all-pass-results
-  audit-spec-review-fail-continues-complete-batch
-]
+qa_case_requirements = fixture.fetch("canonical_qa_case_requirements", {})
+case_requirement = fixture.dig("canonical_review_batch_expectations", "case_requirements", case_id)
 artifact_names = if !explicit_artifact_name.empty?
   [explicit_artifact_name]
-elsif qa_cases.include?(case_id)
-  ["qa_evaluation_result"]
+elsif case_requirement.is_a?(Hash)
+  case_requirement.fetch("required_artifacts")
+elsif qa_case_requirements.key?(case_id)
+  qa_case_requirements.fetch(case_id).fetch("required_artifacts")
 else
-  names = ["final_summary"]
-  names << "audit_report" if audit_cases.include?(case_id)
-  names << "review_delegation_path" if case_id == "trivial-audit-uses-two-isolated-passes"
-  names
+  ["final_summary"]
 end
 
 valid = nil
@@ -274,27 +268,10 @@ if !explicit_artifact_name.empty?
   response = { explicit_artifact_name => response.dig(response_root, "artifact") }
 end
 
-qa_cases = %w[
-  qa-obligation-echo-fulfills-exact-binding
-  qa-obligation-blocks-missing-or-mismatched-binding
-  qa-obligation-blocked-when-required-evidence-is-unavailable
-  not-applicable-binding-unit
-]
-audit_cases = %w[
-  audit-batch-waits-for-all-pass-results
-  audit-spec-review-fail-continues-complete-batch
-]
-final_cases = %w[
-  audit-batch-waits-for-all-pass-results
-  incomplete-review-batch-never-cleans
-  post-fix-review-uses-fresh-snapshot-batch
-  post-fix-verified-closure-with-incomplete-coverage
-  post-fix-review-regression-remains-open
-  audit-spec-review-fail-continues-complete-batch
-  in-flight-mutation-invalidates-review-batch
-  trivial-audit-uses-two-isolated-passes
-]
-
+qa_case_requirements = fixture.fetch("canonical_qa_case_requirements", {})
+qa_cases = qa_case_requirements.keys + ["not-applicable-binding-unit"]
+case_requirement = fixture.dig("canonical_review_batch_expectations", "case_requirements", case_id)
+audit_required = case_requirement.is_a?(Hash) && case_requirement.fetch("required_artifacts", []).include?("audit_report")
 nonblank = ->(value) { value.is_a?(String) && !value.strip.empty? }
 nonblank_strings = ->(value) { value.is_a?(Array) && !value.empty? && value.all? { |item| nonblank.call(item) } }
 integer_in = ->(value, range) { value.is_a?(Integer) && range.cover?(value) }
@@ -335,12 +312,13 @@ end
 batch_expectations = fixture["canonical_review_batch_expectations"]
 template_ref = batch_expectations.is_a?(Hash) ? batch_expectations.fetch("case_template_refs", {})[case_id] : nil
 frozen_final_batch_plan = template_ref ? batch_expectations.fetch("templates", {})[template_ref] : nil
+frozen_scope_manifest = template_ref ? batch_expectations.fetch("scope_manifests", {})[template_ref] : nil
 frozen_closure_authority = fixture.fetch("canonical_review_closure_expectations", {})[case_id]
 frozen_snapshot_authority = fixture.fetch("canonical_review_snapshot_expectations", {})[case_id]
 frozen_deferred_qa_obligation_authority = fixture.fetch("canonical_deferred_qa_obligation_expectations", {})[case_id]
 valid = true
 
-if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? && final_cases.include?(case_id))
+if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? && !template_ref.nil?)
   summary = response["final_summary"]
   valid &&= summary.is_a?(Hash)
   if valid
@@ -386,7 +364,7 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     final_plan = summary["final_batch_plan"]
     valid &&= final_plan.is_a?(Hash)
     final_plan = {} unless final_plan.is_a?(Hash)
-    valid &&= frozen_final_batch_plan.is_a?(Hash) && final_plan == frozen_final_batch_plan
+    valid &&= frozen_final_batch_plan.is_a?(Hash) && frozen_scope_manifest.is_a?(Array) && final_plan == frozen_final_batch_plan
     expected_passes = final_plan["expected_passes"]
     required_tuples = final_plan["required_coverage_tuples"]
     topology = final_plan["topology"]
@@ -491,11 +469,21 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     end
     valid &&= !required_tuples.empty? && !plan_tuples.include?(nil) && plan_tuples.uniq.length == plan_tuples.length && plan_tuples.sort == coverage_tuples.sort
     plan_tuples = plan_tuples.compact
+    manifest_by_scope_item = Array(frozen_scope_manifest).select { |item| item.is_a?(Hash) }.to_h { |item| [item["scope_item_id"], item] }
+    manifest_tuples = expected_passes.flat_map do |pass|
+      Array(pass["assigned_scope"]).flat_map do |scope_item|
+        Array(manifest_by_scope_item.dig(scope_item, "applicable_concerns")).flat_map do |concern|
+          Array(pass["coverage_obligations"]).map do |obligation|
+            [pass["review_pass_id"], scope_item, concern, pass["perspective"], obligation]
+          end
+        end
+      end
+    end
+    valid &&= !manifest_tuples.empty? && manifest_tuples.uniq.length == manifest_tuples.length && plan_tuples.sort == manifest_tuples.sort
     valid &&= expected_passes.all? do |pass|
       pass_tuples = plan_tuples.select { |tuple| tuple[0] == pass["review_pass_id"] }
       expected_matrix = pass["assigned_scope"].flat_map do |scope_item|
-        concerns = pass_tuples.select { |tuple| tuple[1] == scope_item }.map { |tuple| tuple[2] }.uniq
-        concerns.flat_map do |concern|
+        Array(manifest_by_scope_item.dig(scope_item, "applicable_concerns")).flat_map do |concern|
           pass["coverage_obligations"].map do |obligation|
             [pass["review_pass_id"], scope_item, concern, pass["perspective"], obligation]
           end
@@ -646,10 +634,12 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
       valid &&= summary["coverage_complete"] == true && current_batch["batch_status"] == "complete"
       valid &&= findings.is_a?(Array) && material_findings.empty? && fixed.is_a?(Array) && fixed.empty?
       valid &&= material_remaining.empty? && (!summary.key?("coverage_gaps") || summary["coverage_gaps"] == [])
+      valid &&= summary["evidence_bounded_claim"] == "No material findings within the reviewed scope and available evidence"
     when "ISSUES_FIXED"
       valid &&= summary["coverage_complete"] == true && current_batch["batch_status"] == "complete"
       valid &&= findings.is_a?(Array) && material_findings.empty? && fixed.is_a?(Array) && !fixed.empty?
       valid &&= material_remaining.empty? && (!summary.key?("coverage_gaps") || summary["coverage_gaps"] == [])
+      valid &&= summary["evidence_bounded_claim"] == "No material findings within the reviewed scope and available evidence"
     when "HAS_REMAINING_ITEMS"
       valid &&= summary["coverage_complete"] == false || !material_findings.empty? || !material_remaining.empty?
       valid &&= !summary.key?("evidence_bounded_claim")
@@ -714,7 +704,7 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     else
       valid &&= !summary.key?("additional_round_reasons") || summary["additional_round_reasons"] == []
     end
-    if explicit_artifact_name.empty? && audit_cases.include?(case_id)
+    if explicit_artifact_name.empty? && audit_required
       audit = response["audit_report"]
       valid &&= audit.is_a?(Hash) && audit["coverage_complete"] == summary["coverage_complete"] && audit["batch_summaries"] == batches && audit["coverage_ledger_ref"] == "final_summary.coverage_ledger"
       valid &&= audit && audit["findings"].is_a?(Array) && audit["findings"].all? { |finding| nonblank.call(finding["evidence"]) }
@@ -933,6 +923,12 @@ assistant_review_external_alias_envelopes_valid() {
     local expected_contract
     local producer_schema_version
     local producer_contract_root
+    local required_alias
+
+    required_alias="$(jq -r --arg id "$id" '.canonical_review_batch_expectations.case_requirements?[$id].required_envelope_alias? // empty' "$fixture_file")"
+    if [[ -n "$required_alias" ]]; then
+        jq -e --arg alias_name "$required_alias" 'type == "object" and has($alias_name)' "$response_path" >/dev/null 2>&1 || return 1
+    fi
 
     # Only structured responses that actually project an assistant-review
     # producer envelope are in this validator's domain.
@@ -981,7 +977,7 @@ assistant_review_external_alias_envelopes_valid() {
         jq -e --arg alias_name "$alias_name" 'has($alias_name)' "$response_path" >/dev/null || continue
         expected_contract="assistant-review/contracts/output.yaml#$artifact_name"
         jq -e --arg alias_name "$alias_name" --arg expected_contract "$expected_contract" '.[$alias_name].contract == $expected_contract' "$response_path" >/dev/null || return 1
-        assistant_review_artifact_schema_valid "external-producer-envelope" "$response_path" "$artifact_name" "$alias_name" || return 1
+        assistant_review_artifact_schema_valid "external-producer-envelope" "$response_path" "$artifact_name" "$alias_name" "$fixture_file" || return 1
         case "$artifact_name" in
             final_summary|qa_evaluation_result)
                 assistant_review_lifecycle_semantics_valid "$id" "$response_path" "$artifact_name" "$alias_name" "$fixture_file" || return 1
@@ -1018,16 +1014,17 @@ count_assistant_review_canonical_envelope_failures() {
 
     [[ "$skill_name" == "assistant-review" ]] || { printf '0\n'; return; }
 
-    case "$id" in
-        audit-batch-waits-for-all-pass-results|incomplete-review-batch-never-cleans|post-fix-review-uses-fresh-snapshot-batch|post-fix-verified-closure-with-incomplete-coverage|post-fix-review-regression-remains-open|audit-spec-review-fail-continues-complete-batch|in-flight-mutation-invalidates-review-batch|trivial-audit-uses-two-isolated-passes|qa-obligation-echo-fulfills-exact-binding|qa-obligation-blocks-missing-or-mismatched-binding|qa-obligation-blocked-when-required-evidence-is-unavailable)
-            ;;
-        *)
-            printf '0\n'
-            return
-            ;;
-    esac
+    local mapped_final_case
+    local required_audit_report
+    local required_qa_case
+    local required_qa_delegation
+    mapped_final_case="$(jq -r --arg id "$id" '(.canonical_review_batch_expectations.case_template_refs? // {}) | has($id)' "$fixture_file")"
+    required_audit_report="$(jq -r --arg id "$id" '(.canonical_review_batch_expectations.case_requirements?[$id].required_artifacts? // []) | index("audit_report") != null' "$fixture_file")"
+    required_qa_case="$(jq -r --arg id "$id" '(.canonical_qa_case_requirements? // {}) | has($id)' "$fixture_file")"
+    required_qa_delegation="$(jq -r --arg id "$id" '(.canonical_qa_case_requirements?[$id].required_artifacts? // []) | index("qa_evaluation_delegation_path") != null' "$fixture_file")"
+    [[ "$mapped_final_case" == true || "$required_qa_case" == true ]] || { printf '0\n'; return; }
 
-    if jq -e --arg id "$id" '
+    if jq -e --arg id "$id" --argjson mapped_final_case "$mapped_final_case" --argjson required_audit_report "$required_audit_report" --argjson required_qa_case "$required_qa_case" '
         def required_fields($fields):
           . as $object | type == "object" and (($fields - ($object | keys)) | length == 0);
         def final_summary_valid:
@@ -1097,13 +1094,16 @@ count_assistant_review_canonical_envelope_failures() {
           and (.qa_evaluation_result.evidence | type == "array" and length > 0)
           and all(.qa_evaluation_result.evidence[]; required_fields(["source", "detail"]))
           and (if $response.qa_evaluation_result.final_verdict == "blocked" then ($response.qa_evaluation_result.open_questions | type == "array" and length > 0) else true end);
-        if $id == "qa-obligation-echo-fulfills-exact-binding" or $id == "qa-obligation-blocks-missing-or-mismatched-binding" or $id == "qa-obligation-blocked-when-required-evidence-is-unavailable" then qa_result_valid
-        elif $id == "audit-batch-waits-for-all-pass-results" or $id == "audit-spec-review-fail-continues-complete-batch" then final_summary_valid and audit_report_valid and (.final_summary.fixed_items == [])
-        else final_summary_valid end
+        if $required_qa_case then qa_result_valid
+        elif $mapped_final_case then
+          final_summary_valid
+          and (if $required_audit_report then audit_report_valid and (.final_summary.fixed_items == []) else true end)
+        else false end
     ' "$response_path" >/dev/null \
-        && assistant_review_artifact_schema_valid "$id" "$response_path" \
+        && assistant_review_artifact_schema_valid "$id" "$response_path" "" "" "$fixture_file" \
         && assistant_review_lifecycle_semantics_valid "$id" "$response_path" "" "" "$fixture_file" \
-        && { ! jq -e 'has("review_delegation_path")' "$response_path" >/dev/null || assistant_review_delegation_path_semantics_valid "$response_path" "review_delegation_path"; }; then
+        && { ! jq -e 'has("review_delegation_path")' "$response_path" >/dev/null || assistant_review_delegation_path_semantics_valid "$response_path" "review_delegation_path"; } \
+        && { [[ "$required_qa_delegation" != true ]] || assistant_review_delegation_path_semantics_valid "$response_path" "qa_evaluation_delegation_path"; }; then
         printf '0\n'
     else
         printf '1\n'

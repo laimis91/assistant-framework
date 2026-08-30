@@ -46,7 +46,7 @@ jobs:
           command -v rg
           command -v rsync
           command -v ruby
-          ruby -ryaml -e 'abort "Psych/YAML unavailable" unless defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file)'
+          ruby -rjson -ryaml -rbigdecimal -e 'abort "Ruby JSON, Psych/YAML, or BigDecimal unavailable" unless defined?(JSON) && defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file) && defined?(BigDecimal)'
 
       - name: Run aggregate framework contracts
         env:
@@ -99,7 +99,7 @@ jobs:
       - name: Verify runner prerequisites
         run: |
           command -v ruby
-          ruby -ryaml -e 'abort "Psych/YAML unavailable" unless defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file)'
+          ruby -rjson -ryaml -rbigdecimal -e 'abort "Ruby JSON, Psych/YAML, or BigDecimal unavailable" unless defined?(JSON) && defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file) && defined?(BigDecimal)'
 
       - name: Run long contract shard
         run: bash "tests/p0-p4/${{ matrix.suite }}"

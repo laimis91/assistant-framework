@@ -131,6 +131,7 @@ if [[ -n "${CASE_SELECTORS[*]-}" && "$MODE" != "list" && "$MODE" != "emit" && "$
     die "--case is supported only with --list, --emit-prompts, or --responses."
 fi
 
+require_skill_eval_ruby "$MODE"
 load_selected_inventory
 
 case "$MODE" in

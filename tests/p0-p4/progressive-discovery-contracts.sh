@@ -8,6 +8,22 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-ca
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+test_start "progressive-discovery filtered workflow eval removes unmatched review authority"
+progressive_filter_root="$(mktemp -d "${TMPDIR:-/tmp}/progressive-discovery-eval-filter.XXXXXX")"
+p0p4_register_cleanup "$progressive_filter_root"
+mkdir -p "$progressive_filter_root/assistant-workflow/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$progressive_filter_root/assistant-workflow/SKILL.md"
+p0p4_filter_workflow_eval_cases \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" \
+    "$progressive_filter_root/assistant-workflow/evals/cases.json" \
+    "progressive-collaborative-contributor-evidence"
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$progressive_filter_root/assistant-workflow" >/dev/null \
+    && jq -e '(.canonical_review_batch_expectations | not) and (.cases | map(.id) == ["progressive-collaborative-contributor-evidence"])' "$progressive_filter_root/assistant-workflow/evals/cases.json" >/dev/null; then
+    pass
+else
+    fail "progressive-discovery filtered workflow eval retained unmatched canonical review authority"
+fi
+
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 progressive_ref="$workflow_dir/references/progressive-discovery.md"
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
@@ -1431,7 +1447,7 @@ run_collaborative_structured_eval() {
     responses_dir="$eval_root/responses"
     mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
     cp "$workflow_dir/SKILL.md" "$temporary_skill/SKILL.md"
-    jq '.cases = [.cases[] | select(.id == "progressive-collaborative-contributor-evidence")]' "$fixture" >"$temporary_skill/evals/cases.json"
+    p0p4_filter_workflow_eval_cases "$fixture" "$temporary_skill/evals/cases.json" "progressive-collaborative-contributor-evidence"
     printf '%s\n' "$response" >"$responses_dir/assistant-workflow/progressive-collaborative-contributor-evidence.txt"
     if ! run_skill_eval "$responses_dir" "$runner_output" "$temporary_skill"; then
         [[ "$expected_status" == "FAIL" ]] || return 1

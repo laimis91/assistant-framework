@@ -167,6 +167,29 @@ without_docs_eval_forbidden() {
     ' "$source" >"$destination"
 }
 
+test_start "workflow filtered fixtures remain idempotent after optional authority removal"
+workflow_filter_idempotence_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-filter-idempotence.XXXXXX")"
+p0p4_register_cleanup "$workflow_filter_idempotence_root"
+p0p4_filter_workflow_eval_cases \
+    "$workflow_dir/evals/cases.json" \
+    "$workflow_filter_idempotence_root/first.json" \
+    "architecture-pack-resists-premature-abstraction"
+if p0p4_filter_workflow_eval_cases \
+    "$workflow_filter_idempotence_root/first.json" \
+    "$workflow_filter_idempotence_root/second.json" \
+    "architecture-pack-resists-premature-abstraction" \
+    && jq -e '
+        (.cases | length) == 1
+        and .cases[0].id == "architecture-pack-resists-premature-abstraction"
+        and (has("canonical_review_batch_expectations") | not)
+        and (has("canonical_review_snapshot_expectations") | not)
+        and (has("canonical_review_closure_expectations") | not)
+    ' "$workflow_filter_idempotence_root/second.json" >/dev/null; then
+    pass
+else
+    fail "workflow filtered fixture did not preserve optional-authority absence across repeated filtering"
+fi
+
 test_start "architecture triage treats extension seams and material extensibility as Pack triggers"
 if ruby -ryaml -e '
   input = YAML.load_file(ARGV.fetch(0))
@@ -318,7 +341,13 @@ workflow_identity_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-identity-inte
 p0p4_register_cleanup "$workflow_identity_eval_root"
 mkdir -p "$workflow_identity_eval_root/skill" "$workflow_identity_eval_root/skill/evals"
 cp "$workflow_skill" "$workflow_identity_eval_root/skill/SKILL.md"
-jq '.skill = "skill" | .cases = [.cases[] | select(.id | startswith("architecture-pack-") and endswith("-blocks"))]' "$workflow_dir/evals/cases.json" >"$workflow_identity_eval_root/skill/evals/cases.json"
+workflow_identity_case_ids=()
+while IFS= read -r workflow_identity_case_id; do
+    workflow_identity_case_ids+=("$workflow_identity_case_id")
+done < <(jq -r '.cases[] | select(.id | startswith("architecture-pack-") and endswith("-blocks")) | .id' "$workflow_dir/evals/cases.json")
+p0p4_filter_workflow_eval_cases "$workflow_dir/evals/cases.json" "$workflow_identity_eval_root/skill/evals/cases.json" "${workflow_identity_case_ids[@]}"
+jq '.skill = "skill"' "$workflow_identity_eval_root/skill/evals/cases.json" >"$workflow_identity_eval_root/skill/evals/cases.next.json"
+mv "$workflow_identity_eval_root/skill/evals/cases.next.json" "$workflow_identity_eval_root/skill/evals/cases.json"
 workflow_identity_grader_failures=()
 while IFS=$'\t' read -r case_id expected_missing_field; do
     workflow_identity_required="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_identity_eval_root/skill/evals/cases.json" | paste -sd ' ' -)"
@@ -329,7 +358,7 @@ if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_iden
 fi
 while IFS=$'\t' read -r case_id expected_missing_field; do
     workflow_identity_required="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_identity_eval_root/skill/evals/cases.json" | paste -sd ' ' -)"
-    jq '.cases = [.cases[] | select(.id == $case_id)]' --arg case_id "$case_id" "$workflow_identity_eval_root/skill/evals/cases.json" >"$workflow_identity_eval_root/skill/evals/one-case.json"
+    p0p4_filter_workflow_eval_cases "$workflow_identity_eval_root/skill/evals/cases.json" "$workflow_identity_eval_root/skill/evals/one-case.json" "$case_id"
     mv "$workflow_identity_eval_root/skill/evals/one-case.json" "$workflow_identity_eval_root/skill/evals/cases.json"
     rm -f "$workflow_identity_eval_root/skill"/*.txt
     jq -n --arg summary "$workflow_identity_required" --arg expected_missing_field "$expected_missing_field" '{summary: $summary, validation_result: {status: "accepted", missing_field: $expected_missing_field, evidence_or_gap: "Candidate violates the named invariant."}}' >"$workflow_identity_eval_root/skill/$case_id.txt"
@@ -340,7 +369,9 @@ while IFS=$'\t' read -r case_id expected_missing_field; do
         || ! grep -Fq 'structured_json_assertion_failures=1' "$workflow_identity_eval_root/grader.out"; then
         workflow_identity_grader_failures+=("$case_id unsafe response did not fail its sole structured assertion")
     fi
-    jq '.skill = "skill" | .cases = [.cases[] | select(.id | startswith("architecture-pack-") and endswith("-blocks"))]' "$workflow_dir/evals/cases.json" >"$workflow_identity_eval_root/skill/evals/cases.json"
+    p0p4_filter_workflow_eval_cases "$workflow_dir/evals/cases.json" "$workflow_identity_eval_root/skill/evals/cases.json" "${workflow_identity_case_ids[@]}"
+    jq '.skill = "skill"' "$workflow_identity_eval_root/skill/evals/cases.json" >"$workflow_identity_eval_root/skill/evals/cases.next.json"
+    mv "$workflow_identity_eval_root/skill/evals/cases.next.json" "$workflow_identity_eval_root/skill/evals/cases.json"
     jq -n --arg summary "$workflow_identity_required" --arg expected_missing_field "$expected_missing_field" '{summary: $summary, validation_result: {status: "blocked", missing_field: $expected_missing_field, evidence_or_gap: "Candidate violates the named invariant."}}' >"$workflow_identity_eval_root/skill/$case_id.txt"
 done < <(jq -r '.cases[] | select(.id | startswith("architecture-pack-") and endswith("-blocks")) | [.id, (.machine_expectations.structured_json_assertions[] | select(.path == ["validation_result", "missing_field"]) | .expected)] | @tsv' "$workflow_identity_eval_root/skill/evals/cases.json")
 if [[ ${#workflow_identity_grader_failures[@]} -eq 0 ]]; then pass; else fail "real grader accepted or did not independently reject Pack identity invariants: ${workflow_identity_grader_failures[*]}"; fi
@@ -1213,7 +1244,7 @@ run_pack_structured_eval() {
     responses_dir="$eval_root/responses"
     mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
     cp "$workflow_skill" "$temporary_skill/SKILL.md"
-    jq '.cases = [.cases[] | select(.id == "architecture-pack-resists-premature-abstraction")]' "$fixture" >"$temporary_skill/evals/cases.json"
+    p0p4_filter_workflow_eval_cases "$fixture" "$temporary_skill/evals/cases.json" "architecture-pack-resists-premature-abstraction"
     printf '%s\n' "$response" >"$responses_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.txt"
     if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill" 2>&1)"; then
         if [[ "$expected_status" != "FAIL" ]]; then
@@ -1481,7 +1512,7 @@ run_standard_pack_review_eval() {
     responses_dir="$eval_root/responses"
     mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
     cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$temporary_skill/SKILL.md"
-    jq '.cases = [.cases[] | select(.id == "standard-pack-review-result-retains-checklist")]' "$fixture" >"$temporary_skill/evals/cases.json"
+    p0p4_filter_workflow_eval_cases "$fixture" "$temporary_skill/evals/cases.json" "standard-pack-review-result-retains-checklist"
     printf '%s\n' "$response" >"$responses_dir/assistant-workflow/standard-pack-review-result-retains-checklist.txt"
     if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill" 2>&1)"; then
         [[ "$expected_status" == "FAIL" ]] || return 1
@@ -1508,7 +1539,7 @@ run_workflow_case_eval() {
     responses_dir="$eval_root/responses"
     mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
     cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$temporary_skill/SKILL.md"
-    jq --arg case_id "$case_id" '.cases = [.cases[] | select(.id == $case_id)]' "$fixture" >"$temporary_skill/evals/cases.json"
+    p0p4_filter_workflow_eval_cases "$fixture" "$temporary_skill/evals/cases.json" "$case_id"
     printf '%s\n' "$response" >"$responses_dir/assistant-workflow/$case_id.txt"
     if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill" 2>&1)"; then
         if [[ "$expected_status" != "FAIL" ]]; then
@@ -2267,9 +2298,12 @@ for case_id in incomplete-review-blocks-clean-final-handoff blocked-qa-blocks-cl
     if [[ "$case_id" == incomplete-* ]]; then
         if ! jq -e '
           .canonical_final_summary.artifact.aggregation_ledger == [{
-            source_provenance:[{source_kind:"review_pass",source_id:"pass-failure-paths"}],
-            source_pass_ids:["pass-failure-paths"],
-            source_coverage_gap_ids:["coverage-gap:batch-current:pass-failure-paths"],
+            source_provenance:[{source_kind:"review_pass",source_id:"pass-consumer"}],
+            source_pass_ids:["pass-consumer"],
+            source_coverage_gap_ids:[
+              "coverage-gap:batch-current:pass-consumer:canonical-producer-consumption",
+              "coverage-gap:batch-current:pass-consumer:canonical-producer-failure-handling"
+            ],
             disposition:"coverage_gap",
             rationale:"The failed final-batch pass leaves an unresolved coverage gap."
           }]

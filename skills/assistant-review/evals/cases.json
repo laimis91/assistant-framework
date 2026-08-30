@@ -41,6 +41,8 @@
         ],
         "required_coverage_tuples": [
           {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
           {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"}
         ]
       },
@@ -66,6 +68,8 @@
         ],
         "required_coverage_tuples": [
           {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
           {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"}
         ]
       },
@@ -92,7 +96,13 @@
         ],
         "required_coverage_tuples": [
           {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"previously_fixed","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
           {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"previously_fixed","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-closure","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"closure_verification","coverage_obligation":"verify previously fixed finding"},
+          {"review_pass_id":"pass-closure","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"closure_verification","coverage_obligation":"verify previously fixed finding"},
           {"review_pass_id":"pass-closure","scope_item_id":"scope-1","applicable_concern":"previously_fixed","review_perspective":"closure_verification","coverage_obligation":"verify previously fixed finding"}
         ]
       },
@@ -119,10 +129,22 @@
         ],
         "required_coverage_tuples": [
           {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"integration","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
           {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"integration","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-integration","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"integration_compatibility_and_consumers","coverage_obligation":"integration"},
+          {"review_pass_id":"pass-integration","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"integration_compatibility_and_consumers","coverage_obligation":"integration"},
           {"review_pass_id":"pass-integration","scope_item_id":"scope-1","applicable_concern":"integration","review_perspective":"integration_compatibility_and_consumers","coverage_obligation":"integration"}
         ]
       }
+    },
+    "scope_manifests": {
+      "small_base": [{"scope_item_id":"scope-1","locator":"skills/assistant-review/evals/cases.json#small_base","content_digest":"sha256:assistant-review-small-base","applicable_concerns":["contract","runtime"]}],
+      "trivial_base": [{"scope_item_id":"scope-1","locator":"skills/assistant-review/evals/cases.json#trivial_base","content_digest":"sha256:assistant-review-trivial-base","applicable_concerns":["contract","runtime"]}],
+      "small_post_fix_closure": [{"scope_item_id":"scope-1","locator":"skills/assistant-review/evals/cases.json#small_post_fix_closure","content_digest":"sha256:assistant-review-small-closure","applicable_concerns":["contract","runtime","previously_fixed"]}],
+      "medium_inflight_invalidation": [{"scope_item_id":"scope-1","locator":"skills/assistant-review/evals/cases.json#medium_inflight_invalidation","content_digest":"sha256:assistant-review-medium-invalidation","applicable_concerns":["contract","runtime","integration"]}]
     },
     "case_template_refs": {
       "audit-batch-waits-for-all-pass-results": "small_base",
@@ -133,7 +155,22 @@
       "audit-spec-review-fail-continues-complete-batch": "small_base",
       "in-flight-mutation-invalidates-review-batch": "medium_inflight_invalidation",
       "trivial-audit-uses-two-isolated-passes": "trivial_base"
+    },
+    "case_requirements": {
+      "audit-batch-waits-for-all-pass-results": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "incomplete-review-batch-never-cleans": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "post-fix-review-uses-fresh-snapshot-batch": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "post-fix-verified-closure-with-incomplete-coverage": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "post-fix-review-regression-remains-open": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "audit-spec-review-fail-continues-complete-batch": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "in-flight-mutation-invalidates-review-batch": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "trivial-audit-uses-two-isolated-passes": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"}
     }
+  },
+  "canonical_qa_case_requirements": {
+    "qa-obligation-echo-fulfills-exact-binding": {"required_artifacts":["qa_evaluation_result","qa_evaluation_delegation_path"]},
+    "qa-obligation-blocks-missing-or-mismatched-binding": {"required_artifacts":["qa_evaluation_result","qa_evaluation_delegation_path"]},
+    "qa-obligation-blocked-when-required-evidence-is-unavailable": {"required_artifacts":["qa_evaluation_result","qa_evaluation_delegation_path"]}
   },
   "canonical_review_closure_expectations": {
     "post-fix-review-uses-fresh-snapshot-batch": [
@@ -323,7 +360,7 @@
         "structured_json_assertions": [
           {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
           {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
-          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","runtime_lifecycle_and_failure_paths"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","contract_and_test_oracle","runtime_lifecycle_and_failure_paths","runtime_lifecycle_and_failure_paths"]},
           {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["complete"]},
           {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":2,"terminal_response_count":2}]},
           {"operator":"array_field_values_exact","path":["final_summary","aggregated_findings"],"field":"finding_id","expected_values":["review_pass:pass-runtime:finding-1"]},
@@ -356,11 +393,11 @@
         "structured_json_assertions": [
           {"operator":"equals","path":["final_summary","coverage_complete"],"expected":false},
           {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
-          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["completed","timed_out"]},
-          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"coverage_status","expected_values":["complete","incomplete"]},
-          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",1,"coverage_gap_id"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["completed","completed","timed_out","timed_out"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"coverage_status","expected_values":["complete","complete","incomplete","incomplete"]},
+          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",2,"coverage_gap_id"]},
           {"operator":"array_field_values_exact","path":["final_summary","aggregation_ledger"],"field":"disposition","expected_values":["coverage_gap"]},
-          {"operator":"equals","path":["final_summary","aggregation_ledger",0,"source_coverage_gap_ids"],"expected":["coverage-gap:batch-1:pass-runtime:scope-1:runtime"]},
+          {"operator":"equals","path":["final_summary","aggregation_ledger",0,"source_coverage_gap_ids"],"expected":["coverage-gap:batch-1:pass-runtime:scope-1:contract","coverage-gap:batch-1:pass-runtime:scope-1:runtime"]},
           {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["incomplete"]}
         ]
       }
@@ -394,7 +431,7 @@
           {"operator":"array_field_values_exact","path":["final_summary","final_batch_plan","expected_passes"],"field":"perspective","expected_values":["contract_and_test_oracle","runtime_lifecycle_and_failure_paths","closure_verification"]},
           {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["invalidated","complete"]},
           {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":2,"terminal_response_count":1},{"expected_response_count":3,"terminal_response_count":3}]},
-          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["invalidated","invalidated","completed","completed","completed"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["invalidated","invalidated","invalidated","invalidated","completed","completed","completed","completed","completed","completed","completed","completed","completed"]},
           {"operator":"array_field_values_exact","path":["final_summary","fixed_items"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
           {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
           {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"status","expected_values":["verified_closed"]},
@@ -434,8 +471,8 @@
           {"operator":"array_field_values_exact","path":["final_summary","fixed_items"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
           {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"status","expected_values":["verified_closed"]},
           {"operator":"equals","path":["final_summary","aggregated_findings"],"expected":[]},
-          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["invalidated","invalidated","completed","timed_out","completed"]},
-          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",3,"coverage_gap_id"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["invalidated","invalidated","invalidated","invalidated","completed","completed","completed","timed_out","timed_out","timed_out","completed","completed","completed"]},
+          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",6,"coverage_gap_id"]},
           {"operator":"array_field_values_exact","path":["final_summary","aggregation_ledger"],"field":"disposition","expected_values":["fixed_closed","coverage_gap"]},
           {"operator":"path_absent","path":["final_summary","evidence_bounded_claim"]}
         ]
@@ -1803,7 +1840,7 @@
           {"operator":"equals","path":["final_summary","coverage_complete"],"expected":false},
           {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
           {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["invalidated"]},
-          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","runtime_lifecycle_and_failure_paths","integration_compatibility_and_consumers"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","contract_and_test_oracle","contract_and_test_oracle","runtime_lifecycle_and_failure_paths","runtime_lifecycle_and_failure_paths","runtime_lifecycle_and_failure_paths","integration_compatibility_and_consumers","integration_compatibility_and_consumers","integration_compatibility_and_consumers"]},
           {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":3,"terminal_response_count":2}]}
         ]
       }
@@ -1832,7 +1869,7 @@
         "structured_json_assertions": [
           {"operator":"equals","path":["review_delegation_path","subagent_execution_mode"],"expected":"direct_fallback"},
           {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
-          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","runtime_lifecycle_and_failure_paths"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","contract_and_test_oracle","runtime_lifecycle_and_failure_paths","runtime_lifecycle_and_failure_paths"]},
           {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":2,"terminal_response_count":2}]},
           {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["complete"]}
         ]

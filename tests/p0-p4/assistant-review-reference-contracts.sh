@@ -1676,8 +1676,11 @@ if ruby -ryaml -rjson -e '
   plan_fields = plan.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   case_item = cases.fetch("cases").find { |entry| entry.fetch("id") == "post-fix-review-uses-fresh-snapshot-batch" }
   batch_expectations = cases.fetch("canonical_review_batch_expectations")
+  qa_case_requirements = cases.fetch("canonical_qa_case_requirements")
   closure_expectations = cases.fetch("canonical_review_closure_expectations")
   expectation_refs = batch_expectations.fetch("case_template_refs")
+  case_requirements = batch_expectations.fetch("case_requirements")
+  scope_manifests = batch_expectations.fetch("scope_manifests")
   post_fix_expectation = batch_expectations.fetch("templates").fetch(expectation_refs.fetch("post-fix-review-uses-fresh-snapshot-batch"))
   trivial_expectation = batch_expectations.fetch("templates").fetch(expectation_refs.fetch("trivial-audit-uses-two-isolated-passes"))
   post_fix_paths = case_item.fetch("machine_expectations").fetch("structured_json_assertions").select { |assertion| assertion.fetch("operator") == "nonempty_string" }.map { |assertion| assertion.fetch("path") }
@@ -1685,6 +1688,22 @@ if ruby -ryaml -rjson -e '
   expected_names = %w[review_pass_id perspective assigned_scope coverage_obligations prior_finding_visibility]
   fixed_fields = final.fetch("fixed_items").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   closure_results = final.fetch("closure_results")
+  template_scope_authority_valid = batch_expectations.fetch("templates").all? do |template_ref, template|
+    manifest = scope_manifests[template_ref]
+    next false unless manifest.is_a?(Array) && !manifest.empty?
+    manifest_by_scope = manifest.to_h { |item| [item["scope_item_id"], item] }
+    expected = template.fetch("expected_passes").flat_map do |review_pass|
+      review_pass.fetch("assigned_scope").flat_map do |scope_item_id|
+        Array(manifest_by_scope.dig(scope_item_id, "applicable_concerns")).flat_map do |concern|
+          review_pass.fetch("coverage_obligations").map do |obligation|
+            [review_pass.fetch("review_pass_id"), scope_item_id, concern, review_pass.fetch("perspective"), obligation]
+          end
+        end
+      end
+    end
+    actual = template.fetch("required_coverage_tuples").map { |tuple| [tuple["review_pass_id"], tuple["scope_item_id"], tuple["applicable_concern"], tuple["review_perspective"], tuple["coverage_obligation"]] }
+    actual.uniq.length == actual.length && actual.sort == expected.sort
+  end
   valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "7.1" } &&
     entry_names.include?("previously_fixed") && entry_names.include?("persisted_v6_packet_migration") && entry_names.include?("persisted_v7_0_packet_invalidation") &&
     previous.key?("aggregate_finding_id") && previous.fetch("source_finding_ids").fetch("condition").include?("producer schema 7.1") && previous.fetch("source_provenance").fetch("condition").include?("producer schema 7.1") && !previous.key?("finding_id") &&
@@ -1700,7 +1719,15 @@ if ruby -ryaml -rjson -e '
     plan_fields.fetch("expected_passes").fetch("object_fields").map { |field| field.slice("type", "required", "enum_values") } == expected_pass_fields.map { |field| field.slice("type", "required", "enum_values") } &&
     review_delegation.fetch("validation").include?("not_required requires direct_fallback") && !review_trigger_scope.key?("min_items") && review_trigger_scope.fetch("validation").include?("empty only when not_required + direct_fallback") &&
     qa_delegation.fetch("validation").include?("delegation_triggered requires delegated") && !qa_trigger_scope.key?("min_items") && qa_trigger_scope.fetch("validation").include?("empty only when not_required + not_applicable") &&
+    batch_expectations.keys.sort == %w[case_requirements case_template_refs scope_manifests templates] && scope_manifests.keys.sort == batch_expectations.fetch("templates").keys.sort && case_requirements.keys.sort == expectation_refs.keys.sort && template_scope_authority_valid &&
     expectation_refs.keys.sort == %w[audit-batch-waits-for-all-pass-results audit-spec-review-fail-continues-complete-batch in-flight-mutation-invalidates-review-batch incomplete-review-batch-never-cleans post-fix-review-regression-remains-open post-fix-review-uses-fresh-snapshot-batch post-fix-verified-closure-with-incomplete-coverage trivial-audit-uses-two-isolated-passes].sort &&
+    case_requirements.all? { |case_id, requirement| requirement.keys.sort == %w[mode required_artifacts required_envelope_alias] && requirement.fetch("required_envelope_alias") == "final_summary" && requirement.fetch("required_artifacts").include?("final_summary") && requirement.fetch("required_artifacts").include?("review_delegation_path") && (requirement.fetch("mode") == "audit") == requirement.fetch("required_artifacts").include?("audit_report") } &&
+    case_requirements.fetch("incomplete-review-batch-never-cleans") == {"mode" => "audit", "required_artifacts" => ["final_summary", "audit_report", "review_delegation_path"], "required_envelope_alias" => "final_summary"} &&
+    qa_case_requirements == {
+      "qa-obligation-echo-fulfills-exact-binding" => {"required_artifacts" => ["qa_evaluation_result", "qa_evaluation_delegation_path"]},
+      "qa-obligation-blocks-missing-or-mismatched-binding" => {"required_artifacts" => ["qa_evaluation_result", "qa_evaluation_delegation_path"]},
+      "qa-obligation-blocked-when-required-evidence-is-unavailable" => {"required_artifacts" => ["qa_evaluation_result", "qa_evaluation_delegation_path"]}
+    } &&
     trivial_expectation.fetch("scope_size") == "trivial" &&
     post_fix_expectation.fetch("topology").fetch("closure_verification_required") == true && post_fix_expectation.fetch("expected_passes").any? { |pass| pass.fetch("perspective") == "closure_verification" } &&
     closure_expectations.fetch("post-fix-review-uses-fresh-snapshot-batch") == closure_expectations.fetch("post-fix-review-regression-remains-open") && closure_expectations.fetch("post-fix-review-uses-fresh-snapshot-batch") == closure_expectations.fetch("post-fix-verified-closure-with-incomplete-coverage") && closure_expectations.fetch("post-fix-review-uses-fresh-snapshot-batch").first.fetch("aggregate_finding_id") == "aggregate-fixed-1" &&
