@@ -32,6 +32,41 @@ test_sha256_directory() {
     printf '%s' "$inventory" | test_sha256_stream
 }
 
+test_sha256_inventory() {
+    local directory="$1" inventory="" entry relative digest target
+    while IFS= read -r entry; do
+        relative="${entry#"$directory"/}"
+        if [[ -L "$entry" ]]; then
+            target="$(readlink "$entry")"
+            inventory+="symlink $relative $target"$'\n'
+        elif [[ -f "$entry" ]]; then
+            digest="$(test_sha256_stream <"$entry")"
+            inventory+="file $relative $digest"$'\n'
+        elif [[ -d "$entry" ]]; then
+            inventory+="directory $relative"$'\n'
+        elif [[ -p "$entry" ]]; then
+            inventory+="fifo $relative"$'\n'
+        elif [[ -b "$entry" ]]; then
+            inventory+="block $relative"$'\n'
+        elif [[ -c "$entry" ]]; then
+            inventory+="character $relative"$'\n'
+        elif [[ -S "$entry" ]]; then
+            inventory+="socket $relative"$'\n'
+        else
+            inventory+="other $relative"$'\n'
+        fi
+    done < <(find "$directory" -mindepth 1 -print | LC_ALL=C sort)
+    printf '%s' "$inventory" | test_sha256_stream
+}
+
+test_mode_octal() {
+    local path="$1"
+    case "$(uname -s)" in
+        Darwin|FreeBSD) stat -f '%Lp' "$path" ;;
+        *) stat -c '%a' "$path" ;;
+    esac
+}
+
 fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-behavioral-eval-test.XXXXXX")"
 p0p4_register_cleanup "$fixture_root"
 baseline="$fixture_root/baseline"
@@ -1879,17 +1914,15 @@ symlink_output="$fixture_root/symlink-output"
 mkdir -p "$symlink_target"
 chmod 755 "$symlink_target"
 ln -s "$symlink_target" "$symlink_output"
-if symlink_target_mode="$(stat -f '%Lp' "$symlink_target" 2>/dev/null)"; then
-    :
-else
-    symlink_target_mode="$(stat -c '%a' "$symlink_target")"
-fi
+symlink_target_mode="$(test_mode_octal "$symlink_target")"
+symlink_target_hash="$(test_sha256_inventory "$symlink_target")"
 if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
     --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$symlink_output" \
     --codex-bin "$fake_codex" >/dev/null 2>&1 \
     && [[ ! -e "$symlink_target/run-plan.json" ]] \
-    && [[ "$symlink_target_mode" == "755" ]]; then
+    && [[ "$(test_mode_octal "$symlink_target")" == "$symlink_target_mode" ]] \
+    && [[ "$(test_sha256_inventory "$symlink_target")" == "$symlink_target_hash" ]]; then
     pass
 else
     fail "fresh output followed a symlink or changed its target"
@@ -1901,7 +1934,8 @@ nonempty_output="$fixture_root/nonempty-admission-output"
 mkdir -p "$nonempty_output"
 chmod 755 "$nonempty_output"
 printf 'preserve\n' >"$nonempty_output/sentinel"
-if nonempty_mode="$(stat -f '%Lp' "$nonempty_output" 2>/dev/null)"; then :; else nonempty_mode="$(stat -c '%a' "$nonempty_output")"; fi
+nonempty_mode="$(test_mode_octal "$nonempty_output")"
+nonempty_hash="$(test_sha256_inventory "$nonempty_output")"
 rm -f "$capture"/*
 if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
     --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
@@ -1909,7 +1943,8 @@ if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
     --codex-bin "$fake_codex" >"$fixture_root/nonempty-admission.stderr" 2>&1 \
     && grep -Fq -- '--output must be empty or not yet exist' "$fixture_root/nonempty-admission.stderr" \
     && [[ "$(cat "$nonempty_output/sentinel")" == "preserve" ]] \
-    && [[ "$(stat -f '%Lp' "$nonempty_output" 2>/dev/null || stat -c '%a' "$nonempty_output")" == "$nonempty_mode" ]] \
+    && [[ "$(test_mode_octal "$nonempty_output")" == "$nonempty_mode" ]] \
+    && [[ "$(test_sha256_inventory "$nonempty_output")" == "$nonempty_hash" ]] \
     && [[ ! -e "$nonempty_output/.evaluation-lease" ]] \
     && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]]; then
     pass
@@ -2533,16 +2568,16 @@ for nested_spec in \
         fifo) mkfifo "$nested_output/$nested_dir/.unexpected-fifo" ;;
     esac
     chmod 755 "$nested_output"
-    nested_mode="$(stat -f '%Lp' "$nested_output" 2>/dev/null || stat -c '%a' "$nested_output")"
-    nested_hash="$(test_sha256_directory "$nested_output")"
+    nested_mode="$(test_mode_octal "$nested_output")"
+    nested_hash="$(test_sha256_inventory "$nested_output")"
     rm -f "$capture"/*
     if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
         --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
         --cases small-fix-stays-lightweight --repeats 1 --output "$nested_output" \
         --codex-bin "$fake_codex" >/dev/null 2>&1 \
         || [[ -e "$capture/call-0.args" ]] \
-        || [[ "$(stat -f '%Lp' "$nested_output" 2>/dev/null || stat -c '%a' "$nested_output")" != "$nested_mode" ]] \
-        || [[ "$(test_sha256_directory "$nested_output")" != "$nested_hash" ]]; then
+        || [[ "$(test_mode_octal "$nested_output")" != "$nested_mode" ]] \
+        || [[ "$(test_sha256_inventory "$nested_output")" != "$nested_hash" ]]; then
         resume_nested_inventory_failures+=("$nested_dir:$nested_kind")
     fi
 done
@@ -2570,15 +2605,15 @@ for resume_admission_kind in mismatched-plan missing-evidence tampered-artifact;
             ;;
     esac
     chmod 755 "$resume_admission_output"
-    if resume_admission_mode="$(stat -f '%Lp' "$resume_admission_output" 2>/dev/null)"; then :; else resume_admission_mode="$(stat -c '%a' "$resume_admission_output")"; fi
-    resume_admission_hash="$(test_sha256_directory "$resume_admission_output")"
+    resume_admission_mode="$(test_mode_octal "$resume_admission_output")"
+    resume_admission_hash="$(test_sha256_inventory "$resume_admission_output")"
     rm -f "$capture"/*
     if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
         --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
         --cases small-fix-stays-lightweight --repeats 1 --output "$resume_admission_output" \
         --codex-bin "$fake_codex" >/dev/null 2>&1 \
-        || [[ "$(stat -f '%Lp' "$resume_admission_output" 2>/dev/null || stat -c '%a' "$resume_admission_output")" != "$resume_admission_mode" ]] \
-        || [[ "$(test_sha256_directory "$resume_admission_output")" != "$resume_admission_hash" ]] \
+        || [[ "$(test_mode_octal "$resume_admission_output")" != "$resume_admission_mode" ]] \
+        || [[ "$(test_sha256_inventory "$resume_admission_output")" != "$resume_admission_hash" ]] \
         || [[ -e "$capture/call-0.args" ]]; then
         resume_admission_failures+=("$resume_admission_kind")
     fi
