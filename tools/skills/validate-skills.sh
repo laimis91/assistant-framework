@@ -610,6 +610,17 @@ validate_contract_file() {
     esac
 }
 
+require_contract_yaml_runtime() {
+    if ! command -v ruby >/dev/null 2>&1; then
+        printf 'ERROR [PREREQUISITE_RUBY] Ruby with Psych/YAML support is required for contract validation.\n' >&2
+        exit 2
+    fi
+    if ! ruby -ryaml -e 'exit(defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file) ? 0 : 1)' >/dev/null 2>&1; then
+        printf 'ERROR [PREREQUISITE_RUBY_YAML] Ruby with Psych/YAML support is required for contract validation.\n' >&2
+        exit 2
+    fi
+}
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -668,6 +679,8 @@ if [[ "$LIST_ONLY" == true ]]; then
     done
     exit 0
 fi
+
+require_contract_yaml_runtime
 
 if [[ "${#SKILL_FILES[@]}" -eq 0 ]]; then
     record_error "INVENTORY_EMPTY" "$REPO_ROOT/skills" "no skills found in selected inventory"

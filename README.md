@@ -181,8 +181,10 @@ test steps, deviations, and remaining risks without claiming checks that did
 not run.
 
 Each executable slice carries an explicit verification command and evidence
-requirement. Dependent slices wait for verified prerequisites; native subagents
-run in parallel only for independent packets with non-overlapping ownership.
+requirement. Dependent slices wait for verified prerequisites. Read-only analysis
+may run in parallel for independent packets with non-overlapping ownership.
+Source-changing packets in a shared or unknown workspace remain sequential;
+parallel source-changing packets require runtime proof of isolated workspaces.
 After integration, rerun cross-slice and full-scope validation and perform a
 fresh review before completion.
 
@@ -269,6 +271,8 @@ Roslyn-based analyzer that scores method complexity. Used by the workflow skill'
 ### Skill Validator
 
 Source validator for first-class skill metadata and contract structure:
+
+Requires Ruby with Psych/YAML support (`ruby -ryaml`) for contract parsing.
 
 ```bash
 tools/skills/validate-skills.sh

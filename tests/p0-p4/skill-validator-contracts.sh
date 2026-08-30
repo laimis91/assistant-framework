@@ -70,6 +70,25 @@ else
     fail "default validator run failed"
 fi
 
+test_start "skill validator fails fast when Ruby Psych YAML support is unavailable"
+runtime_prerequisite_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-runtime-prerequisite.XXXXXX")"
+p0p4_register_cleanup "$runtime_prerequisite_root"
+mkdir -p "$runtime_prerequisite_root/bin"
+cat >"$runtime_prerequisite_root/bin/ruby" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "$runtime_prerequisite_root/bin/ruby"
+runtime_prerequisite_err="$runtime_prerequisite_root/stderr"
+if PATH="$runtime_prerequisite_root/bin:$PATH" "$skill_validator" >/dev/null 2>"$runtime_prerequisite_err"; then
+    fail "validator accepted an unusable Ruby Psych/YAML runtime"
+elif grep -Fq "PREREQUISITE_RUBY_YAML" "$runtime_prerequisite_err" \
+    && grep -Fq "Ruby with Psych/YAML support is required" "$runtime_prerequisite_err"; then
+    pass
+else
+    fail "validator did not emit the Ruby Psych/YAML prerequisite diagnostic, stderr=$(cat "$runtime_prerequisite_err")"
+fi
+
 test_start "skill validator default list includes assistant skills and excludes local unity skills"
 list_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-list.XXXXXX")"
 p0p4_register_cleanup "$list_fixture_root"

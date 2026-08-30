@@ -34,6 +34,28 @@ shard_job = jobs["contract-shards"]
 errors << "missing framework-contracts job" unless fast_job.is_a?(Hash)
 errors << "missing contract-shards job" unless shard_job.is_a?(Hash)
 
+validate_ruby_prerequisite = lambda do |job, job_name, contract_step_name|
+  next unless job.is_a?(Hash)
+
+  steps = job.fetch("steps", [])
+  prerequisite_indexes = steps.each_index.select do |index|
+    step = steps[index]
+    next false unless step.is_a?(Hash) && step["name"] == "Verify runner prerequisites"
+    run = step["run"]
+    run.is_a?(String) && run.lines.any? { |line| line.strip == "command -v ruby" } &&
+      run.lines.any? { |line| line.strip.start_with?("ruby -ryaml -e ") }
+  end
+  contract_index = steps.index { |step| step.is_a?(Hash) && step["name"] == contract_step_name }
+  if prerequisite_indexes.empty?
+    errors << "#{job_name} must verify Ruby with Psych/YAML support"
+  elsif contract_index && prerequisite_indexes.none? { |index| index < contract_index }
+    errors << "#{job_name} Ruby/Psych verification must precede #{contract_step_name}"
+  end
+end
+
+validate_ruby_prerequisite.call(fast_job, "framework-contracts", "Run aggregate framework contracts")
+validate_ruby_prerequisite.call(shard_job, "contract-shards", "Run long contract shard")
+
 excluded_suites = []
 matrix_suites = []
 if fast_job.is_a?(Hash)
@@ -108,11 +130,11 @@ else
     fail "P0-P4 CI schedule violations: $(cat "$ci_schedule_output")"
 fi
 
-test_start "P0-P4 CI schedule oracle rejects missing, orphaned, and bypassed suites"
+test_start "P0-P4 CI schedule oracle rejects missing, orphaned, bypassed, and misplaced prerequisites"
 ci_schedule_mutation_dir="$(mktemp -d)"
 p0p4_register_cleanup "$ci_schedule_mutation_dir"
 ci_schedule_mutation_failures=()
-for ci_schedule_mutation in missing_aggregate_suite orphaned_shard_suite unguarded_shard_suite mismatched_shard_guard; do
+for ci_schedule_mutation in missing_aggregate_suite orphaned_shard_suite unguarded_shard_suite mismatched_shard_guard misplaced_shard_ruby_prerequisite; do
     ci_schedule_mutation_aggregate="$ci_schedule_mutation_dir/$ci_schedule_mutation-aggregate.sh"
     ci_schedule_mutation_workflow="$ci_schedule_mutation_dir/$ci_schedule_mutation-workflow.yml"
     cp "$FRAMEWORK_DIR/tests/test-p0-p4-contracts.sh" "$ci_schedule_mutation_aggregate"
@@ -158,6 +180,25 @@ needle = "if ! p0p4_suite_is_excluded \"skill-eval-contracts.sh\"; then\n"
 abort "missing shard guard mutation target" unless contents.include?(needle)
 File.write(path, contents.sub(needle, "if ! p0p4_suite_is_excluded \"progressive-discovery-contracts.sh\"; then\n"))
 ' "$ci_schedule_mutation_aggregate"
+            ;;
+        misplaced_shard_ruby_prerequisite)
+            ruby -e '
+path = ARGV.fetch(0)
+contents = File.read(path)
+block = <<YAML
+      - name: Verify runner prerequisites
+        run: |
+          command -v ruby
+          ruby -ryaml -e '\''abort "Psych/YAML unavailable" unless defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file)'\''
+
+YAML
+index = contents.rindex(block)
+abort "missing shard Ruby/Psych prerequisite mutation target" unless index
+contents.slice!(index, block.length)
+marker = "      - name: Run aggregate framework contracts\n"
+abort "missing aggregate step mutation target" unless contents.include?(marker)
+File.write(path, contents.sub(marker, block + marker))
+' "$ci_schedule_mutation_workflow"
             ;;
     esac
     if validate_p0p4_ci_schedule "$ci_schedule_mutation_aggregate" "$ci_schedule_mutation_workflow" "$FRAMEWORK_DIR/tests/p0-p4" >/dev/null 2>&1; then
@@ -271,6 +312,52 @@ if [[ "${#ripgrep_setup_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "general CI ripgrep setup violations: ${ripgrep_setup_failures[*]}"
+fi
+
+test_start "general CI verifies Ruby Psych before every contract job"
+ruby_setup_failures=()
+if [[ ! -f "$framework_validation_workflow" ]]; then
+    ruby_setup_failures+=("missing .github/workflows/framework-validation.yml")
+else
+    ruby_verify_count="$(grep -Ec '^[[:space:]]+command -v ruby[[:space:]]*$' "$framework_validation_workflow" || true)"
+    psych_verify_count="$(grep -Ec '^[[:space:]]+ruby -ryaml -e ' "$framework_validation_workflow" || true)"
+    first_ruby_verify_line="$(grep -nF -- "command -v ruby" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+    aggregate_contract_line="$(grep -nF -- "./tests/test-p0-p4-contracts.sh" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+    second_ruby_verify_line="$(grep -nF -- "command -v ruby" "$framework_validation_workflow" | sed -n '2s/:.*//p' || true)"
+    shard_contract_line="$(grep -nF -- 'bash "tests/p0-p4/${{ matrix.suite }}"' "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+
+    [[ "$ruby_verify_count" -eq 2 ]] || ruby_setup_failures+=("framework-validation.yml: both contract jobs must verify Ruby")
+    [[ "$psych_verify_count" -eq 2 ]] || ruby_setup_failures+=("framework-validation.yml: both contract jobs must verify Psych/YAML")
+    if [[ -z "$first_ruby_verify_line" || -z "$aggregate_contract_line" ]] \
+        || ! (( first_ruby_verify_line < aggregate_contract_line )); then
+        ruby_setup_failures+=("framework-validation.yml: Ruby verification must precede aggregate contracts")
+    fi
+    if [[ -z "$second_ruby_verify_line" || -z "$shard_contract_line" ]] \
+        || ! (( second_ruby_verify_line < shard_contract_line )); then
+        ruby_setup_failures+=("framework-validation.yml: Ruby verification must precede long contract shards")
+    fi
+fi
+if [[ "${#ruby_setup_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "general CI Ruby/Psych setup violations: ${ruby_setup_failures[*]}"
+fi
+
+test_start "README preserves source-edit isolation and validator runtime prerequisites"
+readme_contract_failures=()
+if ! grep -Fq "Source-changing packets in a shared or unknown workspace remain sequential" "$FRAMEWORK_DIR/README.md"; then
+    readme_contract_failures+=("missing shared-workspace sequential gate")
+fi
+if ! grep -Fq "parallel source-changing packets require runtime proof of isolated workspaces" "$FRAMEWORK_DIR/README.md"; then
+    readme_contract_failures+=("missing isolated-workspace proof gate")
+fi
+if ! grep -Fq "Ruby with Psych/YAML support" "$FRAMEWORK_DIR/README.md"; then
+    readme_contract_failures+=("missing Ruby Psych/YAML validator prerequisite")
+fi
+if [[ "${#readme_contract_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "README contract violations: ${readme_contract_failures[*]}"
 fi
 
 test_start "P0-P4 fixture installs isolate ambient CODEX_HOME and restore caller state"
