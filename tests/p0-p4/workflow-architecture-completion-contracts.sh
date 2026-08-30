@@ -61,12 +61,16 @@ fresh_review_field_has_property() {
 fresh_review_pack_refs_are_declared() {
     local file="$1"
     local field
-    for field in canonical_result_ref final_snapshot_identity_ref architecture_decision_pack_review_ref; do
+    for field in canonical_result_ref final_snapshot_identity_ref delegation_path_ref architecture_decision_pack_review_ref; do
         fresh_review_field_has_property "$file" "$field" 'type: string' \
             && fresh_review_field_has_property "$file" "$field" 'required: conditional' \
             && fresh_review_field_has_property "$file" "$field" 'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
             || return 1
     done
+    fresh_review_field_has_property "$file" delegation_contract 'type: string' \
+        && fresh_review_field_has_property "$file" delegation_contract 'required: conditional' \
+        && fresh_review_field_has_property "$file" delegation_contract 'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
+        && fresh_review_field_has_property "$file" delegation_contract 'validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"'
 }
 
 without_fresh_review_pack_refs() {
@@ -792,22 +796,22 @@ elif ! grep -Fq 'controller_intensity == light' <<<"$(phase_block REVIEW)" \
     fail "Review phase no longer preserves the distinct light fresh-review lane"
 elif ! grep -Fq 'assistant-review/contracts/output.yaml#final_summary' <<<"$fresh_review_block" \
     || ! grep -Fq 'final_snapshot_identity_ref' <<<"$fresh_review_block" \
+    || ! grep -Fq 'delegation_path_ref' <<<"$fresh_review_block" \
+    || ! grep -Fq 'assistant-review/contracts/output.yaml#review_delegation_path' <<<"$fresh_review_block" \
     || ! grep -Fq 'assistant-review/contracts/output.yaml#architecture_decision_pack_review' <<<"$fresh_review_block" \
     || ! grep -Fq 'validation_status' <<<"$fresh_review_block"; then
     fail "light Pack fresh_review_result does not retain validated canonical assistant-review output refs"
-elif grep -Fq '      - name: review_delegation_path' <<<"$fresh_review_block"; then
-    fail "light Pack fresh_review_result incorrectly requires review_delegation_path"
 elif ! grep -Fq 'architecture_decision_pack_review' <<<"$(phase_block REVIEW)" \
     || ! grep -Fq 'assistant-review/contracts/output.yaml#final_summary' "$review_router" \
-    || ! p0p4_contains_text "$review_router" 'light direct fallback does not require'; then
-    fail "light Pack review routing does not preserve canonical refs without delegation-path fallback requirements"
+    || ! p0p4_contains_text "$review_router" 'review_delegation_path'; then
+    fail "light Pack review routing does not preserve the canonical delegation-path requirement"
 else
     pass
 fi
 
 test_start "light Pack fresh_review_result declares every conditional canonical reference"
 fresh_review_ref_missing=()
-for field in canonical_result_ref final_snapshot_identity_ref architecture_decision_pack_review_ref; do
+for field in canonical_result_ref final_snapshot_identity_ref delegation_path_ref architecture_decision_pack_review_ref; do
     for property in \
         'type: string' \
         'required: conditional' \
@@ -816,6 +820,15 @@ for field in canonical_result_ref final_snapshot_identity_ref architecture_decis
             fresh_review_ref_missing+=("$field $property")
         fi
     done
+done
+for property in \
+    'type: string' \
+    'required: conditional' \
+    'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
+    'validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"'; do
+    if ! fresh_review_field_has_property "$output_contract" delegation_contract "$property"; then
+        fresh_review_ref_missing+=("delegation_contract $property")
+    fi
 done
 if [[ ${#fresh_review_ref_missing[@]} -eq 0 ]]; then
     pass
@@ -827,7 +840,7 @@ test_start "light Pack fresh_review_result rejects independent canonical-referen
 fresh_review_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-light-pack-ref.XXXXXX")"
 p0p4_register_cleanup "$fresh_review_mutation_dir"
 fresh_review_mutation_failures=()
-for omitted in canonical_result_ref final_snapshot_identity_ref architecture_decision_pack_review_ref canonical_result_ref,final_snapshot_identity_ref,architecture_decision_pack_review_ref; do
+for omitted in canonical_result_ref final_snapshot_identity_ref delegation_path_ref delegation_contract architecture_decision_pack_review_ref canonical_result_ref,final_snapshot_identity_ref,delegation_path_ref,delegation_contract,architecture_decision_pack_review_ref; do
     mutated_output="$fresh_review_mutation_dir/${omitted//,/-}.yaml"
     without_fresh_review_pack_refs "$output_contract" "$mutated_output" "$omitted"
     if fresh_review_pack_refs_are_declared "$mutated_output"; then
@@ -964,6 +977,17 @@ elif ! grep -Eiq 'Build repair.*(implementation|verification)|implementation.*Bu
     fail "README does not identify ordinary Build repair as implementation/verification-failure recovery"
 elif ! grep -Eiq 'Review[- ]fix|review findings.*(inside|within).*Review|assistant-review.*fix' "$FRAMEWORK_DIR/README.md"; then
     fail "README does not distinguish review-finding fixes from ordinary Build repair"
+else
+    pass
+fi
+
+test_start "README describes the assistant-review multi-pass audit topology"
+if grep -Fq 'audits use one pass' "$FRAMEWORK_DIR/README.md"; then
+    fail "README still describes audits as a single-pass review"
+elif ! grep -Fq 'two independent narrow passes' "$FRAMEWORK_DIR/README.md" \
+    || ! grep -Fq 'integration for medium scope' "$FRAMEWORK_DIR/README.md" \
+    || ! grep -Fq 'architecture for large scope' "$FRAMEWORK_DIR/README.md"; then
+    fail "README does not describe the canonical two/three/four-pass audit topology"
 else
     pass
 fi
@@ -1133,14 +1157,14 @@ architecture_mode_evasion_is_rejected_by_eval_grader() {
     done < <(jq -r '.cases[].id' "$fixture")
     printf '%s\n' "$malformed_instance" \
         >>"$responses_dir/assistant-workflow/$case_id.txt"
-    case_count="$(jq '.cases | length' "$fixture")"
+    case_count=1
 
-    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill assistant-workflow >"$eval_output" 2>&1; then
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill assistant-workflow --case "$case_id" >"$eval_output" 2>&1; then
         return 1
     fi
 
     grep -Fq $'FAIL\tassistant-workflow\t'"$case_id" "$eval_output" \
-        && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
+        && grep -Fq "Summary: total=$case_count passed=0 failed=1" "$eval_output" \
         && grep -Fq "forbidden_substring_hits=1" "$eval_output"
 }
 
@@ -1608,6 +1632,9 @@ for lane in standard light; do
         ".${wrapper}.canonical_result_ref = \" \" | .canonical_final_summary.ref = \" \"" \
         ".${wrapper}.final_snapshot_identity_ref = null" \
         ".${wrapper}.final_snapshot_identity_ref = \" \"" \
+        ".${wrapper}.delegation_path_ref = null" \
+        ".${wrapper}.delegation_path_ref = \" \"" \
+        ".${wrapper}.delegation_contract = \"foreign-review/contracts/output.yaml#review_delegation_path\"" \
         ".${wrapper}.final_snapshot_identity.basis = \"unknown_basis\" | .canonical_final_summary.artifact.final_snapshot_identity.basis = \"unknown_basis\" | .current_final_batch.final_snapshot_identity.basis = \"unknown_basis\""; do
         unsafe_response="$(jq "$mutation" <<<"$valid_response")"
         if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
@@ -1823,10 +1850,89 @@ if ruby -ryaml -e '
       [.cases[].id] as $ids |
       ($ids | index("fulfilled-preparation-qa-obligation-allows-completion")) != null and
       ($ids | index("fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion")) != null
-    ' "$workflow_dir/evals/cases.json" >/dev/null; then
+    ' "$workflow_dir/evals/cases.json" >/dev/null \
+    && ruby -rjson -e '
+      fixture = JSON.parse(File.read(ARGV.fetch(0)))
+      authority = fixture.fetch("canonical_deferred_qa_obligation_expectations")
+      existing = authority.fetch("fulfilled-preparation-qa-obligation-allows-completion")
+      not_applicable = authority.fetch("fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion")
+      valid = existing == {
+        "requested_scope" => "Run the requested acceptance QA.",
+        "execution_prerequisite" => "Implementation and tests are complete.",
+        "feature_preparation_scope" => "existing_system",
+        "source_feature_preparation_evidence_ref" => "prep/viewing-route"
+      } && not_applicable == {
+        "requested_scope" => "Run the requested acceptance QA.",
+        "execution_prerequisite" => "Implementation and tests are complete.",
+        "feature_preparation_scope" => "not_applicable",
+        "source_preparation_basis" => "not_applicable"
+      }
+      exit(valid ? 0 : 1)
+    ' "$workflow_dir/evals/cases.json"; then
     pass
 else
     fail "workflow permits a deferred-QA success pair without an exact fulfilled obligation result"
+fi
+
+test_start "workflow evals cover immutable post-fix closure history and regressed closure retention"
+if ruby -rjson -e '
+    fixture = JSON.parse(File.read(ARGV.fetch(0)))
+    ids = fixture.fetch("cases").map { |test_case| test_case.fetch("id") }
+    authority = fixture.fetch("canonical_review_closure_expectations")
+    expected = {
+      "post-fix-review-closure-allows-issues-fixed-completion" => "aggregate-fixed-workflow",
+      "post-fix-review-regression-remains-open" => "aggregate-fixed-workflow"
+    }
+    valid = expected.all? do |case_id, aggregate_id|
+      ids.include?(case_id) &&
+        authority.fetch(case_id).is_a?(Array) && authority.fetch(case_id).length == 1 &&
+        authority.fetch(case_id).first.fetch("aggregate_finding_id") == aggregate_id &&
+        authority.fetch(case_id).first.fetch("source_finding_ids") == ["review_pass:pass-original:finding-workflow-original"] &&
+        authority.fetch(case_id).first.fetch("source_provenance") == [{"source_kind" => "review_pass", "source_id" => "pass-original"}]
+    end
+    exit(valid ? 0 : 1)
+' "$workflow_dir/evals/cases.json"; then
+    pass
+else
+    fail "workflow evals omit immutable fixed-history closure authority or regressed closure coverage"
+fi
+
+test_start "workflow fixed-history consumers reject foreign closure origins and false completion"
+workflow_closure_consumer_failures=()
+for case_id in \
+    post-fix-review-closure-allows-issues-fixed-completion \
+    post-fix-review-regression-remains-open; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    valid_response="$(<"$response_file")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$valid_response" PASS; then
+        workflow_closure_consumer_failures+=("$case_id rejects its canonical baseline")
+        continue
+    fi
+    for mutation in \
+        '.canonical_final_summary.artifact.aggregation_ledger[0].source_finding_ids = ["finding-foreign"]' \
+        '.canonical_final_summary.artifact.aggregation_ledger[0].source_provenance = [{source_kind:"review_pass",source_id:"pass-foreign"}]' \
+        'del(.canonical_final_summary.artifact.closure_results)'; do
+        unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+            workflow_closure_consumer_failures+=("$case_id accepts $mutation")
+        fi
+    done
+done
+regressed_response_file="$(mktemp)"
+p0p4_register_cleanup "$regressed_response_file"
+regressed_summary="$(jq -r '.cases[] | select(.id == "post-fix-review-regression-remains-open") | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+build_workflow_review_lifecycle_eval_response post-fix-review-regression-remains-open "$regressed_response_file" "$regressed_summary"
+false_complete_response="$(jq '.canonical_final_summary.artifact.closure_results[0].status = "verified_closed" | .canonical_final_summary.artifact.result = "ISSUES_FIXED" | .canonical_final_summary.artifact.evidence_bounded_claim = "No material findings within the reviewed scope and available evidence" | .final_handoff.review_completion.result = "ISSUES_FIXED" | .final_handoff.review_completion.completion_disposition = "complete" | .final_handoff.review_completion.evidence_bounded_claim = "No material findings within the reviewed scope and available evidence" | .final_handoff.review_claim = "No material findings within the reviewed scope and available evidence" | .workflow_complete = "--- WORKFLOW COMPLETE ---"' "$regressed_response_file")"
+if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" post-fix-review-regression-remains-open "$false_complete_response" FAIL; then
+    workflow_closure_consumer_failures+=("regressed closure accepts a false complete projection")
+fi
+if [[ ${#workflow_closure_consumer_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "workflow fixed-history closure consumer gaps: ${workflow_closure_consumer_failures[*]}"
 fi
 
 test_start "terminal review consumers anchor canonical v7 and complete endpoint shapes"
@@ -1877,7 +1983,7 @@ for case_id in \
         fi
     done
 done
-if [[ "$canonical_review_schema_version" == "7.0" && ${#terminal_shape_failures[@]} -eq 0 ]]; then
+if [[ "$canonical_review_schema_version" == "7.1" && ${#terminal_shape_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "terminal review consumer endpoint gaps: canonical=$canonical_review_schema_version ${terminal_shape_failures[*]}"
@@ -2508,8 +2614,10 @@ for case_id in \
         '.canonical_qa_result.artifact.result = "BLOCKED" | .final_handoff.review_completion.qa_result = "BLOCKED"' \
         'del(.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.requested_scope_evidence)' \
         '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.requested_scope = "different scope"' \
+        '.approved_feature_preparation_qa_acceptance_obligation.requested_scope = "different scope" | .canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.requested_scope = "different scope"' \
         'del(.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.execution_prerequisite_evidence)' \
         '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.execution_prerequisite = "different prerequisite"' \
+        '.approved_feature_preparation_qa_acceptance_obligation.execution_prerequisite = "different prerequisite" | .canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.execution_prerequisite = "different prerequisite"' \
         '.canonical_qa_result.artifact.approved_feature_preparation_qa_acceptance_obligation_result.feature_preparation_scope = "greenfield"' \
         '.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result_ref = "journal#foreign-obligation"' \
         '.final_handoff.review_completion.approved_feature_preparation_qa_acceptance_obligation_result_ref = "journal#foreign-obligation"'; do

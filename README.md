@@ -226,7 +226,7 @@ STRIDE threat model, OWASP code review, CVE dependency audit, attack surface map
 Triggers on: security, threat model, audit, vulnerability, OWASP
 
 ### assistant-review
-Evidence-bounded code review: audits use one pass; review-fix work normally uses one review plus one fresh post-fix re-review. Additional rounds require new evidence and a recorded reason, within the terminal safety cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
+Evidence-bounded code review: audits use one frozen multi-pass batch with two independent narrow passes, plus integration for medium scope and architecture for large scope. Review-fix work normally uses an initial batch, one bounded repair, and one fresh post-fix re-review batch. Additional rounds require new evidence and a recorded reason, within the terminal safety cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
 
 Triggers on: review, fresh review, code review, review this, check the code
 
@@ -396,9 +396,9 @@ For the locked Draft 2020-12 evaluator checks in that aggregate, first use
 Node.js 22 and run `(cd tools/evals && npm ci --ignore-scripts)`.
 
 Pull requests and pushes to `main` also run
-`.github/workflows/framework-validation.yml`, which executes the aggregate
-contracts, skill and generated-mirror checks, and all three Unix installer
-dry-runs on a hosted Linux runner.
+`.github/workflows/framework-validation.yml`, which executes the fast aggregate
+contracts and four long-running contract suites as parallel shards, then runs
+skill checks and all three Unix installer dry-runs on hosted Linux runners.
 
 The end-to-end fixture checks the observable order: implementation, focused
 test pass, an exact trusted review invocation finding the seeded defect, repair,

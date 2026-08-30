@@ -17,6 +17,145 @@
     "Compare the local response against the review loop entry, findings, fix, validate, and exit contracts.",
     "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
   ],
+  "canonical_review_batch_expectations": {
+    "templates": {
+      "small_base": {
+        "batch_id": "batch-1",
+        "review_snapshot_id": "snapshot-1",
+        "scope_size": "small",
+        "topology": {
+          "discovery_pass_count": 2,
+          "canonical_discovery_perspectives": {
+            "trivial_small": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths"],
+            "medium": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers"],
+            "large": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]
+          },
+          "security_specialist_triggered": false,
+          "closure_verification_required": false,
+          "max_required_responses": 2,
+          "max_repair_attempts_per_pass": 1
+        },
+        "expected_passes": [
+          {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-runtime","perspective":"runtime_lifecycle_and_failure_paths","assigned_scope":["scope-1"],"coverage_obligations":["runtime"],"prior_finding_visibility":"none"}
+        ],
+        "required_coverage_tuples": [
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"}
+        ]
+      },
+      "trivial_base": {
+        "batch_id": "batch-1",
+        "review_snapshot_id": "snapshot-1",
+        "scope_size": "trivial",
+        "topology": {
+          "discovery_pass_count": 2,
+          "canonical_discovery_perspectives": {
+            "trivial_small": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths"],
+            "medium": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers"],
+            "large": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]
+          },
+          "security_specialist_triggered": false,
+          "closure_verification_required": false,
+          "max_required_responses": 2,
+          "max_repair_attempts_per_pass": 1
+        },
+        "expected_passes": [
+          {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-runtime","perspective":"runtime_lifecycle_and_failure_paths","assigned_scope":["scope-1"],"coverage_obligations":["runtime"],"prior_finding_visibility":"none"}
+        ],
+        "required_coverage_tuples": [
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"}
+        ]
+      },
+      "small_post_fix_closure": {
+        "batch_id": "batch-1",
+        "review_snapshot_id": "snapshot-1",
+        "scope_size": "small",
+        "topology": {
+          "discovery_pass_count": 2,
+          "canonical_discovery_perspectives": {
+            "trivial_small": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths"],
+            "medium": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers"],
+            "large": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]
+          },
+          "security_specialist_triggered": false,
+          "closure_verification_required": true,
+          "max_required_responses": 3,
+          "max_repair_attempts_per_pass": 1
+        },
+        "expected_passes": [
+          {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-runtime","perspective":"runtime_lifecycle_and_failure_paths","assigned_scope":["scope-1"],"coverage_obligations":["runtime"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-closure","perspective":"closure_verification","assigned_scope":["scope-1"],"coverage_obligations":["verify previously fixed finding"],"prior_finding_visibility":"closure_ledger"}
+        ],
+        "required_coverage_tuples": [
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-closure","scope_item_id":"scope-1","applicable_concern":"previously_fixed","review_perspective":"closure_verification","coverage_obligation":"verify previously fixed finding"}
+        ]
+      },
+      "medium_inflight_invalidation": {
+        "batch_id": "batch-1",
+        "review_snapshot_id": "snapshot-1",
+        "scope_size": "medium",
+        "topology": {
+          "discovery_pass_count": 3,
+          "canonical_discovery_perspectives": {
+            "trivial_small": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths"],
+            "medium": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers"],
+            "large": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]
+          },
+          "security_specialist_triggered": false,
+          "closure_verification_required": false,
+          "max_required_responses": 3,
+          "max_repair_attempts_per_pass": 1
+        },
+        "expected_passes": [
+          {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-runtime","perspective":"runtime_lifecycle_and_failure_paths","assigned_scope":["scope-1"],"coverage_obligations":["runtime"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-integration","perspective":"integration_compatibility_and_consumers","assigned_scope":["scope-1"],"coverage_obligations":["integration"],"prior_finding_visibility":"none"}
+        ],
+        "required_coverage_tuples": [
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-integration","scope_item_id":"scope-1","applicable_concern":"integration","review_perspective":"integration_compatibility_and_consumers","coverage_obligation":"integration"}
+        ]
+      }
+    },
+    "case_template_refs": {
+      "audit-batch-waits-for-all-pass-results": "small_base",
+      "incomplete-review-batch-never-cleans": "small_base",
+      "post-fix-review-uses-fresh-snapshot-batch": "small_post_fix_closure",
+      "post-fix-verified-closure-with-incomplete-coverage": "small_post_fix_closure",
+      "post-fix-review-regression-remains-open": "small_post_fix_closure",
+      "audit-spec-review-fail-continues-complete-batch": "small_base",
+      "in-flight-mutation-invalidates-review-batch": "medium_inflight_invalidation",
+      "trivial-audit-uses-two-isolated-passes": "trivial_base"
+    }
+  },
+  "canonical_review_closure_expectations": {
+    "post-fix-review-uses-fresh-snapshot-batch": [
+      {"aggregate_finding_id":"aggregate-fixed-1","source_finding_ids":["review_pass:pass-runtime:finding-fixed-1"],"source_provenance":[{"source_kind":"review_pass","source_id":"pass-runtime"}]}
+    ],
+    "post-fix-verified-closure-with-incomplete-coverage": [
+      {"aggregate_finding_id":"aggregate-fixed-1","source_finding_ids":["review_pass:pass-runtime:finding-fixed-1"],"source_provenance":[{"source_kind":"review_pass","source_id":"pass-runtime"}]}
+    ],
+    "post-fix-review-regression-remains-open": [
+      {"aggregate_finding_id":"aggregate-fixed-1","source_finding_ids":["review_pass:pass-runtime:finding-fixed-1"],"source_provenance":[{"source_kind":"review_pass","source_id":"pass-runtime"}]}
+    ]
+  },
+  "canonical_review_snapshot_expectations": {
+    "audit-batch-waits-for-all-pass-results": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "incomplete-review-batch-never-cleans": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "post-fix-review-uses-fresh-snapshot-batch": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-0","review_snapshot_id":"snapshot-0","snapshot_identity":{"basis":"diff_digest","value":"digest-0","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-0"}},{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "post-fix-verified-closure-with-incomplete-coverage": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-0","review_snapshot_id":"snapshot-0","snapshot_identity":{"basis":"diff_digest","value":"digest-0","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-0"}},{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "post-fix-review-regression-remains-open": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-0","review_snapshot_id":"snapshot-0","snapshot_identity":{"basis":"diff_digest","value":"digest-0","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-0"}},{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "audit-spec-review-fail-continues-complete-batch": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "in-flight-mutation-invalidates-review-batch": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "trivial-audit-uses-two-isolated-passes": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]}
+  },
   "cases": [
     {
       "id": "review-fix-loop-handles-findings",
@@ -251,8 +390,88 @@
           {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
           {"operator":"equals","path":["final_summary","rounds"],"expected":2},
           {"operator":"one_of","path":["final_summary","result"],"expected_values":["CLEAN","ISSUES_FIXED"]},
+          {"operator":"equals","path":["final_summary","final_batch_plan","topology","closure_verification_required"],"expected":true},
+          {"operator":"array_field_values_exact","path":["final_summary","final_batch_plan","expected_passes"],"field":"perspective","expected_values":["contract_and_test_oracle","runtime_lifecycle_and_failure_paths","closure_verification"]},
           {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["invalidated","complete"]},
-          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["invalidated","invalidated","completed","completed"]}
+          {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":2,"terminal_response_count":1},{"expected_response_count":3,"terminal_response_count":3}]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["invalidated","invalidated","completed","completed","completed"]},
+          {"operator":"array_field_values_exact","path":["final_summary","fixed_items"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"status","expected_values":["verified_closed"]},
+          {"operator":"nonempty_string","path":["final_summary","closure_results",0,"evidence"]},
+          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",0,"coverage_gap_id"]},
+          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",1,"coverage_gap_id"]}
+        ]
+      }
+    },
+    {
+      "id": "post-fix-verified-closure-with-incomplete-coverage",
+      "title": "Verified closure does not hide unrelated incomplete coverage",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that a verified fixed item remains closed while an unrelated incomplete pass conservatively returns remaining items.",
+      "prompt": "Review and fix this change. The closure pass verifies the original fix, but another required pass times out; report the incomplete coverage without reopening the fixed item.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly authorizes source modification.",
+        "The fresh closure-verification pass verifies aggregate-fixed-1 as closed.",
+        "The fresh runtime/lifecycle pass does not return before the terminal barrier."
+      ],
+      "expected_behavior": [
+        "Retains the attempted fix and verified closure evidence.",
+        "Records the unrelated runtime tuple as incomplete with a stable coverage gap.",
+        "Returns HAS_REMAINING_ITEMS without retaining the verified aggregate as a current finding."
+      ],
+      "pass_criteria": ["Verified closure and incomplete unrelated coverage remain distinct in the canonical final summary."],
+      "fail_signals": ["Reopens the verified fixed item", "Drops the coverage gap", "Returns CLEAN or ISSUES_FIXED"],
+      "machine_expectations": {
+        "required_substrings": ["fresh snapshot", "closure verification", "incomplete coverage"],
+        "forbidden_substrings": ["verified closure makes coverage complete", "final result: CLEAN", "final result: ISSUES_FIXED"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":false},
+          {"operator":"equals","path":["final_summary","rounds"],"expected":2},
+          {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["invalidated","incomplete"]},
+          {"operator":"array_field_values_exact","path":["final_summary","fixed_items"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"status","expected_values":["verified_closed"]},
+          {"operator":"equals","path":["final_summary","aggregated_findings"],"expected":[]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["invalidated","invalidated","completed","timed_out","completed"]},
+          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",3,"coverage_gap_id"]},
+          {"operator":"array_field_values_exact","path":["final_summary","aggregation_ledger"],"field":"disposition","expected_values":["fixed_closed","coverage_gap"]},
+          {"operator":"path_absent","path":["final_summary","evidence_bounded_claim"]}
+        ]
+      }
+    },
+    {
+      "id": "post-fix-review-regression-remains-open",
+      "title": "Post-fix closure regression remains reportable",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that a fresh closure pass can retain fixed-item history while reporting a regressed original aggregate finding as remaining.",
+      "prompt": "Review and fix this change. The fresh closure pass shows that the original must-fix regressed; report the remaining issue without suppressing its history.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly authorizes source modification.",
+        "The immutable previously_fixed input retains aggregate-fixed-1 and its original source provenance.",
+        "The fresh closure-verification pass finds that aggregate-fixed-1 regressed."
+      ],
+      "expected_behavior": [
+        "Retains the attempted fix in fixed_items.",
+        "Reports the original aggregate identity as regressed in closure_results.",
+        "Keeps the regressed aggregate finding material and returns HAS_REMAINING_ITEMS."
+      ],
+      "pass_criteria": ["The original identity and provenance remain bound while the regression blocks a clean or issues-fixed result."],
+      "fail_signals": ["Drops fixed history", "Invents a replacement aggregate identity", "Returns CLEAN or ISSUES_FIXED"],
+      "machine_expectations": {
+        "required_substrings": ["fresh snapshot", "new review batch", "closure verification"],
+        "forbidden_substrings": ["original snapshot remains valid", "previously fixed means never report", "final result: CLEAN", "final result: ISSUES_FIXED"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
+          {"operator":"equals","path":["final_summary","rounds"],"expected":2},
+          {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
+          {"operator":"array_field_values_exact","path":["final_summary","fixed_items"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"status","expected_values":["regressed"]},
+          {"operator":"array_field_values_exact","path":["final_summary","aggregated_findings"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"path_absent","path":["final_summary","evidence_bounded_claim"]}
         ]
       }
     },
@@ -1583,7 +1802,9 @@
         "structured_json_assertions": [
           {"operator":"equals","path":["final_summary","coverage_complete"],"expected":false},
           {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
-          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["invalidated"]}
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["invalidated"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","runtime_lifecycle_and_failure_paths","integration_compatibility_and_consumers"]},
+          {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":3,"terminal_response_count":2}]}
         ]
       }
     },

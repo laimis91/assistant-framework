@@ -13,10 +13,7 @@ jobs:
   framework-contracts:
     name: Framework contracts and installs
     runs-on: ubuntu-latest
-    # The aggregate directly checks every top-level P0-P4 suite before running its combined sourced set.
-    # Hosted run 32586858443 reached 60m15s with passing assertions and unfinished suites;
-    # 90 minutes retains a finite cap plus 29m45s of headroom over that observed lower bound.
-    timeout-minutes: 90
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -50,6 +47,8 @@ jobs:
           command -v rsync
 
       - name: Run aggregate framework contracts
+        env:
+          P0P4_EXCLUDED_SUITES: skill-eval-contracts.sh progressive-discovery-contracts.sh workflow-architecture-completion-contracts.sh codex-behavioral-eval-contracts.sh
         run: ./tests/test-p0-p4-contracts.sh
 
       - name: Validate skills
@@ -60,3 +59,40 @@ jobs:
           ./install.sh --agent codex --dry-run
           ./install.sh --agent claude --dry-run
           ./install.sh --agent gemini --dry-run
+
+  contract-shards:
+    name: Contract shard (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - skill-eval-contracts.sh
+          - progressive-discovery-contracts.sh
+          - workflow-architecture-completion-contracts.sh
+          - codex-behavioral-eval-contracts.sh
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/evals/package-lock.json
+
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ripgrep
+
+      - name: Install evaluation dependencies
+        working-directory: tools/evals
+        run: npm ci --ignore-scripts
+
+      - name: Run long contract shard
+        run: bash "tests/p0-p4/${{ matrix.suite }}"

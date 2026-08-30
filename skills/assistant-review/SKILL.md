@@ -10,13 +10,14 @@ description: "Review code, fix actionable findings, and run one fresh re-review.
 Canonical input, output, phase-gate, and handoff schemas remain authoritative at their enforcement points. Read `contracts/index.yaml` first; do not load every contract at entry.
 
 - `entry`: load `contracts/input.yaml` review-entry fields selected by `review-entry-fields` in `contracts/index.yaml`.
+- `architecture_pack_input`: when Pack review triggers, load `architecture_decision_pack` through `review-architecture-pack-input` before planning or dispatch.
 - `current_round`: load the active round step from `contracts/phase-gates.yaml` at each transition.
 - `selected_handoff`: select the compact dispatch pointer from `contracts/handoffs.yaml` before Reviewer or QAEvaluator dispatch.
 - `reviewer_context`: resolve the fresh bounded Reviewer bundle only when a review pass begins.
 - `return_validation`: select the canonical return pointer only after a worker/direct-fallback result exists.
 - `completion`: load the applicable `contracts/output.yaml` artifacts at completion, before the final review exit.
 
-Migration note: assistant-review contracts are v7. Persisted v6 batch packets are invalidated and rebuilt; they never silently reach a clean result. Pack projections require non-empty boundaries, five-concern coverage, recoverable selected design, rationale, and viable alternatives/dispositions, plus triggered `architecture_decision_pack_checks`; nested Pack mode equals canonical `architecture_design_mode`. Applicable direct-user, `AGENTS.md`, and active-skill instructions trigger Reviewer/QA roles; record provenance in `subagent_trigger_scope`. Opt-out, unavailability, and active policy blocks retain direct fallback. Reviewer returns and final summaries require non-empty `reviewed_scope` so workflow consumers can use the producer packet without deriving or guessing its boundary.
+Migration note: assistant-review contracts are v7. Persisted v6 batch packets are invalidated and rebuilt; they never reach CLEAN. Triggered Pack review loads `architecture_pack_input` and validates recoverable selected design, rationale, and viable alternatives/dispositions plus `architecture_decision_pack_checks`. Applicable instructions trigger Reviewer/QA roles with `subagent_trigger_scope`; opt-out, unavailability, or policy blocks use direct fallback. Reviewer returns and final summaries use non-empty `reviewed_scope` so workflow consumers can use the producer packet.
 
 Selectors use unique id, canonical path, exact section/key, and explicit or allowed runtime names. Entry declares no immediate principles, checklist, or rubric references.
 

@@ -8,8 +8,11 @@ emit_prompts() {
     local id
     local packet_path
     local case_count
+    local selected_cases
 
     validate_all_fixtures
+    validate_selected_case_ids
+    selected_cases="$(selected_case_ids_json)"
     mkdir -p "$OUTPUT_DIR"
 
     for index in "${!FIXTURE_FILES[@]}"; do
@@ -46,7 +49,17 @@ emit_prompts() {
                     + (.machine_expectations.structured_json_assertions | tojson)
                     + "\n```\n\n"
                   else "" end;
-                .cases[]
+                def canonical_review_batch_expectation_section($fixture; $case_id):
+                  ($fixture.canonical_review_batch_expectations.case_template_refs[$case_id]? // null) as $template_ref
+                  | if $template_ref != null then
+                      "### Canonical Review Batch Expectation\n\n"
+                      + "This exact frozen-plan oracle is part of the selected case and is evaluated by the local grader.\n\n"
+                      + "```json\n"
+                      + ($fixture.canonical_review_batch_expectations.templates[$template_ref] | tojson)
+                      + "\n```\n\n"
+                    else "" end;
+                . as $fixture
+                | .cases[]
                 | select(.id == $id)
                 | "# " + .title + "\n\n"
                   + "Skill: " + $skill + "\n\n"
@@ -61,15 +74,25 @@ emit_prompts() {
                   + "## Fail Signals\n\n" + bullets(.fail_signals) + "\n\n"
                   + seeded_defects_section
                   + "## Machine Expectations\n\n"
+                  + canonical_review_batch_expectation_section($fixture; .id)
                   + "### Required Substrings\n\n"
                   + bullets(.machine_expectations.required_substrings) + "\n\n"
                   + "### Forbidden Substrings\n\n"
                   + bullets(.machine_expectations.forbidden_substrings) + "\n\n"
                   + structured_json_assertions_section
             ' "$fixture_file" >"$packet_path"
-        done < <(jq -r '.cases[].id' "$fixture_file")
+        done < <(jq -r --argjson selected_cases "$selected_cases" '
+            .cases[]
+            | .id as $id
+            | select(($selected_cases | length) == 0 or ($selected_cases | index($id)) != null)
+            | .id
+        ' "$fixture_file")
 
-        case_count="$(jq '.cases | length' "$fixture_file")"
+        case_count="$(jq --argjson selected_cases "$selected_cases" '[
+            .cases[]
+            | .id as $id
+            | select(($selected_cases | length) == 0 or ($selected_cases | index($id)) != null)
+        ] | length' "$fixture_file")"
         total=$((total + case_count))
     done
 

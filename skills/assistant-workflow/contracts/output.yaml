@@ -356,8 +356,8 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only and controller_intensity == light"
     description: "Compact review performed after relevant validation with fresh attention to carried Discover scope/criteria, any applicable inline plan, changed files, and acceptance criteria."
-    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected. When an Architecture Decision Pack applies, canonical_result_ref, producer_schema_version, final_review_snapshot_id, final_snapshot_identity_ref, final_snapshot_identity, and architecture_decision_pack_review_ref resolve to validated canonical assistant-review outputs without requiring a review_delegation_path; the alias and identity bind the same final_summary and exact current final batch."
-    on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work. For an applicable Pack, bind final_snapshot_identity_ref to the validated final_summary's exact current final-batch identity before marking validation_status=validated."
+    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected. When an Architecture Decision Pack applies, canonical_result_ref, producer_schema_version, final_review_snapshot_id, final_snapshot_identity_ref, final_snapshot_identity, delegation_path_ref, and architecture_decision_pack_review_ref resolve to validated canonical assistant-review outputs; the alias and identity bind the same final_summary and exact current final batch."
+    on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work. For an applicable Pack, bind final_snapshot_identity_ref to the validated final_summary's exact current final-batch identity and delegation_path_ref to its validated review_delegation_path before marking validation_status=validated."
     object_fields:
       - name: result
         type: enum
@@ -378,7 +378,7 @@ artifacts:
         required: conditional
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         description: "Stable ref to the validated assistant-review final_summary for the light Pack review"
-        validation: "Resolves to a validated canonical assistant-review final_summary without requiring review_delegation_path for light direct fallback"
+        validation: "Resolves to a validated canonical assistant-review final_summary"
       - name: canonical_contract
         type: string
         required: conditional
@@ -420,6 +420,17 @@ artifacts:
           - name: scope_manifest_digest
             type: string
             required: true
+      - name: delegation_path_ref
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        description: "Stable ref to the validated assistant-review review_delegation_path for the light Pack review"
+        validation: "Resolves to the review_delegation_path produced with the canonical final_summary"
+      - name: delegation_contract
+        type: string
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"
       - name: architecture_decision_pack_review_ref
         type: string
         required: conditional

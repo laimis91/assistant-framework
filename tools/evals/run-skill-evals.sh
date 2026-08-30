@@ -11,6 +11,7 @@ RESPONSES_DIR=""
 ACTIVATION_RESULTS_FILE=""
 INCLUDE_LOCAL=false
 SKILL_SELECTORS=()
+CASE_SELECTORS=()
 SKILL_NAMES=()
 SKILL_FILES=()
 FIXTURE_FILES=()
@@ -26,9 +27,9 @@ usage() {
     cat <<'EOF'
 Usage:
   run-skill-evals.sh --validate-fixture [--skill NAME|PATH ...] [--include-local]
-  run-skill-evals.sh --list [--skill NAME|PATH ...] [--include-local]
-  run-skill-evals.sh --emit-prompts DIR [--skill NAME|PATH ...] [--include-local]
-  run-skill-evals.sh --responses DIR [--skill NAME|PATH ...] [--include-local]
+  run-skill-evals.sh --list [--skill NAME|PATH ...] [--case CASE_ID ...] [--include-local]
+  run-skill-evals.sh --emit-prompts DIR [--skill NAME|PATH ...] [--case CASE_ID ...] [--include-local]
+  run-skill-evals.sh --responses DIR [--skill NAME|PATH ...] [--case CASE_ID ...] [--include-local]
   run-skill-evals.sh --activation-results FILE [--skill NAME|PATH ...] [--include-local]
   run-skill-evals.sh --help
 
@@ -40,6 +41,8 @@ No provider SDKs, network calls, or model APIs are used.
 Options:
   --skill NAME|PATH   Select a skill by name, skill directory, or SKILL.md path.
                       May be specified more than once.
+  --case CASE_ID      Limit list, prompt emission, or response grading to an exact
+                      case id within the selected fixtures. May be repeated.
   --include-local     Include every skills/*/SKILL.md with evals/cases.json in
                       the default inventory. Without this, only first-class
                       skills/assistant-*/SKILL.md fixtures are selected.
@@ -103,6 +106,13 @@ while [[ $# -gt 0 ]]; do
             SKILL_SELECTORS+=("$2")
             shift 2
             ;;
+        --case)
+            [[ $# -ge 2 ]] || die "Missing CASE_ID for --case."
+            case_selector="$(printf '%s' "$2" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+            [[ -n "$case_selector" ]] || die "CASE_ID for --case must not be empty."
+            CASE_SELECTORS+=("$case_selector")
+            shift 2
+            ;;
         --include-local)
             INCLUDE_LOCAL=true
             shift
@@ -116,6 +126,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ -n "${CASE_SELECTORS[*]-}" && "$MODE" != "list" && "$MODE" != "emit" && "$MODE" != "responses" ]]; then
+    die "--case is supported only with --list, --emit-prompts, or --responses."
+fi
 
 load_selected_inventory
 

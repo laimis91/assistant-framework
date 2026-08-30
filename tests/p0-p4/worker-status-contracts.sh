@@ -339,7 +339,7 @@ for file_and_handoff in \
 done
 for term in \
     "Reviewer returns include a compact status packet while preserving the findings/rubric schema." \
-    "findings, summary, and verdict remain required and are not replaced by status." \
+    "findings, summary, coverage_entries, and verdict remain required and are not replaced by status." \
     "evidence is required to support the verdict and any findings."; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"; then
         missing_reviewer_status_terms+=("assistant-review handoff: $term")

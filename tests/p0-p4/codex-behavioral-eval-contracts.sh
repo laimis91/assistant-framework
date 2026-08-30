@@ -3336,27 +3336,51 @@ else
     fail "VIEWING evidence mutations were not isolated and rejected: ${viewing_mutation_failures[*]}"
 fi
 
-test_start "VIEWING inspection event mutations are isolated to the candidate verifier"
+run_direct_viewing_event_fixture() {
+    local mode="$1"
+    local jsonl="$2"
+    local workspace="$fixture_root/direct-viewing-event-$mode-workspace"
+    local direct_capture="$fixture_root/direct-viewing-event-$mode-capture"
+    local last_message="$fixture_root/direct-viewing-event-$mode-last-message.txt"
+
+    mkdir -p "$workspace/.agents/skills/assistant-workflow" "$direct_capture"
+    cp -R "$FRAMEWORK_DIR/docs/evals/fixtures/viewing-route-technical-preparation"/. "$workspace/"
+    sed -e 's|{agent_state_dir}|.codex|g' "$candidate/SKILL.md" \
+        >"$workspace/.agents/skills/assistant-workflow/SKILL.md"
+    FAKE_CODEX_CAPTURE_DIR="$direct_capture" FAKE_VIEWING_EVENT_MODE="$mode" \
+        "$fake_codex" exec --json --ignore-user-config --ephemeral \
+        -C "$workspace" --output-last-message "$last_message" -m test-model \
+        --sandbox workspace-write "Inspect the VIEWING route fixture." >"$jsonl"
+}
+
+test_start "VIEWING inspection event mutations fail the production verifier with one end-to-end isolation witness"
 viewing_event_failures=()
 for viewing_event_mutation in missing stale mismatched duplicate unrelated nonzero missing_status failed_status contradictory_status mutating transient_mutation alias_transient_mutation file_change_source_exact file_change_source_dot file_change_source_backslash file_change_source_absolute_suffix file_change_source_item_path file_change_empty_changes file_change_missing_paths file_change_dual_conflict file_change_multiple_conflict file_change_requirement echo_spoof wrong_path_substring compound_touch sed_write_file sed_write_ending_p argv_sed_write_ending_p head_unsafe_flag rg_preprocessor rg_preprocessor_as_pattern rg_preprocessor_separate rg_pre_glob rg_hostname_bin rg_replace rg_field_match_separator rg_field_context_separator rg_context_separator rg_hyperlink_format rg_short_replace rg_short_replace_assignment rg_short_file rg_short_file_attached rg_clustered_short_file rg_long_file rg_ignore_file rg_target_path_as_glob rg_positional_then_explicit rg_explicit_then_positional rg_unquoted_glob wrapped_unquoted_glob rg_colors rg_only_matching rg_path_separator_missing rg_path_separator_invalid rg_path_separator_multibyte rg_target_path_as_path_separator argv_rg_preprocessor argv_rg_preprocessor_as_pattern argv_rg_preprocessor_separate argv_rg_pre_glob argv_rg_hostname_bin argv_rg_replace argv_rg_field_match_separator argv_rg_field_context_separator argv_rg_context_separator argv_rg_hyperlink_format argv_rg_short_file argv_rg_short_file_attached argv_rg_clustered_short_file argv_rg_long_file argv_rg_ignore_file argv_rg_target_path_as_glob argv_rg_positional_then_explicit argv_rg_explicit_then_positional argv_rg_colors argv_rg_only_matching argv_rg_path_separator_missing argv_rg_path_separator_invalid argv_rg_path_separator_multibyte argv_rg_target_path_as_path_separator shell_substitution double_quoted_substitution double_quoted_parameter double_quoted_legacy_arithmetic bash_wrapped_legacy_arithmetic double_quoted_legacy_subscript bash_wrapped_legacy_subscript double_quoted_zsh_split zsh_wrapped_split zsh_equals wrapped_zsh_equals multi_double_fragment_expansion wrapped_multi_double_fragment_expansion redirection additional_command cat_unsafe_flag pipeline_spoof no_space_pipeline wrapped_no_space_pipeline no_space_semicolon wrapped_no_space_semicolon brace_expansion wrapped_brace_expansion no_space_ampersand no_space_process_substitution no_space_glob_pattern extra_path_operand extensionless_extra_path rg_backtick_substitution rg_newline_injection argv_cat_extra_path argv_extensionless_extra_path argv_wrapper_additional_command oversized_output symbol_spoof; do
-    viewing_event_output="$fixture_root/viewing-event-$viewing_event_mutation"
-    rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_event_mutation" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_event_output" \
-        --codex-bin "$fake_codex" >/dev/null; then
-        viewing_event_failures+=("$viewing_event_mutation:runner")
-    elif ! jq -s -e '
-        all(.[] | select(.variant == "baseline"); .execution.verifier.workspace_status == "passed")
-        and all(.[] | select(.variant == "candidate"); .execution.verifier.workspace_status == "failed" and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)
-      ' "$viewing_event_output/traces/"*.json >/dev/null; then
-        viewing_event_failures+=("$viewing_event_mutation:accepted-or-baseline-regressed")
+    viewing_event_jsonl="$fixture_root/viewing-event-$viewing_event_mutation.jsonl"
+    if ! run_direct_viewing_event_fixture "$viewing_event_mutation" "$viewing_event_jsonl"; then
+        viewing_event_failures+=("$viewing_event_mutation:fixture")
+    elif validate_event_stream "$viewing_event_jsonl" \
+        && viewing_inspection_event_evidence "$viewing_event_jsonl" >/dev/null 2>&1; then
+        viewing_event_failures+=("$viewing_event_mutation:accepted")
     fi
 done
+viewing_event_isolation_output="$fixture_root/viewing-event-isolation"
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=shell_substitution "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_event_isolation_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    viewing_event_failures+=("shell_substitution:end-to-end-runner")
+elif ! jq -s -e '
+    all(.[] | select(.variant == "baseline"); .execution.verifier.workspace_status == "passed")
+    and all(.[] | select(.variant == "candidate"); .execution.verifier.workspace_status == "failed" and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)
+  ' "$viewing_event_isolation_output/traces/"*.json >/dev/null; then
+    viewing_event_failures+=("shell_substitution:end-to-end-isolation")
+fi
 if [[ ${#viewing_event_failures[@]} -eq 0 ]]; then
     pass
 else
-    fail "VIEWING inspection-event mutations were not isolated and rejected: ${viewing_event_failures[*]}"
+    fail "VIEWING inspection-event mutations were not rejected by the production verifier: ${viewing_event_failures[*]}"
 fi
 
 test_start "VIEWING lifecycle accepts disclosed exact-path SHA-256 commands"

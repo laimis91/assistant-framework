@@ -12,7 +12,7 @@ workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 progressive_ref="$workflow_dir/references/progressive-discovery.md"
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 actual_grader_invocation_count=0
-workflow_full_corpus_eval_count=0
+workflow_eval_invocation_count=0
 prepare_only_mutation_invocation_count=0
 prepare_only_plan_mode_mutation_count=0
 prepare_only_direct_structured_probe_count=0
@@ -23,20 +23,31 @@ run_skill_eval() {
     local responses_dir="$1"
     local output_path="$2"
     local skill="$3"
+    shift 3
 
     actual_grader_invocation_count=$((actual_grader_invocation_count + 1))
     if [[ "$skill" != "assistant-workflow" ]]; then
         non_workflow_skill_eval_count=$((non_workflow_skill_eval_count + 1))
     fi
-    "$skill_eval_runner" --responses "$responses_dir" --skill "$skill" >"$output_path" 2>&1
+    if [[ "$#" -eq 0 ]]; then
+        "$skill_eval_runner" --responses "$responses_dir" --skill "$skill" >"$output_path" 2>&1
+    else
+        local case_args=()
+        while [[ "$#" -gt 0 ]]; do
+            case_args+=(--case "$1")
+            shift
+        done
+        "$skill_eval_runner" --responses "$responses_dir" --skill "$skill" "${case_args[@]}" >"$output_path" 2>&1
+    fi
 }
 
 run_workflow_eval() {
     local responses_dir="$1"
     local output_path="$2"
+    shift 2
 
-    workflow_full_corpus_eval_count=$((workflow_full_corpus_eval_count + 1))
-    run_skill_eval "$responses_dir" "$output_path" assistant-workflow
+    workflow_eval_invocation_count=$((workflow_eval_invocation_count + 1))
+    run_skill_eval "$responses_dir" "$output_path" assistant-workflow "$@"
 }
 
 run_plan_mode_mutation_eval() {
@@ -60,7 +71,7 @@ run_prepare_only_representative_path_probe() {
     jq --argjson path "$path" 'setpath($path; { injected_forbidden_artifact: true })' \
         "$response_path" >"$prepare_only_eval_dir/mutated.json"
     mv "$prepare_only_eval_dir/mutated.json" "$response_path"
-    if run_prepare_only_representative_cli_probe "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
+    if run_prepare_only_representative_cli_probe "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow "$case_id" \
         || ! grep -Fq $'FAIL\tassistant-workflow\t'"$case_id" "$prepare_only_eval_output" \
         || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$prepare_only_eval_output"; then
         prepare_only_mutation_failures+=("representative:$case_id:$path")
@@ -415,7 +426,7 @@ write_workflow_eval_responses() {
                 progressive-collaborative-contributor-evidence)
                     jq -n '{decision_item: {interaction_mode: "collaborative"}, decision_resolution: {contributor_evidence: [{contributor_role: "agent", contribution: "analysis", evidence_ref: "analysis-ref"}, {contributor_role: "human_or_user", contribution: "decision", evidence_ref: "decision-ref"}]}, route_clear: true}' >"$response_path"
                     ;;
-                standard-pack-review-result-retains-checklist|light-pack-review-result-retains-current-snapshot|incomplete-review-blocks-clean-final-handoff|blocked-qa-blocks-clean-final-handoff|rejected-qa-blocks-clean-final-handoff|fulfilled-preparation-qa-obligation-allows-completion|fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion|qa-reject-source-fix-requires-rebuild-review-before-resume|qa-reject-unchanged-source-allows-resume-with-digest-equality|small-strict-blocked-qa-requires-terminal-projection|small-required-rejected-qa-requires-terminal-projection|stale-assistant-review-version-invalidates-persisted-results)
+                standard-pack-review-result-retains-checklist|light-pack-review-result-retains-current-snapshot|incomplete-review-blocks-clean-final-handoff|blocked-qa-blocks-clean-final-handoff|rejected-qa-blocks-clean-final-handoff|fulfilled-preparation-qa-obligation-allows-completion|fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion|qa-reject-source-fix-requires-rebuild-review-before-resume|qa-reject-unchanged-source-allows-resume-with-digest-equality|small-strict-blocked-qa-requires-terminal-projection|small-required-rejected-qa-requires-terminal-projection|stale-assistant-review-version-invalidates-persisted-results|post-fix-review-closure-allows-issues-fixed-completion|post-fix-review-regression-remains-open)
                     build_workflow_review_lifecycle_eval_response "$case_id" "$response_path" "$required_summary"
                     ;;
                 architecture-pack-*-blocks)
@@ -452,15 +463,15 @@ workflow_forbidden_terms_are_rejected() {
     local eval_output
     local eval_status=0
 
-    workflow_case_count="$(jq '.cases | length' "$fixture")"
-    expected_pass_count=$((workflow_case_count - 1))
+    workflow_case_count=1
+    expected_pass_count=0
     eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/${temp_prefix}.XXXXXX")"
     eval_output="$(mktemp "${TMPDIR:-/tmp}/${temp_prefix}-output.XXXXXX")"
     p0p4_register_cleanup "$eval_dir" "$eval_output"
     write_workflow_eval_responses "$eval_dir" "$fixture"
     printf '%s\n' "$@" >>"$eval_dir/assistant-workflow/$case_id.txt"
 
-    if run_workflow_eval "$eval_dir" "$eval_output"; then
+    if run_workflow_eval "$eval_dir" "$eval_output" "$case_id"; then
         eval_status=1
     fi
 
@@ -479,7 +490,7 @@ write_workflow_eval_responses "$search_ref_eval_dir" "$workflow_dir/evals/cases.
 jq 'del(.feature_preparation_evidence.items[0].implementation_evidence.search_or_access_refs)' \
     "$search_ref_eval_dir/assistant-workflow/viewing-route-preserves-active-behavior.txt" >"$search_ref_eval_dir/mutated.json"
 mv "$search_ref_eval_dir/mutated.json" "$search_ref_eval_dir/assistant-workflow/viewing-route-preserves-active-behavior.txt"
-if run_workflow_eval "$search_ref_eval_dir" "$search_ref_eval_output" \
+if run_workflow_eval "$search_ref_eval_dir" "$search_ref_eval_output" viewing-route-preserves-active-behavior \
     || ! grep -Fq $'FAIL\tassistant-workflow\tviewing-route-preserves-active-behavior' "$search_ref_eval_output" \
     || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$search_ref_eval_output"; then
     fail "workflow grader accepted a missing inspected search-ref array"
@@ -555,7 +566,7 @@ while IFS= read -r workflow_case_id; do
         workflow_mutation='(.completion_policy.plan_mode) |= sub("none"; "inline")'
         jq "$workflow_mutation" "$workflow_response" >"$prepare_only_eval_dir/mutated.json"
         mv "$prepare_only_eval_dir/mutated.json" "$workflow_response"
-        if run_plan_mode_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
+        if run_plan_mode_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow "$workflow_case_id" \
             || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$prepare_only_eval_output"; then
             prepare_only_mutation_failures+=("$workflow_case_id:completion_policy.plan_mode")
         fi
@@ -566,7 +577,7 @@ while IFS= read -r workflow_case_id; do
         workflow_mutation='(.triage_result.plan_mode) = "approval_required"'
         jq "$workflow_mutation" "$workflow_response" >"$prepare_only_eval_dir/mutated.json"
         mv "$prepare_only_eval_dir/mutated.json" "$workflow_response"
-        if run_plan_mode_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow \
+        if run_plan_mode_mutation_eval "$prepare_only_eval_dir" "$prepare_only_eval_output" assistant-workflow "$workflow_case_id" \
             || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$prepare_only_eval_output"; then
             prepare_only_mutation_failures+=("$workflow_case_id:triage_result.plan_mode")
         fi
@@ -574,7 +585,7 @@ while IFS= read -r workflow_case_id; do
     fi
 done < <(preparation_mutation_cases)
 # The direct production grader proves every root and forbidden path. Keep one
-# full CLI invalid-response representative for each preparation branch.
+# case-targeted production CLI invalid-response representative per preparation branch.
 run_prepare_only_representative_path_probe \
     medium-prepare-only-terminal-route '["feature_preparation_result", "readiness_plan"]'
 run_prepare_only_representative_path_probe \
@@ -1834,13 +1845,14 @@ printf '%s\n' \
     >>"$state_fake_dir/assistant-workflow/$mapping_case.txt"
 
 workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-workflow_fake_pass_count=$((workflow_case_count - 2))
+workflow_fake_case_count=2
+workflow_fake_pass_count=0
 state_compliant_status=0
 state_fake_status=0
 if ! run_workflow_eval "$state_compliant_dir" "$state_compliant_output"; then
     state_compliant_status=1
 fi
-if run_workflow_eval "$state_fake_dir" "$state_fake_output"; then
+if run_workflow_eval "$state_fake_dir" "$state_fake_output" "$resolved_then_blocked_case" "$mapping_case"; then
     state_fake_status=1
 fi
 
@@ -1850,7 +1862,7 @@ if [[ "${#state_eval_missing[@]}" -eq 0 ]] \
     && [[ "$state_fake_status" -eq 0 ]] \
     && grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolved-then-blocked-recovery' "$state_fake_output" \
     && grep -Fq $'FAIL\tassistant-workflow\tprogressive-mapping-single-active-negative' "$state_fake_output" \
-    && grep -Fq "Summary: total=$workflow_case_count passed=$workflow_fake_pass_count failed=2" "$state_fake_output" \
+    && grep -Fq "Summary: total=$workflow_fake_case_count passed=$workflow_fake_pass_count failed=2" "$state_fake_output" \
     && grep -Fq "missing required substring" "$state_fake_output" \
     && grep -Fq "missing_required_substrings=2" "$state_fake_output" \
     && ! grep -Fq "forbidden substring hit" "$state_fake_output"; then
@@ -2090,18 +2102,18 @@ printf '%s\n' \
     'Propose another activation at equality despite the finite cap.' \
     >>"$eval_enforcement_dir/assistant-workflow/$readiness_case.txt"
 
-workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
 eval_enforcement_status=0
-if run_workflow_eval "$eval_enforcement_dir" "$eval_enforcement_output"; then
+if run_workflow_eval "$eval_enforcement_dir" "$eval_enforcement_output" "$route_clear_case" "$readiness_case"; then
     eval_enforcement_status=1
 fi
 
-eval_enforcement_expected_pass_count=$((workflow_case_count - 2))
+eval_enforcement_case_count=2
+eval_enforcement_expected_pass_count=0
 if [[ "${#eval_enforcement_missing[@]}" -ne 0 ]] \
     || [[ "$eval_enforcement_status" -ne 0 ]] \
     || ! grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolution-route-clear' "$eval_enforcement_output" \
     || ! grep -Fq $'FAIL\tassistant-workflow\tprogressive-sequential-resolution-readiness' "$eval_enforcement_output" \
-    || ! grep -Fq "Summary: total=$workflow_case_count passed=$eval_enforcement_expected_pass_count failed=2" "$eval_enforcement_output" \
+    || ! grep -Fq "Summary: total=$eval_enforcement_case_count passed=$eval_enforcement_expected_pass_count failed=2" "$eval_enforcement_output" \
     || ! grep -Fq "missing_required_substrings=5" "$eval_enforcement_output" \
     || grep -Fq "forbidden substring hit" "$eval_enforcement_output"; then
     readiness_missing+=("real eval enforcement must reject only the missing route-clear consumer target and readiness lifecycle invariants: ${eval_enforcement_missing[*]}")
@@ -2595,15 +2607,15 @@ p0p4_register_cleanup "$retained_state_eval_dir" "$retained_state_eval_output"
 write_workflow_eval_responses "$retained_state_eval_dir" "$eval_fixture"
 printf '%s\n' "$retained_state_forbidden" >>"$retained_state_eval_dir/assistant-workflow/$retained_state_case.txt"
 
-workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-retained_state_expected_pass_count=$((workflow_case_count - 1))
+retained_state_case_count=1
+retained_state_expected_pass_count=0
 retained_state_eval_status=0
-if run_workflow_eval "$retained_state_eval_dir" "$retained_state_eval_output"; then
+if run_workflow_eval "$retained_state_eval_dir" "$retained_state_eval_output" "$retained_state_case"; then
     retained_state_eval_status=1
 fi
 if [[ "$retained_state_eval_status" -ne 0 ]] \
     || ! grep -Fq $'FAIL\tassistant-workflow\t'"$retained_state_case" "$retained_state_eval_output" \
-    || ! grep -Fq "Summary: total=$workflow_case_count passed=$retained_state_expected_pass_count failed=1" "$retained_state_eval_output" \
+    || ! grep -Fq "Summary: total=$retained_state_case_count passed=$retained_state_expected_pass_count failed=1" "$retained_state_eval_output" \
     || ! grep -Fq "missing_required_substrings=0" "$retained_state_eval_output" \
     || ! grep -Fq "forbidden substring hit" "$retained_state_eval_output"; then
     retained_state_missing+=("real eval enforcement must reject the keyword-complete bounded-state retained-artifact omission")
@@ -3020,16 +3032,16 @@ for case_and_term in \
         select(. != $term)
     ' "$eval_fixture" >"$archival_required_eval_dir/assistant-workflow/$case_id.txt"
 done
-workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-archival_required_expected_pass_count=$((workflow_case_count - 3))
+archival_required_case_count=3
+archival_required_expected_pass_count=0
 archival_required_eval_status=0
-if run_workflow_eval "$archival_required_eval_dir" "$archival_required_eval_output"; then
+if run_workflow_eval "$archival_required_eval_dir" "$archival_required_eval_output" progressive-resolution-route-clear progressive-sequential-resolution-readiness progressive-terminal-archival-omission; then
     archival_required_eval_status=1
 fi
 if [[ "$archival_required_eval_status" -ne 0 ]]; then
     archival_retention_missing+=("required-term omission corpus unexpectedly passed")
 fi
-if ! grep -Fq "Summary: total=$workflow_case_count passed=$archival_required_expected_pass_count failed=3" "$archival_required_eval_output"; then
+if ! grep -Fq "Summary: total=$archival_required_case_count passed=$archival_required_expected_pass_count failed=3" "$archival_required_eval_output"; then
     archival_retention_missing+=("required-term omission corpus must fail exactly three cases")
 fi
 for case_id in progressive-resolution-route-clear progressive-sequential-resolution-readiness progressive-terminal-archival-omission; do
@@ -3049,8 +3061,8 @@ printf '%s\n' \
     "Do not set progressive_artifact_retention_state=terminally_archived while progressive_route_clear_consumption_state=pending." \
     "Do not set progressive_artifact_retention_state=terminally_archived while progressive_sequence_readiness_state=active." \
     >>"$archival_denial_eval_dir/assistant-workflow/$archival_retention_case.txt"
-if ! run_workflow_eval "$archival_denial_eval_dir" "$archival_denial_eval_output" \
-    || ! grep -Fq "Summary: total=$workflow_case_count passed=$workflow_case_count failed=0" "$archival_denial_eval_output"; then
+if ! run_workflow_eval "$archival_denial_eval_dir" "$archival_denial_eval_output" "$archival_retention_case" \
+    || ! grep -Fq "Summary: total=1 passed=1 failed=0" "$archival_denial_eval_output"; then
     archival_retention_missing+=("compliant terminal-archival denial wording must pass the real eval grader")
 fi
 
@@ -3246,15 +3258,15 @@ jq -r --arg case_id "$review_repair_case" --argjson omissions "$all_excluded_inh
         .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[] |
         select(. as $term | $omissions | index($term) | not)
     ' "$eval_fixture" >"$all_excluded_required_eval_dir/assistant-workflow/$review_repair_case.txt"
-workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
-all_excluded_required_expected_pass_count=$((workflow_case_count - 1))
+all_excluded_required_case_count=1
+all_excluded_required_expected_pass_count=0
 all_excluded_required_eval_status=0
-if run_workflow_eval "$all_excluded_required_eval_dir" "$all_excluded_required_eval_output"; then
+if run_workflow_eval "$all_excluded_required_eval_dir" "$all_excluded_required_eval_output" "$review_repair_case"; then
     all_excluded_required_eval_status=1
 fi
 if [[ "$all_excluded_required_eval_status" -ne 0 ]] \
     || ! grep -Fq $'FAIL\tassistant-workflow\t'"$review_repair_case" "$all_excluded_required_eval_output" \
-    || ! grep -Fq "Summary: total=$workflow_case_count passed=$all_excluded_required_expected_pass_count failed=1" "$all_excluded_required_eval_output" \
+    || ! grep -Fq "Summary: total=$all_excluded_required_case_count passed=$all_excluded_required_expected_pass_count failed=1" "$all_excluded_required_eval_output" \
     || ! grep -Fq "missing_required_substrings=${#all_excluded_inherited_required_terms[@]}" "$all_excluded_required_eval_output" \
     || grep -Fq 'forbidden substring hit' "$all_excluded_required_eval_output"; then
     review_repair_missing+=("required-only all-excluded inheritance omission must fail only the owning eval case through every missing inherited obligation")
@@ -3493,18 +3505,18 @@ else
     fail "workflow negative response grading missing: ${terminal_grader_missing[*]}"
 fi
 
-test_start "workflow keeps full-corpus eval enforcement proportional"
+test_start "workflow keeps full-corpus baselines and case-targeted mutation grading proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
-if [[ "$workflow_full_corpus_eval_count" -eq 26 \
+if [[ "$workflow_eval_invocation_count" -eq 26 \
     && "$prepare_only_direct_structured_probe_count" -eq 375 \
     && "$prepare_only_plan_mode_mutation_count" -eq 12 \
     && "$prepare_only_representative_cli_probe_count" -eq 3 \
     && "$prepare_only_mutation_invocation_count" -eq 15 \
-    && "$actual_grader_invocation_count" -eq $((workflow_full_corpus_eval_count + prepare_only_mutation_invocation_count + non_workflow_skill_eval_count)) \
-    && "$full_corpus_eval_call_sites" -eq 1 ]]; then
+    && "$actual_grader_invocation_count" -eq $((workflow_eval_invocation_count + prepare_only_mutation_invocation_count + non_workflow_skill_eval_count)) \
+    && "$full_corpus_eval_call_sites" -eq 2 ]]; then
     pass
 else
-    fail "expected 26 full-corpus, 375 independent direct production structured-grader probes, 12 plan-mode full CLI mutations, and 3 representative branch CLI probes; found $workflow_full_corpus_eval_count full-corpus, $prepare_only_direct_structured_probe_count direct probes, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_representative_cli_probe_count representative, $prepare_only_mutation_invocation_count full CLI mutations, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total full CLI invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 26 bounded workflow evals, 375 independent direct production structured-grader probes, 12 plan-mode case CLI mutations, 3 representative branch CLI probes, and one full-corpus plus one case-targeted runner call site; found $workflow_eval_invocation_count workflow evals, $prepare_only_direct_structured_probe_count direct probes, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_representative_cli_probe_count representative, $prepare_only_mutation_invocation_count mutation CLI calls, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total CLI invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

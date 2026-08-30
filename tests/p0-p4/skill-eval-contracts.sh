@@ -172,9 +172,35 @@ p0p4_write_assistant_review_batch_response() {
             final_review_snapshot_id: "snapshot-1",
             final_snapshot_identity: {basis: "diff_digest", value: "digest-1", captured_at: "2026-08-28T00:00:00Z", scope_manifest_digest: "manifest-1"},
             coverage_complete: $coverage_complete,
+            final_batch_plan: {
+              batch_id: "batch-1",
+              review_snapshot_id: "snapshot-1",
+              scope_size: "small",
+              topology: {
+                discovery_pass_count: 2,
+                canonical_discovery_perspectives: {
+                  trivial_small: ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths"],
+                  medium: ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers"],
+                  large: ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]
+                },
+                security_specialist_triggered: false,
+                closure_verification_required: false,
+                max_required_responses: 2,
+                max_repair_attempts_per_pass: 1
+              },
+              expected_passes: [
+                {review_pass_id: "pass-contract", perspective: "contract_and_test_oracle", assigned_scope: ["scope-1"], coverage_obligations: ["contract"], prior_finding_visibility: "none"},
+                {review_pass_id: "pass-runtime", perspective: "runtime_lifecycle_and_failure_paths", assigned_scope: ["scope-1"], coverage_obligations: ["runtime"], prior_finding_visibility: "none"}
+              ],
+              required_coverage_tuples: [
+                {review_pass_id: "pass-contract", scope_item_id: "scope-1", applicable_concern: "contract", review_perspective: "contract_and_test_oracle", coverage_obligation: "contract"},
+                {review_pass_id: "pass-runtime", scope_item_id: "scope-1", applicable_concern: "runtime", review_perspective: "runtime_lifecycle_and_failure_paths", coverage_obligation: "runtime"}
+              ]
+            },
             coverage_ledger: [
-              {batch_id: "batch-1", review_snapshot_id: "snapshot-1", review_pass_id: "pass-contract", perspective: "contract_and_test_oracle", coverage_obligation: "contract", assigned_scope: ["scope-1"], scope_item_id: "scope-1", applicable_concern: "contract", terminal_state: "completed", coverage_status: "complete", evidence: "contract evidence"},
-              ({batch_id: "batch-1", review_snapshot_id: "snapshot-1", review_pass_id: "pass-runtime", perspective: "runtime_lifecycle_and_failure_paths", coverage_obligation: "runtime", assigned_scope: ["scope-1"], scope_item_id: "scope-1", applicable_concern: "runtime", terminal_state: (if $coverage_complete then "completed" elif $batch_status == "invalidated" then "invalidated" else "timed_out" end), coverage_status: (if $coverage_complete then "complete" elif $batch_status == "invalidated" then "invalidated" else "incomplete" end), evidence: "runtime evidence"} | if $coverage_complete then . else .coverage_gap_id = coverage_gap_id end)
+              {batch_id: "batch-1", review_snapshot_id: "snapshot-1", review_pass_id: "pass-contract", perspective: "contract_and_test_oracle", coverage_obligation: "contract", assigned_scope: ["scope-1"], scope_item_id: "scope-1", applicable_concern: "contract", terminal_state: "completed", coverage_status: "complete", coverage_disposition: "inspected_no_risk", evidence: "contract evidence"},
+              ({batch_id: "batch-1", review_snapshot_id: "snapshot-1", review_pass_id: "pass-runtime", perspective: "runtime_lifecycle_and_failure_paths", coverage_obligation: "runtime", assigned_scope: ["scope-1"], scope_item_id: "scope-1", applicable_concern: "runtime", terminal_state: (if $coverage_complete then "completed" elif $batch_status == "invalidated" then "invalidated" else "timed_out" end), coverage_status: (if $coverage_complete then "complete" elif $batch_status == "invalidated" then "invalidated" else "incomplete" end), coverage_disposition: (if $coverage_complete and $include_finding then "finding" elif $coverage_complete then "inspected_no_risk" else "incomplete" end), evidence: "runtime evidence"}
+                | if $coverage_complete and $include_finding then .finding_ids = ["review_pass:pass-runtime:finding-1"] elif $coverage_complete then . else .coverage_gap_id = coverage_gap_id end)
             ],
             batch_summaries: [{started_batch_ordinal: 1, batch_id: "batch-1", review_snapshot_id: "snapshot-1", snapshot_identity: {basis: "diff_digest", value: "digest-1", captured_at: "2026-08-28T00:00:00Z", scope_manifest_digest: "manifest-1"}, batch_status: $batch_status, expected_response_count: 2, terminal_response_count: (if $batch_status == "complete" then 2 else 1 end), aggregate_rubric_recomputed: ($batch_status == "complete")}],
             aggregation_ledger: (if $include_finding then [{source_provenance: [{source_kind: "review_pass", source_id: "pass-runtime"}], source_finding_ids: ["review_pass:pass-runtime:finding-1"], aggregate_finding_id: "aggregate-1", disposition: "retained", rationale: "Validated later-pass finding."}] elif $coverage_complete then [] else [{source_provenance: [{source_kind: "review_pass", source_id: "pass-runtime"}], source_coverage_gap_ids: [coverage_gap_id], disposition: "coverage_gap", rationale: "The current runtime tuple is incomplete."}] end),
@@ -380,7 +406,7 @@ p0p4_write_skill_eval_responses() {
                     progressive-collaborative-contributor-evidence)
                         jq -n '{decision_item: {interaction_mode: "collaborative"}, decision_resolution: {contributor_evidence: [{contributor_role: "agent", contribution: "analysis", evidence_ref: "analysis-ref"}, {contributor_role: "human_or_user", contribution: "decision", evidence_ref: "decision-ref"}]}, route_clear: true}' >"$response_path"
                         ;;
-                    standard-pack-review-result-retains-checklist|light-pack-review-result-retains-current-snapshot|incomplete-review-blocks-clean-final-handoff|blocked-qa-blocks-clean-final-handoff|rejected-qa-blocks-clean-final-handoff|fulfilled-preparation-qa-obligation-allows-completion|fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion|qa-reject-source-fix-requires-rebuild-review-before-resume|qa-reject-unchanged-source-allows-resume-with-digest-equality|small-strict-blocked-qa-requires-terminal-projection|small-required-rejected-qa-requires-terminal-projection|stale-assistant-review-version-invalidates-persisted-results)
+                    standard-pack-review-result-retains-checklist|light-pack-review-result-retains-current-snapshot|incomplete-review-blocks-clean-final-handoff|blocked-qa-blocks-clean-final-handoff|rejected-qa-blocks-clean-final-handoff|fulfilled-preparation-qa-obligation-allows-completion|fulfilled-not-applicable-preparation-qa-obligation-allows-concern-completion|qa-reject-source-fix-requires-rebuild-review-before-resume|qa-reject-unchanged-source-allows-resume-with-digest-equality|small-strict-blocked-qa-requires-terminal-projection|small-required-rejected-qa-requires-terminal-projection|stale-assistant-review-version-invalidates-persisted-results|post-fix-review-closure-allows-issues-fixed-completion|post-fix-review-regression-remains-open)
                         build_workflow_review_lifecycle_eval_response "$id" "$response_path" "$required_summary"
                         ;;
                     architecture-pack-*-blocks)
@@ -414,17 +440,50 @@ p0p4_write_skill_eval_responses() {
                     incomplete-review-batch-never-cleans)
                         p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "HAS_REMAINING_ITEMS" false incomplete false
                         ;;
-                    post-fix-review-uses-fresh-snapshot-batch)
+                    post-fix-review-uses-fresh-snapshot-batch|post-fix-verified-closure-with-incomplete-coverage|post-fix-review-regression-remains-open)
                         p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "ISSUES_FIXED" true complete false
                         jq '.final_summary.rounds = 2
                             | .final_summary.batch_summaries = [
                                 {started_batch_ordinal: 1, batch_id: "batch-0", review_snapshot_id: "snapshot-0", snapshot_identity: {basis: "diff_digest", value: "digest-0", captured_at: "2026-08-28T00:00:00Z", scope_manifest_digest: "manifest-0"}, batch_status: "invalidated", expected_response_count: 2, terminal_response_count: 1, aggregate_rubric_recomputed: false},
-                                (.final_summary.batch_summaries[0] | .started_batch_ordinal = 2)
+                                (.final_summary.batch_summaries[0]
+                                  | .started_batch_ordinal = 2
+                                  | .expected_response_count = 3
+                                  | .terminal_response_count = 3)
                               ]
+                            | .final_summary.final_batch_plan.topology.closure_verification_required = true
+                            | .final_summary.final_batch_plan.topology.max_required_responses = 3
+                            | .final_summary.final_batch_plan.expected_passes += [{review_pass_id:"pass-closure",perspective:"closure_verification",assigned_scope:["scope-1"],coverage_obligations:["verify previously fixed finding"],prior_finding_visibility:"closure_ledger"}]
+                            | .final_summary.final_batch_plan.required_coverage_tuples += [{review_pass_id:"pass-closure",scope_item_id:"scope-1",applicable_concern:"previously_fixed",review_perspective:"closure_verification",coverage_obligation:"verify previously fixed finding"}]
                             | .final_summary.additional_round_reasons = [{round: 2, reason: "changed_files", evidence_ref: "fix-1", detail: "The fix created a fresh final snapshot for re-review."}]
-                            | .final_summary.fixed_items = [{severity: "must-fix", file: "src/review.ts", description: "The original finding was fixed before the fresh batch.", fixed_in_round: 1}]
-                            | .final_summary.coverage_ledger = ((.final_summary.coverage_ledger | map(.batch_id = "batch-0" | .review_snapshot_id = "snapshot-0" | .terminal_state = "invalidated" | .coverage_status = "invalidated" | .evidence = "Invalidated by source mutation.")) + .final_summary.coverage_ledger)' "$response_path" >"${response_path}.post-fix"
+                            | .final_summary.fixed_items = [{aggregate_finding_id: "aggregate-fixed-1", severity: "must-fix", file: "src/review.ts", description: "The original finding was fixed before the fresh batch.", fixed_in_round: 1}]
+                            | .final_summary.closure_results = [{aggregate_finding_id: "aggregate-fixed-1", status: "verified_closed", evidence: "The closure pass re-inspected the original finding on the fresh snapshot."}]
+                            | .final_summary.aggregation_ledger = [{source_provenance: [{source_kind: "review_pass", source_id: "pass-runtime"}], source_finding_ids: ["review_pass:pass-runtime:finding-fixed-1"], aggregate_finding_id: "aggregate-fixed-1", disposition: "fixed_closed", rationale: "The original aggregate finding was fixed and independently verified closed."}]
+                            | .final_summary.coverage_ledger = ((.final_summary.coverage_ledger | map(.batch_id = "batch-0" | .review_snapshot_id = "snapshot-0" | .terminal_state = "invalidated" | .coverage_status = "invalidated" | .coverage_disposition = "incomplete" | del(.finding_ids) | .coverage_gap_id = ("coverage-gap:batch-0:" + .review_pass_id) | .evidence = "Invalidated by source mutation.")) + .final_summary.coverage_ledger + [{batch_id:"batch-1",review_snapshot_id:"snapshot-1",review_pass_id:"pass-closure",perspective:"closure_verification",coverage_obligation:"verify previously fixed finding",assigned_scope:["scope-1"],scope_item_id:"scope-1",applicable_concern:"previously_fixed",terminal_state:"completed",coverage_status:"complete",coverage_disposition:"inspected_no_risk",evidence:"The previously fixed item was independently rechecked on the fresh snapshot."}])' "$response_path" >"${response_path}.post-fix"
                         mv "${response_path}.post-fix" "$response_path"
+                        if [[ "$id" == "post-fix-verified-closure-with-incomplete-coverage" ]]; then
+                            jq '.final_summary.coverage_complete = false
+                                | .final_summary.result = "HAS_REMAINING_ITEMS"
+                                | del(.final_summary.evidence_bounded_claim)
+                                | .final_summary.batch_summaries[1].batch_status = "incomplete"
+                                | .final_summary.batch_summaries[1].terminal_response_count = 2
+                                | .final_summary.batch_summaries[1].aggregate_rubric_recomputed = false
+                                | .final_summary.coverage_ledger |= map(if .batch_id == "batch-1" and .review_pass_id == "pass-runtime" then .terminal_state = "timed_out" | .coverage_status = "incomplete" | .coverage_disposition = "incomplete" | .coverage_gap_id = "coverage-gap:batch-1:pass-runtime:scope-1:runtime" | .evidence = "The required runtime pass timed out." | del(.finding_ids) else . end)
+                                | .final_summary.aggregation_ledger += [{source_provenance:[{source_kind:"review_pass",source_id:"pass-runtime"}],source_coverage_gap_ids:["coverage-gap:batch-1:pass-runtime:scope-1:runtime"],disposition:"coverage_gap",rationale:"The unrelated runtime coverage tuple is incomplete."}]
+                                | .final_summary.remaining_items = []
+                                | .final_summary.coverage_gaps = ["The required runtime coverage tuple is incomplete."]' "$response_path" >"${response_path}.incomplete"
+                            mv "${response_path}.incomplete" "$response_path"
+                        fi
+                        if [[ "$id" == "post-fix-review-regression-remains-open" ]]; then
+                            jq '.final_summary.result = "HAS_REMAINING_ITEMS"
+                                | del(.final_summary.evidence_bounded_claim)
+                                | .final_summary.closure_results[0].status = "regressed"
+                                | .final_summary.closure_results[0].evidence = "The fresh closure pass reproduced the original failure."
+                                | .final_summary.aggregated_findings = [{aggregate_finding_id:"aggregate-fixed-1",finding_id:"review_pass:pass-closure:finding-regressed-1",source_finding_ids:["review_pass:pass-closure:finding-regressed-1"],source_provenance:[{source_kind:"review_pass",source_id:"pass-closure"}],locus:"response barrier",file:"src/review.ts",line:1,invariant:"the original fix remains effective",failure_mechanism:"the fresh closure pass reproduced the original failure",severity:"must-fix",description:"The original fixed finding regressed.",evidence:"The fresh closure pass reproduced the failure.",smallest_useful_fix:"Repair the original invariant and re-run closure verification.",confidence_pct:99}]
+                                | .final_summary.aggregation_ledger += [{source_provenance:[{source_kind:"review_pass",source_id:"pass-closure"}],source_finding_ids:["review_pass:pass-closure:finding-regressed-1"],aggregate_finding_id:"aggregate-fixed-1",disposition:"retained",rationale:"The fresh closure pass retained the regressed original aggregate finding."}]
+                                | .final_summary.coverage_ledger |= map(if .review_pass_id == "pass-closure" then .coverage_disposition = "finding" | .finding_ids = ["review_pass:pass-closure:finding-regressed-1"] | .evidence = "The closure pass reproduced the original failure." else . end)
+                                | .final_summary.remaining_items = [{severity:"must-fix",file:"src/review.ts",description:"The original fixed finding regressed.",reason_unresolved:"A fresh repair and closure pass are required."}]' "$response_path" >"${response_path}.regressed"
+                            mv "${response_path}.regressed" "$response_path"
+                        fi
                         ;;
                     audit-spec-review-fail-continues-complete-batch)
                         p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "HAS_REMAINING_ITEMS" true complete true
@@ -440,10 +499,22 @@ p0p4_write_skill_eval_responses() {
                         ;;
                     in-flight-mutation-invalidates-review-batch)
                         p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "HAS_REMAINING_ITEMS" false invalidated false
+                        jq '.final_summary.final_batch_plan.scope_size = "medium"
+                            | .final_summary.final_batch_plan.topology.discovery_pass_count = 3
+                            | .final_summary.final_batch_plan.topology.max_required_responses = 3
+                            | .final_summary.final_batch_plan.expected_passes += [{review_pass_id:"pass-integration",perspective:"integration_compatibility_and_consumers",assigned_scope:["scope-1"],coverage_obligations:["integration"],prior_finding_visibility:"none"}]
+                            | .final_summary.final_batch_plan.required_coverage_tuples += [{review_pass_id:"pass-integration",scope_item_id:"scope-1",applicable_concern:"integration",review_perspective:"integration_compatibility_and_consumers",coverage_obligation:"integration"}]
+                            | .final_summary.coverage_ledger += [{batch_id:"batch-1",review_snapshot_id:"snapshot-1",review_pass_id:"pass-integration",perspective:"integration_compatibility_and_consumers",coverage_obligation:"integration",assigned_scope:["scope-1"],scope_item_id:"scope-1",applicable_concern:"integration",terminal_state:"invalidated",coverage_status:"invalidated",coverage_disposition:"incomplete",coverage_gap_id:"coverage-gap:batch-1:pass-integration:scope-1:integration",evidence:"Source identity changed before the integration response could be accepted."}]
+                            | .final_summary.batch_summaries[0].expected_response_count = 3
+                            | .final_summary.batch_summaries[0].terminal_response_count = 2
+                            | .final_summary.aggregation_ledger[0].source_provenance += [{source_kind:"review_pass",source_id:"pass-integration"}]
+                            | .final_summary.aggregation_ledger[0].source_coverage_gap_ids += ["coverage-gap:batch-1:pass-integration:scope-1:integration"]' "$response_path" >"${response_path}.three-pass"
+                        mv "${response_path}.three-pass" "$response_path"
                         ;;
                     trivial-audit-uses-two-isolated-passes)
                         p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "CLEAN" true complete false
-                        jq '.review_delegation_path = {subagent_policy_state: "subagents_unavailable", subagent_execution_mode: "direct_fallback", subagent_trigger_scope: ["small audit"], fresh_context_evidence: "fresh direct-fallback context"}' "$response_path" >"${response_path}.trivial"
+                        jq '.final_summary.final_batch_plan.scope_size = "trivial"
+                            | .review_delegation_path = {subagent_policy_state: "not_required", subagent_execution_mode: "direct_fallback", subagent_trigger_scope: [], fresh_context_evidence: "fresh isolated direct-fallback context"}' "$response_path" >"${response_path}.trivial"
                         mv "${response_path}.trivial" "$response_path"
                         ;;
                     qa-obligation-echo-fulfills-exact-binding)
@@ -1131,6 +1202,39 @@ else
     fail "skill eval runner --list --skill assistant-clarify did not list only assistant-clarify cases"
 fi
 
+test_start "skill eval runner filters list and response grading to exact case ids"
+targeted_case_id="compressed-request-produces-structured-brief"
+targeted_case_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-targeted-case.XXXXXX")"
+targeted_case_output="$targeted_case_root/output.txt"
+targeted_case_prompts="$targeted_case_root/prompts"
+p0p4_register_cleanup "$targeted_case_root"
+mkdir -p "$targeted_case_root/assistant-clarify"
+printf '%s\n' \
+    "likely goal" \
+    "knowns" \
+    "unknowns" \
+    "constraints" \
+    "likely deliverables" \
+    "recommendation" \
+    "execution target" \
+    "needs clarification" \
+    >"$targeted_case_root/assistant-clarify/$targeted_case_id.txt"
+if targeted_case_list_output="$("$skill_eval_runner" --list --skill assistant-clarify --case "$targeted_case_id")" \
+    && [[ "$(printf '%s\n' "$targeted_case_list_output" | grep -c .)" -eq 1 ]] \
+    && printf '%s\n' "$targeted_case_list_output" | grep -Fq $'assistant-clarify\t'"$targeted_case_id"$'\t' \
+    && "$skill_eval_runner" --emit-prompts "$targeted_case_prompts" --skill assistant-clarify --case "$targeted_case_id" >/dev/null \
+    && [[ -f "$targeted_case_prompts/assistant-clarify/$targeted_case_id.md" ]] \
+    && [[ ! -e "$targeted_case_prompts/assistant-clarify/multi-intent-prompt-asks-material-clarification.md" ]] \
+    && "$skill_eval_runner" --responses "$targeted_case_root" --skill assistant-clarify --case "$targeted_case_id" >"$targeted_case_output" 2>&1 \
+    && grep -Fq 'Summary: total=1 passed=1 failed=0' "$targeted_case_output" \
+    && ! "$skill_eval_runner" --list --skill assistant-clarify --case invented-case >/dev/null 2>&1 \
+    && ! "$skill_eval_runner" --list --skill assistant-clarify --case "" >/dev/null 2>&1 \
+    && ! "$skill_eval_runner" --list --skill assistant-clarify --case "   " >/dev/null 2>&1; then
+    pass
+else
+    fail "exact case selection did not bound listing, grading, or reject empty, whitespace-only, and unknown selectors"
+fi
+
 test_start "skill eval runner list honors targeted expanded skill selection"
 telos_case_count="$(jq '.cases | length' "$telos_fixture")"
 if targeted_telos_list_output="$("$skill_eval_runner" --list --skill assistant-telos)" \
@@ -1171,6 +1275,8 @@ if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && grep -Fq '"architecture_design_mode"' "$prompt_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.md" \
     && grep -Fq '"review_intensive"' "$prompt_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.md" \
     && grep -Fq "Skill: assistant-review" "$prompt_dir/assistant-review/review-fix-loop-handles-findings.md" \
+    && grep -Fq "### Canonical Review Batch Expectation" "$prompt_dir/assistant-review/trivial-audit-uses-two-isolated-passes.md" \
+    && grep -Fq '"scope_size":"trivial"' "$prompt_dir/assistant-review/trivial-audit-uses-two-isolated-passes.md" \
     && grep -Fq "## Seeded Defects / Measurable Assertions" "$prompt_dir/assistant-review/code-review-checks-behavioral-contracts.md" \
     && grep -Fq "refund-special-case-bypasses-shared-guards" "$prompt_dir/assistant-review/code-review-checks-behavioral-contracts.md" \
     && grep -Fq "Skill: assistant-tdd" "$prompt_dir/assistant-tdd/bugfix-starts-with-red-evidence.md" \
@@ -1346,7 +1452,7 @@ while IFS='|' read -r assistant_review_case_id assistant_review_mutation; do
     cp "$assistant_review_response" "$assistant_review_response.original"
     jq "$assistant_review_mutation" "$assistant_review_response" >"$assistant_review_runtime_mutation_output"
     mv "$assistant_review_runtime_mutation_output" "$assistant_review_response"
-    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review >"$passing_response_output" 2>&1 \
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review --case "$assistant_review_case_id" >"$passing_response_output" 2>&1 \
         || ! grep -Fq $'FAIL\tassistant-review\t'"$assistant_review_case_id" "$passing_response_output" \
         || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
         assistant_review_runtime_mutation_failures+=("$assistant_review_case_id")
@@ -1354,6 +1460,7 @@ while IFS='|' read -r assistant_review_case_id assistant_review_mutation; do
     mv "$assistant_review_response.original" "$assistant_review_response"
 done <<'EOF_ASSISTANT_REVIEW_RUNTIME_MUTATIONS'
 trivial-audit-uses-two-isolated-passes|del(.final_summary.final_snapshot_identity)
+trivial-audit-uses-two-isolated-passes|del(.final_summary.final_batch_plan)
 trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger += [{}]
 trivial-audit-uses-two-isolated-passes|.final_summary.batch_summaries[0].batch_id = true
 trivial-audit-uses-two-isolated-passes|.final_summary.invented = true
@@ -1377,7 +1484,7 @@ while IFS='|' read -r assistant_review_r9_label assistant_review_case_id assista
     cp "$assistant_review_response" "$assistant_review_response.original"
     jq "$assistant_review_r9_mutation" "$assistant_review_response" >"$assistant_review_r9_output"
     mv "$assistant_review_r9_output" "$assistant_review_response"
-    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review >"$passing_response_output" 2>&1 \
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review --case "$assistant_review_case_id" >"$passing_response_output" 2>&1 \
         || ! grep -Fq $'FAIL\tassistant-review\t'"$assistant_review_case_id" "$passing_response_output" \
         || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
         assistant_review_r9_failures+=("$assistant_review_r9_label")
@@ -1385,13 +1492,67 @@ while IFS='|' read -r assistant_review_r9_label assistant_review_case_id assista
     mv "$assistant_review_response.original" "$assistant_review_response"
 done <<'EOF_ASSISTANT_REVIEW_R9_MUTATIONS'
 final-current-snapshot|audit-batch-waits-for-all-pass-results|.final_summary.final_review_snapshot_id = "foreign-snapshot"
+final-plan-batch|audit-batch-waits-for-all-pass-results|.final_summary.final_batch_plan.batch_id = "foreign-batch"
+final-plan-pass-closure|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.expected_passes = [.final_summary.final_batch_plan.expected_passes[0]]
+final-plan-scope-size|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.scope_size = "medium"
+final-plan-discovery-count|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.topology.discovery_pass_count = 3
+final-plan-response-cap|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.topology.max_required_responses = 3
+final-plan-repair-cap|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.topology.max_repair_attempts_per_pass = 2
+final-plan-specialist-flag|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.topology.security_specialist_triggered = true
+final-plan-closure-visibility|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.expected_passes[0].prior_finding_visibility = "closure_ledger"
+final-plan-uncovered-assigned-scope|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.expected_passes[0].assigned_scope += ["scope-uncovered"]
+final-plan-uncovered-obligation|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.expected_passes[0].coverage_obligations += ["uncovered"]
+final-plan-coordinated-scope-contraction|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.expected_passes |= map(.assigned_scope = ["foreign-scope"]) | .final_summary.final_batch_plan.required_coverage_tuples |= map(.scope_item_id = "foreign-scope") | .final_summary.coverage_ledger |= map(.assigned_scope = ["foreign-scope"] | .scope_item_id = "foreign-scope")
+final-plan-duplicate-assignment|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.expected_passes[0].assigned_scope += ["scope-1"] | .final_summary.coverage_ledger[0].assigned_scope += ["scope-1"]
+final-plan-duplicate-obligation|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.expected_passes[0].coverage_obligations += ["contract"]
+final-plan-required-tuple-omitted|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.required_coverage_tuples = [.final_summary.final_batch_plan.required_coverage_tuples[0]]
+final-plan-required-tuple-perspective|trivial-audit-uses-two-isolated-passes|.final_summary.final_batch_plan.required_coverage_tuples[1].review_perspective = "contract_and_test_oracle"
 identity-nonblank|audit-batch-waits-for-all-pass-results|.final_summary.final_snapshot_identity.value = ""
 identity-current-batch|trivial-audit-uses-two-isolated-passes|.final_summary.final_snapshot_identity.value = "foreign-digest"
+snapshot-authority-coordinated-foreign|audit-batch-waits-for-all-pass-results|.final_summary.final_snapshot_identity = {basis:"diff_digest",value:"foreign-digest",captured_at:"2026-08-28T00:00:00Z",scope_manifest_digest:"foreign-manifest"} | .final_summary.batch_summaries |= map(.snapshot_identity = {basis:"diff_digest",value:"foreign-digest",captured_at:"2026-08-28T00:00:00Z",scope_manifest_digest:"foreign-manifest"}) | .audit_report.batch_summaries |= map(.snapshot_identity = {basis:"diff_digest",value:"foreign-digest",captured_at:"2026-08-28T00:00:00Z",scope_manifest_digest:"foreign-manifest"})
 reviewed-scope-nonblank|audit-batch-waits-for-all-pass-results|.final_summary.reviewed_scope = [""]
 incomplete-coverage-result|incomplete-review-batch-never-cleans|.final_summary.coverage_ledger[1].coverage_status = "complete"
+incomplete-terminal-response-undercount|incomplete-review-batch-never-cleans|.final_summary.batch_summaries[0].terminal_response_count = 0
+incomplete-terminal-response-overcount|incomplete-review-batch-never-cleans|.final_summary.batch_summaries[0].terminal_response_count = 2
 coverage-gap-id-omitted|incomplete-review-batch-never-cleans|del(.final_summary.coverage_ledger[1].coverage_gap_id)
 coverage-gap-ledger-omitted|incomplete-review-batch-never-cleans|.final_summary.aggregation_ledger = []
 coverage-gap-ledger-mismatch|incomplete-review-batch-never-cleans|.final_summary.aggregation_ledger[0].source_coverage_gap_ids = ["coverage-gap:foreign"]
+coverage-gap-provenance-mismatch|incomplete-review-batch-never-cleans|.final_summary.aggregation_ledger[0].source_provenance = [{source_kind:"review_pass",source_id:"pass-contract"}]
+coverage-gap-source-pass-alias|incomplete-review-batch-never-cleans|.final_summary.aggregation_ledger[0].source_pass_ids = ["pass-contract"]
+coverage-gap-carries-finding-fields|incomplete-review-batch-never-cleans|.final_summary.aggregation_ledger[0].source_finding_ids = ["review_pass:pass-runtime:finding-1"] | .final_summary.aggregation_ledger[0].aggregate_finding_id = "aggregate-1"
+coverage-finding-disposition|audit-batch-waits-for-all-pass-results|.final_summary.coverage_ledger[1].coverage_disposition = "inspected_no_risk" | del(.final_summary.coverage_ledger[1].finding_ids)
+coverage-finding-ids|audit-batch-waits-for-all-pass-results|del(.final_summary.coverage_ledger[1].finding_ids)
+historical-gap-id|post-fix-review-uses-fresh-snapshot-batch|del(.final_summary.coverage_ledger[0].coverage_gap_id)
+historical-gap-id-duplicate|post-fix-review-uses-fresh-snapshot-batch|.final_summary.coverage_ledger[0].coverage_gap_id = .final_summary.coverage_ledger[1].coverage_gap_id
+historical-batch-ledger-omitted|post-fix-review-uses-fresh-snapshot-batch|.final_summary.coverage_ledger |= map(select(.batch_id != "batch-0"))
+post-fix-closure-flag|post-fix-review-uses-fresh-snapshot-batch|.final_summary.final_batch_plan.topology.closure_verification_required = false
+post-fix-closure-pass|post-fix-review-uses-fresh-snapshot-batch|.final_summary.final_batch_plan.expected_passes |= map(select(.review_pass_id != "pass-closure")) | .final_summary.final_batch_plan.required_coverage_tuples |= map(select(.review_pass_id != "pass-closure")) | .final_summary.coverage_ledger |= map(select(.review_pass_id != "pass-closure")) | .final_summary.batch_summaries[1].expected_response_count = 2 | .final_summary.batch_summaries[1].terminal_response_count = 2 | .final_summary.final_batch_plan.topology.max_required_responses = 2
+post-fix-closure-id-missing|post-fix-review-uses-fresh-snapshot-batch|del(.final_summary.fixed_items[0].aggregate_finding_id)
+post-fix-closure-result-missing|post-fix-review-uses-fresh-snapshot-batch|.final_summary.closure_results = []
+post-fix-closure-result-foreign|post-fix-review-uses-fresh-snapshot-batch|.final_summary.closure_results[0].aggregate_finding_id = "aggregate-foreign"
+post-fix-closure-ledger-missing|post-fix-review-uses-fresh-snapshot-batch|.final_summary.aggregation_ledger = []
+post-fix-closure-coordinated-foreign|post-fix-review-uses-fresh-snapshot-batch|.final_summary.fixed_items[0].aggregate_finding_id = "aggregate-foreign" | .final_summary.closure_results[0].aggregate_finding_id = "aggregate-foreign"
+post-fix-closure-all-fields-foreign|post-fix-review-uses-fresh-snapshot-batch|.final_summary.fixed_items[0].aggregate_finding_id = "aggregate-foreign" | .final_summary.closure_results[0].aggregate_finding_id = "aggregate-foreign" | .final_summary.aggregation_ledger[0].aggregate_finding_id = "aggregate-foreign" | .final_summary.aggregation_ledger[0].source_finding_ids = ["review_pass:foreign:finding-1"] | .final_summary.aggregation_ledger[0].source_provenance = [{source_kind:"review_pass",source_id:"foreign"}]
+post-fix-closure-result-duplicate|post-fix-review-uses-fresh-snapshot-batch|.final_summary.closure_results += [.final_summary.closure_results[0]]
+post-fix-closure-result-incomplete|post-fix-review-uses-fresh-snapshot-batch|.final_summary.closure_results[0].status = "incomplete"
+post-fix-closure-result-regressed|post-fix-review-uses-fresh-snapshot-batch|.final_summary.closure_results[0].status = "regressed"
+post-fix-verified-still-retained|post-fix-review-uses-fresh-snapshot-batch|.final_summary.aggregated_findings = [{aggregate_finding_id:"aggregate-fixed-1",finding_id:"spec_review:finding-retained-verified",source_finding_ids:["spec_review:finding-retained-verified"],source_provenance:[{source_kind:"spec_review",source_id:"spec-review-retained-verified"}],locus:"src/review.ts",file:"src/review.ts",invariant:"Closed findings stay absent from current aggregates.",failure_mechanism:"The verified finding was retained as a current nit.",severity:"nit",description:"Contradictory retained verified finding.",evidence:"Synthetic contradiction.",smallest_useful_fix:"Remove the retained finding.",confidence_pct:95}] | .final_summary.aggregation_ledger += [{source_provenance:[{source_kind:"spec_review",source_id:"spec-review-retained-verified"}],source_finding_ids:["spec_review:finding-retained-verified"],aggregate_finding_id:"aggregate-fixed-1",disposition:"retained",rationale:"Contradictory retained verified finding."}]
+post-fix-fixed-closed-source-pass-alias|post-fix-review-uses-fresh-snapshot-batch|.final_summary.aggregation_ledger |= map(if .disposition == "fixed_closed" then .source_pass_ids = ["pass-contract"] else . end)
+post-fix-fixed-closed-plus-rejected-invalid|post-fix-review-uses-fresh-snapshot-batch|.final_summary.aggregation_ledger += [{source_provenance:[{source_kind:"review_pass",source_id:"pass-runtime"}],source_finding_ids:["review_pass:pass-runtime:finding-fixed-1"],aggregate_finding_id:"aggregate-fixed-1",disposition:"rejected_invalid",rationale:"Contradictory second disposition for the same source finding."}]
+post-fix-regression-closure-omitted|post-fix-review-regression-remains-open|.final_summary.closure_results = []
+post-fix-regression-closure-foreign|post-fix-review-regression-remains-open|.final_summary.closure_results[0].aggregate_finding_id = "aggregate-foreign"
+post-fix-regression-not-retained|post-fix-review-regression-remains-open|.final_summary.aggregated_findings = [] | .final_summary.aggregation_ledger |= map(select(.disposition != "retained"))
+post-fix-regression-nit-downgrade|post-fix-review-regression-remains-open|.final_summary.aggregated_findings[0].severity = "nit"
+post-fix-regression-foreign-representative|post-fix-review-regression-remains-open|.final_summary.aggregated_findings[0].finding_id = "spec_review:foreign-representative"
+post-fix-regression-provenance-mismatch|post-fix-review-regression-remains-open|.final_summary.aggregated_findings[0].source_provenance = [{source_kind:"review_pass",source_id:"pass-contract"}]
+post-fix-regression-nonclosure-origin|post-fix-review-regression-remains-open|.final_summary.aggregated_findings[0].finding_id = "review_pass:pass-runtime:finding-regressed-1" | .final_summary.aggregated_findings[0].source_finding_ids = ["review_pass:pass-runtime:finding-regressed-1"] | .final_summary.aggregated_findings[0].source_provenance = [{source_kind:"review_pass",source_id:"pass-runtime"}] | .final_summary.aggregation_ledger |= map(if .disposition == "retained" then .source_finding_ids = ["review_pass:pass-runtime:finding-regressed-1"] | .source_provenance = [{source_kind:"review_pass",source_id:"pass-runtime"}] else . end) | .final_summary.coverage_ledger |= map(if .review_pass_id == "pass-runtime" and .batch_id == "batch-1" then .coverage_disposition = "finding" | .finding_ids = ["review_pass:pass-runtime:finding-regressed-1"] | .evidence = "The runtime pass reported the synthetic regression." elif .review_pass_id == "pass-closure" then .coverage_disposition = "inspected_no_risk" | del(.finding_ids) | .evidence = "The closure pass reported no finding." else . end)
+post-fix-regression-source-pass-alias|post-fix-review-regression-remains-open|.final_summary.aggregated_findings[0].source_pass_ids = ["pass-contract"]
+post-fix-regression-ledger-provenance|post-fix-review-regression-remains-open|.final_summary.aggregation_ledger |= map(if .disposition == "retained" then .source_provenance = [{source_kind:"review_pass",source_id:"pass-contract"}] else . end)
+post-fix-regression-ledger-source-pass-alias|post-fix-review-regression-remains-open|.final_summary.aggregation_ledger |= map(if .disposition == "retained" then .source_pass_ids = ["pass-contract"] else . end)
+post-fix-regression-fixed-ledger-origin|post-fix-review-regression-remains-open|.final_summary.aggregation_ledger |= map(if .disposition == "fixed_closed" then .source_finding_ids = ["review_pass:foreign:finding-1"] | .source_provenance = [{source_kind:"review_pass",source_id:"foreign"}] else . end)
+post-fix-regression-plus-observation|post-fix-review-regression-remains-open|.final_summary.aggregation_ledger += [{source_provenance:[{source_kind:"review_pass",source_id:"pass-closure"}],source_finding_ids:["review_pass:pass-closure:finding-regressed-1"],aggregate_finding_id:"aggregate-fixed-1",disposition:"observation",rationale:"Contradictory non-finding disposition for the retained source finding."}]
+post-fix-regression-duplicate-finding-disposition|post-fix-review-regression-remains-open|.final_summary.aggregated_findings[0].source_finding_ids = ["review_pass:pass-runtime:finding-fixed-1","review_pass:pass-closure:finding-regressed-1"] | .final_summary.aggregated_findings[0].source_provenance = [{source_kind:"review_pass",source_id:"pass-runtime"},{source_kind:"review_pass",source_id:"pass-closure"}] | .final_summary.aggregation_ledger |= map(if .disposition == "retained" then .source_finding_ids = ["review_pass:pass-runtime:finding-fixed-1","review_pass:pass-closure:finding-regressed-1"] | .source_provenance = [{source_kind:"review_pass",source_id:"pass-runtime"},{source_kind:"review_pass",source_id:"pass-closure"}] else . end) | .final_summary.coverage_ledger |= map(if .batch_id == "batch-1" and .review_pass_id == "pass-runtime" then .coverage_disposition = "finding" | .finding_ids = ["review_pass:pass-runtime:finding-fixed-1"] | .evidence = "The current runtime pass reproduced the original source finding." else . end)
+spec-review-unnamespaced-source|audit-spec-review-fail-continues-complete-batch|.final_summary.aggregated_findings |= map(if .aggregate_finding_id == "aggregate-spec-1" then .source_finding_ids += ["garbage-source-id"] else . end) | .final_summary.aggregation_ledger |= map(if .aggregate_finding_id == "aggregate-spec-1" then .source_finding_ids += ["garbage-source-id"] else . end) | .audit_report.findings |= map(if .aggregate_finding_id == "aggregate-spec-1" then .source_finding_ids += ["garbage-source-id"] else . end)
 round-ordinal-additional-reason|post-fix-review-uses-fresh-snapshot-batch|.final_summary.rounds = 3 | .final_summary.batch_summaries += [{started_batch_ordinal:3,batch_id:"batch-2",review_snapshot_id:"snapshot-2",snapshot_identity:{basis:"diff_digest",value:"digest-2",captured_at:"2026-08-28T00:00:00Z",scope_manifest_digest:"manifest-2"},batch_status:"complete",expected_response_count:2,terminal_response_count:2,aggregate_rubric_recomputed:true}] | .final_summary.final_review_snapshot_id = "snapshot-2" | .final_summary.final_snapshot_identity = {basis:"diff_digest",value:"digest-2",captured_at:"2026-08-28T00:00:00Z",scope_manifest_digest:"manifest-2"} | .final_summary.coverage_ledger |= map(if .batch_id == "batch-1" then .batch_id = "batch-2" | .review_snapshot_id = "snapshot-2" else . end)
 round-batch-length|post-fix-review-uses-fresh-snapshot-batch|.final_summary.batch_summaries = [.final_summary.batch_summaries[1]]
 batch-identity-unique|post-fix-review-uses-fresh-snapshot-batch|.final_summary.batch_summaries[0].batch_id = .final_summary.batch_summaries[1].batch_id
@@ -1405,7 +1566,9 @@ clean-with-coverage-gap|trivial-audit-uses-two-isolated-passes|.final_summary.co
 issues-fixed-without-fixes|trivial-audit-uses-two-isolated-passes|.final_summary.result = "ISSUES_FIXED"
 issues-fixed-with-material-remaining|post-fix-review-uses-fresh-snapshot-batch|.final_summary.remaining_items = [{severity:"should-fix",file:"src/review.ts",description:"Still open.",reason_unresolved:"Not fixed."}]
 issues-fixed-with-coverage-gap|post-fix-review-uses-fresh-snapshot-batch|.final_summary.coverage_gaps = ["Still incomplete."]
-clean-with-session-fix|trivial-audit-uses-two-isolated-passes|.final_summary.fixed_items = [{severity:"must-fix",file:"src/review.ts",description:"Fixed.",fixed_in_round:1}]
+clean-with-session-fix|trivial-audit-uses-two-isolated-passes|.final_summary.fixed_items = [{aggregate_finding_id:"aggregate-fixed",severity:"must-fix",file:"src/review.ts",description:"Fixed.",fixed_in_round:1}] | .final_summary.closure_results = [{aggregate_finding_id:"aggregate-fixed",status:"verified_closed",evidence:"Closed."}]
+direct-fallback-fabricated-trigger|trivial-audit-uses-two-isolated-passes|.review_delegation_path.subagent_trigger_scope = ["invented trigger"]
+direct-fallback-wrong-mode|trivial-audit-uses-two-isolated-passes|.review_delegation_path.subagent_execution_mode = "not_applicable"
 has-remaining-with-only-nit|trivial-audit-uses-two-isolated-passes|.final_summary.result = "HAS_REMAINING_ITEMS" | del(.final_summary.evidence_bounded_claim) | .final_summary.aggregated_findings = [{aggregate_finding_id:"aggregate-nit",finding_id:"review_pass:pass-contract:nit-1",source_finding_ids:["review_pass:pass-contract:nit-1"],source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],locus:"comment",file:"src/review.ts",invariant:"style",failure_mechanism:"cosmetic",severity:"nit",description:"Cosmetic.",evidence:"line 1",smallest_useful_fix:"Optional.",confidence_pct:90}] | .final_summary.aggregation_ledger = [{source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],source_finding_ids:["review_pass:pass-contract:nit-1"],aggregate_finding_id:"aggregate-nit",disposition:"retained",rationale:"Nit only."}] | .final_summary.remaining_items = []
 audit-findings-unclosed|audit-batch-waits-for-all-pass-results|.audit_report.findings = []
 coverage-evidence|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger[0].evidence = ""
@@ -1446,12 +1609,72 @@ else
     fail "assistant-review runtime grader accepted v7 lifecycle or QA truth-table mutations: ${assistant_review_r9_failures[*]}"
 fi
 
+test_start "assistant-review runtime grader reconciles historical batch response counts"
+assistant_review_historical_count_failures=()
+assistant_review_historical_case="post-fix-review-uses-fresh-snapshot-batch"
+assistant_review_historical_response="$passing_response_dir/assistant-review/$assistant_review_historical_case.txt"
+if ! assistant_review_lifecycle_semantics_valid "$assistant_review_historical_case" "$assistant_review_historical_response"; then
+    assistant_review_historical_count_failures+=("canonical-baseline")
+else
+    while IFS='|' read -r mutation_label terminal_count; do
+        cp "$assistant_review_historical_response" "$assistant_review_historical_response.original"
+        jq --argjson terminal_count "$terminal_count" '
+            .final_summary.batch_summaries[0].batch_status = "incomplete"
+            | .final_summary.batch_summaries[0].terminal_response_count = $terminal_count
+            | .final_summary.coverage_ledger |= map(
+                if .batch_id == "batch-0" and .review_pass_id == "pass-contract" then
+                    .terminal_state = "completed"
+                    | .coverage_status = "complete"
+                    | .coverage_disposition = "inspected_no_risk"
+                    | del(.coverage_gap_id)
+                elif .batch_id == "batch-0" and .review_pass_id == "pass-runtime" then
+                    .terminal_state = "timed_out"
+                    | .coverage_status = "incomplete"
+                    | .coverage_disposition = "incomplete"
+                else . end)' "$assistant_review_historical_response" >"$assistant_review_r9_output"
+        mv "$assistant_review_r9_output" "$assistant_review_historical_response"
+        if assistant_review_lifecycle_semantics_valid "$assistant_review_historical_case" "$assistant_review_historical_response"; then
+            assistant_review_historical_count_failures+=("$mutation_label")
+        fi
+        mv "$assistant_review_historical_response.original" "$assistant_review_historical_response"
+    done <<'EOF_ASSISTANT_REVIEW_HISTORICAL_COUNT_MUTATIONS'
+undercount|0
+overcount|2
+EOF_ASSISTANT_REVIEW_HISTORICAL_COUNT_MUTATIONS
+fi
+if [[ "${#assistant_review_historical_count_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review runtime grader accepted impossible historical terminal response counts: ${assistant_review_historical_count_failures[*]}"
+fi
+
+test_start "assistant-review runtime grader represents an all-terminal blocked review batch"
+assistant_review_blocked_case="incomplete-review-batch-never-cleans"
+assistant_review_blocked_response="$passing_response_dir/assistant-review/$assistant_review_blocked_case.txt"
+cp "$assistant_review_blocked_response" "$assistant_review_blocked_response.original"
+jq '.final_summary.coverage_ledger[1].terminal_state = "blocked"
+    | .final_summary.coverage_ledger[1].evidence = "The required lifecycle pass returned BLOCKED with a concrete evidence gap."
+    | .final_summary.batch_summaries[0].terminal_response_count = .final_summary.batch_summaries[0].expected_response_count' "$assistant_review_blocked_response" >"$assistant_review_r9_output"
+mv "$assistant_review_r9_output" "$assistant_review_blocked_response"
+if bash -c '
+    FRAMEWORK_DIR="$1"
+    REPO_ROOT="$1"
+    source "$2"
+    assistant_review_artifact_schema_valid "$3" "$4" \
+      && assistant_review_lifecycle_semantics_valid "$3" "$4" "" "" "$5"
+' _ "$FRAMEWORK_DIR" "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh" "$assistant_review_blocked_case" "$assistant_review_blocked_response" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"; then
+    pass
+else
+    fail "assistant-review runtime grader rejected a response-backed all-terminal BLOCKED batch"
+fi
+mv "$assistant_review_blocked_response.original" "$assistant_review_blocked_response"
+
 test_start "assistant-review runtime grader uses decimal-safe QA half-up rounding"
 assistant_review_decimal_response="$passing_response_dir/assistant-review/qa-obligation-echo-fulfills-exact-binding.txt"
 cp "$assistant_review_decimal_response" "$assistant_review_decimal_response.original"
 jq '.qa_evaluation_result.qa_scorecard.acceptance_coverage = 4.5 | .qa_evaluation_result.qa_scorecard.evidence_strength = 4.5 | .qa_evaluation_result.qa_scorecard.domain_quality = 5 | .qa_evaluation_result.qa_scorecard.final_readiness = 5 | .qa_evaluation_result.qa_scorecard.weighted_score = 4.73 | .qa_evaluation_result.score_progression[0].weighted_score = 4.73' "$assistant_review_decimal_response" >"$assistant_review_r9_output"
 mv "$assistant_review_r9_output" "$assistant_review_decimal_response"
-if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review >"$passing_response_output" 2>&1 \
+if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review --case qa-obligation-echo-fulfills-exact-binding >"$passing_response_output" 2>&1 \
     && grep -Fq $'PASS\tassistant-review\tqa-obligation-echo-fulfills-exact-binding' "$passing_response_output" \
     && grep -Fq 'structured_json_assertion_failures=0' "$passing_response_output"; then
     pass
@@ -1493,6 +1716,30 @@ else
     fail "assistant-review QA rejected the valid not_applicable evidence-binding branch"
 fi
 mv "$assistant_review_not_applicable_response.original" "$assistant_review_not_applicable_response"
+
+test_start "assistant-review QA delegation represents not-required with an empty trigger scope"
+assistant_review_qa_not_required_response="$passing_response_dir/assistant-review/qa-delegation-not-required.json"
+jq -n '{qa_evaluation_delegation_path:{subagent_policy_state:"not_required",subagent_execution_mode:"not_applicable",subagent_trigger_scope:[],fresh_context_evidence:"QA was not required for this review."}}' >"$assistant_review_qa_not_required_response"
+assistant_review_qa_delegation_failures=()
+if ! REPO_ROOT="$FRAMEWORK_DIR" assistant_review_artifact_schema_valid "qa-delegation-not-required" "$assistant_review_qa_not_required_response" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_delegation_failures+=("canonical not_required artifact rejected by schema")
+fi
+if ! assistant_review_delegation_path_semantics_valid "$assistant_review_qa_not_required_response" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_delegation_failures+=("canonical not_required artifact rejected by semantics")
+fi
+jq '.qa_evaluation_delegation_path.subagent_trigger_scope = ["fabricated trigger"]' "$assistant_review_qa_not_required_response" >"$assistant_review_r9_output"
+if assistant_review_delegation_path_semantics_valid "$assistant_review_r9_output" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_delegation_failures+=("not_required accepted a fabricated trigger")
+fi
+jq '.qa_evaluation_delegation_path.subagent_execution_mode = "direct_fallback"' "$assistant_review_qa_not_required_response" >"$assistant_review_r9_output"
+if assistant_review_delegation_path_semantics_valid "$assistant_review_r9_output" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_delegation_failures+=("not_required accepted the wrong execution mode")
+fi
+if [[ "${#assistant_review_qa_delegation_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review QA not-required delegation contract drifted: ${assistant_review_qa_delegation_failures[*]}"
+fi
 
 test_start "assistant-review QA accepts a canonical non-blocking concern and scoped-domain projection"
 assistant_review_concern_response="$passing_response_dir/assistant-review/qa-obligation-echo-fulfills-exact-binding.txt"
@@ -1563,7 +1810,7 @@ while IFS='|' read -r workflow_case_id workflow_mutation; do
     cp "$workflow_response" "$workflow_response.original"
     jq "$workflow_mutation" "$workflow_response" >"$assistant_review_r9_output"
     mv "$assistant_review_r9_output" "$workflow_response"
-    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow --case "$workflow_case_id" >"$passing_response_output" 2>&1 \
         || ! grep -Fq $'FAIL\tassistant-workflow\t'"$workflow_case_id" "$passing_response_output" \
         || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
         workflow_envelope_failures+=("$workflow_case_id:$workflow_mutation")
@@ -1575,11 +1822,48 @@ fulfilled-preparation-qa-obligation-allows-completion|.canonical_final_summary.a
 fulfilled-preparation-qa-obligation-allows-completion|.canonical_qa_result.artifact.final_verdict = "accepted" | .canonical_qa_result.artifact.result = "HAS_REMAINING_ITEMS"
 fulfilled-preparation-qa-obligation-allows-completion|.canonical_qa_result.artifact.pivot_restart_signal = {trigger:"pivot",affected_round:1,evidence:[{source:"invented",detail:"No pivot was triggered."}],recommended_recovery_focus:"none"}
 qa-reject-source-fix-requires-rebuild-review-before-resume|del(.current_qa_delegation_path.artifact.fresh_context_evidence)
+qa-reject-source-fix-requires-rebuild-review-before-resume|.current_qa_delegation_path.artifact.subagent_trigger_scope = []
+qa-reject-source-fix-requires-rebuild-review-before-resume|.current_qa_delegation_path.artifact.subagent_policy_state = "policy_disallowed" | .current_qa_delegation_path.artifact.subagent_execution_mode = "delegated" | del(.current_qa_delegation_path.artifact.policy_blocking_source)
+standard-pack-review-result-retains-checklist|del(.current_review_delegation_path)
+standard-pack-review-result-retains-checklist|.current_review_delegation_path.artifact.fresh_context_evidence = ""
+standard-pack-review-result-retains-checklist|.current_review_delegation_path.artifact.subagent_trigger_scope = []
+standard-pack-review-result-retains-checklist|.current_review_delegation_path.artifact.subagent_policy_state = "policy_disallowed" | .current_review_delegation_path.artifact.subagent_execution_mode = "delegated" | del(.current_review_delegation_path.artifact.policy_blocking_source)
+standard-pack-review-result-retains-checklist|.current_review_delegation_path.ref = "journal#foreign-review-delegation"
+light-pack-review-result-retains-current-snapshot|.fresh_review_result.delegation_contract = "assistant-review/contracts/output.yaml#qa_evaluation_delegation_path"
+post-fix-review-closure-allows-issues-fixed-completion|.current_assistant_review_contract.schema_version = "7.0"
+post-fix-review-regression-remains-open|.current_assistant_review_contract.schema_version = "7.0"
+post-fix-review-closure-allows-issues-fixed-completion|.review_result.producer_schema_version = "7.0" | .final_handoff.review_completion.review_producer_schema_version = "7.0"
+post-fix-review-regression-remains-open|.review_result.producer_schema_version = "7.0" | .final_handoff.review_completion.review_producer_schema_version = "7.0"
 EOF_WORKFLOW_PRODUCER_ENVELOPE_MUTATIONS
 if [[ "${#workflow_envelope_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow grader accepted producer-invalid assistant-review envelopes: ${workflow_envelope_failures[*]}"
+fi
+
+test_start "workflow producer-version predicates reject fresh-review and QA wrappers directly"
+workflow_direct_version_failures=()
+while IFS='|' read -r workflow_case_id workflow_mutation; do
+    workflow_response="$passing_response_dir/assistant-workflow/$workflow_case_id.txt"
+    if ! assistant_review_external_alias_envelopes_valid "$workflow_response" "$workflow_fixture" "$workflow_case_id"; then
+        workflow_direct_version_failures+=("$workflow_case_id:canonical-baseline")
+        continue
+    fi
+    cp "$workflow_response" "$workflow_response.original"
+    jq "$workflow_mutation" "$workflow_response" >"$assistant_review_r9_output"
+    mv "$assistant_review_r9_output" "$workflow_response"
+    if assistant_review_external_alias_envelopes_valid "$workflow_response" "$workflow_fixture" "$workflow_case_id"; then
+        workflow_direct_version_failures+=("$workflow_case_id:$workflow_mutation")
+    fi
+    mv "$workflow_response.original" "$workflow_response"
+done <<'EOF_WORKFLOW_DIRECT_VERSION_MUTATIONS'
+light-pack-review-result-retains-current-snapshot|.fresh_review_result.producer_schema_version = "7.0"
+fulfilled-preparation-qa-obligation-allows-completion|.qa_evaluation_result.producer_schema_version = "7.0"
+EOF_WORKFLOW_DIRECT_VERSION_MUTATIONS
+if [[ "${#workflow_direct_version_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow external-envelope validator accepted stale fresh-review or QA producer versions: ${workflow_direct_version_failures[*]}"
 fi
 
 test_start "fixture validation resolves every assertion path operand against assistant-review contracts"
@@ -1784,7 +2068,7 @@ assistant_review_final_summary_has_v7_envelope() {
         and (.final_summary.aggregation_ledger | type == "array")
         and all(.final_summary.aggregation_ledger[]; type == "object"
             and required_fields(["source_provenance", "disposition", "rationale"])
-            and (.disposition as $disposition | ["retained", "merged", "observation", "rejected_invalid", "coverage_gap"] | index($disposition)))
+            and (.disposition as $disposition | ["retained", "merged", "fixed_closed", "observation", "rejected_invalid", "coverage_gap"] | index($disposition)))
         and (.final_summary.aggregated_findings | type == "array")
         and all(.final_summary.aggregated_findings[]; type == "object"
             and required_fields(["aggregate_finding_id", "finding_id", "source_finding_ids", "source_provenance", "locus", "file", "invariant", "failure_mechanism", "severity", "description", "evidence", "smallest_useful_fix", "confidence_pct"])
@@ -1977,7 +2261,7 @@ p0p4_register_cleanup "$viewing_variant_output"
 cp "$viewing_response" "$viewing_original"
 jq '(.feature_preparation_evidence.items[0].implementation_evidence.search_or_access_refs) = ["rg ACTIVE src/route.ts"]' "$viewing_response" >"$viewing_variant_output"
 mv "$viewing_variant_output" "$viewing_response"
-if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1; then
+if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow --case viewing-route-preserves-active-behavior >"$passing_response_output" 2>&1; then
     pass
 else
     fail "workflow inspected evidence rejected a useful nonempty search reference: $(grep -E '^(FAIL|Summary:)' "$passing_response_output" | paste -sd ' | ' -)"
@@ -1986,7 +2270,7 @@ mv "$viewing_original" "$viewing_response"
 cp "$viewing_response" "$viewing_original"
 jq 'del(.feature_preparation_evidence.items[0].implementation_evidence.search_or_access_refs)' "$viewing_response" >"$viewing_variant_output"
 mv "$viewing_variant_output" "$viewing_response"
-if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
+if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow --case viewing-route-preserves-active-behavior >"$passing_response_output" 2>&1 \
     || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
     fail "workflow inspected evidence accepted a response without search_or_access_refs"
 else
@@ -1997,7 +2281,7 @@ cp "$viewing_original" "$viewing_response"
 test_start "VIEWING preparation grader rejects a malformed additional evidence row"
 jq '.feature_preparation_evidence.items += [{}]' "$viewing_response" >"$viewing_variant_output"
 mv "$viewing_variant_output" "$viewing_response"
-if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
+if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow --case viewing-route-preserves-active-behavior >"$passing_response_output" 2>&1 \
     || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
     fail "VIEWING preparation accepted a malformed additional evidence row"
 else
@@ -2021,7 +2305,7 @@ run_prepare_only_representative_path_probe() {
         "$response_path" >"$workflow_mutation_output"
     mv "$workflow_mutation_output" "$response_path"
     prepare_only_representative_cli_probe_count=$((prepare_only_representative_cli_probe_count + 1))
-    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow --case "$case_id" >"$passing_response_output" 2>&1 \
         || ! grep -Fq $'FAIL\tassistant-workflow\t'"$case_id" "$passing_response_output" \
         || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
         workflow_core_failures+=("representative:$case_id:$path")
@@ -2106,7 +2390,7 @@ while IFS= read -r workflow_case_id; do
         workflow_mutation='(.completion_policy.plan_mode) |= sub("none"; "inline")'
         jq "$workflow_mutation" "$workflow_response" >"$workflow_mutation_output"
         mv "$workflow_mutation_output" "$workflow_response"
-        if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
+        if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow --case "$workflow_case_id" >"$passing_response_output" 2>&1 \
             || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
             workflow_core_failures+=("$workflow_case_id:completion_policy.plan_mode")
         fi
@@ -2117,7 +2401,7 @@ while IFS= read -r workflow_case_id; do
         workflow_mutation='(.triage_result.plan_mode) = "approval_required"'
         jq "$workflow_mutation" "$workflow_response" >"$workflow_mutation_output"
         mv "$workflow_mutation_output" "$workflow_response"
-        if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow >"$passing_response_output" 2>&1 \
+        if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-workflow --case "$workflow_case_id" >"$passing_response_output" 2>&1 \
             || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$passing_response_output"; then
             workflow_core_failures+=("$workflow_case_id:triage_result.plan_mode")
         fi

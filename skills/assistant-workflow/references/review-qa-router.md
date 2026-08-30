@@ -47,8 +47,7 @@ fallback evidence. When an Architecture Decision Pack applies, persist
 validated refs to `assistant-review/contracts/output.yaml#final_summary`, its
 exact current final-batch `final_snapshot_identity`, and
 `assistant-review/contracts/output.yaml#architecture_decision_pack_review` in
-`fresh_review_result`; light direct fallback does not require
-`review_delegation_path`.
+`fresh_review_result`, including the canonical `review_delegation_path`.
 
 ## Stage 1 - Spec Review
 
@@ -178,10 +177,9 @@ Enforce the review cycle before presenting results:
   canonical review fields remain owned by assistant-review.
 - Light Pack-backed `fresh_review_result` must record validated refs to
   `assistant-review/contracts/output.yaml#final_summary`, its exact current
-  final-batch `final_snapshot_identity`, and
-  `assistant-review/contracts/output.yaml#architecture_decision_pack_review`;
-  light direct fallback does not require
-  `review_delegation_path`.
+  final-batch `final_snapshot_identity`,
+  `assistant-review/contracts/output.yaml#review_delegation_path`, and
+  `assistant-review/contracts/output.yaml#architecture_decision_pack_review`.
 - Independent Code Reviewer dispatch/result evidence, or allowed fresh
   direct-fallback evidence, must be created in Review after Build completes.
 - When `qa_evaluation_mode=required`, workflow must record validated refs to

@@ -1,8 +1,4 @@
-# Review Input Contract
-# Resolve these fields before entering the review loop.
-# The agent determines scope from user request context, git state, or task journal.
-
-schema_version: "7.0"
+schema_version: "7.1"
 contract: input
 skill: assistant-review
 
@@ -11,7 +7,7 @@ fields:
     type: enum
     required: true
     enum_values: [files, changes, task, pr, content]
-    description: "What to review — specific files, uncommitted changes, task journal changes, a PR, or pasted/provided content"
+    description: "Review target: files, changes, task, PR, or supplied content"
     on_missing: infer
     infer_from: >
       User specified files → files.
@@ -24,7 +20,7 @@ fields:
   - name: review_material_snapshot
     type: object
     required: true
-    description: "The material available to review, captured as a scope snapshot rather than assuming a diff"
+    description: "Review material captured as a scope snapshot, including non-diff content"
     validation: "Non-empty and immutable for one review batch. Must include enough material to support concrete file/content findings plus a review_snapshot_id and snapshot_identity that detect source mutation."
     on_missing: fail
     notes: "Generated from review_scope: git diff for changes, file contents for files, task/PR snapshot, or user-provided content."
@@ -103,7 +99,7 @@ fields:
     type: enum
     required: true
     enum_values: [trivial, small, medium, large]
-    description: "Size of the review scope — determines review rigor and whether delegated review is required"
+    description: "Review rigor and delegation scale"
     on_missing: infer
     infer_from: >
       1-2 files, < 50 lines changed → trivial.
@@ -516,7 +512,7 @@ fields:
   - name: task_journal_path
     type: string
     required: false
-    description: "Path to active task journal, if one exists"
+    description: "Active task journal path, when present"
     default: null
     validation: "File exists at the specified path"
     notes: "When present, review findings are appended to the journal's Review Log"
@@ -524,7 +520,6 @@ fields:
   - name: previously_fixed
     type: object[]
     required: false
-    description: "Items fixed in prior review batches; retained for closure verification rather than blanket finding suppression"
     default: []
     object_fields:
       - name: description
@@ -534,11 +529,28 @@ fields:
         type: int
         required: true
         validation: ">= 1 and <= 10"
-      - name: finding_id
+      - name: aggregate_finding_id
         type: string
         required: conditional
-        condition: "entry was created under v7"
-        description: "Stable aggregate finding identifier. A persisted v6 record missing this value is migrated only through persisted_v6_packet_migration before rebuilding the batch."
+        condition: "entry was created under producer schema 7.1 or later"
+      - name: source_finding_ids
+        type: string[]
+        required: conditional
+        condition: "entry was created under producer schema 7.1 or later"
+        min_items: 1
+      - name: source_provenance
+        type: object[]
+        required: conditional
+        condition: "entry was created under producer schema 7.1 or later"
+        min_items: 1
+        object_fields:
+          - name: source_kind
+            type: enum
+            required: true
+            enum_values: [spec_review, review_pass]
+          - name: source_id
+            type: string
+            required: true
       - name: closure_status
         type: enum
         required: false
@@ -549,8 +561,8 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet was created under v6"
-    description: "Explicit compatibility migration for a persisted v6 review packet before v7 can use its historical ledger."
-    validation: "Invalidate every carried v6 batch and rebuild from a freshly rehashed v7 snapshot; a v6 packet cannot produce CLEAN or ISSUES_FIXED. For legacy previously_fixed records missing finding_id, normalize UTF-8 NFC(description) to UTF-8 bytes, SHA-256 it, and use legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use that base ID; every colliding record appends :<ordinal>, where ordinals start at 1 and follow original packet position within its collision group."
+    description: "v6 to producer 7.1 migration."
+    validation: "Invalidate v6 and rebuild from a freshly rehashed 7.1 snapshot; block CLEAN/ISSUES_FIXED. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -567,9 +579,61 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh v7 identity captured after invalidation and rehash."
+        description: "Fresh 7.1 identity."
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
 
-# Validation behavior:
+  - name: persisted_v7_0_packet_invalidation
+    type: object
+    required: conditional
+    condition: "persisted review packet schema_version == 7.0"
+    validation: "Invalidate all 7.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 7.1. Rebuild required review/QA from a fresh 7.1 snapshot before CLEAN/ISSUES_FIXED."
+    on_missing: fail
+    object_fields:
+      - name: source_schema_version
+        type: enum
+        required: true
+        enum_values: ["7.0"]
+      - name: batch_disposition
+        type: enum
+        required: true
+        enum_values: [invalidated_rebuild_required]
+      - name: rebuilt_review_snapshot_id
+        type: string
+        required: true
+      - name: rebuilt_snapshot_identity
+        type: object
+        required: true
+        description: "Fresh 7.1 identity after rehash."
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
+
 # 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required before entering the loop
 # 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
 # 3. If qa_evaluation_mode=required: require acceptance_criteria, verification_evidence, qa_filter_policy, and Done Contract with debate_record when the task has one before QAEvaluator dispatch

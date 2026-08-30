@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "7.0"
+schema_version: "7.1"
 contract: phase-gates
 skill: assistant-review
 
@@ -114,7 +114,7 @@ gates:
         on_fail: "Do not use an early pass verdict or rubric as the batch result. Preserve every validated finding or record its evidence-backed aggregation disposition."
 
       - id: RS4
-        check: "previously_fixed items receive closure verification; incomplete or regressed fixes remain reportable with their original finding_id"
+        check: "previously_fixed items receive closure verification; incomplete or regressed fixes remain reportable with their original aggregate_finding_id"
         on_fail: "Do not suppress the finding. Record closure status and report evidence-backed incomplete or regressed behavior before proceeding to EVALUATE."
 
       - id: RS5
@@ -232,7 +232,7 @@ gates:
         on_fail: "Fix or defer remaining should-fix items — add deferred items to remaining_items with reason_unresolved populated"
 
       - id: F3
-        check: "Each newly fixed item was added to previously_fixed with its original finding_id, description, round number, and pending_verification closure status; only legacy pre-ID records may receive deterministic normalized IDs."
+        check: "Each newly fixed item was added to previously_fixed with its original aggregate_finding_id, source_finding_ids, source_provenance, description, round number, and pending_verification closure status; only legacy pre-ID records may receive deterministic normalized IDs."
         on_fail: "Update previously_fixed closure ledger before proceeding to VALIDATE"
 
   # ─────────────────────────────────────────────

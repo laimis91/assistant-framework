@@ -594,9 +594,9 @@ gates:
         on_fail: "Clear mismatched refs, record task_state_reconciliation.assistant_review_packet_compatibility=invalidated, and rerun review, QA, or both under the current assistant-review contract."
 
       - id: R_LIGHT_FRESH_REVIEW
-        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence; when an Architecture Decision Pack applies, fresh_review_result records validated canonical assistant-review final_summary, exact current final-batch final_snapshot_identity ref and object, and architecture_decision_pack_review refs without requiring review_delegation_path for direct fallback"
+        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence; when an Architecture Decision Pack applies, fresh_review_result records validated canonical assistant-review final_summary, exact current final-batch final_snapshot_identity ref and object, review_delegation_path, and architecture_decision_pack_review refs"
         condition: "controller_intensity == light"
-        on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence. For an applicable Pack, validate and record its canonical assistant-review final_summary, exact current final-batch final_snapshot_identity, and architecture_decision_pack_review refs; do not require review_delegation_path for light direct fallback."
+        on_fail: "Run the compact fresh-review lane, fix findings, rerun relevant validation, and record PASS evidence. For an applicable Pack, validate and record its canonical assistant-review final_summary, exact current final-batch final_snapshot_identity, review_delegation_path, and architecture_decision_pack_review refs."
 
       - id: R2A_CODE_REVIEWER_DISTINCT
         check: "After Build completes, Review owns and records independent Code Reviewer dispatch/result evidence, or fresh direct-fallback review evidence, in subagent_evidence plus validated canonical assistant-review result and final_snapshot_identity refs in review_result. Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence."

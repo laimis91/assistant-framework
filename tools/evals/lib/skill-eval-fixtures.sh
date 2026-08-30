@@ -116,7 +116,7 @@ final_snapshot_identity_schema = {
 }
 inline_eval_only_roots = {
   "assistant-workflow" => [
-    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["7.0"] }] },
+    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["7.1"] }] },
     { "name" => "current_final_batch", "type" => "object", "required" => false, "object_fields" => [{ "name" => "review_snapshot_id", "type" => "string", "required" => true }, final_snapshot_identity_schema] },
     { "name" => "harness_entry_state", "type" => "object", "required" => false },
     {
@@ -175,7 +175,8 @@ external_producer_root_aliases = {
     "canonical_qa_result" => { "producer_skill" => "assistant-review", "artifact" => "qa_evaluation_result", "absent_paths" => [["artifact", "canonical_result_ref"], ["artifact", "canonical_contract"], ["artifact", "final_snapshot_identity_ref"], ["artifact", "approved_feature_preparation_qa_acceptance_obligation_result_ref"]] },
     "current_canonical_qa_result" => { "producer_skill" => "assistant-review", "artifact" => "qa_evaluation_result", "absent_paths" => [["artifact", "canonical_result_ref"], ["artifact", "canonical_contract"], ["artifact", "final_snapshot_identity_ref"], ["artifact", "approved_feature_preparation_qa_acceptance_obligation_result_ref"]] },
     "prior_canonical_qa_result" => { "producer_skill" => "assistant-review", "artifact" => "qa_evaluation_result", "absent_paths" => [["artifact", "canonical_result_ref"], ["artifact", "canonical_contract"], ["artifact", "final_snapshot_identity_ref"], ["artifact", "approved_feature_preparation_qa_acceptance_obligation_result_ref"]] },
-    "current_qa_delegation_path" => { "producer_skill" => "assistant-review", "artifact" => "qa_evaluation_delegation_path", "absent_paths" => [] }
+    "current_qa_delegation_path" => { "producer_skill" => "assistant-review", "artifact" => "qa_evaluation_delegation_path", "absent_paths" => [] },
+    "current_review_delegation_path" => { "producer_skill" => "assistant-review", "artifact" => "review_delegation_path", "absent_paths" => [] }
   }
 }
 external_absent_paths = Hash.new { |hash, key| hash[key] = [] }
@@ -671,11 +672,47 @@ validate_all_fixtures() {
     done
 }
 
+selected_case_ids_json() {
+    if [[ -z "${CASE_SELECTORS[*]-}" ]]; then
+        printf '[]\n'
+        return
+    fi
+
+    printf '%s\n' "${CASE_SELECTORS[@]}" | jq -Rsc 'split("\n") | map(select(length > 0)) | unique'
+}
+
+validate_selected_case_ids() {
+    local requested_case
+    local fixture_file
+    local found
+
+    [[ -n "${CASE_SELECTORS[*]-}" ]] || return 0
+    for requested_case in "${CASE_SELECTORS[@]}"; do
+        found=false
+        for fixture_file in "${FIXTURE_FILES[@]}"; do
+            if jq -e --arg id "$requested_case" 'any(.cases[]; .id == $id)' "$fixture_file" >/dev/null; then
+                found=true
+                break
+            fi
+        done
+        [[ "$found" == true ]] || die "Selected case not found in selected fixtures: $requested_case"
+    done
+}
+
 list_cases() {
     local index
+    local selected_cases
 
     validate_all_fixtures
+    validate_selected_case_ids
+    selected_cases="$(selected_case_ids_json)"
     for index in "${!FIXTURE_FILES[@]}"; do
-        jq -r --arg skill "${SKILL_NAMES[$index]}" '.cases[] | [$skill, .id, .category, .title] | @tsv' "${FIXTURE_FILES[$index]}"
+        jq -r --arg skill "${SKILL_NAMES[$index]}" --argjson selected_cases "$selected_cases" '
+            .cases[]
+            | .id as $id
+            | select(($selected_cases | length) == 0 or ($selected_cases | index($id)) != null)
+            | [$skill, .id, .category, .title]
+            | @tsv
+        ' "${FIXTURE_FILES[$index]}"
     done
 }

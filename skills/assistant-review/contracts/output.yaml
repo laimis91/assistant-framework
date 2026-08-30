@@ -1,7 +1,7 @@
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "7.0"
+schema_version: "7.1"
 contract: output
 skill: assistant-review
 
@@ -11,7 +11,7 @@ artifacts:
     required: conditional
     condition: "scope_size in [medium, large] or subagent_execution_mode in [delegated, direct_fallback]"
     description: "How Reviewer responsibility was executed"
-    validation: "States subagent policy state, execution mode, trigger scope, and whether review used a fresh Reviewer subagent or fresh direct-fallback context"
+    validation: "States subagent policy state, execution mode, trigger provenance, and whether review used a fresh Reviewer subagent or fresh direct-fallback context. delegation_triggered requires delegated; delegation_opted_out or subagents_unavailable requires direct_fallback; policy_disallowed requires direct_fallback plus nonblank policy_blocking_source; not_required requires direct_fallback with empty trigger scope for an untriggered trivial/small isolated review batch."
     on_fail: "Record delegated review or direct fallback before presenting results; do not imply Reviewer subagents were used when delegation was not triggered or they were unavailable"
     object_fields:
       - name: subagent_policy_state
@@ -25,7 +25,7 @@ artifacts:
       - name: subagent_trigger_scope
         type: string[]
         required: true
-        validation: "Non-empty when delegation is relevant; records direct-user, applicable-AGENTS.md, or active-skill provenance and covered review roles, rounds, or files."
+        validation: "Non-empty when a delegation trigger or fallback cause applies; empty only when not_required + direct_fallback records an untriggered trivial/small isolated review batch. Values are unique and nonblank."
       - name: policy_blocking_source
         type: string
         required: conditional
@@ -41,7 +41,7 @@ artifacts:
     required: conditional
     condition: "qa_evaluation_mode == required"
     description: "How QAEvaluator responsibility was executed"
-    validation: "States subagent policy state, execution mode, trigger scope, and whether QA used a fresh QAEvaluator subagent or fresh direct-fallback context"
+    validation: "States subagent policy state, execution mode, trigger provenance, and whether QA used a fresh QAEvaluator subagent or fresh direct-fallback context. delegation_triggered requires delegated; delegation_opted_out or subagents_unavailable requires direct_fallback; policy_disallowed requires direct_fallback plus nonblank policy_blocking_source; not_required requires not_applicable with empty trigger scope."
     on_fail: "Record delegated QA evaluation or direct fallback before presenting results; do not imply QAEvaluator subagents were used when delegation was not triggered or they were unavailable"
     object_fields:
       - name: subagent_policy_state
@@ -55,7 +55,7 @@ artifacts:
       - name: subagent_trigger_scope
         type: string[]
         required: true
-        validation: "Non-empty when delegation is relevant; records direct-user, applicable-AGENTS.md, or active-skill provenance and covered QA roles, rounds, or files."
+        validation: "Non-empty when a delegation trigger or fallback cause applies; empty only when not_required + not_applicable records that QA evaluation was not required. Values are unique and nonblank."
       - name: policy_blocking_source
         type: string
         required: conditional
@@ -168,7 +168,7 @@ artifacts:
     required: true
     condition: always
     description: "The single summary presented to the user after the loop completes"
-    validation: "Must include rounds (1-10), current final snapshot, started batch summaries, obligation-level coverage ledger, aggregation ledger, aggregated findings, aggregate result, the evidence-bounded no-finding claim only when coverage is complete, additional-round evidence when rounds >= 2, fixed_items, remaining_items or coverage gaps when applicable, and nits before presenting review results. The current final batch snapshot_identity exactly equals final_snapshot_identity and its review_snapshot_id exactly equals final_review_snapshot_id. Recompute the result and rubric from the complete aggregated union after the response barrier, never from an early pass result. Historical batches remain accountable but only the current final snapshot requires complete replacement coverage for CLEAN or ISSUES_FIXED."
+    validation: "Must include rounds (1-10), current final snapshot, the exact final_batch_plan, started batch summaries, obligation-level coverage ledger, aggregation ledger, aggregated findings, aggregate result, the evidence-bounded no-finding claim only when coverage is complete, additional-round evidence when rounds >= 2, fixed_items, remaining_items or coverage gaps when applicable, and nits before presenting review results. The current final batch snapshot_identity exactly equals final_snapshot_identity and its review_snapshot_id exactly equals final_review_snapshot_id. final_batch_plan exactly equals the current final review_batch topology and expected_passes, so required integration, architecture, security, and closure passes cannot be omitted before CLEAN. Recompute the result and rubric from the complete aggregated union after the response barrier, never from an early pass result. Historical batches remain accountable but only the current final snapshot requires complete replacement coverage for CLEAN or ISSUES_FIXED."
     object_fields:
       - name: reviewed_scope
         type: string[]
@@ -207,6 +207,108 @@ artifacts:
         type: boolean
         required: true
         description: "True only when the current final snapshot has exact closure over every manifest-derived pass/item/applicable-concern/perspective/coverage_obligation tuple, every required tuple is inspected_no_risk or finding, and every expected pass is completed; historical incomplete or invalidated batches remain in history but do not permanently block a later complete final snapshot."
+      - name: final_batch_plan
+        type: object
+        required: true
+        description: "Typed immutable projection of the current final review_batch plan; binds the final result to the exact planned topology and pass identities."
+        validation: "Exactly equals the current final review_batch batch_id, review_snapshot_id, scope_size, topology, expected_passes, and required_coverage_tuples. CLEAN or ISSUES_FIXED requires every expected_passes record, including required integration, architecture, security, and closure perspectives, to have terminal accounting and exact coverage closure."
+        object_fields:
+          - name: batch_id
+            type: string
+            required: true
+          - name: review_snapshot_id
+            type: string
+            required: true
+          - name: scope_size
+            type: enum
+            required: true
+            enum_values: [trivial, small, medium, large]
+            validation: "Exact current review_batch scope_size; trivial and small use two discovery perspectives, medium uses three, and large uses four."
+          - name: topology
+            type: object
+            required: true
+            validation: "Exactly equals the current final review_batch.topology."
+            object_fields:
+              - name: discovery_pass_count
+                type: int
+                required: true
+              - name: canonical_discovery_perspectives
+                type: object
+                required: true
+                object_fields:
+                  - name: trivial_small
+                    type: string[]
+                    required: true
+                    enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths]
+                  - name: medium
+                    type: string[]
+                    required: true
+                    enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers]
+                  - name: large
+                    type: string[]
+                    required: true
+                    enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse]
+              - name: security_specialist_triggered
+                type: boolean
+                required: true
+              - name: closure_verification_required
+                type: boolean
+                required: true
+              - name: max_required_responses
+                type: int
+                required: true
+              - name: max_repair_attempts_per_pass
+                type: int
+                required: true
+                validation: "Exactly 1: one retry is permitted only for a transient or schema-invalid response."
+          - name: expected_passes
+            type: object[]
+            required: true
+            min_items: 2
+            max_items: 6
+            validation: "Exact ordered projection of current final review_batch.expected_passes; every review_pass_id is unique and no planned pass may be omitted, substituted, or added."
+            object_fields:
+              - name: review_pass_id
+                type: string
+                required: true
+              - name: perspective
+                type: enum
+                required: true
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+              - name: assigned_scope
+                type: string[]
+                required: true
+                min_items: 1
+              - name: coverage_obligations
+                type: string[]
+                required: true
+                min_items: 1
+              - name: prior_finding_visibility
+                type: enum
+                required: true
+                enum_values: [none, closure_ledger]
+          - name: required_coverage_tuples
+            type: object[]
+            required: true
+            min_items: 1
+            validation: "Exact ordered projection of current final review_batch.required_coverage_tuples. The current coverage ledger has one and only one row for each tuple; no assigned scope, applicable concern, perspective, or obligation may be omitted or substituted."
+            object_fields:
+              - name: review_pass_id
+                type: string
+                required: true
+              - name: scope_item_id
+                type: string
+                required: true
+              - name: applicable_concern
+                type: string
+                required: true
+              - name: review_perspective
+                type: enum
+                required: true
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+              - name: coverage_obligation
+                type: string
+                required: true
       - name: coverage_ledger
         type: object[]
         required: true
@@ -246,11 +348,22 @@ artifacts:
             type: enum
             required: true
             enum_values: [complete, incomplete, invalidated]
+          - name: coverage_disposition
+            type: enum
+            required: true
+            enum_values: [inspected_no_risk, finding, incomplete]
+            validation: "Preserves the Reviewer coverage outcome. coverage_status=complete requires inspected_no_risk or finding; incomplete or invalidated requires incomplete."
+          - name: finding_ids
+            type: string[]
+            required: conditional
+            condition: "coverage_disposition == finding"
+            min_items: 1
+            validation: "Exact Reviewer coverage_entries.finding_ids for this tuple; every id is retained in aggregation provenance or an aggregate finding. Absent unless coverage_disposition=finding."
           - name: coverage_gap_id
             type: string
             required: conditional
             condition: "coverage_status in [incomplete, invalidated]"
-            validation: "Stable unique identity for this exact current tuple gap. Absent when coverage_status=complete. Every current gap id appears exactly once across aggregation_ledger disposition=coverage_gap source_coverage_gap_ids, and no foreign or historical gap id substitutes for it."
+            validation: "Stable unique identity for every incomplete or invalidated coverage record, including historical invalidated records. Absent when coverage_status=complete. Every current gap id appears exactly once across aggregation_ledger disposition=coverage_gap source_coverage_gap_ids, and no foreign or historical gap id substitutes for it."
           - name: evidence
             type: string
             required: true
@@ -300,13 +413,14 @@ artifacts:
           - name: terminal_response_count
             type: int
             required: true
+            validation: "Exact number of expected-pass responses received before the barrier. completed, needs_context, and blocked each contribute one; timed_out and failed contribute zero; an invalidated pass contributes zero or one according to whether its response arrived before source invalidation, with typed invalidation evidence retained."
           - name: aggregate_rubric_recomputed
             type: boolean
             required: true
       - name: aggregation_ledger
         type: object[]
         required: true
-        description: "Post-barrier disposition for every pass finding and coverage gap; empty for a genuinely clean complete batch."
+        description: "Post-barrier disposition for every pass finding, coverage gap, and historically aggregated finding fixed during this session; empty for a genuinely clean complete batch with no session fixes."
         object_fields:
           - name: source_provenance
             type: object[]
@@ -327,9 +441,9 @@ artifacts:
           - name: source_finding_ids
             type: string[]
             required: conditional
-            condition: "disposition in [retained, merged]"
+            condition: "disposition in [retained, merged, fixed_closed]"
             min_items: 1
-            validation: "Exact multiset closure for namespaced finding-backed dispositions; a merge preserves every source finding id."
+            validation: "Exact multiset closure for namespaced finding-backed dispositions; a merge preserves every source finding id, and fixed_closed preserves the original source finding identity after repair."
           - name: source_coverage_gap_ids
             type: string[]
             required: conditional
@@ -338,16 +452,17 @@ artifacts:
             validation: "Exact unique coverage_ledger.coverage_gap_id values for current timed-out, invalid, omitted, or otherwise incomplete tuples. Across coverage_gap dispositions this is an exact multiset closure over every current incomplete or invalidated tuple: no omissions, duplicates, foreign ids, or historical substitutions."
           - name: aggregate_finding_id
             type: string
-            required: false
+            required: conditional
+            condition: "disposition in [retained, merged, fixed_closed]"
             validation: "References the aggregate finding identity used for closure, never a bare source finding id."
           - name: disposition
             type: enum
             required: true
-            enum_values: [retained, merged, observation, rejected_invalid, coverage_gap]
+            enum_values: [retained, merged, fixed_closed, observation, rejected_invalid, coverage_gap]
           - name: rationale
             type: string
             required: true
-            validation: "Every schema-valid source finding is retained or merged to an aggregate_finding_id; observation/rejected_invalid is only for non-findings. Invalid returns create coverage gaps and incomplete coverage. Merge only when locus, invariant, and failure mechanism are the same; similar wording alone does not merge. A merged confidence_pct is the minimum confidence among its retained source findings."
+            validation: "Every schema-valid current finding is retained or merged to an aggregate_finding_id; a historically aggregated finding fixed during this session is fixed_closed and preserves its original aggregate_finding_id plus source provenance. observation/rejected_invalid is only for non-findings. Invalid returns create coverage gaps and incomplete coverage. Merge only when locus, invariant, and failure mechanism are the same; similar wording alone does not merge. A merged confidence_pct is the minimum confidence among its retained source findings."
       - name: aggregated_findings
         type: object[]
         required: true
@@ -421,7 +536,7 @@ artifacts:
         required: true
         enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS]
         description: "Machine-compatible workflow state. CLEAN does not prove correctness beyond the reviewed scope and evidence."
-        validation: "HAS_REMAINING_ITEMS is required when current final coverage is incomplete, coverage_gaps is non-empty, remaining_items contains a material item, or aggregated must-fix/should-fix findings remain. CLEAN/ISSUES_FIXED require current complete coverage, empty coverage_gaps, no remaining material findings, and no remaining material aggregate findings; use ISSUES_FIXED only when fixed_items records a finding fixed during this session, otherwise CLEAN."
+        validation: "HAS_REMAINING_ITEMS is required for incomplete coverage, gaps, material remaining/aggregate findings, or regressed/incomplete closure. CLEAN/ISSUES_FIXED require complete coverage and none of those states; ISSUES_FIXED additionally requires session fixed_items, otherwise CLEAN."
       - name: evidence_bounded_claim
         type: string
         required: conditional
@@ -457,6 +572,10 @@ artifacts:
         required: true
         description: "All items fixed across all rounds, grouped by severity"
         object_fields:
+          - name: aggregate_finding_id
+            type: string
+            required: true
+            validation: "Exact fixed_closed and closure_results identity anchored to immutable pre-fix previously_fixed."
           - name: severity
             type: enum
             required: true
@@ -471,6 +590,24 @@ artifacts:
             type: int
             required: true
             validation: ">= 1 and <= 10"
+      - name: closure_results
+        type: object[]
+        required: conditional
+        condition: "fixed_items is non-empty"
+        min_items: 1
+        description: "Fresh closure evidence for each fixed item."
+        validation: "Unique IDs have exact set equality with fixed_items and fixed_closed. Every fixed_closed ID/source/provenance exactly matches immutable pre-fix previously_fixed. ISSUES_FIXED requires verified_closed with evidence. Each regressed/incomplete ID has fresh closure-pass-namespaced source IDs, exact aggregate/ledger provenance, one retained must-fix/should-fix aggregate, and one retained row. Verified_closed IDs are absent from retained/current findings. HAS_REMAINING_ITEMS may instead be caused by unrelated incomplete coverage. Missing, foreign, duplicate, regressed, or incomplete closure cannot produce CLEAN/ISSUES_FIXED."
+        object_fields:
+          - name: aggregate_finding_id
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [verified_closed, regressed, incomplete]
+          - name: evidence
+            type: string
+            required: true
       - name: remaining_items
         type: object[]
         required: false
@@ -779,7 +916,7 @@ artifacts:
         type: object[]
         required: true
         description: "Weighted aggregate score and aggregated union finding count per round — used for drift detection and capped at the 10-round review limit"
-        validation: "v7 score tracking uses aggregated_finding_count. Persisted v6 packets are invalidated and rebuilt before score tracking; legacy finding_count is retained only as historical evidence."
+        validation: "v7.1 score tracking uses aggregated_finding_count. Persisted 6.0/7.0 packets are invalidated and rebuilt before score tracking; legacy finding_count is retained only as historical evidence."
         object_fields:
           - name: round
             type: int

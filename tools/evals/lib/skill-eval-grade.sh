@@ -185,8 +185,9 @@ assistant_review_artifact_schema_valid() {
     local response_path="$2"
     local explicit_artifact_name="${3:-}"
     local response_root="${4:-}"
+    local repository_root="${REPO_ROOT:-${FRAMEWORK_DIR:?FRAMEWORK_DIR or REPO_ROOT is required}}"
 
-    ruby -rjson -ryaml - "$REPO_ROOT/skills/assistant-review/contracts/output.yaml" "$response_path" "$id" "$explicit_artifact_name" "$response_root" <<'RUBY'
+    ruby -rjson -ryaml - "$repository_root/skills/assistant-review/contracts/output.yaml" "$response_path" "$id" "$explicit_artifact_name" "$response_root" <<'RUBY'
 contract = YAML.load_file(ARGV.fetch(0))
 response = JSON.parse(File.read(ARGV.fetch(1)))
 case_id = ARGV.fetch(2)
@@ -218,12 +219,12 @@ valid = nil
 valid = lambda do |value, field|
   type = field.fetch("type")
   type_valid = case type
-               when "string", "file", "jsonl_line" then value.is_a?(String)
+               when "string", "file", "jsonl_line" then value.is_a?(String) && !value.strip.empty?
                when "int" then value.is_a?(Integer)
                when "float" then value.is_a?(Numeric)
                when "boolean" then value == true || value == false
                when "enum" then value.is_a?(String) && field.fetch("enum_values").include?(value)
-               when "string[]" then value.is_a?(Array) && value.all? { |item| item.is_a?(String) }
+               when "string[]" then value.is_a?(Array) && value.all? { |item| item.is_a?(String) && !item.strip.empty? }
                when "object" then value.is_a?(Hash)
                when "object[]" then value.is_a?(Array) && value.all? { |item| item.is_a?(Hash) }
                else false
@@ -259,14 +260,16 @@ assistant_review_lifecycle_semantics_valid() {
     local explicit_artifact_name="${3:-}"
     local response_root="${4:-}"
     local repository_root="${REPO_ROOT:-${FRAMEWORK_DIR:?FRAMEWORK_DIR or REPO_ROOT is required}}"
+    local fixture_file="${5:-$repository_root/skills/assistant-review/evals/cases.json}"
 
-    ruby -rjson -ryaml -rbigdecimal - "$repository_root/skills/assistant-review/contracts/output.yaml" "$repository_root/skills/assistant-review/evals/cases.json" "$response_path" "$id" "$explicit_artifact_name" "$response_root" <<'RUBY'
+    ruby -rjson -ryaml -rbigdecimal - "$repository_root/skills/assistant-review/contracts/output.yaml" "$fixture_file" "$response_path" "$id" "$explicit_artifact_name" "$response_root" <<'RUBY'
 contract = YAML.load_file(ARGV.fetch(0))
 fixture = JSON.parse(File.read(ARGV.fetch(1)))
 response = JSON.parse(File.read(ARGV.fetch(2)), decimal_class: BigDecimal)
 case_id = ARGV.fetch(3)
 explicit_artifact_name = ARGV.fetch(4)
 response_root = ARGV.fetch(5)
+outer_response = response
 if !explicit_artifact_name.empty?
   response = { explicit_artifact_name => response.dig(response_root, "artifact") }
 end
@@ -285,6 +288,8 @@ final_cases = %w[
   audit-batch-waits-for-all-pass-results
   incomplete-review-batch-never-cleans
   post-fix-review-uses-fresh-snapshot-batch
+  post-fix-verified-closure-with-incomplete-coverage
+  post-fix-review-regression-remains-open
   audit-spec-review-fail-continues-complete-batch
   in-flight-mutation-invalidates-review-batch
   trivial-audit-uses-two-isolated-passes
@@ -298,6 +303,28 @@ identity_valid = lambda do |identity|
   identity.is_a?(Hash) && %w[basis value captured_at scope_manifest_digest].all? { |key| nonblank.call(identity[key]) } &&
     %w[git_revision diff_digest content_digest task_or_pr_revision].include?(identity["basis"])
 end
+snapshot_projection = lambda do |batch|
+  batch.is_a?(Hash) ? batch.slice("batch_id", "review_snapshot_id", "snapshot_identity") : nil
+end
+snapshot_authority_valid = lambda do |authority|
+  authority.is_a?(Hash) && authority.keys.sort == %w[batch_projections final_review_snapshot_id final_snapshot_identity] &&
+    nonblank.call(authority["final_review_snapshot_id"]) && identity_valid.call(authority["final_snapshot_identity"]) &&
+    authority["batch_projections"].is_a?(Array) && !authority["batch_projections"].empty? &&
+    authority["batch_projections"].all? do |projection|
+      projection.is_a?(Hash) && projection.keys.sort == %w[batch_id review_snapshot_id snapshot_identity] &&
+        nonblank.call(projection["batch_id"]) && nonblank.call(projection["review_snapshot_id"]) && identity_valid.call(projection["snapshot_identity"])
+    end
+end
+deferred_qa_obligation_authority_valid = lambda do |authority|
+  return false unless authority.is_a?(Hash)
+  required = %w[requested_scope execution_prerequisite feature_preparation_scope]
+  bindings = %w[source_feature_preparation_evidence_ref source_preparation_basis]
+  return false unless (authority.keys - (required + bindings)).empty? && required.all? { |field| nonblank.call(authority[field]) }
+  return false unless %w[existing_system not_applicable].include?(authority["feature_preparation_scope"])
+  present_bindings = bindings.select { |field| authority.key?(field) }
+  return false unless present_bindings.length == 1 && nonblank.call(authority[present_bindings.first])
+  authority["feature_preparation_scope"] == "existing_system" ? present_bindings == ["source_feature_preparation_evidence_ref"] : present_bindings == ["source_preparation_basis"] && authority["source_preparation_basis"] == "not_applicable"
+end
 expected_obligation_value = lambda do |field|
   path = ["qa_evaluation_result", "approved_feature_preparation_qa_acceptance_obligation_result", field]
   fixture.fetch("cases").find { |test_case| test_case["id"] == case_id }
@@ -305,6 +332,12 @@ expected_obligation_value = lambda do |field|
     &.find { |assertion| assertion["operator"] == "equals" && assertion["path"] == path }
     &.fetch("expected", nil)
 end
+batch_expectations = fixture["canonical_review_batch_expectations"]
+template_ref = batch_expectations.is_a?(Hash) ? batch_expectations.fetch("case_template_refs", {})[case_id] : nil
+frozen_final_batch_plan = template_ref ? batch_expectations.fetch("templates", {})[template_ref] : nil
+frozen_closure_authority = fixture.fetch("canonical_review_closure_expectations", {})[case_id]
+frozen_snapshot_authority = fixture.fetch("canonical_review_snapshot_expectations", {})[case_id]
+frozen_deferred_qa_obligation_authority = fixture.fetch("canonical_deferred_qa_obligation_expectations", {})[case_id]
 valid = true
 
 if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? && final_cases.include?(case_id))
@@ -325,7 +358,7 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
         when "complete"
           batch["terminal_response_count"] == batch["expected_response_count"] && batch["aggregate_rubric_recomputed"] == true
         when "incomplete"
-          batch["terminal_response_count"] < batch["expected_response_count"] && batch["aggregate_rubric_recomputed"] == false
+          batch["terminal_response_count"] <= batch["expected_response_count"] && batch["aggregate_rubric_recomputed"] == false
         when "invalidated"
           batch["aggregate_rubric_recomputed"] == false
         else
@@ -339,27 +372,155 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     valid &&= nonblank.call(summary["final_review_snapshot_id"]) && identity_valid.call(identity)
     valid &&= summary["final_review_snapshot_id"] == current_batch["review_snapshot_id"]
     valid &&= identity == current_batch["snapshot_identity"]
+    if snapshot_authority_valid.call(frozen_snapshot_authority)
+      valid &&= summary["final_review_snapshot_id"] == frozen_snapshot_authority["final_review_snapshot_id"]
+      valid &&= identity == frozen_snapshot_authority["final_snapshot_identity"]
+      valid &&= batches.map { |batch| snapshot_projection.call(batch) } == frozen_snapshot_authority["batch_projections"]
+      if outer_response["audit_report"]
+        audit_batches = outer_response.dig("audit_report", "batch_summaries")
+        valid &&= audit_batches.is_a?(Array) && audit_batches.map { |batch| snapshot_projection.call(batch) } == frozen_snapshot_authority["batch_projections"]
+      end
+    else
+      valid = false
+    end
+    final_plan = summary["final_batch_plan"]
+    valid &&= final_plan.is_a?(Hash)
+    final_plan = {} unless final_plan.is_a?(Hash)
+    valid &&= frozen_final_batch_plan.is_a?(Hash) && final_plan == frozen_final_batch_plan
+    expected_passes = final_plan["expected_passes"]
+    required_tuples = final_plan["required_coverage_tuples"]
+    topology = final_plan["topology"]
+    valid &&= expected_passes.is_a?(Array) && required_tuples.is_a?(Array) && topology.is_a?(Hash)
+    expected_passes = [] unless expected_passes.is_a?(Array)
+    required_tuples = [] unless required_tuples.is_a?(Array)
+    topology = {} unless topology.is_a?(Hash)
+    valid &&= final_plan.is_a?(Hash) && final_plan["batch_id"] == current_batch["batch_id"] && final_plan["review_snapshot_id"] == current_batch["review_snapshot_id"]
+    scope_size = final_plan.is_a?(Hash) ? final_plan["scope_size"] : nil
+    canonical_perspectives = {
+      "trivial" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths],
+      "small" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths],
+      "medium" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers],
+      "large" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse]
+    }
+    valid &&= canonical_perspectives.key?(scope_size)
+    expected_discovery = canonical_perspectives.fetch(scope_size, [])
+    valid &&= topology.is_a?(Hash) && topology["discovery_pass_count"] == expected_discovery.length && integer_in.call(topology["max_required_responses"], 2..6) && topology["max_repair_attempts_per_pass"] == 1
+    valid &&= [true, false].include?(topology["security_specialist_triggered"]) && [true, false].include?(topology["closure_verification_required"])
+    canonical_lists = topology.is_a?(Hash) ? topology["canonical_discovery_perspectives"] : nil
+    valid &&= canonical_lists.is_a?(Hash) && canonical_lists.keys.sort == %w[large medium trivial_small]
+    valid &&= canonical_lists && canonical_lists["trivial_small"] == canonical_perspectives["small"] && canonical_lists["medium"] == canonical_perspectives["medium"] && canonical_lists["large"] == canonical_perspectives["large"]
+    valid &&= expected_passes.length == current_batch["expected_response_count"] && expected_passes.length == topology["max_required_responses"] && expected_passes.length.between?(2, 6)
+    valid &&= expected_passes.all? do |pass|
+      pass.is_a?(Hash) && nonblank.call(pass["review_pass_id"]) &&
+        %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse risk_selected_specialist closure_verification].include?(pass["perspective"]) &&
+        nonblank_strings.call(pass["assigned_scope"]) && nonblank_strings.call(pass["coverage_obligations"]) &&
+        pass["assigned_scope"].uniq.length == pass["assigned_scope"].length &&
+        pass["coverage_obligations"].uniq.length == pass["coverage_obligations"].length &&
+        %w[none closure_ledger].include?(pass["prior_finding_visibility"])
+    end
+    expected_passes = expected_passes.select { |pass| pass.is_a?(Hash) }
+    valid &&= expected_passes.map { |pass| pass["review_pass_id"] }.uniq.length == expected_passes.length
+    expected_discovery_passes = expected_passes.select { |pass| expected_discovery.include?(pass["perspective"]) }
+    valid &&= expected_discovery_passes.length == expected_discovery.length && expected_discovery_passes.map { |pass| pass["perspective"] }.sort == expected_discovery.sort
+    valid &&= expected_passes.none? { |pass| (%w[integration_compatibility_and_consumers architecture_maintainability_and_reuse] - expected_discovery).include?(pass["perspective"]) }
+    specialist_passes = expected_passes.select { |pass| pass["perspective"] == "risk_selected_specialist" }
+    closure_passes = expected_passes.select { |pass| pass["perspective"] == "closure_verification" }
+    valid &&= (topology["security_specialist_triggered"] ? specialist_passes.length == 1 : specialist_passes.empty?)
+    valid &&= (topology["closure_verification_required"] ? closure_passes.length == 1 : closure_passes.empty?)
+    valid &&= expected_passes.all? do |pass|
+      pass["perspective"] == "closure_verification" ? pass["prior_finding_visibility"] == "closure_ledger" : pass["prior_finding_visibility"] == "none"
+    end
     valid &&= nonblank_strings.call(summary["reviewed_scope"])
     valid &&= ledger.is_a?(Array) && !ledger.empty?
     valid &&= ledger.all? do |entry|
       entry.is_a?(Hash) && %w[batch_id review_snapshot_id review_pass_id perspective coverage_obligation scope_item_id applicable_concern evidence].all? { |key| nonblank.call(entry[key]) } &&
-        nonblank_strings.call(entry["assigned_scope"])
+        nonblank_strings.call(entry["assigned_scope"]) &&
+        case entry["coverage_disposition"]
+        when "inspected_no_risk"
+          entry["coverage_status"] == "complete" && !entry.key?("finding_ids")
+        when "finding"
+          entry["coverage_status"] == "complete" && nonblank_strings.call(entry["finding_ids"]) && entry["finding_ids"].uniq.length == entry["finding_ids"].length
+        when "incomplete"
+          %w[incomplete invalidated].include?(entry["coverage_status"]) && !entry.key?("finding_ids")
+        else
+          false
+        end &&
+        if %w[incomplete invalidated].include?(entry["coverage_status"])
+          nonblank.call(entry["coverage_gap_id"])
+        else
+          !entry.key?("coverage_gap_id")
+        end
+    end
+    batch_identity_pairs = batches.map { |batch| [batch["batch_id"], batch["review_snapshot_id"]] }
+    valid &&= ledger.all? { |entry| batch_identity_pairs.include?([entry["batch_id"], entry["review_snapshot_id"]]) }
+    valid &&= batches.all? do |batch|
+      batch_entries = ledger.select { |entry| entry["batch_id"] == batch["batch_id"] && entry["review_snapshot_id"] == batch["review_snapshot_id"] }
+      !batch_entries.empty? && case batch["batch_status"]
+      when "complete"
+        batch_entries.all? { |entry| entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete" && %w[inspected_no_risk finding].include?(entry["coverage_disposition"]) }
+      when "incomplete"
+        batch_entries.any? { |entry| entry["terminal_state"] != "completed" || entry["coverage_status"] != "complete" }
+      when "invalidated"
+        batch_entries.any? { |entry| entry["terminal_state"] == "invalidated" || entry["coverage_status"] == "invalidated" }
+      else
+        false
+      end
     end
     current_ledger = ledger.select { |entry| entry["review_snapshot_id"] == summary["final_review_snapshot_id"] }
     valid &&= !current_ledger.empty? && current_ledger.all? { |entry| entry["batch_id"] == current_batch["batch_id"] }
+    valid &&= batches.all? do |batch|
+      batch_entries = ledger.select { |entry| entry["batch_id"] == batch["batch_id"] && entry["review_snapshot_id"] == batch["review_snapshot_id"] }
+      pass_terminal_states = batch_entries.group_by { |entry| entry["review_pass_id"] }.values.map do |pass_entries|
+        pass_entries.map { |entry| entry["terminal_state"] }.uniq
+      end
+      response_backed_count = pass_terminal_states.count do |states|
+        states.length == 1 && %w[completed needs_context blocked].include?(states.first)
+      end
+      invalidated_pass_count = pass_terminal_states.count do |states|
+        states.length == 1 && states.first == "invalidated"
+      end
+      pass_terminal_states.length == batch["expected_response_count"] && pass_terminal_states.all? { |states| states.length == 1 } &&
+        batch["terminal_response_count"].between?(response_backed_count, response_backed_count + invalidated_pass_count)
+    end
     coverage_tuples = current_ledger.map do |entry|
       [entry["review_pass_id"], entry["scope_item_id"], entry["applicable_concern"], entry["perspective"], entry["coverage_obligation"]]
     end
     valid &&= coverage_tuples.uniq.length == coverage_tuples.length
-    valid &&= current_ledger.map { |entry| entry["review_pass_id"] }.uniq.length == current_batch["expected_response_count"]
-    complete_current_coverage = current_ledger.all? { |entry| entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete" }
+    plan_tuples = required_tuples.map do |tuple|
+      tuple.is_a?(Hash) ? [tuple["review_pass_id"], tuple["scope_item_id"], tuple["applicable_concern"], tuple["review_perspective"], tuple["coverage_obligation"]] : nil
+    end
+    valid &&= !required_tuples.empty? && !plan_tuples.include?(nil) && plan_tuples.uniq.length == plan_tuples.length && plan_tuples.sort == coverage_tuples.sort
+    plan_tuples = plan_tuples.compact
+    valid &&= expected_passes.all? do |pass|
+      pass_tuples = plan_tuples.select { |tuple| tuple[0] == pass["review_pass_id"] }
+      expected_matrix = pass["assigned_scope"].flat_map do |scope_item|
+        concerns = pass_tuples.select { |tuple| tuple[1] == scope_item }.map { |tuple| tuple[2] }.uniq
+        concerns.flat_map do |concern|
+          pass["coverage_obligations"].map do |obligation|
+            [pass["review_pass_id"], scope_item, concern, pass["perspective"], obligation]
+          end
+        end
+      end
+      pass["assigned_scope"].all? { |scope_item| pass_tuples.any? { |tuple| tuple[1] == scope_item } } &&
+        expected_matrix.sort == pass_tuples.sort
+    end
+    planned_pass_ids = expected_passes.map { |pass| pass["review_pass_id"] }
+    valid &&= current_ledger.map { |entry| entry["review_pass_id"] }.uniq.sort == planned_pass_ids.sort
+    valid &&= expected_passes.all? do |pass|
+      pass_entries = current_ledger.select { |entry| entry["review_pass_id"] == pass["review_pass_id"] }
+      !pass_entries.empty? && pass_entries.all? do |entry|
+        Array(pass["assigned_scope"]).include?(entry["scope_item_id"]) && Array(pass["coverage_obligations"]).include?(entry["coverage_obligation"]) && pass["perspective"] == entry["perspective"]
+      end && Array(pass["assigned_scope"]).all? { |scope_item| plan_tuples.any? { |tuple| tuple[0] == pass["review_pass_id"] && tuple[1] == scope_item } } && Array(pass["coverage_obligations"]).all? { |obligation| plan_tuples.any? { |tuple| tuple[0] == pass["review_pass_id"] && tuple[4] == obligation } }
+    end
+    complete_current_coverage = current_ledger.all? { |entry| entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete" && %w[inspected_no_risk finding].include?(entry["coverage_disposition"]) }
     current_gap_entries = current_ledger.reject { |entry| entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete" }
     current_gap_ids = current_gap_entries.map { |entry| entry["coverage_gap_id"] }
     valid &&= current_ledger.all? do |entry|
       complete = entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete"
       complete ? !entry.key?("coverage_gap_id") : (%w[incomplete invalidated].include?(entry["coverage_status"]) && nonblank.call(entry["coverage_gap_id"]))
     end
-    valid &&= current_gap_ids.all? { |gap_id| nonblank.call(gap_id) } && current_gap_ids.uniq.length == current_gap_ids.length
+    all_gap_ids = ledger.select { |entry| %w[incomplete invalidated].include?(entry["coverage_status"]) }.map { |entry| entry["coverage_gap_id"] }
+    valid &&= current_gap_ids.all? { |gap_id| nonblank.call(gap_id) } && current_gap_ids.uniq.length == current_gap_ids.length && all_gap_ids.all? { |gap_id| nonblank.call(gap_id) } && all_gap_ids.uniq.length == all_gap_ids.length
     if summary["coverage_complete"] == true
       valid &&= current_batch["batch_status"] == "complete" && complete_current_coverage
     else
@@ -368,9 +529,118 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     end
     findings = summary["aggregated_findings"]
     fixed = summary["fixed_items"]
+    closure_results = summary["closure_results"]
+    aggregation = summary["aggregation_ledger"]
     remaining = summary["remaining_items"]
     material_findings = findings.is_a?(Array) ? findings.select { |finding| finding.is_a?(Hash) && %w[must-fix should-fix].include?(finding["severity"]) } : []
     material_remaining = remaining.is_a?(Array) ? remaining.select { |item| item.is_a?(Hash) && %w[must-fix should-fix].include?(item["severity"]) } : []
+    normalized_provenance = lambda do |sources|
+      Array(sources).map do |source|
+        source.is_a?(Hash) ? source.slice("source_kind", "source_id") : {}
+      end.sort_by { |source| [source["source_kind"].to_s, source["source_id"].to_s] }
+    end
+    review_pass_ids_from_provenance = lambda do |sources|
+      Array(sources).select { |source| source.is_a?(Hash) && source["source_kind"] == "review_pass" }
+        .map { |source| source["source_id"] }
+    end
+    review_pass_id_from_finding = lambda do |finding_id|
+      match = finding_id.is_a?(String) ? /\Areview_pass:([^:]+):.+\z/.match(finding_id) : nil
+      match && match[1]
+    end
+    namespaced_finding_id = lambda do |finding_id|
+      finding_id.is_a?(String) && /\A(?:review_pass:[^:]+:.+|spec_review:.+)\z/.match?(finding_id)
+    end
+    review_pass_ids_from_findings = lambda do |source_ids|
+      Array(source_ids).map { |finding_id| review_pass_id_from_finding.call(finding_id) }.compact
+    end
+    source_pass_alias_valid = lambda do |entry|
+      next true unless entry.key?("source_pass_ids")
+      aliases = entry["source_pass_ids"]
+      expected = review_pass_ids_from_provenance.call(entry["source_provenance"])
+      aliases.is_a?(Array) && aliases.all? { |source_id| nonblank.call(source_id) } && aliases.uniq.length == aliases.length && aliases.sort == expected.uniq.sort
+    end
+    if aggregation.is_a?(Array)
+      finding_dispositions = %w[retained merged fixed_closed]
+      nonfinding_dispositions = %w[observation rejected_invalid]
+      finding_backed_entries = aggregation.select { |entry| entry.is_a?(Hash) && finding_dispositions.include?(entry["disposition"]) }
+      valid &&= aggregation.all? do |entry|
+        next false unless entry.is_a?(Hash)
+        disposition = entry["disposition"]
+        if finding_dispositions.include?(disposition)
+          source_ids = entry["source_finding_ids"]
+          source_ids.is_a?(Array) && !source_ids.empty? && source_ids.all? { |finding_id| namespaced_finding_id.call(finding_id) } &&
+            source_ids.uniq.length == source_ids.length && nonblank.call(entry["aggregate_finding_id"]) && !entry.key?("source_coverage_gap_ids")
+        elsif disposition == "coverage_gap"
+          gap_ids = entry["source_coverage_gap_ids"]
+          gap_ids.is_a?(Array) && !gap_ids.empty? && gap_ids.all? { |gap_id| nonblank.call(gap_id) } &&
+            gap_ids.uniq.length == gap_ids.length && !entry.key?("source_finding_ids") && !entry.key?("aggregate_finding_id")
+        elsif nonfinding_dispositions.include?(disposition)
+          !entry.key?("source_finding_ids") && !entry.key?("source_coverage_gap_ids") && !entry.key?("aggregate_finding_id")
+        else
+          false
+        end
+      end
+      finding_source_ids = finding_backed_entries.flat_map { |entry| entry["source_finding_ids"] }
+      valid &&= finding_source_ids.uniq.length == finding_source_ids.length
+    else
+      valid = false
+    end
+    if fixed.is_a?(Array) && !fixed.empty?
+      valid &&= topology["closure_verification_required"] == true && closure_passes.length == 1
+      closure_pass_ids = closure_passes.map { |pass| pass["review_pass_id"] }
+      closure_entries = current_ledger.select { |entry| closure_pass_ids.include?(entry["review_pass_id"]) }
+      valid &&= !closure_entries.empty? && closure_entries.all? do |entry|
+        entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete" &&
+          %w[inspected_no_risk finding].include?(entry["coverage_disposition"])
+      end
+      fixed_ids = fixed.map { |item| item.is_a?(Hash) ? item["aggregate_finding_id"] : nil }
+      closure_ids = closure_results.is_a?(Array) ? closure_results.map { |item| item.is_a?(Hash) ? item["aggregate_finding_id"] : nil } : []
+      fixed_ledger = aggregation.is_a?(Array) ? aggregation.select { |entry| entry.is_a?(Hash) && entry["disposition"] == "fixed_closed" } : []
+      fixed_ledger_ids = fixed_ledger.map { |entry| entry["aggregate_finding_id"] }
+      valid &&= fixed_ids.all? { |finding_id| nonblank.call(finding_id) } && fixed_ids.uniq.length == fixed_ids.length
+      valid &&= closure_results.is_a?(Array) && !closure_results.empty? && closure_ids.all? { |finding_id| nonblank.call(finding_id) } && closure_ids.uniq.length == closure_ids.length
+      valid &&= fixed_ledger_ids.all? { |finding_id| nonblank.call(finding_id) } && fixed_ledger_ids.uniq.length == fixed_ledger_ids.length
+      valid &&= fixed_ledger.all? do |entry|
+        source_ids = entry["source_finding_ids"]
+        source_ids.is_a?(Array) && !source_ids.empty? && source_ids.all? { |finding_id| namespaced_finding_id.call(finding_id) } && source_ids.uniq.length == source_ids.length && source_pass_alias_valid.call(entry)
+      end
+      normalize_authority = lambda do |entries|
+        Array(entries).map do |entry|
+          {
+            "aggregate_finding_id" => entry["aggregate_finding_id"],
+            "source_finding_ids" => Array(entry["source_finding_ids"]).sort,
+            "source_provenance" => Array(entry["source_provenance"]).map { |source| source.slice("source_kind", "source_id") }.sort_by { |source| [source["source_kind"].to_s, source["source_id"].to_s] }
+          }
+        end.sort_by { |entry| entry["aggregate_finding_id"].to_s }
+      end
+      valid &&= frozen_closure_authority.is_a?(Array) && !frozen_closure_authority.empty? && normalize_authority.call(fixed_ledger) == normalize_authority.call(frozen_closure_authority)
+      valid &&= fixed_ids.sort == closure_ids.sort && fixed_ids.sort == fixed_ledger_ids.sort && closure_results.all? do |item|
+        item.is_a?(Hash) && %w[verified_closed regressed incomplete].include?(item["status"]) && nonblank.call(item["evidence"])
+      end
+      finding_rows = findings.is_a?(Array) ? findings.select { |finding| finding.is_a?(Hash) } : []
+      retained_ledger = aggregation.is_a?(Array) ? aggregation.select { |entry| entry.is_a?(Hash) && entry["disposition"] == "retained" } : []
+      verified_ids = closure_results.select { |item| item["status"] == "verified_closed" }.map { |item| item["aggregate_finding_id"] }
+      unclosed_ids = closure_results.select { |item| %w[regressed incomplete].include?(item["status"]) }.map { |item| item["aggregate_finding_id"] }
+      valid &&= unclosed_ids.all? do |finding_id|
+        matching_findings = finding_rows.select { |finding| finding["aggregate_finding_id"] == finding_id }
+        matching_retained = retained_ledger.select { |entry| entry["aggregate_finding_id"] == finding_id }
+        current_source_pass_ids = matching_findings.length == 1 ? review_pass_ids_from_findings.call(matching_findings.first["source_finding_ids"]) : []
+        matching_findings.length == 1 && %w[must-fix should-fix].include?(matching_findings.first["severity"]) && matching_retained.length == 1 &&
+          !(current_source_pass_ids & closure_pass_ids).empty?
+      end
+      valid &&= verified_ids.all? do |finding_id|
+        finding_rows.none? { |finding| finding["aggregate_finding_id"] == finding_id } &&
+          retained_ledger.none? { |entry| entry["aggregate_finding_id"] == finding_id }
+      end
+      if summary["result"] == "ISSUES_FIXED"
+        valid &&= unclosed_ids.empty?
+      elsif summary["result"] != "HAS_REMAINING_ITEMS"
+        valid = false
+      end
+    else
+      valid &&= !summary.key?("closure_results") || summary["closure_results"] == []
+      valid &&= !aggregation.is_a?(Array) || aggregation.none? { |entry| entry.is_a?(Hash) && entry["disposition"] == "fixed_closed" }
+    end
     case summary["result"]
     when "CLEAN"
       valid &&= summary["coverage_complete"] == true && current_batch["batch_status"] == "complete"
@@ -386,23 +656,47 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     else
       valid = false
     end
-    aggregation = summary["aggregation_ledger"]
     if findings.is_a?(Array) && aggregation.is_a?(Array)
       aggregate_ids = findings.map { |finding| finding["aggregate_finding_id"] }
       retained = aggregation.select { |entry| %w[retained merged].include?(entry["disposition"]) }
       retained_ids = retained.map { |entry| entry["aggregate_finding_id"] }
       valid &&= aggregate_ids.all? { |aggregate_id| nonblank.call(aggregate_id) } && aggregate_ids.uniq.length == aggregate_ids.length
-      valid &&= retained_ids.all? { |aggregate_id| nonblank.call(aggregate_id) } && retained_ids.uniq.sort == aggregate_ids.sort
+      valid &&= retained_ids.all? { |aggregate_id| nonblank.call(aggregate_id) } && retained_ids.uniq.length == retained_ids.length && retained_ids.sort == aggregate_ids.sort
       valid &&= findings.all? do |finding|
         source_ids = finding["source_finding_ids"]
-        ledger_source_ids = retained.select { |entry| entry["aggregate_finding_id"] == finding["aggregate_finding_id"] }.flat_map { |entry| entry["source_finding_ids"] || [] }
-        source_ids.is_a?(Array) && !source_ids.empty? && source_ids.uniq.length == source_ids.length && ledger_source_ids.sort == source_ids.sort
+        matching_ledger = retained.select { |entry| entry["aggregate_finding_id"] == finding["aggregate_finding_id"] }
+        ledger_entry = matching_ledger.first
+        ledger_source_ids = ledger_entry ? Array(ledger_entry["source_finding_ids"]) : []
+        review_source_pass_ids = review_pass_ids_from_findings.call(source_ids)
+        provenance_pass_ids = review_pass_ids_from_provenance.call(finding["source_provenance"])
+        review_source_ids_resolve = Array(source_ids).all? do |source_id|
+          pass_id = review_pass_id_from_finding.call(source_id)
+          !pass_id || current_ledger.any? { |entry| entry["review_pass_id"] == pass_id && Array(entry["finding_ids"]).include?(source_id) }
+        end
+        source_ids.is_a?(Array) && !source_ids.empty? && source_ids.all? { |source_id| namespaced_finding_id.call(source_id) } && source_ids.uniq.length == source_ids.length && namespaced_finding_id.call(finding["finding_id"]) && source_ids.include?(finding["finding_id"]) && matching_ledger.length == 1 &&
+          ledger_source_ids.sort == source_ids.sort && normalized_provenance.call(ledger_entry["source_provenance"]) == normalized_provenance.call(finding["source_provenance"]) &&
+          review_source_pass_ids.uniq.sort == provenance_pass_ids.uniq.sort && review_source_ids_resolve &&
+          source_pass_alias_valid.call(finding) && source_pass_alias_valid.call(ledger_entry)
       end
+      coverage_finding_ids = ledger.select { |entry| entry["coverage_disposition"] == "finding" }.flat_map { |entry| entry["finding_ids"] || [] }
+      aggregate_source_ids = findings.flat_map { |finding| finding["source_finding_ids"] || [] }
+      valid &&= coverage_finding_ids.all? { |finding_id| aggregate_source_ids.include?(finding_id) }
+      review_pass_aggregate_source_ids = retained.select do |entry|
+        (entry["source_provenance"] || []).any? { |source| source.is_a?(Hash) && source["source_kind"] == "review_pass" }
+      end.flat_map { |entry| entry["source_finding_ids"] || [] }
+      valid &&= review_pass_aggregate_source_ids.all? { |finding_id| coverage_finding_ids.include?(finding_id) }
       coverage_gap_dispositions = aggregation.select { |entry| entry["disposition"] == "coverage_gap" }
       aggregated_gap_ids = coverage_gap_dispositions.flat_map { |entry| entry["source_coverage_gap_ids"] || [] }
+      valid &&= aggregation.all? { |entry| entry.is_a?(Hash) && source_pass_alias_valid.call(entry) }
       valid &&= coverage_gap_dispositions.all? do |entry|
         ids = entry["source_coverage_gap_ids"]
-        ids.is_a?(Array) && !ids.empty? && ids.all? { |gap_id| nonblank.call(gap_id) } && ids.uniq.length == ids.length
+        gap_rows = ids.is_a?(Array) ? current_gap_entries.select { |gap| ids.include?(gap["coverage_gap_id"]) } : []
+        gap_owner_ids = gap_rows.map { |gap| gap["review_pass_id"] }
+        provenance = Array(entry["source_provenance"])
+        provenance_pass_ids = review_pass_ids_from_provenance.call(provenance)
+        ids.is_a?(Array) && !ids.empty? && ids.all? { |gap_id| nonblank.call(gap_id) } && ids.uniq.length == ids.length &&
+          gap_rows.length == ids.length && gap_owner_ids.all? { |pass_id| nonblank.call(pass_id) } && gap_owner_ids.uniq.sort == provenance_pass_ids.uniq.sort &&
+          provenance.all? { |source| source.is_a?(Hash) && source["source_kind"] == "review_pass" }
       end
       valid &&= aggregated_gap_ids.uniq.length == aggregated_gap_ids.length && aggregated_gap_ids.sort == current_gap_ids.sort
     else
@@ -444,7 +738,7 @@ elsif explicit_artifact_name == "qa_evaluation_result" || (explicit_artifact_nam
     }
     valid &&= verdict_result.fetch(qa["final_verdict"], []).include?(qa["result"])
     obligation = qa["approved_feature_preparation_qa_acceptance_obligation_result"]
-    expected_obligation_present = %w[requested_scope execution_prerequisite feature_preparation_scope source_feature_preparation_evidence_ref source_preparation_basis].any? { |field| !expected_obligation_value.call(field).nil? }
+    expected_obligation_present = frozen_deferred_qa_obligation_authority || %w[requested_scope execution_prerequisite feature_preparation_scope source_feature_preparation_evidence_ref source_preparation_basis].any? { |field| !expected_obligation_value.call(field).nil? }
     if obligation || expected_obligation_present
       valid &&= obligation.is_a?(Hash)
       valid &&= obligation && %w[requested_scope_evidence execution_prerequisite_evidence requested_scope execution_prerequisite].all? { |key| nonblank.call(obligation[key]) }
@@ -458,6 +752,18 @@ elsif explicit_artifact_name == "qa_evaluation_result" || (explicit_artifact_nam
         valid &&= obligation["source_preparation_basis"] == "not_applicable" && !obligation.key?("source_feature_preparation_evidence_ref")
       else
         valid = false
+      end
+      if frozen_deferred_qa_obligation_authority
+        authority_fields = %w[requested_scope execution_prerequisite feature_preparation_scope source_feature_preparation_evidence_ref source_preparation_basis]
+        carried_obligation = outer_response["approved_feature_preparation_qa_acceptance_obligation"]
+        if deferred_qa_obligation_authority_valid.call(frozen_deferred_qa_obligation_authority)
+          valid &&= carried_obligation == frozen_deferred_qa_obligation_authority
+          valid &&= authority_fields.all? do |field|
+            obligation.key?(field) == frozen_deferred_qa_obligation_authority.key?(field) && obligation[field] == frozen_deferred_qa_obligation_authority[field]
+          end
+        else
+          valid = false
+        end
       end
       if %w[accepted accepted_with_concerns].include?(qa["final_verdict"])
         valid &&= obligation["requested_scope_status"] == "fulfilled" && obligation["execution_prerequisite_status"] == "met"
@@ -589,18 +895,55 @@ exit valid ? 0 : 1
 RUBY
 }
 
+assistant_review_delegation_path_semantics_valid() {
+    local response_path="$1"
+    local artifact_name="$2"
+    local response_root="${3:-}"
+
+    jq -e --arg artifact_name "$artifact_name" --arg response_root "$response_root" '
+      def nonblank: type == "string" and test("[^[:space:]]");
+      def delegation_valid($artifact_name):
+        . as $artifact
+        | ($artifact | type == "object")
+        and ($artifact.fresh_context_evidence | nonblank)
+        and ($artifact.subagent_trigger_scope | type == "array" and all(.[]; nonblank) and length == (unique | length))
+        and (if $artifact.subagent_policy_state == "delegation_triggered" then
+               ($artifact.subagent_trigger_scope | length > 0) and $artifact.subagent_execution_mode == "delegated" and ($artifact | has("policy_blocking_source") | not)
+             elif ($artifact.subagent_policy_state == "delegation_opted_out" or $artifact.subagent_policy_state == "subagents_unavailable") then
+               ($artifact.subagent_trigger_scope | length > 0) and $artifact.subagent_execution_mode == "direct_fallback" and ($artifact | has("policy_blocking_source") | not)
+             elif $artifact.subagent_policy_state == "policy_disallowed" then
+               ($artifact.subagent_trigger_scope | length > 0) and $artifact.subagent_execution_mode == "direct_fallback" and ($artifact.policy_blocking_source | nonblank)
+             elif $artifact.subagent_policy_state == "not_required" then
+               (if $artifact_name == "review_delegation_path" then
+                  $artifact.subagent_execution_mode == "direct_fallback" and ($artifact.subagent_trigger_scope | length == 0)
+                else
+                  $artifact.subagent_execution_mode == "not_applicable" and ($artifact.subagent_trigger_scope | length == 0)
+                end) and ($artifact | has("policy_blocking_source") | not)
+             else false end);
+      if $response_root == "" then .[$artifact_name] else .[$response_root].artifact end | delegation_valid($artifact_name)
+    ' "$response_path" >/dev/null
+}
+
 assistant_review_external_alias_envelopes_valid() {
     local response_path="$1"
+    local fixture_file="$2"
+    local id="$3"
     local alias_name
     local artifact_name
     local expected_contract
+    local producer_schema_version
+    local producer_contract_root
 
     # Only structured responses that actually project an assistant-review
     # producer envelope are in this validator's domain.
     jq -e 'type == "object"' "$response_path" >/dev/null 2>&1 || return 0
-    jq -e '. as $response | ["canonical_final_summary", "fresh_canonical_final_summary", "canonical_qa_result", "current_canonical_qa_result", "prior_canonical_qa_result", "current_qa_delegation_path"] | any(.[]; . as $name | $response | has($name))' "$response_path" >/dev/null || return 0
+    jq -e '. as $response | ["canonical_final_summary", "fresh_canonical_final_summary", "canonical_qa_result", "current_canonical_qa_result", "prior_canonical_qa_result", "current_qa_delegation_path", "current_review_delegation_path"] | any(.[]; . as $name | $response | has($name))' "$response_path" >/dev/null || return 0
 
-    jq -e '
+    producer_contract_root="${REPO_ROOT:-${FRAMEWORK_DIR:-}}"
+    [[ -n "$producer_contract_root" ]] || return 1
+    producer_schema_version="$(ruby -ryaml -e 'value = YAML.load_file(ARGV.fetch(0)).fetch("schema_version"); abort unless value.is_a?(String) && !value.strip.empty?; print value' "$producer_contract_root/skills/assistant-review/contracts/index.yaml")" || return 1
+
+    jq -e --arg producer_schema_version "$producer_schema_version" '
       def nonblank: type == "string" and test("[^[:space:]]");
       def wrapper_valid($name; $contract):
         if has($name) then
@@ -616,6 +959,22 @@ assistant_review_external_alias_envelopes_valid() {
       and wrapper_valid("current_canonical_qa_result"; "assistant-review/contracts/output.yaml#qa_evaluation_result")
       and wrapper_valid("prior_canonical_qa_result"; "assistant-review/contracts/output.yaml#qa_evaluation_result")
       and wrapper_valid("current_qa_delegation_path"; "assistant-review/contracts/output.yaml#qa_evaluation_delegation_path")
+      and wrapper_valid("current_review_delegation_path"; "assistant-review/contracts/output.yaml#review_delegation_path")
+      and (.current_assistant_review_contract | type == "object" and .schema_version == $producer_schema_version)
+      and ([.review_result?, .fresh_review_result?, .qa_evaluation_result?]
+        | all(.[]; if type == "object" then .producer_schema_version == $producer_schema_version else true end))
+      and (if (.final_handoff.review_completion? | type) == "object" then
+          (.final_handoff.review_completion.review_producer_schema_version == $producer_schema_version)
+          and (if .final_handoff.review_completion | has("qa_producer_schema_version") then
+            .final_handoff.review_completion.qa_producer_schema_version == $producer_schema_version
+          else true end)
+        else true end)
+      and (. as $response | [ $response.review_result?, $response.fresh_review_result? ]
+        | all(.[]; if type == "object" and has("delegation_path_ref") then
+            ($response | has("current_review_delegation_path"))
+            and (.delegation_path_ref == $response.current_review_delegation_path.ref)
+            and (.delegation_contract == $response.current_review_delegation_path.contract)
+          else true end))
     ' "$response_path" >/dev/null || return 1
 
     while IFS='|' read -r alias_name artifact_name; do
@@ -625,7 +984,10 @@ assistant_review_external_alias_envelopes_valid() {
         assistant_review_artifact_schema_valid "external-producer-envelope" "$response_path" "$artifact_name" "$alias_name" || return 1
         case "$artifact_name" in
             final_summary|qa_evaluation_result)
-                assistant_review_lifecycle_semantics_valid "external-producer-envelope" "$response_path" "$artifact_name" "$alias_name" || return 1
+                assistant_review_lifecycle_semantics_valid "$id" "$response_path" "$artifact_name" "$alias_name" "$fixture_file" || return 1
+                ;;
+            review_delegation_path|qa_evaluation_delegation_path)
+                assistant_review_delegation_path_semantics_valid "$response_path" "$artifact_name" "$alias_name" || return 1
                 ;;
         esac
     done <<'EOF_ASSISTANT_REVIEW_EXTERNAL_ALIASES'
@@ -635,6 +997,7 @@ canonical_qa_result|qa_evaluation_result
 current_canonical_qa_result|qa_evaluation_result
 prior_canonical_qa_result|qa_evaluation_result
 current_qa_delegation_path|qa_evaluation_delegation_path
+current_review_delegation_path|review_delegation_path
 EOF_ASSISTANT_REVIEW_EXTERNAL_ALIASES
 }
 
@@ -642,9 +1005,10 @@ count_assistant_review_canonical_envelope_failures() {
     local skill_name="$1"
     local id="$2"
     local response_path="$3"
+    local fixture_file="$4"
 
     if [[ "$skill_name" == "assistant-workflow" ]]; then
-        if assistant_review_external_alias_envelopes_valid "$response_path"; then
+        if assistant_review_external_alias_envelopes_valid "$response_path" "$fixture_file" "$id"; then
             printf '0\n'
         else
             printf '1\n'
@@ -655,7 +1019,7 @@ count_assistant_review_canonical_envelope_failures() {
     [[ "$skill_name" == "assistant-review" ]] || { printf '0\n'; return; }
 
     case "$id" in
-        audit-batch-waits-for-all-pass-results|incomplete-review-batch-never-cleans|post-fix-review-uses-fresh-snapshot-batch|audit-spec-review-fail-continues-complete-batch|in-flight-mutation-invalidates-review-batch|trivial-audit-uses-two-isolated-passes|qa-obligation-echo-fulfills-exact-binding|qa-obligation-blocks-missing-or-mismatched-binding|qa-obligation-blocked-when-required-evidence-is-unavailable)
+        audit-batch-waits-for-all-pass-results|incomplete-review-batch-never-cleans|post-fix-review-uses-fresh-snapshot-batch|post-fix-verified-closure-with-incomplete-coverage|post-fix-review-regression-remains-open|audit-spec-review-fail-continues-complete-batch|in-flight-mutation-invalidates-review-batch|trivial-audit-uses-two-isolated-passes|qa-obligation-echo-fulfills-exact-binding|qa-obligation-blocks-missing-or-mismatched-binding|qa-obligation-blocked-when-required-evidence-is-unavailable)
             ;;
         *)
             printf '0\n'
@@ -668,23 +1032,30 @@ count_assistant_review_canonical_envelope_failures() {
           . as $object | type == "object" and (($fields - ($object | keys)) | length == 0);
         def final_summary_valid:
           . as $response
-          | (.final_summary | required_fields(["reviewed_scope", "rounds", "final_review_snapshot_id", "final_snapshot_identity", "coverage_complete", "coverage_ledger", "batch_summaries", "aggregation_ledger", "aggregated_findings", "result", "fixed_items", "nits"]))
+          | (.final_summary | required_fields(["reviewed_scope", "rounds", "final_review_snapshot_id", "final_snapshot_identity", "coverage_complete", "final_batch_plan", "coverage_ledger", "batch_summaries", "aggregation_ledger", "aggregated_findings", "result", "fixed_items", "nits"]))
           and (.final_summary.reviewed_scope | type == "array" and length > 0)
           and (.final_summary.rounds | type == "number")
           and (.final_summary.final_review_snapshot_id | type == "string")
           and (.final_summary.final_snapshot_identity | required_fields(["basis", "value", "captured_at", "scope_manifest_digest"])
             and (.basis as $basis | ["git_revision", "diff_digest", "content_digest", "task_or_pr_revision"] | index($basis)))
           and (.final_summary.coverage_complete | type == "boolean")
+          and (.final_summary.final_batch_plan | required_fields(["batch_id", "review_snapshot_id", "topology", "expected_passes"])
+            and (.topology | required_fields(["discovery_pass_count", "canonical_discovery_perspectives", "security_specialist_triggered", "closure_verification_required", "max_required_responses", "max_repair_attempts_per_pass"]))
+            and (.expected_passes | type == "array" and length >= 2 and length <= 6)
+            and all(.expected_passes[]; required_fields(["review_pass_id", "perspective", "assigned_scope", "coverage_obligations", "prior_finding_visibility"])))
           and (.final_summary.coverage_ledger | type == "array" and length > 0)
-          and all(.final_summary.coverage_ledger[]; required_fields(["batch_id", "review_snapshot_id", "review_pass_id", "perspective", "coverage_obligation", "assigned_scope", "scope_item_id", "applicable_concern", "terminal_state", "coverage_status", "evidence"])
+          and all(.final_summary.coverage_ledger[]; required_fields(["batch_id", "review_snapshot_id", "review_pass_id", "perspective", "coverage_obligation", "assigned_scope", "scope_item_id", "applicable_concern", "terminal_state", "coverage_status", "coverage_disposition", "evidence"])
             and (.terminal_state as $terminal_state | ["completed", "needs_context", "blocked", "timed_out", "failed", "invalidated"] | index($terminal_state))
-            and (.coverage_status as $coverage_status | ["complete", "incomplete", "invalidated"] | index($coverage_status)))
+            and (.coverage_status as $coverage_status | ["complete", "incomplete", "invalidated"] | index($coverage_status))
+            and (.coverage_disposition as $coverage_disposition | ["inspected_no_risk", "finding", "incomplete"] | index($coverage_disposition))
+            and (if .coverage_disposition == "finding" then (.finding_ids | type == "array" and length > 0) else has("finding_ids") | not end)
+            and (if (.coverage_status == "incomplete" or .coverage_status == "invalidated") then (.coverage_gap_id | type == "string" and length > 0) else has("coverage_gap_id") | not end))
           and (.final_summary.batch_summaries | type == "array" and length > 0)
           and all(.final_summary.batch_summaries[]; required_fields(["started_batch_ordinal", "batch_id", "review_snapshot_id", "batch_status", "expected_response_count", "terminal_response_count", "aggregate_rubric_recomputed"])
             and (.batch_status as $batch_status | ["complete", "incomplete", "invalidated"] | index($batch_status)))
           and (.final_summary.aggregation_ledger | type == "array")
           and all(.final_summary.aggregation_ledger[]; required_fields(["source_provenance", "disposition", "rationale"])
-            and (.disposition as $disposition | ["retained", "merged", "observation", "rejected_invalid", "coverage_gap"] | index($disposition)))
+            and (.disposition as $disposition | ["retained", "merged", "fixed_closed", "observation", "rejected_invalid", "coverage_gap"] | index($disposition)))
           and (.final_summary.aggregated_findings | type == "array")
           and all(.final_summary.aggregated_findings[]; required_fields(["aggregate_finding_id", "finding_id", "source_finding_ids", "source_provenance", "locus", "file", "invariant", "failure_mechanism", "severity", "description", "evidence", "smallest_useful_fix", "confidence_pct"])
             and (.severity as $severity | ["must-fix", "should-fix", "nit"] | index($severity)))
@@ -731,7 +1102,8 @@ count_assistant_review_canonical_envelope_failures() {
         else final_summary_valid end
     ' "$response_path" >/dev/null \
         && assistant_review_artifact_schema_valid "$id" "$response_path" \
-        && assistant_review_lifecycle_semantics_valid "$id" "$response_path"; then
+        && assistant_review_lifecycle_semantics_valid "$id" "$response_path" "" "" "$fixture_file" \
+        && { ! jq -e 'has("review_delegation_path")' "$response_path" >/dev/null || assistant_review_delegation_path_semantics_valid "$response_path" "review_delegation_path"; }; then
         printf '0\n'
     else
         printf '1\n'
@@ -895,9 +1267,13 @@ grade_responses() {
     local canonical_envelope_failures
     local status
     local reason
+    local selected_cases
 
     echo "Heuristic/local grading only. Deterministic substring checks are local proxies; no provider API is invoked."
     echo ""
+
+    validate_selected_case_ids
+    selected_cases="$(selected_case_ids_json)"
 
     for index in "${!FIXTURE_FILES[@]}"; do
         skill_name="${SKILL_NAMES[$index]}"
@@ -925,7 +1301,7 @@ grade_responses() {
                 seeded_failures="$(count_seeded_defect_failures "$fixture_file" "$id" "$response_path")"
                 false_positive_failures="$(count_false_positive_marker_failures "$fixture_file" "$id" "$response_path")"
                 structured_failures="$(count_structured_json_assertion_failures "$fixture_file" "$id" "$response_path")"
-                canonical_envelope_failures="$(count_assistant_review_canonical_envelope_failures "$skill_name" "$id" "$response_path")"
+                canonical_envelope_failures="$(count_assistant_review_canonical_envelope_failures "$skill_name" "$id" "$response_path" "$fixture_file")"
                 structured_failures=$((structured_failures + canonical_envelope_failures))
                 if [[ "$fail_signal_hits" -gt 0 ]]; then
                     status="FAIL"
@@ -995,7 +1371,13 @@ grade_responses() {
             fi
 
             printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$status" "$skill_name" "$id" "$category" "$title" "$reason"
-        done < <(jq -r '.cases[] | [.id, .category, .title] | @tsv' "$fixture_file")
+        done < <(jq -r --argjson selected_cases "$selected_cases" '
+            .cases[]
+            | .id as $id
+            | select(($selected_cases | length) == 0 or ($selected_cases | index($id)) != null)
+            | [.id, .category, .title]
+            | @tsv
+        ' "$fixture_file")
     done
 
     echo ""

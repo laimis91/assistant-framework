@@ -266,6 +266,7 @@ if ! ruby -ryaml -e '
     output = YAML.load_file(ARGV.fetch(2))
     index = YAML.load_file(ARGV.fetch(3))
     entry_names = index.fetch("load_sets").fetch("entry").fetch("selectors").find { |selector| selector["id"] == "review-entry-fields" }.fetch("names")
+    pack_input_names = index.fetch("load_sets").fetch("architecture_pack_input").fetch("selectors").find { |selector| selector["id"] == "review-architecture-pack-input" }.fetch("names")
     input_fields = input.fetch("fields").to_h { |field| [field["name"], field] }
     canonical_mode = input_fields.fetch("architecture_design_mode")
     pack = input_fields.fetch("architecture_decision_pack")
@@ -276,7 +277,7 @@ if ! ruby -ryaml -e '
     reviewer_challenge = reviewer_checks.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
     output_pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack_review" }
     output_challenge = output_pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
-    valid = input["schema_version"] == "7.0" && handoffs["schema_version"] == "7.0" && output["schema_version"] == "7.0" && index["schema_version"] == "7.0" &&
+    valid = input["schema_version"] == "7.1" && handoffs["schema_version"] == "7.1" && output["schema_version"] == "7.1" && index["schema_version"] == "7.1" &&
       canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
       canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
       canonical_mode["on_missing"] == "infer" &&
@@ -290,6 +291,8 @@ if ! ruby -ryaml -e '
       canonical_mode.fetch("infer_from").include?("corroborate but must not determine") &&
       canonical_mode.fetch("infer_from").include?("workflow Pack or handoff") &&
       entry_names.include?("architecture_design_mode") &&
+      !entry_names.include?("architecture_decision_pack") &&
+      pack_input_names == ["architecture_decision_pack"] &&
       pack_fields.fetch("mode")["validation"] == "Must equal canonical architecture_design_mode" &&
       pack_fields.fetch("independent_challenge_evidence")["condition"] == "architecture_design_mode == review_intensive" &&
       context.fetch("architecture_design_mode")["required"] == "conditional" && context.fetch("architecture_design_mode")["condition"] == "architecture_decision_pack_review_required is true" &&
@@ -585,7 +588,7 @@ if ! ruby -ryaml -e '
     pressure = fields.fetch("design_pressure_checks")
     required_concerns = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
     ref = fields.fetch("ref")
-    valid = contracts.all? { |contract| contract.fetch("schema_version") == "7.0" } &&
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == "7.1" } &&
       boundaries["required"] == true && boundaries["min_items"] == 1 &&
       pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
       ref["required"] == true && ref.fetch("validation").include?("selected design") && ref.fetch("validation").include?("rationale") && ref.fetch("validation").include?("viable alternatives") &&
@@ -802,7 +805,7 @@ if ruby -ryaml -e '
     final_fields.fetch("coverage_ledger").fetch("object_fields").find { |field| field["name"] == "terminal_state" }.fetch("enum_values").include?("failed") &&
     coverage.fetch("scope_item_id").fetch("type") == "string" && coverage.fetch("scope_item_id")["required"] == true && !coverage.key?("scope_item_ids") &&
     final.fetch("validation").include?("current final snapshot") && final_fields.fetch("coverage_complete").fetch("description").include?("current final snapshot") && batch_identity == final_fields.fetch("final_snapshot_identity").fetch("object_fields") &&
-    ledger["min_items"].nil? && ledger.fetch("object_fields").find { |field| field["name"] == "disposition" }.fetch("enum_values") == %w[retained merged observation rejected_invalid coverage_gap] &&
+    ledger["min_items"].nil? && ledger.fetch("object_fields").find { |field| field["name"] == "disposition" }.fetch("enum_values") == %w[retained merged fixed_closed observation rejected_invalid coverage_gap] &&
     finding_fields.include?("evidence") && finding_fields.include?("smallest_useful_fix") &&
     rubric.fetch("description").include?("post-barrier aggregated union") && progression.fetch("object_fields").any? { |field| field["name"] == "aggregated_finding_count" } &&
     gate_ids.fetch("RS5").fetch("check").include?("post-barrier aggregated union")
@@ -1090,8 +1093,8 @@ else
 fi
 
 test_start "assistant-review v7 migration wording preserves source and target direction"
-if grep -Fq 'Rebuild persisted v6 under v7 from a freshly rehashed v7 snapshot.' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md" \
-  && ! grep -Fq 'Rebuild v6 from rehashed v7' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"; then
+if grep -Fq 'Rebuild persisted 6.0 or incompatible 7.0 under 7.1 from a fresh snapshot' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md" \
+  && ! grep -Fq 'Rebuild 7.1 from' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"; then
     pass
 else
     fail "assistant-review review-batch migration wording reverses the v6-to-v7 rebuild direction"
@@ -1197,18 +1200,23 @@ if ruby -ryaml -e '
     end
   }
   migrated_ids = migrate_ids.call(legacy_packet.fetch("previously_fixed"))
-  migration = {"source_schema_version" => legacy_packet.fetch("schema_version"), "batch_disposition" => "invalidated_rebuild_required", "rebuilt_review_snapshot_id" => "fresh-v7-snapshot"}
-  can_claim_clean = ->(packet, migration_state) { packet.fetch("schema_version") == "7.0" && migration_state.fetch("batch_disposition") != "invalidated_rebuild_required" }
+  current_schema_version = input.fetch("schema_version")
+  migration = {"source_schema_version" => legacy_packet.fetch("schema_version"), "batch_disposition" => "invalidated_rebuild_required", "rebuilt_review_snapshot_id" => "fresh-v#{current_schema_version}-snapshot"}
+  legacy_v7_packet = {"schema_version" => "7.0", "final_summary" => {"result" => "CLEAN"}}
+  can_claim_clean = ->(packet, migration_state) { packet.fetch("schema_version") == "7.1" && migration_state.fetch("batch_disposition") != "invalidated_rebuild_required" }
   previously_fixed = input.fetch("fields").find { |field| field["name"] == "previously_fixed" }.fetch("object_fields").to_h { |field| [field["name"], field] }
   migration_contract = input.fetch("fields").find { |field| field["name"] == "persisted_v6_packet_migration" }
+  v7_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v7_0_packet_invalidation" }
   pass_fields = reviewer.fetch("context_fields").map { |field| field.fetch("name") }
   final = output.fetch("artifacts").find { |item| item["name"] == "final_summary" }.fetch("object_fields").to_h { |field| [field["name"], field] }
   valid = legacy_packet.fetch("schema_version") == "6.0" && legacy_packet.dig("final_summary", "result") == "CLEAN" &&
     migrated_ids[0] == base.call(legacy_packet.fetch("previously_fixed")[0]) && migrated_ids[1].end_with?(":1") && migrated_ids[2].end_with?(":2") && migrated_ids[1] != migrated_ids[2] &&
-    migration.fetch("source_schema_version") == "6.0" && migration.fetch("batch_disposition") == "invalidated_rebuild_required" && !can_claim_clean.call(legacy_packet, migration) &&
-    previously_fixed.fetch("finding_id").fetch("condition") == "entry was created under v7" &&
+    migration.fetch("source_schema_version") == "6.0" && migration.fetch("batch_disposition") == "invalidated_rebuild_required" && !can_claim_clean.call(legacy_packet, migration) && !can_claim_clean.call(legacy_v7_packet, {"batch_disposition" => "current"}) &&
+    previously_fixed.fetch("aggregate_finding_id").fetch("condition") == "entry was created under producer schema 7.1 or later" &&
+    migration_contract.fetch("description").include?(current_schema_version) && migration_contract.fetch("validation").include?("freshly rehashed #{current_schema_version} snapshot") && migration_contract.fetch("object_fields").find { |field| field["name"] == "rebuilt_snapshot_identity" }.fetch("description").include?(current_schema_version) &&
     migration_contract.fetch("validation").include?("UTF-8 NFC") && migration_contract.fetch("validation").include?("SHA-256") && migration_contract.fetch("validation").downcase.include?("invalidate") &&
     migration_contract.fetch("validation").downcase.include?("non-colliding records use") && migration_contract.fetch("validation").include?("every colliding record appends") &&
+    v7_invalidation.fetch("condition").include?("7.0") && v7_invalidation.fetch("validation").include?("do not reinterpret") && v7_invalidation.fetch("validation").include?("7.1") &&
     bundle.fetch("context_fields_from_dispatch").include?("review_focus") && pass_fields.include?("review_focus") &&
     bundle.fetch("review_evidence_pointer").fetch("required_refs").include?("review_material_snapshot") &&
     !bundle.fetch("review_evidence_pointer").fetch("required_refs").include?("review_material_snapshot_ref") &&
@@ -1313,7 +1321,7 @@ if ruby -ryaml -e '
   response_terminal = ->(events) { events.count { |event| event["disposition"] == "active_terminal" } == 1 }
   synthetic_failure = ->(events, kind, evidence) { events.none? { |event| event["disposition"] == "active_terminal" } && %w[timeout transport schema_invalid source_mutation].include?(kind) && !evidence.empty? }
   truth = returns.fetch("status").fetch("validation")
-  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "7.0" } &&
+  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "7.1" } &&
     identity == final_identity && final_identity.find { |field| field["name"] == "basis" }.fetch("type") == "enum" &&
     final.fetch("final_review_snapshot_id").fetch("validation").downcase.include?("exactly equals current review_snapshot_id") &&
     manifest.fetch("scope_item_id").fetch("validation").downcase.include?("unique") && manifest.fetch("applicable_concerns").fetch("validation").downcase.include?("unique") &&
@@ -1331,7 +1339,7 @@ if ruby -ryaml -e '
     qa_return.fetch("approved_feature_preparation_qa_acceptance_obligation_result").fetch("validation").include?("accepted_with_concerns") &&
     qa_gates.fetch("QA5").fetch("check").include?("accepted_with_concerns/ISSUES_FIXED") &&
     qa_gates.fetch("QA5").fetch("check").include?("requested_scope_status=fulfilled") &&
-    handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("v6") &&
+    handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("6.0") && handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("7.0") &&
     handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("UTF-8 NFC") && handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("SHA-256") &&
     batch.fetch("expected_passes").fetch("validation").include?("assistant-security checklist/perspective") &&
     review_gates.fetch("RS2").fetch("check").include?("assistant-security checklist/perspective")
@@ -1360,6 +1368,7 @@ if ruby -ryaml -e '
     {"review_pass_id" => "pass-contract", "perspective" => "contract_and_test_oracle", "assigned_scope" => ["item-1"], "coverage_obligations" => ["contract"], "prior_finding_visibility" => "none"},
     {"review_pass_id" => "pass-runtime", "perspective" => "runtime_lifecycle_and_failure_paths", "assigned_scope" => ["item-1"], "coverage_obligations" => ["runtime"], "prior_finding_visibility" => "none"}
   ]
+  topology = {"discovery_pass_count" => 2, "canonical_discovery_perspectives" => {"trivial_small" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths], "medium" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers], "large" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse]}, "security_specialist_triggered" => false, "closure_verification_required" => false, "max_required_responses" => 2, "max_repair_attempts_per_pass" => 1}
   tuples = expected_passes.map { |pass| {"review_pass_id" => pass["review_pass_id"], "scope_item_id" => "item-1", "applicable_concern" => "contract", "review_perspective" => pass["perspective"], "coverage_obligation" => pass["coverage_obligations"].first} }
   coverage = ->(pass) { {"scope_item_id" => "item-1", "applicable_concern" => "contract", "review_perspective" => pass["perspective"], "coverage_obligation" => pass["coverage_obligations"].first, "status" => "inspected_no_risk", "evidence" => "inspected #{pass["review_pass_id"]}"} }
   reviewer_return = ->(pass) {
@@ -1375,12 +1384,13 @@ if ruby -ryaml -e '
   end
   final_summary = {
     "reviewed_scope" => ["item-1"], "rounds" => 1, "final_review_snapshot_id" => "snapshot-1", "final_snapshot_identity" => identity, "coverage_complete" => true,
-    "coverage_ledger" => tuples.map { |tuple| {"batch_id" => "batch-1", "review_snapshot_id" => "snapshot-1", "review_pass_id" => tuple["review_pass_id"], "perspective" => tuple["review_perspective"], "coverage_obligation" => tuple["coverage_obligation"], "assigned_scope" => ["item-1"], "scope_item_id" => "item-1", "applicable_concern" => "contract", "terminal_state" => "completed", "coverage_status" => "complete", "evidence" => "reviewed"} },
+    "final_batch_plan" => {"batch_id" => "batch-1", "review_snapshot_id" => "snapshot-1", "scope_size" => "small", "topology" => topology, "expected_passes" => expected_passes, "required_coverage_tuples" => tuples},
+    "coverage_ledger" => tuples.map { |tuple| {"batch_id" => "batch-1", "review_snapshot_id" => "snapshot-1", "review_pass_id" => tuple["review_pass_id"], "perspective" => tuple["review_perspective"], "coverage_obligation" => tuple["coverage_obligation"], "assigned_scope" => ["item-1"], "scope_item_id" => "item-1", "applicable_concern" => "contract", "terminal_state" => "completed", "coverage_status" => "complete", "coverage_disposition" => "inspected_no_risk", "evidence" => "reviewed"} },
     "batch_summaries" => [{"started_batch_ordinal" => 1, "batch_id" => "batch-1", "review_snapshot_id" => "snapshot-1", "snapshot_identity" => identity, "batch_status" => "complete", "expected_response_count" => 2, "terminal_response_count" => 2, "aggregate_rubric_recomputed" => true}],
     "aggregation_ledger" => [], "aggregated_findings" => [], "result" => "CLEAN", "evidence_bounded_claim" => "No material findings within the reviewed scope and available evidence", "fixed_items" => [], "nits" => []
   }
   qa_return = {"status" => "DONE", "round" => 1, "acceptance_findings" => [], "qa_scorecard" => {"acceptance_coverage" => 5.0, "evidence_strength" => 5.0, "domain_quality" => 5.0, "final_readiness" => 5.0, "weighted_score" => 5.0, "rationale" => {"acceptance_coverage" => "covered", "evidence_strength" => "current", "domain_quality" => "not_applicable", "final_readiness" => "ready"}}, "final_verdict" => "accepted", "result" => "CLEAN", "evidence" => [{"source" => "test", "detail" => "passed"}], "score_entry" => {"round" => 1, "weighted_score" => 5.0, "failed_acceptance_count" => 0, "delta" => "initial", "drift_status" => "NEUTRAL"}}
-  packet = {"review_material_snapshot" => {"review_snapshot_id" => "snapshot-1", "snapshot_identity" => identity, "scope_manifest" => manifest}, "review_batch" => {"batch_id" => "batch-1", "review_snapshot_id" => "snapshot-1", "expected_passes" => expected_passes, "required_coverage_tuples" => tuples, "pass_attempt_ledger" => attempts}, "reviewer_returns" => returns, "final_summary" => final_summary, "qa_packet" => {"code_review_result" => {"role" => "Reviewer", "result" => "CLEAN", "rounds" => 1, "final_review_snapshot_id" => "snapshot-1", "final_snapshot_identity" => identity, "coverage_complete" => true, "remaining_risks" => []}, "return" => qa_return}}
+  packet = {"review_material_snapshot" => {"review_snapshot_id" => "snapshot-1", "snapshot_identity" => identity, "scope_manifest" => manifest}, "review_batch" => {"batch_id" => "batch-1", "review_snapshot_id" => "snapshot-1", "topology" => topology, "expected_passes" => expected_passes, "required_coverage_tuples" => tuples, "pass_attempt_ledger" => attempts}, "reviewer_returns" => returns, "final_summary" => final_summary, "qa_packet" => {"code_review_result" => {"role" => "Reviewer", "result" => "CLEAN", "rounds" => 1, "final_review_snapshot_id" => "snapshot-1", "final_snapshot_identity" => identity, "coverage_complete" => true, "remaining_risks" => []}, "return" => qa_return}}
   duplicate = ->(value) { Marshal.load(Marshal.dump(value)) }
   type_ok = ->(value, type) {
     case type
@@ -1406,7 +1416,7 @@ if ruby -ryaml -e '
       next true unless value.key?(name)
       item = value[name]
       next false unless type_ok.call(item, field["type"])
-      next false if field["enum_values"] && !field["enum_values"].include?(item)
+      next false if field["type"] == "enum" && field["enum_values"] && !field["enum_values"].include?(item)
       next false if field["min_items"] && item.respond_to?(:length) && item.length < field["min_items"]
       children = field["object_fields"]
       if children && field["type"] == "object"
@@ -1448,11 +1458,26 @@ if ruby -ryaml -e '
   final_valid = ->(full_packet) {
     final = full_packet["final_summary"]
     return false unless shape_ok.call(final, final_fields) && final["final_review_snapshot_id"] == full_packet.dig("review_material_snapshot", "review_snapshot_id") && final["final_snapshot_identity"] == full_packet.dig("review_material_snapshot", "snapshot_identity") && final["coverage_complete"] && final["result"] == "CLEAN"
+    plan = final.fetch("final_batch_plan")
+    return false unless plan["batch_id"] == full_packet.dig("review_batch", "batch_id") && plan["review_snapshot_id"] == full_packet.dig("review_batch", "review_snapshot_id") && plan["scope_size"] == "small" && plan["topology"] == full_packet.dig("review_batch", "topology") && plan["expected_passes"] == full_packet.dig("review_batch", "expected_passes") && plan["required_coverage_tuples"] == full_packet.dig("review_batch", "required_coverage_tuples")
     current = final.fetch("batch_summaries").max_by { |entry| entry.fetch("started_batch_ordinal") }
     return false unless batch_identity_fields.map { |field| field.fetch("name") } == %w[basis value captured_at scope_manifest_digest] && current.fetch("review_snapshot_id") == final.fetch("final_review_snapshot_id") && current.fetch("snapshot_identity") == final.fetch("final_snapshot_identity")
+    aggregate_source_ids = final.fetch("aggregated_findings").flat_map { |finding| finding.fetch("source_finding_ids") }
+    coverage_dispositions_valid = final.fetch("coverage_ledger").all? do |entry|
+      case entry.fetch("coverage_disposition")
+      when "inspected_no_risk"
+        entry.fetch("coverage_status") == "complete" && !entry.key?("finding_ids")
+      when "finding"
+        entry.fetch("coverage_status") == "complete" && entry["finding_ids"].is_a?(Array) && !entry["finding_ids"].empty? && entry["finding_ids"].all? { |id| aggregate_source_ids.include?(id) }
+      when "incomplete"
+        %w[incomplete invalidated].include?(entry.fetch("coverage_status")) && !entry.key?("finding_ids")
+      else
+        false
+      end
+    end
     actual = final["coverage_ledger"].map { |entry| [entry["review_pass_id"], entry["scope_item_id"], entry["applicable_concern"], entry["perspective"], entry["coverage_obligation"]].join("\u0000") }
     required = full_packet.dig("review_batch", "required_coverage_tuples").map { |tuple| tuple_key.call(tuple) }
-    actual.sort == required.sort && final["coverage_ledger"].all? { |entry| entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete" }
+    coverage_dispositions_valid && actual.sort == required.sort && final["coverage_ledger"].all? { |entry| entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete" && entry["coverage_disposition"] == "inspected_no_risk" }
   }
   qa_valid = ->(full_packet) {
     qa = full_packet["qa_packet"]
@@ -1493,10 +1518,15 @@ if ruby -ryaml -e '
     "wrong_final_batch_identity" => ->(trial) { trial["final_summary"]["batch_summaries"][0]["snapshot_identity"] = trial["final_summary"]["batch_summaries"][0]["snapshot_identity"].merge("value" => "sha256:stale") },
     "wrong_attempt" => ->(trial) { trial["reviewer_returns"][0]["review_attempt_id"] = "wrong-attempt" },
     "wrong_tuple" => ->(trial) { trial["reviewer_returns"][0]["coverage_entries"][0]["coverage_obligation"] = "wrong" },
+    "missing_final_plan_pass" => ->(trial) { trial["final_summary"]["final_batch_plan"]["expected_passes"].pop },
+    "missing_final_plan_tuple" => ->(trial) { trial["final_summary"]["final_batch_plan"]["required_coverage_tuples"].pop },
+    "missing_coverage_disposition" => ->(trial) { trial["final_summary"]["coverage_ledger"][0].delete("coverage_disposition") },
+    "finding_without_ids" => ->(trial) { trial["final_summary"]["coverage_ledger"][0]["coverage_disposition"] = "finding" },
+    "unbound_finding_id" => ->(trial) { trial["final_summary"]["coverage_ledger"][0]["coverage_disposition"] = "finding"; trial["final_summary"]["coverage_ledger"][0]["finding_ids"] = ["foreign-finding"] },
     "coordinated_invalid_terminal" => ->(trial) { trial["review_batch"]["pass_attempt_ledger"][0]["attempts"][0]["terminal_state"] = "blocked"; trial["reviewer_returns"][0]["status"] = "BLOCKED"; trial["reviewer_returns"][0]["pass_completion_state"] = "blocked"; trial["reviewer_returns"][0]["verdict"] = "not_assessed"; trial["reviewer_returns"][0]["coverage_entries"] = []; trial["reviewer_returns"][0]["open_questions"] = ["blocked"] }
   }
   mutation_valid = mutations.all? { |_name, mutate| trial = duplicate.call(packet); mutate.call(trial); !packet_valid.call(trial) }
-  valid = input.fetch("schema_version") == "7.0" && handoffs.fetch("schema_version") == "7.0" && output.fetch("schema_version") == "7.0" && packet_valid.call(packet) && truth_valid && mutation_valid
+  valid = input.fetch("schema_version") == "7.1" && handoffs.fetch("schema_version") == "7.1" && output.fetch("schema_version") == "7.1" && packet_valid.call(packet) && truth_valid && mutation_valid
   exit valid ? 0 : 1
 ' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
     pass
@@ -1619,6 +1649,72 @@ if ruby -ryaml -e '
     pass
 else
     fail "Reviewer prompts or return contract omit mandatory, triggered, or pivot return fields"
+fi
+
+test_start "assistant-review preserves discovery outcomes, closure identities, and final planned topology"
+if ruby -ryaml -rjson -e '
+  input, output, handoffs, index, cases, gates = ARGV.then { |paths| [YAML.load_file(paths[0]), YAML.load_file(paths[1]), YAML.load_file(paths[2]), YAML.load_file(paths[3]), JSON.parse(File.read(paths[4])), YAML.load_file(paths[5])] }
+  input_fields = input.fetch("fields").to_h { |field| [field.fetch("name"), field] }
+  previous = input_fields.fetch("previously_fixed").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  canonical_identity = input_fields.fetch("review_material_snapshot").fetch("object_fields").find { |field| field.fetch("name") == "snapshot_identity" }.fetch("object_fields")
+  migration_identity = input_fields.fetch("persisted_v6_packet_migration").fetch("object_fields").find { |field| field.fetch("name") == "rebuilt_snapshot_identity" }.fetch("object_fields")
+  invalidation_identity = input_fields.fetch("persisted_v7_0_packet_invalidation").fetch("object_fields").find { |field| field.fetch("name") == "rebuilt_snapshot_identity" }.fetch("object_fields")
+  f3 = gates.fetch("gates").flat_map { |phase| phase.fetch("exit_assertions", []) }.find { |gate| gate.fetch("id") == "F3" }
+  reviewer = handoffs.fetch("handoffs").find { |entry| entry.fetch("name") == "orchestrator_to_reviewer" }
+  reviewer_context = reviewer.fetch("context_fields").to_h { |field| [field.fetch("name"), field] }
+  handoff_previous = reviewer_context.fetch("previously_fixed").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  batch = reviewer_context.fetch("review_batch").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  expected_pass_fields = batch.fetch("expected_passes").fetch("object_fields")
+  final_artifact = output.fetch("artifacts").find { |artifact| artifact.fetch("name") == "final_summary" }
+  final = final_artifact.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  coverage = final.fetch("coverage_ledger").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  review_delegation = output.fetch("artifacts").find { |artifact| artifact.fetch("name") == "review_delegation_path" }
+  qa_delegation = output.fetch("artifacts").find { |artifact| artifact.fetch("name") == "qa_evaluation_delegation_path" }
+  review_trigger_scope = review_delegation.fetch("object_fields").find { |field| field.fetch("name") == "subagent_trigger_scope" }
+  qa_trigger_scope = qa_delegation.fetch("object_fields").find { |field| field.fetch("name") == "subagent_trigger_scope" }
+  plan = final.fetch("final_batch_plan")
+  plan_fields = plan.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  case_item = cases.fetch("cases").find { |entry| entry.fetch("id") == "post-fix-review-uses-fresh-snapshot-batch" }
+  batch_expectations = cases.fetch("canonical_review_batch_expectations")
+  closure_expectations = cases.fetch("canonical_review_closure_expectations")
+  expectation_refs = batch_expectations.fetch("case_template_refs")
+  post_fix_expectation = batch_expectations.fetch("templates").fetch(expectation_refs.fetch("post-fix-review-uses-fresh-snapshot-batch"))
+  trivial_expectation = batch_expectations.fetch("templates").fetch(expectation_refs.fetch("trivial-audit-uses-two-isolated-passes"))
+  post_fix_paths = case_item.fetch("machine_expectations").fetch("structured_json_assertions").select { |assertion| assertion.fetch("operator") == "nonempty_string" }.map { |assertion| assertion.fetch("path") }
+  entry_names = index.fetch("load_sets").fetch("entry").fetch("selectors").first.fetch("names")
+  expected_names = %w[review_pass_id perspective assigned_scope coverage_obligations prior_finding_visibility]
+  fixed_fields = final.fetch("fixed_items").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  closure_results = final.fetch("closure_results")
+  valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "7.1" } &&
+    entry_names.include?("previously_fixed") && entry_names.include?("persisted_v6_packet_migration") && entry_names.include?("persisted_v7_0_packet_invalidation") &&
+    previous.key?("aggregate_finding_id") && previous.fetch("source_finding_ids").fetch("condition").include?("producer schema 7.1") && previous.fetch("source_provenance").fetch("condition").include?("producer schema 7.1") && !previous.key?("finding_id") &&
+    migration_identity == canonical_identity && invalidation_identity == canonical_identity &&
+    f3.fetch("check").include?("source_finding_ids") && f3.fetch("check").include?("source_provenance") &&
+    handoff_previous.key?("aggregate_finding_id") && handoff_previous.fetch("source_finding_ids").fetch("required") == true && handoff_previous.fetch("source_provenance").fetch("required") == true && !handoff_previous.key?("finding_id") &&
+    batch.fetch("scope_size").fetch("enum_values") == %w[trivial small medium large] &&
+    coverage.fetch("coverage_disposition").fetch("enum_values") == %w[inspected_no_risk finding incomplete] &&
+    coverage.fetch("finding_ids").fetch("condition") == "coverage_disposition == finding" && coverage.fetch("finding_ids").fetch("min_items") == 1 &&
+    coverage.fetch("coverage_gap_id").fetch("validation").include?("every incomplete or invalidated coverage record") &&
+    plan_fields.fetch("scope_size").fetch("enum_values") == %w[trivial small medium large] && plan_fields.fetch("topology").fetch("required") == true && plan_fields.fetch("expected_passes").fetch("required") == true && plan_fields.fetch("required_coverage_tuples").fetch("required") == true &&
+    plan_fields.fetch("expected_passes").fetch("object_fields").map { |field| field.fetch("name") } == expected_names &&
+    plan_fields.fetch("expected_passes").fetch("object_fields").map { |field| field.slice("type", "required", "enum_values") } == expected_pass_fields.map { |field| field.slice("type", "required", "enum_values") } &&
+    review_delegation.fetch("validation").include?("not_required requires direct_fallback") && !review_trigger_scope.key?("min_items") && review_trigger_scope.fetch("validation").include?("empty only when not_required + direct_fallback") &&
+    qa_delegation.fetch("validation").include?("delegation_triggered requires delegated") && !qa_trigger_scope.key?("min_items") && qa_trigger_scope.fetch("validation").include?("empty only when not_required + not_applicable") &&
+    expectation_refs.keys.sort == %w[audit-batch-waits-for-all-pass-results audit-spec-review-fail-continues-complete-batch in-flight-mutation-invalidates-review-batch incomplete-review-batch-never-cleans post-fix-review-regression-remains-open post-fix-review-uses-fresh-snapshot-batch post-fix-verified-closure-with-incomplete-coverage trivial-audit-uses-two-isolated-passes].sort &&
+    trivial_expectation.fetch("scope_size") == "trivial" &&
+    post_fix_expectation.fetch("topology").fetch("closure_verification_required") == true && post_fix_expectation.fetch("expected_passes").any? { |pass| pass.fetch("perspective") == "closure_verification" } &&
+    closure_expectations.fetch("post-fix-review-uses-fresh-snapshot-batch") == closure_expectations.fetch("post-fix-review-regression-remains-open") && closure_expectations.fetch("post-fix-review-uses-fresh-snapshot-batch") == closure_expectations.fetch("post-fix-verified-closure-with-incomplete-coverage") && closure_expectations.fetch("post-fix-review-uses-fresh-snapshot-batch").first.fetch("aggregate_finding_id") == "aggregate-fixed-1" &&
+    fixed_fields.fetch("aggregate_finding_id").fetch("required") == true &&
+    closure_results.fetch("condition") == "fixed_items is non-empty" && closure_results.fetch("validation").include?("exact set equality") && closure_results.fetch("validation").include?("HAS_REMAINING_ITEMS") &&
+    final_artifact.fetch("validation").include?("final_batch_plan") &&
+    post_fix_paths.include?(["final_summary", "coverage_ledger", 0, "coverage_gap_id"]) && post_fix_paths.include?(["final_summary", "coverage_ledger", 1, "coverage_gap_id"])
+  exit valid ? 0 : 1
+' "$review_input" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_handoffs" "$review_index" "$review_evals" "$review_phase_gates" \
+  && ! grep -Fq -- "medium+ scope only" "$review_handoffs" \
+  && grep -Fq -- "including triggered trivial/small scope" "$review_handoffs"; then
+    pass
+else
+    fail "assistant-review loses version, fallback, scope, closure identity, historical gap, or final planned-pass binding"
 fi
 
 test_start "assistant-review producer clean claim keeps the canonical literal unperiodized"
