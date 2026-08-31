@@ -40,8 +40,6 @@ skills/<skill-name>/
   *.md                  # Sub-tools loaded on demand
   playbooks/            # (workflow) Project-type architecture guides
   references/           # (workflow) Templates, prompts, checklists
-  scripts/              # (workflow) Automation scripts (decompose, agents)
-  agents/               # (workflow) Agent preset configs per platform
 ```
 
 Each supported agent discovers installed skills natively from required names and descriptions, then follows body instructions after activation. Use `requires` only for validated hard dependencies. Keep representative activation examples only in contracts and positive/negative evals; top-level `effort` and `triggers` metadata are retired and rejected by validation.

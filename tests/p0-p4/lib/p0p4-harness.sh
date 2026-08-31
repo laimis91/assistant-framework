@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$P0P4_SUITE_DIR/.." && pwd)"
 FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 P0P4_HARNESS_LOADED=1
+P0P4_HARNESS_STARTED_AT_SECONDS=$SECONDS
 PASS=0
 FAIL=0
 P0P4_CLEANUP_PATHS=()
@@ -109,6 +110,7 @@ finish() {
     echo "===================="
     echo "  Passed: $PASS"
     echo "  Failed: $FAIL"
+    echo "  Elapsed: $((SECONDS - P0P4_HARNESS_STARTED_AT_SECONDS))s"
     if [[ "$FAIL" -gt 0 ]]; then
         exit 1
     fi

@@ -3,6 +3,214 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+validate_p0p4_ci_schedule() {
+    local aggregate_script="$1"
+    local workflow_file="$2"
+    local suite_dir="$3"
+
+    ruby -ryaml - "$aggregate_script" "$workflow_file" "$suite_dir" <<'RUBY'
+aggregate_script, workflow_file, suite_dir = ARGV
+aggregate = File.read(aggregate_script)
+workflow = YAML.load_file(workflow_file)
+errors = []
+
+all_aggregate_sources = aggregate.scan(/^[ \t]*source "\$P0P4_SUITE_DIR\/([^\"\/]+\.sh)"$/).flatten
+guarded_pairs = aggregate.scan(/^if ! p0p4_suite_is_excluded "([^\"\/]+\.sh)"; then\n[ \t]+source "\$P0P4_SUITE_DIR\/([^\"\/]+\.sh)"\nfi$/)
+guarded_suites = guarded_pairs.map(&:last)
+aggregate_suites = all_aggregate_sources.dup
+guarded_suites.each do |suite|
+  index = aggregate_suites.index(suite)
+  index ? aggregate_suites.delete_at(index) : errors << "guarded suite lacks source: #{suite}"
+end
+guarded_pairs.each do |guard_suite, source_suite|
+  errors << "suite exclusion guard/source mismatch: #{guard_suite} != #{source_suite}" unless guard_suite == source_suite
+end
+suite_names = Dir[File.join(suite_dir, "*.sh")].map { |path| File.basename(path) }.sort
+compatibility_wrappers = %w[agent-status-contracts.sh workflow-contracts.sh]
+
+jobs = workflow.fetch("jobs", {})
+fast_job = jobs["framework-contracts"]
+shard_job = jobs["contract-shards"]
+errors << "missing framework-contracts job" unless fast_job.is_a?(Hash)
+errors << "missing contract-shards job" unless shard_job.is_a?(Hash)
+
+validate_ruby_prerequisite = lambda do |job, job_name, contract_step_name|
+  next unless job.is_a?(Hash)
+
+  steps = job.fetch("steps", [])
+  prerequisite_indexes = steps.each_index.select do |index|
+    step = steps[index]
+    next false unless step.is_a?(Hash) && step["name"] == "Verify runner prerequisites"
+    run = step["run"]
+    run.is_a?(String) && run.lines.any? { |line| line.strip == "command -v ruby" } &&
+      run.lines.any? { |line| line.strip.start_with?("ruby -rjson -ryaml -rbigdecimal -e ") }
+  end
+  contract_index = steps.index { |step| step.is_a?(Hash) && step["name"] == contract_step_name }
+  if prerequisite_indexes.empty?
+    errors << "#{job_name} must verify Ruby with JSON, Psych/YAML, and BigDecimal support"
+  elsif contract_index && prerequisite_indexes.none? { |index| index < contract_index }
+    errors << "#{job_name} Ruby/Psych verification must precede #{contract_step_name}"
+  end
+end
+
+validate_ruby_prerequisite.call(fast_job, "framework-contracts", "Run aggregate framework contracts")
+validate_ruby_prerequisite.call(shard_job, "contract-shards", "Run long contract shard")
+
+excluded_suites = []
+matrix_suites = []
+if fast_job.is_a?(Hash)
+  aggregate_step = fast_job.fetch("steps", []).find { |step| step.is_a?(Hash) && step["name"] == "Run aggregate framework contracts" }
+  unless aggregate_step.is_a?(Hash)
+    errors << "missing aggregate contract step"
+  else
+    exclusions = aggregate_step.dig("env", "P0P4_EXCLUDED_SUITES")
+    if exclusions.is_a?(String)
+      excluded_suites = exclusions.split
+    else
+      errors << "aggregate contract step must declare string P0P4_EXCLUDED_SUITES"
+    end
+    errors << "aggregate contract command must be ./tests/test-p0-p4-contracts.sh" unless aggregate_step["run"] == "./tests/test-p0-p4-contracts.sh"
+  end
+end
+
+if shard_job.is_a?(Hash)
+  matrix_suites = shard_job.dig("strategy", "matrix", "suite")
+  unless matrix_suites.is_a?(Array) && matrix_suites.all? { |suite| suite.is_a?(String) }
+    errors << "contract-shards matrix suite must be a string array"
+    matrix_suites = []
+  end
+  long_shard_step = shard_job.fetch("steps", []).find { |step| step.is_a?(Hash) && step["name"] == "Run long contract shard" }
+  unless long_shard_step.is_a?(Hash) && long_shard_step["run"] == 'bash "tests/p0-p4/${{ matrix.suite }}"'
+    errors << "long shard must run exactly bash tests/p0-p4 matrix suite"
+  end
+end
+
+unless all_aggregate_sources.uniq.length == all_aggregate_sources.length
+  errors << "aggregate declares duplicate suites: #{all_aggregate_sources.tally.select { |_suite, count| count != 1 }.keys.sort.join(', ')}"
+end
+unless matrix_suites.uniq.length == matrix_suites.length
+  errors << "matrix contains duplicate suites: #{matrix_suites.tally.select { |_suite, count| count != 1 }.keys.sort.join(', ')}"
+end
+unless excluded_suites.sort == matrix_suites.sort && excluded_suites.uniq.length == excluded_suites.length
+  errors << "aggregate exclusions and matrix suites differ"
+end
+unless guarded_suites.sort == excluded_suites.sort && guarded_suites.uniq.length == guarded_suites.length
+  errors << "guarded aggregate suites and declared exclusions differ"
+end
+
+(aggregate_suites + matrix_suites).uniq.each do |suite|
+  errors << "scheduled suite is not top-level P0-P4 suite: #{suite}" unless suite_names.include?(suite)
+end
+
+suite_names.each do |suite|
+  schedule_count = aggregate_suites.count(suite) + matrix_suites.count(suite)
+  if compatibility_wrappers.include?(suite)
+    errors << "compatibility wrapper must remain explicitly unscheduled: #{suite}" unless schedule_count.zero?
+  elsif schedule_count != 1
+    errors << "top-level P0-P4 suite must be scheduled exactly once: #{suite} (#{schedule_count})"
+  end
+end
+
+unless errors.empty?
+  warn errors.join("; ")
+  exit 1
+end
+RUBY
+}
+
+test_start "P0-P4 aggregate and long shards schedule every substantive suite exactly once"
+ci_schedule_output="$(mktemp)"
+p0p4_register_cleanup "$ci_schedule_output"
+if validate_p0p4_ci_schedule \
+    "$FRAMEWORK_DIR/tests/test-p0-p4-contracts.sh" \
+    "$FRAMEWORK_DIR/.github/workflows/framework-validation.yml" \
+    "$FRAMEWORK_DIR/tests/p0-p4" >"$ci_schedule_output" 2>&1; then
+    pass
+else
+    fail "P0-P4 CI schedule violations: $(cat "$ci_schedule_output")"
+fi
+
+test_start "P0-P4 CI schedule oracle rejects missing, orphaned, bypassed, and misplaced prerequisites"
+ci_schedule_mutation_dir="$(mktemp -d)"
+p0p4_register_cleanup "$ci_schedule_mutation_dir"
+ci_schedule_mutation_failures=()
+for ci_schedule_mutation in missing_aggregate_suite orphaned_shard_suite unguarded_shard_suite mismatched_shard_guard misplaced_shard_ruby_prerequisite; do
+    ci_schedule_mutation_aggregate="$ci_schedule_mutation_dir/$ci_schedule_mutation-aggregate.sh"
+    ci_schedule_mutation_workflow="$ci_schedule_mutation_dir/$ci_schedule_mutation-workflow.yml"
+    cp "$FRAMEWORK_DIR/tests/test-p0-p4-contracts.sh" "$ci_schedule_mutation_aggregate"
+    cp "$FRAMEWORK_DIR/.github/workflows/framework-validation.yml" "$ci_schedule_mutation_workflow"
+    case "$ci_schedule_mutation" in
+        missing_aggregate_suite)
+            ruby -e '
+path = ARGV.fetch(0)
+contents = File.read(path)
+needle = "source \"$P0P4_SUITE_DIR/harness-controller-contracts.sh\"\n"
+abort "missing harness source mutation target" unless contents.include?(needle)
+File.write(path, contents.sub(needle, ""))
+' "$ci_schedule_mutation_aggregate"
+            ;;
+        orphaned_shard_suite)
+            ruby -e '
+path = ARGV.fetch(0)
+contents = File.read(path)
+needle = "          - codex-behavioral-eval-contracts.sh\n"
+abort "missing shard mutation target" unless contents.include?(needle)
+File.write(path, contents.sub(needle, "          - orphaned-contracts.sh\n"))
+' "$ci_schedule_mutation_workflow"
+            ;;
+        unguarded_shard_suite)
+            ruby -e '
+path = ARGV.fetch(0)
+contents = File.read(path)
+guarded = <<~SH
+if ! p0p4_suite_is_excluded "skill-eval-contracts.sh"; then
+    source "$P0P4_SUITE_DIR/skill-eval-contracts.sh"
+fi
+SH
+replacement = "    source \"$P0P4_SUITE_DIR/skill-eval-contracts.sh\"\n"
+abort "missing guarded shard source mutation target" unless contents.include?(guarded)
+File.write(path, contents.sub(guarded, replacement))
+' "$ci_schedule_mutation_aggregate"
+            ;;
+        mismatched_shard_guard)
+            ruby -e '
+path = ARGV.fetch(0)
+contents = File.read(path)
+needle = "if ! p0p4_suite_is_excluded \"skill-eval-contracts.sh\"; then\n"
+abort "missing shard guard mutation target" unless contents.include?(needle)
+File.write(path, contents.sub(needle, "if ! p0p4_suite_is_excluded \"progressive-discovery-contracts.sh\"; then\n"))
+' "$ci_schedule_mutation_aggregate"
+            ;;
+        misplaced_shard_ruby_prerequisite)
+            ruby -e '
+path = ARGV.fetch(0)
+contents = File.read(path)
+block = <<YAML
+      - name: Verify runner prerequisites
+        run: |
+          command -v ruby
+          ruby -rjson -ryaml -rbigdecimal -e '\''abort "Ruby JSON, Psych/YAML, or BigDecimal unavailable" unless defined?(JSON) && defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file) && defined?(BigDecimal)'\''
+
+YAML
+index = contents.rindex(block)
+abort "missing shard Ruby/Psych prerequisite mutation target" unless index
+contents.slice!(index, block.length)
+marker = "      - name: Run aggregate framework contracts\n"
+abort "missing aggregate step mutation target" unless contents.include?(marker)
+File.write(path, contents.sub(marker, block + marker))
+' "$ci_schedule_mutation_workflow"
+            ;;
+    esac
+    if validate_p0p4_ci_schedule "$ci_schedule_mutation_aggregate" "$ci_schedule_mutation_workflow" "$FRAMEWORK_DIR/tests/p0-p4" >/dev/null 2>&1; then
+        ci_schedule_mutation_failures+=("$ci_schedule_mutation")
+    fi
+done
+if [[ "${#ci_schedule_mutation_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "CI schedule oracle accepted mutation(s): ${ci_schedule_mutation_failures[*]}"
+fi
+
 test_start "tests tree has no .DS_Store files"
 ds_store_file="$(find "$SCRIPT_DIR" -type f -name .DS_Store -print | sed -n '1p')"
 if [[ -z "$ds_store_file" ]]; then
@@ -11,7 +219,26 @@ else
     fail "unexpected .DS_Store file under tests/: $ds_store_file"
 fi
 
-test_start "general CI covers framework contracts, installs, and mirrors without retired runtime jobs"
+test_start "retired plugin distribution paths stay absent"
+retired_plugin_paths=(
+    "$FRAMEWORK_DIR/plugins"
+    "$FRAMEWORK_DIR/docs/plugin-architecture.md"
+    "$FRAMEWORK_DIR/tools/plugins/sync-plugin-skills.sh"
+    "$FRAMEWORK_DIR/tests/p0-p4/plugin-boundary-contracts.sh"
+    "$FRAMEWORK_DIR/tests/p0-p4/plugin-manifest-contracts.sh"
+)
+remaining_retired_plugin_paths=()
+for retired_plugin_path in "${retired_plugin_paths[@]}"; do
+    [[ ! -e "$retired_plugin_path" && ! -L "$retired_plugin_path" ]] \
+        || remaining_retired_plugin_paths+=("${retired_plugin_path#"$FRAMEWORK_DIR/"}")
+done
+if [[ "${#remaining_retired_plugin_paths[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "retired plugin distribution paths remain: ${remaining_retired_plugin_paths[*]}"
+fi
+
+test_start "general CI covers framework contracts and installs without retired runtime jobs"
 framework_validation_workflow="$FRAMEWORK_DIR/.github/workflows/framework-validation.yml"
 framework_validation_failures=()
 if [[ ! -f "$framework_validation_workflow" ]]; then
@@ -23,9 +250,8 @@ else
         "contents: read" \
         "persist-credentials: false" \
         "timeout-minutes: 30" \
-        "./tests/test-p0-p4-contracts.sh" \
+        "timeout-minutes: 60" \
         "tools/skills/validate-skills.sh" \
-        "tools/plugins/sync-plugin-skills.sh --check" \
         "./install.sh --agent codex --dry-run" \
         "./install.sh --agent claude --dry-run" \
         "./install.sh --agent gemini --dry-run"; do
@@ -34,12 +260,14 @@ else
         fi
     done
 
-    [[ "$(grep -Ec '^[[:space:]]+uses: actions/checkout@v5[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
-        || framework_validation_failures+=("framework-validation.yml: expected one checkout@v5 step")
-    [[ "$(grep -Ec '^[[:space:]]+persist-credentials: false[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
-        || framework_validation_failures+=("framework-validation.yml: the checkout must disable credential persistence")
+    [[ "$(grep -Ec '^[[:space:]]+uses: actions/checkout@v5[[:space:]]*$' "$framework_validation_workflow")" -eq 2 ]] \
+        || framework_validation_failures+=("framework-validation.yml: expected checkout@v5 in both contract jobs")
+    [[ "$(grep -Ec '^[[:space:]]+persist-credentials: false[[:space:]]*$' "$framework_validation_workflow")" -eq 2 ]] \
+        || framework_validation_failures+=("framework-validation.yml: both checkouts must disable credential persistence")
     [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 30[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
-        || framework_validation_failures+=("framework-validation.yml: the framework-contract job must use the bounded timeout")
+        || framework_validation_failures+=("framework-validation.yml: the fast framework-contract job must use the bounded timeout")
+    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 60[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
+        || framework_validation_failures+=("framework-validation.yml: the slow contract shards must use the bounded timeout")
     [[ "$(grep -Ec '^permissions:[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: expected one workflow-level permissions block")
     [[ "$(grep -Ec '^[[:space:]]+contents: read[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
@@ -65,7 +293,7 @@ else
     ripgrep_update_line="$(grep -nF -- "sudo apt-get update" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
     ripgrep_install_line="$(grep -nF -- "sudo apt-get install --yes --no-install-recommends ripgrep" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
     ripgrep_verify_line="$(grep -nF -- "command -v rg" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
-    aggregate_contract_line="$(grep -nF -- "run: ./tests/test-p0-p4-contracts.sh" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+    aggregate_contract_line="$(grep -nF -- "./tests/test-p0-p4-contracts.sh" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
 
     [[ -n "$ripgrep_update_line" ]] || ripgrep_setup_failures+=("framework-validation.yml: missing apt metadata refresh")
     [[ -n "$ripgrep_install_line" ]] || ripgrep_setup_failures+=("framework-validation.yml: missing minimal ripgrep install")
@@ -84,6 +312,53 @@ if [[ "${#ripgrep_setup_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "general CI ripgrep setup violations: ${ripgrep_setup_failures[*]}"
+fi
+
+test_start "general CI verifies Ruby Psych before every contract job"
+ruby_setup_failures=()
+if [[ ! -f "$framework_validation_workflow" ]]; then
+    ruby_setup_failures+=("missing .github/workflows/framework-validation.yml")
+else
+    ruby_verify_count="$(grep -Ec '^[[:space:]]+command -v ruby[[:space:]]*$' "$framework_validation_workflow" || true)"
+psych_verify_count="$(grep -Ec '^[[:space:]]+ruby -rjson -ryaml -rbigdecimal -e ' "$framework_validation_workflow" || true)"
+    first_ruby_verify_line="$(grep -nF -- "command -v ruby" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+    aggregate_contract_line="$(grep -nF -- "./tests/test-p0-p4-contracts.sh" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+    second_ruby_verify_line="$(grep -nF -- "command -v ruby" "$framework_validation_workflow" | sed -n '2s/:.*//p' || true)"
+    shard_contract_line="$(grep -nF -- 'bash "tests/p0-p4/${{ matrix.suite }}"' "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
+
+    [[ "$ruby_verify_count" -eq 2 ]] || ruby_setup_failures+=("framework-validation.yml: both contract jobs must verify Ruby")
+    [[ "$psych_verify_count" -eq 2 ]] || ruby_setup_failures+=("framework-validation.yml: both contract jobs must verify Ruby JSON, Psych/YAML, and BigDecimal")
+    if [[ -z "$first_ruby_verify_line" || -z "$aggregate_contract_line" ]] \
+        || ! (( first_ruby_verify_line < aggregate_contract_line )); then
+        ruby_setup_failures+=("framework-validation.yml: Ruby verification must precede aggregate contracts")
+    fi
+    if [[ -z "$second_ruby_verify_line" || -z "$shard_contract_line" ]] \
+        || ! (( second_ruby_verify_line < shard_contract_line )); then
+        ruby_setup_failures+=("framework-validation.yml: Ruby verification must precede long contract shards")
+    fi
+fi
+if [[ "${#ruby_setup_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "general CI Ruby/Psych setup violations: ${ruby_setup_failures[*]}"
+fi
+
+test_start "README preserves source-edit isolation and validator runtime prerequisites"
+readme_contract_failures=()
+if ! grep -Fq "Source-changing packets in a shared or unknown workspace remain sequential" "$FRAMEWORK_DIR/README.md"; then
+    readme_contract_failures+=("missing shared-workspace sequential gate")
+fi
+if ! grep -Fq "parallel source-changing packets require runtime proof of isolated workspaces" "$FRAMEWORK_DIR/README.md"; then
+    readme_contract_failures+=("missing isolated-workspace proof gate")
+fi
+if ! grep -Fq "skill-eval runner requires Ruby with JSON and Psych/YAML support" "$FRAMEWORK_DIR/README.md" \
+    || ! grep -Fq "ruby -rbigdecimal" "$FRAMEWORK_DIR/README.md"; then
+    readme_contract_failures+=("missing Ruby JSON/Psych/YAML/BigDecimal evaluator prerequisite")
+fi
+if [[ "${#readme_contract_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "README contract violations: ${readme_contract_failures[*]}"
 fi
 
 test_start "P0-P4 fixture installs isolate ambient CODEX_HOME and restore caller state"
@@ -241,29 +516,28 @@ else
     pass
 fi
 
-if [[ -z "${P0P4_DIRECT_RUN_GUARD:-}" ]]; then
-    test_start "top-level P0-P4 suites are directly runnable"
-    direct_run_tmp="$(mktemp -d)"
-    direct_run_failures=()
-
-    for suite_file in "$P0P4_SUITE_DIR"/*.sh; do
-        [[ -f "$suite_file" ]] || continue
-
-        suite_output="$direct_run_tmp/$(basename -- "$suite_file").out"
-        # Prevent this guard suite from recursively launching the full direct-run check.
-        if P0P4_DIRECT_RUN_GUARD=1 bash "$suite_file" >"$suite_output" 2>&1; then
-            continue
-        fi
-
-        direct_run_failures+=("$(basename -- "$suite_file")")
-    done
-
-    if [[ "${#direct_run_failures[@]}" -eq 0 ]]; then
-        rm -rf "$direct_run_tmp"
-        pass
-    else
-        fail "direct run failed for: ${direct_run_failures[*]}; output captured in $direct_run_tmp"
+test_start "top-level P0-P4 suites retain standalone bootstrap contracts"
+direct_run_contract_failures=()
+for suite_file in "$P0P4_SUITE_DIR"/*.sh; do
+    [[ -f "$suite_file" ]] || continue
+    suite_name="$(basename -- "$suite_file")"
+    if ! bash -n "$suite_file"; then
+        direct_run_contract_failures+=("$suite_name:syntax")
     fi
+    if ! grep -Fq 'p0p4_bootstrap_suite' "$suite_file"; then
+        direct_run_contract_failures+=("$suite_name:bootstrap")
+    fi
+done
+direct_run_smoke_output="$(mktemp)"
+p0p4_register_cleanup "$direct_run_smoke_output"
+if ! bash "$P0P4_SUITE_DIR/review-loop-cap-contracts.sh" >"$direct_run_smoke_output" 2>&1 \
+    || ! grep -Eq '^[[:space:]]+Failed: 0$' "$direct_run_smoke_output"; then
+    direct_run_contract_failures+=("review-loop-cap-contracts.sh:direct-smoke")
+fi
+if [[ "${#direct_run_contract_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "standalone suite contract failures: ${direct_run_contract_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

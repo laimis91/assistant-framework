@@ -1,4 +1,4 @@
-schema_version: "3.0"
+schema_version: "6.0"
 contract: input
 skill: assistant-thinking
 
@@ -83,3 +83,29 @@ fields:
     description: "Fresh workflow Architecture Decision Pack reference or durable decision record being challenged"
     validation: "Non-empty and traceable to its source revision/context; if stale, identify refresh rather than reasoning from an assumed current design"
     on_missing: ask
+
+  - name: feature_preparation_evidence_bindings
+    type: object[]
+    required: false
+    condition: "tool == deep_think and existing-system feature preparation is in scope"
+    description: "Canonical workflow feature-preparation evidence rows that may validate distinct Deep Think candidate promotions"
+    validation: "At most 32 distinct exact stable {evidence_ref, item_id, claim_or_question} bindings are admissible. Missing or inaccessible bindings keep concerns candidate_only with promotion_status=requires_feature_preparation_evidence; Deep Think may still surface candidates."
+    default: []
+    max_items: 32
+    on_missing: skip
+    object_fields:
+      - name: evidence_ref
+        type: string
+        required: true
+        validation: "Non-empty canonical workflow feature-preparation evidence artifact reference."
+        on_missing: fail
+      - name: item_id
+        type: string
+        required: true
+        validation: "Non-empty admissible item identifier under evidence_ref."
+        on_missing: fail
+      - name: claim_or_question
+        type: string
+        required: true
+        validation: "Exact carried behavior claim or Product question paired with evidence_ref and item_id."
+        on_missing: fail

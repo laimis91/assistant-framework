@@ -6,13 +6,15 @@ Think of it like a speedometer with a lie detector: the score can go up, but onl
 
 ## Score History Format
 
-After each review round, record an entry in the score history:
+After each response barrier, recompute from the post-barrier aggregated union of
+the current final snapshot and record an entry in score history. Perspective-local
+rubrics never drive a batch exit or drift calculation.
 
 ```
 score_history.append({
   round: N,
-  weighted_score: 3.85,
-  finding_count: 5,        # must-fix + should-fix (not nits)
+  weighted_score: 3.90, # (4.0 * 0.30) + (3.5 * 0.20) + (4.0 * 0.20) + (5.0 * 0.15) + (3.0 * 0.15)
+  aggregated_finding_count: 5, # union must-fix + should-fix (not nits)
   dimension_scores: { correctness: 4.0, code_quality: 3.5, ... },
   drift_status: GENUINE    # computed from rules below
 })
@@ -20,34 +22,35 @@ score_history.append({
 
 ## Drift Detection Rules
 
-Compare each round to the previous round using two signals: **score delta** and **finding count delta**.
+Compare each round to the previous final snapshot using **aggregate score delta**
+and **aggregated union finding count delta**.
 
 ### Rule 1: GENUINE improvement
 
 Score went up AND finding count went down.
 
 ```
-score_delta > 0 AND finding_count_delta < 0 → GENUINE
+score_delta > 0 AND aggregated_finding_count_delta < 0 → GENUINE
 ```
 
 This is the expected pattern: fixes improve the code, fewer issues found.
 
 ### Rule 2: SUSPICIOUS improvement
 
-Score went up significantly (> 1.0) in a single round. Even if findings decreased, this magnitude of jump warrants verification.
+Score went up significantly (> 1.0) in a single round while findings decreased. This magnitude warrants verification.
 
 ```
-score_delta > 1.0 → SUSPICIOUS (regardless of finding count)
+score_delta > 1.0 AND aggregated_finding_count_delta < 0 → SUSPICIOUS
 ```
 
 Action: Log a warning in the final summary. The improvement may be real (e.g., a single critical fix that uncapped the score), but it should be noted.
 
 ### Rule 3: DRIFT (evaluator leniency)
 
-Score went up BUT finding count didn't decrease. The evaluator is scoring higher without the code actually improving.
+DRIFT takes precedence whenever finding count is unchanged or increased, including a large score increase. The evaluator is scoring higher without evidence of fewer findings.
 
 ```
-score_delta > 0 AND finding_count_delta >= 0 → DRIFT
+score_delta > 0 AND aggregated_finding_count_delta >= 0 → DRIFT
 ```
 
 Action: **Reset evaluator context once.** Dispatch a fresh reviewer agent with an explicitly stricter prompt:
@@ -75,7 +78,7 @@ Action: This is not necessarily bad — a fresh evaluator may legitimately find 
 Score unchanged for 2+ consecutive rounds with findings still present.
 
 ```
-score_delta == 0 for 2 consecutive rounds AND finding_count > 0 → STAGNATION
+score_delta == 0 for 2 consecutive rounds AND aggregated_finding_count > 0 → STAGNATION
 ```
 
 Action: Return `pivot_restart_signal` to the orchestrator. The loop is churning
@@ -112,7 +115,7 @@ Record scores in each Quality Review entry:
 - Previously fixed: M items from prior rounds
 - Found this round: X must-fix, Y should-fix, Z nits
 - Rubric: correctness=4.0 quality=3.5 architecture=4.0 security=5.0 coverage=3.0
-- Weighted: 3.85
+- Weighted: 3.90
 - Delta from previous: +0.35
 - Drift check: GENUINE (findings decreased 5→3)
 ```
@@ -126,7 +129,7 @@ Include in the review exit summary:
 | Round | Score | Findings | Delta | Drift |
 |---|---|---|---|---|
 | 1 | 3.50 | 5 | — | — |
-| 2 | 3.85 | 3 | +0.35 | GENUINE |
+| 2 | 3.90 | 3 | +0.40 | GENUINE |
 | 3 | 4.10 | 0 | +0.25 | GENUINE |
 ```
 

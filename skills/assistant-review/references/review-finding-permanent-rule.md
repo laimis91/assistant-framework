@@ -13,7 +13,7 @@ Do not turn every nit into a rule. Promote only findings with evidence of recurr
 
 ```text
 Review Finding Rule Distillation:
-- Finding: [short finding title]
+- Finding: [canonical aggregate_finding_id]
 - Evidence: [file/path/contract/eval/review evidence]
 - Failure pattern: [what class of mistake this represents]
 - Classification: one_off_fix | permanent_rule_candidate | no_action
@@ -42,4 +42,4 @@ Defer or reject when:
 
 ## Output expectation
 
-For every blocker or must-fix finding, include at least a short classification. For lower-severity findings, classify only when the issue is recurring or framework-level.
+For every blocker or must-fix finding, include at least a short classification. `Finding` is the canonical `aggregate_finding_id` from active `aggregated_findings` or `fixed_items`; when a fixed item regresses, keep one deduplicated mapping for that same id. For lower-severity findings, classify only when the issue is recurring or framework-level.

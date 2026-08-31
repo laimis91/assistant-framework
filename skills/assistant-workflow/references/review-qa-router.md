@@ -24,18 +24,30 @@ Quality review cannot satisfy Spec Review. QA Evaluation cannot substitute for
 Spec Review or Code Quality Review. Code Reviewer and QA Evaluator
 responsibilities stay separate.
 
+## Review Authorization Gate
+
+Before Stage 1 Spec Review or source inspection/mutation, resolve
+`assistant-review` mode from semantic modification authority. Clear report-only
+intent selects audit. Explicit source-modification authorization, or a carried
+active approved implementation workflow with bounded in-scope repairs, selects
+review-fix. Authorship, branch/PR ownership, platform, and connector never
+authorize edits. If audit versus editing remains materially unresolved, ask
+exactly: "Should I only report findings, or also implement and verify fixes?"
+and stop before reviewing or changing source until the user answers.
+
 For `controller_intensity=light`, use the compact lane instead: compare the
 diff with carried Discover scope/criteria and any applicable inline plan, run a
 fresh review pass after validation,
-record PASS plus the reviewed scope/evidence, and fix any findings before
-completion. Light work does not load the full rubric/QA loop unless risk or an
+record PASS plus the reviewed scope/evidence, and in review-fix mode address
+only evidence-backed findings within authorized scope before completion. Light
+work does not load the full rubric/QA loop unless risk or an
 independent trigger promotes it. This is a fresh self-review and does not
 require Code Reviewer, Reviewer, Code Writer, or Builder/Tester dispatch/direct
 fallback evidence. When an Architecture Decision Pack applies, persist
-validated refs to `assistant-review/contracts/output.yaml#final_summary` and
+validated refs to `assistant-review/contracts/output.yaml#final_summary`, its
+exact current final-batch `final_snapshot_identity`, and
 `assistant-review/contracts/output.yaml#architecture_decision_pack_review` in
-`fresh_review_result`; light direct fallback does not require
-`review_delegation_path`.
+`fresh_review_result`, including the canonical `review_delegation_path`.
 
 ## Stage 1 - Spec Review
 
@@ -58,8 +70,9 @@ Spec Review must:
 6. Append a `### Spec Review #N` entry to the task journal Review Log with:
    Result: PASS | FAIL, Missing acceptance criteria, Extra scope, Changed files
    mismatch, Verification evidence mismatch, and Required fixes.
-7. On Spec review FAIL, fix required items, re-test, and re-run Spec Review
-   before Stage 2.
+7. On Spec review FAIL, in review-fix mode fix only evidence-backed required
+   items within authorized scope, re-test, and re-run Spec Review before Stage
+   2. In audit mode, report the mismatch without source changes.
 8. On Spec review PASS, proceed to Stage 2.
 
 Print: `>> Spec Review: [PASS / FAIL - found N required fixes]`
@@ -92,9 +105,14 @@ In direct fallback, preserve fresh-review evidence and record
 evidence only.
 
 The `assistant-review` loop fixes must-fix and should-fix items, re-reviews
-automatically, and returns a final clean/remaining summary. For small tasks, a
-quick spec check plus one clean review round is acceptable. For medium+ tasks,
-run full Spec Review plus the autonomous code quality loop.
+automatically only when review-fix authority is explicit or carried by the
+active approved workflow, and only for evidence-backed findings within its
+approved scope. Audit mode reports findings without source changes. A finding
+that expands scope, requirements, architecture, files, risk, verification, or
+acceptance criteria returns to planning or approval before any mutation. Light
+small tasks may use a quick spec check plus one clean review round. Small
+strict/required-QA work requires full Stage 1 Spec Review and Stage 2 Code
+Quality Review, as do medium+ tasks.
 
 If code review reports STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT, pause the loop and create an orchestrator-owned
 `pivot_restart_decision` before another fix/review dispatch. The autonomous
@@ -114,6 +132,13 @@ Load and follow assistant-review's QA loop. assistant-review owns QAEvaluator
 dispatch, direct-fallback policy, input/return validation, and the canonical
 delegation-path/result artifacts; workflow records only validated refs.
 
+When a carried feature-preparation QA obligation exists, a successful canonical
+pair (`accepted` or `accepted_with_concerns` with `CLEAN` or `ISSUES_FIXED`) is
+valid only when its obligation result records `requested_scope_status=fulfilled`,
+`execution_prerequisite_status=met`, and the exact unchanged scope/source
+binding. A blocked or failed obligation remains non-complete even when the
+verdict/result pair otherwise looks successful.
+
 assistant-review loads `references/domain-rubrics.md` only when its canonical
 QA inputs require subjective/product/UX/docs/DX/UI/domain scoring. The canonical
 QA output schema remains solely in `assistant-review/contracts/output.yaml`.
@@ -128,25 +153,43 @@ an orchestrator-owned `pivot_restart_decision` before another QA/build dispatch.
 Round 10 remains terminal: return the final QA verdict and remaining failed
 acceptance items instead of starting round 11.
 
+QA rejection followed by a source fix returns to Build. Before another QA
+round, record passed Build validation, recompute the source digest, and run a
+fresh complete assistant-review batch on the post-fix identity. Reusing the
+prior review is allowed only when equal pre/post digests and explicit equality
+evidence prove no source change; changed-path fields must be absent.
+
 ## Status Gate
 
 Enforce the review cycle before presenting results:
 
 - Review Log or equivalent review result must exist.
 - Standard/strict `review_result` must record validated refs to assistant-review
-  `final_summary` and `review_delegation_path` plus their exact canonical
-  contract ids. Standard/strict Pack-backed `review_result` must also record validated refs to
+  `final_summary`, the current `producer_schema_version`, its exact current
+  `final_review_snapshot_id` and `final_snapshot_identity`, and
+  `review_delegation_path` plus their exact canonical contract ids.
+  `final_snapshot_identity_ref` and `final_snapshot_identity` must resolve
+  within the same `final_summary` and equal the current final batch;
+  `final_review_snapshot_id` must equal the current final batch
+  `review_snapshot_id` and identify the same canonical identity. Standard/strict
+  Pack-backed `review_result` must also record validated refs to
   `assistant-review/contracts/output.yaml#architecture_decision_pack_review`;
   canonical review fields remain owned by assistant-review.
 - Light Pack-backed `fresh_review_result` must record validated refs to
-  `assistant-review/contracts/output.yaml#final_summary` and
-  `assistant-review/contracts/output.yaml#architecture_decision_pack_review`;
-  light direct fallback does not require
-  `review_delegation_path`.
+  `assistant-review/contracts/output.yaml#final_summary`, its exact current
+  final-batch `final_snapshot_identity`,
+  `assistant-review/contracts/output.yaml#review_delegation_path`, and
+  `assistant-review/contracts/output.yaml#architecture_decision_pack_review`.
 - Independent Code Reviewer dispatch/result evidence, or allowed fresh
   direct-fallback evidence, must be created in Review after Build completes.
 - When `qa_evaluation_mode=required`, workflow must record validated refs to
-  assistant-review `qa_evaluation_result` and `qa_evaluation_delegation_path`.
+  assistant-review `qa_evaluation_result` and `qa_evaluation_delegation_path`,
+  plus the current producer version and exact carried-obligation result ref when
+  applicable.
+- Every consumed `producer_schema_version` must equal
+  `skills/assistant-review/contracts/index.yaml#schema_version`. Persisted
+  mismatches invalidate canonical review/QA result, delegation, snapshot, and
+  Pack refs and rerun the required current-contract lane.
 - Pivot/Restart Decision must exist when Review or QA reported STAGNATION,
   repeated DRIFT, repeated REGRESSION, or pivot action.
 - Final Result must be recorded.

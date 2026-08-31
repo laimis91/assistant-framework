@@ -70,6 +70,25 @@ else
     fail "default validator run failed"
 fi
 
+test_start "skill validator fails fast when Ruby Psych YAML support is unavailable"
+runtime_prerequisite_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-runtime-prerequisite.XXXXXX")"
+p0p4_register_cleanup "$runtime_prerequisite_root"
+mkdir -p "$runtime_prerequisite_root/bin"
+cat >"$runtime_prerequisite_root/bin/ruby" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "$runtime_prerequisite_root/bin/ruby"
+runtime_prerequisite_err="$runtime_prerequisite_root/stderr"
+if PATH="$runtime_prerequisite_root/bin:$PATH" "$skill_validator" >/dev/null 2>"$runtime_prerequisite_err"; then
+    fail "validator accepted an unusable Ruby Psych/YAML runtime"
+elif grep -Fq "PREREQUISITE_RUBY_YAML" "$runtime_prerequisite_err" \
+    && grep -Fq "Ruby with Psych/YAML support is required" "$runtime_prerequisite_err"; then
+    pass
+else
+    fail "validator did not emit the Ruby Psych/YAML prerequisite diagnostic, stderr=$(cat "$runtime_prerequisite_err")"
+fi
+
 test_start "skill validator default list includes assistant skills and excludes local unity skills"
 list_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-list.XXXXXX")"
 p0p4_register_cleanup "$list_fixture_root"
@@ -896,6 +915,262 @@ elif grep -Fq "ENUM_VALUES" "$missing_enum_err"; then
     pass
 else
     fail "missing enum_values failure did not include ENUM_VALUES, stderr=$(cat "$missing_enum_err")"
+fi
+
+test_start "skill validator accepts supported contract field types and rejects enum[]"
+field_type_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-field-types.XXXXXX")"
+field_type_err="$(mktemp "${TMPDIR:-/tmp}/skill-validator-field-types-err.XXXXXX")"
+p0p4_register_cleanup "$field_type_root" "$field_type_err"
+p0p4_write_valid_skill_fixture "$field_type_root/field-types-skill"
+cat >"$field_type_root/field-types-skill/contracts/input.yaml" <<'EOF'
+schema_version: "1.0"
+contract: input
+skill: field-types-skill
+
+fields:
+  - name: text
+    type: string
+    required: true
+    description: "Fixture text"
+    validation: "Non-empty"
+    on_missing: ask
+  - name: count
+    type: int
+    required: false
+  - name: ratio
+    type: float
+    required: false
+  - name: enabled
+    type: boolean
+    required: false
+  - name: mode
+    type: enum
+    required: false
+    enum_values: [one, two]
+  - name: labels
+    type: string[]
+    required: false
+  - name: metadata
+    type: object
+    required: false
+  - name: records
+    type: object[]
+    required: false
+  - name: report
+    type: file
+    required: false
+  - name: journal_line
+    type: jsonl_line
+    required: false
+EOF
+if ! "$skill_validator" --skill "$field_type_root/field-types-skill" >/dev/null; then
+    fail "validator rejected supported contract field types"
+else
+    sed -i.bak 's/type: string\[\]/type: enum[]/' "$field_type_root/field-types-skill/contracts/input.yaml"
+    rm -f "$field_type_root/field-types-skill/contracts/input.yaml.bak"
+    if "$skill_validator" --skill "$field_type_root/field-types-skill" >/dev/null 2>"$field_type_err"; then
+        fail "validator accepted unsupported enum[] contract field type"
+    elif grep -Fq "CONTRACT_FIELD_TYPE" "$field_type_err"; then
+        sed -i.bak 's/type: enum\[\]/type: unsupported_type/' "$field_type_root/field-types-skill/contracts/input.yaml"
+        rm -f "$field_type_root/field-types-skill/contracts/input.yaml.bak"
+        if "$skill_validator" --skill "$field_type_root/field-types-skill" >/dev/null 2>"$field_type_err"; then
+            fail "validator accepted an unknown contract field type"
+        elif grep -Fq "CONTRACT_FIELD_TYPE" "$field_type_err"; then
+            pass
+        else
+            fail "unknown contract field type failure lacked CONTRACT_FIELD_TYPE, stderr=$(cat "$field_type_err")"
+        fi
+    else
+        fail "unsupported contract field type failure lacked CONTRACT_FIELD_TYPE, stderr=$(cat "$field_type_err")"
+    fi
+fi
+
+test_start "skill validator rejects unsupported inline contract field types"
+inline_type_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-inline-field-types.XXXXXX")"
+inline_type_err="$(mktemp "${TMPDIR:-/tmp}/skill-validator-inline-field-types-err.XXXXXX")"
+p0p4_register_cleanup "$inline_type_root" "$inline_type_err"
+p0p4_write_valid_skill_fixture "$inline_type_root/inline-field-types-skill"
+cat >"$inline_type_root/inline-field-types-skill/contracts/input.yaml" <<'EOF'
+schema_version: "1.0"
+contract: input
+skill: inline-field-types-skill
+
+fields:
+  - {name: request, type: string, required: true, description: "Fixture request", validation: "Non-empty", on_missing: ask}
+  - {name: nested, "type": object, required: false, object_fields: [{name: bad, "type": "enum[]"}, {name: valid, type: string}]}
+EOF
+if "$skill_validator" --skill "$inline_type_root/inline-field-types-skill" >/dev/null 2>"$inline_type_err"; then
+    fail "validator accepted unsupported inline enum[] contract field type"
+elif grep -Fq "CONTRACT_FIELD_TYPE" "$inline_type_err"; then
+    sed -i.bak 's/"type": "enum\[\]"/"type": string/; s/type: string}]}/type: unsupported_type}]}/' "$inline_type_root/inline-field-types-skill/contracts/input.yaml"
+    rm -f "$inline_type_root/inline-field-types-skill/contracts/input.yaml.bak"
+    if "$skill_validator" --skill "$inline_type_root/inline-field-types-skill" >/dev/null 2>"$inline_type_err"; then
+        fail "validator accepted reversed-order unsupported inline field type"
+    elif grep -Fq "unsupported_type" "$inline_type_err"; then
+        pass
+    else
+        fail "reversed-order inline failure did not identify unsupported_type, stderr=$(cat "$inline_type_err")"
+    fi
+else
+    fail "inline unsupported contract field type failure lacked CONTRACT_FIELD_TYPE, stderr=$(cat "$inline_type_err")"
+fi
+
+test_start "skill validator validates nested field types in input, output artifacts, and handoffs without reading metadata types"
+schema_traversal_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-schema-traversal.XXXXXX")"
+schema_traversal_err="$(mktemp "${TMPDIR:-/tmp}/skill-validator-schema-traversal-err.XXXXXX")"
+p0p4_register_cleanup "$schema_traversal_root" "$schema_traversal_err"
+p0p4_write_valid_skill_fixture "$schema_traversal_root/schema-traversal-skill"
+cat >>"$schema_traversal_root/schema-traversal-skill/SKILL.md" <<'EOF'
+| `contracts/phase-gates.yaml` | fixture phase gates |
+| `contracts/handoffs.yaml` | fixture handoffs |
+EOF
+cat >"$schema_traversal_root/schema-traversal-skill/contracts/input.yaml" <<'EOF'
+schema_version: "1.0"
+contract: input
+skill: schema-traversal-skill
+
+fields:
+  - name: request
+    type: object
+    required: true
+    description: "Fixture request"
+    validation: "Non-empty"
+    on_missing: ask
+    object_fields:
+      - name: options
+        type: object
+        required: true
+        object_fields:
+          - name: labels
+            type: string[]
+            required: true
+EOF
+cat >"$schema_traversal_root/schema-traversal-skill/contracts/output.yaml" <<'EOF'
+schema_version: "1.0"
+contract: output
+skill: schema-traversal-skill
+
+metadata:
+  type: unsupported_metadata_type
+
+artifacts:
+  - name: result
+    type: object
+    required: true
+    description: "Fixture result"
+    validation: "Non-empty"
+    on_fail: "Re-run the fixture skill and provide a result"
+    object_fields:
+      - name: details
+        type: object
+        required: true
+        object_fields:
+          - name: status
+            type: enum
+            required: true
+            enum_values: [ready]
+EOF
+cat >"$schema_traversal_root/schema-traversal-skill/contracts/phase-gates.yaml" <<'EOF'
+schema_version: "1.0"
+contract: phase-gates
+skill: schema-traversal-skill
+
+gates:
+  - phase: FIXTURE
+    checkpoint_start: "--- PHASE: FIXTURE ---"
+    checkpoint_end: "--- PHASE: FIXTURE COMPLETE ---"
+    exit_assertions:
+      - id: F1
+        check: "Fixture phase completed"
+        on_fail: "Complete the fixture phase"
+EOF
+cat >"$schema_traversal_root/schema-traversal-skill/contracts/handoffs.yaml" <<'EOF'
+schema_version: "1.0"
+contract: handoffs
+skill: schema-traversal-skill
+
+worker_status_protocol:
+  type: unsupported_metadata_type
+
+handoffs:
+  - name: orchestrator_to_worker
+    from: Orchestrator
+    to: Worker
+    phase: FIXTURE
+    context_fields:
+      - name: context
+        type: object
+        required: true
+        object_fields:
+          - name: source
+            type: string
+            required: true
+    return_fields:
+      - name: result
+        type: object
+        required: true
+        object_fields:
+          - name: summary
+            type: string
+            required: true
+EOF
+if ! "$skill_validator" --skill "$schema_traversal_root/schema-traversal-skill" >/dev/null; then
+    fail "validator rejected valid nested input, output, and handoff field types or treated metadata type as a field type"
+else
+    sed -i.bak 's/type: enum/type: enum[]/' "$schema_traversal_root/schema-traversal-skill/contracts/output.yaml"
+    rm -f "$schema_traversal_root/schema-traversal-skill/contracts/output.yaml.bak"
+    if "$skill_validator" --skill "$schema_traversal_root/schema-traversal-skill" >/dev/null 2>"$schema_traversal_err"; then
+        fail "validator accepted unsupported nested output artifact field type"
+    elif ! grep -Fq "CONTRACT_FIELD_TYPE" "$schema_traversal_err"; then
+        fail "nested output artifact failure lacked CONTRACT_FIELD_TYPE, stderr=$(cat "$schema_traversal_err")"
+    else
+        sed -i.bak 's/type: enum\[\]/type: enum/' "$schema_traversal_root/schema-traversal-skill/contracts/output.yaml"
+        rm -f "$schema_traversal_root/schema-traversal-skill/contracts/output.yaml.bak"
+        sed -i.bak 's/type: string/type: unsupported_type/' "$schema_traversal_root/schema-traversal-skill/contracts/handoffs.yaml"
+        rm -f "$schema_traversal_root/schema-traversal-skill/contracts/handoffs.yaml.bak"
+        if "$skill_validator" --skill "$schema_traversal_root/schema-traversal-skill" >/dev/null 2>"$schema_traversal_err"; then
+            fail "validator accepted unsupported nested handoff field type"
+        elif grep -Fq "CONTRACT_FIELD_TYPE" "$schema_traversal_err"; then
+            sed -i.bak 's/type: unsupported_type/type: string/' "$schema_traversal_root/schema-traversal-skill/contracts/handoffs.yaml"
+            rm -f "$schema_traversal_root/schema-traversal-skill/contracts/handoffs.yaml.bak"
+            nonstring_type_failures=()
+            for nonstring_type_case in boolean number null array object; do
+                case "$nonstring_type_case" in
+                    boolean) nonstring_type_value=true ;;
+                    number) nonstring_type_value=7 ;;
+                    null) nonstring_type_value=null ;;
+                    array) nonstring_type_value='[string]' ;;
+                    object) nonstring_type_value='{kind: string}' ;;
+                esac
+                sed -i.bak "s/type: enum/type: $nonstring_type_value/" "$schema_traversal_root/schema-traversal-skill/contracts/output.yaml"
+                rm -f "$schema_traversal_root/schema-traversal-skill/contracts/output.yaml.bak"
+                if "$skill_validator" --skill "$schema_traversal_root/schema-traversal-skill" >/dev/null 2>"$schema_traversal_err" \
+                    || ! grep -Fq "CONTRACT_FIELD_TYPE" "$schema_traversal_err" \
+                    || grep -Fq "line 0" "$schema_traversal_err"; then
+                    nonstring_type_failures+=("$nonstring_type_case")
+                fi
+                sed -i.bak "s/type: $nonstring_type_value/type: enum/" "$schema_traversal_root/schema-traversal-skill/contracts/output.yaml"
+                rm -f "$schema_traversal_root/schema-traversal-skill/contracts/output.yaml.bak"
+            done
+            if [[ ${#nonstring_type_failures[@]} -eq 0 ]]; then
+                pass
+            else
+                fail "validator did not reject non-string nested contract field types with a real or omitted locus: ${nonstring_type_failures[*]}"
+            fi
+        else
+            fail "nested handoff failure lacked CONTRACT_FIELD_TYPE, stderr=$(cat "$schema_traversal_err")"
+        fi
+    fi
+fi
+
+test_start "contract guide and validator share the canonical field-type vocabulary"
+canonical_types='string, int, boolean, enum, string[], object, object[], float, file, jsonl_line'
+if grep -Fq "Field types: \`string\`, \`int\`, \`boolean\`, \`enum\`, \`string[]\`, \`object\`, \`object[]\`, \`float\`, \`file\`, \`jsonl_line\`" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq 'string|int|float|boolean|enum' "$skill_validator" \
+    && grep -Fq 'file|jsonl_line' "$skill_validator"; then
+    pass
+else
+    fail "contract guide and validator do not share the canonical field-type vocabulary"
 fi
 
 test_start "skill validator rejects analysis skills missing phase gates contract"

@@ -1,7 +1,32 @@
 if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-response-fixtures.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
+
+test_start "worker-status filtered workflow eval keeps matched review authority coherent"
+worker_status_filter_root="$(mktemp -d "${TMPDIR:-/tmp}/worker-status-eval-filter.XXXXXX")"
+p0p4_register_cleanup "$worker_status_filter_root"
+mkdir -p "$worker_status_filter_root/assistant-workflow/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$worker_status_filter_root/assistant-workflow/SKILL.md"
+p0p4_filter_workflow_eval_cases \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" \
+    "$worker_status_filter_root/assistant-workflow/evals/cases.json" \
+    "standard-pack-review-result-retains-checklist"
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$worker_status_filter_root/assistant-workflow" >/dev/null \
+    && jq -e '
+        .canonical_review_batch_expectations as $authority
+        | ($authority.case_template_refs | keys) == ["standard-pack-review-result-retains-checklist"]
+        and ($authority.case_requirements | keys) == ["standard-pack-review-result-retains-checklist"]
+        and ($authority.templates | keys) == ["workflow_small_current"]
+        and ($authority.scope_manifests | keys) == ["workflow_small_current"]
+        and (.canonical_review_snapshot_expectations | keys) == ["standard-pack-review-result-retains-checklist"]
+        and (.canonical_review_closure_expectations | keys) == []
+      ' "$worker_status_filter_root/assistant-workflow/evals/cases.json" >/dev/null; then
+    pass
+else
+    fail "worker-status filtered workflow eval left a dangling canonical review authority"
+fi
 
 handoff_context_field_required() {
     local file="$1"
@@ -339,7 +364,7 @@ for file_and_handoff in \
 done
 for term in \
     "Reviewer returns include a compact status packet while preserving the findings/rubric schema." \
-    "findings, summary, and verdict remain required and are not replaced by status." \
+    "findings, summary, coverage_entries, and verdict remain required and are not replaced by status." \
     "evidence is required to support the verdict and any findings."; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"; then
         missing_reviewer_status_terms+=("assistant-review handoff: $term")
@@ -478,7 +503,7 @@ run_code_mapper_outcome_eval() {
     responses_dir="$eval_root/responses"
     mkdir -p "$temporary_skill/evals" "$responses_dir/assistant-workflow"
     cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$temporary_skill/SKILL.md"
-    jq --arg case_id "$case_id" '.cases = [.cases[] | select(.id == $case_id)]' "$fixture" >"$temporary_skill/evals/cases.json"
+    p0p4_filter_workflow_eval_cases "$fixture" "$temporary_skill/evals/cases.json" "$case_id"
     printf '%s\n' "$response" >"$responses_dir/assistant-workflow/$case_id.txt"
     if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill" 2>&1)"; then
         [[ "$expected_status" == "FAIL" ]] || return 1

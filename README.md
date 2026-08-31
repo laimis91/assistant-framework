@@ -31,16 +31,6 @@ Install all skills for any supported agent:
 
 The release inventory is the tracked `skills/assistant-*` set. `skills/unity-*` directories are local-only and ignored by git; they are not installed or validated as framework release skills.
 
-Plugin boundaries are contract-backed in `docs/plugin-architecture.md`. The current installer still uses the root `skills/assistant-*` release inventory by default, and it also supports focused profile installs:
-
-```bash
-./install.sh --agent codex --plugin assistant-core
-./install.sh --agent codex --plugin assistant-research
-./install.sh --agent codex --plugin assistant-dev
-```
-
-The repo also includes scaffolded Codex plugin manifests at `plugins/assistant-core/.codex-plugin/plugin.json`, `plugins/assistant-research/.codex-plugin/plugin.json`, and `plugins/assistant-dev/.codex-plugin/plugin.json`. The core scaffold contains `assistant-clarify` and `assistant-telos`; the research scaffold has three skills, and the dev scaffold has nine. These plugin-local copies are generated release artifacts from the root `skills/assistant-*` source of truth; verify or refresh them with `tools/plugins/sync-plugin-skills.sh --check` and `tools/plugins/sync-plugin-skills.sh --apply`. The installer performs manifest-aware dry-run validation for the core, research, and dev profiles, but the scaffolds are not marketplace-registered yet; root installs remain the compatibility path.
-
 Install a single skill:
 ```bash
 ./install.sh --agent claude --skill assistant-thinking
@@ -75,11 +65,10 @@ Install the complete release inventory for one agent:
 .\install.ps1 -Agent gemini
 ```
 
-The same entry point supports a single skill, a focused profile, and a non-mutating preview:
+The same entry point supports a single skill and a non-mutating preview:
 
 ```powershell
 .\install.ps1 -Agent claude -Skill assistant-thinking
-.\install.ps1 -Agent codex -Plugin assistant-dev
 .\install.ps1 -Agent codex -DryRun
 ```
 
@@ -149,12 +138,9 @@ makes quality claims falsifiable with workload/budget/measurement, and travels
 through the plan, task handoff, and independent review. It does not
 add a permanent architect agent or force architecture ceremony onto local work.
 
-For multi-slice work, Assistant Workflow infers the repository's current local
-target branch unless explicitly supplied, then uses a portable task branch
-(`feature/<task>`) with collision-safe slice heads (`slice/<task>/<slice-id>`)
-built from descriptive outcome-oriented slice identifiers rather than ordinal-only labels.
-`review_gated` slices emit SHA-bound `REVIEW_PENDING` evidence; remote review
-and policy mechanics remain in the configured provider adapter.
+For multi-slice work, Assistant Workflow uses descriptive outcome-oriented
+slice identifiers rather than ordinal-only labels, explicit dependencies, and
+native subagents only for independent packets.
 
 The architecture is an adaptive loop implemented through native skill routing;
 there is no installed lifecycle engine. Its conceptual states map to the public
@@ -164,15 +150,17 @@ workflow like this:
 |---|---|---|
 | ORIENT, RESOLVE | Discover | Inspect the request, repository, policy, and current task state; apply and record deterministic safe defaults, and ask only material questions with no safe default. |
 | PLAN? | Optional Plan | Select `plan_mode`: `none`, `inline`, or `approval_required`. |
-| EXECUTE SLICE, OBSERVE | Build | Implement one coherent slice, run focused tests, and host-verify argv-array commands before marking evidence verified. |
+| EXECUTE SLICE, OBSERVE | Build | Implement one coherent slice, run its explicit verification command, and record evidence before marking it verified. |
 | REVIEW | Review | Independently check requirements, regressions, quality, security, and QA evidence. |
 | REPAIR | Build or Review | Build repair handles implementation or verification failures with bounded attempts, followed by fresh Review. The assistant-review Review-fix loop handles review findings inside Review with revalidation and a fresh review result. |
 | HANDOFF | Document | Compose `final_handoff` and developer-facing manual test guidance only after acceptance evidence exists. |
 
-`plan_mode=none` is limited to small, local, reversible, high-confidence work
-with known scope. `inline` records a short plan without an approval wait.
-`approval_required` applies to medium-or-larger work and to risk, policy, or
-public-impact changes. Build owns implementation, tests, host verification, and
+For `execution_intent != prepare_only`, `plan_mode=none` is limited to small,
+local, reversible, high-confidence work with known scope. `inline` records a
+short plan without an approval wait. For `prepare_only` at any size, `plan_mode=none` is the default; optional readiness planning retains evidence and next-state context only, without executable packets or downstream Pack handoffs.
+For prepare_only at any size, default to `plan_mode=none` unless optional readiness planning is explicitly requested.
+For `execution_intent != prepare_only`, `approval_required` applies to medium-or-larger work and to risk, policy, or
+public-impact changes. An explicitly requested `prepare_only` readiness Plan is always inline and no-wait. Build owns implementation, tests, verification, and
 a bounded repair loop: at most three attempts, a no-progress limit of two, and
 recorded failure signatures and progress before pivoting or reporting a block.
 Build repair is implementation/verification-failure recovery. Review-fix work
@@ -192,13 +180,13 @@ important changed areas, architecture decisions, verification evidence, manual
 test steps, deviations, and remaining risks without claiming checks that did
 not run.
 
-For executable slices, repository verification uses canonical argv arrays and
-is bound to tracked files in the exact clean slice commit. Host verification
-has bounded private logs and a hard process-group timeout; passing commits are
-promoted from an isolated merge candidate with compare-and-swap protection.
-Validation commands must leave the candidate tree unchanged. Parallel worktree
-storage inside the repository must already be gitignored—the runner fails with
-an instruction instead of editing `.gitignore`.
+Each executable slice carries an explicit verification command and evidence
+requirement. Dependent slices wait for verified prerequisites. Read-only analysis
+may run in parallel for independent packets with non-overlapping ownership.
+Source-changing packets in a shared or unknown workspace remain sequential;
+parallel source-changing packets require runtime proof of isolated workspaces.
+After integration, rerun cross-slice and full-scope validation and perform a
+fresh review before completion.
 
 For compression-safe work, the orchestrator keeps concise, root-scoped task and
 session state under `.codex/`. Resume reconciles that journal with the newest
@@ -240,7 +228,7 @@ STRIDE threat model, OWASP code review, CVE dependency audit, attack surface map
 Triggers on: security, threat model, audit, vulnerability, OWASP
 
 ### assistant-review
-Evidence-bounded code review: audits use one pass; review-fix work normally uses one review plus one fresh post-fix re-review. Additional rounds require new evidence and a recorded reason, within the terminal safety cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
+Evidence-bounded code review: audits use one frozen multi-pass batch with two independent narrow passes, plus integration for medium scope and architecture for large scope. Review-fix work normally uses an initial batch, one bounded repair, and one fresh post-fix re-review batch. Additional rounds require new evidence and a recorded reason, within the terminal safety cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
 
 Triggers on: review, fresh review, code review, review this, check the code
 
@@ -283,6 +271,11 @@ Roslyn-based analyzer that scores method complexity. Used by the workflow skill'
 ### Skill Validator
 
 Source validator for first-class skill metadata and contract structure:
+
+Requires Ruby with Psych/YAML support (`ruby -ryaml`) for contract parsing.
+The skill-eval runner requires Ruby with JSON and Psych/YAML support
+(`ruby -rjson -ryaml`); per-skill response grading additionally requires
+BigDecimal (`ruby -rbigdecimal`).
 
 ```bash
 tools/skills/validate-skills.sh
@@ -406,10 +399,13 @@ fixture:
 ./tests/test-p0-p4-contracts.sh
 ```
 
+For the locked Draft 2020-12 evaluator checks in that aggregate, first use
+Node.js 22 and run `(cd tools/evals && npm ci --ignore-scripts)`.
+
 Pull requests and pushes to `main` also run
-`.github/workflows/framework-validation.yml`, which executes the aggregate
-contracts, skill and generated-mirror checks, and all three Unix installer
-dry-runs on a hosted Linux runner.
+`.github/workflows/framework-validation.yml`, which executes the fast aggregate
+contracts and four long-running contract suites as parallel shards, then runs
+skill checks and all three Unix installer dry-runs on hosted Linux runners.
 
 The end-to-end fixture checks the observable order: implementation, focused
 test pass, an exact trusted review invocation finding the seeded defect, repair,
@@ -426,8 +422,8 @@ for this architecture; changes to those surfaces must rerun the hosted workflow.
 The previously recorded Terra snapshot predates the changed fixture and grader
 and remains historical, non-promoting evidence. A new live promotion claim
 requires fresh authorization for the exact four-call smoke and, if it passes,
-separate authorization for the six-case, three-repeat, two-variant pilot
-(36 calls / 18 pairs). Every automatic and human gate in
+separate authorization for the eight-case, three-repeat, two-variant pilot
+(48 calls / 24 pairs). Every automatic and human gate in
 `docs/evals/README.md` must pass.
 
 ## Structure
@@ -442,8 +438,6 @@ skills/
     SKILL.md                       <- Core pipeline (always loaded when triggered)
     references/                    <- Plan templates, checklists, prompt packs
     playbooks/                     <- Project-type architecture guides
-    scripts/                       <- Mega task automation
-    agents/                        <- Agent presets (claude/codex/gemini.conf)
 
   assistant-clarify/
     SKILL.md                       <- Clarification workflow for ambiguous or multi-intent prompts

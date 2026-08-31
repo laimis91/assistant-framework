@@ -10,9 +10,6 @@
 #   ./install.sh --agent gemini     # → ~/.gemini/skills/assistant-*/
 #   ./install.sh --agent claude --dry-run
 #   ./install.sh --agent claude --skill assistant-workflow  # single skill only
-#   ./install.sh --agent codex --plugin assistant-core      # core profile only
-#   ./install.sh --agent codex --plugin assistant-research  # research profile only
-#   ./install.sh --agent codex --plugin assistant-dev       # development profile only
 #   ./install.sh --agent codex                              # native, hookless behavior
 #   ./install.sh --agent claude --no-hooks                  # deprecated compatibility no-op
 #
@@ -24,7 +21,6 @@ set -euo pipefail
 AGENT=""
 DRY_RUN=false
 SINGLE_SKILL=""
-PLUGIN_PROFILE=""
 FRAMEWORK_DIR=""
 toml_files=()
 
@@ -42,7 +38,6 @@ Installs the Assistant Framework skills for an AI agent.
 Options:
   --agent NAME       Target agent: claude, codex, gemini (required)
   --skill NAME       Install only one skill (default: all)
-  --plugin NAME      Install a planned plugin profile such as assistant-core, assistant-research, or assistant-dev
   --no-hooks         Deprecated compatibility no-op; all installs are hookless
   --dry-run          Show what would be done without doing it
   -h, --help         Show this help
@@ -52,16 +47,12 @@ added manually to installed skill directories. Back up customizations first.
 
 Skills installed:
   Auto-discovered from skills/assistant-*/SKILL.md.
-  Use --plugin assistant-core, --plugin assistant-research, or --plugin assistant-dev to install a focused profile.
 
 Examples:
   $(basename "$0") --agent claude
   $(basename "$0") --agent codex --dry-run
   $(basename "$0") --agent claude --skill assistant-thinking
   $(basename "$0") --agent claude --no-hooks
-  $(basename "$0") --agent codex --plugin assistant-core
-  $(basename "$0") --agent codex --plugin assistant-research
-  $(basename "$0") --agent codex --plugin assistant-dev
 EOF
     exit "${1:-0}"
 }
@@ -70,7 +61,6 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --agent)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; AGENT="$2"; shift 2 ;;
         --skill)    [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; SINGLE_SKILL="$2"; shift 2 ;;
-        --plugin)   [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }; PLUGIN_PROFILE="$2"; shift 2 ;;
         --no-hooks)   echo "WARNING: --no-hooks is deprecated; all Assistant Framework installs are hookless." >&2; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
         -h|--help)  usage 0 ;;
@@ -389,124 +379,6 @@ PY
     fi
 }
 
-plugin_profile_line() {
-    local plugin_name="$1"
-    local plugin_doc="$FRAMEWORK_DIR/docs/plugin-architecture.md"
-
-    [[ -f "$plugin_doc" ]] || return 1
-
-    awk -v plugin_name="$plugin_name" '
-        /^PLUGIN_BOUNDARY_START$/ { inside = 1; next }
-        /^PLUGIN_BOUNDARY_END$/ { inside = 0; next }
-        inside && index($0, plugin_name ":") == 1 {
-            print
-            found = 1
-            exit
-        }
-        END { exit found ? 0 : 1 }
-    ' "$plugin_doc"
-}
-
-plugin_manifest_path() {
-    local plugin_name="$1"
-    printf '%s/plugins/%s/.codex-plugin/plugin.json\n' "$FRAMEWORK_DIR" "$plugin_name"
-}
-
-skill_in_active_profile() {
-    local candidate="$1"
-    local selected_skill
-
-    for selected_skill in "${SKILLS[@]}"; do
-        [[ "$candidate" == "$selected_skill" ]] && return 0
-    done
-
-    return 1
-}
-
-validate_plugin_manifest_dry_run() {
-    local plugin_name="$1"
-    local manifest_path
-    local manifest_name
-    local manifest_skills
-    local plugin_skills_root
-    local profile_skill
-    local plugin_skill_file
-    local plugin_skill
-
-    manifest_path="$(plugin_manifest_path "$plugin_name")"
-
-    [[ -f "$manifest_path" ]] || fail "Plugin manifest $plugin_name not found at $manifest_path"
-    command -v jq >/dev/null 2>&1 || fail "jq is required to validate plugin manifest dry-run for $plugin_name."
-
-    manifest_name="$(jq -r '.name // ""' "$manifest_path")" || fail "Plugin manifest $plugin_name is not valid JSON: $manifest_path"
-    manifest_skills="$(jq -r '.skills // ""' "$manifest_path")" || fail "Plugin manifest $plugin_name is not valid JSON: $manifest_path"
-
-    [[ "$manifest_name" == "$plugin_name" ]] || fail "Plugin manifest $plugin_name must declare name: $plugin_name"
-    [[ "$manifest_skills" == "./skills/" ]] || fail "Plugin manifest $plugin_name must declare skills: ./skills/"
-
-    plugin_skills_root="$FRAMEWORK_DIR/plugins/$plugin_name/${manifest_skills#./}"
-    plugin_skills_root="${plugin_skills_root%/}"
-    [[ -d "$plugin_skills_root" ]] || fail "Plugin manifest $plugin_name skills directory not found: $plugin_skills_root"
-
-    for profile_skill in "${SKILLS[@]}"; do
-        [[ -f "$plugin_skills_root/$profile_skill/SKILL.md" ]] || fail "Plugin manifest $plugin_name missing skill copy: $profile_skill"
-    done
-
-    while IFS= read -r plugin_skill_file; do
-        plugin_skill="$(basename "$(dirname "$plugin_skill_file")")"
-        skill_in_active_profile "$plugin_skill" \
-            || fail "Plugin manifest $plugin_name includes skill outside profile boundary: $plugin_skill"
-    done < <(find "$plugin_skills_root" -mindepth 2 -maxdepth 2 -type f -name SKILL.md -print | sort)
-
-    dry "Validate plugin manifest: $plugin_name -> $manifest_skills"
-    dry "Plugin manifest skills match profile boundary: ${SKILLS[*]}"
-}
-
-supported_plugin_profiles() {
-    printf '%s\n' assistant-core assistant-research assistant-dev
-}
-
-is_supported_plugin_profile() {
-    local plugin_name="$1"
-    local supported_profile
-
-    while IFS= read -r supported_profile; do
-        [[ "$plugin_name" == "$supported_profile" ]] && return 0
-    done < <(supported_plugin_profiles)
-
-    return 1
-}
-
-apply_plugin_profile() {
-    local plugin_name="$1"
-    local profile_line
-    local profile_payload
-    local profile_skill
-    local profile_skills=()
-
-    if ! profile_line="$(plugin_profile_line "$plugin_name")"; then
-        fail "Unknown plugin profile: $plugin_name. Available install profiles are defined in docs/plugin-architecture.md."
-    fi
-
-    if ! is_supported_plugin_profile "$plugin_name"; then
-        fail "$plugin_name is boundary-defined but not installable yet. Supported install profiles: $(supported_plugin_profiles | tr '\n' ' ' | sed 's/[[:space:]]*$//')."
-    fi
-
-    profile_payload="${profile_line#*:}"
-    for profile_skill in $profile_payload; do
-        case "$profile_skill" in
-            assistant-*)
-                [[ -f "$SKILLS_SOURCE/$profile_skill/SKILL.md" ]] || fail "Plugin profile $plugin_name references missing skill: $profile_skill"
-                profile_skills+=("$profile_skill")
-                ;;
-            *) ;;
-        esac
-    done
-
-    [[ "${#profile_skills[@]}" -gt 0 ]] || fail "Plugin profile $plugin_name has no installable assistant skills."
-    SKILLS=("${profile_skills[@]}")
-}
-
 substitute_agent_paths_in_stream() {
     sed -e "s|{agent_state_dir}|.${AGENT}|g"
 }
@@ -555,22 +427,74 @@ remove_source_only_promotion_tools() {
         [[ -n "$relative_path" ]] || continue
         if $DRY_RUN; then
             dry "Remove source-repository-only promotion tool: $tools_target/$relative_path"
+        elif [[ "$relative_path" == "evals/node_modules" ]]; then
+            rm -rf -- "$tools_target/$relative_path"
         else
-            rm -f "$tools_target/$relative_path"
+            rm -f -- "$tools_target/$relative_path"
         fi
     done <<'EOF'
 context-budget-report.sh
 evals/run-codex-framework-evals.sh
 evals/finalize-workflow-kernel-review.sh
 evals/lib/context-budget-evidence.sh
+evals/validate-promotion-decision-schema.cjs
+evals/package.json
+evals/package-lock.json
+evals/node_modules
 EOF
+}
+
+validate_installed_plugin_tool_cleanup() {
+    local tools_target="$1"
+    local plugin_tools_directory="$tools_target/plugins"
+    local retired_tool="$plugin_tools_directory/sync-plugin-skills.sh"
+
+    if [[ -L "$plugin_tools_directory" ]]; then
+        fail "Refusing retired plugin tool cleanup through a symlink: $plugin_tools_directory"
+    elif [[ -e "$plugin_tools_directory" && ! -d "$plugin_tools_directory" ]]; then
+        fail "Refusing retired plugin tool cleanup because the parent is not a directory: $plugin_tools_directory"
+    fi
+
+    if [[ -L "$retired_tool" ]]; then
+        fail "Refusing to remove a retired plugin tool symlink: $retired_tool"
+    elif [[ -e "$retired_tool" && ! -f "$retired_tool" ]]; then
+        fail "Refusing to remove a retired plugin tool that is not a file: $retired_tool"
+    fi
+}
+
+retire_installed_plugin_tool() {
+    local tools_target="$1"
+    local plugin_tools_directory="$tools_target/plugins"
+    local retired_tool="$plugin_tools_directory/sync-plugin-skills.sh"
+    local projected_remaining_entry=""
+
+    validate_installed_plugin_tool_cleanup "$tools_target"
+
+    if [[ -f "$retired_tool" ]]; then
+        if $DRY_RUN; then
+            dry "Remove retired managed plugin tool: $retired_tool"
+        else
+            rm -f -- "$retired_tool"
+            ok "Removed retired managed plugin tool: $retired_tool"
+        fi
+    fi
+
+    if [[ -d "$plugin_tools_directory" ]]; then
+        if $DRY_RUN; then
+            projected_remaining_entry="$(find "$plugin_tools_directory" -mindepth 1 -maxdepth 1 ! -name 'sync-plugin-skills.sh' -print -quit)"
+            if [[ -z "$projected_remaining_entry" ]]; then
+                dry "Remove empty retired plugin tools directory: $plugin_tools_directory"
+            fi
+        else
+            rmdir -- "$plugin_tools_directory" 2>/dev/null || true
+        fi
+    fi
 }
 
 # ── Validate ──────────────────────────────────────────────────────────────────
 
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
 [[ "$AGENT" =~ ^(claude|codex|gemini)$ ]] || fail "Unknown agent: $AGENT. Supported: claude, codex, gemini"
-[[ -z "$SINGLE_SKILL" || -z "$PLUGIN_PROFILE" ]] || fail "Use either --skill or --plugin, not both."
 
 FRAMEWORK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_SOURCE="$FRAMEWORK_DIR/skills"
@@ -595,6 +519,13 @@ else
     AGENT_HOME="$HOME/.${AGENT}"
 fi
 SKILLS_TARGET="$AGENT_HOME/skills"
+TOOLS_SOURCE="$FRAMEWORK_DIR/tools"
+TOOLS_TARGET="$AGENT_HOME/tools"
+
+# Reject unsafe retired-tool parents before skill installation can mutate files.
+if [[ -d "$TOOLS_SOURCE" ]]; then
+    validate_installed_plugin_tool_cleanup "$TOOLS_TARGET"
+fi
 
 # Filter to single skill if requested
 if [[ -n "$SINGLE_SKILL" ]]; then
@@ -602,29 +533,13 @@ if [[ -n "$SINGLE_SKILL" ]]; then
     SKILLS=("$SINGLE_SKILL")
 fi
 
-# Filter to a planned plugin profile if requested.
-if [[ -n "$PLUGIN_PROFILE" ]]; then
-    apply_plugin_profile "$PLUGIN_PROFILE"
-fi
-
 SETTINGS_FILE="$AGENT_HOME/settings.json"
 HOOKS_TARGET="$AGENT_HOME/hooks/assistant"
 
 echo "Installing Assistant Framework for: $AGENT"
 echo "  Source: $FRAMEWORK_DIR"
-if [[ -n "$PLUGIN_PROFILE" ]]; then
-    echo "  Plugin profile: $PLUGIN_PROFILE"
-    if $DRY_RUN; then
-        echo "  Plugin manifest: $(plugin_manifest_path "$PLUGIN_PROFILE")"
-    fi
-fi
 echo "  Skills target: $SKILLS_TARGET"
 echo ""
-
-# Dry-run validates plugin scaffold metadata without changing the real install path.
-if [[ -n "$PLUGIN_PROFILE" ]] && $DRY_RUN; then
-    validate_plugin_manifest_dry_run "$PLUGIN_PROFILE"
-fi
 
 # ── Install skills ────────────────────────────────────────────────────────────
 
@@ -645,16 +560,6 @@ for skill in "${SKILLS[@]}"; do
         rsync -a --delete \
             --exclude='.DS_Store' \
             "$source_dir/" "$target_dir/"
-
-        # Swap agent.conf to the correct preset if one exists before path substitution.
-        if [[ "$AGENT" != "claude" ]]; then
-            agent_preset="$target_dir/agents/${AGENT}.conf"
-            agent_conf="$target_dir/agent.conf"
-            if [[ -f "$agent_preset" && -f "$agent_conf" ]]; then
-                cp "$agent_preset" "$agent_conf"
-            fi
-
-        fi
 
         # Substitute agent-specific state directory placeholders in instruction/config files.
         while IFS= read -r instruction_file; do
@@ -738,17 +643,16 @@ fi
 
 # ── Install tools ────────────────────────────────────────────────────────────
 
-TOOLS_SOURCE="$FRAMEWORK_DIR/tools"
-TOOLS_TARGET="$AGENT_HOME/tools"
-
 if [[ -d "$TOOLS_SOURCE" ]]; then
     echo ""
     if $DRY_RUN; then
         dry "rsync $TOOLS_SOURCE/ -> $TOOLS_TARGET/"
         remove_source_only_promotion_tools "$TOOLS_TARGET"
+        retire_installed_plugin_tool "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET" "$TOOLS_SOURCE"
     else
         mkdir -p "$TOOLS_TARGET"
+        retire_installed_plugin_tool "$TOOLS_TARGET"
         rsync -a --delete \
             --exclude='.DS_Store' \
             --exclude='.publish' \
@@ -759,6 +663,11 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
             --exclude='/evals/run-codex-framework-evals.sh' \
             --exclude='/evals/finalize-workflow-kernel-review.sh' \
             --exclude='/evals/lib/context-budget-evidence.sh' \
+            --exclude='/evals/validate-promotion-decision-schema.cjs' \
+            --exclude='/evals/package.json' \
+            --exclude='/evals/package-lock.json' \
+            --exclude='/evals/node_modules' \
+            --exclude='/plugins/' \
             "$TOOLS_SOURCE/" "$TOOLS_TARGET/"
         remove_source_only_promotion_tools "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET" "$TOOLS_SOURCE"

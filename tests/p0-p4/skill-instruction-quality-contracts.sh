@@ -180,25 +180,71 @@ else
     fail "assistant-clarify utility contract requirements failed: ${clarify_contract_failures[*]}"
 fi
 
-test_start "assistant-review audit mode covers findings-only requests"
+test_start "assistant-review resolves mode from authorization and asks on ambiguity"
 review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
 review_audit_failures=()
 for term in \
-    "provide findings" \
-    "report findings" \
-    "list findings" \
-    "summarize findings" \
-    "review against" \
-    "audit. Otherwise"; do
+    "semantic modification authority" \
+    "carried active approved implementation workflow" \
+    "authorship, branch/PR ownership, platform, or connector" \
+    "Should I only report findings, or also implement and verify fixes?"; do
     if ! grep -Fq "$term" "$review_input"; then
         review_audit_failures+=("missing $term")
     fi
 done
 
+if grep -Fq "default: review-fix" "$review_input"; then
+    review_audit_failures+=("must not default to review-fix")
+fi
+
 if [[ "${#review_audit_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "assistant-review findings-only prompts must infer audit mode: ${review_audit_failures[*]}"
+    fail "assistant-review mode resolution must use authorization and ask on ambiguity: ${review_audit_failures[*]}"
+fi
+
+test_start "assistant-review gates fixes and normalizes review eval authority"
+review_authorization_failures=()
+review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
+review_router="$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md"
+review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
+for file_and_term in \
+    "$review_loop::Infer review mode before review or mutation" \
+    "$review_loop::run only in" \
+    "$review_loop::evidence-backed must-fix and should-fix items" \
+    "$review_loop::Dispatch every planned read-only Reviewer pass" \
+    "$review_loop::never expose the mismatch details to discovery siblings" \
+    "$review_loop::Return it to the composing workflow for planning or approval" \
+    "$review_router::Before Stage 1 Spec Review or source inspection/mutation" \
+    "$review_router::only when review-fix authority is explicit or carried by the" \
+    "$review_router::Audit mode reports findings without source changes" \
+    "$review_router::In audit mode, report the mismatch without source changes" \
+    "$review_router::only evidence-backed findings within authorized scope" \
+    "$review_router::returns to planning or approval before any mutation"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+        review_authorization_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+
+if ! jq -e '
+    def case($id): .cases[] | select(.id == $id);
+    (case("audit-one-pass").expected_behavior | index("Reports findings and residual risk without edits.")) and
+    (case("audit-spec-review-fail-is-read-only").expected_behavior | index("Dispatches every planned read-only Reviewer pass and exits without repair, Build, or source-mutation dispatch.")) and
+    (case("review-fix-loop-handles-findings").expected_behavior | index("Uses the user\u0027s explicit source-modification authorization to resolve mode=review-fix.")) and
+    (case("workflow-carried-authorization-allows-bounded-review-fix").expected_behavior | index("Resolves mode=review-fix from carried active approved workflow authorization.")) and
+    (case("ambiguous-standalone-review-asks-before-review-or-mutation").expected_behavior | index("Asks exactly: Should I only report findings, or also implement and verify fixes?")) and
+    (case("ambiguous-standalone-review-asks-before-review-or-mutation").machine_expectations.forbidden_substrings | index("I reviewed")) and
+    (case("ambiguous-standalone-review-asks-before-review-or-mutation").machine_expectations.forbidden_substrings | index("I changed"))
+' "$review_evals" >/dev/null; then
+    review_authorization_failures+=("assistant-review evals lack explicit audit/fix/workflow authority or ambiguity guard")
+fi
+
+if [[ "${#review_authorization_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review execution authorization contract drifted: ${review_authorization_failures[*]}"
 fi
 
 test_start "assistant-ideate owns brainstorming description activation"
@@ -276,7 +322,7 @@ workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
 workflow_phase_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
 
 for file_and_term in \
-    "$workflow_skill::inline plan and proceeds without ceremony unless risk requires approval" \
+    "$workflow_skill::no-wait" \
     "$workflow_phases::print the inline plan and continue directly to Build" \
     "$workflow_output::not_required_small" \
     "$workflow_phase_gates::no-wait eligibility was recorded"; do
@@ -528,6 +574,62 @@ if [[ "${#thinking_delegation_proof_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-thinking delegation fallback must carry trigger or policy-block evidence: ${thinking_delegation_proof_failures[*]}"
+fi
+
+test_start "assistant-review v7 prompts preserve deferred-QA and security-specialist routing"
+review_v7_prompt_failures=()
+qa_evaluator_agents=(
+    "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md"
+    "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml"
+)
+for review_agent in "${qa_evaluator_agents[@]}"; do
+    for review_term in \
+        "approved_feature_preparation_qa_acceptance_obligation_result" \
+        "requested_scope_status" \
+        "execution_prerequisite_status" \
+        "accepted_with_concerns" \
+        "HAS_REMAINING_ITEMS"; do
+        if ! grep -Fq "$review_term" "$review_agent"; then
+            review_v7_prompt_failures+=("${review_agent#$FRAMEWORK_DIR/}: missing $review_term")
+        fi
+    done
+done
+for reviewer_agent in \
+    "$FRAMEWORK_DIR/agents/claude/code-reviewer.md" \
+    "$FRAMEWORK_DIR/agents/claude/reviewer.md" \
+    "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml" \
+    "$FRAMEWORK_DIR/agents/codex/reviewer.toml"; do
+    for review_term in \
+        "risk_selected_specialist" \
+        "assistant-security" \
+        "canonical Reviewer schema"; do
+        if ! grep -Fq "$review_term" "$reviewer_agent"; then
+            review_v7_prompt_failures+=("${reviewer_agent#$FRAMEWORK_DIR/}: missing $review_term")
+        fi
+    done
+done
+for review_term in \
+    "assistant-review contracts are v7" \
+    "Persisted v6 batch packets are invalidated and rebuilt" \
+    "risk_selected_specialist" \
+    "assistant-security checklist/perspective"; do
+    if ! grep -Fq "$review_term" "$review_skill"; then
+        review_v7_prompt_failures+=("skills/assistant-review/SKILL.md: missing $review_term")
+    fi
+done
+if [[ "$(grep -F 'weighted_score = ' "$review_rubric" | wc -l | tr -d ' ')" -ne 1 ]] \
+    || ! grep -Fq 'Example: correctness=4, quality=3.5, architecture=4, security=5, coverage=3' "$review_rubric" \
+    || ! grep -Fq '= (4 * 0.30) + (3.5 * 0.20) + (4 * 0.20) + (5 * 0.15) + (3 * 0.15)' "$review_rubric" \
+    || ! grep -Fq '= 1.20 + 0.70 + 0.80 + 0.75 + 0.45' "$review_rubric" \
+    || ! grep -Fq '= 3.90 → REFINE' "$review_rubric" \
+    || ! grep -Fq '  weighted_score: 3.90' "$review_rubric" \
+    || ! grep -Fq '(4.0 * 0.30) + (3.5 * 0.20)' "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md"; then
+    review_v7_prompt_failures+=("assistant-review rubric arithmetic is not canonically 3.90")
+fi
+if [[ "${#review_v7_prompt_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review v7 prompt/rubric parity failed: ${review_v7_prompt_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

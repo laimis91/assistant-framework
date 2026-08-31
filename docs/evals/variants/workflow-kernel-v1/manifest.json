@@ -22,14 +22,14 @@
     "raw_response_retained": false
   },
   "static_measurement": {
-    "baseline_selected_initial_words": 1959,
-    "candidate_selected_initial_words": 970,
-    "selected_initial_word_delta": -989,
-    "baseline_total_initial_words": 2564,
-    "candidate_total_initial_words": 1575,
-    "baseline_selected_entry_words": 3908,
-    "candidate_selected_entry_words": 2919,
-    "selected_entry_word_delta": -989,
+    "baseline_selected_initial_words": 2154,
+    "candidate_selected_initial_words": 455,
+    "selected_initial_word_delta": -1699,
+    "baseline_total_initial_words": 2743,
+    "candidate_total_initial_words": 1044,
+    "baseline_selected_entry_words": 3759,
+    "candidate_selected_entry_words": 2060,
+    "selected_entry_word_delta": -1699,
     "standing_context_growth": 0,
     "measured_with": "tools/context-budget-report.sh --skill-overlay"
   },
@@ -42,9 +42,11 @@
     "small-fix-stays-lightweight",
     "stale-journal-yields-to-current-evidence",
     "requirements-map-through-completion",
-    "ordinary-medium-bounded-executor",
-    "seeded-code-review-regressions",
-    "medium-final-handoff-is-reconstructable"
+      "ordinary-medium-bounded-executor",
+      "seeded-code-review-regressions",
+      "medium-final-handoff-is-reconstructable",
+      "viewing-route-technical-preparation",
+      "pending-architecture-pack-verification"
   ],
   "pilot_repeats": 3,
   "status": "candidate"

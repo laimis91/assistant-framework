@@ -89,6 +89,14 @@ else
     fail "assistant-review 10-round cap terms missing: ${missing_review_cap_terms[*]}"
 fi
 
+test_start "review cap counts every started batch, not individual perspective passes"
+if grep -Fq 'round counts started review batches, not individual perspective passes' "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md" \
+    && grep -Fq 'round 10 remains terminal after its started batch reaches a terminal outcome' "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"; then
+    pass
+else
+    fail "assistant-review 10-round cap does not count incomplete or invalidated started batches"
+fi
+
 test_start "workflow routes the canonical assistant-review 10-round cap without duplicating schemas"
 missing_runtime_cap_terms=()
 for file_and_term in \

@@ -41,6 +41,10 @@ under common operating conditions:
   `framework-semantic-review-verdict.schema.json`, and
   `framework-promotion-decision.schema.json` - bounded synthetic-review and
   fail-closed promotion contracts.
+- `workflow-kernel-activation-observation.schema.json` and
+  `fixtures/workflow-kernel-activation-observation.contract.json` - bounded
+  external native-selection attestation. The checked-in companion fixture is a
+  `contract_test_fixture`, validates mechanics only, and can never promote.
 - `../../tools/evals/run-framework-instruction-evals.sh` - offline helper for
   validating the fixture and imported traces, listing cases, emitting prompt
   packets, grading captured responses, and comparing variants locally.
@@ -50,6 +54,17 @@ under common operating conditions:
   verdict template and promotion finalizer; it invokes no model.
 
 ### How To Use
+
+The Draft 2020-12 promotion-decision contract test uses the locked local Ajv
+tooling dependency. Before running that contract suite, install it once with
+Node.js 22 and npm:
+
+```bash
+(cd tools/evals && npm ci --ignore-scripts)
+```
+
+The suite fails clearly when Node, npm, or this locked dependency is absent; it
+never installs packages during validation.
 
 Validate the fixture before using it:
 
@@ -142,7 +157,7 @@ canonical `assistant-workflow` contracts and references into both disposable
 workspaces, then replaces only the root file. This holds behavior contracts
 constant while measuring the smaller kernel intervention.
 
-Before any model call, adapter v5 runs only the reporter from the evaluator's
+Before any model call, adapter v6 runs only the reporter from the evaluator's
 trusted repository; variant inputs can never supply executable tooling. It uses
 `LC_ALL=C` over the already materialized snapshot root files. The run plan embeds one canonical,
 count-only `context_budget_evidence` object plus its SHA-256. It binds the
@@ -150,7 +165,7 @@ reporter and both materialized instruction hashes. Generic manifest-free A/B
 plans retain structural counts without applying workflow-kernel policy.
 Manifest-backed promotion enforces fixed selected-skill caps of 1050 initial
 words and 3000 entry-boundary words, zero standing-context growth, and the
-hardcoded two-case smoke and six-case/three-repeat pilot. Internally consistent
+hardcoded two-case smoke and eight-case/three-repeat pilot. Internally consistent
 but false or loosened manifests fail closed. The evidence contains no
 instruction bodies or absolute paths.
 
@@ -160,6 +175,14 @@ local Codex login, isolated temporary Git workspaces, `--ephemeral`,
 fixture, and JSONL events. The runtime prompt
 contains only setup context and the user request. Expected behavior, pass
 criteria, fail signals, and machine grading anchors remain hidden from Codex.
+When an execute selection includes `viewing-route-technical-preparation`, the
+adapter additionally requires a working `node --test` capability before it
+persists a run plan or invokes Codex because it validates that case's trusted
+seed fixture with Node's test runner. A bounded capability probe fails closed
+before output admission or model calls; Python 3 supervises that probe so its
+entire process group is reaped if Node hangs. This conditional prerequisite is separate from the
+Node.js 22 and Ajv requirement for contract-suite validation; plan-only runs
+and execute selections that omit the VIEWING case do not require it.
 Skill-local `evals/` directories are excluded from materialized variants, and
 the native `.agents/skills/assistant-workflow` copy is exposed. Seeded Git baselines
 make unexpected created, changed, or deleted paths measurable; review-only
@@ -218,8 +241,26 @@ The default executable resolution remains an accepted local PATH trust boundary;
 its recorded hash detects later drift but does not make a compromised PATH trusted.
 
 If an execute run is interrupted, repeat the exact command with `--resume` only
-when exact validation succeeds, no uncertain `in_flight` or evidence-loss state
-exists, and the incomplete-pair breaker remains within its plan-bound limit.
+when an exact final persisted run plan already exists, exact validation
+succeeds, no uncertain `in_flight` or evidence-loss state exists, and the
+incomplete-pair breaker remains within its plan-bound limit. A missing plan or
+an orphan atomic plan temp never authorizes a resume; use a separate new output
+for replacement execution. The runner holds one crash-aware exclusive output
+lease from validation through final artifact creation, so concurrent writers
+fail before model invocation. It never automatically reclaims a stale-looking
+lease: any existing lease remains untouched and requires explicit operator
+cleanup or a new output directory.
+Its `FRAMEWORK_EVAL_TEST_*` synchronization hooks are rejected unless an
+isolated contract test explicitly enables test mode, supplies the repository
+fake-Codex capture directory, and uses an executable `--codex-bin` override;
+normal invocations never activate those hooks.
+For preparation readiness, `existing_system` carries its exact unchanged feature-preparation evidence ref, while `not_applicable` carries `preparation_basis=not_applicable` and no feature-evidence ref. An explicitly requested `prepare_only` readiness Plan is inline and does not wait; only execution work can use `approval_required`.
+Before the durable run plan is committed, execute mode writes a plan-hash-bound,
+content-free pre-attempt authorization marker. Resume may create missing
+`not_started` attempt records only while that exact marker remains and no trace,
+checkpoint, comparison, semantic packet, or started attempt evidence exists; it
+durably removes the marker before any Codex call. Missing execution evidence
+without this positive marker is evidence loss, never retry authority.
 Before any Codex invocation, the runner atomically transitions the plan-bound,
 content-free record in `run-attempts/` from `not_started` to `in_flight`; it
 marks the run `completed` only after durable trace evidence exists. Resume
@@ -249,9 +290,9 @@ Python 3 for that narrow durability syscall. Fresh and resumed output paths
 must resolve to real non-symlink directories; the parent is canonicalized
 before any result write.
 
-Each Codex child is tracked. INT/TERM is forwarded with a five-second grace
-period before forced termination, and the runner waits for the child before
-removing raw storage. The default per-run ceiling is 600 seconds and the
+Each Codex invocation runs under a supervisor in a new process group. INT/TERM,
+launch failure, and timeout terminate and wait for that complete group before
+the lease or raw storage is released. The default per-run ceiling is 600 seconds and the
 plan-bound total evaluation ceiling is 5,400 seconds. Override them only in the
 reviewed command with `--run-timeout-seconds` and
 `--total-timeout-seconds`; their values participate in exact resume-plan
@@ -365,7 +406,7 @@ two-artifact decision is rejected.
 
 `grader_sha256` binds both the canonical case grading contract and the complete
 Codex eval-runner implementation. Current promotion evidence requires adapter
-`codex-framework-eval-v5`; changing the contract or runner invalidates existing
+`codex-framework-eval-v6`; changing the contract or runner invalidates existing
 traces instead of retroactively re-grading deleted response or workspace data.
 
 Metrics without native Codex event timestamps are explicitly labeled as
@@ -395,11 +436,31 @@ tools/context-budget-report.sh --agent codex --skill assistant-workflow \
 
 Use the exact `smoke_cases` and `pilot_cases` declared in the variant manifest.
 The smoke uses one repeat (four runs total). Only after valid/redaction-safe
-traces, expand to the six-case three-repeat pilot (36 runs), sequentially and
+traces, expand to the eight-case three-repeat pilot (48 runs), sequentially and
 with the approved time/quota cap.
+
+Native routing is not invoked by this repository. A human evaluator may capture
+the six exact `assistant-workflow` activation selections from a native Codex
+session, without retaining raw session content, then supply that bounded JSON
+artifact to the adapter:
+
+```bash
+tools/evals/run-codex-framework-evals.sh --activation-observations /tmp/workflow-native-activation.json ...
+```
+
+The adapter records the artifact hash and a redacted admissibility summary in
+`run-plan.json`, then copies the validated observation to
+`activation-observations.json`. Freshness is checked when the runner admits a
+manual observation; finalization verifies that immutable hash binding rather
+than applying a second wall-clock freshness window. Promotion requires a fresh
+`manual_native_observation` with `human_evaluator`, `manual_native_session`,
+and `native_host=codex`, bound to the exact candidate skill and six activation
+cases. Missing evidence, stale hashes, or the checked-in
+`contract_test_fixture` fail closed with
+`native_activation_observation_not_admissible`.
 Authorization is invocation-bound: a replacement smoke, pilot, or retry that
 would make new model calls needs fresh explicit authorization for its exact call
-count. Prior authorization and a human verdict do not authorize a new 36-call
+count. Prior authorization and a human verdict do not authorize a new 48-call
 execution.
 
 GPT-5.6-Terra represents the common simple-task smoke profile. Pin it explicitly
@@ -422,11 +483,17 @@ The committed ordered-workflow fixture and runner changed the case and grader
 hashes. Any earlier Terra snapshot is therefore historical evidence only and
 cannot establish current behavioral promotion. Do not describe the architecture
 as currently Terra-validated unless a newly authorized exact pilot completes
-36/36 runs and 18/18 pairs against the current source, every automatic gate
+48/48 runs and 24/24 pairs against the current source, an admissible
+hash-bound manual native activation observation, every automatic gate
 passes, the bounded human semantic verdict covers the current packet, and the
 finalizer writes `behavioral_promotion_eligible=true`. Repository contract tests
 can validate the framework mechanics without consuming model quota, but they do
 not substitute for that live promotion record.
+
+Python 3 is required whenever the runner validates a `manual_native_observation`
+freshness timestamp, including plan-only admission. The runner checks that
+prerequisite before evaluating freshness; resume validates the persisted binding
+without reapplying the admission-time freshness window.
 
 ### Source-only context budget
 
@@ -476,8 +543,9 @@ skills/<skill>/evals/cases.json
 
 `tools/evals/run-skill-evals.sh` validates, lists, emits, and locally grades
 those skill fixtures with the same provider-neutral constraints as the framework
-instruction eval runner. It uses local shell and `jq` only; it does not call
-provider SDKs, model APIs, or network services.
+instruction eval runner. Operational modes require local shell, `jq`, and Ruby
+with JSON plus Psych/YAML support; response grading also requires Ruby
+BigDecimal. It does not call provider SDKs, model APIs, or network services.
 
 This slice now covers all 14 first-class `assistant-*` skills. Local-only Unity
 skills remain excluded from the default inventory unless `--include-local` is
@@ -596,14 +664,29 @@ tools/evals/run-skill-evals.sh --activation-results /tmp/clarify-activation-resu
 Cases may additionally define `machine_expectations.structured_json_assertions`.
 For these per-skill cases, the response must contain exactly one valid JSON
 value. The local grader applies only the fixed provider-neutral operators:
-`equals`, `nonempty_string`, `nonempty_array`, `empty_array`, `equals_path`,
-`required_when_equals`, `array_field_values_exact`, and
-`array_items_nonempty_fields`. Assertion paths are JSON arrays for safe
+`equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`,
+`required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, and
+`array_items_nonempty_fields`, and `array_items_nonempty_array_fields`. Assertion paths are JSON arrays for safe
 `getpath` access. They are grader-only declarations, never executable fixture
 content: arbitrary jq, code, or expressions are not accepted. `array_items_nonempty_fields`
 requires the target array to contain at least one object, and every listed field
 in every object must be a non-empty string.
+`array_items_nonempty_array_fields` requires the target array to contain at
+least one object, and every listed field in every object must be a non-empty
+array whose every member is a nonblank string.
 `empty_array` requires the target path to resolve to an empty array.
+`array_type` requires the target path to resolve to an array and permits an empty array. `array_nonblank_strings` requires every member to be a nonblank string and a required boolean `allow_empty` declares whether an empty array is valid.
+In this exhaustive fixed operator list, `path_absent` passes only when its target
+path cannot resolve; a present `null` value is present and therefore fails.
+`absent_or_empty_array` passes when its target path is unresolved or resolves to
+an empty array; a present `null`, non-array, or non-empty array fails.
+`one_of` requires exact membership in its bounded declared scalar values.
+`array_object_values_exact` compares each target object’s declared `fields` as
+an unordered exact multiset against bounded `expected_objects`, preserving the
+correlation among the declared fields while allowing response-object reordering.
+`one_of` permits at most 32 scalar values. `array_object_values_exact` permits
+at most 16 unique fields and 32 expected objects; absent projected fields fail,
+while a present `null` matches only a present `null`.
 
 Include local-only skill experiments explicitly:
 

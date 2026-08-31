@@ -241,8 +241,8 @@ for duplicate_anchor in \
         project_guidance_failures+=("AGENTS.md repeats global policy '$duplicate_anchor'")
     fi
 done
-if [[ "$(grep -Fc -- 'tools/plugins/sync-plugin-skills.sh --apply' "$FRAMEWORK_DIR/AGENTS.md")" != "1" ]]; then
-    project_guidance_failures+=("AGENTS.md must name the generated-mirror sync command exactly once")
+if ! grep -Fq -- 'Root `skills/assistant-*` directories are the editable source of truth.' "$FRAMEWORK_DIR/AGENTS.md"; then
+    project_guidance_failures+=("AGENTS.md must identify root assistant skills as the editable source of truth")
 fi
 if [[ "${#project_guidance_failures[@]}" -eq 0 ]]; then
     pass

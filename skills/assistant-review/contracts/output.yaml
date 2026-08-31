@@ -1,7 +1,7 @@
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "6.0"
+schema_version: "7.1"
 contract: output
 skill: assistant-review
 
@@ -11,7 +11,7 @@ artifacts:
     required: conditional
     condition: "scope_size in [medium, large] or subagent_execution_mode in [delegated, direct_fallback]"
     description: "How Reviewer responsibility was executed"
-    validation: "States subagent policy state, execution mode, trigger scope, and whether review used a fresh Reviewer subagent or fresh direct-fallback context"
+    validation: "States subagent policy state, execution mode, trigger provenance, and whether review used a fresh Reviewer subagent or fresh direct-fallback context. delegation_triggered requires delegated; delegation_opted_out or subagents_unavailable requires direct_fallback; policy_disallowed requires direct_fallback plus nonblank policy_blocking_source; not_required requires direct_fallback with empty trigger scope for an untriggered trivial/small isolated review batch."
     on_fail: "Record delegated review or direct fallback before presenting results; do not imply Reviewer subagents were used when delegation was not triggered or they were unavailable"
     object_fields:
       - name: subagent_policy_state
@@ -25,7 +25,7 @@ artifacts:
       - name: subagent_trigger_scope
         type: string[]
         required: true
-        validation: "Non-empty when delegation is relevant; records direct-user, applicable-AGENTS.md, or active-skill provenance and covered review roles, rounds, or files."
+        validation: "Non-empty when a delegation trigger or fallback cause applies; empty only when not_required + direct_fallback records an untriggered trivial/small isolated review batch. Values are unique and nonblank."
       - name: policy_blocking_source
         type: string
         required: conditional
@@ -41,7 +41,7 @@ artifacts:
     required: conditional
     condition: "qa_evaluation_mode == required"
     description: "How QAEvaluator responsibility was executed"
-    validation: "States subagent policy state, execution mode, trigger scope, and whether QA used a fresh QAEvaluator subagent or fresh direct-fallback context"
+    validation: "States subagent policy state, execution mode, trigger provenance, and whether QA used a fresh QAEvaluator subagent or fresh direct-fallback context. delegation_triggered requires delegated; delegation_opted_out or subagents_unavailable requires direct_fallback; policy_disallowed requires direct_fallback plus nonblank policy_blocking_source; not_required requires not_applicable with empty trigger scope."
     on_fail: "Record delegated QA evaluation or direct fallback before presenting results; do not imply QAEvaluator subagents were used when delegation was not triggered or they were unavailable"
     object_fields:
       - name: subagent_policy_state
@@ -55,7 +55,7 @@ artifacts:
       - name: subagent_trigger_scope
         type: string[]
         required: true
-        validation: "Non-empty when delegation is relevant; records direct-user, applicable-AGENTS.md, or active-skill provenance and covered QA roles, rounds, or files."
+        validation: "Non-empty when a delegation trigger or fallback cause applies; empty only when not_required + not_applicable records that QA evaluation was not required. Values are unique and nonblank."
       - name: policy_blocking_source
         type: string
         required: conditional
@@ -127,10 +127,10 @@ artifacts:
   - name: review_finding_rule_distillation
     type: object[]
     required: conditional
-    condition: "review has blocker or must-fix findings, or a finding exposes recurring process, contract, checklist, or eval gaps"
+    condition: "review has active or fixed must-fix findings, or a non-must-fix canonical finding exposes recurring process, contract, checklist, or eval gaps"
     description: "Classification of review findings into one-off fixes versus permanent rule candidates"
-    validation: "Each applicable finding must include evidence, failure pattern, classification, target, proposed rule or no-action rationale, verification/eval update, scope/exclusions, and promotion decision"
-    on_fail: "Load references/review-finding-permanent-rule.md and classify blocker/must-fix findings before final review output"
+    validation: "Every present entry must include evidence, failure pattern, classification, target, proposed rule or no-action rationale, verification/eval update, scope/exclusions, and promotion decision. Its finding exactly equals one canonical aggregated_findings[].aggregate_finding_id or fixed_items[].aggregate_finding_id; entries are unique. Every unique must-fix id from active aggregated_findings and fixed_items appears exactly once, including a regressed id present in both. Additional recurring-gap entries are allowed only for other canonical finding ids."
+    on_fail: "Load references/review-finding-permanent-rule.md and classify each active or fixed must-fix finding before final review output"
     object_fields:
       - name: finding
         type: string
@@ -168,7 +168,7 @@ artifacts:
     required: true
     condition: always
     description: "The single summary presented to the user after the loop completes"
-    validation: "Must include rounds (1-10), result, the evidence-bounded no-finding claim when applicable, additional-round evidence when rounds >= 3, fixed_items, remaining_items when applicable, and nits before presenting review results"
+    validation: "Must include rounds (1-10), current final snapshot, the exact final_batch_plan, started batch summaries, obligation-level coverage ledger, aggregation ledger, aggregated findings, aggregate result, the evidence-bounded no-finding claim only when coverage is complete, additional-round evidence when rounds >= 2, fixed_items, remaining_items or coverage gaps when applicable, and nits before presenting review results. The current final batch snapshot_identity exactly equals final_snapshot_identity and its review_snapshot_id exactly equals final_review_snapshot_id. final_batch_plan exactly equals the current final review_batch topology and expected_passes, so required integration, architecture, security, and closure passes cannot be omitted before CLEAN. Recompute the result and rubric from the complete aggregated union after the response barrier, never from an early pass result. Historical batches remain accountable but only the current final snapshot requires complete replacement coverage for CLEAN or ISSUES_FIXED."
     object_fields:
       - name: reviewed_scope
         type: string[]
@@ -179,34 +179,388 @@ artifacts:
         type: int
         required: true
         validation: ">= 1 and <= 10"
+      - name: final_review_snapshot_id
+        type: string
+        required: true
+        description: "Current final snapshot whose complete replacement coverage governs the final result"
+        validation: "Exactly equals current review_snapshot_id from the current complete final review batch."
+      - name: final_snapshot_identity
+        type: object
+        required: true
+        validation: "Equals the current complete final batch review_material_snapshot.snapshot_identity; final_review_snapshot_id exactly equals current review_snapshot_id."
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
+      - name: coverage_complete
+        type: boolean
+        required: true
+        description: "True only when the current final snapshot has exact closure over every manifest-derived pass/item/applicable-concern/perspective/coverage_obligation tuple, every required tuple is inspected_no_risk or finding, and every expected pass is completed; historical incomplete or invalidated batches remain in history but do not permanently block a later complete final snapshot."
+      - name: final_batch_plan
+        type: object
+        required: true
+        description: "Typed immutable projection of the current final review_batch plan; binds the final result to the exact planned topology and pass identities."
+        validation: "Exactly equals the current final review_batch batch_id, review_snapshot_id, scope_size, topology, expected_passes, and required_coverage_tuples. CLEAN or ISSUES_FIXED requires every expected_passes record, including required integration, architecture, security, and closure perspectives, to have terminal accounting and exact coverage closure."
+        object_fields:
+          - name: batch_id
+            type: string
+            required: true
+          - name: review_snapshot_id
+            type: string
+            required: true
+          - name: scope_size
+            type: enum
+            required: true
+            enum_values: [trivial, small, medium, large]
+            validation: "Exact current review_batch scope_size; trivial and small use two discovery perspectives, medium uses three, and large uses four."
+          - name: topology
+            type: object
+            required: true
+            validation: "Exactly equals the current final review_batch.topology."
+            object_fields:
+              - name: discovery_pass_count
+                type: int
+                required: true
+              - name: canonical_discovery_perspectives
+                type: object
+                required: true
+                object_fields:
+                  - name: trivial_small
+                    type: string[]
+                    required: true
+                    enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths]
+                  - name: medium
+                    type: string[]
+                    required: true
+                    enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers]
+                  - name: large
+                    type: string[]
+                    required: true
+                    enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse]
+              - name: security_specialist_triggered
+                type: boolean
+                required: true
+              - name: closure_verification_required
+                type: boolean
+                required: true
+              - name: max_required_responses
+                type: int
+                required: true
+              - name: max_repair_attempts_per_pass
+                type: int
+                required: true
+                validation: "Exactly 1: one retry is permitted only for a transient or schema-invalid response."
+          - name: expected_passes
+            type: object[]
+            required: true
+            min_items: 2
+            max_items: 6
+            validation: "Exact ordered projection of current final review_batch.expected_passes; every review_pass_id is unique and no planned pass may be omitted, substituted, or added."
+            object_fields:
+              - name: review_pass_id
+                type: string
+                required: true
+              - name: perspective
+                type: enum
+                required: true
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+              - name: assigned_scope
+                type: string[]
+                required: true
+                min_items: 1
+              - name: coverage_obligations
+                type: string[]
+                required: true
+                min_items: 1
+              - name: prior_finding_visibility
+                type: enum
+                required: true
+                enum_values: [none, closure_ledger]
+          - name: required_coverage_tuples
+            type: object[]
+            required: true
+            min_items: 1
+            validation: "Exact ordered projection of current final review_batch.required_coverage_tuples. The current coverage ledger has one and only one row for each tuple; no assigned scope, applicable concern, perspective, or obligation may be omitted or substituted."
+            object_fields:
+              - name: review_pass_id
+                type: string
+                required: true
+              - name: scope_item_id
+                type: string
+                required: true
+              - name: applicable_concern
+                type: string
+                required: true
+              - name: review_perspective
+                type: enum
+                required: true
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+              - name: coverage_obligation
+                type: string
+                required: true
+      - name: coverage_ledger
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Obligation-level coverage ledger across every started batch; the current final snapshot needs exact closure over manifest-derived pass/item/concern/perspective/coverage_obligation tuples while prior entries retain terminal accounting."
+        validation: "For the current final snapshot, the coverage records are the unique exact multiset of required_coverage_tuples, with one terminal record for each assigned coverage_obligation; only inspected_no_risk or finding completes it. blocked, not_applicable, needs_context, timed_out, failed, or invalidated forces coverage_complete=false and HAS_REMAINING_ITEMS."
+        object_fields:
+          - name: batch_id
+            type: string
+            required: true
+          - name: review_snapshot_id
+            type: string
+            required: true
+          - name: review_pass_id
+            type: string
+            required: true
+          - name: perspective
+            type: string
+            required: true
+          - name: coverage_obligation
+            type: string
+            required: true
+          - name: assigned_scope
+            type: string[]
+            required: true
+          - name: scope_item_id
+            type: string
+            required: true
+          - name: applicable_concern
+            type: string
+            required: true
+          - name: terminal_state
+            type: enum
+            required: true
+            enum_values: [completed, needs_context, blocked, timed_out, failed, invalidated]
+          - name: coverage_status
+            type: enum
+            required: true
+            enum_values: [complete, incomplete, invalidated]
+          - name: coverage_disposition
+            type: enum
+            required: true
+            enum_values: [inspected_no_risk, finding, incomplete]
+            validation: "Preserves the Reviewer coverage outcome. coverage_status=complete requires inspected_no_risk or finding; incomplete or invalidated requires incomplete."
+          - name: finding_ids
+            type: string[]
+            required: conditional
+            condition: "coverage_disposition == finding"
+            min_items: 1
+            validation: "Exact Reviewer coverage_entries.finding_ids for this tuple; every id is retained in aggregation provenance or an aggregate finding. Absent unless coverage_disposition=finding."
+          - name: coverage_gap_id
+            type: string
+            required: conditional
+            condition: "coverage_status in [incomplete, invalidated]"
+            validation: "Stable unique identity for every incomplete or invalidated coverage record, including historical invalidated records. Absent when coverage_status=complete. Every current gap id appears exactly once across aggregation_ledger disposition=coverage_gap source_coverage_gap_ids, and no foreign or historical gap id substitutes for it."
+          - name: evidence
+            type: string
+            required: true
+      - name: batch_summaries
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Summary of every started frozen-snapshot batch, including incomplete and invalidated batches."
+        object_fields:
+          - name: started_batch_ordinal
+            type: int
+            required: true
+            validation: "Unique contiguous 1..rounds in started order; batch_summaries length equals rounds, including incomplete and invalidated batches, and 11 is invalid."
+          - name: batch_id
+            type: string
+            required: true
+          - name: review_snapshot_id
+            type: string
+            required: true
+          - name: snapshot_identity
+            type: object
+            required: true
+            validation: "Exact frozen identity for this batch; the current final batch exactly equals final_summary.final_snapshot_identity and its review_snapshot_id exactly equals final_summary.final_review_snapshot_id."
+            object_fields:
+              - name: basis
+                type: enum
+                required: true
+                enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+              - name: value
+                type: string
+                required: true
+              - name: captured_at
+                type: string
+                required: true
+              - name: scope_manifest_digest
+                type: string
+                required: true
+                description: "Digest of the ordered scope_manifest and its content digests"
+          - name: batch_status
+            type: enum
+            required: true
+            enum_values: [complete, incomplete, invalidated]
+          - name: expected_response_count
+            type: int
+            required: true
+            validation: "2 to 6"
+          - name: terminal_response_count
+            type: int
+            required: true
+            validation: "Exact number of expected-pass responses received before the barrier. completed, needs_context, and blocked each contribute one; timed_out and failed contribute zero; an invalidated pass contributes zero or one according to whether its response arrived before source invalidation, with typed invalidation evidence retained."
+          - name: aggregate_rubric_recomputed
+            type: boolean
+            required: true
+      - name: aggregation_ledger
+        type: object[]
+        required: true
+        description: "Post-barrier disposition for every pass finding, coverage gap, and historically aggregated finding fixed during this session; empty for a genuinely clean complete batch with no session fixes."
+        object_fields:
+          - name: source_provenance
+            type: object[]
+            required: true
+            min_items: 1
+            object_fields:
+              - name: source_kind
+                type: enum
+                required: true
+                enum_values: [spec_review, review_pass]
+              - name: source_id
+                type: string
+                required: true
+          - name: source_pass_ids
+            type: string[]
+            required: false
+            description: "Compatibility projection of review_pass source_provenance only; Spec Review provenance uses source_provenance."
+          - name: source_finding_ids
+            type: string[]
+            required: conditional
+            condition: "disposition in [retained, merged, fixed_closed]"
+            min_items: 1
+            validation: "Exact multiset closure for namespaced finding-backed dispositions; a merge preserves every source finding id, and fixed_closed preserves the original source finding identity after repair."
+          - name: source_coverage_gap_ids
+            type: string[]
+            required: conditional
+            condition: "disposition == coverage_gap"
+            min_items: 1
+            validation: "Exact unique coverage_ledger.coverage_gap_id values for current timed-out, invalid, omitted, or otherwise incomplete tuples. Across coverage_gap dispositions this is an exact multiset closure over every current incomplete or invalidated tuple: no omissions, duplicates, foreign ids, or historical substitutions."
+          - name: aggregate_finding_id
+            type: string
+            required: conditional
+            condition: "disposition in [retained, merged, fixed_closed]"
+            validation: "References the aggregate finding identity used for closure, never a bare source finding id."
+          - name: disposition
+            type: enum
+            required: true
+            enum_values: [retained, merged, fixed_closed, observation, rejected_invalid, coverage_gap]
+          - name: rationale
+            type: string
+            required: true
+            validation: "Every schema-valid current finding is retained or merged to an aggregate_finding_id; a historically aggregated finding fixed during this session is fixed_closed and preserves its original aggregate_finding_id plus source provenance. observation/rejected_invalid is only for non-findings. Invalid returns create coverage gaps and incomplete coverage. Merge only when locus, invariant, and failure mechanism are the same; similar wording alone does not merge. A merged confidence_pct is the minimum confidence among its retained source findings."
+      - name: aggregated_findings
+        type: object[]
+        required: true
+        description: "Stable aggregate union of validated pass findings after the response barrier."
+        object_fields:
+          - name: aggregate_finding_id
+            type: string
+            required: true
+            validation: "Unique aggregate finding identity; closure_results reference this value."
+          - name: finding_id
+            type: string
+            required: true
+            description: "Compatibility representative source finding identifier retained through the aggregate projection."
+            validation: "Namespaced source finding identifier, never used as the closure key."
+          - name: source_pass_ids
+            type: string[]
+            required: false
+            description: "Compatibility projection of review_pass source_provenance only."
+          - name: source_finding_ids
+            type: string[]
+            required: true
+            min_items: 1
+            validation: "Aggregate provenance: retain every namespaced source finding id, including all merged sources and regressed closure findings; aggregate_finding_id is the closure key."
+          - name: source_provenance
+            type: object[]
+            required: true
+            min_items: 1
+            object_fields:
+              - name: source_kind
+                type: enum
+                required: true
+                enum_values: [spec_review, review_pass]
+              - name: source_id
+                type: string
+                required: true
+          - name: locus
+            type: string
+            required: true
+          - name: file
+            type: string
+            required: true
+          - name: line
+            type: int
+            required: false
+          - name: invariant
+            type: string
+            required: true
+          - name: failure_mechanism
+            type: string
+            required: true
+          - name: severity
+            type: enum
+            required: true
+            enum_values: [must-fix, should-fix, nit]
+            validation: "For a conservative merge, use the strongest source severity: must-fix > should-fix > nit."
+          - name: description
+            type: string
+            required: true
+          - name: evidence
+            type: string
+            required: true
+          - name: smallest_useful_fix
+            type: string
+            required: true
+          - name: confidence_pct
+            type: int
+            required: true
+            validation: "For one source preserve its evidence-calibrated confidence; for a conservative merge use the minimum source confidence."
       - name: result
         type: enum
         required: true
         enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS]
         description: "Machine-compatible workflow state. CLEAN does not prove correctness beyond the reviewed scope and evidence."
+        validation: "HAS_REMAINING_ITEMS is required for incomplete coverage, gaps, material remaining/aggregate findings, or regressed/incomplete closure. CLEAN/ISSUES_FIXED require complete coverage and none of those states; ISSUES_FIXED additionally requires session fixed_items, otherwise CLEAN."
       - name: evidence_bounded_claim
         type: string
         required: conditional
-        condition: "result in [CLEAN, ISSUES_FIXED]"
+        condition: "result in [CLEAN, ISSUES_FIXED] and coverage_complete is true"
         description: "Calibrated user-facing claim when no must-fix or should-fix finding remains"
         validation: "Exactly: No material findings within the reviewed scope and available evidence"
         on_fail: "Replace absolute correctness or clean claims with the required evidence-bounded wording while preserving the machine enum."
       - name: additional_round_reasons
         type: object[]
         required: conditional
-        condition: "rounds >= 3"
-        description: "Evidence-backed justification for each exceptional review pass after round 2"
-        validation: "Contains one entry for every round from 3 through rounds; score below threshold alone is not an allowed entry."
-        on_fail: "Remove unjustified extra rounds or record one allowed new-evidence reason for every round 3+."
+        condition: "rounds >= 2"
+        description: "Historical evidence for every review round after round 1"
+        validation: "Contains one entry for every round from 2 through rounds; round 2 records changed-files/fix evidence retrospectively, and score below threshold alone is not an allowed entry."
+        on_fail: "Record changed-files/fix evidence for round 2 and one allowed new-evidence reason for every round 3+."
         object_fields:
           - name: round
             type: int
             required: true
-            validation: ">= 3 and <= 10"
+            validation: ">= 2 and <= 10"
           - name: reason
             type: enum
             required: true
             enum_values: [changed_files, unresolved_finding, validation_failure, regression_or_drift, changed_hypothesis]
+            validation: "Round 2 is changed_files only and cites the source fix plus refreshed build/test evidence. The other reasons are available only for round 3 or later."
           - name: evidence_ref
             type: string
             required: true
@@ -218,6 +572,10 @@ artifacts:
         required: true
         description: "All items fixed across all rounds, grouped by severity"
         object_fields:
+          - name: aggregate_finding_id
+            type: string
+            required: true
+            validation: "Exact fixed_closed and closure_results identity anchored to immutable pre-fix previously_fixed."
           - name: severity
             type: enum
             required: true
@@ -232,6 +590,24 @@ artifacts:
             type: int
             required: true
             validation: ">= 1 and <= 10"
+      - name: closure_results
+        type: object[]
+        required: conditional
+        condition: "fixed_items is non-empty"
+        min_items: 1
+        description: "Fresh closure evidence for each fixed item."
+        validation: "Unique IDs have exact set equality with fixed_items and fixed_closed. Every fixed_closed ID/source/provenance exactly matches immutable pre-fix previously_fixed. ISSUES_FIXED requires verified_closed with evidence. Each regressed/incomplete ID has fresh closure-pass-namespaced source IDs, exact aggregate/ledger provenance, one retained must-fix/should-fix aggregate, and one retained row. Verified_closed IDs are absent from retained/current findings. HAS_REMAINING_ITEMS may instead be caused by unrelated incomplete coverage. Missing, foreign, duplicate, regressed, or incomplete closure cannot produce CLEAN/ISSUES_FIXED."
+        object_fields:
+          - name: aggregate_finding_id
+            type: string
+            required: true
+          - name: status
+            type: enum
+            required: true
+            enum_values: [verified_closed, regressed, incomplete]
+          - name: evidence
+            type: string
+            required: true
       - name: remaining_items
         type: object[]
         required: false
@@ -251,6 +627,11 @@ artifacts:
           - name: reason_unresolved
             type: string
             required: true
+      - name: coverage_gaps
+        type: string[]
+        required: conditional
+        condition: "coverage_complete is false"
+        description: "Missing, invalid, blocked, timed-out, or invalidated pass coverage that prevents a clean result"
       - name: nits
         type: object[]
         required: true
@@ -268,7 +649,7 @@ artifacts:
     required: conditional
     condition: "qa_evaluation_mode == required"
     description: "Independent QA evaluation final result after build/test and code-review evidence"
-    validation: "Must include rounds (1-10), final_verdict, result, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, evidence, and open_questions when blocked"
+    validation: "Must include rounds (1-10), final_verdict, result, canonical acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, pivot_restart_signal when triggered, evidence, obligation result when carried, and open_questions when blocked; every successful pair accepted|accepted_with_concerns with CLEAN|ISSUES_FIXED is invalid until the carried obligation is fulfilled."
     on_fail: "Run the QA evaluation loop from references/qa-evaluation-loop.md or record why QA is blocked before presenting final review results"
     object_fields:
       - name: rounds
@@ -298,10 +679,61 @@ artifacts:
           - name: evidence
             type: string
             required: true
+          - name: impact
+            type: string
+            required: true
+          - name: recommendation
+            type: string
+            required: false
           - name: disposition
             type: enum
             required: true
             enum_values: [resolved, remaining, not_applicable]
+            validation: "not_applicable is allowed only for an unscoped criterion."
+      - name: approved_feature_preparation_qa_acceptance_obligation_result
+        type: object
+        required: conditional
+        condition: "approved_feature_preparation_qa_acceptance_obligation is carried from workflow"
+        validation: "Echoes the carried requested_scope, execution_prerequisite, feature_preparation_scope, and exactly one conditional source binding unchanged; every successful pair accepted|accepted_with_concerns with CLEAN|ISSUES_FIXED requires requested_scope_status=fulfilled, execution_prerequisite_status=met, and requested-scope/prerequisite evidence. Otherwise final_verdict/result is rejected/HAS_REMAINING_ITEMS or blocked/BLOCKED."
+        object_fields:
+          - name: requested_scope_status
+            type: enum
+            required: true
+            enum_values: [fulfilled, blocked, failed]
+          - name: requested_scope_evidence
+            type: string
+            required: true
+          - name: execution_prerequisite_status
+            type: enum
+            required: true
+            enum_values: [met, missing, blocked]
+          - name: execution_prerequisite_evidence
+            type: string
+            required: true
+          - name: requested_scope
+            type: string
+            required: true
+            validation: "Equals approved_feature_preparation_qa_acceptance_obligation.requested_scope."
+          - name: execution_prerequisite
+            type: string
+            required: true
+            validation: "Equals approved_feature_preparation_qa_acceptance_obligation.execution_prerequisite."
+          - name: feature_preparation_scope
+            type: enum
+            required: true
+            enum_values: [not_applicable, existing_system]
+            validation: "Equals carried feature_preparation_scope."
+          - name: source_feature_preparation_evidence_ref
+            type: string
+            required: conditional
+            condition: "feature_preparation_scope == existing_system"
+            validation: "Equals carried source_feature_preparation_evidence_ref."
+          - name: source_preparation_basis
+            type: enum
+            required: conditional
+            condition: "feature_preparation_scope == not_applicable"
+            enum_values: [not_applicable]
+            validation: "Equals carried source_preparation_basis."
       - name: qa_scorecard
         type: object
         required: true
@@ -310,38 +742,64 @@ artifacts:
           - name: acceptance_coverage
             type: float
             required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
           - name: evidence_strength
             type: float
             required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
           - name: domain_quality
             type: float
             required: true
+            validation: "1.0 to 5.0 in 0.5 increments; use 5.0 when no scoped domain quality surface applies and state not_applicable in rationale"
           - name: final_readiness
             type: float
             required: true
+            validation: "1.0 to 5.0 in 0.5 increments"
           - name: weighted_score
             type: float
             required: true
+            validation: "weighted_score = round_half_up((acceptance_coverage * 0.30) + (evidence_strength * 0.25) + (domain_quality * 0.20) + (final_readiness * 0.25), 2 decimal places)"
+          - name: rationale
+            type: object
+            required: true
+            object_fields:
+              - name: acceptance_coverage
+                type: string
+                required: true
+              - name: evidence_strength
+                type: string
+                required: true
+              - name: domain_quality
+                type: string
+                required: true
+              - name: final_readiness
+                type: string
+                required: true
       - name: selected_domain_rubrics
         type: string[]
         required: false
-        condition: "domain_context or rubric_refs was provided, or acceptance criteria / Done Contract required subjective/product/UX/docs/DX/UI/domain craft evaluation"
-        description: "Rubric families selected from references/domain-rubrics.md; empty or omitted when domain rubrics were not scoped"
+        condition: "domain_context or rubric_refs is present, or acceptance criteria / Done Contract require subjective/product/UX/docs/DX/UI/domain craft evaluation"
+        description: "Rubric families selected from references/domain-rubrics.md for this QA round"
+        validation: "Every selected family is one of [ui_visual_design, ux_product_acceptance, documentation_quality, developer_experience, domain_specific_craft] and is tied to acceptance criteria, Done Contract, domain_context, or explicit rubric_refs. Empty or omitted when no scoped domain rubric applies."
       - name: domain_quality_scores
         type: object[]
         required: false
         condition: "selected_domain_rubrics is non-empty"
-        description: "Evidence-backed domain rubric scores from the final QA round"
+        description: "Per-family domain rubric scores from references/domain-rubrics.md"
+        validation: "Each score cites scoped evidence and uses pass/refine/pivot or accepted/rejected guidance; unscoped dimensions are not_applicable, not invented."
         object_fields:
           - name: rubric_ref
             type: string
             required: true
+            description: "Selected rubric family, such as ui_visual_design, ux_product_acceptance, documentation_quality, developer_experience, or domain_specific_craft"
           - name: dimension
             type: string
             required: true
+            description: "Selected dimension within the rubric family"
           - name: score
             type: float
             required: true
+            validation: "1.0 to 5.0 in 0.5 increments. For action=not_applicable, use 5.0 and state the unscoped rationale in evidence."
           - name: action
             type: enum
             required: true
@@ -349,10 +807,11 @@ artifacts:
           - name: evidence
             type: string
             required: true
+            validation: "Cites acceptance criteria, Done Contract, domain_context, rubric_refs, verification artifacts, screenshots, docs, or concrete files"
       - name: score_progression
         type: object[]
         required: true
-        description: "QA score progression across rounds"
+        description: "Canonical QA score projection across rounds"
         object_fields:
           - name: round
             type: int
@@ -364,10 +823,45 @@ artifacts:
           - name: failed_acceptance_count
             type: int
             required: true
+          - name: delta
+            type: string
+            required: true
+            validation: "Round 1 is exactly initial. Later rounds are the exact signed two-decimal weighted_score change from the immediately preceding round, for example +0.50, +0.00, or -0.50."
           - name: drift_status
             type: enum
             required: true
             enum_values: [GENUINE, SUSPICIOUS, DRIFT, REGRESSION, STAGNATION, NEUTRAL, NOT_APPLICABLE]
+            validation: "Derived from the immediately preceding score and failed_acceptance_count movement. REGRESSION is a negative delta. A positive delta is GENUINE when failed count falls, SUSPICIOUS when that improvement exceeds 1.00, and DRIFT otherwise. STAGNATION requires a two-transition zero-delta plateau with the same positive failed count; otherwise use NEUTRAL. Repeated DRIFT/REGRESSION means consecutive terminal transitions only."
+      - name: pivot_restart_signal
+        type: object
+        required: false
+        condition: "final score_progression entry drift_status == STAGNATION, repeated QA DRIFT/REGRESSION is detected, or any scoped domain_quality_scores action == pivot"
+        description: "Signal that the QA loop needs orchestrator-owned pivot/restart handling before another QA/build dispatch."
+        validation: "Preserves the terminal QAEvaluator signal unchanged; affected_round exactly equals qa_evaluation_result.rounds, the current final QA round."
+        object_fields:
+          - name: trigger
+            type: enum
+            required: true
+            enum_values: [STAGNATION, repeated_DRIFT, repeated_REGRESSION, pivot]
+          - name: evidence
+            type: object[]
+            required: true
+            min_items: 1
+            object_fields:
+              - name: source
+                type: string
+                required: true
+              - name: detail
+                type: string
+                required: true
+          - name: affected_round
+            type: int
+            required: true
+            validation: ">= 1 and <= 10; exactly equals current return round."
+          - name: recommended_recovery_focus
+            type: string
+            required: true
+            description: "Acceptance gap, evidence gap, domain pivot evidence, or stale QA context the orchestrator should consider"
       - name: evidence
         type: object[]
         required: true
@@ -388,13 +882,13 @@ artifacts:
   - name: rubric_summary
     type: object
     required: false
-    condition: "scope_size in [medium, large] and mode == review-fix"
-    description: "Final rubric scores from the last review round, plus progression across all rounds"
+    condition: "scope_size in [medium, large]"
+    description: "Final rubric scores from the post-barrier aggregated union of the current final snapshot, plus aggregate progression across all rounds"
     object_fields:
       - name: final_scores
         type: object
         required: true
-        description: "Rubric scores from the final review round"
+        description: "Aggregate rubric scores recomputed after the response barrier from the current final snapshot union"
         object_fields:
           - name: correctness
             type: float
@@ -421,7 +915,8 @@ artifacts:
       - name: score_progression
         type: object[]
         required: true
-        description: "Weighted score per round — used for drift detection and capped at the 10-round review limit"
+        description: "Weighted aggregate score and aggregated union finding count per round — used for drift detection and capped at the 10-round review limit"
+        validation: "v7.1 score tracking uses aggregated_finding_count. Persisted 6.0/7.0 packets are invalidated and rebuilt before score tracking; legacy finding_count is retained only as historical evidence."
         object_fields:
           - name: round
             type: int
@@ -430,10 +925,10 @@ artifacts:
           - name: weighted_score
             type: float
             required: true
-          - name: finding_count
+          - name: aggregated_finding_count
             type: int
             required: true
-            description: "Total findings (must-fix + should-fix) this round"
+            description: "Aggregated union findings (must-fix + should-fix) this round"
           - name: drift_status
             type: enum
             required: true
@@ -632,8 +1127,21 @@ artifacts:
     required: true
     condition: "mode == audit"
     description: "Full findings report when running in audit mode (no fixes)"
-    validation: "Must include all audit findings and an overall summary before audit results are presented"
+    validation: "Must include all aggregate audit findings, current-final-snapshot coverage_complete, started batch summaries, and an overall summary after the response barrier before audit results are presented."
     object_fields:
+      - name: coverage_complete
+        type: boolean
+        required: true
+        description: "Current audit snapshot exact manifest-derived tuple closure result"
+      - name: batch_summaries
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Terminal summaries for the completed read-only batch"
+      - name: coverage_ledger_ref
+        type: string
+        required: true
+        description: "Pointer to final_summary obligation-level coverage ledger"
       - name: findings
         type: object[]
         required: true
@@ -652,8 +1160,54 @@ artifacts:
           - name: description
             type: string
             required: true
+          - name: aggregate_finding_id
+            type: string
+            required: true
+            description: "Stable identifier from final_summary.aggregated_findings"
+          - name: finding_id
+            type: string
+            required: true
+            description: "Compatibility representative namespaced source finding identifier retained from final_summary.aggregated_findings; it is not the closure key."
+          - name: source_finding_ids
+            type: string[]
+            required: true
+            min_items: 1
+            description: "Lossless source-finding provenance; a merged audit finding preserves every source finding ID."
+          - name: source_pass_ids
+            type: string[]
+            required: false
+            description: "Compatibility projection of review_pass provenance only."
+          - name: source_provenance
+            type: object[]
+            required: true
+            min_items: 1
+            description: "Truthful aggregate provenance for review-pass and retained Spec Review findings."
+            object_fields:
+              - name: source_kind
+                type: enum
+                required: true
+                enum_values: [spec_review, review_pass]
+              - name: source_id
+                type: string
+                required: true
           - name: confidence_pct
             type: int
+            required: true
+            validation: "Matches the evidence-calibrated final_summary aggregate confidence, using the minimum source confidence for a merge."
+          - name: locus
+            type: string
+            required: true
+          - name: invariant
+            type: string
+            required: true
+          - name: failure_mechanism
+            type: string
+            required: true
+          - name: evidence
+            type: string
+            required: true
+          - name: smallest_useful_fix
+            type: string
             required: true
       - name: summary
         type: string

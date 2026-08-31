@@ -33,17 +33,40 @@ file centralizes decision boundaries that cut across phase details while
 
 ## Routing Defaults
 
-- `plan_mode=none`: only trivial, localized, reversible, low-risk work with one
-  obvious implementation path, known files and verification, no material
-  ambiguity, and no public contract, data, security, destructive, or policy
-  concern. Discover carries the goal, scope, constraints, and verification
-  directly into Build; there is no plan artifact.
+- `plan_mode=none`: `prepare_only` at any size may retain `plan_mode=none`
+  unless an optional readiness plan is specifically requested; Discover then
+  proceeds directly to Preparation Completion. Otherwise this mode is only for
+  trivial, localized, reversible, low-risk work with one obvious implementation
+  path, known files and verification, no material ambiguity, and no public
+  contract, data, security, destructive, or policy concern. Discover carries
+  the goal, scope, constraints, and verification directly into Build; there is
+  no plan artifact.
+- `prepare_only`: use `plan_mode=inline` only when an optional readiness plan
+  is explicitly requested; otherwise retain `plan_mode=none`, including at
+  high/critical risk. The readiness plan never waits for implementation
+  approval.
+- For `prepare_only`, force `qa_evaluation_mode=not_required`, even when the
+  request explicitly asks for QA or acceptance evaluation. Preserve that request
+  only in `feature_preparation_result.future_qa_acceptance_obligation`; it must
+  not activate Build, Review, QA Evaluator, strict control, or persisted
+  workflow state solely from that request. Progressive uncertainty may still use
+  journal state when local artifacts are configured and policy allows it.
+- For `prepare_only`, force `harness_capable=false`, including when the request
+  explicitly asks for harness work or accepted independent harness evidence is
+  carried. Preserve that scope only in
+  `feature_preparation_result.future_harness_obligation`; it must not load the
+  harness controller, activate Done Contract or trace/replay artifacts, select a
+  Build lane, or independently require strict/journal state. Record a QA request
+  at `feature_preparation_result.future_qa_acceptance_obligation`, never as a
+  broad readiness substring.
 - `plan_mode=inline`: bounded small work with more than one useful step but no
-  approval trigger. Record the compact plan and continue without waiting.
-- `plan_mode=approval_required`: all medium+ work and any task with high/critical
-  risk, destructive effects, public contract/data/security changes, material
-  architecture or scope choices, repository approval policy, or an explicit
-  user request. Wait for approval before Build.
+  approval trigger, or an explicitly requested `prepare_only` readiness plan.
+  Record the compact plan and continue without waiting.
+- `plan_mode=approval_required`: For `execution_intent != prepare_only`, use
+  `plan_mode=approval_required` for medium+, high/critical risk, destructive
+  effects, public contract/data/security changes, material architecture or
+  scope choices, repository approval policy, or an explicit user request. Wait
+  for approval before Build.
 
 - `light`: small, low-risk, local work with no public behavior, data, security,
   harness, or QA acceptance risk. It may run inline/direct with relevant
@@ -61,16 +84,39 @@ file centralizes decision boundaries that cut across phase details while
   fresh direct-fallback result. It requires an approved plan, Build
   verification, and independent review, but no harness, split-worker, or QA
   ceremony by size.
-- `strict`: select only for high/critical risk,
+- `strict`: for `execution_intent != prepare_only`, select for high/critical risk,
   `harness_capable=true`, `qa_evaluation_mode=required`, trace/replay criteria,
-  explicit harness/QA criteria, or explicit strict control.
+  explicit harness/QA criteria, or explicit strict control. Risk/project criteria may still select strict preparation for
+  `prepare_only`, but a QA or harness request alone must not select strict.
+- Otherwise-small strict or required-QA execution selects the `small_elevated`
+  completion tier; it does not fabricate medium+ slices.
 - Do not infer `strict`, `harness_capable=true`, or required QA from
   size=medium+ or delegation alone.
-- Treat `harness_capable` as false unless the task is long-running,
-  trace/replay-ready, high-risk harness work, domain-scored,
-  UI/visual/product/UX/docs/DX-facing, explicitly requested as harness/QA work,
+- During `prepare_only`, always treat `harness_capable` as false and retain an
+  explicit harness request or accepted independent harness evidence only in
+  `feature_preparation_result.future_harness_obligation`. For execution work,
+  treat `harness_capable` as false unless the task is long-running,
+  trace/replay-ready, high-risk harness work, domain-scored work or UI/visual/product/UX/docs/DX-facing work, explicitly requested as harness/QA work,
   or already has an accepted Done Contract/Harness Recipe.
-- Treat `qa_evaluation_mode=not_required` unless explicit QA/acceptance
+- For `implement_only`, an accepted
+  `approved_feature_preparation_harness_obligation` is explicit harness scope:
+  bind it to `approved_feature_preparation_evidence_ref` for `existing_system`,
+  or to `source_preparation_basis=not_applicable` with no evidence ref for
+  `not_applicable`; promote an initially small implementation to at least
+  `medium`, set `harness_capable=true`, load the harness controller, and complete
+  the existing Done Contract, Harness Recipe, and runtime-ref gates before Build.
+  Preserve its three approved payload fields exactly, add exactly one applicable preparation-source binding, and carry the resulting enriched obligation unchanged through task packets and verification handoffs.
+- For `implement_only`, an accepted
+  `approved_feature_preparation_qa_acceptance_obligation` is explicit QA scope:
+  preserve its two approved payload fields exactly, bind the approved evidence
+  ref for `existing_system` or `source_preparation_basis=not_applicable`, set
+  `qa_evaluation_mode=required`, and carry it unchanged through task packets,
+  Build, verification, Code Reviewer evidence, and the existing QA Evaluator
+  acceptance context. It does not imply harness capability or a pre-Build gate.
+  At completion, accepted or accepted-with-concerns QA is non-complete unless
+  the exact obligation result records fulfilled scope, met prerequisite, and
+  the unchanged applicable source binding.
+- Treat `qa_evaluation_mode=not_required` unless `execution_intent != prepare_only` and explicit QA/acceptance
   evaluation, accepted Done Contract, harness-capable acceptance scope,
   domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance applies.
 
@@ -94,15 +140,17 @@ gates.
   Compare the newest user request and current repository identity/evidence,
   classify the state as `active`, `stale`, `superseded`, or `completed`, and
   use the recorded next action only when the state is reconciled active.
-- Use `workflow_state_mode=inline` unless state must survive clarification,
-  delegation, compaction/cross-session continuation, explicit persistence, or
-  strict/harness/required-QA execution. Medium+ size alone does not force a task
-  journal; `journal` owns durable state when one of those triggers applies.
-- Progressive uncertainty selects `workflow_state_mode=journal` when local
-  state artifacts are configured and policy allows them; otherwise use the
-  equivalent carried-state fallback. Keep `progressive_discovery_state` and its
-  compact decision refs in the existing journal/equivalent carried state, never
-  a second store.
+- For `uncertainty_shape == progressive`, use `workflow_state_mode=journal`
+  only when local state artifacts are configured and policy allows them;
+  unavailable/policy-disallowed progressive state uses an equivalent
+  carried-state fallback inline, including `prepare_only`. Otherwise inline
+  requires `uncertainty_shape == bounded` absent clarification wait, delegated
+  workflow roles during execution, cross-session/compaction continuation,
+  explicit persisted state, `controller_intensity == strict`,
+  `harness_capable == true`, or `execution_intent != prepare_only and
+  qa_evaluation_mode == required`; those require journal. Size alone never
+  requires journal. Keep `progressive_discovery_state` and compact decision
+  refs in the existing journal/equivalent carried state, never a second store.
 - Progressive Discover is a no-execution boundary. Any mutating prerequisite
   must use a separate approved workflow that returns evidence; this controller
   does not authorize project/source mutation, external writes, or branch work
@@ -167,7 +215,7 @@ gates.
   evidence. Any security, high-risk, harness, or QA trigger promotes the work out
   of this lane.
 - Code Reviewer and QA Evaluator responsibilities stay separate.
-- QA Evaluator runs only when `qa_evaluation_mode=required`, after build/test
+- QA Evaluator runs only when `qa_evaluation_mode=required` for `execution_intent != prepare_only`, after build/test
   and Code Reviewer evidence exist.
 - QA Evaluator owns acceptance, Done Contract readiness, verification evidence,
   final readiness, and scoped domain quality.
@@ -186,6 +234,3 @@ gates.
   `harness_capable=false`, and `qa_evaluation_mode=not_required`.
 - Harness checks must prove `references/harness-controller.md` stays
   harness-only.
-- Generated plugin mirrors must come from
-  `tools/plugins/sync-plugin-skills.sh --apply`; do not hand-edit plugin skill
-  copies.

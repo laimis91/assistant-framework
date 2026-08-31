@@ -166,4 +166,43 @@ else
     fail "output.yaml missing distinct spec/quality review result contract terms: ${missing_review_output_terms[*]}"
 fi
 
+test_start "small elevated strict or required-QA work has coherent full Spec Review applicability"
+small_elevated_contract_terms=()
+for term in \
+    'required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, validation_results, spec_review_result, review_result, final_handoff]' \
+    'conditional_artifacts: [test_results, subagent_evidence' \
+    'small strict/required-QA work selects small_elevated' \
+    'Quality Review, as do medium+ tasks.'; do
+    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" && \
+       ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md"; then
+        small_elevated_contract_terms+=("$term")
+    fi
+done
+if ! tr '\n' ' ' < "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md" | \
+    grep -Fq 'Small strict/required-QA work requires full Stage 1 Spec Review and Stage 2 Code Quality Review'; then
+    small_elevated_contract_terms+=("strict/required-QA small work requires both full review stages")
+fi
+for artifact in triage_result spec_review_result; do
+    if ! awk -v artifact="$artifact" '
+        $0 == "  - name: " artifact { in_artifact = 1; next }
+        in_artifact && /^  - name: / { exit }
+        in_artifact && $0 == "    condition: \"execution_intent != prepare_only and (size in [medium, large, mega] or risk_tier in [high, critical] or controller_intensity == strict or qa_evaluation_mode == required)\"" { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
+        small_elevated_contract_terms+=("$artifact requires strict/required-QA small work")
+    fi
+done
+for term in \
+    'Quality Review completed by loading and following assistant-review SKILL.md' \
+    'controller_intensity in [standard, strict]'; do
+    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
+        small_elevated_contract_terms+=("$term")
+    fi
+done
+if [[ "${#small_elevated_contract_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "small elevated strict/required-QA contract is incomplete: ${small_elevated_contract_terms[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

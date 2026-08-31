@@ -7,13 +7,8 @@ Use the strict slice packet fields from `slice_manifest` for every executable br
 - One or more slices; use a single slice when it is the smallest iterable increment and record the rationale
 - Contract-only/setup-only work is valid only when it is the verified deliverable artifact slice; otherwise include enabling changes in the slice that first uses them
 - Each slice: Plan --> [Design] --> Build
-- Git: task branch `feature/<task>` + per-slice branches `slice/<task>/<slice-id>`; use `references/slice-review-topology.md` when `promotion_mode: review_gated` produces REVIEW_PENDING evidence. Legacy branch layouts are compatibility-only and must not mix with new briefs.
-
-Automation scripts in `scripts/` (bash):
-- `decompose.sh` -- create branches, worktrees, briefs
-- `run-agents.sh` -- launch parallel agents (reads `agent.conf` for CLI)
-- `check-integration.sh` -- validate integration readiness
-- `generate-agents-md.sh` -- capture project knowledge
+- Keep slice ownership explicit through task packets. Source-changing packets in a shared or unknown workspace are sequential. Parallel source-changing packets require the runtime explicitly proves isolated workspaces; independent read-only analysis may run in parallel.
+- Verify each completed slice before dependent work starts. After all slices are integrated, run cross-slice and full-scope validation, then a fresh review.
 
 ## Agent Portability
 
@@ -36,13 +31,13 @@ Agent definitions are per-platform: Claude uses `.md` files in `agents/claude/`,
 
 - **Guess:** Ask when ambiguous, state assumptions when clear
 - **Skip Discovery:** Even small tasks get quick validation
-- **Skip Decompose:** Medium+ tasks MUST decompose into strict slices. "It's straightforward" is not an excuse — decomposition reveals hidden complexity.
+- **Skip Decompose:** Medium+ implementation/execution work MUST decompose into strict slices. "It's straightforward" is not an excuse — decomposition reveals hidden complexity. `prepare_only` uses Discover -> PREPARATION_COMPLETION with optional Plan readiness and no slices.
 - **Mega-step:** One plan step at a time
 - **Silent drift:** Stop and flag plan deviations
 - **Tests after:** Write tests alongside each step
-- **Skip review:** NEVER skip review. Invoke `assistant-review` skill. If you don't see `--- PHASE: REVIEW ---` in the output, review was skipped.
+- **Skip review:** For implementation/execution work, NEVER skip review. Invoke `assistant-review` skill when the Review phase applies. `prepare_only` ends at Preparation Completion without a review or final-handoff claim.
 - **Review once and done:** Review has two stages (spec + quality) and quality is an autonomous loop
 - **No gate:** Always wait for approval before Build
-- **No checkpoints:** Every phase MUST print `--- PHASE: [name] ---` messages. Missing checkpoints = workflow not followed.
-- **Skip SOLID:** Evaluate the graduated SOLID checklist after each build step, not as a batch at the end
+- **No checkpoints:** Exact phase checkpoints are required only when controller intensity, explicit project policy, or the user requires them. Missing required checkpoints = workflow not followed.
+- **Skip SOLID:** For implementation/execution work, evaluate the graduated SOLID checklist after each Build step, not as a batch at the end.
 - **Context hoarding:** Every file read must serve a purpose

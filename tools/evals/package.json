@@ -1,0 +1,9 @@
+{
+  "name": "assistant-framework-eval-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Locked local dependencies for framework evaluation tooling.",
+  "devDependencies": {
+    "ajv": "8.20.0"
+  }
+}

@@ -1,10 +1,14 @@
 # Harness Controller
 
 Use this reference only for medium+ work that is explicitly harness-capable:
-long-running, trace/replay-ready multi-slice, high-risk harness,
-subjective/domain-scored, UI/visual/product/UX/docs/DX-facing, or explicitly
+long-running, trace/replay-ready multi-slice, high-risk harness, subjective,
+domain-scored work or UI/visual/product/UX/docs/DX-facing work, or explicitly
 requested as harness work. Do not load it for small local fixes, ordinary
 medium+ source changes, or delegation alone.
+
+An `implement_only` workflow that consumes an accepted
+`approved_feature_preparation_harness_obligation` is promoted to at least
+`medium` during Triage before this reference and its pre-Build gates are loaded.
 
 `harness_capable` defaults to false. Set it to true only when one of the
 explicit criteria above is present in the request, approved plan, task packet,

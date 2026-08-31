@@ -32,6 +32,41 @@ test_sha256_directory() {
     printf '%s' "$inventory" | test_sha256_stream
 }
 
+test_sha256_inventory() {
+    local directory="$1" inventory="" entry relative digest target
+    while IFS= read -r entry; do
+        relative="${entry#"$directory"/}"
+        if [[ -L "$entry" ]]; then
+            target="$(readlink "$entry")"
+            inventory+="symlink $relative $target"$'\n'
+        elif [[ -f "$entry" ]]; then
+            digest="$(test_sha256_stream <"$entry")"
+            inventory+="file $relative $digest"$'\n'
+        elif [[ -d "$entry" ]]; then
+            inventory+="directory $relative"$'\n'
+        elif [[ -p "$entry" ]]; then
+            inventory+="fifo $relative"$'\n'
+        elif [[ -b "$entry" ]]; then
+            inventory+="block $relative"$'\n'
+        elif [[ -c "$entry" ]]; then
+            inventory+="character $relative"$'\n'
+        elif [[ -S "$entry" ]]; then
+            inventory+="socket $relative"$'\n'
+        else
+            inventory+="other $relative"$'\n'
+        fi
+    done < <(find "$directory" -mindepth 1 -print | LC_ALL=C sort)
+    printf '%s' "$inventory" | test_sha256_stream
+}
+
+test_mode_octal() {
+    local path="$1"
+    case "$(uname -s)" in
+        Darwin|FreeBSD) stat -f '%Lp' "$path" ;;
+        *) stat -c '%a' "$path" ;;
+    esac
+}
+
 fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-behavioral-eval-test.XXXXXX")"
 p0p4_register_cleanup "$fixture_root"
 baseline="$fixture_root/baseline"
@@ -40,6 +75,8 @@ capture="$fixture_root/capture"
 mkdir -p "$baseline" "$candidate" "$capture"
 cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$baseline/SKILL.md"
 cp "$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/SKILL.md" "$candidate/SKILL.md"
+export FAKE_BASELINE_SKILL_SHA256="$(sed -e 's|{agent_state_dir}|.codex|g' "$baseline/SKILL.md" | shasum -a 256 | awk '{print $1}')"
+export FAKE_CANDIDATE_SKILL_SHA256="$(sed -e 's|{agent_state_dir}|.codex|g' "$candidate/SKILL.md" | shasum -a 256 | awk '{print $1}')"
 mkdir -p "$baseline/evals" "$candidate/evals"
 printf '%s\n' '{"secret":"baseline grader anchor"}' >"$baseline/evals/cases.json"
 printf '%s\n' '{"secret":"candidate grader anchor"}' >"$candidate/evals/cases.json"
@@ -137,11 +174,47 @@ if [[ "$prompt" == "-" ]]; then
     prompt="$(cat)"
 fi
 
+installed_skill="$workspace/.agents/skills/assistant-workflow/SKILL.md"
+if [[ ! -f "$installed_skill" ]]; then
+    printf '%s\n' 'missing installed workflow skill identity' >&2
+    exit 2
+fi
+installed_skill_sha256="$(shasum -a 256 "$installed_skill" | awk '{print $1}')"
+if [[ "$installed_skill_sha256" == "${FAKE_BASELINE_SKILL_SHA256:?}" ]]; then
+    is_candidate_identity=false
+elif [[ "$installed_skill_sha256" == "${FAKE_CANDIDATE_SKILL_SHA256:?}" ]]; then
+    is_candidate_identity=true
+else
+    printf '%s\n' 'unexpected installed skill identity' >&2
+    exit 2
+fi
+
 if [[ "${FAKE_CODEX_BLOCK_AFTER_INVOCATION:-false}" == "true" ]]; then
     printf '%s\n' "$$" >"$capture_dir/call-$call_id.pid"
+    if [[ "${FAKE_CODEX_SPAWN_SIGNAL_IGNORING_GRANDCHILD:-false}" == "true" ]]; then
+        (
+            trap '' INT TERM
+            while true; do sleep 1; done
+        ) &
+        printf '%s\n' "$!" >"$capture_dir/call-$call_id.grandchild.pid"
+        trap '' INT TERM
+    fi
     while true; do
         sleep 1
     done
+fi
+
+if [[ -n "${FAKE_CODEX_EXIT_AFTER_GRANDCHILD:-}" ]]; then
+    (
+        trap '' INT TERM
+        while true; do sleep 1; done
+    ) &
+    printf '%s\n' "$!" >"$capture_dir/call-$call_id.grandchild.pid"
+    case "$FAKE_CODEX_EXIT_AFTER_GRANDCHILD" in
+        success) exit 0 ;;
+        nonzero) exit 23 ;;
+        *) printf 'unsupported FAKE_CODEX_EXIT_AFTER_GRANDCHILD\n' >&2; exit 2 ;;
+    esac
 fi
 
 if [[ -n "${FAKE_CODEX_FAILURE_MESSAGE:-}" ]]; then
@@ -193,7 +266,7 @@ if [[ -f "$workspace/docs/usage.md" ]]; then
     fi
     mkdir -p "$workspace/.assistant-eval"
     small_plan_mode=none
-    if grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+    if [[ "$is_candidate_identity" == true ]]; then
         small_plan_mode="${FAKE_SMALL_PLAN_MODE:-none}"
     fi
     printf '%s\n' "{\"schema_version\":\"1.0\",\"task_size\":\"trivial\",\"plan_mode\":\"$small_plan_mode\"}" >"$workspace/.assistant-eval/workflow-decision.json"
@@ -202,8 +275,7 @@ if [[ -f "$workspace/.agents/skills/assistant-workflow/contracts/index.yaml" ]] 
     && [[ -f "$workspace/.agents/skills/assistant-workflow/references/phases.md" ]]; then
     printf '%s\n' 'canonical-skill-surfaces-present' >>"$capture_dir/call-$call_id.fixtures"
     if ! grep -R -Fq '{agent_state_dir}' "$workspace/.agents/skills/assistant-workflow" \
-        && grep -R -Fq '.codex/task.md' "$workspace/.agents/skills/assistant-workflow" \
-        && grep -Fq 'AGENT_NAME="codex"' "$workspace/.agents/skills/assistant-workflow/agent.conf"; then
+        && grep -R -Fq '.codex/task.md' "$workspace/.agents/skills/assistant-workflow"; then
         printf '%s\n' 'codex-state-path-substituted' >>"$capture_dir/call-$call_id.fixtures"
     fi
 fi
@@ -218,7 +290,7 @@ if [[ -f "$workspace/current-task/README.md" ]] \
     && grep -Fq 'feature/already-merged' "$workspace/.codex/task.md"; then
     printf '%s\n' 'stale-journal-conflict-present' >>"$capture_dir/call-$call_id.fixtures"
     stale_mode=valid
-    if grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+    if [[ "$is_candidate_identity" == true ]]; then
         stale_mode="${FAKE_STALE_JOURNAL_MODE:-valid}"
     fi
     case "$stale_mode" in
@@ -284,7 +356,7 @@ if [[ -f "$workspace/CHANGE_SUMMARY.md" ]] && [[ -f "$workspace/VERIFICATION.md"
     printf '%s\n' 'handoff-fixture-present' >>"$capture_dir/call-$call_id.fixtures"
     if [[ "${FAKE_STRUCTURED_ARTIFACTS:-true}" == "true" ]]; then
         mkdir -p "$workspace/.assistant-eval"
-        if grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        if [[ "$is_candidate_identity" == true ]]; then
             end_to_end_mode="${FAKE_END_TO_END_MODE:-valid}"
         fi
         cat >"$workspace/src/search-policy.js" <<'FAKE_SOURCE'
@@ -362,7 +434,7 @@ FAKE_SOURCE
         if [[ "$handoff_claim_mode" == "paraphrase" ]]; then
             printf '%s\n' '{"schema_version":"1.0","changed_behavior":"search endpoint ordering and response shape","architecture_decision":"SearchPolicy","rationale":"avoid mutable global state","rejected_alternatives":["global singleton"],"requirement_evidence":[{"requirement_id":"R1","command":"bash tests/search-contracts.sh","status":"passed"}],"manual_scenarios":["mixed-case search without a limit"],"regression_surfaces":["search endpoint ordering","response shape"],"limitations":["locale folding"],"rollback":"Turn off search_policy_v2","review_claim":"Within the reviewed scope, no material findings were found using the available evidence."}' >"$workspace/.assistant-eval/final-handoff.json"
         elif [[ "$handoff_claim_mode" == "contradictory_candidate" ]] \
-            && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+            && [[ "$is_candidate_identity" == true ]]; then
             printf '%s\n' '{"schema_version":"1.0","changed_behavior":"search endpoint ordering and response shape","architecture_decision":"SearchPolicy","rationale":"avoid mutable global state","rejected_alternatives":["global singleton"],"requirement_evidence":[{"requirement_id":"R1","command":"bash tests/search-contracts.sh","status":"passed"}],"manual_scenarios":["mixed-case search without a limit"],"regression_surfaces":["search endpoint ordering","response shape"],"limitations":["locale folding"],"rollback":"Refuse to disable search_policy_v2","review_claim":"No material findings within the reviewed scope and available evidence; the implementation cannot be wrong."}' >"$workspace/.assistant-eval/final-handoff.json"
         else
             printf '%s\n' '{"schema_version":"1.0","changed_behavior":"search endpoint ordering and response shape","architecture_decision":"SearchPolicy","rationale":"avoid mutable global state","rejected_alternatives":["global singleton"],"requirement_evidence":[{"requirement_id":"R1","command":"bash tests/search-contracts.sh","status":"passed"}],"manual_scenarios":["mixed-case search without a limit"],"regression_surfaces":["search endpoint ordering","response shape"],"limitations":["locale folding"],"rollback":"disable the search_policy_v2 feature flag","review_claim":"No material findings within reviewed scope and available evidence."}' >"$workspace/.assistant-eval/final-handoff.json"
@@ -378,6 +450,84 @@ if [[ -f "$workspace/docs/evals/framework-instruction-cases.json" ]] \
     printf '%s\n' ' ' >>"$workspace/docs/evals/framework-instruction-cases.json"
     printf '%s\n' ' ' >>"$workspace/docs/evals/README.md"
 fi
+if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
+    mkdir -p "$workspace/.assistant-eval"
+    viewing_mode=valid
+    if [[ "$is_candidate_identity" == true ]]; then
+        viewing_mode="${FAKE_VIEWING_PREPARATION_MODE:-valid}"
+        if [[ "${FAKE_VIEWING_SOURCE_MUTANT:-false}" == "true" ]]; then
+            sed -i.bak '/focusViewport("ACTIVE", effects);/d' "$workspace/src/route.ts"
+            rm -f "$workspace/src/route.ts.bak"
+        fi
+        if [[ "${FAKE_VIEWING_TEST_MUTATION:-false}" == "true" ]]; then
+            printf '%s\n' '#!/usr/bin/env node' 'const assert = require("node:assert/strict");' "require('node:fs').writeFileSync('${FAKE_VIEWING_HOST_MARKER:?}', \"executed\");" 'assert.deepEqual("host-canary", "host-canary");' >"$workspace/tests/route.test.js"
+        fi
+        if [[ "${FAKE_VIEWING_TEST_SYMLINK:-false}" == "true" ]]; then
+            rm -f "$workspace/tests/route.test.js"
+            ln -s /dev/null "$workspace/tests/route.test.js"
+        fi
+    fi
+    case "$viewing_mode" in
+        valid)
+            source_sha="$(shasum -a 256 "$workspace/src/route.ts" | awk '{print $1}')"
+            test_sha="$(shasum -a 256 "$workspace/tests/route.test.js" | awk '{print $1}')"
+            jq -n --arg source_sha "$source_sha" --arg test_sha "$test_sha" '
+              {schema_version:"1.0",feature_preparation_evidence:{ref:"prep/viewing-route",items:[{item_id:"viewing-observable-route-effects",requirements_evidence:["VIEWING_PREPARATION.md#viewing-technical-preparation"],design_evidence:{status:"unavailable",source_refs:[],rationale:"No design artifact is seeded."},implementation_evidence:{status:"inspected",traces:[{file:"src/route.ts",content_sha256:$source_sha,symbols:["applyActiveRouteEffects","selectRoute","highlightRoute","focusViewport"],execution_behavior:"ACTIVE applies selection, highlight, and viewport focus.",inspection_event_ref:"viewing-source-search"}],search_or_access_refs:["viewing-source-search"],rationale:"Current implementation path inspected."},behavioral_test_evidence:{status:"inspected",file:"tests/route.test.js",content_sha256:$test_sha,test_name:"ACTIVE route selects, highlights, and focuses the viewport",assertions_or_search_refs:["assert.deepEqual","viewing-test-search"],inspection_event_ref:"viewing-test-search",rationale:"Behavioral assertion inspected."},conflict_analysis:"Requirements extend scope without changing existing effects.",evidence_gaps:[],behavior_status:"existing_behavior_to_preserve",work_status:"implementation_gap",rationale:"Tested behavior defaults to preservation.",implementation_implication:"Adapt ACTIVE-only scope for read-only VIEWING."}]},feature_preparation_result:{execution_status:"not_started",scope:"VIEWING",feature_preparation_evidence_ref:"prep/viewing-route",evidence_gaps:[],open_decisions:[],implementation_implications:["Preserve selection, highlight, and viewport focus without enabling editing."],recommended_next_step:"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
+            ;;
+        product_question)
+            printf '%s\n' '{"schema_version":"1.0","feature_preparation_evidence":{"ref":"prep/viewing-route","items":[{"item_id":"viewing-observable-route-effects","behavior_status":"materially_unknown","work_status":"product_question"}]},"feature_preparation_result":{"execution_status":"not_started","scope":"VIEWING","feature_preparation_evidence_ref":"prep/viewing-route","evidence_gaps":[],"open_decisions":[],"implementation_implications":[],"recommended_next_step":"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
+            ;;
+        execution_evidence)
+            printf '%s\n' '{"schema_version":"1.0","feature_preparation_evidence":{"ref":"prep/viewing-route","items":[]},"feature_preparation_result":{"execution_status":"implemented","scope":"VIEWING","feature_preparation_evidence_ref":"prep/viewing-route","evidence_gaps":[],"open_decisions":[],"implementation_implications":[],"recommended_next_step":"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
+            ;;
+        omitted_ref|stale_hashes|bad_path|bad_symbol|bad_assertion|bad_event_ref|missing_event|extra_top_key|extra_evidence_key|extra_item_key|extra_design_key|extra_implementation_key|extra_trace_key|extra_behavioral_test_key|extra_result_key|prepended_document|appended_document)
+            source_sha="$(shasum -a 256 "$workspace/src/route.ts" | awk '{print $1}')"
+            test_sha="$(shasum -a 256 "$workspace/tests/route.test.js" | awk '{print $1}')"
+            jq -n --arg source_sha "$source_sha" --arg test_sha "$test_sha" '
+              {schema_version:"1.0",feature_preparation_evidence:{ref:"prep/viewing-route",items:[{item_id:"viewing-observable-route-effects",requirements_evidence:["VIEWING_PREPARATION.md#viewing-technical-preparation"],design_evidence:{status:"unavailable",source_refs:[],rationale:"No design artifact is seeded."},implementation_evidence:{status:"inspected",traces:[{file:"src/route.ts",content_sha256:$source_sha,symbols:["applyActiveRouteEffects","selectRoute","highlightRoute","focusViewport"],execution_behavior:"ACTIVE applies selection, highlight, and viewport focus.",inspection_event_ref:"viewing-source-search"}],search_or_access_refs:["viewing-source-search"],rationale:"Current implementation path inspected."},behavioral_test_evidence:{status:"inspected",file:"tests/route.test.js",content_sha256:$test_sha,test_name:"ACTIVE route selects, highlights, and focuses the viewport",assertions_or_search_refs:["assert.deepEqual","viewing-test-search"],inspection_event_ref:"viewing-test-search",rationale:"Behavioral assertion inspected."},conflict_analysis:"Requirements extend scope without changing existing effects.",evidence_gaps:[],behavior_status:"existing_behavior_to_preserve",work_status:"implementation_gap",rationale:"Tested behavior defaults to preservation.",implementation_implication:"Adapt ACTIVE-only scope for read-only VIEWING."}]},feature_preparation_result:{execution_status:"not_started",scope:"VIEWING",feature_preparation_evidence_ref:"prep/viewing-route",evidence_gaps:[],open_decisions:[],implementation_implications:["Preserve selection, highlight, and viewport focus without enabling editing."],recommended_next_step:"Start a separate implementation workflow."}}' >"$workspace/.assistant-eval/viewing-preparation.json"
+            case "$viewing_mode" in
+                omitted_ref) jq 'del(.feature_preparation_evidence.ref)' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                stale_hashes) jq '(.feature_preparation_evidence.items[0].implementation_evidence.traces[0].content_sha256) = "0000000000000000000000000000000000000000000000000000000000000000"' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                bad_path) jq '(.feature_preparation_evidence.items[0].implementation_evidence.traces[0].file) = "src/not-route.ts"' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                bad_symbol) jq '(.feature_preparation_evidence.items[0].implementation_evidence.traces[0].symbols[0]) = "missingSymbol"' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                bad_assertion) jq '(.feature_preparation_evidence.items[0].behavioral_test_evidence.assertions_or_search_refs[0]) = "assert.equal"' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                bad_event_ref) jq '(.feature_preparation_evidence.items[0].implementation_evidence.traces[0].inspection_event_ref) = "wrong-event"' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                missing_event) jq '(.feature_preparation_evidence.items[0].implementation_evidence.search_or_access_refs) = []' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_top_key) jq '(.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_evidence_key) jq '(.feature_preparation_evidence.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_item_key) jq '(.feature_preparation_evidence.items[0].undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_design_key) jq '(.feature_preparation_evidence.items[0].design_evidence.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_implementation_key) jq '(.feature_preparation_evidence.items[0].implementation_evidence.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_trace_key) jq '(.feature_preparation_evidence.items[0].implementation_evidence.traces[0].undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_behavioral_test_key) jq '(.feature_preparation_evidence.items[0].behavioral_test_evidence.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                extra_result_key) jq '(.feature_preparation_result.undeclared) = true' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                prepended_document) jq -n '{invalid:true},inputs' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+                appended_document) jq -n 'inputs,{invalid:true}' "$workspace/.assistant-eval/viewing-preparation.json" ;;
+            esac >"$workspace/.assistant-eval/viewing-preparation.mutated.json"
+            mv "$workspace/.assistant-eval/viewing-preparation.mutated.json" "$workspace/.assistant-eval/viewing-preparation.json"
+            ;;
+        *) printf 'unsupported FAKE_VIEWING_PREPARATION_MODE: %s\n' "$viewing_mode" >&2; exit 2 ;;
+    esac
+fi
+if [[ -f "$workspace/PENDING_ARCHITECTURE_PACK.md" ]]; then
+    mkdir -p "$workspace/.assistant-eval"
+    pack_mode=valid
+    if [[ "$is_candidate_identity" == true ]]; then
+        pack_mode="${FAKE_PENDING_PACK_MODE:-valid}"
+    fi
+    case "$pack_mode" in
+        valid)
+            printf '%s\n' '{"schema_version":"1.0","quality_scenario_status":"pending","planned_verification":"Verify VIEWING parity after implementation.","verification_ref_present":false}' >"$workspace/.assistant-eval/pending-pack.json"
+            ;;
+        verified)
+            printf '%s\n' '{"schema_version":"1.0","quality_scenario_status":"verified","planned_verification":"Verify VIEWING parity after implementation.","verification_ref_present":false}' >"$workspace/.assistant-eval/pending-pack.json"
+            ;;
+        premature_ref)
+            printf '%s\n' '{"schema_version":"1.0","quality_scenario_status":"pending","planned_verification":"Verify VIEWING parity after implementation.","verification_ref_present":true}' >"$workspace/.assistant-eval/pending-pack.json"
+            ;;
+        *) printf 'unsupported FAKE_PENDING_PACK_MODE: %s\n' "$pack_mode" >&2; exit 2 ;;
+    esac
+fi
 raw_dir="$(dirname "$last_message")"
 printf '%s\n' "$raw_dir" >"$capture_dir/call-$call_id.raw-dir"
 if stat -f '%Lp' "$raw_dir" >/dev/null 2>&1; then
@@ -390,34 +540,34 @@ response='phase small docs/usage.md typo teh'
 if [[ -f "$workspace/src/order.js" ]]; then
     response='{"findings":[{"severity":"P1","source":"src/order.js","line":2,"summary":"The discount requirement is omitted"},{"severity":"P1","source":"src/order.js","line":2,"summary":"An input mutation changes the order"},{"severity":"P1","source":"src/order.js","line":3,"summary":"Negative quantity is accepted"},{"severity":"P1","source":"tests/order.test.js","line":3,"summary":"The fake test has no behavioral assertion"}]}'
     if [[ "${FAKE_UNCLASSIFIED_SEMANTIC:-false}" == "true" ]] \
-        && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        && [[ "$is_candidate_identity" == true ]]; then
         response='{"findings":[{"severity":"P1","source":"src/order.js","line":2,"summary":"The discount requirement is omitted"},{"severity":"P1","source":"src/order.js","line":2,"summary":"An input mutation changes the order"},{"severity":"P1","source":"src/order.js","line":3,"summary":"Negative quantity is accepted"},{"severity":"P1","source":"tests/order.test.js","line":3,"summary":"The fake test has no behavioral assertion"},{"severity":"P2","source":"src/order.js","line":2,"summary":"proprietary-throughput-claim must be investigated"}]}'
     fi
     if [[ "${FAKE_UNSAFE_SEMANTIC:-false}" == "true" ]] \
-        && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        && [[ "$is_candidate_identity" == true ]]; then
         response='{"findings":[{"severity":"P1","source":"src/order.js","line":2,"summary":"sk-private-fixture-value at /Users/company/private/source.js"}]}'
     fi
     if [[ "${FAKE_SEMANTIC_PARAPHRASE:-false}" == "true" ]]; then
         response='{"findings":[{"severity":"P1","source":"src/order.js","line":2,"summary":"Preferred customers should receive a 10 percent price reduction"},{"severity":"P1","source":"src/order.js","line":2,"summary":"The function mutates its input order"},{"severity":"P1","source":"src/order.js","line":3,"summary":"Quantities below zero are accepted"},{"severity":"P1","source":"tests/order.test.js","line":3,"summary":"The test never calls the function or makes an assertion"}]}'
     fi
     if [[ "${FAKE_AMBIGUOUS_SEMANTIC:-false}" == "true" ]] \
-        && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        && [[ "$is_candidate_identity" == true ]]; then
         response='{"findings":[{"severity":"P1","source":"src/order.js","line":2,"summary":"The discount requirement is omitted"},{"severity":"P1","source":"src/order.js","line":2,"summary":"An input mutation changes the order"},{"severity":"P1","source":"src/order.js","line":3,"summary":"Negative quantity is accepted"},{"severity":"P1","source":"tests/order.test.js","line":3,"summary":"The fake test has no behavioral assertion"},{"severity":"P2","source":"src/order.js","line":2,"summary":"The mutation also skips the discount"}]}'
     fi
     if [[ "${FAKE_SEMANTIC_LAUNDERING:-false}" == "true" ]] \
-        && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        && [[ "$is_candidate_identity" == true ]]; then
         response='{"findings":[{"severity":"P2","source":"src/order.js","line":2,"summary":"Discount audit logging should include a timestamp"},{"severity":"P2","source":"src/order.js","line":2,"summary":"Mutation coverage metrics need a dashboard"},{"severity":"P2","source":"src/order.js","line":3,"summary":"Negative-number formatting should use parentheses"},{"severity":"P2","source":"tests/order.test.js","line":3,"summary":"The assertion message should use title case"}]}'
     fi
     if [[ "${FAKE_SEMANTIC_CONTROL:-}" == "escape" ]] \
-        && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        && [[ "$is_candidate_identity" == true ]]; then
         response='{"findings":[{"severity":"P1","source":"src/order.js","line":2,"summary":"Discount control-marker \u001b must not persist"}]}'
     fi
     if [[ "${FAKE_SEMANTIC_CONTROL:-}" == "tab" ]] \
-        && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        && [[ "$is_candidate_identity" == true ]]; then
         response='{"findings":[{"severity":"P1","source":"src/order.js","line":2,"summary":"Discount control-marker \t must not persist"}]}'
     fi
     if [[ -n "${FAKE_SEMANTIC_UNSAFE_KIND:-}" ]] \
-        && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+        && [[ "$is_candidate_identity" == true ]]; then
         case "$FAKE_SEMANTIC_UNSAFE_KIND" in
             private_var) response='{"findings":[{"severity":"P1","source":"src/order.js","line":2,"summary":"Discount issue at /private/var/private-path-marker"}]}' ;;
             tmp) response='{"findings":[{"severity":"P1","source":"src/order.js","line":2,"summary":"Discount issue at /tmp/private-path-marker"}]}' ;;
@@ -436,6 +586,12 @@ fi
 if [[ -f "$workspace/CHANGE_SUMMARY.md" ]]; then
     response='Architecture: SearchPolicy injection. Rationale: avoid global mutable state. Rejected alternatives: global singleton coupling. Requirement evidence: bash tests/search-contracts.sh passed. Manual scenario: mixed-case search, omitted limit, newest-first JSON. Limitations: locale folding. Rollback: disable search_policy_v2. No material findings within the reviewed scope and available evidence.'
 fi
+if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
+    response='VIEWING current implementation and behavioral tests support existing_behavior_to_preserve plus implementation_gap; execution not started.'
+fi
+if [[ -f "$workspace/PENDING_ARCHITECTURE_PACK.md" ]]; then
+    response='Architecture Pack quality scenario is pending with planned verification after implementation.'
+fi
 if [[ "$prompt" == *'Choose the Build and Review roles for this task.'* ]]; then
     response='build_execution_lane=bounded_executor; the same owner runs RED, GREEN, focused verification, and refactor safety; an independent Code Reviewer reviews the result.'
     if [[ "${FAKE_STRUCTURED_ARTIFACTS:-true}" == "true" ]]; then
@@ -444,7 +600,7 @@ if [[ "$prompt" == *'Choose the Build and Review roles for this task.'* ]]; then
     fi
 fi
 if [[ "${FAKE_INVALID_STRUCTURED_ARTIFACT:-false}" == "true" ]] \
-    && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+    && [[ "$is_candidate_identity" == true ]]; then
     for structured_artifact in requirement-map.json execution-decision.json final-handoff.json; do
         if [[ -f "$workspace/.assistant-eval/$structured_artifact" ]]; then
             printf '%s\n' '{}' >"$workspace/.assistant-eval/$structured_artifact"
@@ -452,7 +608,7 @@ if [[ "${FAKE_INVALID_STRUCTURED_ARTIFACT:-false}" == "true" ]] \
     done
 fi
 if [[ -n "${FAKE_STRUCTURED_ATTACK:-}" ]] \
-    && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+    && [[ "$is_candidate_identity" == true ]]; then
     case "$FAKE_STRUCTURED_ATTACK" in
         garbage)
             if [[ -f "$workspace/.assistant-eval/requirement-map.json" ]]; then
@@ -510,7 +666,7 @@ if [[ "${FAKE_SMALL_BROAD:-false}" == "true" ]] && [[ -f "$workspace/docs/usage.
 fi
 if [[ "${FAKE_CANDIDATE_SMALL_FAILURE:-false}" == "true" ]] \
     && [[ -f "$workspace/docs/usage.md" ]] \
-    && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+    && [[ "$is_candidate_identity" == true ]]; then
     response='No material findings.'
 fi
 if [[ "${FAKE_SCOPE_DEVIATION:-false}" == "true" ]]; then
@@ -519,11 +675,11 @@ fi
 printf '%s\n' "$response" >"$last_message"
 resolved_model='resolved-test-model'
 if [[ "${FAKE_DIFFERENT_MODEL_CANDIDATE:-false}" == "true" ]] \
-    && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+    && [[ "$is_candidate_identity" == true ]]; then
     resolved_model='different-resolved-model'
 fi
 if [[ "${FAKE_UNKNOWN_CANDIDATE:-false}" == "true" ]] \
-    && grep -Fq 'candidate instruction marker' "$workspace/.agents/skills/assistant-workflow/SKILL.md"; then
+    && [[ "$is_candidate_identity" == true ]]; then
     printf '%s\n' '{"unexpected":true}'
     exit 0
 fi
@@ -535,6 +691,590 @@ else
 fi
 printf '%s\n' '{"type":"turn.started"}'
 printf '%s\n' '{"type":"item.completed","item":{"id":"item-1","type":"agent_message","text":"phase small docs/usage.md teh"}}'
+if [[ -f "$workspace/VIEWING_PREPARATION.md" ]]; then
+    viewing_event_mode=valid
+    if [[ "$is_candidate_identity" == true ]]; then
+        viewing_event_mode="${FAKE_VIEWING_EVENT_MODE:-valid}"
+    fi
+    if [[ "$viewing_event_mode" != missing ]]; then
+        source_event_id='actual-source-command-17'
+        source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+        if source_output="$(rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"; then
+            source_exit_code=0
+        else
+            source_exit_code=$?
+        fi
+        test_event_id='actual-test-command-18'
+        test_command="rg -n 'assert\\.deepEqual' tests/route.test.js"
+        if test_output="$(rg -n 'assert\.deepEqual' "$workspace/tests/route.test.js")"; then
+            test_exit_code=0
+        else
+            test_exit_code=$?
+        fi
+        source_status='completed'
+        test_status='completed'
+        case "$viewing_event_mode" in
+            stale) source_output='1:unrelated source output' ;;
+            mismatched) source_event_id='' ;;
+            unrelated) source_command='rg -n unrelated src/route.ts'; source_output='1:unrelated' ;;
+            nonzero) source_exit_code=1 ;;
+            wrapped) ;;
+            argv_wrapped) ;;
+            wrapped_context_rg)
+                source_command="rg -C 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -C 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --before-context=20 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --before-context=20 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            equivalent)
+                source_command='sed -n "1,200p" src/route.ts'
+                source_output="$(sed -n '1,200p' "$workspace/src/route.ts")"
+                test_command='cat tests/route.test.js'
+                test_output="$(cat "$workspace/tests/route.test.js")"
+                ;;
+            quoted_non_rg)
+                source_command='cat "src/route.ts"'
+                source_output="$(cat "$workspace/src/route.ts")"
+                test_command='sed -n "1,200p" "tests/route.test.js"'
+                test_output="$(sed -n '1,200p' "$workspace/tests/route.test.js")"
+                ;;
+            wrapped_quoted_non_rg)
+                source_command='head -n 50 "src/route.ts"'
+                source_output="$(head -n 50 "$workspace/src/route.ts")"
+                test_command='cat "tests/route.test.js"'
+                test_output="$(cat "$workspace/tests/route.test.js")"
+                ;;
+            head|argv_head)
+                source_command='head -n 50 src/route.ts'
+                source_output="$(head -n 50 "$workspace/src/route.ts")"
+                test_command='head -n 50 tests/route.test.js'
+                test_output="$(head -n 50 "$workspace/tests/route.test.js")"
+                ;;
+            head_unsafe_flag)
+                source_command='head -c 10000 src/route.ts'
+                ;;
+            head_too_many|argv_head_too_many)
+                source_command='head -n 10001 src/route.ts'
+                source_output="$(head -n 10001 "$workspace/src/route.ts")"
+                test_command='head -n 10001 tests/route.test.js'
+                test_output="$(head -n 10001 "$workspace/tests/route.test.js")"
+                ;;
+            transient_mutation) ;;
+            alias_transient_mutation) ;;
+            mutating)
+                source_command="sed -i.bak -e 's/ACTIVE/VIEWING/' src/route.ts"
+                ;;
+            echo_spoof)
+                source_command='echo src/route.ts'
+                ;;
+            wrong_path_substring)
+                source_command='cat src/route.ts.bak'
+                ;;
+            compound_touch)
+                source_command='touch evidence.txt && cat src/route.ts'
+                ;;
+            sed_write_file)
+                source_command="sed -n '1,200w evidence.txt' src/route.ts"
+                ;;
+            sed_write_ending_p)
+                source_command="sed -n '1p;w evidencep' src/route.ts"
+                ;;
+            argv_sed_write_ending_p)
+                source_command='sed -n 1p src/route.ts'
+                ;;
+            rg_preprocessor)
+                source_command="rg --pre=cat -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_preprocessor_as_pattern)
+                source_command="rg -n '--pre=/bin/cat' src/route.ts"
+                ;;
+            rg_preprocessor_separate)
+                source_command="rg --pre cat -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_pre_glob)
+                source_command="rg --pre-glob='*.ts' -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_hostname_bin)
+                source_command="rg --hostname-bin=hostname -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_replace)
+                source_command="rg --replace=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_field_match_separator)
+                source_command="rg --field-match-separator=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_field_context_separator)
+                source_command="rg --field-context-separator=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_context_separator)
+                source_command="rg --context-separator=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_hyperlink_format)
+                source_command="rg --hyperlink-format=spoof -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_short_replace)
+                source_command="rg -nr 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_short_replace_assignment)
+                source_command="rg -r=spoof 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_short_file)
+                source_command="rg -f .assistant-eval/blank-patterns src/route.ts"
+                ;;
+            rg_short_file_attached)
+                source_command="rg -f.assistant-eval/blank-patterns src/route.ts"
+                ;;
+            rg_clustered_short_file)
+                source_command="rg -nf .assistant-eval/blank-patterns src/route.ts"
+                ;;
+            rg_long_file)
+                source_command="rg --file .assistant-eval/blank-patterns src/route.ts"
+                ;;
+            rg_ignore_file)
+                source_command="rg --ignore-file .assistant-eval/blank-patterns 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_target_path_as_glob)
+                source_command="rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --glob src/route.ts"
+                ;;
+            rg_positional_then_explicit)
+                source_command="rg 'applyActiveRouteEffects' -e 'selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_explicit_then_positional)
+                source_command="rg -e 'applyActiveRouteEffects' 'selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_unquoted_glob)
+                source_command="rg --glob * -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            wrapped_unquoted_glob)
+                source_command="rg --glob * -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_colors)
+                source_command="rg --colors match:none -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_only_matching)
+                source_command="rg -o 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -o 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                ;;
+            rg_path_separator_missing)
+                source_command="rg --path-separator -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_path_separator_invalid)
+                source_command="rg --path-separator . -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_path_separator_multibyte)
+                source_command="rg --path-separator // -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            rg_target_path_as_path_separator)
+                source_command="rg --path-separator src/route.ts -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport'"
+                ;;
+            argv_rg_preprocessor)
+                source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                ;;
+            argv_rg_preprocessor_as_pattern|argv_rg_preprocessor_separate|argv_rg_pre_glob|argv_rg_hostname_bin|argv_rg_replace|argv_rg_field_match_separator|argv_rg_field_context_separator|argv_rg_context_separator|argv_rg_hyperlink_format|argv_rg_short_file|argv_rg_short_file_attached|argv_rg_clustered_short_file|argv_rg_long_file|argv_rg_ignore_file|argv_rg_target_path_as_glob|argv_rg_positional_then_explicit|argv_rg_explicit_then_positional|argv_rg_colors|argv_rg_only_matching|argv_rg_path_separator_missing|argv_rg_path_separator_invalid|argv_rg_path_separator_multibyte|argv_rg_target_path_as_path_separator) ;;
+            shell_substitution)
+                source_command='cat $(pwd)/src/route.ts'
+                ;;
+            double_quoted_substitution)
+                source_command='rg -n "$(cat src/route.ts)" src/route.ts'
+                ;;
+            double_quoted_parameter)
+                source_command='rg -n "$HOME" src/route.ts'
+                ;;
+            double_quoted_legacy_arithmetic|bash_wrapped_legacy_arithmetic)
+                source_command='rg -n "$[1+1]" src/route.ts'
+                ;;
+            double_quoted_legacy_subscript|bash_wrapped_legacy_subscript)
+                source_command='rg -n "$[variable]" src/route.ts'
+                ;;
+            double_quoted_zsh_split|zsh_wrapped_split)
+                source_command='rg -n "$=source_args" src/route.ts'
+                ;;
+            zsh_equals|wrapped_zsh_equals)
+                source_command='rg -n =false src/route.ts'
+                ;;
+            multi_double_fragment_expansion|wrapped_multi_double_fragment_expansion)
+                source_command='rg -n "safe""$[1+1]" src/route.ts'
+                ;;
+            redirection)
+                source_command='cat src/route.ts > evidence.txt'
+                ;;
+            additional_command)
+                source_command='cat src/route.ts; cat tests/route.test.js'
+                ;;
+            cat_unsafe_flag)
+                source_command='cat -z src/route.ts'
+                ;;
+            pipeline_spoof)
+                source_command='rg -n applyActiveRouteEffects src/route.ts | cat src/route.ts'
+                ;;
+            no_space_pipeline)
+                source_command='rg -n definitelynotpresent|cat src/route.ts'
+                ;;
+            wrapped_no_space_pipeline)
+                source_command='rg -n definitelynotpresent|cat src/route.ts'
+                ;;
+            no_space_semicolon|wrapped_no_space_semicolon)
+                source_command='rg -n definitelynotpresent;cat src/route.ts'
+                ;;
+            brace_expansion|wrapped_brace_expansion)
+                source_command="rg -n applyActiveRouteEffects {src,tests}/route.ts"
+                ;;
+            no_space_ampersand)
+                source_command='rg -n definitelynotpresent&cat src/route.ts'
+                ;;
+            no_space_process_substitution)
+                source_command='rg -n applyActiveRouteEffects<(cat src/route.ts) src/route.ts'
+                ;;
+            no_space_glob_pattern)
+                source_command='rg -n definitely* src/route.ts'
+                ;;
+            extra_path_operand)
+                source_command='rg -n applyActiveRouteEffects src/route.ts src/route.ts'
+                ;;
+            extensionless_extra_path)
+                source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src src/route.ts"
+                ;;
+            rg_backtick_substitution)
+                source_command='rg -n `printf applyActiveRouteEffects` src/route.ts'
+                ;;
+            rg_newline_injection)
+                source_command=$'rg -n applyActiveRouteEffects src/route.ts\ncat src/route.ts'
+                ;;
+            argv_combined_rg)
+                source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\\.deepEqual' src/route.ts tests/route.test.js"
+                source_output="$(rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\.deepEqual' "$workspace/src/route.ts" "$workspace/tests/route.test.js")"
+                test_command='echo no-second-inspection'
+                test_output='no second inspection'
+                ;;
+            argv_cat_extra_path|argv_extensionless_extra_path) ;;
+            argv_grouped_rg)
+                source_command="rg -n '(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)' src/route.ts"
+                source_output="$(rg -n '(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)' "$workspace/src/route.ts")"
+                ;;
+            double_quoted_rg)
+                source_command='rg -n "(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)" src/route.ts'
+                source_output="$(rg -n '(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)' "$workspace/src/route.ts")"
+                ;;
+            combined_option_rg)
+                source_command="rg -ni 'ACTIVE|assert\\.deepEqual' src/route.ts tests/route.test.js"
+                source_output="$(rg -ni 'ACTIVE|assert\.deepEqual' "$workspace/src/route.ts" "$workspace/tests/route.test.js")"
+                test_command='echo no-second-inspection'
+                test_output='no second inspection'
+                ;;
+            reversed_ignore_case_rg)
+                source_command="rg -i 'ACTIVE|assert\\.deepEqual' tests/route.test.js src/route.ts"
+                source_output="$(rg -i 'ACTIVE|assert\.deepEqual' "$workspace/tests/route.test.js" "$workspace/src/route.ts")"
+                test_command='echo no-second-inspection'
+                test_output='no second inspection'
+                ;;
+            string_context_rg)
+                source_command="rg -C 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -C 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --context=20 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --context=20 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            argv_context_rg)
+                source_command="rg -B 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -B 20 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --after-context=20 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --after-context=20 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            argv_separated_value_rg)
+                source_command="rg --sort path -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --sort path -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --sort path -e 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --sort path -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            argv_regexp_rg)
+                source_command="rg --regexp='applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --regexp='applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg -e 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_glob_rg|argv_glob_rg)
+                source_command="rg --glob '*.ts' -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --glob '*.ts' -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --glob '*.js' -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --glob '*.js' -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_max_count_rg|argv_max_count_rg)
+                source_command="rg --max-count 20 -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --max-count 20 -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --max-count 20 -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --max-count 20 -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_sort_none_rg|argv_sort_none_rg)
+                source_command="rg --sort none -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --sort none -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --sort none -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --sort none -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_path_separator_rg|argv_path_separator_rg)
+                source_command="rg --path-separator / -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --path-separator / -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --path-separator / -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --path-separator / -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_anchored_rg|argv_anchored_rg)
+                source_command="rg -e '^(function applyActiveRouteEffects\\(\\) \\{|  selectRoute\\(\"ACTIVE\", effects\\);|  highlightRoute\\(\"ACTIVE\", effects\\);|  focusViewport\\(\"ACTIVE\", effects\\);)\$' src/route.ts"
+                source_output="$(rg -e '^(function applyActiveRouteEffects\(\) \{|  selectRoute\("ACTIVE", effects\);|  highlightRoute\("ACTIVE", effects\);|  focusViewport\("ACTIVE", effects\);)$' "$workspace/src/route.ts")"
+                test_command="rg -e '^  assert\\.deepEqual\\(applyActiveRouteEffects\\(\\), \\[\"select:ACTIVE\", \"highlight:ACTIVE\", \"focus:ACTIVE\"\\]\\);\$' tests/route.test.js"
+                test_output="$(rg -e '^  assert\.deepEqual\(applyActiveRouteEffects\(\), \["select:ACTIVE", "highlight:ACTIVE", "focus:ACTIVE"\]\);$' "$workspace/tests/route.test.js")"
+                ;;
+            double_quoted_anchored_rg)
+                source_command='rg -e "^(function applyActiveRouteEffects\(\) \{|  selectRoute\(\"ACTIVE\", effects\);|  highlightRoute\(\"ACTIVE\", effects\);|  focusViewport\(\"ACTIVE\", effects\);)$" src/route.ts'
+                source_output="$(rg -e '^(function applyActiveRouteEffects\(\) \{|  selectRoute\("ACTIVE", effects\);|  highlightRoute\("ACTIVE", effects\);|  focusViewport\("ACTIVE", effects\);)$' "$workspace/src/route.ts")"
+                test_command='rg -e "^  assert\.deepEqual\(applyActiveRouteEffects\(\), \[\"select:ACTIVE\", \"highlight:ACTIVE\", \"focus:ACTIVE\"\]\);$" tests/route.test.js'
+                test_output="$(rg -e '^  assert\.deepEqual\(applyActiveRouteEffects\(\), \["select:ACTIVE", "highlight:ACTIVE", "focus:ACTIVE"\]\);$' "$workspace/tests/route.test.js")"
+                ;;
+            string_color_positional_before_rg)
+                source_command="rg --color never 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --color never 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --color never 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --color never 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_color_positional_after_rg)
+                source_command="rg 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --color never src/route.ts"
+                source_output="$(rg 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --color never "$workspace/src/route.ts")"
+                test_command="rg 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' --color never tests/route.test.js"
+                test_output="$(rg 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' --color never "$workspace/tests/route.test.js")"
+                ;;
+            string_color_explicit_before_rg)
+                source_command="rg --color never -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --color never -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --color never -e 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --color never -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_color_explicit_after_rg)
+                source_command="rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --color never src/route.ts"
+                source_output="$(rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' --color never "$workspace/src/route.ts")"
+                test_command="rg -e 'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' --color never tests/route.test.js"
+                test_output="$(rg -e 'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' --color never "$workspace/tests/route.test.js")"
+                ;;
+            string_word_concat_rg|wrapped_word_concat_rg)
+                source_command="rg --glob='*.ts' --regexp='applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg --glob='*.ts' --regexp='applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg --glob='*.js' -e'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg --glob='*.js' -e'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            string_attached_short_values_rg|argv_attached_short_values_rg)
+                source_command="rg -Eutf-8 -g'*.ts' -tts -e'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -Eutf-8 -g'*.ts' -tts -e'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg -Eutf-8 -g'*.js' -tjs -e'assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg -Eutf-8 -g'*.js' -tjs -e'assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            argv_literal_dollar_rg)
+                source_command="rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|\$literal' src/route.ts"
+                source_output="$(rg -e 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|$literal' "$workspace/src/route.ts")"
+                test_command="rg -e 'assert\\.deepEqual|\$literal' tests/route.test.js"
+                test_output="$(rg -e 'assert\.deepEqual|$literal' "$workspace/tests/route.test.js")"
+                ;;
+            string_quoted_equals_rg)
+                source_command="rg -e '=false|applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' src/route.ts"
+                source_output="$(rg -e '=false|applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport' "$workspace/src/route.ts")"
+                test_command="rg -e '=false|assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' tests/route.test.js"
+                test_output="$(rg -e '=false|assert\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE' "$workspace/tests/route.test.js")"
+                ;;
+            quoted_space_rg|argv_quoted_space_rg)
+                source_command="rg -C 20 'function applyActiveRouteEffects' src/route.ts"
+                source_output="$(rg -C 20 'function applyActiveRouteEffects' "$workspace/src/route.ts")"
+                test_command="rg -C 20 'assert.deepEqual' tests/route.test.js"
+                test_output="$(rg -C 20 'assert\.deepEqual' "$workspace/tests/route.test.js")"
+                ;;
+            oversized_output)
+                source_output="$(printf '%65537s' '' | tr ' ' x)$source_output"
+                ;;
+            symbol_spoof)
+                source_output='selectRoute highlightRoute focusViewport applyActiveRouteEffects'
+                test_output='assert.deepEqual applyActiveRouteEffects select:ACTIVE highlight:ACTIVE focus:ACTIVE'
+                ;;
+            argv_wrapper_additional_command) ;;
+            combined_rg)
+                source_command="rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\\.deepEqual' src/route.ts tests/route.test.js"
+                source_output="$(rg -n 'applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\.deepEqual' "$workspace/src/route.ts" "$workspace/tests/route.test.js")"
+                test_command='echo no-second-inspection'
+                test_output='no second inspection'
+                ;;
+            duplicate) ;;
+            missing_status) source_status='' ;;
+            failed_status) source_status='failed' ;;
+            contradictory_status) test_status='failed' ;;
+            artifact_file_change_exact|artifact_file_change_dot|artifact_file_change_backslash|artifact_file_change_item_path|file_change_source_exact|file_change_source_dot|file_change_source_backslash|file_change_source_absolute_suffix|file_change_source_item_path|file_change_empty_changes|file_change_missing_paths|file_change_dual_conflict|file_change_multiple_conflict|file_change_requirement|hash_sha256sum|hash_shasum|hash_quoted|valid) ;;
+            *) printf 'unsupported FAKE_VIEWING_EVENT_MODE: %s\n' "$viewing_event_mode" >&2; exit 2 ;;
+        esac
+        source_command_json="$(jq -cn --arg command "$source_command" '$command')"
+        test_command_json="$(jq -cn --arg command "$test_command" '$command')"
+        if [[ "$viewing_event_mode" == wrapped || "$viewing_event_mode" == wrapped_context_rg || "$viewing_event_mode" == wrapped_quoted_non_rg || "$viewing_event_mode" == wrapped_word_concat_rg || "$viewing_event_mode" == wrapped_unquoted_glob || "$viewing_event_mode" == wrapped_no_space_pipeline || "$viewing_event_mode" == wrapped_no_space_semicolon || "$viewing_event_mode" == wrapped_brace_expansion || "$viewing_event_mode" == wrapped_zsh_equals || "$viewing_event_mode" == wrapped_multi_double_fragment_expansion ]]; then
+            source_command_json="$(jq -cn --arg command "$source_command" '"/bin/zsh -lc \"" + $command + "\""')"
+            test_command_json="$(jq -cn --arg command "$test_command" '"/bin/zsh -lc \"" + $command + "\""')"
+        elif [[ "$viewing_event_mode" == argv_wrapped ]]; then
+            source_command_json="$(jq -cn --arg command "$source_command" '["/bin/zsh","-lc",$command]')"
+            test_command_json="$(jq -cn --arg command "$test_command" '["/bin/zsh","-lc",$command]')"
+        elif [[ "$viewing_event_mode" == bash_wrapped_legacy_arithmetic || "$viewing_event_mode" == bash_wrapped_legacy_subscript ]]; then
+            source_command_json="$(jq -cn --arg command "$source_command" '["/bin/bash","-lc",$command]')"
+            test_command_json="$(jq -cn --arg command "$test_command" '["/bin/bash","-lc",$command]')"
+        elif [[ "$viewing_event_mode" == zsh_wrapped_split ]]; then
+            source_command_json="$(jq -cn --arg command "$source_command" '["/bin/zsh","-lc",$command]')"
+            test_command_json="$(jq -cn --arg command "$test_command" '["/bin/zsh","-lc",$command]')"
+        elif [[ "$viewing_event_mode" == argv_sed_write_ending_p ]]; then
+            source_command_json='["sed","-n","1p;w evidencep","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_head ]]; then
+            source_command_json='["head","-n","50","src/route.ts"]'
+            test_command_json='["head","-n","50","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_head_too_many ]]; then
+            source_command_json='["head","-n","10001","src/route.ts"]'
+            test_command_json='["head","-n","10001","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_rg_only_matching ]]; then
+            source_command_json='["rg","--only-matching","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_preprocessor ]]; then
+            source_command_json='["rg","--pre=cat","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_preprocessor_as_pattern ]]; then
+            source_command_json='["rg","-n","--pre=/bin/cat","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_preprocessor_separate ]]; then
+            source_command_json='["rg","--pre","cat","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_pre_glob ]]; then
+            source_command_json='["rg","--pre-glob=*.ts","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_hostname_bin ]]; then
+            source_command_json='["rg","--hostname-bin=hostname","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_replace ]]; then
+            source_command_json='["rg","--replace=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_field_match_separator ]]; then
+            source_command_json='["rg","--field-match-separator=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_field_context_separator ]]; then
+            source_command_json='["rg","--field-context-separator=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_context_separator ]]; then
+            source_command_json='["rg","--context-separator=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_hyperlink_format ]]; then
+            source_command_json='["rg","--hyperlink-format=spoof","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_short_file ]]; then
+            source_command_json='["rg","-f",".assistant-eval/blank-patterns","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_short_file_attached ]]; then
+            source_command_json='["rg","-f.assistant-eval/blank-patterns","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_clustered_short_file ]]; then
+            source_command_json='["rg","-nf",".assistant-eval/blank-patterns","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_long_file ]]; then
+            source_command_json='["rg","--file",".assistant-eval/blank-patterns","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_ignore_file ]]; then
+            source_command_json='["rg","--ignore-file",".assistant-eval/blank-patterns","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_target_path_as_glob ]]; then
+            source_command_json='["rg","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","--glob","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_positional_then_explicit ]]; then
+            source_command_json='["rg","applyActiveRouteEffects","-e","selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_explicit_then_positional ]]; then
+            source_command_json='["rg","-e","applyActiveRouteEffects","selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_colors ]]; then
+            source_command_json='["rg","--colors","match:none","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_path_separator_missing ]]; then
+            source_command_json='["rg","--path-separator","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_path_separator_invalid ]]; then
+            source_command_json='["rg","--path-separator",".","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_path_separator_multibyte ]]; then
+            source_command_json='["rg","--path-separator=//","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_rg_target_path_as_path_separator ]]; then
+            source_command_json='["rg","--path-separator","src/route.ts","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport"]'
+        elif [[ "$viewing_event_mode" == argv_combined_rg ]]; then
+            source_command_json='["rg","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|assert\\.deepEqual","src/route.ts","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_cat_extra_path ]]; then
+            source_command_json='["cat","tests/route.test.js","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_extensionless_extra_path ]]; then
+            source_command_json='["rg","-n","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_grouped_rg ]]; then
+            source_command_json='["rg","-n","(applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport)","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == reversed_ignore_case_rg ]]; then
+            source_command_json='["rg","-i","ACTIVE|assert\\.deepEqual","tests/route.test.js","src/route.ts"]'
+        elif [[ "$viewing_event_mode" == argv_context_rg ]]; then
+            source_command_json='["rg","-B","20","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--after-context=20","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_separated_value_rg ]]; then
+            source_command_json='["rg","--sort","path","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--sort","path","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_regexp_rg ]]; then
+            source_command_json='["rg","--regexp=applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_glob_rg ]]; then
+            source_command_json='["rg","--glob","*.ts","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--glob=*.js","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_max_count_rg ]]; then
+            source_command_json='["rg","--max-count","20","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--max-count=20","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_sort_none_rg ]]; then
+            source_command_json='["rg","--sort","none","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--sortr=none","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_path_separator_rg ]]; then
+            source_command_json='["rg","--path-separator","/","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","--path-separator=\\","-e","assert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_anchored_rg ]]; then
+            source_command_json='["rg","-e","^(function applyActiveRouteEffects\\(\\) \\{|  selectRoute\\(\"ACTIVE\", effects\\);|  highlightRoute\\(\"ACTIVE\", effects\\);|  focusViewport\\(\"ACTIVE\", effects\\);)$","src/route.ts"]'
+            test_command_json='["rg","-e","^  assert\\.deepEqual\\(applyActiveRouteEffects\\(\\), \\[\"select:ACTIVE\", \"highlight:ACTIVE\", \"focus:ACTIVE\"\\]\\);$","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_quoted_space_rg ]]; then
+            source_command_json='["rg","-C","20","function applyActiveRouteEffects","src/route.ts"]'
+            test_command_json='["rg","-C","20","assert.deepEqual","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_attached_short_values_rg ]]; then
+            source_command_json='["rg","-Eutf-8","-g*.ts","-tts","-eapplyActiveRouteEffects|selectRoute|highlightRoute|focusViewport","src/route.ts"]'
+            test_command_json='["rg","-Eutf-8","-g*.js","-tjs","-eassert\\.deepEqual|applyActiveRouteEffects|select:ACTIVE|highlight:ACTIVE|focus:ACTIVE","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_literal_dollar_rg ]]; then
+            source_command_json='["rg","-e","applyActiveRouteEffects|selectRoute|highlightRoute|focusViewport|$literal","src/route.ts"]'
+            test_command_json='["rg","-e","assert\\.deepEqual|$literal","tests/route.test.js"]'
+        elif [[ "$viewing_event_mode" == argv_wrapper_additional_command ]]; then
+            source_command_json="$(jq -cn --arg command "$source_command" '["/bin/zsh","-lc",$command,"touch evidence.txt"]')"
+        fi
+        if [[ "$viewing_event_mode" == artifact_file_change_exact ]]; then
+            jq -cn '{type:"item.completed",item:{id:"viewing-artifact-write",type:"file_change",changes:[{path:".assistant-eval/viewing-preparation.json",kind:"add"}]}}'
+        elif [[ "$viewing_event_mode" == artifact_file_change_dot ]]; then
+            jq -cn '{type:"item.completed",item:{id:"viewing-artifact-write",type:"file_change",changes:[{path:"./.assistant-eval/./viewing-preparation.json",kind:"add"}]}}'
+        elif [[ "$viewing_event_mode" == artifact_file_change_backslash ]]; then
+            jq -cn --arg path '.\.assistant-eval\viewing-preparation.json' '{type:"item.completed",item:{id:"viewing-artifact-write",type:"file_change",changes:[{path:$path,kind:"add"}]}}'
+        elif [[ "$viewing_event_mode" == artifact_file_change_item_path ]]; then
+            jq -cn '{type:"item.completed",item:{id:"viewing-artifact-write",type:"file_change",path:".assistant-eval/viewing-preparation.json"}}'
+        elif [[ "$viewing_event_mode" == file_change_source_exact ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-mutation",type:"file_change",changes:[{path:"src/route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_source_dot ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-mutation",type:"file_change",changes:[{path:"./src/./route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_source_backslash ]]; then
+            jq -cn --arg path '.\src\route.ts' '{type:"item.completed",item:{id:"source-mutation",type:"file_change",changes:[{path:$path,kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_source_absolute_suffix ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-mutation",type:"file_change",changes:[{path:"/tmp/workspace/src/route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_source_item_path ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-mutation",type:"file_change",path:"src/route.ts"}}'
+        elif [[ "$viewing_event_mode" == file_change_empty_changes ]]; then
+            jq -cn '{type:"item.completed",item:{id:"ambiguous-mutation",type:"file_change",changes:[]}}'
+        elif [[ "$viewing_event_mode" == file_change_missing_paths ]]; then
+            jq -cn '{type:"item.completed",item:{id:"ambiguous-mutation",type:"file_change"}}'
+        elif [[ "$viewing_event_mode" == file_change_dual_conflict ]]; then
+            jq -cn '{type:"item.completed",item:{id:"ambiguous-mutation",type:"file_change",path:".assistant-eval/viewing-preparation.json",changes:[{path:"src/route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_multiple_conflict ]]; then
+            jq -cn '{type:"item.completed",item:{id:"ambiguous-mutation",type:"file_change",changes:[{path:".assistant-eval/viewing-preparation.json",kind:"add"},{path:"src/route.ts",kind:"update"}]}}'
+        elif [[ "$viewing_event_mode" == file_change_requirement ]]; then
+            jq -cn '{type:"item.completed",item:{id:"requirement-mutation",type:"file_change",changes:[{path:"VIEWING_PREPARATION.md",kind:"update"}]}}'
+        fi
+        if [[ "$viewing_event_mode" == transient_mutation ]]; then
+            jq -cn '{type:"item.completed",item:{id:"transient-mutation",type:"command_execution",command:"sed -i.bak -e s/ACTIVE/VIEWING/ src/route.ts",exit_code:0,aggregated_output:"",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == alias_transient_mutation ]]; then
+            jq -cn '{type:"item.completed",item:{id:"alias-transient-mutation",type:"command_execution",command:"sed -i.bak -e s/ACTIVE/VIEWING/ src/route.?s",exit_code:0,aggregated_output:"",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == hash_sha256sum ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-hash",type:"command_execution",command:["sha256sum","src/route.ts"],exit_code:0,aggregated_output:"hash  src/route.ts",status:"completed"}}'
+            jq -cn '{type:"item.completed",item:{id:"test-hash",type:"command_execution",command:"sha256sum tests/route.test.js",exit_code:0,aggregated_output:"hash  tests/route.test.js",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == hash_shasum ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-hash",type:"command_execution",command:["shasum","-a","256","src/route.ts"],exit_code:0,aggregated_output:"hash  src/route.ts",status:"completed"}}'
+            jq -cn '{type:"item.completed",item:{id:"test-hash",type:"command_execution",command:"shasum -a 256 tests/route.test.js",exit_code:0,aggregated_output:"hash  tests/route.test.js",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == hash_quoted ]]; then
+            jq -cn '{type:"item.completed",item:{id:"source-hash",type:"command_execution",command:"sha256sum \"src/route.ts\"",exit_code:0,aggregated_output:"hash  src/route.ts",status:"completed"}}'
+            jq -cn '{type:"item.completed",item:{id:"test-hash",type:"command_execution",command:"shasum -a 256 \"tests/route.test.js\"",exit_code:0,aggregated_output:"hash  tests/route.test.js",status:"completed"}}'
+        fi
+        jq -cn --arg id "$source_event_id" --arg status "$source_status" --argjson command "$source_command_json" --arg output "$source_output" --argjson exit_code "$source_exit_code" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output,status:$status}}' | if [[ -z "$source_status" ]]; then jq 'del(.item.status)'; else cat; fi
+        if [[ "$viewing_event_mode" != combined_rg && "$viewing_event_mode" != argv_combined_rg && "$viewing_event_mode" != combined_option_rg && "$viewing_event_mode" != reversed_ignore_case_rg ]]; then
+            jq -cn --arg id "$test_event_id" --arg status "$test_status" --argjson command "$test_command_json" --arg output "$test_output" --argjson exit_code "$test_exit_code" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output,status:$status}}'
+        fi
+        if [[ "$viewing_event_mode" == transient_mutation ]]; then
+            jq -cn '{type:"item.completed",item:{id:"transient-restoration",type:"command_execution",command:"mv src/route.ts.bak src/route.ts",exit_code:0,aggregated_output:"",status:"completed"}}'
+        elif [[ "$viewing_event_mode" == alias_transient_mutation ]]; then
+            jq -cn '{type:"item.completed",item:{id:"alias-transient-restoration",type:"command_execution",command:"mv src/route.?s.bak src/route.?s",exit_code:0,aggregated_output:"",status:"completed"}}'
+        fi
+        if [[ "$viewing_event_mode" == duplicate ]]; then
+            jq -cn --arg id "$source_event_id" --arg status "$source_status" --argjson command "$source_command_json" --arg output "$source_output" --argjson exit_code "$source_exit_code" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output,status:$status}}'
+        fi
+    fi
+fi
 if [[ -f "$workspace/tests/review-contracts.sh" ]]; then
     focused_test_command='bash tests/search-contracts.sh'
     trusted_review_command='bash tests/review-contracts.sh'
@@ -581,9 +1321,34 @@ if [[ -f "$workspace/docs/evals/README.md" ]]; then
 fi
 printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":123,"output_tokens":45}}'
 FAKE
-sed -i.bak 's/candidate instruction marker/least process that safely fits/g' "$fake_codex"
-rm -f "$fake_codex.bak"
 chmod +x "$fake_codex"
+
+test_start "behavioral candidate branches use explicit skill identities rather than mutable prose"
+if grep -Fq 'candidate instruction marker' "$fake_codex"; then
+    fail "behavioral fake still derives candidate identity from mutable instruction prose"
+elif ! grep -Fq 'FAKE_BASELINE_SKILL_SHA256' "$fake_codex" \
+    || ! grep -Fq 'FAKE_CANDIDATE_SKILL_SHA256' "$fake_codex" \
+    || ! grep -Fq 'unexpected installed skill identity' "$fake_codex"; then
+    fail "behavioral fake lacks explicit baseline/candidate identity preconditions"
+else
+    pass
+fi
+
+test_start "behavioral candidate identity mismatch fails instead of silently taking the baseline branch"
+identity_workspace="$(mktemp -d "${TMPDIR:-/tmp}/candidate-identity-mismatch.XXXXXX")"
+identity_capture="$identity_workspace/capture"
+p0p4_register_cleanup "$identity_workspace"
+mkdir -p "$identity_workspace/.agents/skills/assistant-workflow" "$identity_capture"
+cp "$candidate/SKILL.md" "$identity_workspace/.agents/skills/assistant-workflow/SKILL.md"
+if FAKE_CODEX_CAPTURE_DIR="$identity_capture" \
+    FAKE_CANDIDATE_SKILL_SHA256="0000000000000000000000000000000000000000000000000000000000000000" \
+    "$fake_codex" exec -C "$identity_workspace" "identity mismatch" >"$identity_workspace/output" 2>&1; then
+    fail "candidate identity mismatch silently took a behavior branch"
+elif grep -Fq 'unexpected installed skill identity' "$identity_workspace/output"; then
+    pass
+else
+    fail "candidate identity mismatch did not report the bounded identity precondition"
+fi
 
 run_inside_outer_seatbelt() {
     if [[ "$(/usr/bin/uname -s)" == "Darwin" ]] \
@@ -882,7 +1647,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_OFFICIAL_JSONL=true "$runner" --execut
         and .provenance.model_selection_evidence == "explicit_model_argument_only"
         and .provenance.requested_model_catalog_entry_sha256 == null
         and (.provenance | has("resolved_model") | not)
-        and .provenance.adapter_version == "codex-framework-eval-v5")
+        and .provenance.adapter_version == "codex-framework-eval-v6")
     ' "$official_jsonl_output/traces/"*.json >/dev/null \
     && jq -e '.complete_pairs == 1 and .excluded_incomplete_pairs == 0' \
         "$official_jsonl_output/comparison.json" >/dev/null; then
@@ -1051,6 +1816,9 @@ fi
 test_start "bounded catalog recheck stops a hanging lookup before later model calls"
 catalog_hang_output="$fixture_root/catalog-hang-output"
 catalog_hang_error="$fixture_root/catalog-hang-error.txt"
+# This outer bound includes fixture setup and the first complete model pair;
+# the production catalog watchdog remains fixed at the requested one second.
+catalog_hang_outer_bound_seconds=20
 rm -f "$capture"/*
 hang_started_at="$(date +%s)"
 if ! PATH="$trusted_bin:$PATH" FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CATALOG_MODE=hang_after_preflight \
@@ -1059,7 +1827,7 @@ if ! PATH="$trusted_bin:$PATH" FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CATALOG_MO
     --cases small-fix-stays-lightweight,requirements-map-through-completion,medium-final-handoff-is-reconstructable \
     --repeats 1 --model-catalog-timeout-seconds 1 --output "$catalog_hang_output" \
     >/dev/null 2>"$catalog_hang_error" \
-    && [[ "$(( $(date +%s) - hang_started_at ))" -le 8 ]] \
+    && [[ "$(( $(date +%s) - hang_started_at ))" -le "$catalog_hang_outer_bound_seconds" ]] \
     && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" == "2" ]] \
     && [[ -f "$capture/catalog-child-pid" ]] \
     && ! kill -0 "$(cat "$capture/catalog-child-pid")" 2>/dev/null \
@@ -1146,22 +1914,43 @@ symlink_output="$fixture_root/symlink-output"
 mkdir -p "$symlink_target"
 chmod 755 "$symlink_target"
 ln -s "$symlink_target" "$symlink_output"
-if symlink_target_mode="$(stat -f '%Lp' "$symlink_target" 2>/dev/null)"; then
-    :
-else
-    symlink_target_mode="$(stat -c '%a' "$symlink_target")"
-fi
+symlink_target_mode="$(test_mode_octal "$symlink_target")"
+symlink_target_hash="$(test_sha256_inventory "$symlink_target")"
 if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
     --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$symlink_output" \
     --codex-bin "$fake_codex" >/dev/null 2>&1 \
     && [[ ! -e "$symlink_target/run-plan.json" ]] \
-    && [[ "$symlink_target_mode" == "755" ]]; then
+    && [[ "$(test_mode_octal "$symlink_target")" == "$symlink_target_mode" ]] \
+    && [[ "$(test_sha256_inventory "$symlink_target")" == "$symlink_target_hash" ]]; then
     pass
 else
     fail "fresh output followed a symlink or changed its target"
 fi
 rm -f "$symlink_output"
+
+test_start "rejected non-resume output preserves existing mode and contents"
+nonempty_output="$fixture_root/nonempty-admission-output"
+mkdir -p "$nonempty_output"
+chmod 755 "$nonempty_output"
+printf 'preserve\n' >"$nonempty_output/sentinel"
+nonempty_mode="$(test_mode_octal "$nonempty_output")"
+nonempty_hash="$(test_sha256_inventory "$nonempty_output")"
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$nonempty_output" \
+    --codex-bin "$fake_codex" >"$fixture_root/nonempty-admission.stderr" 2>&1 \
+    && grep -Fq -- '--output must be empty or not yet exist' "$fixture_root/nonempty-admission.stderr" \
+    && [[ "$(cat "$nonempty_output/sentinel")" == "preserve" ]] \
+    && [[ "$(test_mode_octal "$nonempty_output")" == "$nonempty_mode" ]] \
+    && [[ "$(test_sha256_inventory "$nonempty_output")" == "$nonempty_hash" ]] \
+    && [[ ! -e "$nonempty_output/.evaluation-lease" ]] \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]]; then
+    pass
+else
+    fail "non-resume output admission mutated a rejected directory"
+fi
 
 test_start "paid-call state and trace commits are fsync-backed before later transitions"
 if grep -Fq 'os.fsync(handle)' "$runner" \
@@ -1178,19 +1967,22 @@ test_start "runner owns Codex termination and enforces a bounded per-run timeout
 lifecycle_ok=true
 owned_child_output="$fixture_root/owned-child-output"
 rm -f "$capture"/*
-FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true \
+FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true FAKE_CODEX_SPAWN_SIGNAL_IGNORING_GRANDCHILD=true \
     "$runner" --execute --model test-model \
     --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$owned_child_output" \
     --codex-bin "$fake_codex" >/dev/null 2>&1 &
 owned_runner_pid=$!
 owned_invoked=false
-for _ in {1..100}; do
+# Plan materialization and fsync-backed admission may exceed five wall-clock
+# seconds on a busy host; wait for the actual fake Codex boundary.
+for _ in {1..600}; do
     if [[ -f "$capture/call-0.pid" ]]; then owned_invoked=true; break; fi
     sleep 0.05
 done
 if [[ "$owned_invoked" == true ]]; then
     owned_codex_pid="$(cat "$capture/call-0.pid")"
+    owned_grandchild_pid="$(cat "$capture/call-0.grandchild.pid")"
     kill -TERM "$owned_runner_pid" 2>/dev/null || true
     owned_runner_exited=false
     for _ in {1..100}; do
@@ -1199,8 +1991,10 @@ if [[ "$owned_invoked" == true ]]; then
     done
     owned_child_alive=false
     kill -0 "$owned_codex_pid" 2>/dev/null && owned_child_alive=true
+    kill -0 "$owned_grandchild_pid" 2>/dev/null && owned_child_alive=true
     if [[ "$owned_runner_exited" != true || "$owned_child_alive" == true ]]; then lifecycle_ok=false; fi
     kill -KILL "$owned_codex_pid" 2>/dev/null || true
+    kill -KILL "$owned_grandchild_pid" 2>/dev/null || true
     kill -KILL "$owned_runner_pid" 2>/dev/null || true
     wait "$owned_runner_pid" 2>/dev/null || true
 else
@@ -1211,14 +2005,14 @@ fi
 
 timeout_output="$fixture_root/timeout-output"
 rm -f "$capture"/*
-if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true \
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true FAKE_CODEX_SPAWN_SIGNAL_IGNORING_GRANDCHILD=true \
     "$runner" --execute --model test-model --run-timeout-seconds 1 \
     --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$timeout_output" \
     --codex-bin "$fake_codex" >/dev/null 2>&1 \
     || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable"
       and .error.code == "execution_timed_out")' "$timeout_output/traces/"*.json >/dev/null 2>&1 \
-    || find "$capture" -maxdepth 1 -name 'call-*.pid' -exec sh -c '
+    || find "$capture" -maxdepth 1 \( -name 'call-*.pid' -o -name 'call-*.grandchild.pid' \) -exec sh -c '
         for file do kill -0 "$(cat "$file")" 2>/dev/null && exit 1; done
       ' sh {} +; then
     lifecycle_ok=false
@@ -1229,21 +2023,326 @@ else
     fail "runner left Codex alive or did not classify and stop bounded timeouts"
 fi
 
-test_start "resume cleans an orphan plan temp and executes the newly recovered exact plan"
+test_start "supervisor reaps signal-ignoring descendants after leader success and failure before lease release"
+supervisor_reap_failures=()
+for supervisor_exit in success nonzero; do
+    supervisor_output="$fixture_root/supervisor-$supervisor_exit-output"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_EXIT_AFTER_GRANDCHILD="$supervisor_exit" \
+        "$runner" --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$supervisor_output" \
+        --codex-bin "$fake_codex" >/dev/null 2>&1; then
+        supervisor_reap_failures+=("$supervisor_exit-run")
+        continue
+    fi
+    for descendant_pid_file in "$capture"/*.grandchild.pid; do
+        [[ -f "$descendant_pid_file" ]] || { supervisor_reap_failures+=("$supervisor_exit-missing-pid"); continue; }
+        kill -0 "$(cat "$descendant_pid_file")" 2>/dev/null && supervisor_reap_failures+=("$supervisor_exit-descendant-live")
+    done
+    [[ ! -e "$supervisor_output/.evaluation-lease" ]] || supervisor_reap_failures+=("$supervisor_exit-lease-retained")
+done
+if [[ ${#supervisor_reap_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "supervisor returned or released its lease before descendant cleanup: ${supervisor_reap_failures[*]}"
+fi
+
+test_start "signal cleanup retains protected lease and raw state while a supervised group outlives five seconds"
+delayed_output="$fixture_root/delayed-supervisor-output"
+rm -f "$capture"/*
+FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FRAMEWORK_EVAL_TEST_SUPERVISOR_POST_GROUP_HOLD_SECONDS=7 \
+    FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true FAKE_CODEX_SPAWN_SIGNAL_IGNORING_GRANDCHILD=true \
+    "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$delayed_output" --codex-bin "$fake_codex" \
+    >"$fixture_root/delayed-supervisor.stdout" 2>"$fixture_root/delayed-supervisor.stderr" &
+delayed_runner_pid=$!
+delayed_started=false
+# Durable plan initialization can take longer than the cleanup grace on a busy
+# host. Wait for the actual fake Codex boundary before exercising the signal.
+for _ in {1..600}; do
+    [[ -f "$capture/call-0.pid" ]] && { delayed_started=true; break; }
+    sleep 0.05
+done
+delayed_raw_root=""
+if [[ "$delayed_started" == true ]]; then
+    delayed_workspace="$(awk 'previous == "-C" { print; exit } { previous = $0 }' "$capture/call-0.args")"
+    delayed_raw_root="$(dirname "$(dirname "$delayed_workspace")")"
+    kill -TERM "$delayed_runner_pid" 2>/dev/null || true
+    sleep 6
+fi
+if [[ "$delayed_started" == true && -d "$delayed_output/.evaluation-lease" && -d "$delayed_raw_root" ]]; then
+    delayed_child_pid="$(cat "$capture/call-0.pid")"
+    delayed_grandchild_pid="$(cat "$capture/call-0.grandchild.pid")"
+    kill -KILL "$delayed_child_pid" "$delayed_grandchild_pid" 2>/dev/null || true
+    wait "$delayed_runner_pid" 2>/dev/null || true
+    if [[ -d "$delayed_output/.evaluation-lease" && -d "$delayed_raw_root" ]]; then
+        rm -rf -- "$delayed_output/.evaluation-lease" "$delayed_raw_root"
+        pass
+    else
+        fail "outer cleanup released protected state after the supervisor hold instead of retaining it for explicit recovery"
+    fi
+else
+    kill -KILL "$delayed_runner_pid" 2>/dev/null || true
+    wait "$delayed_runner_pid" 2>/dev/null || true
+    fail "signal cleanup released lease or raw state before the supervised group confirmed exit"
+fi
+
+test_start "resume rejects an orphan plan temp before any model call"
 plan_temp_output="$fixture_root/resume-plan-temp-output"
 mkdir -p "$plan_temp_output"
 printf 'partial\n' >"$plan_temp_output/.run-plan.json.tmp.interrupted"
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute \
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute \
     --model test-model --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$plan_temp_output" \
-    --codex-bin "$fake_codex" >/dev/null \
-    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 2 ]] \
-    && [[ -f "$plan_temp_output/run-plan.json" && -f "$plan_temp_output/comparison.json" ]] \
-    && [[ ! -e "$plan_temp_output/.run-plan.json.tmp.interrupted" ]]; then
+    --codex-bin "$fake_codex" >"$fixture_root/resume-plan-temp.stderr" 2>&1 \
+    && grep -Fq -- '--resume requires an existing exact final run-plan.json' "$fixture_root/resume-plan-temp.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]] \
+    && [[ -f "$plan_temp_output/.run-plan.json.tmp.interrupted" ]]; then
     pass
 else
-    fail "resume did not safely recover an orphan atomic plan temp"
+    fail "orphan atomic plan temp authorized a resume, model call, or mutation"
+fi
+
+test_start "concurrent resume is rejected by the exclusive output lease before model calls"
+lease_output="$fixture_root/concurrent-lease-output"
+lease_first_pid=""
+rm -f "$capture"/*
+FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$lease_output" \
+    --codex-bin "$fake_codex" >"$fixture_root/concurrent-lease-first.stdout" 2>"$fixture_root/concurrent-lease-first.stderr" &
+lease_first_pid=$!
+lease_started=false
+for _ in {1..1500}; do
+    if [[ -f "$capture/call-0.args" ]]; then lease_started=true; break; fi
+    sleep 0.02
+done
+if [[ "$lease_started" == true ]] \
+    && ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$lease_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/concurrent-lease-second.stdout" 2>"$fixture_root/concurrent-lease-second.stderr" \
+    && grep -Fq 'Evaluation output already has an exclusive lease' "$fixture_root/concurrent-lease-second.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 1 ]]; then
+    kill -TERM "$lease_first_pid" 2>/dev/null || true
+    wait "$lease_first_pid" 2>/dev/null || true
+    pass
+else
+    kill -TERM "$lease_first_pid" 2>/dev/null || true
+    wait "$lease_first_pid" 2>/dev/null || true
+    fail "concurrent resume acquired the output lease or invoked an extra model call"
+fi
+
+test_start "unsafe, live, and stale output leases fail closed before resume validation"
+lease_guard_ok=true
+for lease_variant in live stale malformed symlink; do
+    lease_guard_output="$fixture_root/lease-guard-$lease_variant-output"
+    mkdir -p "$lease_guard_output"
+    case "$lease_variant" in
+        live)
+            mkdir "$lease_guard_output/.evaluation-lease"
+            jq -cnS --arg token "$(printf live | test_sha256_stream)" --argjson owner_pid "$$" '{schema_version:"1.0",token:$token,owner_pid:$owner_pid}' >"$lease_guard_output/.evaluation-lease/owner.json"
+            ;;
+        stale)
+            mkdir "$lease_guard_output/.evaluation-lease"
+            jq -cnS --arg token "$(printf stale | test_sha256_stream)" '{schema_version:"1.0",token:$token,owner_pid:999999}' >"$lease_guard_output/.evaluation-lease/owner.json"
+            ;;
+        malformed)
+            mkdir "$lease_guard_output/.evaluation-lease"
+            printf '{}\n' >"$lease_guard_output/.evaluation-lease/owner.json"
+            ;;
+        symlink)
+            mkdir "$lease_guard_output/lease-target"
+            ln -s lease-target "$lease_guard_output/.evaluation-lease"
+            ;;
+    esac
+    rm -f "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$lease_guard_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/lease-guard-$lease_variant.stdout" 2>"$fixture_root/lease-guard-$lease_variant.stderr" \
+        || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]] \
+        || [[ "$lease_variant" == stale && ! -f "$lease_guard_output/.evaluation-lease/owner.json" ]]; then
+        lease_guard_ok=false
+    fi
+done
+if [[ "$lease_guard_ok" == true ]]; then
+    pass
+else
+    fail "unsafe or live output lease variant reached model execution"
+fi
+
+test_start "resume initializes a wholly pre-attempt exact plan without retrying uncertain work"
+pre_attempt_output="$fixture_root/resume-pre-attempt-output"
+pre_attempt_ok=false
+rm -f "$capture"/*
+if FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$pre_attempt_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && [[ -f "$pre_attempt_output/run-plan.json" ]] \
+    && [[ -f "$pre_attempt_output/pre-attempt-authorization.json" ]] \
+    && [[ ! -e "$pre_attempt_output/traces" && ! -e "$pre_attempt_output/semantic-checkpoints" && ! -e "$pre_attempt_output/run-attempts" ]]; then
+    pre_attempt_plan_sha256="$(test_sha256_stream <"$pre_attempt_output/run-plan.json")"
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$pre_attempt_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 2 ]] \
+        && [[ "$(test_sha256_stream <"$pre_attempt_output/run-plan.json")" == "$pre_attempt_plan_sha256" ]] \
+        && [[ ! -e "$pre_attempt_output/pre-attempt-authorization.json" ]] \
+        && jq -s -e 'length == 2 and all(.[]; .state == "completed")' "$pre_attempt_output/run-attempts/"*.json >/dev/null \
+        && jq -e '.complete_pairs == 1' "$pre_attempt_output/comparison.json" >/dev/null; then
+        pre_attempt_ok=true
+    fi
+fi
+if [[ "$pre_attempt_ok" == true ]]; then
+    pass
+else
+    fail "resume could not safely initialize an exact persisted plan before any attempt state existed"
+fi
+
+test_start "pre-attempt authorization permits only partial durable not-started initialization"
+partial_pre_attempt_output="$fixture_root/resume-partial-pre-attempt-output"
+partial_pre_attempt_ok=false
+rm -f "$capture"/*
+if FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$partial_pre_attempt_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && [[ -f "$partial_pre_attempt_output/pre-attempt-authorization.json" ]]; then
+    mkdir -p "$partial_pre_attempt_output/run-attempts"
+    jq -cnS --arg run_id "$(jq -r '.runs[0] | .pair_id + "-" + .variant' "$partial_pre_attempt_output/run-plan.json")" \
+        --arg pair_id "$(jq -r '.runs[0].pair_id' "$partial_pre_attempt_output/run-plan.json")" \
+        --arg case_id "$(jq -r '.runs[0].case_id' "$partial_pre_attempt_output/run-plan.json")" \
+        --arg variant "$(jq -r '.runs[0].variant' "$partial_pre_attempt_output/run-plan.json")" \
+        --arg run_plan_sha256 "$(test_sha256_stream <"$partial_pre_attempt_output/run-plan.json")" \
+        --argjson trial_index "$(jq -r '.runs[0].trial_index' "$partial_pre_attempt_output/run-plan.json")" \
+        '{schema_version:"1.0",run_id:$run_id,pair_id:$pair_id,case_id:$case_id,trial_index:$trial_index,variant:$variant,run_plan_sha256:$run_plan_sha256,state:"not_started",attempt_started_at:[],completed_at:null}' \
+        >"$partial_pre_attempt_output/run-attempts/$(jq -r '.runs[0] | .pair_id + "-" + .variant + ".json"' "$partial_pre_attempt_output/run-plan.json")"
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$partial_pre_attempt_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 2 ]] \
+        && [[ ! -e "$partial_pre_attempt_output/pre-attempt-authorization.json" ]] \
+        && jq -s -e 'length == 2 and all(.[]; .state == "completed")' "$partial_pre_attempt_output/run-attempts/"*.json >/dev/null; then
+        partial_pre_attempt_ok=true
+    fi
+fi
+if [[ "$partial_pre_attempt_ok" == true ]]; then
+    pass
+else
+    fail "resume did not limit pre-attempt recovery to durable not-started initialization"
+fi
+
+test_start "missing execution evidence without pre-attempt authorization never replays completed calls"
+erased_execution_output="$fixture_root/resume-erased-execution-evidence-output"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$erased_execution_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    rm -rf "$erased_execution_output/traces" "$erased_execution_output/semantic-checkpoints" "$erased_execution_output/run-attempts"
+    rm -f "$erased_execution_output/comparison.json" "$erased_execution_output/semantic-review-packet.json"
+    rm -f "$capture"/*
+    if [[ ! -e "$erased_execution_output/pre-attempt-authorization.json" ]] \
+        && ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+            --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+            --cases small-fix-stays-lightweight --repeats 1 --output "$erased_execution_output" \
+            --codex-bin "$fake_codex" >"$fixture_root/resume-erased-execution-evidence.stderr" 2>&1 \
+        && grep -Fq 'Run-attempt state is missing' "$fixture_root/resume-erased-execution-evidence.stderr" \
+        && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]]; then
+        pass
+    else
+        fail "missing execution evidence was treated as retry authority"
+    fi
+else
+    fail "completed execution fixture could not be created for replay-safety coverage"
+fi
+
+test_start "tampered pre-attempt authorization variants fail closed before model calls"
+marker_base_output="$fixture_root/pre-attempt-authorization-tamper-base"
+marker_tamper_ok=true
+rm -f "$capture"/*
+if ! FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$marker_base_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    marker_tamper_ok=false
+fi
+for marker_variant in malformed wrong-plan-hash symlink; do
+    marker_variant_output="$fixture_root/pre-attempt-authorization-$marker_variant"
+    rm -rf "$marker_variant_output"
+    cp -R "$marker_base_output" "$marker_variant_output"
+    case "$marker_variant" in
+        malformed)
+            jq '.state = "tampered"' "$marker_variant_output/pre-attempt-authorization.json" >"$marker_variant_output/marker.json"
+            mv "$marker_variant_output/marker.json" "$marker_variant_output/pre-attempt-authorization.json"
+            ;;
+        wrong-plan-hash)
+            jq '.run_plan_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' "$marker_variant_output/pre-attempt-authorization.json" >"$marker_variant_output/marker.json"
+            mv "$marker_variant_output/marker.json" "$marker_variant_output/pre-attempt-authorization.json"
+            ;;
+        symlink)
+            mv "$marker_variant_output/pre-attempt-authorization.json" "$marker_variant_output/marker-target.json"
+            ln -s marker-target.json "$marker_variant_output/pre-attempt-authorization.json"
+            ;;
+    esac
+    rm -f "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$marker_variant_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/pre-attempt-authorization-$marker_variant.stderr" 2>&1 \
+        || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+        marker_tamper_ok=false
+    fi
+done
+if [[ "$marker_tamper_ok" == true ]]; then
+    pass
+else
+    fail "tampered or unsafe pre-attempt authorization admitted a model call"
+fi
+
+test_start "pre-attempt authorization without a committed plan fails closed"
+orphan_pre_attempt_output="$fixture_root/orphan-pre-attempt-authorization-output"
+rm -f "$capture"/*
+if FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PRE_ATTEMPT_AUTHORIZATION=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$orphan_pre_attempt_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && [[ -f "$orphan_pre_attempt_output/pre-attempt-authorization.json" && ! -e "$orphan_pre_attempt_output/run-plan.json" ]] \
+    && ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$orphan_pre_attempt_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/orphan-pre-attempt-authorization.stderr" 2>&1 \
+    && grep -Fq -- '--resume requires an existing exact final run-plan.json' "$fixture_root/orphan-pre-attempt-authorization.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]]; then
+    pass
+else
+    fail "orphan pre-attempt authorization did not fail closed before a model call"
+fi
+
+test_start "test hooks require isolated contract-test mode and fake Codex identity"
+hook_gate_output="$fixture_root/hook-gate-output"
+hook_gate_missing_identity_output="$fixture_root/hook-gate-missing-identity-output"
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$hook_gate_output" \
+    --codex-bin "$fake_codex" >"$fixture_root/hook-gate.stderr" 2>&1 \
+    && grep -Fq 'FRAMEWORK_EVAL_TEST_* hooks require FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true' "$fixture_root/hook-gate.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]] \
+    && ! FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FRAMEWORK_EVAL_TEST_EXIT_AFTER_PLAN_PERSISTENCE=true "$runner" --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$hook_gate_missing_identity_output" \
+        --codex-bin "$fake_codex" >"$fixture_root/hook-gate-missing-identity.stderr" 2>&1 \
+    && grep -Fq 'regular fake capture directory' "$fixture_root/hook-gate-missing-identity.stderr"; then
+    pass
+else
+    fail "test hook ran without isolated contract-test mode and fake Codex identity"
 fi
 
 test_start "partial generic resume executes only the missing planned run"
@@ -1303,6 +2402,28 @@ else
     fail "seeded checkpoint fixture could not be created"
 fi
 
+test_start "in-flight seeded checkpoint recovery restores trace without a paid replay"
+inflight_checkpoint_output="$fixture_root/inflight-checkpoint-output"
+cp -R "$resume_seeded_output" "$inflight_checkpoint_output"
+inflight_checkpoint_attempt="$(find "$inflight_checkpoint_output/run-attempts" -type f -name '*-candidate.json' -print -quit)"
+inflight_checkpoint_trace="$(find "$inflight_checkpoint_output/traces" -type f -name '*-candidate.json' -print -quit)"
+rm -f "$inflight_checkpoint_trace" "$inflight_checkpoint_output/comparison.json" "$inflight_checkpoint_output/semantic-review-packet.json"
+jq '.state = "in_flight" | .completed_at = null' "$inflight_checkpoint_attempt" >"$inflight_checkpoint_attempt.tmp"
+mv "$inflight_checkpoint_attempt.tmp" "$inflight_checkpoint_attempt"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases seeded-code-review-regressions --repeats 1 --output "$inflight_checkpoint_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && [[ ! -e "$capture/call-0.args" ]] \
+    && jq -e '.state == "completed" and .completed_at != null' "$inflight_checkpoint_attempt" >/dev/null \
+    && jq -e '.status == "completed" and (.execution.semantic_checkpoint_sha256 | test("^[0-9a-f]{64}$"))' \
+        "${inflight_checkpoint_trace:-$inflight_checkpoint_output/traces/missing}" >/dev/null; then
+    pass
+else
+    fail "in-flight checkpoint recovery replayed Codex, omitted the recovered trace, or left attempt state in-flight"
+fi
+
 test_start "resume blocks uncertain in-flight seeded and non-seeded runs before another model call"
 uncertain_cases_ok=true
 for uncertain_spec in \
@@ -1322,7 +2443,7 @@ for uncertain_spec in \
         --codex-bin "$fake_codex" >/dev/null 2>&1 &
     uncertain_runner_pid=$!
     uncertain_invoked=false
-    for _ in {1..100}; do
+    for _ in {1..600}; do
         if [[ -f "$capture/call-0.pid" ]]; then
             uncertain_invoked=true
             break
@@ -1345,6 +2466,10 @@ for uncertain_spec in \
         "${TMPDIR:-/tmp}"/codex-framework-evals.*) rm -rf -- "$uncertain_raw_root" ;;
         *) uncertain_cases_ok=false ;;
     esac
+    # The test deliberately killed the lease owner. Explicitly clear this
+    # fixture-owned stale lease before exercising the independent in-flight
+    # recovery guard; production resume never reclaims it automatically.
+    rm -rf -- "$uncertain_output/.evaluation-lease"
 
     uncertain_marker=""
     for candidate_marker in "$uncertain_output/run-attempts"/*.json; do
@@ -1424,6 +2549,79 @@ if [[ "$resume_rejections" -eq 4 && ! -e "$capture/call-0.args" ]]; then
     pass
 else
     fail "resume accepted unknown, finalized, or tampered persisted evidence"
+fi
+
+test_start "resume rejects hidden, symlinked, and FIFO nested evidence without mutating output"
+resume_nested_inventory_failures=()
+for nested_spec in \
+    'traces hidden-regular' \
+    'semantic-checkpoints hidden-json' \
+    'run-attempts symlink' \
+    'traces fifo'; do
+    read -r nested_dir nested_kind <<<"$nested_spec"
+    nested_output="$fixture_root/resume-nested-${nested_dir}-${nested_kind}"
+    cp -R "$resume_generic_output" "$nested_output"
+    case "$nested_kind" in
+        hidden-regular) printf 'unexpected\n' >"$nested_output/$nested_dir/.unexpected" ;;
+        hidden-json) printf '{}\n' >"$nested_output/$nested_dir/.unexpected.json" ;;
+        symlink) ln -s ../run-plan.json "$nested_output/$nested_dir/.unexpected-link" ;;
+        fifo) mkfifo "$nested_output/$nested_dir/.unexpected-fifo" ;;
+    esac
+    chmod 755 "$nested_output"
+    nested_mode="$(test_mode_octal "$nested_output")"
+    nested_hash="$(test_sha256_inventory "$nested_output")"
+    rm -f "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$nested_output" \
+        --codex-bin "$fake_codex" >/dev/null 2>&1 \
+        || [[ -e "$capture/call-0.args" ]] \
+        || [[ "$(test_mode_octal "$nested_output")" != "$nested_mode" ]] \
+        || [[ "$(test_sha256_inventory "$nested_output")" != "$nested_hash" ]]; then
+        resume_nested_inventory_failures+=("$nested_dir:$nested_kind")
+    fi
+done
+if [[ ${#resume_nested_inventory_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "resume accepted or mutated unsafe nested evidence: ${resume_nested_inventory_failures[*]}"
+fi
+
+test_start "rejected resume preserves supplied output mode and evidence bytes"
+resume_admission_failures=()
+for resume_admission_kind in mismatched-plan missing-evidence tampered-artifact; do
+    resume_admission_output="$fixture_root/resume-admission-$resume_admission_kind"
+    cp -R "$resume_generic_output" "$resume_admission_output"
+    case "$resume_admission_kind" in
+        mismatched-plan)
+            jq '.fixture_sha256 = ("f" * 64)' "$resume_admission_output/run-plan.json" >"$resume_admission_output/run-plan.tmp"
+            mv "$resume_admission_output/run-plan.tmp" "$resume_admission_output/run-plan.json"
+            ;;
+        missing-evidence) rm -f "$(find "$resume_admission_output/run-attempts" -type f -name '*.json' -print -quit)" ;;
+        tampered-artifact)
+            resume_admission_trace="$(find "$resume_admission_output/traces" -type f -name '*.json' -print -quit)"
+            jq '.provenance.fixture_sha256 = ("e" * 64)' "$resume_admission_trace" >"$resume_admission_trace.tmp"
+            mv "$resume_admission_trace.tmp" "$resume_admission_trace"
+            ;;
+    esac
+    chmod 755 "$resume_admission_output"
+    resume_admission_mode="$(test_mode_octal "$resume_admission_output")"
+    resume_admission_hash="$(test_sha256_inventory "$resume_admission_output")"
+    rm -f "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$resume_admission_output" \
+        --codex-bin "$fake_codex" >/dev/null 2>&1 \
+        || [[ "$(test_mode_octal "$resume_admission_output")" != "$resume_admission_mode" ]] \
+        || [[ "$(test_sha256_inventory "$resume_admission_output")" != "$resume_admission_hash" ]] \
+        || [[ -e "$capture/call-0.args" ]]; then
+        resume_admission_failures+=("$resume_admission_kind")
+    fi
+done
+if [[ ${#resume_admission_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "resume admission mutated rejected output evidence: ${resume_admission_failures[*]}"
 fi
 
 test_start "stale-state case contains real conflicting journal and repository evidence"
@@ -1768,7 +2966,7 @@ else
     fail "persisted traces lack provenance/verifier fields, violate the schema, or retain raw content"
 fi
 
-test_start "grader provenance binds the canonical contract and full v5 runner bytes"
+test_start "grader provenance binds the canonical contract and full v6 runner bytes"
 small_contract_hash="$(jq -cS --arg id small-fix-stays-lightweight '
   .cases[] | select(.id == $id) | {fail_signals,machine_expectations,semantic_review}
 ' "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json" | test_sha256_stream)"
@@ -1778,12 +2976,27 @@ expected_grader_hash="$(printf 'contract_sha256=%s\nrunner_sha256=%s\n' \
 changed_grader_hash="$(printf 'contract_sha256=%s\nrunner_sha256=%064d\n' \
     "$small_contract_hash" 0 | test_sha256_stream)"
 if jq -s -e --arg expected "$expected_grader_hash" 'all(.[].provenance;
-      .grader_sha256 == $expected and .adapter_version == "codex-framework-eval-v5")
+      .grader_sha256 == $expected and .adapter_version == "codex-framework-eval-v6")
     ' "$execute_output/traces/"*.json >/dev/null \
     && [[ "$changed_grader_hash" != "$expected_grader_hash" ]]; then
     pass
 else
-    fail "grader hash is not bound to the exact case contract and full v5 runner implementation"
+    fail "grader hash is not bound to the exact case contract and full v6 runner implementation"
+fi
+
+test_start "active adapter-version docs and diagnostics match the canonical runner"
+active_adapter_version="$(sed -n 's/^ADAPTER_VERSION="\([^"]*\)"$/\1/p' "$runner")"
+active_adapter_label="${active_adapter_version##*-}"
+if [[ "$active_adapter_version" =~ ^codex-framework-eval-v[0-9]+$ ]] \
+    && grep -Fq "EXPECTED_ADAPTER_VERSION=\"$active_adapter_version\"" "$semantic_finalizer" \
+    && grep -Fq "Before any model call, adapter $active_adapter_label runs" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "\`$active_adapter_version\`" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "full $active_adapter_label runner bytes" "${BASH_SOURCE[0]}" \
+    && grep -Fq "v4 resolved-model traces cannot mix with the $active_adapter_label attestation contract" "${BASH_SOURCE[0]}" \
+    && grep -Fq "legacy resolved-model evidence remained valid under the $active_adapter_label schema" "${BASH_SOURCE[0]}"; then
+    pass
+else
+    fail "active adapter-version documentation or diagnostics drifted from $active_adapter_version"
 fi
 
 test_start "case-specific command verifier catches forbidden test execution"
@@ -1936,6 +3149,1054 @@ if [[ "$small_concise_ok" == true && "$small_broad_ok" == true && "$small_scope_
     pass
 else
     fail "small-fix grader required ritual words or accepted broad/out-of-scope/plan_mode behavior"
+fi
+
+test_start "VIEWING requirement evidence resolves to the seeded fixture heading"
+viewing_requirement_fixture="$FRAMEWORK_DIR/docs/evals/fixtures/viewing-route-technical-preparation/VIEWING_PREPARATION.md"
+if grep -Fqx '# VIEWING technical preparation' "$viewing_requirement_fixture" \
+    && grep -Fq 'VIEWING_PREPARATION.md#viewing-technical-preparation' "$runner" \
+    && ! grep -Fq 'VIEWING_PREPARATION.md#read-only-viewing' "$runner"; then
+    pass
+else
+    fail "VIEWING requirement evidence uses a dangling Markdown fragment"
+fi
+
+test_start "VIEWING blind prompt exposes every exact producer obligation without grader sections"
+viewing_prompt_output="$fixture_root/viewing-prompt-contract"
+rm -f "$capture"/*
+viewing_prompt_failures=()
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_prompt_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    viewing_prompt_failures+=("runner")
+fi
+if [[ "$(find "$capture" -maxdepth 1 -name 'call-*.prompt' | wc -l | tr -d ' ')" -ne 2 ]]; then
+    viewing_prompt_failures+=("prompt-count")
+else
+    viewing_required_prompt_fragments=(
+        '.assistant-eval/viewing-preparation.json'
+        'schema_version is the JSON string "1.0"'
+        'top-level keys schema_version, feature_preparation_evidence, and feature_preparation_result'
+        'feature_preparation_evidence is exactly {ref,items}'
+        'ref is prep/viewing-route'
+        'exact keys item_id, requirements_evidence, design_evidence, implementation_evidence, behavioral_test_evidence, conflict_analysis, evidence_gaps, behavior_status, work_status, rationale, implementation_implication'
+        'item_id viewing-observable-route-effects'
+        'requirements_evidence [VIEWING_PREPARATION.md#viewing-technical-preparation]'
+        'design_evidence {status: unavailable, source_refs: [], rationale: No design artifact is seeded.}'
+        'implementation_evidence is exactly {status: inspected'
+        'file: src/route.ts'
+        'content_sha256: the lowercase SHA-256 of the inspected file bytes'
+        'symbols: [applyActiveRouteEffects, selectRoute, highlightRoute, focusViewport]'
+        'execution_behavior: ACTIVE applies selection, highlight, and viewport focus.'
+        'inspection_event_ref: viewing-source-search'
+        'search_or_access_refs: [viewing-source-search]'
+        'rationale: Current implementation path inspected.'
+        'behavioral_test_evidence is exactly {status: inspected, file: tests/route.test.js'
+        'test_name: ACTIVE route selects, highlights, and focuses the viewport'
+        'assertions_or_search_refs: [assert.deepEqual, viewing-test-search]'
+        'inspection_event_ref: viewing-test-search'
+        'rationale: Behavioral assertion inspected.'
+        'conflict_analysis Requirements extend scope without changing existing effects.'
+        'evidence_gaps []'
+        'behavior_status existing_behavior_to_preserve'
+        'work_status implementation_gap'
+        'rationale Tested behavior defaults to preservation.'
+        'implementation_implication Adapt ACTIVE-only scope for read-only VIEWING.'
+        'one completed successful source-inspection command event whose raw output contains these exact complete source lines'
+        'function applyActiveRouteEffects() {'
+        'selectRoute("ACTIVE", effects);'
+        'one completed successful test-inspection command event whose raw output contains this exact complete assertion line'
+        'assert.deepEqual(applyActiveRouteEffects(), ["select:ACTIVE", "highlight:ACTIVE", "focus:ACTIVE"]);'
+        'Use only rg without -o/--only-matching, cat, sed -n, or head -n with a positive decimal line count against the exact seeded path'
+        'Compute each content_sha256 only with sha256sum PATH or shasum -a 256 PATH against the exact seeded path.'
+        'command events are limited to the disclosed exact-path inspection and hash forms'
+        'create the JSON artifact through a file-change operation, not another command'
+        'feature_preparation_result is exactly {execution_status: not_started, scope: VIEWING, feature_preparation_evidence_ref: prep/viewing-route, evidence_gaps: [], open_decisions: [], implementation_implications: [Preserve selection, highlight, and viewport focus without enabling editing.], recommended_next_step: Start a separate implementation workflow.}'
+        'Do not add keys outside the declared closed-world schema.'
+    )
+    for viewing_prompt_fragment in "${viewing_required_prompt_fragments[@]}"; do
+        if [[ "$(grep -lF -- "$viewing_prompt_fragment" "$capture"/call-*.prompt | wc -l | tr -d ' ')" -ne 2 ]]; then
+            viewing_prompt_failures+=("missing:$viewing_prompt_fragment")
+        fi
+    done
+    for viewing_grader_heading in 'Expected Behavior' 'Pass Criteria' 'Fail Signals' 'Machine Expectations'; do
+        if grep -Fq -- "$viewing_grader_heading" "$capture"/call-*.prompt; then
+            viewing_prompt_failures+=("grader:$viewing_grader_heading")
+        fi
+    done
+fi
+if [[ ${#viewing_prompt_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING runtime prompt hides exact producer obligations or exposes grader sections: ${viewing_prompt_failures[*]}"
+fi
+
+test_start "all four preparation and pending-Pack pilot inflation modes fail closed"
+pilot_mode_failures=()
+for pilot_mode in product_question execution_evidence verified premature_ref; do
+    pilot_output="$fixture_root/pilot-mode-$pilot_mode"
+    rm -f "$capture"/*
+    if [[ "$pilot_mode" == product_question || "$pilot_mode" == execution_evidence ]]; then
+        FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_PREPARATION_MODE="$pilot_mode" "$runner" --execute \
+            --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+            --cases viewing-route-technical-preparation --repeats 1 --output "$pilot_output" \
+            --codex-bin "$fake_codex" >/dev/null || pilot_mode_failures+=("$pilot_mode:runner")
+    else
+        FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PENDING_PACK_MODE="$pilot_mode" "$runner" --execute \
+            --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+            --cases pending-architecture-pack-verification --repeats 1 --output "$pilot_output" \
+            --codex-bin "$fake_codex" >/dev/null || pilot_mode_failures+=("$pilot_mode:runner")
+    fi
+    if ! jq -s -e 'any(.[]; .variant == "candidate" and .execution.verifier.workspace_status == "failed" and .execution.verifier.status == "failed")' "$pilot_output/traces/"*.json >/dev/null; then
+        pilot_mode_failures+=("$pilot_mode:accepted")
+    fi
+done
+if [[ ${#pilot_mode_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "preparation or pending-Pack pilot verifier accepted inflation: ${pilot_mode_failures[*]}"
+fi
+
+test_start "command-event bounds reject pathological shell input before expensive parsing"
+event_bounds_lib="$fixture_root/event-bounds-functions.sh"
+awk '
+    /^validate_event_stream\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >"$event_bounds_lib"
+awk '
+    /^viewing_inspection_event_evidence\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >>"$event_bounds_lib"
+# shellcheck source=/dev/null
+source "$event_bounds_lib"
+
+event_bounds_64="$fixture_root/event-bounds-64.jsonl"
+event_bounds_65="$fixture_root/event-bounds-65.jsonl"
+event_bounds_4096="$fixture_root/event-bounds-4096.jsonl"
+event_bounds_4097="$fixture_root/event-bounds-4097.jsonl"
+event_bounds_argv_64_path="$fixture_root/event-bounds-argv-64.jsonl"
+event_bounds_argv_65_path="$fixture_root/event-bounds-argv-65.jsonl"
+event_bounds_argv_oversized_path="$fixture_root/event-bounds-argv-oversized.jsonl"
+event_bounds_raw="$fixture_root/event-bounds-raw.jsonl"
+event_bounds_wrapper="$fixture_root/event-bounds-wrapper.jsonl"
+event_bounds_small_command='rg'
+event_bounds_command_4096="$(printf '%4096s' '' | tr ' ' x)"
+event_bounds_command_4097="${event_bounds_command_4096}x"
+event_bounds_argv_64=''
+event_bounds_argv_65=''
+event_bounds_argv_oversized=''
+event_bounds_argv_64="$(jq -cn '[range(0; 64) | "x"]')"
+event_bounds_argv_65="$(jq -cn '[range(0; 65) | "x"]')"
+event_bounds_argv_oversized="$(jq -cn --arg token "$event_bounds_command_4097" '["rg", $token]')"
+
+for event_bounds_count in 64 65; do
+    jq -cn --arg command "$event_bounds_small_command" --argjson count "$event_bounds_count" \
+        '[range(0; $count) | {type:"item.completed", item:{type:"command_execution", command:$command}}]' \
+        | jq -c '.[]' >"$fixture_root/event-bounds-$event_bounds_count.jsonl"
+done
+for event_bounds_path in "$event_bounds_4096" "$event_bounds_4097"; do
+    if [[ "$event_bounds_path" == "$event_bounds_4096" ]]; then
+        event_bounds_command="$event_bounds_command_4096"
+    else
+        event_bounds_command="$event_bounds_command_4097"
+    fi
+    jq -cn --arg command "$event_bounds_command" \
+        '{type:"item.completed", item:{type:"command_execution", command:$command}}' >"$event_bounds_path"
+done
+for event_bounds_path in "$event_bounds_argv_64_path" "$event_bounds_argv_65_path" "$event_bounds_argv_oversized_path"; do
+    case "$event_bounds_path" in
+        "$event_bounds_argv_64_path") event_bounds_argv="$event_bounds_argv_64" ;;
+        "$event_bounds_argv_65_path") event_bounds_argv="$event_bounds_argv_65" ;;
+        *) event_bounds_argv="$event_bounds_argv_oversized" ;;
+    esac
+    jq -cn --argjson command "$event_bounds_argv" \
+        '{type:"item.completed", item:{type:"command_execution", command:$command}}' >"$event_bounds_path"
+done
+
+event_bounds_empty_quotes="$(printf '%50000s' '' | tr ' ' '"')"
+event_bounds_raw_command="rg -n $event_bounds_empty_quotes src/route.ts"
+event_bounds_wrapper_command="/bin/zsh -lc \"$event_bounds_raw_command\""
+jq -cn --arg command "$event_bounds_raw_command" \
+    '{type:"item.completed", item:{id:"raw", type:"command_execution", command:$command, status:"completed", exit_code:0, aggregated_output:""}}' \
+    >"$event_bounds_raw"
+jq -cn --arg command "$event_bounds_wrapper_command" \
+    '{type:"item.completed", item:{id:"wrapper", type:"command_execution", command:$command, status:"completed", exit_code:0, aggregated_output:""}}' \
+    >"$event_bounds_wrapper"
+
+event_bounds_timing_passed=true
+for event_bounds_path in "$event_bounds_raw" "$event_bounds_wrapper"; do
+    event_bounds_started_at=$SECONDS
+    if validate_event_stream "$event_bounds_path" >/dev/null 2>&1 \
+        || viewing_inspection_event_evidence "$event_bounds_path" >/dev/null 2>&1 \
+        || (( SECONDS - event_bounds_started_at >= 5 )); then
+        event_bounds_timing_passed=false
+    fi
+done
+if validate_event_stream "$event_bounds_64" \
+    && ! validate_event_stream "$event_bounds_65" \
+    && validate_event_stream "$event_bounds_4096" \
+    && ! validate_event_stream "$event_bounds_4097" \
+    && validate_event_stream "$event_bounds_argv_64_path" \
+    && ! validate_event_stream "$event_bounds_argv_65_path" \
+    && ! validate_event_stream "$event_bounds_argv_oversized_path" \
+    && [[ "$event_bounds_timing_passed" == true ]]; then
+    pass
+else
+    fail "command-event bounds or pre-regex pathological-input rejection regressed"
+fi
+
+test_start "VIEWING evidence mutations are isolated to the candidate verifier"
+viewing_mutation_failures=()
+for viewing_mutation in omitted_ref stale_hashes bad_path bad_symbol bad_assertion bad_event_ref missing_event extra_top_key extra_evidence_key extra_item_key extra_design_key extra_implementation_key extra_trace_key extra_behavioral_test_key extra_result_key prepended_document appended_document; do
+    viewing_mutation_output="$fixture_root/viewing-mutation-$viewing_mutation"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_PREPARATION_MODE="$viewing_mutation" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_mutation_output" \
+        --codex-bin "$fake_codex" >/dev/null; then
+        viewing_mutation_failures+=("$viewing_mutation:runner")
+    elif ! jq -s -e '
+        all(.[] | select(.variant == "baseline"); .execution.verifier.workspace_status == "passed")
+        and all(.[] | select(.variant == "candidate"); .execution.verifier.workspace_status == "failed" and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)
+      ' "$viewing_mutation_output/traces/"*.json >/dev/null; then
+        viewing_mutation_failures+=("$viewing_mutation:accepted-or-baseline-regressed")
+    fi
+done
+if [[ ${#viewing_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING evidence mutations were not isolated and rejected: ${viewing_mutation_failures[*]}"
+fi
+
+run_direct_viewing_event_fixture() {
+    local mode="$1"
+    local jsonl="$2"
+    local workspace="$fixture_root/direct-viewing-event-$mode-workspace"
+    local direct_capture="$fixture_root/direct-viewing-event-$mode-capture"
+    local last_message="$fixture_root/direct-viewing-event-$mode-last-message.txt"
+
+    mkdir -p "$workspace/.agents/skills/assistant-workflow" "$direct_capture"
+    cp -R "$FRAMEWORK_DIR/docs/evals/fixtures/viewing-route-technical-preparation"/. "$workspace/"
+    sed -e 's|{agent_state_dir}|.codex|g' "$candidate/SKILL.md" \
+        >"$workspace/.agents/skills/assistant-workflow/SKILL.md"
+    FAKE_CODEX_CAPTURE_DIR="$direct_capture" FAKE_VIEWING_EVENT_MODE="$mode" \
+        "$fake_codex" exec --json --ignore-user-config --ephemeral \
+        -C "$workspace" --output-last-message "$last_message" -m test-model \
+        --sandbox workspace-write "Inspect the VIEWING route fixture." >"$jsonl"
+}
+
+test_start "VIEWING inspection event mutations fail the production verifier with one end-to-end isolation witness"
+viewing_event_failures=()
+for viewing_event_mutation in missing stale mismatched duplicate unrelated nonzero missing_status failed_status contradictory_status mutating transient_mutation alias_transient_mutation file_change_source_exact file_change_source_dot file_change_source_backslash file_change_source_absolute_suffix file_change_source_item_path file_change_empty_changes file_change_missing_paths file_change_dual_conflict file_change_multiple_conflict file_change_requirement echo_spoof wrong_path_substring compound_touch sed_write_file sed_write_ending_p argv_sed_write_ending_p head_unsafe_flag rg_preprocessor rg_preprocessor_as_pattern rg_preprocessor_separate rg_pre_glob rg_hostname_bin rg_replace rg_field_match_separator rg_field_context_separator rg_context_separator rg_hyperlink_format rg_short_replace rg_short_replace_assignment rg_short_file rg_short_file_attached rg_clustered_short_file rg_long_file rg_ignore_file rg_target_path_as_glob rg_positional_then_explicit rg_explicit_then_positional rg_unquoted_glob wrapped_unquoted_glob rg_colors rg_only_matching rg_path_separator_missing rg_path_separator_invalid rg_path_separator_multibyte rg_target_path_as_path_separator argv_rg_preprocessor argv_rg_preprocessor_as_pattern argv_rg_preprocessor_separate argv_rg_pre_glob argv_rg_hostname_bin argv_rg_replace argv_rg_field_match_separator argv_rg_field_context_separator argv_rg_context_separator argv_rg_hyperlink_format argv_rg_short_file argv_rg_short_file_attached argv_rg_clustered_short_file argv_rg_long_file argv_rg_ignore_file argv_rg_target_path_as_glob argv_rg_positional_then_explicit argv_rg_explicit_then_positional argv_rg_colors argv_rg_only_matching argv_rg_path_separator_missing argv_rg_path_separator_invalid argv_rg_path_separator_multibyte argv_rg_target_path_as_path_separator shell_substitution double_quoted_substitution double_quoted_parameter double_quoted_legacy_arithmetic bash_wrapped_legacy_arithmetic double_quoted_legacy_subscript bash_wrapped_legacy_subscript double_quoted_zsh_split zsh_wrapped_split zsh_equals wrapped_zsh_equals multi_double_fragment_expansion wrapped_multi_double_fragment_expansion redirection additional_command cat_unsafe_flag pipeline_spoof no_space_pipeline wrapped_no_space_pipeline no_space_semicolon wrapped_no_space_semicolon brace_expansion wrapped_brace_expansion no_space_ampersand no_space_process_substitution no_space_glob_pattern extra_path_operand extensionless_extra_path rg_backtick_substitution rg_newline_injection argv_cat_extra_path argv_extensionless_extra_path argv_wrapper_additional_command oversized_output symbol_spoof; do
+    viewing_event_jsonl="$fixture_root/viewing-event-$viewing_event_mutation.jsonl"
+    if ! run_direct_viewing_event_fixture "$viewing_event_mutation" "$viewing_event_jsonl"; then
+        viewing_event_failures+=("$viewing_event_mutation:fixture")
+    elif validate_event_stream "$viewing_event_jsonl" \
+        && viewing_inspection_event_evidence "$viewing_event_jsonl" >/dev/null 2>&1; then
+        viewing_event_failures+=("$viewing_event_mutation:accepted")
+    fi
+done
+viewing_event_isolation_output="$fixture_root/viewing-event-isolation"
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=shell_substitution "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_event_isolation_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    viewing_event_failures+=("shell_substitution:end-to-end-runner")
+elif ! jq -s -e '
+    all(.[] | select(.variant == "baseline"); .execution.verifier.workspace_status == "passed")
+    and all(.[] | select(.variant == "candidate"); .execution.verifier.workspace_status == "failed" and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)
+  ' "$viewing_event_isolation_output/traces/"*.json >/dev/null; then
+    viewing_event_failures+=("shell_substitution:end-to-end-isolation")
+fi
+if [[ ${#viewing_event_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING inspection-event mutations were not rejected by the production verifier: ${viewing_event_failures[*]}"
+fi
+
+test_start "VIEWING lifecycle accepts disclosed exact-path SHA-256 commands"
+viewing_hash_failures=()
+for viewing_hash_mode in hash_sha256sum hash_shasum hash_quoted; do
+    viewing_hash_output="$fixture_root/viewing-event-$viewing_hash_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_hash_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_hash_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_hash_output/traces/"*.json >/dev/null; then
+        viewing_hash_failures+=("$viewing_hash_mode")
+    fi
+done
+if [[ ${#viewing_hash_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING lifecycle rejected disclosed SHA-256 commands: ${viewing_hash_failures[*]}"
+fi
+
+test_start "VIEWING lifecycle permits only canonical grading-artifact file changes"
+viewing_artifact_change_failures=()
+for viewing_artifact_change_mode in artifact_file_change_exact artifact_file_change_dot artifact_file_change_backslash artifact_file_change_item_path; do
+    viewing_artifact_change_output="$fixture_root/viewing-event-$viewing_artifact_change_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_artifact_change_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_artifact_change_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_artifact_change_output/traces/"*.json >/dev/null; then
+        viewing_artifact_change_failures+=("$viewing_artifact_change_mode")
+    fi
+done
+if [[ ${#viewing_artifact_change_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING lifecycle rejected canonical grading-artifact aliases: ${viewing_artifact_change_failures[*]}"
+fi
+
+test_start "VIEWING inspection accepts authentic completed string shell-wrapper events including rg context"
+viewing_wrapped_failures=()
+for viewing_wrapped_mode in wrapped wrapped_context_rg wrapped_quoted_non_rg; do
+    viewing_wrapped_output="$fixture_root/viewing-event-$viewing_wrapped_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_wrapped_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_wrapped_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e '
+          all(.[]; .execution.verifier.workspace_status == "passed")
+          and ([.[] | select(.variant == "candidate")] | length) == 1
+        ' "$viewing_wrapped_output/traces/"*.json >/dev/null; then
+        viewing_wrapped_failures+=("$viewing_wrapped_mode")
+    fi
+done
+if [[ ${#viewing_wrapped_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING inspection rejected authentic completed string shell-wrapper events: ${viewing_wrapped_failures[*]}"
+fi
+
+test_start "VIEWING inspection retains explicitly labelled argv shell-wrapper compatibility"
+viewing_argv_wrapped_output="$fixture_root/viewing-event-argv-wrapped"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=argv_wrapped "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_argv_wrapped_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_argv_wrapped_output/traces/"*.json >/dev/null; then
+    pass
+else
+    fail "VIEWING inspection lost explicitly tested argv shell-wrapper compatibility"
+fi
+
+test_start "VIEWING inspection accepts equivalent read-only source and test inspection commands"
+viewing_equivalent_failures=()
+for viewing_equivalent_mode in equivalent quoted_non_rg; do
+    viewing_equivalent_output="$fixture_root/viewing-event-$viewing_equivalent_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_equivalent_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_equivalent_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_equivalent_output/traces/"*.json >/dev/null; then
+        viewing_equivalent_failures+=("$viewing_equivalent_mode")
+    fi
+done
+if [[ ${#viewing_equivalent_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING inspection rejected equivalent quoted read-only source and test commands: ${viewing_equivalent_failures[*]}"
+fi
+
+test_start "VIEWING inspection accepts disclosed bounded head string and argv commands"
+viewing_head_failures=()
+for viewing_head_mode in head argv_head head_too_many argv_head_too_many; do
+    viewing_head_output="$fixture_root/viewing-event-$viewing_head_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_head_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_head_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_head_output/traces/"*.json >/dev/null; then
+        viewing_head_failures+=("$viewing_head_mode")
+    fi
+done
+if [[ ${#viewing_head_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING inspection rejected bounded head equivalents: ${viewing_head_failures[*]}"
+fi
+
+test_start "VIEWING inspection accepts one combined read-only rg event for both expected files"
+viewing_combined_rg_output="$fixture_root/viewing-event-combined-rg"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=combined_rg "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_combined_rg_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_combined_rg_output/traces/"*.json >/dev/null; then
+    pass
+else
+    fail "VIEWING inspection rejected one combined read-only rg event for both expected files"
+fi
+
+test_start "VIEWING inspection accepts grouped and safely quoted rg equivalents"
+viewing_rg_equivalent_failures=()
+for viewing_rg_equivalent_mode in argv_combined_rg argv_grouped_rg double_quoted_rg combined_option_rg reversed_ignore_case_rg string_context_rg argv_context_rg argv_separated_value_rg argv_regexp_rg quoted_space_rg argv_quoted_space_rg string_glob_rg argv_glob_rg string_max_count_rg argv_max_count_rg string_sort_none_rg argv_sort_none_rg string_path_separator_rg argv_path_separator_rg string_anchored_rg argv_anchored_rg double_quoted_anchored_rg string_color_positional_before_rg string_color_positional_after_rg string_color_explicit_before_rg string_color_explicit_after_rg string_word_concat_rg wrapped_word_concat_rg string_attached_short_values_rg argv_attached_short_values_rg argv_literal_dollar_rg string_quoted_equals_rg; do
+    viewing_rg_equivalent_output="$fixture_root/viewing-event-$viewing_rg_equivalent_mode"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_rg_equivalent_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_rg_equivalent_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_rg_equivalent_output/traces/"*.json >/dev/null; then
+        viewing_rg_equivalent_failures+=("$viewing_rg_equivalent_mode")
+    fi
+done
+if [[ ${#viewing_rg_equivalent_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING inspection rejected safe rg equivalents: ${viewing_rg_equivalent_failures[*]}"
+fi
+
+test_start "VIEWING source-effect mutant fails executable behavior and candidate verification"
+viewing_source_mutant_root="$fixture_root/viewing-source-mutant"
+cp -R "$FRAMEWORK_DIR/docs/evals/fixtures/viewing-route-technical-preparation" "$viewing_source_mutant_root"
+sed -i.bak '/focusViewport("ACTIVE", effects);/d' "$viewing_source_mutant_root/src/route.ts"
+rm -f "$viewing_source_mutant_root/src/route.ts.bak"
+viewing_source_mutant_output="$fixture_root/viewing-source-mutant-output"
+rm -f "$capture"/*
+if ! node --test "$viewing_source_mutant_root/tests/route.test.js" >/dev/null 2>&1 \
+    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_SOURCE_MUTANT=true "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_source_mutant_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e '
+        all(.[] | select(.variant == "baseline"); .execution.verifier.workspace_status == "passed")
+        and all(.[] | select(.variant == "candidate"); .execution.verifier.workspace_status == "failed" and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)
+      ' "$viewing_source_mutant_output/traces/"*.json >/dev/null; then
+    pass
+else
+    fail "VIEWING source-effect mutant passed behavior or candidate verification"
+fi
+
+test_start "VIEWING post-model test mutations fail before host JavaScript execution"
+viewing_post_model_failures=()
+for viewing_post_model_mutation in FAKE_VIEWING_TEST_MUTATION FAKE_VIEWING_TEST_SYMLINK; do
+    viewing_host_marker="$fixture_root/viewing-host-marker-$viewing_post_model_mutation"
+    viewing_post_model_output="$fixture_root/viewing-post-model-$viewing_post_model_mutation"
+    rm -f "$capture"/* "$viewing_host_marker"
+    if [[ "$viewing_post_model_mutation" == "FAKE_VIEWING_TEST_MUTATION" ]]; then
+        printf '%s\n' 'const assert = require("node:assert/strict");' "require('node:fs').writeFileSync('${viewing_host_marker}', \"executed\");" 'assert.deepEqual("host-canary", "host-canary");' >"$fixture_root/direct-host-canary.js"
+        node "$fixture_root/direct-host-canary.js" >/dev/null \
+            && [[ "$(cat "$viewing_host_marker")" == "executed" ]] \
+            || viewing_post_model_failures+=("direct-canary-proof")
+        rm -f "$viewing_host_marker"
+    fi
+    if ! env "$viewing_post_model_mutation=true" FAKE_VIEWING_HOST_MARKER="$viewing_host_marker" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_post_model_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || [[ -e "$viewing_host_marker" ]] \
+        || ! jq -s -e '([.[] | select(.variant == "candidate" and .execution.verifier.workspace_status == "failed" and .execution.verifier.scope_deviations > 0 and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)] | length) == 1' "$viewing_post_model_output/traces/"*.json >/dev/null; then
+        viewing_post_model_failures+=("$viewing_post_model_mutation")
+    fi
+done
+if [[ ${#viewing_post_model_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING post-model test mutation executed or bypassed the scope/hash gate: ${viewing_post_model_failures[*]}"
+fi
+
+test_start "manual activation freshness preflights Python before timestamp validation"
+if ruby -e '
+  runner = File.read(ARGV.fetch(0))
+  readme = File.read(ARGV.fetch(1))
+  freshness = runner.index("validate_activation_observation_freshness()")
+  prerequisite = runner.index("require_python3_for_manual_activation_observation_freshness")
+  timestamp = runner.index("activation_timestamp_is_current", freshness)
+  valid = !freshness.nil? && !prerequisite.nil? && !timestamp.nil? &&
+    runner.include?("python3 is required to validate manual native activation observation freshness.") &&
+    runner.index("require_python3_for_manual_activation_observation_freshness", freshness) < timestamp &&
+    readme.include?("Python 3 is required whenever the runner validates a `manual_native_observation`") &&
+    readme.include?("including plan-only admission") &&
+    readme.include?("without reapplying the admission-time freshness window")
+  exit valid ? 0 : 1
+' "$runner" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    pass
+else
+    fail "manual activation freshness does not preflight its Python prerequisite before timestamp validation"
+fi
+
+test_start "VIEWING execute preflights working node --test before run-plan persistence while plan-only and other cases remain Node-free"
+if ruby -e '
+  runner = File.read(ARGV.fetch(0))
+  readme = File.read(ARGV.fetch(1))
+  validation = runner.index("selected_case_ids >/dev/null")
+  node_guard = runner.index("require_viewing_node_test_capability", validation)
+  admission = runner.index("\nacquire_output_lease\nWORK_ROOT", node_guard)
+  valid = !validation.nil? && !node_guard.nil? && !admission.nil? &&
+    validation < node_guard && node_guard < admission &&
+    runner.include?("requires a working node --test capability") &&
+    runner.include?("VIEWING_NODE_TEST_PROBE_TIMEOUT_SECONDS") &&
+    runner.include?("start_new_session=True") && runner.include?("os.killpg") &&
+    runner.include?("[[ \"$MODE\" == \"execute\" ]] && selected_cases_include \"viewing-route-technical-preparation\"") &&
+    !runner.include?("selected_case_ids | grep -Fxq") &&
+    readme.include?("adapter additionally requires a working `node --test` capability") &&
+    readme.include?("bounded capability probe") &&
+    readme.include?("entire process group is reaped") &&
+    readme.include?("plan-only runs") && readme.include?("omit the VIEWING case")
+  exit valid ? 0 : 1
+' "$runner" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    pass
+else
+    fail "VIEWING execute Node preflight is missing, late, or documented as an unconditional prerequisite"
+fi
+
+activation_cases_sha="$(jq -cS '.activation_cases' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" | test_sha256_stream)"
+manual_activation_observation="$fixture_root/manual-native-activation-observation.json"
+activation_now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+jq -n --arg candidate_sha "$FAKE_CANDIDATE_SKILL_SHA256" --arg cases_sha "$activation_cases_sha" --arg captured_at "$activation_now" \
+    --slurpfile evals "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" '
+      {schema_version:"1.0",observation_kind:"workflow_kernel_native_activation",evidence_class:"manual_native_observation",
+       provenance:{capture_owner_kind:"human_evaluator",capture_method:"manual_native_session",native_host:"codex",native_host_version:"codex-cli 9.9.9-test",captured_at_utc:$captured_at,observed_selection_surface:"native Codex skill routing",repository_runner_invoked_native_routing:false,raw_session_retained:false},
+       bindings:{skill:"assistant-workflow",candidate_skill_sha256:$candidate_sha,activation_cases_sha256:$cases_sha},
+       results:[$evals[0].activation_cases[] | {skill:"assistant-workflow",user_request,selected_skills:(if .should_activate then ["assistant-workflow","assistant-thinking"] else ["assistant-docs"] end)}]}' \
+    >"$manual_activation_observation"
+
+test_start "plan-only activation freshness requires Python only for manual observations"
+pythonless_bin="$fixture_root/pythonless-bin"
+mkdir -p "$pythonless_bin"
+for pythonless_command in awk bash basename cat chmod cp cut date dirname env find grep head jq ln mkdir mktemp mv paste pwd rm rsync sed shasum sha256sum sort stat tail tee tr uname wc; do
+    pythonless_command_path="$(command -v "$pythonless_command" 2>/dev/null || true)"
+    [[ -z "$pythonless_command_path" || -e "$pythonless_bin/$pythonless_command" ]] \
+        || ln -s "$pythonless_command_path" "$pythonless_bin/$pythonless_command"
+done
+pythonless_manual_output="$fixture_root/pythonless-manual-output"
+pythonless_manual_error="$fixture_root/pythonless-manual-error.txt"
+pythonless_no_activation_output="$fixture_root/pythonless-no-activation-output"
+pythonless_static_output="$fixture_root/pythonless-static-output"
+pythonless_failures=()
+if [[ -e "$pythonless_bin/python3" ]]; then
+    pythonless_failures+=("path-includes-python3")
+fi
+if PATH="$pythonless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$pythonless_manual_output" \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null 2>"$pythonless_manual_error"; then
+    pythonless_failures+=("manual-observation-succeeded")
+elif ! grep -Fxq 'Error: python3 is required to validate manual native activation observation freshness.' "$pythonless_manual_error" \
+    || grep -Fq 'Manual native activation observation is stale or outside the permitted future skew.' "$pythonless_manual_error"; then
+    pythonless_failures+=("manual-observation-error")
+fi
+if ! PATH="$pythonless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$pythonless_no_activation_output" \
+    --codex-bin "$fake_codex" >/dev/null; then
+    pythonless_failures+=("no-activation-evidence")
+fi
+if ! PATH="$pythonless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$pythonless_static_output" \
+    --codex-bin "$fake_codex" \
+    --activation-observations "$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json" >/dev/null; then
+    pythonless_failures+=("contract-test-fixture")
+fi
+if [[ ${#pythonless_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "plan-only Python freshness preflight did not remain manual-observation-specific: ${pythonless_failures[*]}"
+fi
+
+test_start "VIEWING Node prerequisite is execute-only and precedes output admission or calls"
+nodeless_bin="$fixture_root/nodeless-bin"
+mkdir -p "$nodeless_bin"
+cp -R "$pythonless_bin/." "$nodeless_bin/"
+for nodeless_command in git id kill ps readlink rmdir sleep tail touch xargs; do
+    nodeless_command_path="$(command -v "$nodeless_command" 2>/dev/null || true)"
+    [[ -z "$nodeless_command_path" || -e "$nodeless_bin/$nodeless_command" ]] \
+        || ln -s "$nodeless_command_path" "$nodeless_bin/$nodeless_command"
+done
+nodeless_python3_path="$(command -v python3 2>/dev/null || true)"
+if [[ -n "$nodeless_python3_path" ]]; then
+    ln -s "$nodeless_python3_path" "$nodeless_bin/python3"
+fi
+nodeless_viewing_execute_output="$fixture_root/nodeless-viewing-execute-output"
+nodeless_all_execute_output="$fixture_root/nodeless-all-execute-output"
+nodeless_viewing_plan_output="$fixture_root/nodeless-viewing-plan-output"
+nodeless_nonview_execute_output="$fixture_root/nodeless-nonview-execute-output"
+nodeless_viewing_execute_error="$fixture_root/nodeless-viewing-execute-error.txt"
+nodeless_all_execute_error="$fixture_root/nodeless-all-execute-error.txt"
+nodeless_nonview_execute_error="$fixture_root/nodeless-nonview-execute-error.txt"
+nodeless_node_error='Error: --execute with viewing-route-technical-preparation requires Node.js for its trusted seed-fixture test before run-plan persistence or model calls.'
+nodeless_failures=()
+if [[ -e "$nodeless_bin/node" || -z "$nodeless_python3_path" ]]; then
+    nodeless_failures+=("fixture")
+fi
+rm -f "$capture"/*
+if PATH="$nodeless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$nodeless_viewing_execute_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$nodeless_viewing_execute_error"; then
+    nodeless_failures+=("viewing-execute-succeeded")
+elif ! grep -Fxq "$nodeless_node_error" "$nodeless_viewing_execute_error" \
+    || [[ -e "$nodeless_viewing_execute_output/run-plan.json" || -e "$nodeless_viewing_execute_output/.evaluation-lease" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+    nodeless_failures+=("viewing-execute-admission-or-call")
+fi
+rm -f "$capture"/*
+if PATH="$nodeless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases all --repeats 1 --output "$nodeless_all_execute_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$nodeless_all_execute_error"; then
+    nodeless_failures+=("all-execute-succeeded")
+elif ! grep -Fxq "$nodeless_node_error" "$nodeless_all_execute_error" \
+    || [[ -e "$nodeless_all_execute_output/run-plan.json" || -e "$nodeless_all_execute_output/.evaluation-lease" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+    nodeless_failures+=("all-execute-admission-or-call")
+fi
+broken_node_bin="$fixture_root/broken-node-bin"
+cp -R "$nodeless_bin" "$broken_node_bin"
+cat >"$broken_node_bin/node" <<'BROKEN_NODE'
+#!/bin/sh
+exit 1
+BROKEN_NODE
+chmod +x "$broken_node_bin/node"
+broken_node_output="$fixture_root/broken-node-viewing-output"
+broken_node_error="$fixture_root/broken-node-viewing-error.txt"
+broken_node_capability_error='Error: --execute with viewing-route-technical-preparation requires a working node --test capability; the bounded prerequisite probe failed before run-plan persistence or model calls.'
+rm -f "$capture"/*
+if PATH="$broken_node_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$broken_node_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$broken_node_error"; then
+    nodeless_failures+=("broken-node-test-capability-succeeded")
+elif ! grep -Fxq "$broken_node_capability_error" "$broken_node_error" \
+    || [[ -e "$broken_node_output/run-plan.json" || -e "$broken_node_output/.evaluation-lease" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+    nodeless_failures+=("broken-node-test-capability-admission-or-call")
+fi
+hang_node_bin="$fixture_root/hang-node-bin"
+cp -R "$nodeless_bin" "$hang_node_bin"
+hang_node_child_pid_file="$fixture_root/hang-node-child.pid"
+cat >"$hang_node_bin/node" <<'HANG_NODE'
+#!/bin/sh
+set -eu
+child_pid_file="${FAKE_NODE_PROBE_CHILD_PID_FILE:?}"
+if [ -n "${FAKE_NODE_PROBE_LEADER_PID_FILE:-}" ]; then
+    printf '%s\n' "$$" >"$FAKE_NODE_PROBE_LEADER_PID_FILE"
+fi
+(
+    trap '' TERM
+    exec tail -f /dev/null
+) &
+printf '%s\n' "$!" >"$child_pid_file"
+exec tail -f /dev/null
+HANG_NODE
+chmod +x "$hang_node_bin/node"
+hang_node_output="$fixture_root/hang-node-viewing-output"
+hang_node_error="$fixture_root/hang-node-viewing-error.txt"
+hang_node_started_at="$(date +%s)"
+rm -f "$capture"/* "$hang_node_child_pid_file"
+if PATH="$hang_node_bin" FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_NODE_PROBE_CHILD_PID_FILE="$hang_node_child_pid_file" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$hang_node_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$hang_node_error"; then
+    nodeless_failures+=("hanging-node-test-capability-succeeded")
+else
+    hang_node_elapsed_seconds="$(( $(date +%s) - hang_node_started_at ))"
+    hang_node_child_pid="$(cat "$hang_node_child_pid_file" 2>/dev/null || true)"
+    if ! grep -Fxq "$broken_node_capability_error" "$hang_node_error" \
+        || [[ "$hang_node_elapsed_seconds" -gt 15 ]] \
+        || [[ -e "$hang_node_output/run-plan.json" || -e "$hang_node_output/.evaluation-lease" ]] \
+        || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]] \
+        || [[ ! "$hang_node_child_pid" =~ ^[0-9]+$ ]] \
+        || kill -0 "$hang_node_child_pid" 2>/dev/null; then
+        nodeless_failures+=("hanging-node-test-capability-timeout-admission-or-child")
+    fi
+    [[ ! "$hang_node_child_pid" =~ ^[0-9]+$ ]] || kill -KILL "$hang_node_child_pid" 2>/dev/null || true
+fi
+signal_node_tmp="$fixture_root/signal-node-tmp"
+signal_node_output="$fixture_root/signal-node-output"
+signal_node_error="$fixture_root/signal-node-error.txt"
+signal_node_child_pid_file="$fixture_root/signal-node-child.pid"
+signal_node_leader_pid_file="$fixture_root/signal-node-leader.pid"
+mkdir -p "$signal_node_tmp"
+rm -f "$capture"/* "$signal_node_child_pid_file" "$signal_node_leader_pid_file"
+TMPDIR="$signal_node_tmp" PATH="$hang_node_bin" FAKE_CODEX_CAPTURE_DIR="$capture" \
+    FAKE_NODE_PROBE_CHILD_PID_FILE="$signal_node_child_pid_file" \
+    FAKE_NODE_PROBE_LEADER_PID_FILE="$signal_node_leader_pid_file" \
+    "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$signal_node_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$signal_node_error" &
+signal_runner_pid=$!
+for _ in $(seq 1 100); do
+    [[ -s "$signal_node_child_pid_file" && -s "$signal_node_leader_pid_file" ]] && break
+    kill -0 "$signal_runner_pid" 2>/dev/null || break
+    sleep 0.05
+done
+signal_node_child_pid="$(cat "$signal_node_child_pid_file" 2>/dev/null || true)"
+signal_node_leader_pid="$(cat "$signal_node_leader_pid_file" 2>/dev/null || true)"
+kill -TERM "$signal_runner_pid" 2>/dev/null || true
+if wait "$signal_runner_pid"; then signal_runner_status=0; else signal_runner_status=$?; fi
+for _ in $(seq 1 100); do
+    child_live=false
+    leader_live=false
+    [[ ! "$signal_node_child_pid" =~ ^[0-9]+$ ]] || ! kill -0 "$signal_node_child_pid" 2>/dev/null || child_live=true
+    [[ ! "$signal_node_leader_pid" =~ ^[0-9]+$ ]] || ! kill -0 "$signal_node_leader_pid" 2>/dev/null || leader_live=true
+    [[ "$child_live" == false && "$leader_live" == false ]] && break
+    sleep 0.05
+done
+if [[ "$signal_runner_status" -ne 143 \
+    || ! "$signal_node_child_pid" =~ ^[0-9]+$ \
+    || ! "$signal_node_leader_pid" =~ ^[0-9]+$ \
+    || "$child_live" == true \
+    || "$leader_live" == true \
+    || -e "$signal_node_output/run-plan.json" || -e "$signal_node_output/.evaluation-lease" \
+    || "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 \
+    || -n "$(find "$signal_node_tmp" -mindepth 1 -maxdepth 1 -name 'viewing-node-test-probe.*' -print -quit)" ]]; then
+    nodeless_failures+=("signal-node-test-capability-admission-or-descendant")
+fi
+[[ ! "$signal_node_child_pid" =~ ^[0-9]+$ ]] || kill -KILL "$signal_node_child_pid" 2>/dev/null || true
+[[ ! "$signal_node_leader_pid" =~ ^[0-9]+$ ]] || kill -KILL "$signal_node_leader_pid" 2>/dev/null || true
+rm -f "$capture"/*
+real_node_path="$(command -v node 2>/dev/null || true)"
+for leader_exit in success nonzero; do
+    leader_node_bin="$fixture_root/${leader_exit}-leader-node-bin"
+    cp -R "$nodeless_bin" "$leader_node_bin"
+    leader_child_pid_file="$fixture_root/${leader_exit}-leader-node-child.pid"
+    cat >"$leader_node_bin/node" <<'LEADER_EXIT_NODE'
+#!/bin/sh
+set -eu
+if [ "${2:-}" != "" ] && [ "${2##*/}" = "capability.test.js" ]; then
+    (
+        trap '' TERM
+        exec tail -f /dev/null
+    ) &
+    printf '%s\n' "$!" >"${FAKE_NODE_PROBE_CHILD_PID_FILE:?}"
+    if [ "${FAKE_NODE_PROBE_EXIT_CODE:?}" = "0" ]; then
+        exit 0
+    fi
+    exit 1
+fi
+exec "${FAKE_REAL_NODE:?}" "$@"
+LEADER_EXIT_NODE
+    chmod +x "$leader_node_bin/node"
+    leader_output="$fixture_root/${leader_exit}-leader-node-output"
+    leader_error="$fixture_root/${leader_exit}-leader-node-error.txt"
+    rm -f "$capture"/* "$leader_child_pid_file"
+    if [[ "$leader_exit" == success ]]; then
+        leader_exit_code=0
+        if ! PATH="$leader_node_bin" FAKE_REAL_NODE="$real_node_path" FAKE_NODE_PROBE_CHILD_PID_FILE="$leader_child_pid_file" FAKE_NODE_PROBE_EXIT_CODE="$leader_exit_code" FAKE_CODEX_CAPTURE_DIR="$capture" \
+            "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+            --cases viewing-route-technical-preparation --repeats 1 --output "$leader_output" \
+            --codex-bin "$fake_codex" >/dev/null 2>"$leader_error"; then
+            nodeless_failures+=("success-leader-run")
+        fi
+    else
+        leader_exit_code=1
+        if PATH="$leader_node_bin" FAKE_REAL_NODE="$real_node_path" FAKE_NODE_PROBE_CHILD_PID_FILE="$leader_child_pid_file" FAKE_NODE_PROBE_EXIT_CODE="$leader_exit_code" FAKE_CODEX_CAPTURE_DIR="$capture" \
+            "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+            --cases viewing-route-technical-preparation --repeats 1 --output "$leader_output" \
+            --codex-bin "$fake_codex" >/dev/null 2>"$leader_error"; then
+            nodeless_failures+=("nonzero-leader-succeeded")
+        elif ! grep -Fxq "$broken_node_capability_error" "$leader_error" \
+            || [[ -e "$leader_output/run-plan.json" || -e "$leader_output/.evaluation-lease" ]] \
+            || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+            nodeless_failures+=("nonzero-leader-admission-or-call")
+        fi
+    fi
+    leader_child_pid="$(cat "$leader_child_pid_file" 2>/dev/null || true)"
+    if [[ ! "$leader_child_pid" =~ ^[0-9]+$ ]] || kill -0 "$leader_child_pid" 2>/dev/null; then
+        nodeless_failures+=("${leader_exit}-leader-descendant-live")
+    fi
+    [[ ! "$leader_child_pid" =~ ^[0-9]+$ ]] || kill -KILL "$leader_child_pid" 2>/dev/null || true
+    [[ ! -e "$leader_output/.evaluation-lease" ]] || nodeless_failures+=("${leader_exit}-leader-lease-retained")
+done
+rm -f "$capture"/*
+if ! PATH="$nodeless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases viewing-route-technical-preparation --repeats 1 --output "$nodeless_viewing_plan_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    || [[ ! -f "$nodeless_viewing_plan_output/run-plan.json" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 0 ]]; then
+    nodeless_failures+=("viewing-plan")
+fi
+rm -f "$capture"/*
+if ! PATH="$nodeless_bin" FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$nodeless_nonview_execute_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$nodeless_nonview_execute_error" \
+    || grep -Fxq "$nodeless_node_error" "$nodeless_nonview_execute_error" \
+    || [[ ! -f "$nodeless_nonview_execute_output/run-plan.json" ]] \
+    || [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -ne 2 ]]; then
+    nodeless_failures+=("nonview-execute")
+fi
+if [[ ${#nodeless_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "VIEWING Node preflight did not preserve execute-only admission behavior: ${nodeless_failures[*]}"
+fi
+
+test_start "activation observations bind the rendered candidate, exact cases, and current native provenance"
+activation_static_output="$fixture_root/activation-static-output"
+activation_manual_plan_output="$fixture_root/activation-manual-plan-output"
+activation_manual_output="$fixture_root/activation-manual-output"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$activation_static_output" \
+    --codex-bin "$fake_codex" \
+    --activation-observations "$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json" >/dev/null \
+    && FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$activation_manual_plan_output" \
+        --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null \
+    && [[ ! -e "$capture/call-0.args" ]] \
+    && FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$activation_manual_output" \
+        --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null \
+    && jq -e --arg candidate_sha "$FAKE_CANDIDATE_SKILL_SHA256" '
+        .candidate_variant.materialized_skill_sha256 == $candidate_sha
+        and .activation_observation.evidence_class == "contract_test_fixture"
+        and .activation_observation.manual_native_admissible == false
+      ' "$activation_static_output/run-plan.json" >/dev/null \
+    && jq -e --arg candidate_sha "$FAKE_CANDIDATE_SKILL_SHA256" '
+        .mode == "plan"
+        and .candidate_variant.materialized_skill_sha256 == $candidate_sha
+        and .cli_version == "codex-cli 9.9.9-test"
+        and (.codex_executable_sha256 | type == "string" and length == 64)
+        and .model_selection_evidence.method == "not_checked_plan_mode"
+        and .model_selection_evidence.catalog_source == "none"
+        and .activation_observation.evidence_class == "manual_native_observation"
+        and .activation_observation.manual_native_admissible == true
+        and .activation_observation.result_count == 6
+      ' "$activation_manual_plan_output/run-plan.json" >/dev/null \
+    && jq -e --arg candidate_sha "$FAKE_CANDIDATE_SKILL_SHA256" '
+        .candidate_variant.materialized_skill_sha256 == $candidate_sha
+        and .activation_observation.evidence_class == "manual_native_observation"
+        and .activation_observation.manual_native_admissible == true
+        and .activation_observation.result_count == 6
+      ' "$activation_manual_output/run-plan.json" >/dev/null; then
+    pass
+else
+    fail "activation observation did not bind plan/execute CLI identity or distinguish manual-native evidence"
+fi
+
+test_start "resume restores a validated manual activation copy only with an exact existing plan"
+activation_manual_sha="$(test_sha256_stream <"$manual_activation_observation")"
+activation_orphan_plan_output="$fixture_root/activation-orphan-plan-output"
+activation_missing_copy_output="$fixture_root/activation-missing-copy-output"
+mkdir -p "$activation_orphan_plan_output"
+printf 'partial\n' >"$activation_orphan_plan_output/.run-plan.json.tmp.interrupted"
+printf 'partial\n' >"$activation_orphan_plan_output/.activation-observations.json.tmp.interrupted"
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$activation_orphan_plan_output" \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >"$fixture_root/activation-orphan-plan.stderr" 2>&1 \
+    && [[ -f "$activation_orphan_plan_output/.run-plan.json.tmp.interrupted" ]] \
+    && [[ -f "$activation_orphan_plan_output/.activation-observations.json.tmp.interrupted" ]] \
+    && grep -Fq -- '--resume requires an existing exact final run-plan.json' "$fixture_root/activation-orphan-plan.stderr" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]]; then
+    cp -R "$activation_manual_output" "$activation_missing_copy_output"
+    rm -f "$activation_missing_copy_output/activation-observations.json" "$capture"/*
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$activation_missing_copy_output" \
+        --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null \
+        && [[ ! -e "$capture/call-0.args" ]] \
+        && [[ "$(test_sha256_stream <"$activation_missing_copy_output/activation-observations.json")" == "$activation_manual_sha" ]] \
+        && restored_activation_status="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; RESULTS_DIR="$activation_missing_copy_output"; CANDIDATE_VARIANT="$candidate"; native_activation_observation_status "$activation_missing_copy_output/run-plan.json")" \
+        && [[ "$restored_activation_status" == true ]]; then
+        pass
+    else
+        fail "resume did not restore the activation copy bound by an exact existing plan"
+    fi
+else
+    fail "resume accepted orphan activation evidence or could not restore an exact-plan binding"
+fi
+
+test_start "activation snapshot barrier rejects a symlink marker without modifying its target"
+activation_snapshot_symlink_barrier="$fixture_root/activation-snapshot-symlink-barrier"
+activation_snapshot_symlink_output="$fixture_root/activation-snapshot-symlink-output"
+activation_snapshot_symlink_victim="$fixture_root/activation-snapshot-symlink-victim"
+mkdir -p "$activation_snapshot_symlink_barrier"
+printf 'unchanged\n' >"$activation_snapshot_symlink_victim"
+ln -s "$activation_snapshot_symlink_victim" "$activation_snapshot_symlink_barrier/snapshot-ready"
+if ! FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FRAMEWORK_EVAL_TEST_ACTIVATION_SNAPSHOT_BARRIER_DIR="$activation_snapshot_symlink_barrier" \
+    FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$activation_snapshot_symlink_output" \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >"$fixture_root/activation-snapshot-symlink.stderr" 2>&1 \
+    && grep -Fq 'marker already exists or is unsafe' "$fixture_root/activation-snapshot-symlink.stderr" \
+    && [[ "$(cat "$activation_snapshot_symlink_victim")" == "unchanged" ]]; then
+    pass
+else
+    fail "activation snapshot barrier followed or overwrote a caller-controlled symlink"
+fi
+
+test_start "activation observation admission persists immutable snapshot bytes after caller mutation"
+activation_snapshot_barrier="$fixture_root/activation-snapshot-barrier"
+activation_snapshot_source="$fixture_root/activation-snapshot-source.json"
+activation_snapshot_replacement="$fixture_root/activation-snapshot-replacement.json"
+activation_snapshot_output="$fixture_root/activation-snapshot-output"
+mkdir -p "$activation_snapshot_barrier"
+cp "$manual_activation_observation" "$activation_snapshot_source"
+activation_snapshot_sha="$(test_sha256_stream <"$activation_snapshot_source")"
+jq '.provenance.observed_selection_surface = "caller-owned replacement after admission"' \
+    "$activation_snapshot_source" >"$activation_snapshot_replacement"
+(
+    for ((activation_snapshot_wait = 0; activation_snapshot_wait < 500; activation_snapshot_wait++)); do
+        if [[ -d "$activation_snapshot_barrier/snapshot-ready" && ! -L "$activation_snapshot_barrier/snapshot-ready" ]]; then
+            mv "$activation_snapshot_replacement" "$activation_snapshot_source"
+            mkdir "$activation_snapshot_barrier/continue"
+            exit 0
+        fi
+        sleep 0.01
+    done
+    exit 1
+) &
+activation_snapshot_mutator_pid=$!
+rm -f "$capture"/*
+if FRAMEWORK_EVAL_CONTRACT_TEST_MODE=true FRAMEWORK_EVAL_TEST_ACTIVATION_SNAPSHOT_BARRIER_DIR="$activation_snapshot_barrier" \
+    FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$activation_snapshot_output" \
+    --codex-bin "$fake_codex" --activation-observations "$activation_snapshot_source" >/dev/null \
+    && wait "$activation_snapshot_mutator_pid" \
+    && [[ "$(test_sha256_stream <"$activation_snapshot_source")" != "$activation_snapshot_sha" ]] \
+    && [[ "$(test_sha256_stream <"$activation_snapshot_output/activation-observations.json")" == "$activation_snapshot_sha" ]] \
+    && jq -e --arg sha "$activation_snapshot_sha" '
+      .activation_observations_sha256 == $sha
+      and .activation_observation.sha256 == $sha
+    ' "$activation_snapshot_output/run-plan.json" >/dev/null \
+    && [[ ! -e "$capture/call-0.args" ]]; then
+    pass
+else
+    wait "$activation_snapshot_mutator_pid" 2>/dev/null || true
+    fail "activation admission did not persist immutable snapshot bytes after caller mutation"
+fi
+
+test_start "resume retains an admitted activation observation after its freshness window"
+stale_activation_observation="$fixture_root/stale-manual-native-activation-observation.json"
+stale_activation_output="$fixture_root/stale-activation-resume-output"
+jq '.provenance.captured_at_utc = "2000-01-01T00:00:00Z"' \
+    "$manual_activation_observation" >"$stale_activation_observation"
+cp -R "$activation_manual_output" "$stale_activation_output"
+cp "$stale_activation_observation" "$stale_activation_output/activation-observations.json"
+stale_activation_sha="$(test_sha256_stream <"$stale_activation_observation")"
+jq --arg sha "$stale_activation_sha" '
+  .activation_observations_sha256 = $sha
+  | .activation_observation.sha256 = $sha
+' "$stale_activation_output/run-plan.json" >"$stale_activation_output/run-plan.json.tmp"
+mv "$stale_activation_output/run-plan.json.tmp" "$stale_activation_output/run-plan.json"
+stale_activation_plan_sha="$(test_sha256_stream <"$stale_activation_output/run-plan.json")"
+for stale_activation_attempt in "$stale_activation_output/run-attempts/"*.json; do
+    jq -cS --arg sha "$stale_activation_plan_sha" '.run_plan_sha256 = $sha' \
+        "$stale_activation_attempt" >"$stale_activation_attempt.tmp"
+    mv "$stale_activation_attempt.tmp" "$stale_activation_attempt"
+done
+stale_activation_missing_trace="$(find "$stale_activation_output/traces" -type f -name '*-candidate.json' -print -quit)"
+stale_activation_missing_attempt="$stale_activation_output/run-attempts/$(basename "$stale_activation_missing_trace")"
+rm -f "$stale_activation_missing_trace" "$stale_activation_output/comparison.json" \
+    "$stale_activation_output/semantic-review-packet.json"
+jq -cS '.state = "not_started" | .attempt_started_at = [] | .completed_at = null' \
+    "$stale_activation_missing_attempt" >"$stale_activation_missing_attempt.tmp"
+mv "$stale_activation_missing_attempt.tmp" "$stale_activation_missing_attempt"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$stale_activation_output" \
+    --codex-bin "$fake_codex" --activation-observations "$stale_activation_observation" >/dev/null \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 1 ]] \
+    && [[ "$(find "$stale_activation_output/traces" -type f -name '*.json' | wc -l | tr -d ' ')" -eq 2 ]] \
+    && [[ "$(test_sha256_stream <"$stale_activation_output/activation-observations.json")" == "$stale_activation_sha" ]]; then
+    pass
+else
+    fail "resume reapplied freshness or lost the exact admitted activation binding"
+fi
+
+test_start "stale resume still rejects replacement, omission, and unadmitted evidence"
+stale_resume_binding_failures=()
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$stale_activation_output" \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null 2>&1 \
+    || [[ -e "$capture/call-0.args" ]]; then
+    stale_resume_binding_failures+=("replacement")
+fi
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$stale_activation_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>&1 \
+    || [[ -e "$capture/call-0.args" ]]; then
+    stale_resume_binding_failures+=("omission")
+fi
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$fixture_root/unadmitted-stale-activation-output" \
+    --codex-bin "$fake_codex" --activation-observations "$stale_activation_observation" >/dev/null 2>&1 \
+    || [[ -e "$capture/call-0.args" ]]; then
+    stale_resume_binding_failures+=("unadmitted")
+fi
+if [[ ${#stale_resume_binding_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "resume accepted activation evidence without its exact admitted binding: ${stale_resume_binding_failures[*]}"
+fi
+
+test_start "activation observation mutations reject before any model call and resume rechecks the copied evidence"
+activation_mutation_failures=()
+for activation_mutation in candidate cases results order cardinality provenance old future version skill_name_too_long false_positive; do
+    mutation_file="$fixture_root/activation-$activation_mutation.json"
+    case "$activation_mutation" in
+        candidate) jq '.bindings.candidate_skill_sha256 = ("f" * 64)' "$manual_activation_observation" >"$mutation_file" ;;
+        cases) jq '.bindings.activation_cases_sha256 = ("e" * 64)' "$manual_activation_observation" >"$mutation_file" ;;
+        results) jq '.results[0].selected_skills = []' "$manual_activation_observation" >"$mutation_file" ;;
+        order) jq '.results |= reverse' "$manual_activation_observation" >"$mutation_file" ;;
+        cardinality) jq '.results |= .[0:5]' "$manual_activation_observation" >"$mutation_file" ;;
+        provenance) jq '.provenance.capture_owner_kind = "repository_contract_test"' "$manual_activation_observation" >"$mutation_file" ;;
+        old) jq '.provenance.captured_at_utc = "2000-01-01T00:00:00Z"' "$manual_activation_observation" >"$mutation_file" ;;
+        future) jq '.provenance.captured_at_utc = "2099-01-01T00:00:00Z"' "$manual_activation_observation" >"$mutation_file" ;;
+        version) jq '.provenance.native_host_version = "codex-cli mismatched"' "$manual_activation_observation" >"$mutation_file" ;;
+        skill_name_too_long) jq '.results[0].selected_skills[1] = ("x" * 129)' "$manual_activation_observation" >"$mutation_file" ;;
+        false_positive) jq '.results[-1].selected_skills = ["assistant-workflow"]' "$manual_activation_observation" >"$mutation_file" ;;
+    esac
+    rm -f "$capture"/*
+    mutation_error="$fixture_root/activation-$activation_mutation.stderr"
+    if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$fixture_root/activation-$activation_mutation-output" \
+        --codex-bin "$fake_codex" --activation-observations "$mutation_file" >/dev/null 2>"$mutation_error" \
+        || [[ -e "$capture/call-0.args" ]]; then
+        activation_mutation_failures+=("$activation_mutation")
+    fi
+done
+activation_resume_error="$fixture_root/activation-resume.stderr"
+cp -R "$activation_manual_output" "$fixture_root/activation-tampered-copy-output"
+activation_tampered_copy="$fixture_root/activation-tampered-copy-output/activation-observations.json"
+jq '.provenance.observed_selection_surface = "tampered retained copy"' "$activation_tampered_copy" >"$activation_tampered_copy.tmp"
+mv "$activation_tampered_copy.tmp" "$activation_tampered_copy"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --resume --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$fixture_root/activation-tampered-copy-output" \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null 2>"$activation_resume_error" \
+    || [[ -e "$capture/call-0.args" ]] \
+    || ! grep -Fq 'Existing activation observation does not match the current exact observation binding.' "$activation_resume_error"; then
+    activation_mutation_failures+=("tampered-copy-resume")
+fi
+if [[ ${#activation_mutation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "activation observation mutations did not fail closed before calls: ${activation_mutation_failures[*]}"
 fi
 
 test_start "seeded review case reports defect recall and false positives"
@@ -2193,7 +4454,9 @@ if [[ -x "$semantic_finalizer" ]] \
       .additionalProperties == false
       and (.properties.behavioral_promotion_eligible.type == "boolean")
       and (.required | index("trusted_execution_profile_passed") != null)
+      and (.properties.native_activation_observation_passed.type == "boolean")
       and (.properties.failed_gates.items.enum | index("untrusted_execution_profile") != null)
+      and (.properties.failed_gates.items.enum | index("native_activation_observation_not_admissible") != null)
     ' "$promotion_decision_schema" >/dev/null; then
     pass
 else
@@ -2233,6 +4496,74 @@ if ! jq -e '(.overall_verdict != "approved") or all(.pair_verdicts[]; .verdict =
     pass
 else
     fail "published schemas accept contradictory human verdict or promotion states"
+fi
+
+draft2020_require_prerequisites() {
+    local node_command="$1"
+    local npm_command="$2"
+    local dependency_root="$3"
+
+    command -v "$node_command" >/dev/null 2>&1 \
+        || { printf 'Node.js 22 or newer is required for Draft 2020-12 validation.\n' >&2; return 1; }
+    "$node_command" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' >/dev/null 2>&1 \
+        || { printf 'Node.js 22 or newer is required for Draft 2020-12 validation.\n' >&2; return 1; }
+    command -v "$npm_command" >/dev/null 2>&1 \
+        || { printf 'npm is required to install the locked Draft 2020-12 validator dependency.\n' >&2; return 1; }
+    [[ -f "$dependency_root/node_modules/ajv/package.json" ]] \
+        || { printf 'Locked Ajv dependency is missing; run (cd tools/evals && npm ci --ignore-scripts).\n' >&2; return 1; }
+    NODE_PATH="$dependency_root/node_modules" "$node_command" -e 'require("ajv/dist/2020")' >/dev/null 2>&1 \
+        || { printf 'Locked Ajv dependency is unreadable; rerun (cd tools/evals && npm ci --ignore-scripts).\n' >&2; return 1; }
+}
+
+test_start "Draft 2020-12 prerequisite failures identify Node npm and Ajv separately"
+draft2020_missing_root="$(mktemp -d "${TMPDIR:-/tmp}/draft2020-missing-ajv.XXXXXX")"
+p0p4_register_cleanup "$draft2020_missing_root"
+draft2020_missing_node_error="$(draft2020_require_prerequisites __missing_node_for_contract_test__ npm "$FRAMEWORK_DIR/tools/evals" 2>&1 || true)"
+draft2020_missing_npm_error="$(draft2020_require_prerequisites node __missing_npm_for_contract_test__ "$FRAMEWORK_DIR/tools/evals" 2>&1 || true)"
+draft2020_missing_ajv_error="$(draft2020_require_prerequisites node npm "$draft2020_missing_root" 2>&1 || true)"
+if [[ "$draft2020_missing_node_error" == *"Node.js 22 or newer is required"* ]] \
+    && [[ "$draft2020_missing_npm_error" == *"npm is required"* ]] \
+    && [[ "$draft2020_missing_ajv_error" == *"Locked Ajv dependency is missing"* ]]; then
+    pass
+else
+    fail "Draft 2020-12 prerequisite diagnostics did not distinguish Node npm and Ajv"
+fi
+
+test_start "Draft 2020-12 permits v1 only for non-promoting decisions and requires v2 activation evidence for promotion"
+draft2020_root="$FRAMEWORK_DIR/tools/evals"
+promotion_v1_valid="$fixture_root/promotion-v1-valid.json"
+promotion_v1_invalid="$fixture_root/promotion-v1-invalid.json"
+promotion_v2_valid="$fixture_root/promotion-v2-valid.json"
+promotion_v2_invalid="$fixture_root/promotion-v2-invalid.json"
+promotion_v2_null_activation="$fixture_root/promotion-v2-null-activation.json"
+promotion_v1_eligible="$fixture_root/promotion-v1-eligible.json"
+jq -n '
+  def sha: "a" * 64;
+  {schema_version:"1.0",decision_kind:"workflow_kernel_behavioral_promotion",
+   bindings:{candidate_manifest_sha256:sha,candidate_instruction_sha256:sha,context_budget_evidence_sha256:sha,review_packet_sha256:sha,semantic_verdict_sha256:sha,trace_set_sha256:sha,pair_sha256:[sha]},
+   automatic_behavioral_gates_passed:false,trusted_execution_profile_passed:true,
+   semantic_false_positive_review:{status:"approved",reviewed_pairs:1,reviewed_candidate_findings:1},failed_gates:["pilot_coverage_or_automatic_gates"],behavioral_promotion_eligible:false}' >"$promotion_v1_valid"
+jq '.failed_gates = []' "$promotion_v1_valid" >"$promotion_v1_invalid"
+ jq '.automatic_behavioral_gates_passed = true | .failed_gates = [] | .behavioral_promotion_eligible = true' "$promotion_v1_valid" >"$promotion_v1_eligible"
+jq '.schema_version = "2.0" | .bindings.activation_observations_sha256 = ("b" * 64) | .native_activation_observation_passed = true | .automatic_behavioral_gates_passed = true | .failed_gates = [] | .behavioral_promotion_eligible = true' "$promotion_v1_valid" >"$promotion_v2_valid"
+jq 'del(.native_activation_observation_passed)' "$promotion_v2_valid" >"$promotion_v2_invalid"
+jq '.bindings.activation_observations_sha256 = null' "$promotion_v2_valid" >"$promotion_v2_null_activation"
+draft2020_prerequisite_error=""
+if ! draft2020_prerequisite_error="$(draft2020_require_prerequisites node npm "$draft2020_root" 2>&1)"; then
+    fail "Draft 2020-12 prerequisite failure: $draft2020_prerequisite_error"
+elif NODE_PATH="$draft2020_root/node_modules" node "$FRAMEWORK_DIR/tools/evals/validate-promotion-decision-schema.cjs" \
+        "$promotion_decision_schema" "$promotion_v1_valid" "$promotion_v2_valid" >/dev/null \
+    && ! NODE_PATH="$draft2020_root/node_modules" node "$FRAMEWORK_DIR/tools/evals/validate-promotion-decision-schema.cjs" \
+        "$promotion_decision_schema" "$promotion_v1_eligible" >/dev/null 2>&1 \
+    && ! NODE_PATH="$draft2020_root/node_modules" node "$FRAMEWORK_DIR/tools/evals/validate-promotion-decision-schema.cjs" \
+        "$promotion_decision_schema" "$promotion_v1_invalid" >/dev/null 2>&1 \
+    && ! NODE_PATH="$draft2020_root/node_modules" node "$FRAMEWORK_DIR/tools/evals/validate-promotion-decision-schema.cjs" \
+        "$promotion_decision_schema" "$promotion_v2_invalid" >/dev/null 2>&1 \
+    && ! NODE_PATH="$draft2020_root/node_modules" node "$FRAMEWORK_DIR/tools/evals/validate-promotion-decision-schema.cjs" \
+        "$promotion_decision_schema" "$promotion_v2_null_activation" >/dev/null 2>&1; then
+    pass
+else
+    fail "Draft 2020-12 validator accepted an invalid v1/v2 promotion decision or rejected a valid one"
 fi
 
 test_start "seeded review emits a safe hash-bound packet without retaining model prose"
@@ -2520,7 +4851,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
     --cases "$pilot_cases" \
     --repeats 3 \
     --output "$pilot_output" \
-    --codex-bin "$fake_codex" >/dev/null \
+    --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null \
     && "$semantic_finalizer" --results "$pilot_output" --write-verdict-template "$pilot_template" >/dev/null \
     && jq '
       .reviewer.kind = "human"
@@ -2535,6 +4866,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
     && jq -e '
       .automatic_behavioral_gates_passed == true
       and .trusted_execution_profile_passed == false
+      and .native_activation_observation_passed == true
       and .semantic_false_positive_review.status == "approved"
       and .semantic_false_positive_review.reviewed_pairs == 3
       and .semantic_false_positive_review.reviewed_candidate_findings == 12
@@ -2561,6 +4893,112 @@ else
     fail "fake or overridden Codex execution became promotion-eligible"
 fi
 
+test_start "contract-test activation evidence remains non-promoting through finalization"
+static_activation_pilot_output="$fixture_root/static-activation-pilot-output"
+static_activation_template="$fixture_root/static-activation-pilot-template.json"
+static_activation_verdict="$fixture_root/static-activation-pilot-verdict.json"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases "$pilot_cases" --repeats 3 --output "$static_activation_pilot_output" \
+    --codex-bin "$fake_codex" \
+    --activation-observations "$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json" >/dev/null \
+    && "$semantic_finalizer" --results "$static_activation_pilot_output" --write-verdict-template "$static_activation_template" >/dev/null \
+    && jq '
+      .reviewer.kind = "human"
+      | .reviewer.attestation = "reviewed_all_candidate_findings_against_synthetic_fixture"
+      | .reviewed_at = "2026-07-12T12:00:00Z"
+      | .pair_verdicts[].candidate_findings[].verdict = "supported"
+      | .pair_verdicts[].candidate_findings[].reason_code = "supported_by_synthetic_fixture"
+      | .pair_verdicts[].verdict = "approved"
+      | .overall_verdict = "approved"
+    ' "$static_activation_template" >"$static_activation_verdict" \
+    && ! "$semantic_finalizer" --results "$static_activation_pilot_output" --candidate-variant "$candidate" --verdict "$static_activation_verdict" >/dev/null 2>&1 \
+    && jq -e '
+      .schema_version == "2.0"
+      and .native_activation_observation_passed == false
+      and .failed_gates == ["untrusted_execution_profile", "native_activation_observation_not_admissible"]
+      and .behavioral_promotion_eligible == false
+    ' "$static_activation_pilot_output/promotion-decision.json" >/dev/null; then
+    pass
+else
+    fail "contract-test activation evidence became admissible during finalization"
+fi
+
+test_start "finalizer retains runner-admitted manual activation evidence after the 24-hour admission window"
+stale_finalizer_results="$fixture_root/stale-finalizer-activation-results"
+stale_finalizer_observation="$stale_finalizer_results/activation-observations.json"
+stale_finalizer_plan="$stale_finalizer_results/run-plan.json"
+stale_finalizer_observation_tmp="$fixture_root/stale-finalizer-activation-observation.tmp"
+stale_finalizer_plan_tmp="$fixture_root/stale-finalizer-activation-plan.tmp"
+rm -rf "$stale_finalizer_results"
+cp -R "$pilot_output" "$stale_finalizer_results"
+jq '.provenance.captured_at_utc = "2000-01-01T00:00:00Z"' "$stale_finalizer_observation" >"$stale_finalizer_observation_tmp"
+mv "$stale_finalizer_observation_tmp" "$stale_finalizer_observation"
+stale_finalizer_observation_sha="$(test_sha256_stream <"$stale_finalizer_observation")"
+jq --arg sha "$stale_finalizer_observation_sha" '
+  .activation_observations_sha256 = $sha
+  | .activation_observation.sha256 = $sha
+' "$stale_finalizer_plan" >"$stale_finalizer_plan_tmp"
+mv "$stale_finalizer_plan_tmp" "$stale_finalizer_plan"
+if [[ "$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; RESULTS_DIR="$stale_finalizer_results"; CANDIDATE_VARIANT="$candidate"; native_activation_observation_status "$stale_finalizer_plan")" == true ]]; then
+    pass
+else
+    fail "finalizer rechecked runner-admitted manual activation evidence against a later wall clock"
+fi
+
+test_start "finalizer rejects an unexpected assistant-workflow selection for a negative activation case"
+false_positive_finalizer_results="$fixture_root/false-positive-finalizer-activation-results"
+false_positive_finalizer_observation="$false_positive_finalizer_results/activation-observations.json"
+false_positive_finalizer_plan="$false_positive_finalizer_results/run-plan.json"
+false_positive_finalizer_observation_tmp="$fixture_root/false-positive-finalizer-activation-observation.tmp"
+false_positive_finalizer_plan_tmp="$fixture_root/false-positive-finalizer-activation-plan.tmp"
+rm -rf "$false_positive_finalizer_results"
+cp -R "$pilot_output" "$false_positive_finalizer_results"
+jq '.results[-1].selected_skills = ["assistant-workflow"]' "$false_positive_finalizer_observation" >"$false_positive_finalizer_observation_tmp"
+mv "$false_positive_finalizer_observation_tmp" "$false_positive_finalizer_observation"
+false_positive_finalizer_observation_sha="$(test_sha256_stream <"$false_positive_finalizer_observation")"
+jq --arg sha "$false_positive_finalizer_observation_sha" '
+  .activation_observations_sha256 = $sha
+  | .activation_observation.sha256 = $sha
+' "$false_positive_finalizer_plan" >"$false_positive_finalizer_plan_tmp"
+mv "$false_positive_finalizer_plan_tmp" "$false_positive_finalizer_plan"
+if finalizer_false_positive_status="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; RESULTS_DIR="$false_positive_finalizer_results"; CANDIDATE_VARIANT="$candidate"; native_activation_observation_status "$false_positive_finalizer_plan")"; then
+    if [[ "$finalizer_false_positive_status" == true ]]; then
+        fail "finalizer accepted an unexpected assistant-workflow selection for a negative activation case"
+    else
+        pass
+    fi
+else
+    pass
+fi
+
+test_start "finalizer rejects a missing assistant-workflow selection for a positive activation case"
+missing_positive_finalizer_results="$fixture_root/missing-positive-finalizer-activation-results"
+missing_positive_finalizer_observation="$missing_positive_finalizer_results/activation-observations.json"
+missing_positive_finalizer_plan="$missing_positive_finalizer_results/run-plan.json"
+missing_positive_finalizer_observation_tmp="$fixture_root/missing-positive-finalizer-activation-observation.tmp"
+missing_positive_finalizer_plan_tmp="$fixture_root/missing-positive-finalizer-activation-plan.tmp"
+rm -rf "$missing_positive_finalizer_results"
+cp -R "$pilot_output" "$missing_positive_finalizer_results"
+jq '.results[0].selected_skills = ["assistant-thinking"]' "$missing_positive_finalizer_observation" >"$missing_positive_finalizer_observation_tmp"
+mv "$missing_positive_finalizer_observation_tmp" "$missing_positive_finalizer_observation"
+missing_positive_finalizer_observation_sha="$(test_sha256_stream <"$missing_positive_finalizer_observation")"
+jq --arg sha "$missing_positive_finalizer_observation_sha" '
+  .activation_observations_sha256 = $sha
+  | .activation_observation.sha256 = $sha
+' "$missing_positive_finalizer_plan" >"$missing_positive_finalizer_plan_tmp"
+mv "$missing_positive_finalizer_plan_tmp" "$missing_positive_finalizer_plan"
+if missing_positive_finalizer_status="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; RESULTS_DIR="$missing_positive_finalizer_results"; CANDIDATE_VARIANT="$candidate"; native_activation_observation_status "$missing_positive_finalizer_plan")"; then
+    if [[ "$missing_positive_finalizer_status" == true ]]; then
+        fail "finalizer accepted a missing assistant-workflow selection for a positive activation case"
+    else
+        pass
+    fi
+else
+    pass
+fi
+
 test_start "final artifacts use atomic writes and safely recover from either one-artifact interruption"
 semantic_only_results="$fixture_root/semantic-only-retry"
 decision_only_results="$fixture_root/decision-only-retry"
@@ -2575,7 +5013,7 @@ if grep -Fq 'atomic_write_json' "$runner" \
         --candidate-variant "$candidate" --verdict "$pilot_verdict" >/dev/null 2>&1 \
     && ! "$semantic_finalizer" --results "$decision_only_results" --baseline-variant "$baseline" \
         --candidate-variant "$candidate" --verdict "$pilot_verdict" >/dev/null 2>&1 \
-    && jq -e '.behavioral_promotion_eligible == false and .failed_gates == ["untrusted_execution_profile"]' \
+    && jq -e '.behavioral_promotion_eligible == false and .native_activation_observation_passed == true and .failed_gates == ["untrusted_execution_profile"]' \
         "$semantic_only_results/promotion-decision.json" "$decision_only_results/promotion-decision.json" >/dev/null \
     && jq -e '.overall_verdict == "approved"' \
         "$semantic_only_results/semantic-review-verdict.json" "$decision_only_results/semantic-review-verdict.json" >/dev/null; then
@@ -3029,7 +5467,7 @@ else
     fail "raw adapter error message rejection was not actionable"
 fi
 
-test_start "v4 resolved-model traces cannot mix with the v5 attestation contract"
+test_start "v4 resolved-model traces cannot mix with the v6 attestation contract"
 legacy_v4_trace_dir="$fixture_root/legacy-v4-trace"
 legacy_v4_error="$fixture_root/legacy-v4-error.txt"
 mkdir -p "$legacy_v4_trace_dir"
@@ -3046,7 +5484,7 @@ if ! "$legacy_runner" --validate-traces "$legacy_v4_trace_dir" >/dev/null 2>"$le
     && grep -Eq 'runtime_model_attestation|resolved_model' "$legacy_v4_error"; then
     pass
 else
-    fail "legacy resolved-model evidence remained valid under the v5 schema"
+    fail "legacy resolved-model evidence remained valid under the v6 schema"
 fi
 
 test_start "trace identity rejects requested-model alias contradictions"
@@ -3135,16 +5573,6 @@ if jq -e '
     pass
 else
     fail "trace schema does not expose the required behavioral provenance contract"
-fi
-
-test_start "Codex workflow examples use the current -C working-directory flag"
-if grep -Fq 'AGENT_CWD_FLAG="-C"' "$FRAMEWORK_DIR/skills/assistant-workflow/agents/codex.conf" \
-    && grep -Fq 'codex exec "PROMPT" -C DIR' "$FRAMEWORK_DIR/skills/assistant-workflow/agent.conf" \
-    && grep -Fq -- "codex exec \"\$(cat 'briefs/slice-<N>-<slice_id>.md')\" -C ." "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md" \
-    && ! grep -Fq -- 'codex exec "PROMPT" --cwd DIR' "$FRAMEWORK_DIR/skills/assistant-workflow/agent.conf"; then
-    pass
-else
-    fail "one or more approved Codex launch examples still use --cwd"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

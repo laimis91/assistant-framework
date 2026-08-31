@@ -10,19 +10,14 @@ description: "Review code, fix actionable findings, and run one fresh re-review.
 Canonical input, output, phase-gate, and handoff schemas remain authoritative at their enforcement points. Read `contracts/index.yaml` first; do not load every contract at entry.
 
 - `entry`: load `contracts/input.yaml` review-entry fields selected by `review-entry-fields` in `contracts/index.yaml`.
+- `architecture_pack_input`: when Pack review triggers, load `architecture_decision_pack` through `review-architecture-pack-input` before planning or dispatch.
 - `current_round`: load the active round step from `contracts/phase-gates.yaml` at each transition.
 - `selected_handoff`: select the compact dispatch pointer from `contracts/handoffs.yaml` before Reviewer or QAEvaluator dispatch.
 - `reviewer_context`: resolve the fresh bounded Reviewer bundle only when a review pass begins.
 - `return_validation`: select the canonical return pointer only after a worker/direct-fallback result exists.
 - `completion`: load the applicable `contracts/output.yaml` artifacts at completion, before the final review exit.
 
-Migration note: assistant-review contracts are v6. Pack projections require non-empty boundaries, exact five-concern design-pressure coverage, and a current authoritative `ref` that preserves recoverable selected design, rationale, and viable alternatives/dispositions; triggered Reviewer returns require `architecture_decision_pack_checks`. v4 Pack review carries canonical `architecture_design_mode`; its nested Pack mode must match and review-intensive review requires independent challenge evidence. Applicable direct-user,
-`AGENTS.md`, and active-skill instructions trigger required Reviewer and QA
-roles; record their provenance and covered work in `subagent_trigger_scope`
-without a second permission question. Explicit opt-out, real unavailability,
-and exact active policy blocks retain direct fallback. Every Reviewer return and
-final summary requires a non-empty `reviewed_scope` string array so workflow
-consumers can use the producer packet without deriving or guessing its boundary.
+Migration note: assistant-review contracts are v7. Persisted v6 batch packets are invalidated and rebuilt; they never reach CLEAN. Triggered Pack review loads `architecture_pack_input` and validates recoverable selected design, rationale, and viable alternatives/dispositions plus `architecture_decision_pack_checks`. Applicable instructions trigger Reviewer/QA roles with `subagent_trigger_scope`; opt-out, unavailability, or policy blocks use direct fallback. Reviewer returns and final summaries use non-empty `reviewed_scope` so workflow consumers can use the producer packet.
 
 Selectors use unique id, canonical path, exact section/key, and explicit or allowed runtime names. Entry declares no immediate principles, checklist, or rubric references.
 
@@ -38,7 +33,7 @@ Find evidence-backed defects, regressions, and test gaps; fix them in review-fix
 
 - Scope, mode, and review material are resolved before the loop.
 - Findings are severity-ranked with evidence and confidence.
-- Every Reviewer return names the non-empty `reviewed_scope` actually inspected.
+- Every frozen-snapshot batch completes at least two independent passes before aggregation, fix, or exit; audit exits after one started batch reaches terminal accounting, complete or incomplete (`HAS_REMAINING_ITEMS` when incomplete), and returns name non-empty `reviewed_scope` and coverage.
 - Every review applies the SOLID, KISS, DRY, YAGNI, and readability lens from `references/review-principles.md`.
 - When a carried Architecture Decision Pack applies, the review checks its freshness, ownership/dependency boundary, semantic type ledger, falsifiable quality scenarios, compatibility/extension seam, and verification handoff.
 - In review-fix mode, must-fix and should-fix findings are addressed or explicitly deferred.
@@ -50,7 +45,7 @@ Find evidence-backed defects, regressions, and test gaps; fix them in review-fix
 
 ## Constraints
 
-- Default to audit mode when the user asks to provide, report, list, or summarize findings.
+- Infer review mode from semantic modification authority, not fixed wording, authorship, platform, or connector metadata. Clear report-only intent selects audit; clear source-modification authorization selects review-fix. A carried active approved implementation workflow authorizes only bounded, in-scope review fixes. Only when audit versus editing remains materially unresolved, ask: "Should I only report findings, or also implement and verify fixes?" Do not review or mutate until answered.
 - Do not emit intermediate review summaries; present one final summary after loop exit.
 - Use concrete risk categories for refactor-related findings.
 - Treat clean-code principles as evidence lenses, not acronym-driven style rules.
@@ -60,13 +55,15 @@ Find evidence-backed defects, regressions, and test gaps; fix them in review-fix
 
 Prefer explicit files/content/diff, then uncommitted changes, then the active task journal or packet, then requested current-file audit. Ask only when no review material can be determined.
 
-A standalone `review this` with no carried workflow evidence performs Spec Review against the user request and user scope, records a PASS evidence pointer before Reviewer dispatch, and blocks dispatch on FAIL until the scope mismatch is fixed and Spec Review passes. Standalone review does not require a task journal; `task_journal_path` remains optional.
+A standalone `review this` without carried workflow evidence runs Spec Review against user scope. In review-fix mode, repair an authorized mismatch and repeat to a PASS pointer before Reviewer dispatch. In audit mode, audit retains the Spec Review mismatch as an aggregate finding and continues a frozen read-only multi-pass batch without source mutation; the final report includes the mismatch and every later quality finding. Standalone does not require a task journal; `task_journal_path` is optional.
 
 A workflow-composed review consumes the carried Spec Review PASS pointer and carried current build/test evidence. After any source fix, every subsequent Reviewer dispatch requires real current passed build/test evidence; a not-applicable marker is invalid.
 
 ## Review Modes
 
-Use the smallest applicable combination: spec, regression, test, maintainability, bugfix evidence, semantic contract, behavioral contract, agentic loop safety, and security. Contract and loop modes are enabled by the three entry flags; security-sensitive surfaces route to `assistant-security`.
+Use the smallest applicable combination: spec, regression, test, maintainability, bugfix evidence, semantic contract, behavioral contract, agentic loop safety, and security. Contract and loop modes are enabled by the three entry flags; security-sensitive surfaces route to `assistant-security`. A `risk_selected_specialist` security pass uses Code Reviewer with the assistant-security checklist/perspective while retaining the canonical Reviewer schema.
+
+Authorship, branch/PR ownership, platform, and connector availability may identify material but never authorize source changes. Carried workflow authorization permits only evidence-backed in-scope fixes. Findings expanding scope, requirements, or architecture return to the composing workflow for planning or approval.
 
 Findings include severity (`must-fix`, `should-fix`, or `nit`), file/line evidence, concrete impact, smallest useful fix, and evidence-calibrated confidence. Speculative concerns remain non-blocking Observations.
 
@@ -113,19 +110,21 @@ For each principle/readability finding, include the violated lens, affected surf
 
 ## Review Loop Routing
 
-After entry fields are resolved, load `references/review-loop.md` before the first REVIEW step. It is the only immediately mandatory first-review reference in orchestrator context and owns REVIEW -> EVALUATE -> FIX -> VALIDATE, fresh bundle construction, drift/pivot handling, and the max 10 rounds limit. Principles, applicable checklist sections, and rubric guidance belong to the fresh Reviewer worker bundle created only when a review pass begins; they are not assistant-review entry dependencies.
+After entry, load `references/review-loop.md` before the first REVIEW step. It owns the batch protocol, loop, barriers, pivots, and max 10. Principles, triggered checklists, and rubric guidance belong to fresh pass bundles. Before dispatch, include `worker_return_schema_selector`: recursively required/triggered shapes, types, enums, and cardinality only; never sibling/batch state.
 
 Run QA only when `qa_evaluation_mode=required`. The loop routes to `references/qa-evaluation-loop.md` after build/test and code-review evidence exist; QA evaluates acceptance and scoped quality, and does not replace code review.
 
+When an `approved_feature_preparation_qa_acceptance_obligation` is carried, QAEvaluator returns `approved_feature_preparation_qa_acceptance_obligation_result`: the exact requested scope, execution prerequisite, feature-preparation scope, and one carried source binding, together with `requested_scope_status`, `execution_prerequisite_status`, and evidence. `accepted` or `accepted_with_concerns` paired with `CLEAN` or `ISSUES_FIXED` requires `fulfilled` and `met` statuses with the exact binding and evidence; otherwise return only `rejected`/`HAS_REMAINING_ITEMS` or `blocked`/`BLOCKED`.
+
 ## Exit: Present Final Result
 
-Present one summary using `contracts/output.yaml`. For no findings, say: "No material findings within the reviewed scope and available evidence." `CLEAN` remains a machine enum, not proof of correctness.
+Present one summary using `contracts/output.yaml`. For no findings, say: "No material findings within the reviewed scope and available evidence". `CLEAN` remains a machine enum, not proof of correctness.
 
 ## Rules
 
 - Keep round results internal and present one final summary.
-- Use a fresh Reviewer bundle each medium+ round; direct fallback uses the same isolated bundle without claiming a subagent dispatch.
-- Previously fixed items are not re-reported; findings remain evidence-backed.
+- Use fresh sibling-blind bundles; a single broad pass is never sufficient coverage.
+- Wait for every response before aggregation. Incomplete coverage returns `HAS_REMAINING_ITEMS`; prior fixes need closure verification.
 
 ## Output
 
@@ -133,8 +132,8 @@ Return reviewed scope, rounds/result, evidence-backed findings and fixes, verifi
 
 ## Stop Rules
 
-- Audit mode stops after one review pass. Report findings without edits.
-- The normal review-fix path is an initial review, fixes and validation, then one fresh re-review; stop after a no-finding pass unless new evidence justifies another round.
+- Audit mode stops after one review batch. Report findings without edits after all planned passes are terminal.
+- The normal review-fix path is an initial review batch, fixes and validation, then one fresh re-review batch; mutation requires a new snapshot and complete coverage.
 - Before round 3+, require `additional_round_reason` backed by changed files, an unresolved finding, validation failure, regression/drift, or a changed hypothesis. Score below threshold alone is insufficient.
 - The hard max 10 rounds remains: round 10 is terminal and round 11 never starts.
 - Stop and report a blocker if required review material is unavailable or empty.

@@ -2,6 +2,7 @@
 **/bin/
 **/obj/
 **/.publish/
+/tools/evals/node_modules/
 
 # OS files
 **/.DS_Store

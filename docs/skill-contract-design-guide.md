@@ -43,7 +43,7 @@ DSPy replaces hand-written prompts with **signatures** — typed declarations of
 
 **Enforcement for skills:**
 - Every skill MUST declare typed `InputField` and `OutputField` equivalents in YAML
-- Field types: `string`, `int`, `boolean`, `enum`, `string[]`, `object`, `object[]`
+- Field types: `string`, `int`, `boolean`, `enum`, `string[]`, `object`, `object[]`, `float`, `file`, `jsonl_line`
 - Enum fields MUST list all valid values — no open-ended enums
 - Descriptions are not optional — they scope what the agent should produce
 
@@ -199,10 +199,12 @@ The root `SKILL.md` must tell the agent to read the index first, load only the s
 
 ### Field schema
 
+`float`, `file`, and `jsonl_line` are supported repository extensions.
+
 ```yaml
 fields:
   - name: field_name            # identifier (snake_case)
-    type: string                # string | int | boolean | enum | string[] | object | object[]
+    type: string                # string|int|boolean|enum|string[]|object|object[]|float|file|jsonl_line
     required: true              # true | false | conditional
     condition: "when..."        # only when required=conditional
     description: "what this is" # human-readable purpose
@@ -280,6 +282,34 @@ smallest relevant behavior; none is required to invent architecture ceremony.
 
 This audit is behavior mapping, not a requirement to change every skill for
 every task. The workflow Pack and review gate are the durable integration path.
+
+### Existing-system feature preparation evidence
+
+Technical preparation for a feature, epic, story, or spike must not classify a
+behavior as a Product question merely because requirements or visual design omit
+it. When existing repository behavior is in scope, `assistant-workflow` owns a
+provider-neutral evidence matrix that traces requirements, design evidence or an
+explicit disposition, current implementation and observable effects, relevant
+behavioral tests or inspected absence/access gaps, conflicts, and evidence gaps.
+The matrix classifies behavior separately from work: for example, behavior may
+be `existing_behavior_to_preserve` while the work is an `implementation_gap`.
+
+Product-question promotion fails closed. Uninspected or inaccessible evidence is
+an evidence gap, contradictory sources are a source conflict, and tested current
+behavior defaults to preservation unless an authoritative source explicitly
+changes it. The gate applies before Plan or Build in prepare-only and end-to-end
+work; implementation-only work must resolve the approved evidence reference.
+Prepare-only completion reports that execution has not started and never
+manufactures changed-files or implementation verification evidence.
+
+Adjacent skills consume but do not redefine this decision. `assistant-thinking`
+may surface candidate concerns or criteria, but cannot promote them without an
+admissible evidence row. `assistant-diagrams` traces every rendered node and edge
+to inspected or user-provided evidence and discloses gaps. `assistant-docs`
+blocks any existing-system preparation document whose behavior claims or Product
+questions lack complete evidence; when a fresh Architecture Decision Pack also
+applies, it returns an additional incomplete-Pack recovery rather than
+propagating those claims as decisions.
 
 ### Phase gate schema
 
@@ -438,7 +468,17 @@ shapes native description routing and is separate from response-grade `.cases`.
 
 Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
 
-Per-skill cases may optionally add `machine_expectations.structured_json_assertions` when substring anchors cannot safely prove a typed response shape. Use only the fixed provider-neutral operators `equals`, `nonempty_string`, `nonempty_array`, `empty_array`, `equals_path`, `required_when_equals`, `array_field_values_exact`, and `array_items_nonempty_fields`. `array_items_nonempty_fields` requires a non-empty target array and non-empty string values for every listed field in every object. Paths must be non-empty JSON arrays of string object keys or non-negative integer array indexes. A selected structured case requires exactly one valid JSON response value. These declarations are grader-only data, never executable instructions: do not permit arbitrary jq, code, expressions, or fixture-provided operators outside this fixed set.
+Per-skill cases may optionally add `machine_expectations.structured_json_assertions` when substring anchors cannot safely prove a typed response shape. Use only the fixed provider-neutral operators `equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`, `required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, `array_items_nonempty_fields`, and `array_items_nonempty_array_fields`. `array_type` accepts arrays, including empty. `array_nonblank_strings` requires a string array of nonblank members; `allow_empty` controls zero members. `path_absent` accepts only absence; present `null` fails. `absent_or_empty_array` accepts only absence or `[]`; `null` and other values fail. `one_of` requires exact membership in bounded scalars. `array_object_values_exact` projects every target-array object to its bounded explicit `fields` list and compares those tuples as an unordered exact multiset against `expected_objects`; this preserves each declared field correlation without making object order significant. `array_items_nonempty_fields` requires a non-empty target array and non-empty string values for every listed field in every object. `array_items_nonempty_array_fields` requires a non-empty target array and a non-empty array of nonblank string values for every listed field in every object. Paths must be non-empty JSON arrays of string object keys or non-negative integer array indexes. A selected structured case requires exactly one valid JSON response value. These declarations are grader-only data, never executable instructions: do not permit arbitrary jq, code, expressions, or fixture-provided operators outside this fixed set.
+
+`one_of` accepts at most 32 declared scalar values. `array_object_values_exact`
+accepts at most 16 unique projected fields and 32 expected objects; it compares
+their tuples as an unordered multiset, preserves field correlation, and treats
+an absent field differently from a present `null`.
+
+`equals` compares a string, number, boolean, or ordered primitive array
+exactly; an extra, missing, reordered, or type-mismatched array value fails.
+Object- and null-valued expectations remain unsupported so fixtures cannot
+encode arbitrary structures.
 
 **Current implementation: Levels 1-4 for every first-class skill, with complete first-class per-skill eval fixtures.** Level 3 is source structural validation; Level 4 is provider-neutral conformance fixtures plus semantic review. Local-only skill experiments remain opt-in through `--include-local`.
 

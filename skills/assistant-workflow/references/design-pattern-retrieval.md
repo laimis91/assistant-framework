@@ -29,7 +29,7 @@ explicit config path. Do not search home or project directories for one.
   a direct implementation has lower coupling and equal correctness.
 - SOLID, DRY, and design patterns are evidence lenses, not acronym quotas.
 - Do not persist configured roots, source bodies, personal paths, or customer
-  code in plans, indexes, logs, plugin mirrors, or company installations.
+  code in plans, indexes, logs, generated copies, or company installations.
 - Use library id plus relative path in evidence.
 - Reject stale language/style, hidden dependencies, unsafe caching/lifecycle,
   and examples whose tradeoffs do not fit the current force.

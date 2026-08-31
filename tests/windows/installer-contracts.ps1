@@ -1171,7 +1171,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         }
     }
 
-    Invoke-Contract 'CLI validates help, agent, skill, and plugin combinations' {
+    Invoke-Contract 'CLI validates help, agent, and skill combinations' {
         Use-IsolatedEnvironment 'cli validation' {
             param($root, $isolatedUserProfile)
             $help = Invoke-Installer -Arguments @('-Help')
@@ -1202,8 +1202,10 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Assert-True ($unknown.ExitCode -ne 0) 'Unknown agent should fail'
             $unknownSkill = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-not-real')
             Assert-True ($unknownSkill.ExitCode -ne 0) 'Unknown skill should fail'
-            $exclusive = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-Plugin', 'assistant-dev')
-            Assert-True ($exclusive.ExitCode -ne 0) '-Skill and -Plugin together should fail'
+            $beforeRetiredPlugin = Get-TreeFingerprint -LiteralPath $root
+            $retiredPlugin = Invoke-Installer -Arguments @('-Agent', 'codex', '-Plugin', 'assistant-core')
+            Assert-True ($retiredPlugin.ExitCode -ne 0) 'Retired -Plugin parameter should fail'
+            Assert-Equal $beforeRetiredPlugin (Get-TreeFingerprint -LiteralPath $root) 'Retired -Plugin parameter mutated the isolated environment'
         }
     }
 
@@ -1232,7 +1234,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Assert-NotContains $config '"-Command"' 'MCP config uses command-text execution'
             Assert-NotContains $config 'Invoke-Expression' 'MCP config introduces evaluated command text'
 
-            foreach ($excluded in @('context-budget-report.sh', 'evals\run-codex-framework-evals.sh', 'evals\finalize-workflow-kernel-review.sh', 'evals\lib\context-budget-evidence.sh')) {
+            foreach ($excluded in @('context-budget-report.sh', 'evals\run-codex-framework-evals.sh', 'evals\finalize-workflow-kernel-review.sh', 'evals\lib\context-budget-evidence.sh', 'evals\validate-promotion-decision-schema.cjs', 'evals\package.json', 'evals\package-lock.json', 'evals\node_modules')) {
                 Assert-False (Test-Path -LiteralPath (Join-Path (Join-Path $hostileCodexHome 'tools') $excluded)) "Source-only tool was installed: $excluded"
             }
         }
@@ -1321,7 +1323,7 @@ requires:
         }
     }
 
-    Invoke-Contract 'full inventory, plugin profile, and single-skill selection remain bounded' {
+    Invoke-Contract 'full inventory and single-skill selection remain bounded' {
         Use-IsolatedEnvironment 'inventory selection' {
             param($root, $isolatedUserProfile)
             $full = Invoke-Installer -Arguments @('-Agent', 'gemini')
@@ -1335,16 +1337,6 @@ requires:
             )
             $actual = Get-InstalledSkillNames -SkillsRoot (Join-Path $isolatedUserProfile '.gemini\skills')
             Assert-Equal $expected $actual 'Full Windows inventory differs from root assistant-* inventory'
-
-            $profileHome = Join-Path $root 'Profile User'
-            [void][System.IO.Directory]::CreateDirectory($profileHome)
-            [Environment]::SetEnvironmentVariable('USERPROFILE', $profileHome, 'Process')
-            [Environment]::SetEnvironmentVariable('HOME', $profileHome, 'Process')
-            $profile = Invoke-Installer -Arguments @('-Agent', 'gemini', '-Plugin', 'assistant-core')
-            Assert-Equal 0 $profile.ExitCode "Profile install failed: $($profile.Output)"
-            $profileSkills = Get-InstalledSkillNames -SkillsRoot (Join-Path $profileHome '.gemini\skills')
-            $expectedCore = @('assistant-clarify', 'assistant-telos')
-            Assert-Equal $expectedCore $profileSkills 'assistant-core differs from the canonical plugin boundary'
 
             $singleHome = Join-Path $root 'Single User'
             [void][System.IO.Directory]::CreateDirectory($singleHome)
@@ -1388,6 +1380,9 @@ requires:
                 'evals\run-codex-framework-evals.sh',
                 'evals\finalize-workflow-kernel-review.sh',
                 'evals\lib\context-budget-evidence.sh',
+                'evals\validate-promotion-decision-schema.cjs',
+                'evals\package.json',
+                'evals\package-lock.json',
                 'cleanup-memory-graph.ps1',
                 'cleanup-memory-graph.sh'
             )
@@ -1396,6 +1391,16 @@ requires:
                 [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $target))
                 [System.IO.File]::WriteAllText($target, 'legacy source-only artifact', (New-Object System.Text.UTF8Encoding($false)))
             }
+            $sourceOnlyDirectory = Join-Path $toolsRoot 'evals\node_modules'
+            [void][System.IO.Directory]::CreateDirectory((Join-Path $sourceOnlyDirectory 'stale\nested'))
+            [System.IO.File]::WriteAllText((Join-Path $sourceOnlyDirectory 'stale\nested\package.json'), 'legacy source-only artifact', (New-Object System.Text.UTF8Encoding($false)))
+            $retiredPluginToolsDirectory = Join-Path $toolsRoot 'plugins'
+            $retiredPluginSyncTool = Join-Path $retiredPluginToolsDirectory 'sync-plugin-skills.sh'
+            $customPluginTool = Join-Path $retiredPluginToolsDirectory 'custom\tool.txt'
+            [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $customPluginTool))
+            [System.IO.File]::WriteAllText($retiredPluginSyncTool, 'legacy plugin tool', (New-Object System.Text.UTF8Encoding($false)))
+            $customPluginToolBytes = [byte[]](255, 13, 10, 4, 3, 2, 1)
+            [System.IO.File]::WriteAllBytes($customPluginTool, $customPluginToolBytes)
             $sentinel = Join-Path $toolsRoot 'company-custom-tool.txt'
             $sentinelBytes = [byte[]](0, 1, 2, 13, 10, 255)
             [System.IO.File]::WriteAllBytes($sentinel, $sentinelBytes)
@@ -1407,9 +1412,13 @@ requires:
             Assert-Contains $dryRun.Output 'Remove managed installed target for retired managed tools' 'Dry run omitted exact retired-target cleanup'
             Assert-Contains $dryRun.Output 'cleanup-memory-graph.ps1' 'Dry run omitted the retired PowerShell cleanup target'
             Assert-Contains $dryRun.Output 'cleanup-memory-graph.sh' 'Dry run omitted the retired Bash cleanup target'
+            Assert-Contains $dryRun.Output 'sync-plugin-skills.sh' 'Dry run omitted the exact retired plugin sync tool'
             foreach ($relativePath in $retiredManagedTargets) {
                 Assert-True (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath) -PathType Leaf) "Dry run removed managed target: $relativePath"
             }
+            Assert-True (Test-Path -LiteralPath $sourceOnlyDirectory -PathType Container) 'Dry run removed the source-only node_modules directory'
+            Assert-True (Test-Path -LiteralPath $retiredPluginToolsDirectory -PathType Container) 'Dry run removed the retired plugin tools directory'
+            Assert-Equal $customPluginToolBytes ([System.IO.File]::ReadAllBytes($customPluginTool)) 'Dry run changed an unrelated plugin tool'
             Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($sentinel)) 'Dry run changed unrelated tools sibling'
 
             $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
@@ -1417,7 +1426,27 @@ requires:
             foreach ($relativePath in $retiredManagedTargets) {
                 Assert-False (Test-Path -LiteralPath (Join-Path $toolsRoot $relativePath)) "Managed target survived reinstall: $relativePath"
             }
+            Assert-False (Test-Path -LiteralPath $sourceOnlyDirectory) 'Source-only node_modules directory survived reinstall'
+            Assert-False (Test-Path -LiteralPath $retiredPluginSyncTool) 'Exact retired plugin sync tool survived reinstall'
+            Assert-True (Test-Path -LiteralPath $retiredPluginToolsDirectory -PathType Container) 'Plugin tools directory containing unrelated content was removed'
+            Assert-Equal $customPluginToolBytes ([System.IO.File]::ReadAllBytes($customPluginTool)) 'Reinstall changed an unrelated plugin tool'
             Assert-Equal $sentinelBytes ([System.IO.File]::ReadAllBytes($sentinel)) 'Reinstall changed unrelated top-level tools sibling'
+
+            $legacyOnlyHome = Join-Path $root 'Codex Legacy Plugin Tool Only Home'
+            $legacyOnlyDirectory = Join-Path $legacyOnlyHome 'tools\plugins'
+            $legacyOnlyTool = Join-Path $legacyOnlyDirectory 'sync-plugin-skills.sh'
+            [void][System.IO.Directory]::CreateDirectory($legacyOnlyDirectory)
+            [System.IO.File]::WriteAllText($legacyOnlyTool, 'legacy plugin tool', (New-Object System.Text.UTF8Encoding($false)))
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', $legacyOnlyHome, 'Process')
+
+            $legacyOnlyDryRun = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-DryRun')
+            Assert-Equal 0 $legacyOnlyDryRun.ExitCode "Legacy-only plugin tool dry run failed: $($legacyOnlyDryRun.Output)"
+            Assert-Contains $legacyOnlyDryRun.Output 'Remove empty managed installed directory for retired managed tools' 'Dry run omitted the projected empty plugin tools directory cleanup'
+            Assert-True (Test-Path -LiteralPath $legacyOnlyDirectory -PathType Container) 'Dry run removed the legacy-only plugin tools directory'
+
+            $legacyOnlyResult = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
+            Assert-Equal 0 $legacyOnlyResult.ExitCode "Legacy-only plugin tool reinstall failed: $($legacyOnlyResult.Output)"
+            Assert-False (Test-Path -LiteralPath $legacyOnlyDirectory) 'Legacy-only empty plugin tools directory survived reinstall'
         }
     }
 

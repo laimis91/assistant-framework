@@ -1,8 +1,4 @@
-# Review Input Contract
-# Resolve these fields before entering the review loop.
-# The agent determines scope from user request context, git state, or task journal.
-
-schema_version: "6.0"
+schema_version: "7.1"
 contract: input
 skill: assistant-review
 
@@ -11,7 +7,7 @@ fields:
     type: enum
     required: true
     enum_values: [files, changes, task, pr, content]
-    description: "What to review — specific files, uncommitted changes, task journal changes, a PR, or pasted/provided content"
+    description: "Review target: files, changes, task, PR, or supplied content"
     on_missing: infer
     infer_from: >
       User specified files → files.
@@ -24,8 +20,8 @@ fields:
   - name: review_material_snapshot
     type: object
     required: true
-    description: "The material available to review, captured as a scope snapshot rather than assuming a diff"
-    validation: "Non-empty. Must include enough material to support concrete file/content findings."
+    description: "Review material captured as a scope snapshot, including non-diff content"
+    validation: "Non-empty and immutable for one review batch. Must include enough material to support concrete file/content findings plus a review_snapshot_id and snapshot_identity that detect source mutation."
     on_missing: fail
     notes: "Generated from review_scope: git diff for changes, file contents for files, task/PR snapshot, or user-provided content."
     object_fields:
@@ -47,17 +43,63 @@ fields:
         required: false
         default: []
         description: "Known files covered by the snapshot"
+      - name: scope_manifest
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Stable reviewable items whose digest and obligations define coverage for this snapshot"
+        validation: "Every item has a stable id, locator, content digest, and applicable concerns; snapshot_identity.scope_manifest_digest binds this exact manifest."
+        object_fields:
+          - name: scope_item_id
+            type: string
+            required: true
+            validation: "Unique within this ordered scope_manifest."
+          - name: locator
+            type: string
+            required: true
+          - name: content_digest
+            type: string
+            required: true
+          - name: applicable_concerns
+            type: string[]
+            required: true
+            min_items: 1
+            validation: "Unique concern identifiers for this scope_item_id."
       - name: source_ref
         type: string
         required: false
         default: null
         description: "Optional PR URL, task journal path, command, or user-provided label"
+      - name: review_snapshot_id
+        type: string
+        required: true
+        description: "Stable identifier for the frozen material reviewed by one batch"
+        validation: "Unique for the material contents and retained on every pass return."
+      - name: snapshot_identity
+        type: object
+        required: true
+        description: "Reproducible identity evidence used to invalidate the batch after material mutation"
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
 
   - name: scope_size
     type: enum
     required: true
     enum_values: [trivial, small, medium, large]
-    description: "Size of the review scope — determines review rigor and whether delegated review is required"
+    description: "Review rigor and delegation scale"
     on_missing: infer
     infer_from: >
       1-2 files, < 50 lines changed → trivial.
@@ -80,10 +122,10 @@ fields:
     required: false
     enum_values: [delegated, direct_fallback, not_applicable]
     description: "How Reviewer responsibility is executed"
-    validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires delegation_opted_out, subagents_unavailable, or policy_disallowed plus fresh review context evidence; not_applicable applies to trivial/small self-review"
+    validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires opted_out, unavailable, policy_disallowed, or trivial/small isolated multi-pass evidence only when no applicable delegation trigger applies; not_applicable never collapses an audit batch to one self-review"
     default: not_applicable
     on_missing: infer
-    infer_from: "For medium+ scope use delegated when applicable instructions trigger Reviewer subagents. Use direct_fallback when the user explicitly opts out, subagents are unavailable after real failure or supported configuration proof, or policy disallows spawning. Use not_applicable for trivial/small self-review."
+    infer_from: "Use delegated when an applicable trigger requires Reviewer subagents, including trivial/small scope. Absent an applicable trigger, use direct_fallback for opt-out, unavailability, policy blocks, or trivial/small two-pass isolation. Use not_applicable only when no review batch is required."
 
   - name: subagent_trigger_scope
     type: string[]
@@ -120,22 +162,51 @@ fields:
     required: false
     enum_values: [not_required, optional, required]
     description: "Whether the independent QA evaluation loop should run after code-review/build evidence"
-    validation: "QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
+    validation: "QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work. A carried approved_feature_preparation_qa_acceptance_obligation also requires QA."
     default: not_required
     on_missing: infer
     infer_from: >
-      Use required only for QA required positive triggers: explicit QA/acceptance evaluation request,
-      accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped
-      UI/visual/product/UX/docs/DX acceptance.
-      Use required when the user explicitly requests QA/acceptance evaluation, an accepted Done
-      Contract exists, harness_capable == true and acceptance evaluation is in scope, the task is
-      domain-scored, or scoped UI/visual/product/UX/docs/DX acceptance applies.
-      QA non-triggers: template labels/placeholders, generic acceptance criteria labels,
-      optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+
-      code-review-only/source-changing work.
-      Use optional when acceptance material exists but the orchestrator has not marked QA as required.
-      Use not_required for ordinary medium+ code-review-only/source-changing work with no separate
-      acceptance evidence need.
+      Use required when the user explicitly requests QA/acceptance evaluation, an accepted Done Contract exists,
+      harness_capable == true and acceptance evaluation is in scope, the task is domain-scored, or scoped UI/visual/product/UX/docs/DX acceptance applies.
+      Use required for a carried approved_feature_preparation_qa_acceptance_obligation.
+      Use optional when acceptance material exists but QA is not required.
+      Use not_required for ordinary medium+ code-review-only/source-changing work.
+
+  - name: feature_preparation_scope
+    type: enum
+    required: false
+    enum_values: [not_applicable, existing_system]
+    description: "Whether the task prepares a feature against behavior already implemented in the repository"
+    validation: "existing_system is required for prepare_only or end_to_end feature/spike work that can affect an existing user-visible route, scope, selection, highlight, focus, side effect, or compatibility behavior. For implement_only, carry existing_system when the approved packet was prepared against such behavior."
+    default: not_applicable
+    on_missing: infer
+    infer_from: "Use existing_system when technical preparation concerns an existing repository behavior or route. Otherwise use not_applicable."
+
+  - name: approved_feature_preparation_qa_acceptance_obligation
+    type: object
+    required: conditional
+    condition: "approved_feature_preparation_qa_acceptance_obligation is carried from workflow"
+    description: "Carried unchanged QA obligation."
+    validation: "Carry the approved workflow payload unchanged: exactly one source binding requires QA and blocks missing prerequisite/evidence."
+    on_missing: fail
+    object_fields:
+      - name: requested_scope
+        type: string
+        required: true
+      - name: execution_prerequisite
+        type: string
+        required: true
+      - name: source_feature_preparation_evidence_ref
+        type: string
+        required: conditional
+        condition: "feature_preparation_scope == existing_system"
+        validation: "Equals the approved evidence ref."
+      - name: source_preparation_basis
+        type: enum
+        required: conditional
+        condition: "feature_preparation_scope == not_applicable"
+        enum_values: [not_applicable]
+        validation: "Records the exact non-existing-system preparation basis without fabricating an evidence ref."
 
   - name: done_contract
     type: object
@@ -244,10 +315,16 @@ fields:
     type: enum
     required: true
     enum_values: [review-fix, audit]
-    description: "review-fix: autonomous loop that fixes issues. audit: report only, no fixes."
-    default: review-fix
+    description: "review-fix: autonomous loop that fixes issues. audit: report only, no fixes. Resolve from semantic modification authority before review begins."
+    validation: "Set audit only for unambiguous report-only intent. Set review-fix only for unambiguous source-modification authorization or a carried active approved implementation workflow whose repairs remain in scope. Do not infer authorization from authorship, branch/PR ownership, platform, or connector."
     on_missing: infer
-    infer_from: "User says 'audit', 'review only', 'just review', 'don't fix', 'provide findings', 'report findings', 'list findings', 'summarize findings', or 'review against' → audit. Otherwise → review-fix."
+    infer_from: >
+      Resolve semantic modification authority rather than matching fixed phrases. Clear report-only intent → audit.
+      Clear authorization to modify source → review-fix. A carried active approved implementation workflow →
+      review-fix only for bounded repairs within its approved scope. If neither outcome is unambiguous, leave
+      mode unresolved and ask; do not begin review or mutation.
+    ask_prompt: "Should I only report findings, or also implement and verify fixes?"
+    notes: "A repair that expands approved scope, requirements, or architecture returns to the composing workflow for planning or approval."
 
   - name: change_kind
     type: enum
@@ -256,7 +333,7 @@ fields:
     description: "Dominant kind of material under review; skill_or_workflow triggers semantic contract review"
     on_missing: infer
     infer_from: >
-      Changes under skills/, plugins/*/skills/, contracts/, evals/, prompts, automation that drives workflow behavior,
+      Changes under skills/, contracts/, evals/, prompts, automation that drives workflow behavior,
       generated instruction templates, agent-framework docs, or named-method adaptations → skill_or_workflow.
       Application source changes → code. Documentation-only changes → docs. Config-only changes → config.
       Multiple categories → mixed.
@@ -435,7 +512,7 @@ fields:
   - name: task_journal_path
     type: string
     required: false
-    description: "Path to active task journal, if one exists"
+    description: "Active task journal path, when present"
     default: null
     validation: "File exists at the specified path"
     notes: "When present, review findings are appended to the journal's Review Log"
@@ -443,7 +520,6 @@ fields:
   - name: previously_fixed
     type: object[]
     required: false
-    description: "Items already fixed in prior review loops (carries over from workflow Build/Review)"
     default: []
     object_fields:
       - name: description
@@ -453,8 +529,111 @@ fields:
         type: int
         required: true
         validation: ">= 1 and <= 10"
+      - name: aggregate_finding_id
+        type: string
+        required: conditional
+        condition: "entry was created under producer schema 7.1 or later"
+      - name: source_finding_ids
+        type: string[]
+        required: conditional
+        condition: "entry was created under producer schema 7.1 or later"
+        min_items: 1
+      - name: source_provenance
+        type: object[]
+        required: conditional
+        condition: "entry was created under producer schema 7.1 or later"
+        min_items: 1
+        object_fields:
+          - name: source_kind
+            type: enum
+            required: true
+            enum_values: [spec_review, review_pass]
+          - name: source_id
+            type: string
+            required: true
+      - name: closure_status
+        type: enum
+        required: false
+        enum_values: [pending_verification, verified_closed, regressed, incomplete]
+        description: "Latest re-review closure state; regressed or incomplete items remain reportable"
 
-# Validation behavior:
+  - name: persisted_v6_packet_migration
+    type: object
+    required: conditional
+    condition: "persisted review packet was created under v6"
+    description: "v6 to producer 7.1 migration."
+    validation: "Invalidate v6 and rebuild from a freshly rehashed 7.1 snapshot; block CLEAN/ISSUES_FIXED. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance."
+    on_missing: fail
+    object_fields:
+      - name: source_schema_version
+        type: enum
+        required: true
+        enum_values: ["6.0"]
+      - name: batch_disposition
+        type: enum
+        required: true
+        enum_values: [invalidated_rebuild_required]
+      - name: rebuilt_review_snapshot_id
+        type: string
+        required: true
+      - name: rebuilt_snapshot_identity
+        type: object
+        required: true
+        description: "Fresh 7.1 identity."
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
+
+  - name: persisted_v7_0_packet_invalidation
+    type: object
+    required: conditional
+    condition: "persisted review packet schema_version == 7.0"
+    validation: "Invalidate all 7.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 7.1. Rebuild required review/QA from a fresh 7.1 snapshot before CLEAN/ISSUES_FIXED."
+    on_missing: fail
+    object_fields:
+      - name: source_schema_version
+        type: enum
+        required: true
+        enum_values: ["7.0"]
+      - name: batch_disposition
+        type: enum
+        required: true
+        enum_values: [invalidated_rebuild_required]
+      - name: rebuilt_review_snapshot_id
+        type: string
+        required: true
+      - name: rebuilt_snapshot_identity
+        type: object
+        required: true
+        description: "Fresh 7.1 identity after rehash."
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
+
 # 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required before entering the loop
 # 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
 # 3. If qa_evaluation_mode=required: require acceptance_criteria, verification_evidence, qa_filter_policy, and Done Contract with debate_record when the task has one before QAEvaluator dispatch

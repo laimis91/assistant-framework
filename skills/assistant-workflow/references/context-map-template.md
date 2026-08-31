@@ -41,6 +41,11 @@ Generated: [date] | Task: [1-sentence description]
 |------|-----------|------|
 | [module/feature] | [path] | Unit / Integration / E2E |
 
+## Observable Behavior Inventory (existing-system feature preparation only)
+| Entry / route | Execution path | Observable effects | Behavioral test assertions | Preservation or explicit change |
+|---------------|----------------|--------------------|----------------------------|---------------------------------|
+| [entry] | [symbol → symbol] | [selection/highlight/focus/etc.] | [test:path assertion] | [preserve/change/conflict/gap] |
+
 ## References Checked
 | Path or query | Relationship | Outcome |
 |---------------|--------------|---------|

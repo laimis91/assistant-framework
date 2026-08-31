@@ -17,6 +17,192 @@
     "Compare the local response against the review loop entry, findings, fix, validate, and exit contracts.",
     "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
   ],
+  "canonical_review_batch_expectations": {
+    "templates": {
+      "small_base": {
+        "batch_id": "batch-1",
+        "review_snapshot_id": "snapshot-1",
+        "scope_size": "small",
+        "topology": {
+          "discovery_pass_count": 2,
+          "canonical_discovery_perspectives": {
+            "trivial_small": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths"],
+            "medium": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers"],
+            "large": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]
+          },
+          "security_specialist_triggered": false,
+          "closure_verification_required": false,
+          "max_required_responses": 2,
+          "max_repair_attempts_per_pass": 1
+        },
+        "expected_passes": [
+          {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-runtime","perspective":"runtime_lifecycle_and_failure_paths","assigned_scope":["scope-1"],"coverage_obligations":["runtime"],"prior_finding_visibility":"none"}
+        ],
+        "required_coverage_tuples": [
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"}
+        ]
+      },
+      "trivial_base": {
+        "batch_id": "batch-1",
+        "review_snapshot_id": "snapshot-1",
+        "scope_size": "trivial",
+        "topology": {
+          "discovery_pass_count": 2,
+          "canonical_discovery_perspectives": {
+            "trivial_small": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths"],
+            "medium": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers"],
+            "large": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]
+          },
+          "security_specialist_triggered": false,
+          "closure_verification_required": false,
+          "max_required_responses": 2,
+          "max_repair_attempts_per_pass": 1
+        },
+        "expected_passes": [
+          {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-runtime","perspective":"runtime_lifecycle_and_failure_paths","assigned_scope":["scope-1"],"coverage_obligations":["runtime"],"prior_finding_visibility":"none"}
+        ],
+        "required_coverage_tuples": [
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"}
+        ]
+      },
+      "small_post_fix_closure": {
+        "batch_id": "batch-1",
+        "review_snapshot_id": "snapshot-1",
+        "scope_size": "small",
+        "topology": {
+          "discovery_pass_count": 2,
+          "canonical_discovery_perspectives": {
+            "trivial_small": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths"],
+            "medium": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers"],
+            "large": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]
+          },
+          "security_specialist_triggered": false,
+          "closure_verification_required": true,
+          "max_required_responses": 3,
+          "max_repair_attempts_per_pass": 1
+        },
+        "expected_passes": [
+          {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-runtime","perspective":"runtime_lifecycle_and_failure_paths","assigned_scope":["scope-1"],"coverage_obligations":["runtime"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-closure","perspective":"closure_verification","assigned_scope":["scope-1"],"coverage_obligations":["verify previously fixed finding"],"prior_finding_visibility":"closure_ledger"}
+        ],
+        "required_coverage_tuples": [
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"previously_fixed","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"previously_fixed","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-closure","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"closure_verification","coverage_obligation":"verify previously fixed finding"},
+          {"review_pass_id":"pass-closure","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"closure_verification","coverage_obligation":"verify previously fixed finding"},
+          {"review_pass_id":"pass-closure","scope_item_id":"scope-1","applicable_concern":"previously_fixed","review_perspective":"closure_verification","coverage_obligation":"verify previously fixed finding"}
+        ]
+      },
+      "medium_inflight_invalidation": {
+        "batch_id": "batch-1",
+        "review_snapshot_id": "snapshot-1",
+        "scope_size": "medium",
+        "topology": {
+          "discovery_pass_count": 3,
+          "canonical_discovery_perspectives": {
+            "trivial_small": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths"],
+            "medium": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers"],
+            "large": ["contract_and_test_oracle", "runtime_lifecycle_and_failure_paths", "integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]
+          },
+          "security_specialist_triggered": false,
+          "closure_verification_required": false,
+          "max_required_responses": 3,
+          "max_repair_attempts_per_pass": 1
+        },
+        "expected_passes": [
+          {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-runtime","perspective":"runtime_lifecycle_and_failure_paths","assigned_scope":["scope-1"],"coverage_obligations":["runtime"],"prior_finding_visibility":"none"},
+          {"review_pass_id":"pass-integration","perspective":"integration_compatibility_and_consumers","assigned_scope":["scope-1"],"coverage_obligations":["integration"],"prior_finding_visibility":"none"}
+        ],
+        "required_coverage_tuples": [
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-contract","scope_item_id":"scope-1","applicable_concern":"integration","review_perspective":"contract_and_test_oracle","coverage_obligation":"contract"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-runtime","scope_item_id":"scope-1","applicable_concern":"integration","review_perspective":"runtime_lifecycle_and_failure_paths","coverage_obligation":"runtime"},
+          {"review_pass_id":"pass-integration","scope_item_id":"scope-1","applicable_concern":"contract","review_perspective":"integration_compatibility_and_consumers","coverage_obligation":"integration"},
+          {"review_pass_id":"pass-integration","scope_item_id":"scope-1","applicable_concern":"runtime","review_perspective":"integration_compatibility_and_consumers","coverage_obligation":"integration"},
+          {"review_pass_id":"pass-integration","scope_item_id":"scope-1","applicable_concern":"integration","review_perspective":"integration_compatibility_and_consumers","coverage_obligation":"integration"}
+        ]
+      }
+    },
+    "scope_manifests": {
+      "small_base": [{"scope_item_id":"scope-1","locator":"skills/assistant-review/evals/cases.json#small_base","content_digest":"sha256:assistant-review-small-base","applicable_concerns":["contract","runtime"]}],
+      "trivial_base": [{"scope_item_id":"scope-1","locator":"skills/assistant-review/evals/cases.json#trivial_base","content_digest":"sha256:assistant-review-trivial-base","applicable_concerns":["contract","runtime"]}],
+      "small_post_fix_closure": [{"scope_item_id":"scope-1","locator":"skills/assistant-review/evals/cases.json#small_post_fix_closure","content_digest":"sha256:assistant-review-small-closure","applicable_concerns":["contract","runtime","previously_fixed"]}],
+      "medium_inflight_invalidation": [{"scope_item_id":"scope-1","locator":"skills/assistant-review/evals/cases.json#medium_inflight_invalidation","content_digest":"sha256:assistant-review-medium-invalidation","applicable_concerns":["contract","runtime","integration"]}]
+    },
+    "case_template_refs": {
+      "audit-batch-waits-for-all-pass-results": "small_base",
+      "incomplete-review-batch-never-cleans": "small_base",
+      "post-fix-review-uses-fresh-snapshot-batch": "small_post_fix_closure",
+      "post-fix-verified-closure-with-incomplete-coverage": "small_post_fix_closure",
+      "post-fix-review-regression-remains-open": "small_post_fix_closure",
+      "audit-spec-review-fail-continues-complete-batch": "small_base",
+      "in-flight-mutation-invalidates-review-batch": "medium_inflight_invalidation",
+      "trivial-audit-uses-two-isolated-passes": "trivial_base"
+    },
+    "case_requirements": {
+      "audit-batch-waits-for-all-pass-results": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "incomplete-review-batch-never-cleans": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "post-fix-review-uses-fresh-snapshot-batch": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "post-fix-verified-closure-with-incomplete-coverage": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "post-fix-review-regression-remains-open": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "audit-spec-review-fail-continues-complete-batch": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "in-flight-mutation-invalidates-review-batch": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "trivial-audit-uses-two-isolated-passes": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"}
+    }
+  },
+  "canonical_qa_case_requirements": {
+    "qa-obligation-echo-fulfills-exact-binding": {"required_artifacts":["qa_evaluation_result","qa_evaluation_delegation_path"]},
+    "qa-obligation-blocks-missing-or-mismatched-binding": {"required_artifacts":["qa_evaluation_result","qa_evaluation_delegation_path"]},
+    "qa-obligation-blocked-when-required-evidence-is-unavailable": {"required_artifacts":["qa_evaluation_result","qa_evaluation_delegation_path"]}
+  },
+  "canonical_review_closure_expectations": {
+    "post-fix-review-uses-fresh-snapshot-batch": [
+      {"aggregate_finding_id":"aggregate-fixed-1","source_finding_ids":["review_pass:pass-runtime:finding-fixed-1"],"source_provenance":[{"source_kind":"review_pass","source_id":"pass-runtime"}]}
+    ],
+    "post-fix-verified-closure-with-incomplete-coverage": [
+      {"aggregate_finding_id":"aggregate-fixed-1","source_finding_ids":["review_pass:pass-runtime:finding-fixed-1"],"source_provenance":[{"source_kind":"review_pass","source_id":"pass-runtime"}]}
+    ],
+    "post-fix-review-regression-remains-open": [
+      {"aggregate_finding_id":"aggregate-fixed-1","source_finding_ids":["review_pass:pass-runtime:finding-fixed-1"],"source_provenance":[{"source_kind":"review_pass","source_id":"pass-runtime"}]}
+    ]
+  },
+  "canonical_review_finding_rule_distillation_expectations": {
+    "audit-batch-waits-for-all-pass-results": {"active_must_fix_aggregate_finding_ids":["aggregate-1"],"fixed_must_fix_aggregate_finding_ids":[]},
+    "incomplete-review-batch-never-cleans": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]},
+    "post-fix-review-uses-fresh-snapshot-batch": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":["aggregate-fixed-1"]},
+    "post-fix-verified-closure-with-incomplete-coverage": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":["aggregate-fixed-1"]},
+    "post-fix-review-regression-remains-open": {"active_must_fix_aggregate_finding_ids":["aggregate-fixed-1"],"fixed_must_fix_aggregate_finding_ids":["aggregate-fixed-1"]},
+    "audit-spec-review-fail-continues-complete-batch": {"active_must_fix_aggregate_finding_ids":["aggregate-1","aggregate-spec-1"],"fixed_must_fix_aggregate_finding_ids":[]},
+    "in-flight-mutation-invalidates-review-batch": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]},
+    "trivial-audit-uses-two-isolated-passes": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]}
+  },
+  "canonical_review_snapshot_expectations": {
+    "audit-batch-waits-for-all-pass-results": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "incomplete-review-batch-never-cleans": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "post-fix-review-uses-fresh-snapshot-batch": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-0","review_snapshot_id":"snapshot-0","snapshot_identity":{"basis":"diff_digest","value":"digest-0","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-0"}},{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "post-fix-verified-closure-with-incomplete-coverage": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-0","review_snapshot_id":"snapshot-0","snapshot_identity":{"basis":"diff_digest","value":"digest-0","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-0"}},{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "post-fix-review-regression-remains-open": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-0","review_snapshot_id":"snapshot-0","snapshot_identity":{"basis":"diff_digest","value":"digest-0","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-0"}},{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "audit-spec-review-fail-continues-complete-batch": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "in-flight-mutation-invalidates-review-batch": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "trivial-audit-uses-two-isolated-passes": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]}
+  },
   "cases": [
     {
       "id": "review-fix-loop-handles-findings",
@@ -27,11 +213,11 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The working tree has uncommitted changes in multiple files.",
-        "The user did not request audit-only mode."
+        "The user explicitly authorizes source modifications for this review."
       ],
       "expected_behavior": [
         "Resolves review scope and captures a non-empty review_material_snapshot.",
-        "Defaults mode to review-fix.",
+        "Uses the user's explicit source-modification authorization to resolve mode=review-fix.",
         "Runs the initial review with evidence-backed findings and previously_fixed tracking.",
         "Fixes all must-fix and should-fix findings before validation.",
         "Runs build or test verification after fixes.",
@@ -77,6 +263,7 @@
       "prompt": "Review and fix this medium change. The second review has no new must-fix or should-fix finding, but its rubric score is 3.5.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly authorizes source modifications for this review.",
         "Round 1 found an actionable issue and the fix passed validation.",
         "Round 2 has no material finding and no changed file, validation failure, regression/drift, or changed hypothesis after it began."
       ],
@@ -111,40 +298,348 @@
     },
     {
       "id": "audit-one-pass",
-      "title": "Audit mode stops after one pass",
+      "title": "Audit mode stops after one complete batch",
       "category": "bounded_review_loop",
-      "purpose": "Checks that an explicit findings-only audit performs exactly one review pass without edits or re-review.",
+      "purpose": "Checks that an explicit findings-only audit completes one frozen-snapshot multi-pass review batch without edits or a second batch.",
       "prompt": "Audit these changes and report findings only. Do not fix anything.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The review material is non-empty.",
-        "The user explicitly requested audit mode."
+        "The user explicitly requests an audit; report findings only and do not modify source."
       ],
       "expected_behavior": [
-        "Runs exactly one evidence-backed review pass.",
+        "Freezes one review snapshot and plans at least two independent narrow review passes.",
+        "Waits for every expected pass response or terminal failure record before aggregating findings.",
         "Reports findings and residual risk without edits.",
-        "Does not dispatch a second review pass."
+        "Does not dispatch a second review batch."
       ],
       "pass_criteria": [
-        "The response records audit mode and one round.",
+        "The response records audit mode, one complete batch, and all expected pass responses.",
         "The response does not fix findings.",
         "The response presents one final audit report."
       ],
       "fail_signals": [
         "Edits reviewed files.",
-        "Starts a second review round.",
+        "Aggregates after a first response or starts a second review batch.",
         "Asks whether it should fix the findings before reporting."
       ],
       "machine_expectations": {
         "required_substrings": [
           "audit",
-          "one review pass",
+          "frozen snapshot",
+          "independent passes",
+          "all expected responses",
+          "one review batch",
           "findings"
         ],
         "forbidden_substrings": [
-          "second review round",
           "fixed the findings",
           "Should I fix"
+          ]
+      }
+    },
+    {
+      "id": "audit-batch-waits-for-all-pass-results",
+      "title": "Audit waits for every required narrow pass",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that an audit does not conclude after its first clean or finding response when another independent perspective remains outstanding.",
+      "prompt": "Audit this change. The contract/test pass returns clean first; the runtime/lifecycle pass later returns a concrete must-fix. Report once all review evidence is available.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
+        "The frozen review snapshot has two required independent narrow passes.",
+        "The contract/test pass returns clean before the runtime/lifecycle pass returns an evidence-backed must-fix."
+      ],
+      "expected_behavior": [
+        "Keeps the batch open after the first clean response.",
+        "Waits for all required pass results before aggregation.",
+        "Reports the later runtime/lifecycle finding in the single final audit report."
+      ],
+      "pass_criteria": [
+        "The response identifies the response barrier and later-pass finding.",
+        "The response does not claim CLEAN before the later response arrives."
+      ],
+      "fail_signals": [
+        "Concludes after the first clean response.",
+        "Suppresses the later evidence-backed finding.",
+        "Runs a single broad pass as sufficient coverage."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["all expected responses", "later pass", "runtime/lifecycle", "must-fix", "single final audit report"],
+        "forbidden_substrings": ["first clean response is sufficient", "single broad pass", "CLEAN before all responses"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
+          {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","contract_and_test_oracle","runtime_lifecycle_and_failure_paths","runtime_lifecycle_and_failure_paths"]},
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["complete"]},
+          {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":2,"terminal_response_count":2}]},
+          {"operator":"array_field_values_exact","path":["final_summary","aggregated_findings"],"field":"finding_id","expected_values":["review_pass:pass-runtime:finding-1"]},
+          {"operator":"nonempty_array","path":["audit_report","findings"]},
+          {"operator":"equals","path":["final_summary","fixed_items"],"expected":[]}
+        ]
+      }
+    },
+    {
+      "id": "incomplete-review-batch-never-cleans",
+      "title": "Incomplete review coverage cannot return clean",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that a missing, invalid, or terminally failed required pass is visible as incomplete coverage and maps to the compatible remaining-items result.",
+      "prompt": "Review this change read-only. One required independent pass times out after its bounded retry; the other pass finds no issue.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The request is read-only audit mode.",
+        "The review batch has a frozen snapshot and one required pass has terminal failure after its retry limit."
+      ],
+      "expected_behavior": [
+        "Records the terminal failure in the coverage ledger.",
+        "Returns HAS_REMAINING_ITEMS with an explicit coverage gap.",
+        "Does not report a clean or fixed final result."
+      ],
+      "pass_criteria": ["The response reports incomplete coverage and the compatible remaining-items result."],
+    "fail_signals": ["Reports a clean final result", "Reports a fixed final result", "Hides the missing pass."],
+      "machine_expectations": {
+        "required_substrings": ["coverage incomplete", "HAS_REMAINING_ITEMS", "terminal failure"],
+      "forbidden_substrings": ["final result: CLEAN", "final result: ISSUES_FIXED", "missing pass does not matter"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":false},
+          {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["completed","completed","timed_out","timed_out"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"coverage_status","expected_values":["complete","complete","incomplete","incomplete"]},
+          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",2,"coverage_gap_id"]},
+          {"operator":"array_field_values_exact","path":["final_summary","aggregation_ledger"],"field":"disposition","expected_values":["coverage_gap"]},
+          {"operator":"equals","path":["final_summary","aggregation_ledger",0,"source_coverage_gap_ids"],"expected":["coverage-gap:batch-1:pass-runtime:scope-1:contract","coverage-gap:batch-1:pass-runtime:scope-1:runtime"]},
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["incomplete"]}
+        ]
+      }
+    },
+    {
+      "id": "post-fix-review-uses-fresh-snapshot-batch",
+      "title": "Post-fix re-review starts a fresh batch",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that source mutation invalidates prior review coverage and the review-fix re-review begins a new frozen snapshot batch.",
+      "prompt": "Review and fix this change. A must-fix is corrected and tests pass; now re-review it.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly authorizes source modification.",
+        "A source fix changes the material after the first review batch."
+      ],
+      "expected_behavior": [
+        "Invalidates the first batch when source changes.",
+        "Creates a fresh snapshot and complete independent re-review batch after validation.",
+        "Uses previously_fixed as closure verification rather than suppressing an incomplete or regressed fix."
+      ],
+      "pass_criteria": ["The response distinguishes the fresh post-fix batch from the invalidated original batch."],
+      "fail_signals": ["Reuses the original snapshot", "Suppresses a regressed prior fix", "Skips the complete post-fix batch."],
+      "machine_expectations": {
+        "required_substrings": ["fresh snapshot", "new review batch", "closure verification"],
+        "forbidden_substrings": ["original snapshot remains valid", "previously fixed means never report", "single pass is enough"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
+          {"operator":"equals","path":["final_summary","rounds"],"expected":2},
+          {"operator":"one_of","path":["final_summary","result"],"expected_values":["CLEAN","ISSUES_FIXED"]},
+          {"operator":"equals","path":["final_summary","final_batch_plan","topology","closure_verification_required"],"expected":true},
+          {"operator":"array_field_values_exact","path":["final_summary","final_batch_plan","expected_passes"],"field":"perspective","expected_values":["contract_and_test_oracle","runtime_lifecycle_and_failure_paths","closure_verification"]},
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["invalidated","complete"]},
+          {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":2,"terminal_response_count":1},{"expected_response_count":3,"terminal_response_count":3}]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["invalidated","invalidated","invalidated","invalidated","completed","completed","completed","completed","completed","completed","completed","completed","completed"]},
+          {"operator":"array_field_values_exact","path":["final_summary","fixed_items"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"status","expected_values":["verified_closed"]},
+          {"operator":"nonempty_string","path":["final_summary","closure_results",0,"evidence"]},
+          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",0,"coverage_gap_id"]},
+          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",1,"coverage_gap_id"]}
+        ]
+      }
+    },
+    {
+      "id": "post-fix-verified-closure-with-incomplete-coverage",
+      "title": "Verified closure does not hide unrelated incomplete coverage",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that a verified fixed item remains closed while an unrelated incomplete pass conservatively returns remaining items.",
+      "prompt": "Review and fix this change. The closure pass verifies the original fix, but another required pass times out; report the incomplete coverage without reopening the fixed item.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly authorizes source modification.",
+        "The fresh closure-verification pass verifies aggregate-fixed-1 as closed.",
+        "The fresh runtime/lifecycle pass does not return before the terminal barrier."
+      ],
+      "expected_behavior": [
+        "Retains the attempted fix and verified closure evidence.",
+        "Records the unrelated runtime tuple as incomplete with a stable coverage gap.",
+        "Returns HAS_REMAINING_ITEMS without retaining the verified aggregate as a current finding."
+      ],
+      "pass_criteria": ["Verified closure and incomplete unrelated coverage remain distinct in the canonical final summary."],
+      "fail_signals": ["Reopens the verified fixed item", "Drops the coverage gap", "Returns CLEAN or ISSUES_FIXED"],
+      "machine_expectations": {
+        "required_substrings": ["fresh snapshot", "closure verification", "incomplete coverage"],
+        "forbidden_substrings": ["verified closure makes coverage complete", "final result: CLEAN", "final result: ISSUES_FIXED"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":false},
+          {"operator":"equals","path":["final_summary","rounds"],"expected":2},
+          {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["invalidated","incomplete"]},
+          {"operator":"array_field_values_exact","path":["final_summary","fixed_items"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"status","expected_values":["verified_closed"]},
+          {"operator":"equals","path":["final_summary","aggregated_findings"],"expected":[]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["invalidated","invalidated","invalidated","invalidated","completed","completed","completed","timed_out","timed_out","timed_out","completed","completed","completed"]},
+          {"operator":"nonempty_string","path":["final_summary","coverage_ledger",6,"coverage_gap_id"]},
+          {"operator":"array_field_values_exact","path":["final_summary","aggregation_ledger"],"field":"disposition","expected_values":["fixed_closed","coverage_gap"]},
+          {"operator":"path_absent","path":["final_summary","evidence_bounded_claim"]}
+        ]
+      }
+    },
+    {
+      "id": "post-fix-review-regression-remains-open",
+      "title": "Post-fix closure regression remains reportable",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that a fresh closure pass can retain fixed-item history while reporting a regressed original aggregate finding as remaining.",
+      "prompt": "Review and fix this change. The fresh closure pass shows that the original must-fix regressed; report the remaining issue without suppressing its history.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly authorizes source modification.",
+        "The immutable previously_fixed input retains aggregate-fixed-1 and its original source provenance.",
+        "The fresh closure-verification pass finds that aggregate-fixed-1 regressed."
+      ],
+      "expected_behavior": [
+        "Retains the attempted fix in fixed_items.",
+        "Reports the original aggregate identity as regressed in closure_results.",
+        "Keeps the regressed aggregate finding material and returns HAS_REMAINING_ITEMS."
+      ],
+      "pass_criteria": ["The original identity and provenance remain bound while the regression blocks a clean or issues-fixed result."],
+      "fail_signals": ["Drops fixed history", "Invents a replacement aggregate identity", "Returns CLEAN or ISSUES_FIXED"],
+      "machine_expectations": {
+        "required_substrings": ["fresh snapshot", "new review batch", "closure verification"],
+        "forbidden_substrings": ["original snapshot remains valid", "previously fixed means never report", "final result: CLEAN", "final result: ISSUES_FIXED"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
+          {"operator":"equals","path":["final_summary","rounds"],"expected":2},
+          {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
+          {"operator":"array_field_values_exact","path":["final_summary","fixed_items"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"array_field_values_exact","path":["final_summary","closure_results"],"field":"status","expected_values":["regressed"]},
+          {"operator":"array_field_values_exact","path":["final_summary","aggregated_findings"],"field":"aggregate_finding_id","expected_values":["aggregate-fixed-1"]},
+          {"operator":"path_absent","path":["final_summary","evidence_bounded_claim"]}
+        ]
+      }
+    },
+    {
+      "id": "audit-spec-review-fail-is-read-only",
+      "title": "Audit retains a standalone Spec Review mismatch through complete coverage",
+      "category": "spec_review_mode_boundary",
+      "purpose": "Checks that a seeded standalone Spec Review FAIL remains a read-only aggregate finding while every required narrow pass completes.",
+      "prompt": "Audit this standalone change against the stated request. Report findings only; do not fix anything.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The request is standalone audit mode with no carried implementation authority.",
+        "Spec Review FAIL: the diff includes a file outside the stated request scope.",
+        "The mismatch is evidence-backed but no source mutation is authorized."
+      ],
+      "expected_behavior": [
+        "Records the Spec Review FAIL as an evidence-backed aggregate audit finding.",
+        "Continues the frozen read-only multi-pass batch without source mutation.",
+        "Waits for every required pass before one final audit report.",
+        "Dispatches every planned read-only Reviewer pass and exits without repair, Build, or source-mutation dispatch."
+      ],
+      "pass_criteria": [
+        "The response identifies the out-of-scope mismatch.",
+        "The response remains in audit mode and one batch.",
+        "The response records residual risk without changing source."
+      ],
+      "fail_signals": [
+        "Changes source to repair the mismatch.",
+        "Stops coverage after the failing Spec Review.",
+        "Starts a review-fix loop or repeat Spec Review."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["audit", "Spec Review FAIL", "aggregate finding", "all expected responses", "without source mutation", "read-only Reviewer pass"],
+        "forbidden_substrings": ["fixed the mismatch", "Spec Review FAIL ends the audit", "Build started"]
+      }
+    },
+    {
+      "id": "workflow-carried-authorization-allows-bounded-review-fix",
+      "title": "Carried workflow authorization allows bounded review-fix",
+      "category": "review_mode_resolution",
+      "purpose": "Checks that the Review phase of an active approved implementation workflow may repair evidence-backed in-scope findings without asking a redundant mode question.",
+      "prompt": "Check the implementation before completion.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The request is the Review phase of an active approved implementation workflow.",
+        "The current review material and acceptance scope belong to that workflow.",
+        "A discovered defect can be fixed without expanding the approved requirements, architecture, or files outside the implementation scope."
+      ],
+      "expected_behavior": [
+        "Resolves mode=review-fix from carried active approved workflow authorization.",
+        "Reviews, fixes the bounded in-scope defect, validates, and performs a fresh re-review.",
+        "Does not ask the audit-versus-fix question again.",
+        "Returns to the composing workflow for planning or approval if a finding would expand scope."
+      ],
+      "pass_criteria": [
+        "The response identifies carried workflow authorization as the reason for review-fix.",
+        "The response limits repairs to the approved scope.",
+        "The response validates after fixes and performs a fresh re-review."
+      ],
+      "fail_signals": [
+        "Treats workflow review as audit only.",
+        "Asks a redundant audit-versus-fix question despite carried authorization.",
+        "Uses the workflow as permission to expand requirements or architecture."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "carried active approved implementation workflow",
+          "review-fix",
+          "bounded in-scope",
+          "validate",
+          "fresh re-review"
+        ],
+        "forbidden_substrings": [
+          "authorship authorizes",
+          "platform authorizes",
+          "connector authorizes",
+          "expand scope without approval"
+        ]
+      }
+    },
+    {
+      "id": "ambiguous-standalone-review-asks-before-review-or-mutation",
+      "title": "Ambiguous standalone review asks before review or mutation",
+      "category": "review_mode_resolution",
+      "purpose": "Checks that standalone check/review paraphrases with unresolved audit-versus-edit intent ask one concise mode question before any review pass or source change.",
+      "prompt": "Could you check my branch and review the comments?",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "This is a standalone request with no carried active approved implementation workflow.",
+        "The user did not unambiguously request report-only output or source modification.",
+        "The branch and comments may be user-authored or from any review platform."
+      ],
+      "expected_behavior": [
+        "Keeps mode unresolved because both audit and modification remain plausible.",
+        "Asks exactly: Should I only report findings, or also implement and verify fixes?",
+        "Does not begin a review pass, dispatch a Reviewer, or mutate source before the answer.",
+        "Does not use authorship, branch/PR ownership, platform, or connector to resolve authorization."
+      ],
+      "pass_criteria": [
+        "The response contains only the concise mode question needed to proceed.",
+        "The response does not claim audit or review-fix before the user answers.",
+        "The response does not inspect or change code before resolving mode."
+      ],
+      "fail_signals": [
+        "Defaults to review-fix.",
+        "Defaults to audit.",
+        "Starts reviewing or editing before asking.",
+        "Treats authorship or a connector as modification permission."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Should I only report findings, or also implement and verify fixes?"
+        ],
+        "forbidden_substrings": [
+          "review-fix",
+          "audit mode",
+          "I reviewed",
+          "I changed",
+          "authorship authorizes",
+          "platform authorizes",
+          "connector authorizes"
         ]
       }
     },
@@ -192,7 +687,7 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The review scope is medium-sized.",
-        "The user asks for a fresh review and does not request audit-only mode."
+        "The user explicitly authorizes source modifications for this review."
       ],
       "expected_behavior": [
         "Requires rubric scores for correctness, code quality, architecture, security, and test coverage.",
@@ -244,7 +739,7 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The review scope has application code, tests, and at least one abstraction change.",
-        "The user explicitly asks for clean-code principle review in addition to normal review."
+        "The user explicitly authorizes source modifications for this review."
       ],
       "expected_behavior": [
         "Loads or applies the review-principles reference.",
@@ -293,6 +788,7 @@
       "prompt": "Review this medium change. DeliveryCoordinator now validates customer input, applies eligibility policy, sends HTTP requests, writes status records, and formats operator messages. Policy, transport, persistence, and presentation evolve independently.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review scope is medium.",
         "The described concerns have different owners and independent reasons to change."
       ],
@@ -337,6 +833,7 @@
       "prompt": "Review this medium change. InvoiceSummaryBuilder performs a detailed transformation from one normalized invoice into one summary. Every step contributes to that calculation, the output has one consumer, and no separate policy, I/O, persistence, or presentation concern is introduced.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review scope is medium.",
         "The unit has one cohesive responsibility and the available evidence shows no independently changing concern."
       ],
@@ -378,6 +875,7 @@
       "prompt": "Review this change for maintainability. Order.ApprovedAt changes from null to a timestamp to approve an order and from a timestamp to null to revoke approval. Rules and notifications depend on those changes. Customer.SecondaryPhone is nullable only because it is optional.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "Approval and revocation are business transitions inferred from changes to Order.ApprovedAt.",
         "Customer.SecondaryPhone has no transition rules, side effects, or state-dependent required data."
       ],
@@ -423,6 +921,7 @@
       "prompt": "Review this integration change. PaymentProvider is an enum that gains a value for every new provider, and pricing, routing, validation, and logging each switch on it. The product supports provider plugins. LogLevel is a stable closed enum used only for logging severity.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "PaymentProvider is an open-ended feature set and additions require changes in several consumers.",
         "LogLevel is a small stable closed enum with no provider-specific behavior."
       ],
@@ -467,6 +966,7 @@
       "purpose": "Checks that review distinguishes reusable authoritative conversion behavior, semantic drift, and unrelated similar arithmetic.",
       "prompt": "Review a mapper that duplicates nautical-mile to metre conversion arithmetic while an authoritative helper already exists. Also assess a second mapper with differing rounding and an unrelated percentage calculation.",
       "setup_context": [
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The helper and first duplicated mapper arithmetic have the same conversion semantics.",
         "The second mapper uses differing rounding, so its semantics diverge from the helper.",
         "The percentage calculation is an independent concept despite similar arithmetic."
@@ -514,6 +1014,7 @@
       "prompt": "Review this bugfix diff. It changes checkout total calculation and adds a regression test.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material is a bugfix.",
         "The diff does not clearly show reproduction/root-cause evidence."
       ],
@@ -555,7 +1056,8 @@
       "prompt": "Review this assistant-research skill change. It adds a new method template, output contract fields, phase gates, and evals. Check whether the workflow is semantically contract-safe before I merge it.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
-        "The review material touches skills/assistant-research, contracts/output.yaml, contracts/phase-gates.yaml, evals/cases.json, and a plugin-local copy.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
+        "The review material touches skills/assistant-research, contracts/output.yaml, contracts/phase-gates.yaml, evals/cases.json, and generated installer guidance.",
         "The new method adapts a named external research method and can emit do/wait/avoid recommendations."
       ],
       "expected_behavior": [
@@ -566,9 +1068,9 @@
         "Checks eval machine expectations for both new behavior and inherited base contract artifacts.",
         "Checks whether the external named method's defining loop is preserved by a testable artifact.",
         "Checks high-stakes recommendation guardrails for finance/trading/legal/medical/safety-critical recommendations.",
-        "Checks root and plugin-local copies plus generated/docs/automation surfaces that can drive behavior.",
+        "Checks canonical skill sources plus generated/docs/automation surfaces that can drive behavior.",
         "Reports semantic findings using the normal finding format with Evidence, Impact, Recommendation, and Confidence, or explicitly states no concrete risk found for each checklist area.",
-        "Cites concrete reviewed surfaces such as SKILL.md, contracts/output.yaml, contracts/phase-gates.yaml, evals/cases.json, and plugin-local copies when assessing semantic contract risk.",
+        "Cites concrete reviewed surfaces such as SKILL.md, contracts/output.yaml, contracts/phase-gates.yaml, evals/cases.json, and generated installer guidance when assessing semantic contract risk.",
         "Attempts to falsify the new eval by considering whether a plausible incomplete response could pass machine expectations without satisfying the base contract."
       ],
       "pass_criteria": [
@@ -579,7 +1081,7 @@
         "The response checks high-stakes recommendation guards and mirror-surface sync.",
         "Findings include concrete evidence, impact, smallest fix, and confidence.",
         "The response includes evidence-bearing checks, not only checklist names.",
-        "The response names concrete reviewed surfaces such as SKILL.md, contracts/output.yaml, evals/cases.json, and plugin-local copy.",
+        "The response names concrete reviewed surfaces such as SKILL.md, contracts/output.yaml, evals/cases.json, and generated installer guidance.",
         "The response includes Evidence, Impact, Recommendation, and Confidence for semantic findings or explicitly says no concrete risk found for a checklist area."
       ],
       "fail_signals": [
@@ -587,7 +1089,7 @@
         "Checks only new headings and ignores inherited base artifacts.",
         "Approves a named-method adaptation without identifying the defining loop.",
         "Ignores high-stakes do/wait/avoid recommendations.",
-        "Ignores plugin-local copy drift.",
+        "Ignores generated instruction drift.",
         "Does not load or apply the review-checklists reference.",
         "Only lists checklist category names without evidence.",
         "Does not cite any reviewed file or contract surface.",
@@ -605,7 +1107,7 @@
           "external-method signature",
           "high-stakes",
           "mirror-surface",
-          "plugin-local",
+          "generated installer guidance",
           "Evidence:",
           "Impact:",
           "Recommendation:",
@@ -623,7 +1125,7 @@
           "inherited artifacts do not matter",
           "no need to check evals",
           "method signature is irrelevant",
-          "plugin copies can drift",
+          "generated copies can drift",
           "no need to load review-checklists",
           "checklist names are enough",
           "no file evidence needed",
@@ -639,6 +1141,7 @@
       "prompt": "Review this API feature diff. It changes a public order endpoint, adds a new special-case path for refunds, updates tests, and modifies config defaults. Check behavioral compatibility before merge.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material touches public API behavior, domain/business logic, money/refund handling, tests, and config defaults.",
         "The change has both inherited behavior and new behavior that must remain compatible."
       ],
@@ -815,6 +1318,7 @@
       "prompt": "Review this research-agent workflow change. It adds a loop that searches the web, calls an LLM to summarize each result, retries empty searches, and dispatches subagents until it thinks the report is good enough.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material adds an agentic research loop with repeated web search, LLM summarization, empty-result retries, and subagent dispatch.",
         "The diff does not clearly show max step count, explicit stop condition, retry cap, empty-result fallback, or cost/token guardrails."
       ],
@@ -888,10 +1392,11 @@
       "title": "Review checklists reference is mandatory",
       "category": "checklist_reference_loading",
       "purpose": "Checks that assistant-review loads and applies the extracted checklist reference when agentic loop safety, behavioral contract, or semantic contract review modes are applicable.",
-      "prompt": "Review a mixed framework/API change. It edits an agent workflow loop, a public billing endpoint, skill contracts, evals, and plugin-local copies. Before declaring it clean, show which mandatory review checklists you applied and give evidence-bearing checks.",
+      "prompt": "Review a mixed framework/API change. It edits an agent workflow loop, a public billing endpoint, skill contracts, evals, and generated installer guidance. Before declaring it clean, show which mandatory review checklists you applied and give evidence-bearing checks.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
-        "The review material touches an autonomous agent loop, behavior-bearing billing code, skill/workflow contracts, evals, and plugin-local mirrors.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
+        "The review material touches an autonomous agent loop, behavior-bearing billing code, skill/workflow contracts, evals, and generated instruction mirrors.",
         "The diff includes plausible risks around runaway retries, bypassed billing authorization, eval fake-passes, and mirror drift."
       ],
       "expected_behavior": [
@@ -914,7 +1419,7 @@
         "Applies only one or two of the three applicable checklists.",
         "Lists checklist names without representative terms.",
         "Treats checklist headings as enough evidence.",
-        "Ignores plugin-local mirror drift or eval fake-pass risk."
+        "Ignores generated instruction drift or eval fake-pass risk."
       ],
       "machine_expectations": {
         "required_substrings": [
@@ -951,7 +1456,7 @@
           "no need to load review-checklists",
           "checklist headings are enough",
           "representative terms are optional",
-          "plugin mirrors can drift",
+          "generated mirrors can drift",
           "eval fake-passes are acceptable"
         ]
       }
@@ -1031,6 +1536,7 @@
       "prompt": "Review this standalone ADR. It selects a bounded cache, labels repository evidence and assumptions, lists one material question with its impact and default, and records an independent challenge. There is no workflow Architecture Decision Pack artifact.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The ADR makes memory, public-interface, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
         "No workflow architecture_design_mode is supplied; the standalone record must normalize review_intensive from its high-risk/conflicting drivers before treating independent challenge evidence as corroboration.",
         "The supplied ADR has enough source-backed content to derive the compact review projection."
@@ -1083,9 +1589,10 @@
       "title": "Standalone high-risk ADR without challenge remains review intensive",
       "category": "architecture_decision_pack_review",
       "purpose": "Checks that a standalone ADR with high-risk or conflicting record drivers resolves review_intensive before missing independent challenge evidence is validated.",
-      "prompt": "Review this standalone ADR. It selects a retention policy that trades memory use against throughput and makes an irreversible public-data deletion decision. It records facts, assumptions, material questions, decision, risk, and verification evidence, but no independent challenge evidence. There is no workflow Architecture Decision Pack artifact. Return exactly one valid JSON object with architecture_design_mode, architecture_decision_pack.mode, and validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
+      "prompt": "Review this standalone ADR. It selects a retention policy that trades memory use against throughput and makes an irreversible public-data deletion decision. It records facts, assumptions, material questions, decision, risk, and verification evidence, but no independent challenge evidence. There is no workflow Architecture Decision Pack artifact. Return exactly one valid JSON object with architecture_design_mode, architecture_decision_pack.mode, and architecture_decision_pack_review evidence including architecture_pack_findings_summary; include no prose outside that object.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The ADR makes memory, throughput, public-data, ownership, and lifecycle claims, so architecture_decision_pack_review_required is true.",
         "The standalone ADR has conflicting memory-versus-throughput and irreversible public-data decision drivers, but no independent_challenge_evidence.",
         "No workflow architecture_design_mode is supplied."
@@ -1130,17 +1637,13 @@
           },
           {
             "operator": "equals",
-            "path": ["validation_result", "status"],
-            "expected": "blocked"
+            "path": ["architecture_decision_pack_review", "independent_challenge_evidence"],
+            "expected": "missing independent challenge evidence"
           },
           {
             "operator": "equals",
-            "path": ["validation_result", "missing_field"],
-            "expected": "independent_challenge_evidence"
-          },
-          {
-            "operator": "nonempty_string",
-            "path": ["validation_result", "evidence_or_gap"]
+            "path": ["architecture_decision_pack_review", "architecture_pack_findings_summary"],
+            "expected": "Blocked: independent_challenge_evidence is missing for review_intensive mode."
           }
         ]
       }
@@ -1150,9 +1653,10 @@
       "title": "Empty Pack review evidence blocks review",
       "category": "architecture_decision_pack_review",
       "purpose": "Checks that an applicable Pack projection cannot pass review with empty boundary and design-pressure evidence.",
-      "prompt": "Review this current workflow Architecture Decision Pack projection. It supplies boundaries_and_dependencies=[] and design_pressure_checks=[] even though Pack review is required. Return exactly one valid JSON object with validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
+      "prompt": "Review this current workflow Architecture Decision Pack projection. It supplies boundaries_and_dependencies=[] and design_pressure_checks=[] even though Pack review is required. Return exactly one valid JSON object with architecture_decision_pack_review evidence including architecture_pack_findings_summary; include no prose outside that object.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "architecture_decision_pack_review_required is true.",
         "The supplied compact Pack projection has no boundary entries and no design-pressure entries."
       ],
@@ -1183,17 +1687,12 @@
         "structured_json_assertions": [
           {
             "operator": "equals",
-            "path": ["validation_result", "status"],
-            "expected": "blocked"
+            "path": ["architecture_decision_pack_review", "architecture_pack_findings_summary"],
+            "expected": "Blocked: boundaries_and_dependencies_or_design_pressure_checks is empty."
           },
           {
-            "operator": "equals",
-            "path": ["validation_result", "missing_field"],
-            "expected": "boundaries_and_dependencies_or_design_pressure_checks"
-          },
-          {
-            "operator": "nonempty_string",
-            "path": ["validation_result", "evidence_or_gap"]
+            "operator": "path_absent",
+            "path": ["architecture_decision_pack_review", "independent_challenge_evidence"]
           }
         ]
       }
@@ -1206,6 +1705,7 @@
       "prompt": "Review this workflow change. Its Architecture Decision Pack proposes a cache keyed by string, says it will be memory efficient and easily extensible, but gives no workload, budget, benchmark, failure condition, public-contract compatibility plan, cancellation/early-exit behavior, ownership/disposal rule, or registration seam.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "architecture_decision_pack_review_required is true, architecture_design_mode=review_intensive, and the Pack mode equals canonical architecture_design_mode with a revision reference, typed facts, assumptions, material questions, boundaries, Type Ledger, quality scenarios, invalidators, verification handoff, and independent challenge evidence.",
         "The cache key represents a meaningful domain identity and appears in a public-facing interface.",
         "The changed repository revision is newer than the Pack's recorded revision."
@@ -1260,9 +1760,10 @@
       "title": "Architecture Pack review blocks unrecoverable selected decision",
       "category": "architecture_decision_pack_review",
       "purpose": "Checks that compact Pack review projections reject a referenced Pack whose selected design, rationale, or viable alternative dispositions cannot be recovered.",
-      "prompt": "Review this applicable workflow Architecture Decision Pack projection. It has ref=journal#pack-17 but omits selected_design, selected_design_rationale, and viable_alternatives/dispositions. Return exactly one valid JSON object with validation_result containing status, missing_field, and evidence_or_gap; include no prose outside that object.",
+      "prompt": "Review this applicable workflow Architecture Decision Pack projection. It has ref=journal#pack-17 but omits selected_design, selected_design_rationale, and viable_alternatives/dispositions. Return exactly one valid JSON object with architecture_decision_pack_review evidence including architecture_pack_findings_summary; include no prose outside that object.",
       "setup_context": [
         "assistant-review is active and architecture_decision_pack_review_required is true.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The projection may remain compact only if ref resolves against the current authoritative Pack to the selected design, rationale, and viable alternatives/dispositions."
       ],
       "expected_behavior": [
@@ -1270,8 +1771,8 @@
         "Requires current authoritative ref resolution or explicit selected_design, selected_design_rationale, and viable_alternatives/dispositions evidence."
       ],
       "pass_criteria": [
-        "The response is one JSON object with blocked validation_result.",
-        "The evidence_or_gap explains that the selected design is not recoverable from the current Pack ref."
+        "The response is one JSON object with a blocked architecture_pack_findings_summary.",
+        "The findings summary explains that the selected design is not recoverable from the current Pack ref."
       ],
       "fail_signals": [
         "Accepts the projection because the ref exists without resolving the selected decision.",
@@ -1290,9 +1791,97 @@
           "invent selected design"
         ],
         "structured_json_assertions": [
-          {"operator":"equals","path":["validation_result","status"],"expected":"blocked"},
-          {"operator":"nonempty_string","path":["validation_result","missing_field"]},
-          {"operator":"nonempty_string","path":["validation_result","evidence_or_gap"]}
+          {"operator":"equals","path":["architecture_decision_pack_review","architecture_pack_findings_summary"],"expected":"Blocked: selected_design_evidence is not recoverable from the current Pack reference."},
+          {"operator":"path_absent","path":["architecture_decision_pack_review","independent_challenge_evidence"]}
+        ]
+      }
+    },
+    {
+      "id": "audit-spec-review-fail-continues-complete-batch",
+      "title": "Audit Spec Review finding continues independent coverage",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that a standalone audit preserves a Spec Review mismatch without allowing it to hide later pass findings.",
+      "prompt": "Audit this change read-only. Spec Review finds one out-of-scope file; the runtime pass later finds an authorization defect. Do not edit source.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "This is a frozen read-only snapshot with two required independent passes.",
+        "Spec Review FAIL is evidence-backed and the runtime pass has not yet returned."
+      ],
+      "expected_behavior": [
+        "Retains the Spec Review mismatch as an aggregate finding.",
+        "Waits for all expected responses before the single audit report.",
+        "Reports both the Spec Review mismatch and the later runtime finding without source mutation."
+      ],
+      "pass_criteria": ["The audit names the response barrier, both findings, and read-only behavior."],
+      "fail_signals": ["Stops after the Spec Review FAIL.", "Mutates source.", "Hides the later runtime finding."],
+      "machine_expectations": {
+        "required_substrings": ["Spec Review FAIL", "aggregate finding", "all expected responses", "later runtime finding", "without source mutation"],
+        "forbidden_substrings": ["Spec Review FAIL ends the audit", "repairing the source", "skip later pass"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["complete"]},
+          {"operator":"array_field_values_exact","path":["audit_report","findings"],"field":"finding_id","expected_values":["review_pass:pass-runtime:finding-1","spec_review:finding-1"]},
+          {"operator":"equals","path":["final_summary","fixed_items"],"expected":[]}
+        ]
+      }
+    },
+    {
+      "id": "in-flight-mutation-invalidates-review-batch",
+      "title": "In-flight mutation invalidates final aggregation",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that echoed identity alone cannot preserve a batch after material changes during pass collection.",
+      "prompt": "Audit this frozen snapshot. After two passes return, source content changes before the third response and before final output.",
+      "setup_context": [
+        "The review batch has three expected sibling-blind passes.",
+        "Every returned pass echoes the original snapshot identity.",
+        "Recomputed scope-manifest/content identity differs at the response barrier and final exit."
+      ],
+      "expected_behavior": [
+        "Recomputes identity at the barrier and before final exit.",
+        "Invalidates the batch and records the coverage gap.",
+        "Returns HAS_REMAINING_ITEMS rather than CLEAN or ISSUES_FIXED."
+      ],
+      "pass_criteria": ["The response names recomputed identity mismatch and an invalidated batch."],
+      "fail_signals": ["Accepts echoed identity as sufficient.", "Reports CLEAN.", "Reports ISSUES_FIXED."],
+      "machine_expectations": {
+        "required_substrings": ["recomputed identity", "invalidated batch", "coverage incomplete", "HAS_REMAINING_ITEMS"],
+        "forbidden_substrings": ["final result: CLEAN", "final result: ISSUES_FIXED", "echoed identity is sufficient"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":false},
+          {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["invalidated"]},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","contract_and_test_oracle","contract_and_test_oracle","runtime_lifecycle_and_failure_paths","runtime_lifecycle_and_failure_paths","runtime_lifecycle_and_failure_paths","integration_compatibility_and_consumers","integration_compatibility_and_consumers","integration_compatibility_and_consumers"]},
+          {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":3,"terminal_response_count":2}]}
+        ]
+      }
+    },
+    {
+      "id": "trivial-audit-uses-two-isolated-passes",
+      "title": "Trivial audit retains two isolated purpose-specific passes",
+      "category": "multi_pass_review_batch",
+      "purpose": "Checks that proportional trivial/small execution remains multi-pass rather than collapsing into one self-review.",
+      "prompt": "Audit this one-file change read-only. It is trivial scope; report only after coverage is complete.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The scope is trivial and has two purpose-specific discovery obligations.",
+        "No delegated Reviewer is available, so direct fallback must retain isolation records."
+      ],
+      "expected_behavior": [
+        "Runs two isolated direct-fallback passes with distinct purposes.",
+        "Records assignments and coverage for both passes.",
+        "Waits for the response barrier before the read-only audit result."
+      ],
+      "pass_criteria": ["The response identifies two isolated passes and complete coverage."],
+      "fail_signals": ["Uses one self-review as complete coverage.", "Omits one purpose-specific obligation."],
+      "machine_expectations": {
+        "required_substrings": ["two isolated passes", "direct fallback", "coverage", "all expected responses"],
+        "forbidden_substrings": ["one self-review is sufficient", "single broad pass"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["review_delegation_path","subagent_execution_mode"],"expected":"direct_fallback"},
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","contract_and_test_oracle","runtime_lifecycle_and_failure_paths","runtime_lifecycle_and_failure_paths"]},
+          {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":2,"terminal_response_count":2}]},
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["complete"]}
         ]
       }
     },
@@ -1304,6 +1893,7 @@
       "prompt": "Review a framework PR where an eval passes with checklist headings only and misses a planted contract failure. Report blockers and whether any finding should become a permanent framework rule.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
         "The review material includes a blocker: an eval can fake-pass by naming headings without fixture-specific evidence.",
         "The same class of failure could recur across other skill evals unless a contract/eval rule is added.",
         "The review also includes a style nit that should not be promoted into a permanent rule."
@@ -1355,6 +1945,86 @@
           "no eval update needed",
           "checklist headings are enough",
           "skip blocker classification"
+        ]
+      }
+    },
+    {
+      "id": "qa-obligation-echo-fulfills-exact-binding",
+      "title": "Deferred QA echoes and fulfills the carried binding",
+      "category": "deferred_qa_obligation",
+      "purpose": "Checks that a fulfilled obligation preserves its exact typed workflow binding rather than replacing it with generic evidence.",
+      "prompt": "Run required QA for an existing-system feature-preparation obligation whose requested scope and evidence ref are supplied.",
+      "setup_context": ["feature_preparation_scope=existing_system", "The carried obligation has requested_scope=checkout-confirmation, execution_prerequisite=build-passed, and source_feature_preparation_evidence_ref=prep-42.", "The prerequisite and requested scope have matching evidence."],
+      "expected_behavior": ["Returns the unchanged requested_scope, execution_prerequisite, feature_preparation_scope, and source_feature_preparation_evidence_ref.", "Returns fulfilled/met statuses with scoped evidence and may accept/CLEAN."],
+      "pass_criteria": ["The result echoes prep-42 and checkout-confirmation exactly."],
+      "fail_signals": ["Replaces prep-42 with unrelated evidence.", "Drops the discriminator or source binding."],
+      "machine_expectations": {
+        "required_substrings": ["checkout-confirmation", "prep-42", "fulfilled", "met"],
+        "forbidden_substrings": ["generic source binding", "unrelated evidence"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["qa_evaluation_result","final_verdict"],"expected":"accepted"},
+          {"operator":"equals","path":["qa_evaluation_result","result"],"expected":"CLEAN"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","requested_scope_status"],"expected":"fulfilled"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","execution_prerequisite_status"],"expected":"met"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","requested_scope"],"expected":"checkout-confirmation"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","execution_prerequisite"],"expected":"build-passed"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","feature_preparation_scope"],"expected":"existing_system"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","source_feature_preparation_evidence_ref"],"expected":"prep-42"},
+          {"operator":"nonempty_string","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","requested_scope_evidence"]},
+          {"operator":"nonempty_string","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","execution_prerequisite_evidence"]}
+        ]
+      }
+    },
+    {
+      "id": "qa-obligation-blocks-missing-or-mismatched-binding",
+      "title": "Deferred QA blocks missing prerequisite or mismatched binding",
+      "category": "deferred_qa_obligation",
+      "purpose": "Checks that missing prerequisite evidence and a mismatched source ref cannot be accepted as CLEAN.",
+      "prompt": "Run required QA where the carried existing-system obligation requires prep-42 but only unrelated prep-99 evidence is present and the prerequisite has not passed.",
+      "setup_context": ["feature_preparation_scope=existing_system", "requested_scope=checkout-confirmation", "execution_prerequisite=build-passed is missing."],
+      "expected_behavior": ["Rejects the obligation instead of dropping it.", "Returns rejected/HAS_REMAINING_ITEMS, never accepted/CLEAN."],
+      "pass_criteria": ["The response identifies both the missing prerequisite and mismatched prep-99 binding."],
+      "fail_signals": ["Accepts/CLEAN with prep-99.", "Uses unrelated evidence as the carried binding."],
+      "machine_expectations": {
+        "required_substrings": ["prep-42", "prep-99", "missing prerequisite", "HAS_REMAINING_ITEMS"],
+        "forbidden_substrings": ["accepted CLEAN", "binding matches"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["qa_evaluation_result","final_verdict"],"expected":"rejected"},
+          {"operator":"equals","path":["qa_evaluation_result","result"],"expected":"HAS_REMAINING_ITEMS"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","requested_scope_status"],"expected":"failed"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","execution_prerequisite_status"],"expected":"missing"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","requested_scope"],"expected":"checkout-confirmation"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","execution_prerequisite"],"expected":"build-passed"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","feature_preparation_scope"],"expected":"existing_system"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","source_feature_preparation_evidence_ref"],"expected":"prep-42"}
+        ]
+      }
+    },
+    {
+      "id": "qa-obligation-blocked-when-required-evidence-is-unavailable",
+      "title": "Deferred QA reports blocked when required evidence is unavailable",
+      "category": "deferred_qa_obligation",
+      "purpose": "Checks the distinct blocked terminal state without treating unavailable prerequisite evidence as acceptance.",
+      "prompt": "Run required QA where the carried obligation requires prep-42, but the prerequisite evidence source is unavailable to inspect.",
+      "setup_context": ["feature_preparation_scope=existing_system", "requested_scope=checkout-confirmation", "execution_prerequisite=build-passed cannot be verified because the evidence source is unavailable."],
+      "expected_behavior": ["Keeps the exact carried binding.", "Returns blocked/BLOCKED with an evidence gap and open question, never accepted/CLEAN."],
+      "pass_criteria": ["The response reports the unavailable evidence and blocked terminal state."],
+      "fail_signals": ["Accepts/CLEAN without inspecting the unavailable evidence.", "Drops prep-42 because it is unavailable."],
+      "machine_expectations": {
+        "required_substrings": ["prep-42", "unavailable evidence", "blocked", "BLOCKED"],
+        "forbidden_substrings": ["accepted CLEAN", "binding can be dropped"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["qa_evaluation_result","final_verdict"],"expected":"blocked"},
+          {"operator":"equals","path":["qa_evaluation_result","result"],"expected":"BLOCKED"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","requested_scope_status"],"expected":"blocked"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","execution_prerequisite_status"],"expected":"blocked"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","requested_scope"],"expected":"checkout-confirmation"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","execution_prerequisite"],"expected":"build-passed"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","feature_preparation_scope"],"expected":"existing_system"},
+          {"operator":"equals","path":["qa_evaluation_result","approved_feature_preparation_qa_acceptance_obligation_result","source_feature_preparation_evidence_ref"],"expected":"prep-42"},
+          {"operator":"nonempty_array","path":["qa_evaluation_result","open_questions"]},
+          {"operator":"equals","path":["qa_evaluation_result","qa_scorecard","weighted_score"],"expected":1.8},
+          {"operator":"equals","path":["qa_evaluation_result","score_progression",0,"weighted_score"],"expected":1.8}
         ]
       }
     }

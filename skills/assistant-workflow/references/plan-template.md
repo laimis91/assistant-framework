@@ -7,12 +7,18 @@ Harness details live in optional appendices. Base plans keep compact refs only:
 load `references/plan-harness-appendix.md` for harness-capable work, otherwise
 record `N/A: [reason]`.
 
-## Small Tasks — Inline Plan (`plan_mode=inline`)
+For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits. It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests. `existing_system` records the exact unchanged feature-preparation evidence ref; `not_applicable` records `preparation_basis=not_applicable` and no feature-evidence ref. It records readiness implications, open decisions, and recommended next implementation state; it never creates executable slices or a downstream handoff.
+
+## Small Tasks — Inline Plan (`plan_mode=inline`, `execution_intent != prepare_only`)
 
 No separate plan document needed. Include directly in your response:
 
 ```markdown
 **Goal:** [1 sentence]
+**Authoritative packet fields:**
+- execution_intent: [implement_only | end_to_end]
+- feature_preparation_scope: [not_applicable | existing_system]
+- approved_feature_preparation_result: [required exact complete typed approved_feature_preparation_result unchanged when execution_intent=implement_only; otherwise N/A]
 **Artifact Contract:**
 - Artifact type: [code | docs | report | dataset | chart | slide_deck | plan | eval | PR | config | other]
 - Required files or deliverables: [exact paths or named artifact]
@@ -31,19 +37,27 @@ No separate plan document needed. Include directly in your response:
 **SRP check:** [single responsibility confirmed / split needed]
 ```
 
-## Executable Task Packet
+## Executable Task Packet (`execution_intent != prepare_only`)
 
-For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan in delegated mode, or that the main session can execute in direct fallback mode while preserving the same role evidence.
+For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is the authoritative packet and a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan in delegated mode, or that the main session can execute in direct fallback mode while preserving the same role evidence.
 
 ```markdown
 ### Task [ID]: [short name]
 - name: [task packet name; must populate current_task_packet.name]
 - Slice: [slice_id] [slice_name, or "N/A for small task"]
-- Slice topology: target_branch: [target] | target_base_sha: [immutable target commit SHA] | task_branch: feature/[task] | slice_branch: slice/[task]/[slice_id] | promotion_mode: [local | review_gated]
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
+- execution_intent: [implement_only | end_to_end]
+- feature_preparation_scope: [not_applicable | existing_system]
+- approved_feature_preparation_result: [required exact complete typed approved_feature_preparation_result unchanged when execution_intent=implement_only; otherwise N/A]
+- Feature preparation evidence ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise N/A]
+- Feature preparation QA/acceptance obligation: [required exact approved object when the preparation result contains future_qa_acceptance_obligation; include requested_scope, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise N/A]
 - Architecture Decision Pack: [fresh pack ref, or N/A with concrete reason]
+- QA evaluation mode: [carry triage value: not_required | optional | required]
+- Harness capable: [carry triage value: true | false]
+- Build execution lane: [carry triage value: inline_direct | bounded_executor | separated_workers]
+- Workflow state mode: [carry triage value: inline | journal]
 - Pack handoff binding: [discover_only only before Plan; otherwise downstream_bound | context/journal ref | plan/task-packet ref | review-scope ref]
 - Plan-mode-none Pack binding: [before Build, atomically set downstream_bound with compact inline task-packet/execution and inline review-scope refs]
 - Architecture test obligations: [when TDD applies to a Pack, carry each stable obligation_id, obligation kind, behavior, and verification into CodeWriter/BuilderTester; selected Build owner returns exact-once architecture_obligation_coverage]
@@ -101,12 +115,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - Evidence: [files changed, test result, review note, or "pending"]
 ```
 
-## Slice Manifest
-
-For `review_gated`, copy the complete topology metadata into every packet and
-record `REVIEW_PENDING` review evidence rather than calling the slice VERIFIED.
-Use `references/slice-review-topology.md` for the exact evidence and adapter
-boundary; legacy briefs are a separate compatibility format and cannot mix.
+## Slice Manifest (`execution_intent != prepare_only`)
 
 For Medium and Large/Mega plans, paste the approved Decompose slice manifest once and consume it directly in task packets. Do not rediscover boundaries in Plan; order packets from this manifest by dependency.
 
@@ -133,7 +142,7 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 - single_slice_rationale: [required only when exactly one slice exists]
 ```
 
-## Medium Tasks — Standard Plan
+## Medium Tasks — Standard Plan (`execution_intent != prepare_only`)
 
 Covers the essentials without Security/Operability overhead. Fill this in during Phase 3 (Plan).
 
@@ -153,6 +162,10 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Risk tier: [low | moderate | high | critical]
 - Controller intensity: [light | standard | strict]
 - Plan mode: [approval_required]
+- QA evaluation mode: [not_required | optional | required]
+- Harness capable: [true | false]
+- Build execution lane: [inline_direct | bounded_executor | separated_workers]
+- Workflow state mode: [inline | journal]
 - Architecture design mode: [not_applicable | lightweight | required | review_intensive]
 - Architecture trigger reasons: [concrete evidence, or N/A reason]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
@@ -168,6 +181,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Assumed (not explicitly asked): [assumption and reasoning]
 - Non-goals: [what's explicitly out of scope]
 - Reuse search: [copy the CodeMapper result; not_applicable needs a concrete reason, otherwise include searches, candidates or no_candidate_reason, decision, and decision_rationale]
+- Implement-only preparation result: [execution_intent=implement_only: copy the exact typed approved_feature_preparation_result, feature_preparation_scope, and applicable evidence/basis unchanged into every implementation step and task packet; otherwise N/A]
 
 ## Architecture Decision Pack
 - Pack ref / mode: [ref] | [lightweight | required | review_intensive], or `N/A: [concrete reason]`
@@ -279,11 +293,28 @@ Use the shared Slice Manifest structure above. Paste the approved Decompose mani
 ## Task packets
 Use the Executable Task Packet structure above for each approved slice. Order packets by dependency, consume the slice manifest directly, and do not rediscover boundaries in Plan.
 
+## Existing-system feature preparation (when `feature_preparation_scope=existing_system`)
+- Feature-preparation evidence ref: [stable `feature_preparation_evidence.ref`]
+- Behavior/work classification: [each scoped item id + behavior_status + work_status]
+- Execution status: [`Execution not started` for prepare-only | evidence completed before Build for end-to-end | approved evidence ref resolved for implement-only]
+- Plan/readiness result: [implementation steps or the exact evidence gap/conflict]
+- Product questions: [only rows admitted by the canonical evidence matrix]
+- Future QA/acceptance obligation: [`feature_preparation_result.future_qa_acceptance_obligation` or N/A]
+- Approved QA/acceptance obligation: [`approved_feature_preparation_qa_acceptance_obligation` for implement_only; preserve requested_scope and execution_prerequisite plus exactly one source binding; set `qa_evaluation_mode=required` and route post-Build Code Reviewer then QA Evaluator, or N/A]
+- Future harness obligation: [`feature_preparation_result.future_harness_obligation` or N/A; preparation keeps `harness_capable=false`]
+
+For `prepare_only`, return `feature_preparation_result` instead of an execution
+handoff: scope, evidence ref when applicable, evidence gaps, open decisions,
+implementation implications, recommended next step, and `execution_status=not_started`.
+For medium+ preparation, an optional readiness plan may be recorded without
+waiting for implementation approval; name that approval or delegation as the
+next implementation state rather than treating it as a gate on preparation.
+
 ## Tests to run
 - [command]: [what it validates]
 ```
 
-## Large / Mega Tasks — Full Plan
+## Large / Mega Tasks — Full Plan (`execution_intent != prepare_only`)
 
 Everything from Medium, plus Security and Operability sections. Use when the task touches auth, external inputs, infrastructure, or multi-module boundaries.
 

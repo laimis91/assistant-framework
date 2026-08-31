@@ -14,9 +14,6 @@ Target agent: claude, codex, or gemini. Agent names are case-insensitive.
 .PARAMETER Skill
 Install one root assistant-* skill instead of the complete inventory.
 
-.PARAMETER Plugin
-Install an assistant-core, assistant-research, or assistant-dev profile.
-
 .PARAMETER DryRun
 Validate and report the planned work without changing the filesystem.
 
@@ -29,14 +26,11 @@ Deprecated compatibility switch. All installs are hookless.
 .EXAMPLE
 .\install.ps1 -Agent claude -Skill assistant-workflow
 
-.EXAMPLE
-.\install.ps1 -Agent codex -Plugin assistant-dev -DryRun
 #>
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$Agent,
     [string]$Skill,
-    [string]$Plugin,
     [switch]$DryRun,
     [switch]$NoHooks,
     [Alias('h')]
@@ -52,7 +46,6 @@ $script:MaxJsonInputBytes = 4 * 1024 * 1024
 $script:MaxJsonIdentityDepth = 64
 $script:MaxJsonIdentityProperties = 10000
 $script:MaxJsonIdentityValues = 10000
-$script:SupportedPluginProfiles = @('assistant-core', 'assistant-research', 'assistant-dev')
 $script:LegacyHookEntrypoints = @(
     'session-start.sh',
     'skill-router.sh',
@@ -92,7 +85,6 @@ Usage: .\install.ps1 -Agent <claude|codex|gemini> [options]
 
 Options:
   -Skill <name>             Install one assistant-* skill
-  -Plugin <name>            Install assistant-core, assistant-research, or assistant-dev
   -DryRun                   Validate and show work without changing files
   -NoHooks                  Deprecated no-op; installs are hookless
   -Help                     Show this help
@@ -1464,6 +1456,103 @@ function Remove-ExactManagedFiles {
     }
 }
 
+function Remove-ExactManagedDirectories {
+    param(
+        [Parameter(Mandatory = $true)][string]$TargetRoot,
+        [Parameter(Mandatory = $true)][string]$ManagedRoot,
+        [Parameter(Mandatory = $true)][string[]]$RelativePaths,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $safeTargetRoot = Assert-SafeManagedChild -LiteralPath $TargetRoot -ManagedRoot $ManagedRoot -Purpose "$Label root"
+    $validatedDirectories = New-Object System.Collections.Generic.List[string]
+    foreach ($relativePath in $RelativePaths) {
+        $normalized = $relativePath.Replace('\', '/').Trim('/')
+        if ([string]::IsNullOrWhiteSpace($normalized) -or
+            [System.IO.Path]::IsPathRooted($relativePath) -or
+            @($normalized -split '/' | Where-Object { $_ -eq '.' -or $_ -eq '..' }).Count -gt 0) {
+            throw "Refusing unsafe relative path for ${Label}: $relativePath"
+        }
+
+        $candidate = Join-Path $safeTargetRoot $relativePath
+        $safeDirectory = Assert-SafeManagedChild -LiteralPath $candidate -ManagedRoot $safeTargetRoot -Purpose "$Label directory"
+        $item = Get-Item -LiteralPath $safeDirectory -Force -ErrorAction SilentlyContinue
+        if ($null -eq $item) { continue }
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or -not $item.PSIsContainer) {
+            throw "Refusing to remove a managed target for $Label that is not a real directory: $safeDirectory"
+        }
+        if (@(Get-ChildItem -LiteralPath $safeDirectory -Force -Recurse -ErrorAction Stop | Where-Object { ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 }).Count -gt 0) {
+            throw "Refusing to remove a managed target for $Label containing a reparse point: $safeDirectory"
+        }
+        $validatedDirectories.Add($safeDirectory)
+    }
+
+    foreach ($safeDirectory in $validatedDirectories) {
+        if ($DryRun) {
+            Write-DryRun "Remove managed installed directory for ${Label}: $safeDirectory"
+            continue
+        }
+        [void](Assert-SafeManagedChild -LiteralPath $safeDirectory -ManagedRoot $safeTargetRoot -Purpose "$Label deletion")
+        Remove-Item -LiteralPath $safeDirectory -Recurse -Force
+        Write-Ok "Removed managed installed directory for ${Label}: $safeDirectory"
+    }
+}
+
+function Remove-ExactManagedEmptyDirectories {
+    param(
+        [Parameter(Mandatory = $true)][string]$TargetRoot,
+        [Parameter(Mandatory = $true)][string]$ManagedRoot,
+        [Parameter(Mandatory = $true)][string[]]$RelativePaths,
+        [string[]]$ProjectedRemovedChildNames = @(),
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $safeTargetRoot = Assert-SafeManagedChild -LiteralPath $TargetRoot -ManagedRoot $ManagedRoot -Purpose "$Label root"
+    foreach ($relativePath in $RelativePaths) {
+        $normalized = $relativePath.Replace('\', '/').Trim('/')
+        if ([string]::IsNullOrWhiteSpace($normalized) -or
+            [System.IO.Path]::IsPathRooted($relativePath) -or
+            @($normalized -split '/' | Where-Object { $_ -eq '.' -or $_ -eq '..' }).Count -gt 0) {
+            throw "Refusing unsafe relative path for ${Label}: $relativePath"
+        }
+
+        $candidate = Join-Path $safeTargetRoot $relativePath
+        $safeDirectory = Assert-SafeManagedChild -LiteralPath $candidate -ManagedRoot $safeTargetRoot -Purpose "$Label directory"
+        $item = Get-Item -LiteralPath $safeDirectory -Force -ErrorAction SilentlyContinue
+        if ($null -eq $item) { continue }
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or -not $item.PSIsContainer) {
+            throw "Refusing to prune a managed target for $Label that is not a real directory: $safeDirectory"
+        }
+        $remainingChildren = New-Object System.Collections.Generic.List[object]
+        foreach ($child in @(Get-ChildItem -LiteralPath $safeDirectory -Force -ErrorAction Stop)) {
+            $projectedRemoved = $false
+            foreach ($projectedName in $ProjectedRemovedChildNames) {
+                if ([string]::Equals($child.Name, $projectedName, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $projectedRemoved = $true
+                    break
+                }
+            }
+            if (-not $projectedRemoved) { $remainingChildren.Add($child) }
+        }
+        if ($remainingChildren.Count -gt 0) { continue }
+
+        if ($DryRun) {
+            Write-DryRun "Remove empty managed installed directory for ${Label}: $safeDirectory"
+            continue
+        }
+        [void](Assert-SafeManagedChild -LiteralPath $safeDirectory -ManagedRoot $safeTargetRoot -Purpose "$Label deletion")
+        $item = Get-Item -LiteralPath $safeDirectory -Force -ErrorAction SilentlyContinue
+        if ($null -eq $item) { continue }
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or -not $item.PSIsContainer) {
+            throw "Refusing changed managed target for $Label before pruning: $safeDirectory"
+        }
+        if (@(Get-ChildItem -LiteralPath $safeDirectory -Force -ErrorAction Stop).Count -eq 0) {
+            [System.IO.Directory]::Delete($safeDirectory, $false)
+            Write-Ok "Removed empty managed installed directory for ${Label}: $safeDirectory"
+        }
+    }
+}
+
 function Get-JsonPropertyInfoExact {
     param($Object, [string]$Name)
     if ($null -eq $Object) { return $null }
@@ -1711,78 +1800,6 @@ function Save-JsonObject {
     Write-AtomicText -LiteralPath $LiteralPath -Content ($json.TrimEnd() + [Environment]::NewLine)
 }
 
-function Get-PluginProfileSkills {
-    param([string]$PluginName, [string]$SkillsSource)
-    if ($script:SupportedPluginProfiles -notcontains $PluginName) {
-        throw "Unknown or unsupported plugin profile: $PluginName. Supported: $($script:SupportedPluginProfiles -join ', ')"
-    }
-    $architectureFile = Join-Path $script:FrameworkDir 'docs/plugin-architecture.md'
-    if (-not (Test-Path -LiteralPath $architectureFile -PathType Leaf)) {
-        throw "Plugin architecture document not found: $architectureFile"
-    }
-
-    $inside = $false
-    $profileLine = $null
-    foreach ($line in Get-Content -LiteralPath $architectureFile) {
-        if ($line -eq 'PLUGIN_BOUNDARY_START') { $inside = $true; continue }
-        if ($line -eq 'PLUGIN_BOUNDARY_END') { $inside = $false; continue }
-        if ($inside -and $line.StartsWith($PluginName + ':', [System.StringComparison]::Ordinal)) {
-            $profileLine = $line
-            break
-        }
-    }
-    if ($null -eq $profileLine) {
-        throw "Plugin profile '$PluginName' is missing from the exact PLUGIN_BOUNDARY block."
-    }
-
-    $result = @()
-    $payload = $profileLine.Substring($profileLine.IndexOf(':') + 1).Trim()
-    foreach ($candidate in @($payload -split '\s+')) {
-        if ($candidate -like 'assistant-*') {
-            $skillFile = Join-Path (Join-Path $SkillsSource $candidate) 'SKILL.md'
-            if (-not (Test-Path -LiteralPath $skillFile -PathType Leaf)) {
-                throw "Plugin profile $PluginName references missing skill: $candidate"
-            }
-            $result += $candidate
-        }
-    }
-    if ($result.Count -eq 0) {
-        throw "Plugin profile $PluginName has no installable assistant skills."
-    }
-    return @($result)
-}
-
-function Test-PluginManifest {
-    param([string]$PluginName, [string[]]$ProfileSkills)
-    $manifest = Join-Path (Join-Path (Join-Path $script:FrameworkDir 'plugins') $PluginName) '.codex-plugin/plugin.json'
-    if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
-        throw "Plugin manifest not found: $manifest"
-    }
-    $document = Read-JsonObject -LiteralPath $manifest
-    if ($null -eq $document) { throw "Plugin manifest is invalid JSON: $manifest" }
-    if ((Get-JsonProperty -Object $document -Name 'name') -ne $PluginName) {
-        throw "Plugin manifest $PluginName must declare name '$PluginName'."
-    }
-    if ((Get-JsonProperty -Object $document -Name 'skills') -ne './skills/') {
-        throw "Plugin manifest $PluginName must declare skills './skills/'."
-    }
-    $pluginSkillsRoot = Join-Path (Split-Path -Parent (Split-Path -Parent $manifest)) 'skills'
-    if (-not (Test-Path -LiteralPath $pluginSkillsRoot -PathType Container)) {
-        throw "Plugin skills directory not found: $pluginSkillsRoot"
-    }
-    $manifestSkills = @(
-        Get-ChildItem -LiteralPath $pluginSkillsRoot -Directory |
-            Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'SKILL.md') -PathType Leaf } |
-            ForEach-Object { $_.Name } |
-            Sort-Object
-    )
-    $expected = @($ProfileSkills | Sort-Object)
-    if (($manifestSkills -join "`n") -ne ($expected -join "`n")) {
-        throw "Plugin manifest skills do not match profile boundary for $PluginName."
-    }
-    Write-DryRun "Validated plugin manifest $manifest"
-}
-
 function Replace-AgentStatePlaceholders {
     param([string]$SkillTarget, [string]$AgentName)
     $extensions = @('.md', '.yaml', '.yml', '.json', '.conf', '.toml')
@@ -1804,15 +1821,8 @@ function Install-Skills {
         $target = Join-Path $TargetRoot $skillName
         Sync-ManagedDirectory -Source $source -Target $target -ManagedRoot $TargetRoot -Label $skillName
         if ($DryRun) {
-            Write-DryRun "Select $AgentName preset and substitute {agent_state_dir} in $skillName"
+            Write-DryRun "Substitute {agent_state_dir} in $skillName"
             continue
-        }
-        if ($AgentName -ne 'claude') {
-            $preset = Join-Path (Join-Path $target 'agents') ($AgentName + '.conf')
-            $agentConf = Join-Path $target 'agent.conf'
-            if ((Test-Path -LiteralPath $preset -PathType Leaf) -and (Test-Path -LiteralPath $agentConf -PathType Leaf)) {
-                Copy-ManagedFile -Source $preset -Destination $agentConf
-            }
         }
         Replace-AgentStatePlaceholders -SkillTarget $target -AgentName $AgentName
     }
@@ -2180,9 +2190,6 @@ function Invoke-AssistantFrameworkInstall {
     if (@('claude', 'codex', 'gemini') -notcontains $agentName) {
         throw "Unknown agent '$Agent'. Supported: claude, codex, gemini."
     }
-    if (-not [string]::IsNullOrWhiteSpace($Skill) -and -not [string]::IsNullOrWhiteSpace($Plugin)) {
-        throw 'Use either -Skill or -Plugin, not both.'
-    }
     if ($NoHooks) { Write-Info 'WARNING: -NoHooks is deprecated; all Assistant Framework installs are hookless.' }
 
     $skillsSource = Join-Path $script:FrameworkDir 'skills'
@@ -2205,10 +2212,6 @@ function Invoke-AssistantFrameworkInstall {
     if (-not [string]::IsNullOrWhiteSpace($Skill)) {
         if ($inventory -notcontains $Skill) { throw "Unknown skill '$Skill'. Available: $($inventory -join ', ')" }
         $selectedSkills = @($Skill)
-    }
-    elseif (-not [string]::IsNullOrWhiteSpace($Plugin)) {
-        $selectedSkills = @(Get-PluginProfileSkills -PluginName $Plugin -SkillsSource $skillsSource)
-        if ($DryRun) { Test-PluginManifest -PluginName $Plugin -ProfileSkills $selectedSkills }
     }
 
     if ($agentName -eq 'codex' -and -not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
@@ -2264,22 +2267,28 @@ function Invoke-AssistantFrameworkInstall {
 
     Write-Host "Installing Assistant Framework for: $agentName"
     Write-Info "Source: $script:FrameworkDir"
-    if (-not [string]::IsNullOrWhiteSpace($Plugin)) { Write-Info "Plugin profile: $Plugin" }
     Write-Info "Skills target: $skillsTarget"
 
     $toolsSource = Join-Path $script:FrameworkDir 'tools'
     $toolExclusions = @('.DS_Store', '.publish', 'bin', 'obj')
     $evalDocsSource = Join-Path (Join-Path $script:FrameworkDir 'docs') 'evals'
-    $sourceOnly = @(
+    $sourceOnlyFiles = @(
         'context-budget-report.sh',
         'evals/run-codex-framework-evals.sh',
         'evals/finalize-workflow-kernel-review.sh',
-        'evals/lib/context-budget-evidence.sh'
+        'evals/lib/context-budget-evidence.sh',
+        'evals/validate-promotion-decision-schema.cjs',
+        'evals/package.json',
+        'evals/package-lock.json'
     )
+    $sourceOnlyDirectories = @('evals/node_modules')
+    $sourceOnly = @($sourceOnlyFiles + $sourceOnlyDirectories)
     $retiredManagedTools = @(
         'cleanup-memory-graph.ps1',
-        'cleanup-memory-graph.sh'
+        'cleanup-memory-graph.sh',
+        'plugins/sync-plugin-skills.sh'
     )
+    $retiredManagedEmptyToolDirectories = @('plugins')
     # Legacy hook retirement is the only remaining operation that reads agent
     # configuration. Do not inspect unrelated user-owned files such as Codex
     # config.toml or Claude's top-level .claude.json.
@@ -2308,8 +2317,10 @@ function Invoke-AssistantFrameworkInstall {
     $installedAgentFiles = @()
     try {
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
-            Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnly -Label 'source-only tools'
+            Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnlyFiles -Label 'source-only tools'
+            Remove-ExactManagedDirectories -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnlyDirectories -Label 'source-only tools'
             Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $retiredManagedTools -Label 'retired managed tools'
+            Remove-ExactManagedEmptyDirectories -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $retiredManagedEmptyToolDirectories -ProjectedRemovedChildNames @('sync-plugin-skills.sh') -Label 'retired managed tools'
         }
 
         Install-Skills -SkillNames $selectedSkills -SourceRoot $skillsSource -TargetRoot $skillsTarget -AgentName $agentName

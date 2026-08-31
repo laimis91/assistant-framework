@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "6.0"
+schema_version: "7.1"
 contract: phase-gates
 skill: assistant-review
 
@@ -23,8 +23,8 @@ gates:
         on_fail: "Determine scope from git state and task journal, or ask user"
 
       - id: E2
-        check: "review_material_snapshot.material is non-empty — there is actual material to review"
-        on_fail: "Inform user 'nothing to review' and exit without entering the loop"
+        check: "review_material_snapshot.material is non-empty and review_snapshot_id plus snapshot_identity are frozen — there is actual immutable material to review"
+        on_fail: "Inform user 'nothing to review' and exit without entering the loop; otherwise capture immutable snapshot identity before planning a batch"
 
       - id: E3
         check: "scope_size is determined (trivial, small, medium, large)"
@@ -32,7 +32,7 @@ gates:
 
       - id: E4
         check: "mode is resolved (review-fix or audit)"
-        on_fail: "Default to review-fix unless user explicitly requested audit"
+        on_fail: "Ask exactly: 'Should I only report findings, or also implement and verify fixes?' Stop before Reviewer dispatch or source mutation until the user answers. Do not use authorship, branch/PR ownership, platform, or connector as modification authorization."
 
       - id: E5
         check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required with canonical architecture_design_mode are resolved before review starts"
@@ -44,18 +44,18 @@ gates:
         on_fail: "Block review and request a repaired Pack projection with non-empty boundaries plus control_and_early_exit, ownership_and_disposal, resource_envelope, extension_registration, and representative_path conclusions and a current authoritative selected-decision ref; never invent missing evidence."
 
       - id: E6
-        check: "subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, conditional policy_blocking_source, and qa_evaluation_mode are resolved before any Reviewer subagent dispatch"
+        check: "subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, conditional policy_blocking_source, qa_evaluation_mode, feature_preparation_scope, and any approved_feature_preparation_qa_acceptance_obligation are resolved before any Reviewer subagent dispatch"
         on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required Reviewer roles without a separate permission question. Otherwise preserve and complete the evidenced direct fallback state; do not overwrite explicit opt-out."
 
       - id: E7
-        check: "If qa_evaluation_mode is required: Done Contract with debate_record when available, acceptance_criteria, verification_evidence, domain_context/rubric_refs when applicable, and qa_filter_policy are resolved before QAEvaluator dispatch"
+        check: "If qa_evaluation_mode is required: Done Contract with debate_record when available, acceptance_criteria, verification_evidence, domain_context/rubric_refs when applicable, qa_filter_policy, feature_preparation_scope, and any approved_feature_preparation_qa_acceptance_obligation with execution_prerequisite and exactly one source evidence path are resolved before QAEvaluator dispatch"
         condition: "qa_evaluation_mode == required"
         on_fail: "Load references/qa-evaluation-loop.md, gather acceptance material and verification evidence, select domain rubric scope only when acceptance criteria, Done Contract, domain_context, or rubric_refs require it, or mark QA blocked with open_questions before dispatching QAEvaluator."
 
       - id: E8
-        check: "Standalone review without carried evidence performs Spec Review against the user request and review scope, records spec_review_pass_ref before Reviewer dispatch, fixes any scope mismatch on FAIL, and does not require a task journal"
+        check: "Standalone Spec Review uses user request/scope. On FAIL, mode=review-fix repairs an authorized in-scope mismatch and repeats to spec_review_pass_ref; mode=audit exits repair/Build/source-mutation dispatch, retains the mismatch as a pre-batch aggregate finding, continues the frozen read-only multi-pass batch, and dispatches every planned read-only Reviewer pass through the response barrier."
         condition: "review_preparation_mode == standalone"
-        on_fail: "Block Reviewer dispatch, run Spec Review against user request/review scope, fix missing or extra scope on FAIL, repeat until PASS, and record the PASS pointer; do not require task_journal_path."
+        on_fail: "In mode=review-fix, repair only an authorized in-scope mismatch and repeat to PASS. In mode=audit, record the mismatch, freeze the read-only batch, dispatch every required pass, wait for the response barrier, and never mutate source."
 
       - id: E9
         check: "Workflow-composed review consumes carried spec_review_pass_ref and carried current build/test evidence before Reviewer dispatch"
@@ -71,18 +71,27 @@ gates:
     exit_assertions:
 
       - id: RS1
-        check: "For medium+ scope in delegated mode: a fresh Reviewer subagent was dispatched (not reusing prior context)"
-        condition: "scope_size in [medium, large] and subagent_execution_mode == delegated"
-        on_fail: "Dispatch a new Reviewer subagent with the current review material snapshot and previously_fixed list"
+        check: "For every delegated scope: fresh Reviewer subagents were dispatched for every planned independent narrow pass (not reusing prior context)"
+        condition: "subagent_execution_mode == delegated"
+        on_fail: "Plan a batch with at least two independent narrow passes, then dispatch a new Reviewer subagent for every expected pass with the frozen snapshot and closure-verification list"
+
+      - id: RS_BATCH_PLAN
+        check: "Every review round has one frozen-snapshot review_batch with canonical distinct discovery perspectives for scope_size, matching discovery_pass_count and expected_passes, unique pass identifiers, non-empty assigned scope/coverage obligations, sibling-blind dispatch, and an orchestrator-owned pass_attempt_ledger"
+        on_fail: "Freeze the snapshot, derive expected_passes from canonical_discovery_perspectives rather than count alone, then withhold sibling findings. A single broad model pass is not sufficient coverage."
 
       - id: RS1A
         check: "For medium+ scope in direct fallback mode: the same bounded fresh_reviewer_context bundle was created only when the review pass began, review context was isolated, and fresh-context evidence is recorded"
         condition: "scope_size in [medium, large] and subagent_execution_mode == direct_fallback"
         on_fail: "Resolve the reviewer_context load set, create the same bounded bundle used by delegated review, clear stale assumptions, record direct-fallback evidence, and do not claim a Reviewer subagent was dispatched"
 
+      - id: RS1B
+        check: "For trivial/small direct-fallback scope: two purpose-specific isolated direct-fallback pass records carry distinct assignments, coverage obligations, evidence, and the same all-response barrier"
+        condition: "scope_size in [trivial, small] and subagent_execution_mode == direct_fallback"
+        on_fail: "Do not collapse to one self-review. Create two isolated direct-fallback records and aggregate only after both terminal responses."
+
       - id: RS2
-        check: "Reviewer or direct-fallback review received fresh_reviewer_context with selected dispatch_context_ref, review_preparation_mode, review_evidence_pointer proving latest Spec Review PASS plus required build_test_verification_ref, round, previously_fixed, finding_filter_policy, reuse_search_instruction requiring a fresh independent capability search, review-principles, review-rubric when required, and only triggered checklist sections"
-        on_fail: "Resolve reviewer_context only at pass start, rebuild the bounded bundle from dispatch_context_bundles, exclude untriggered checklist sections, and re-dispatch or restart direct fallback with the repaired bundle."
+        check: "Reviewer or direct-fallback review received fresh_reviewer_context with selected dispatch_context_ref, bounded worker_return_schema_selector: Worker loads named handoff return_fields recursively from active skill root, proves worker_return_schema equals the referenced schema, or fails closed before response, review_preparation_mode, sanitized pre_batch_criteria_ref proving latest Spec Review PASS or retained audit FAIL without finding detail, required build_test_verification_ref, per-pass assignment/obligations, quality_principles_required, round, closure ledger only when applicable, finding_filter_policy, reuse_search_instruction requiring a fresh independent capability search, review-principles, review-rubric when required, only triggered checklist sections, and for risk_selected_specialist security the Code Reviewer assistant-security checklist/perspective while the Reviewer return schema remains authoritative"
+        on_fail: "Resolve reviewer_context only at pass start, rebuild the bounded bundle from dispatch_context_bundles, exclude untriggered checklist sections, and use pass_repair_guard for one allowed transient/schema repair before terminal incomplete coverage."
 
       - id: RS2A
         check: "build_test_verification_ref contains current real passed build/test evidence whenever source fix/build is in scope; not_applicable is one of audit_only, read_only, or no_build_scope only when no source fix/build is in scope and is invalid after any source fix"
@@ -94,44 +103,52 @@ gates:
 
       - id: RS3
         check: "Only after the Reviewer or direct-fallback result exists: reviewer_return_validation is resolved and the canonical return fields, including findings[], summary, evidence, applicable checks, verdict, and rubric scores when required, are validated before EVALUATE"
-        on_fail: "Resolve reviewer_return_validation after the result, then re-dispatch Reviewer or complete direct-fallback return evidence for every missing canonical field before evaluating."
+        on_fail: "Resolve reviewer_return_validation after the result, then use pass_repair_guard for at most one transient/schema repair; otherwise record failed/timed_out terminal evidence and continue incomplete aggregation."
+
+      - id: RS_BATCH_BARRIER
+        check: "Before aggregation, fixes, or EVALUATE: planned/dispatched batches may have empty or pending zero-attempt ledger records and collecting batches may be partial; at the terminal barrier all expected passes reach terminal accounting. Response-backed terminal states completed, needs_context, and blocked require exactly one active_terminal response for the active dispatch attempt; timed_out, failed, and invalidated may have zero active responses only with typed failure evidence. Stale/duplicate attempts are audited but cannot complete coverage. Every response matches its active review_attempt_id dispatch, every response matches assigned five-dimensional closure (pass/item/concern/perspective/obligation) and frozen identity, and recomputed scope-manifest/content identity still matches; early aggregation is forbidden and otherwise coverage is incomplete."
+        on_fail: "Do not aggregate, fix, exit, or report a clean result from a partial or mutated batch. Use pass_repair_guard for at most one transient/schema repair; failed, timed_out, invalidated, or omitted assignment/obligation is an explicit coverage gap."
+
+      - id: RS_BATCH_AGGREGATION
+        check: "Only after the response barrier: validate every pass, prove exact multiset closure over every manifest-derived pass/item/applicable-concern/perspective/coverage_obligation tuple completed only by inspected_no_risk or finding, require finding coverage links and exact source_finding_ids closure or source_coverage_gap_ids, and require closure_results exact aggregate_finding_id equality for every pending fix. Build the complete aggregated union including pre_batch_findings, record typed provenance/dispositions/rationale, and recompute rubric and exit from that union. Conservatively merge only same locus, invariant, and failure mechanism. A genuinely clean complete batch may have an empty aggregation ledger."
+        on_fail: "Do not use an early pass verdict or rubric as the batch result. Preserve every validated finding or record its evidence-backed aggregation disposition."
 
       - id: RS4
-        check: "No previously-fixed item was re-reported in findings"
-        on_fail: "Filter out re-reported items before proceeding to EVALUATE"
+        check: "previously_fixed items receive closure verification; incomplete or regressed fixes remain reportable with their original aggregate_finding_id"
+        on_fail: "Do not suppress the finding. Record closure status and report evidence-backed incomplete or regressed behavior before proceeding to EVALUATE."
 
       - id: RS5
-        check: "For medium+ scope: rubric_scores is present in reviewer return with all 5 dimensions scored"
+        check: "For medium+ scope: perspective-local rubric_scores are present in reviewer returns with all 5 dimensions scored, while the post-barrier aggregated union rubric and aggregated finding count alone drive batch exit and score tracking"
         condition: "scope_size in [medium, large]"
-        on_fail: "In delegated mode, re-dispatch Reviewer with rubric_required=true. In direct fallback mode, score the fresh review context before continuing. Reference references/review-rubric.md for scoring instructions."
+        on_fail: "Use pass_repair_guard for one valid transient/schema repair with rubric_required=true; after exhaustion record terminal incomplete coverage. In direct fallback mode, score the fresh context, then recompute aggregate rubric after the barrier."
 
       - id: RS6
         check: "Reviewer or direct-fallback review applied the clean-code principle lens from references/review-principles.md: SOLID, KISS, DRY, YAGNI, and readability"
-        on_fail: "In delegated mode, re-dispatch Reviewer with quality_principles_required=true and request principle_checks plus evidence-backed findings only. In direct fallback mode, complete principle_checks against the fresh review context."
+        on_fail: "Use pass_repair_guard for one valid transient/schema repair with quality_principles_required=true; after exhaustion record terminal incomplete coverage. In direct fallback mode, complete principle_checks against fresh context."
 
       - id: RS6A
         check: "For medium+ scope: Reviewer or direct-fallback review completed the Design Coherence Pass from references/review-principles.md and returned principle_checks.design_coherence with either an evidence-backed responsibility/boundary risk or 'no concrete risk found'"
         condition: "scope_size in [medium, large]"
-        on_fail: "In delegated mode, re-dispatch Reviewer with the current review material and require the Design Coherence Pass plus principle_checks.design_coherence. In direct fallback mode, complete the pass against the fresh review context. Do not manufacture a finding from a structural heuristic alone."
+        on_fail: "Use pass_repair_guard for one valid transient/schema repair requiring Design Coherence; after exhaustion record terminal incomplete coverage. In direct fallback, complete the fresh pass; do not manufacture a heuristic finding."
 
       - id: RS_REUSE_SEARCH
         check: "Reviewer or direct-fallback return includes reuse_search from a fresh independent capability search, not merely carried Mapper/task-packet evidence. When applicability=applicable, it records bounded searches, candidates or no_candidate_reason, decision, and decision_rationale; an applicable review cannot return clean without this evidence."
-        on_fail: "Re-dispatch Reviewer or complete direct fallback with the fresh independent bounded reuse search. For not_applicable, record the concrete applicability_reason without search ceremony."
+        on_fail: "Use pass_repair_guard for one valid transient/schema repair with fresh bounded reuse search; after exhaustion record terminal incomplete coverage. For not_applicable, record applicability_reason."
 
       - id: RS7
         check: "When semantic_contract_review_required is true: Reviewer or direct-fallback review applied the Semantic Contract Review Checklist and returned semantic_contract_checks"
         condition: "semantic_contract_review_required is true"
-        on_fail: "In delegated mode, re-dispatch Reviewer requesting semantic_contract_checks for inherited contracts, template-contract alignment, eval inheritance, external-method signature fidelity, high-stakes guards, and mirror-surface sync. In direct fallback mode, complete those semantic_contract_checks before declaring clean."
+        on_fail: "Use pass_repair_guard for one valid transient/schema repair requesting semantic_contract_checks; after exhaustion record terminal incomplete coverage. In direct fallback, complete checks before clean."
 
       - id: RS8
         check: "When behavioral_contract_review_required is true: Reviewer or direct-fallback review applied the Behavioral Contract Review Checklist and returned behavioral_contract_checks"
         condition: "behavioral_contract_review_required is true"
-        on_fail: "In delegated mode, re-dispatch Reviewer requesting behavioral_contract_checks for existing invariants, interface-implementation alignment, inherited tests, protocol/algorithm fidelity, high-impact guards, and runtime-surface sync. In direct fallback mode, complete those behavioral_contract_checks before declaring clean."
+        on_fail: "Use pass_repair_guard for one valid transient/schema repair requesting behavioral_contract_checks; after exhaustion record terminal incomplete coverage. In direct fallback, complete checks before clean."
 
       - id: RS9
         check: "When agentic_loop_safety_review_required is true: Reviewer or direct-fallback review applied the Agentic Loop Safety Checklist and returned agentic_loop_safety_checks"
         condition: "agentic_loop_safety_review_required is true"
-        on_fail: "In delegated mode, re-dispatch Reviewer requesting agentic_loop_safety_checks for bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation. In direct fallback mode, complete those agentic_loop_safety_checks before declaring clean."
+        on_fail: "Use pass_repair_guard for one valid transient/schema repair requesting agentic_loop_safety_checks; after exhaustion record terminal incomplete coverage. In direct fallback, complete checks before clean."
 
       - id: RS10
         check: "When architecture_decision_pack_review_required is true: Reviewer or direct-fallback review applied the Architecture Decision Pack Review Checklist and returned architecture_decision_pack_checks; architecture_decision_pack.mode equals canonical architecture_design_mode and review_intensive includes independent challenge evidence"
@@ -151,21 +168,21 @@ gates:
     exit_assertions:
 
       - id: EV1
-        check: "Exit decision is one of: EXIT_CLEAN, EXIT_ISSUES_FIXED, EXIT_MAX_ROUNDS, ESCALATE_PIVOT_RESTART, CONTINUE"
-        on_fail: "Re-evaluate findings against exit criteria. EXIT_CLEAN = no must-fix/should-fix and no fixes this session. EXIT_ISSUES_FIXED = fixes occurred and no must-fix/should-fix remain. EXIT_MAX_ROUNDS = round 10 with remaining must-fix or should-fix findings. ESCALATE_PIVOT_RESTART = STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT. Rubric score calibrates residual risk but does not create a finding."
+        check: "Exit decision is one of: EXIT_CLEAN, EXIT_ISSUES_FIXED, EXIT_MAX_ROUNDS, EXIT_INCOMPLETE_COVERAGE, ESCALATE_PIVOT_RESTART, CONTINUE"
+        on_fail: "Re-evaluate after complete-batch aggregation. EXIT_CLEAN = complete final-snapshot coverage, no must-fix/should-fix, and no fixes this session. EXIT_ISSUES_FIXED = complete final-snapshot coverage, fixes occurred, and no must-fix/should-fix remain. EXIT_INCOMPLETE_COVERAGE = current missing, invalid, blocked, timed-out, failed, or invalidated expected pass and maps to HAS_REMAINING_ITEMS. EXIT_MAX_ROUNDS = round 10 with remaining must-fix or should-fix findings. ESCALATE_PIVOT_RESTART = STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT. Rubric score calibrates residual risk but does not create a finding."
 
       - id: EV2
-        check: "EXIT_CLEAN or EXIT_ISSUES_FIXED only if zero must-fix and zero should-fix findings remain; any below-threshold rubric score is recorded as residual risk with the evidence-bounded claim"
-        on_fail: "Address or explicitly defer evidence-backed findings. Do not manufacture a finding or another round solely to raise a score."
+        check: "EXIT_CLEAN or EXIT_ISSUES_FIXED only if the current final snapshot recomputed scope-manifest/content identity still matches, the complete aggregated union has exact manifest-derived tuple closure and zero must-fix and zero should-fix findings remain; prior incomplete or invalidated batches require terminal accounting in history but do not permanently block a later complete replacement batch; needs_context, blocked, timed_out, failed, or invalidated current expected pass forces coverage_complete=false and HAS_REMAINING_ITEMS, never CLEAN or ISSUES_FIXED; any below-threshold aggregate rubric score is recorded as residual risk with the evidence-bounded claim"
+        on_fail: "Address or explicitly defer evidence-backed findings and record coverage gaps. Do not manufacture a finding or another round solely to raise a score."
 
       - id: EV3
         check: "EXIT_MAX_ROUNDS only if: round == 10"
         on_fail: "Rounds remain — must CONTINUE to FIX step"
 
       - id: EV4
-        check: "In audit mode: always EXIT after first round (no fix loop)"
+        check: "In audit mode: after exactly one started batch reaches terminal accounting, EXIT complete or incomplete with no fix loop or replacement batch; incomplete maps to HAS_REMAINING_ITEMS."
         condition: "mode == audit"
-        on_fail: "Audit mode does not fix or loop — present findings and exit"
+        on_fail: "Audit mode does not fix or loop — wait for terminal accounting, present findings, and exit."
 
       - id: EV5
         check: "For medium+ scope: rubric threshold action calibrates focus and residual risk — PASS supports a findings-based exit, REFINE targets existing findings only, and PIVOT escalates through pivot_restart_decision"
@@ -183,14 +200,14 @@ gates:
         on_fail: "Pause the loop, build pivot_restart_signal from score_history, and require orchestrator-owned pivot_restart_decision. Do not advance to another review round until the decision names the exact next action and an allowed evidence-backed additional_round_reason exists."
 
       - id: EV8
-        check: "Audit mode exits after exactly one review pass without fixes or a second Reviewer dispatch"
+        check: "Audit mode exits after exactly one started batch reaches terminal accounting complete or incomplete, without fixes, a replacement, or a second batch; incomplete is HAS_REMAINING_ITEMS and the first response never ends the batch"
         condition: "mode == audit"
-        on_fail: "Stop after round 1 and present the evidence-backed audit findings."
+        on_fail: "Wait for every expected pass result, aggregate once, then stop after round 1 and present the evidence-backed audit findings."
 
       - id: EV9
-        check: "The normal review-fix path is round 1 review, fixes and validation when needed, then one fresh round 2 re-review"
+        check: "The normal review-fix path is round 1 complete review batch, fixes and validation when needed, then one fresh round 2 re-review batch on a new snapshot"
         condition: "mode == review-fix"
-        on_fail: "After round 1 fixes, validate and perform one fresh round 2 re-review; do not schedule more rounds by default."
+        on_fail: "After round 1 fixes, invalidate the old batch, validate, freeze a new snapshot, and perform one fresh complete round 2 re-review batch; do not schedule more rounds by default."
 
       - id: EV10
         check: "Round 3+ has a recorded additional_round_reason backed by new evidence from changed_files, unresolved_finding, validation_failure, regression_or_drift, or changed_hypothesis. Score below threshold alone is insufficient."
@@ -215,8 +232,8 @@ gates:
         on_fail: "Fix or defer remaining should-fix items — add deferred items to remaining_items with reason_unresolved populated"
 
       - id: F3
-        check: "Each fixed item was added to previously_fixed with description and round number"
-        on_fail: "Update previously_fixed list before proceeding to VALIDATE"
+        check: "Each newly fixed item was added to previously_fixed with its original aggregate_finding_id, source_finding_ids, source_provenance, description, round number, and pending_verification closure status; only legacy pre-ID records may receive deterministic normalized IDs."
+        on_fail: "Update previously_fixed closure ledger before proceeding to VALIDATE"
 
   # ─────────────────────────────────────────────
   # VALIDATE step — per round (review-fix mode only)
@@ -241,8 +258,8 @@ gates:
         on_fail: "Run complexity analysis and flag methods exceeding threshold"
 
       - id: V4
-        check: "After any source fix, build_test_verification_ref was refreshed with current real passed build/test evidence for every subsequent Reviewer dispatch; not_applicable is absent"
-        on_fail: "Run current build/tests, record the passed evidence ref, and block the next review round until the fresh evidence is available."
+        check: "After any source fix, the current batch is invalidated and build_test_verification_ref is refreshed with current real passed build/test evidence before every pass in the next frozen-snapshot batch; not_applicable is absent"
+        on_fail: "Run current build/tests, record the passed evidence ref, freeze a new snapshot/batch, and block the next review round until the fresh evidence is available."
 
   # ─────────────────────────────────────────────
   # QA EVALUATION step — after code review/build evidence
@@ -254,15 +271,15 @@ gates:
     exit_assertions:
 
       - id: QA1
-        check: "QA evaluation starts only after build/test verification evidence and Code Reviewer or Reviewer compatibility result are available"
-        on_fail: "Return to validation or code review. Do not dispatch QAEvaluator until code-review/build evidence exists."
+        check: "QA evaluation starts only after build/test verification evidence and Code Reviewer or Reviewer compatibility result are available. That result must be a fresh complete final batch. Immediately rehash the source snapshot before QA; if it changed, validate, invalidate the prior batch, and complete a fresh review batch before QA resumes. The only bypass is exact equality of review_snapshot_id and all final snapshot identity fields. A carried approved_feature_preparation_qa_acceptance_obligation also requires its execution_prerequisite before QAEvaluator checks requested_scope."
+        on_fail: "Return to validation or code review. Do not dispatch or resume QAEvaluator until current code-review/build evidence and exact rehash equality exist; on source mutation invalidate and rebuild the review batch. Block if prerequisite or evidence is missing rather than dropping the obligation."
 
       - id: QA2
-        check: "QAEvaluator received done_contract with debate_record when present, acceptance_criteria, verification_evidence, domain_context/rubric_refs when applicable, round, previously_failed_acceptance_items, and qa_filter_policy"
+        check: "QAEvaluator received bounded worker_return_schema_selector: Worker loads named handoff return_fields recursively from active skill root, proves worker_return_schema equals the referenced schema, or fails closed before response, done_contract with debate_record when present, acceptance_criteria, verification_evidence, domain_context/rubric_refs when applicable, round, previously_failed_acceptance_items, qa_filter_policy, and any approved_feature_preparation_qa_acceptance_obligation"
         on_fail: "Re-dispatch QAEvaluator with the full QA handoff context, or complete direct-fallback QA context before continuing."
 
       - id: QA3
-        check: "QAEvaluator returned status, round, acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were selected, final_verdict, result, evidence, and score_entry"
+        check: "QAEvaluator returned status, round, canonical acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were selected, final_verdict, result, evidence, score_entry, and approved_feature_preparation_qa_acceptance_obligation_result when carried; that result exactly echoes requested_scope, execution_prerequisite, feature_preparation_scope, and the conditional source ref or basis."
         on_fail: "In delegated mode, re-dispatch QAEvaluator requesting the missing fields. In direct fallback mode, complete the missing QA evidence before deciding acceptance. Require selected_domain_rubrics/domain_quality_scores only when domain rubrics are scoped."
 
       - id: QA4
@@ -270,7 +287,7 @@ gates:
         on_fail: "Move generic code/security/architecture/test-coverage findings back to Code Reviewer unless they directly block an acceptance criterion or Done Contract item."
 
       - id: QA5
-        check: "QA loop exit decision is accepted, accepted_with_concerns, rejected, or blocked; round 10 is terminal and never starts round 11"
+        check: "QA loop exit decision is accepted, accepted_with_concerns, rejected, or blocked; when a carried approved_feature_preparation_qa_acceptance_obligation exists, every successful pair accepted/CLEAN, accepted/ISSUES_FIXED, accepted_with_concerns/CLEAN, or accepted_with_concerns/ISSUES_FIXED requires requested_scope_status=fulfilled, execution_prerequisite_status=met, exact carried binding, and evidence. Otherwise return rejected/HAS_REMAINING_ITEMS or blocked/BLOCKED. round 10 is terminal and never starts round 11"
         on_fail: "Apply references/qa-evaluation-loop.md terminal behavior. If round < 10 and rejected, return failed acceptance items to Build; if round == 10, record remaining failed acceptance items in qa_evaluation_result."
 
       - id: QA6
@@ -303,7 +320,7 @@ gates:
       - id: X3
         check: "For medium+ scope: rubric_summary is populated in output with final scores and score progression"
         condition: "scope_size in [medium, large]"
-        on_fail: "Populate rubric_summary with final_scores from last round and score_progression from all rounds"
+        on_fail: "Populate rubric_summary with final scores from the post-barrier aggregated union and aggregate score progression"
 
       - id: X4
         check: "If qa_evaluation_mode is required: qa_evaluation_result is populated with final_verdict, result, acceptance_findings, qa_scorecard, score_progression, and evidence"
@@ -311,7 +328,7 @@ gates:
         on_fail: "Run or complete the QA evaluation loop before presenting final review results."
 
       - id: X5
-        check: "A no-material-finding final result uses the evidence-bounded claim 'No material findings within the reviewed scope and available evidence' and does not present CLEAN as proof of correctness"
+        check: "A no-material-finding final result has complete coverage, uses the evidence-bounded claim 'No material findings within the reviewed scope and available evidence', and does not present CLEAN as proof of correctness"
         on_fail: "Keep the compatible machine enum, replace the user-facing certainty claim with the required evidence-bounded wording, and state residual risk."
 
 # ─────────────────────────────────────────────
@@ -324,7 +341,7 @@ invariants:
     on_fail: "Do not print findings or summaries until the loop exits. Buffer all output for the final summary."
 
   - id: INV1
-    check: "previously_fixed list only grows — items are never removed"
+    check: "previously_fixed ledger only grows — items are never removed; closure verification may update status and does not suppress incomplete or regressed findings"
     scope: all_rounds
     on_fail: "Restore any removed items to previously_fixed. This list is append-only."
 
@@ -342,6 +359,11 @@ invariants:
     check: "Finding-count changes are explained by fixed items, regressions, drift, or newly discovered evidence"
     scope: all_rounds
     on_fail: "Investigate the increased count and classify each new item. Never suppress a new evidence-backed finding to preserve a monotonic count; record regressions or newly discovered risks in the final summary."
+
+  - id: INV_BATCH
+    check: "Each round counts started review batches, not individual perspective passes, including incomplete or invalidated batches. round 10 remains terminal after its started batch reaches a terminal outcome; no batch may claim clean before all expected responses are terminal and coverage is complete."
+    scope: all_rounds
+    on_fail: "Finish the current response barrier or record incomplete coverage as HAS_REMAINING_ITEMS. Do not increment the round for sibling passes or start round 11."
 
   - id: INV5
     check: "For medium+ scope: rubric score increases correlate with finding count decreases (no drift)"

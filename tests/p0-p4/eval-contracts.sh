@@ -13,6 +13,9 @@ semantic_verdict_schema="$FRAMEWORK_DIR/docs/evals/framework-semantic-review-ver
 promotion_decision_schema="$FRAMEWORK_DIR/docs/evals/framework-promotion-decision.schema.json"
 workflow_kernel_manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
 eval_readme="$FRAMEWORK_DIR/docs/evals/README.md"
+eval_package="$FRAMEWORK_DIR/tools/evals/package.json"
+eval_package_lock="$FRAMEWORK_DIR/tools/evals/package-lock.json"
+framework_validation_workflow="$FRAMEWORK_DIR/.github/workflows/framework-validation.yml"
 
 test_sha256_stream() {
     if command -v sha256sum >/dev/null 2>&1; then sha256sum | awk '{print $1}'
@@ -278,6 +281,25 @@ if [[ -x "$eval_runner" ]]; then
     pass
 else
     fail "eval runner is missing or not executable: $eval_runner"
+fi
+
+test_start "framework CI installs the locked Draft 2020 validator dependency"
+ajv_version="$(jq -r '.devDependencies.ajv // empty' "$eval_package")"
+if [[ "$ajv_version" =~ ^8\.([1][89]|[2-9][0-9])\.[0-9]+$ ]] \
+    && jq -e --arg version "$ajv_version" '
+        .packages[""].devDependencies.ajv == $version
+        and .packages["node_modules/ajv"].version == $version
+    ' "$eval_package_lock" >/dev/null \
+    && grep -Fq 'uses: actions/setup-node@v4' "$framework_validation_workflow" \
+    && grep -Fq 'node-version: 22' "$framework_validation_workflow" \
+    && grep -Fq 'cache-dependency-path: tools/evals/package-lock.json' "$framework_validation_workflow" \
+    && grep -Fq 'working-directory: tools/evals' "$framework_validation_workflow" \
+    && grep -Fq 'run: npm ci --ignore-scripts' "$framework_validation_workflow" \
+    && grep -Fq 'command -v node' "$framework_validation_workflow" \
+    && grep -Fq 'command -v npm' "$framework_validation_workflow"; then
+    pass
+else
+    fail "framework CI does not install the exact safe Ajv lock used by Draft 2020 validation"
 fi
 
 test_start "docs eval runner validates fixture"
@@ -1017,7 +1039,7 @@ for variant in baseline candidate; do
          instruction_sha256:$instruction_hash,seed_workspace_sha256:("4"*64),requested_model:"test-model",
          runtime_model_attestation:"not_exposed_by_codex_jsonl",model_selection_evidence:"explicit_model_argument_only",
          requested_model_catalog_entry_sha256:null,codex_executable_sha256:null,
-         cli_version:"codex-cli test",adapter_version:"codex-framework-eval-v5"}}' \
+         cli_version:"codex-cli test",adapter_version:"codex-framework-eval-v6"}}' \
       >"$binding_traces/identity-pair-$variant.json"
 done
 jq -n '{planned_runs:2,fixture_sha256:("1"*64),requested_model:"test-model",cli_version:"codex-cli test",
@@ -1076,9 +1098,6 @@ while IFS= read -r entry; do
     cp -R "$entry" "$materialization_expected/"
 done < <(find "$FRAMEWORK_DIR/skills/assistant-workflow" -mindepth 1 -maxdepth 1 ! -name evals -print | LC_ALL=C sort)
 cp "$materialization_overlay" "$materialization_expected/SKILL.md"
-if [[ -f "$materialization_expected/agents/codex.conf" ]]; then
-    cp "$materialization_expected/agents/codex.conf" "$materialization_expected/agent.conf"
-fi
 while IFS= read -r instruction_file; do
     sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file"
     rm -f "${instruction_file}.bak"
@@ -1088,11 +1107,10 @@ done < <(find "$materialization_expected" -type f \( \
 expected_materialization_hash="$(test_hash_directory "$materialization_expected")"
 actual_materialization_hash="$(export FINALIZER_SOURCE_ONLY=true; source "$semantic_finalizer"; materialized_candidate_hash "$materialization_overlay")"
 if [[ "$actual_materialization_hash" == "$expected_materialization_hash" ]] \
-    && cmp -s "$materialization_expected/agent.conf" "$materialization_expected/agents/codex.conf" \
     && ! grep -R -Fq '{agent_state_dir}' "$materialization_expected"; then
     pass
 else
-    fail "finalizer did not mirror the runner's Codex preset and agent-state substitution before hashing"
+    fail "finalizer did not mirror installer instruction materialization and agent-state substitution before hashing"
 fi
 
 test_start "question-mark proxy naming is explicit across manifest comparison and docs"

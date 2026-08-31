@@ -183,7 +183,7 @@ review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
 review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
 review_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
 standalone_routing_text="$(tr '\n\t' '  ' < "$review_root"; tr '\n\t' '  ' < "$review_loop"; tr '\n\t' '  ' < "$review_gates")"
-standalone_handoff_text="$(tr '\n\t' '  ' < "$review_handoffs"; tr -s '[:space:]' ' ')"
+standalone_handoff_text="$(tr '\n\t' '  ' < "$review_handoffs" | tr -s '[:space:]' ' ')"
 
 if ! grep -Fq 'review this' "$review_root"; then
     standalone_failures+=("review this invocation is not routed")
@@ -222,6 +222,70 @@ if [[ "${#standalone_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "${standalone_failures[*]}"
+fi
+
+test_start "review mode infers clear authority and asks only for genuine ambiguity"
+if ruby -ryaml -rjson -e '
+  input = YAML.load_file(ARGV.fetch(0))
+  cases = JSON.parse(File.read(ARGV.fetch(1))).fetch("cases")
+  mode = input.fetch("fields").find { |field| field["name"] == "mode" }
+  ids = %w[audit-one-pass review-fix-loop-handles-findings workflow-carried-authorization-allows-bounded-review-fix ambiguous-standalone-review-asks-before-review-or-mutation]
+  ambiguous = cases.find { |entry| entry["id"] == ids.last }
+  valid = mode["required"] == true && mode["on_missing"] == "infer" &&
+    mode.fetch("infer_from").include?("Clear report-only intent") &&
+    mode.fetch("infer_from").include?("Clear authorization to modify source") &&
+    mode.fetch("infer_from").include?("carried active approved implementation workflow") &&
+    mode.fetch("infer_from").include?("If neither outcome is unambiguous") &&
+    ids.all? { |id| cases.any? { |entry| entry["id"] == id } } &&
+    ambiguous.fetch("expected_behavior").join(" ").include?("exactly") &&
+    ambiguous.fetch("fail_signals").join(" ").include?("Starts reviewing or editing before asking")
+  exit valid ? 0 : 1
+' "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"; then
+    pass
+else
+    fail "review mode still asks before inferring clear audit, review-fix, or carried workflow authority"
+fi
+
+test_start "review batches require all independent responses before aggregation"
+if ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0))
+  gates = YAML.load_file(ARGV.fetch(1))
+  reviewer = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
+  context = reviewer.fetch("context_fields").to_h { |field| [field["name"], field] }
+  returns = reviewer.fetch("return_fields").to_h { |field| [field["name"], field] }
+  review = gates.fetch("gates").find { |gate| gate["phase"] == "REVIEW_STEP" }
+  assertions = review.fetch("exit_assertions").to_h { |assertion| [assertion["id"], assertion] }
+  valid = reviewer.fetch("context_fields").any? { |field| field["name"] == "review_batch" } && context.key?("batch_id") && context.key?("review_pass_id") && context.key?("review_perspective") &&
+    returns.key?("coverage_entries") && assertions.key?("RS_BATCH_BARRIER") &&
+    assertions.fetch("RS_BATCH_BARRIER").fetch("check").include?("all expected passes reach terminal accounting")
+  exit valid ? 0 : 1
+' "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml" "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"; then
+    pass
+else
+    fail "assistant-review does not require an all-response independent review batch barrier"
+fi
+
+test_start "standalone Spec Review FAIL repairs only in review-fix and remains read-only in audit"
+if ruby -ryaml -rjson -e '
+  gates = YAML.load_file(ARGV.fetch(0))
+  cases = JSON.parse(File.read(ARGV.fetch(1))).fetch("cases")
+  entry = gates.fetch("gates").find { |gate| gate["phase"] == "ENTRY" }
+  e8 = entry.fetch("exit_assertions").find { |assertion| assertion["id"] == "E8" }
+  audit = cases.find { |item| item["id"] == "audit-spec-review-fail-is-read-only" }
+  valid = e8.fetch("check").include?("review-fix") &&
+    e8.fetch("check").include?("audit") &&
+    e8.fetch("check").include?("exits repair/Build/source-mutation dispatch") &&
+    e8.fetch("check").include?("dispatches every planned read-only Reviewer pass") &&
+    e8.fetch("on_fail").include?("mode=review-fix") &&
+    !audit.nil? &&
+    audit.fetch("setup_context").join(" ").include?("Spec Review FAIL") &&
+    audit.fetch("expected_behavior").join(" ").include?("Dispatches every planned read-only Reviewer pass") &&
+    audit.fetch("fail_signals").join(" ").include?("Changes source")
+  exit valid ? 0 : 1
+' "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"; then
+    pass
+else
+    fail "Spec Review FAIL does not yet distinguish authorized review-fix repair from audit read-only exit"
 fi
 
 write_index_validator_fixture() {

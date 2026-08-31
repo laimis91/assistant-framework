@@ -118,6 +118,14 @@ nested Pack mode cannot be weakened to evade that evidence.
 - Fact: [claim] -- [source ref and command/path]
 - Assumption/default: [statement] -- [safe default | pending question | validated]
 
+### Existing-system feature-preparation evidence (when applicable)
+- Evidence ref: [feature_preparation_evidence.ref]
+- Carried behavior claim or Product question: [{evidence_ref, item_id, claim_or_question}, exactly one binding per carried claim/question and only if its evidence row is admissible]
+- Preserve/change classification: [behavior_status + work_status]
+- Do not carry an unsupported Product question: incomplete inspection is an
+  evidence gap and contradictory sources are
+  `source_conflict + source_conflict_resolution` until resolved.
+
 ### Design-pressure checks
 | Check | Evidence or material question | Decision implication |
 |---|---|---|
@@ -184,14 +192,16 @@ hypothesis until its stated verification runs.
   rely on stale architecture prose.
 - During Discover, set `handoff_binding_state=discover_only` and retain only
   `context_or_journal_ref`; discover_only forbids invented
-  `plan_or_task_packet_ref` and `review_scope_ref`. Plan atomically binds
+  `plan_or_task_packet_ref` and `review_scope_ref`. For `prepare_only`, retain
+  discover_only through Preparation Completion even when optional readiness
+  planning runs. For `execution_intent != prepare_only`, Plan atomically binds
   `plan_or_task_packet_ref` and `review_scope_ref` before Build by setting
-  `handoff_binding_state=downstream_bound` when `plan_mode!=none`. For
-  `plan_mode=none`, the Discover exit transition atomically binds compact inline
-  task-packet/execution and inline review-scope refs before any Build action.
-  Build, Review, and completion
-  retain handoff_binding_state=downstream_bound. Material invalidation clears
-  stale downstream refs through refresh, re-plan, and reapproval.
+  `handoff_binding_state=downstream_bound` when `plan_mode!=none`. For that
+  execution lane with `plan_mode=none`, the Discover exit transition atomically
+  binds compact inline task-packet/execution and inline review-scope refs before
+  any Build action. Build, Review, and completion retain
+  handoff_binding_state=downstream_bound. Material invalidation clears stale
+  downstream refs through refresh, re-plan, and reapproval.
 - A plan deviation that changes the selected design, semantic contract,
   resource budget, or verification target requires the normal deviation and
   re-approval path.

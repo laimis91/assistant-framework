@@ -34,13 +34,20 @@ Start with a status packet:
 - `open_questions`: required when status is `NEEDS_CONTEXT` or `BLOCKED`
 
 Then return:
+- Before first response, resolve `worker_return_schema`: from the active assistant-review skill root, load named `return_fields` recursively with bounded keys from `contracts/handoffs.yaml`; verify it equals the schema identified by `return_schema_ref`, or return `NEEDS_CONTEXT` without a partial result.
 - `acceptance_findings`: failed or risky acceptance items with evidence
 - `qa_scorecard`: compact scores with per-dimension rationale
+- Compute `weighted_score = round_half_up((acceptance_coverage * 0.30) + (evidence_strength * 0.25) + (domain_quality * 0.20) + (final_readiness * 0.25), 2 decimal places)`.
 - `selected_domain_rubrics`: selected rubric families from domain-rubrics.md when scoped; empty or omitted when not applicable
 - `domain_quality_scores`: per-family/per-dimension scores when scoped domain rubrics were used
-- `score_entry` or `score_progression`: round score, failed acceptance count, delta/drift notes
+- `score_entry` is required for every QA round.
+- `score_entry` includes `round` (int), `weighted_score` (float), `failed_acceptance_count` (int), `delta` (string), and `drift_status` (the canonical enum).
+- `score_progression` is optional prior-round history; when returned, every entry is the same canonical projection: `round` (int), `weighted_score` (float), `failed_acceptance_count` (int), `delta` (string), and `drift_status` (the canonical enum).
+- When score_entry.drift_status=STAGNATION, repeated QA DRIFT/REGRESSION occurs, or a scoped domain action=pivot, return `pivot_restart_signal` with `trigger`, `evidence`, `affected_round`, and `recommended_recovery_focus`.
 - `final_verdict`: accepted, accepted_with_concerns, rejected, or blocked
 - `result`: CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS, or BLOCKED
+
+When `approved_feature_preparation_qa_acceptance_obligation` is carried, also return `approved_feature_preparation_qa_acceptance_obligation_result`. It exactly echoes `requested_scope`, `execution_prerequisite`, `feature_preparation_scope`, and the one carried source binding; it includes `requested_scope_status` (`fulfilled`, `blocked`, or `failed`), `execution_prerequisite_status` (`met`, `missing`, or `blocked`), and evidence for both statuses. Only `accepted` or `accepted_with_concerns` with `CLEAN` or `ISSUES_FIXED` may be returned when statuses are `fulfilled` and `met` with exact scope/binding evidence. Otherwise return `rejected` with `HAS_REMAINING_ITEMS`, or `blocked` with `BLOCKED`.
 
 ## Status meanings
 - `DONE`: QA evaluation complete and final_verdict is accepted
