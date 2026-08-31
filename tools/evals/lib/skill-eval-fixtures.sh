@@ -59,6 +59,7 @@ eval_only_root_registry = {
   ],
   "assistant-workflow" => [
     { "kind" => "input_field", "name" => "approved_feature_preparation_evidence_ref" },
+    { "kind" => "input_field", "name" => "approved_feature_preparation_result" },
     { "kind" => "input_field", "name" => "approved_feature_preparation_harness_obligation" },
     { "kind" => "input_field", "name" => "approved_feature_preparation_qa_acceptance_obligation" },
     { "kind" => "input_field", "name" => "architecture_design_mode" },
@@ -382,6 +383,7 @@ canonical_perspectives = {
   "medium" => perspectives.take(3),
   "large" => perspectives.take(4)
 }
+
 review_case_ids = Array(fixture["cases"]).map do |test_case|
   test_case["id"] if test_case.is_a?(Hash) && test_case["category"] == "multi_pass_review_batch"
 end.compact
@@ -524,6 +526,101 @@ closure_expectations = fixture["canonical_review_closure_expectations"]
 fail_with.call("canonical_review_closure_expectations must be an object keyed exactly to closure-required mapped cases") unless closure_expectations.is_a?(Hash) && closure_expectations.keys.sort == closure_case_ids.sort
 closure_expectations.each do |case_id, authority|
   fail_with.call("canonical_review_closure_expectations #{case_id.inspect} has an invalid bounded closure authority") unless closure_authority_valid.call(authority)
+end
+if skill_name == "assistant-review"
+  distillation_expectations = fixture["canonical_review_finding_rule_distillation_expectations"]
+  fail_with.call("canonical_review_finding_rule_distillation_expectations must be an object keyed exactly to mapped final-summary cases") unless distillation_expectations.is_a?(Hash) && distillation_expectations.keys.sort == case_refs.keys.sort
+  distillation_expectations.each do |case_id, authority|
+    fields = %w[active_must_fix_aggregate_finding_ids fixed_must_fix_aggregate_finding_ids]
+    fail_with.call("canonical_review_finding_rule_distillation_expectations #{case_id.inspect} must contain exactly active and fixed must-fix ids") unless authority.is_a?(Hash) && authority.keys.sort == fields
+    fields.each do |field|
+      ids = authority[field]
+      fail_with.call("canonical_review_finding_rule_distillation_expectations #{case_id.inspect}.#{field} must be a unique string array") unless ids.is_a?(Array) && ids.all? { |finding_id| nonblank.call(finding_id) } && ids.uniq.length == ids.length
+    end
+  end
+end
+RUBY
+)" || die "$authority_error"
+
+    [[ -z "$authority_error" ]] || die "$authority_error"
+}
+
+validate_canonical_feature_preparation_result_authority() {
+    local fixture_file="$1"
+    local skill_name="$2"
+    local authority_error
+
+    [[ "$skill_name" == "assistant-workflow" ]] || return 0
+
+    authority_error="$(ruby -rjson - "$fixture_file" 2>&1 <<'RUBY'
+fixture = JSON.parse(File.read(ARGV.fetch(0)))
+fail_with = lambda { |message| warn "assistant-workflow canonical_feature_preparation_result_expectations: #{message}"; exit 1 }
+nonblank = ->(value) { value.is_a?(String) && !value.strip.empty? }
+nonblank_strings = ->(value) { value.is_a?(Array) && value.all? { |item| nonblank.call(item) } }
+result_valid = lambda do |result, scope, top_level_evidence_ref|
+  required = %w[execution_status scope evidence_gaps open_decisions implementation_implications recommended_next_step]
+  optional = %w[feature_preparation_evidence_ref future_harness_obligation future_qa_acceptance_obligation readiness_plan]
+  next false unless result.is_a?(Hash) && (result.keys - (required + optional)).empty? && required.all? { |field| result.key?(field) }
+  next false unless result["execution_status"] == "not_started" && nonblank.call(result["scope"]) && nonblank_strings.call(result["evidence_gaps"]) && nonblank_strings.call(result["open_decisions"]) && nonblank_strings.call(result["implementation_implications"]) && !result["implementation_implications"].empty? && nonblank.call(result["recommended_next_step"])
+  next false if result.key?("feature_preparation_evidence_ref") && !nonblank.call(result["feature_preparation_evidence_ref"])
+  if result.key?("future_harness_obligation")
+    obligation = result["future_harness_obligation"]
+    next false unless obligation.is_a?(Hash) && obligation.keys.sort == %w[evidence_basis execution_prerequisite requested_scope] && nonblank.call(obligation["requested_scope"]) && nonblank_strings.call(obligation["evidence_basis"]) && !obligation["evidence_basis"].empty? && nonblank.call(obligation["execution_prerequisite"])
+  end
+  if result.key?("future_qa_acceptance_obligation")
+    obligation = result["future_qa_acceptance_obligation"]
+    next false unless obligation.is_a?(Hash) && obligation.keys.sort == %w[execution_prerequisite requested_scope] && nonblank.call(obligation["requested_scope"]) && nonblank.call(obligation["execution_prerequisite"])
+  end
+  if result.key?("readiness_plan")
+    readiness = result["readiness_plan"]
+    common_fields_valid = readiness.is_a?(Hash) && readiness["execution_status"] == "not_started" && nonblank_strings.call(readiness["implementation_implications"]) && !readiness["implementation_implications"].empty? && nonblank_strings.call(readiness["open_decisions"]) && nonblank.call(readiness["recommended_next_state"])
+    if scope == "existing_system"
+      next false unless common_fields_valid && readiness.keys.sort == %w[evidence_ref execution_status implementation_implications open_decisions recommended_next_state] && readiness["evidence_ref"] == result["feature_preparation_evidence_ref"] && readiness["evidence_ref"] == top_level_evidence_ref
+    else
+      next false unless common_fields_valid && readiness.keys.sort == %w[execution_status implementation_implications open_decisions preparation_basis recommended_next_state] && readiness["preparation_basis"] == "not_applicable"
+    end
+  end
+  true
+end
+carrying_categories = %w[feature_preparation_transition feature_preparation_qa_transition]
+carrying_cases = Array(fixture["cases"]).select do |test_case|
+  carrying_categories.include?(test_case["category"])
+end
+expected_case_ids = carrying_cases.map { |test_case| test_case.fetch("id") }.sort
+authorities = fixture["canonical_feature_preparation_result_expectations"]
+if expected_case_ids.empty?
+  fail_with.call("must be absent or empty when no implementation projection carries an approved preparation result") unless authorities.nil? || (authorities.is_a?(Hash) && authorities.empty?)
+  exit 0
+end
+fail_with.call("must be an object keyed exactly to every carrying implementation case") unless authorities.is_a?(Hash) && authorities.keys.sort == expected_case_ids
+carrying_cases.each do |test_case|
+  case_id = test_case.fetch("id")
+  authority = authorities.fetch(case_id)
+  assertions = Array(test_case.dig("machine_expectations", "structured_json_assertions"))
+  execution_intent = assertions.any? do |assertion|
+    assertion["operator"] == "equals" && assertion["path"] == ["execution_intent"] && assertion["expected"] == "implement_only"
+  end
+  fail_with.call("#{case_id.inspect} must assert execution_intent=implement_only") unless execution_intent
+  scope_assertion = assertions.find { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["feature_preparation_scope"] }
+  scope = scope_assertion && scope_assertion["expected"]
+  fail_with.call("#{case_id.inspect} must declare feature_preparation_scope") unless %w[existing_system not_applicable].include?(scope)
+  root_to_triage = assertions.any? do |assertion|
+    assertion["operator"] == "equals_path" && assertion["path"] == ["approved_feature_preparation_result"] && assertion["other_path"] == ["triage_result", "approved_feature_preparation_result"]
+  end
+  root_to_implementation_step = assertions.any? do |assertion|
+    assertion["operator"] == "equals_path" && assertion["path"] == ["approved_feature_preparation_result"] && assertion["other_path"].is_a?(Array) && assertion["other_path"].length == 3 && assertion["other_path"][0] == "implementation_steps" && assertion["other_path"][1].is_a?(Integer) && assertion["other_path"][1] >= 0 && assertion["other_path"][2] == "approved_feature_preparation_result"
+  end
+  fail_with.call("#{case_id.inspect} must assert the exact root-to-triage preparation-result projection") unless root_to_triage
+  fail_with.call("#{case_id.inspect} must assert an exact root-to-implementation-step preparation-result projection") unless root_to_implementation_step
+  top_level_evidence_assertion = assertions.find { |assertion| assertion["operator"] == "equals" && assertion["path"] == ["approved_feature_preparation_evidence_ref"] }
+  top_level_evidence_ref = top_level_evidence_assertion && top_level_evidence_assertion["expected"]
+  if scope == "existing_system"
+    fail_with.call("#{case_id.inspect} existing-system authority must carry the exact top-level evidence ref") unless nonblank.call(top_level_evidence_ref) && authority["feature_preparation_evidence_ref"] == top_level_evidence_ref
+  else
+    fail_with.call("#{case_id.inspect} not-applicable authority must omit its evidence ref") if authority.key?("feature_preparation_evidence_ref")
+    fail_with.call("#{case_id.inspect} not-applicable case must assert no top-level evidence ref") unless assertions.any? { |assertion| assertion["operator"] == "path_absent" && assertion["path"] == ["approved_feature_preparation_evidence_ref"] }
+  end
+  fail_with.call("#{case_id.inspect} has an invalid bounded preparation-result authority") unless result_valid.call(authority, scope, top_level_evidence_ref)
 end
 RUBY
 )" || die "$authority_error"
@@ -875,6 +972,7 @@ validate_fixture() {
 
     validate_assertion_contract_paths "$fixture_file" "$skill_name"
     validate_canonical_review_batch_authority "$fixture_file" "$skill_name"
+    validate_canonical_feature_preparation_result_authority "$fixture_file" "$skill_name"
 }
 
 validate_all_fixtures() {

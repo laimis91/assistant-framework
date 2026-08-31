@@ -224,6 +224,7 @@ p0p4_write_assistant_review_batch_response() {
           }
         }
         | if $result == "CLEAN" or $result == "ISSUES_FIXED" then .final_summary.evidence_bounded_claim = "No material findings within the reviewed scope and available evidence" else . end
+        | if $include_finding then .review_finding_rule_distillation = [{finding:"aggregate-1",evidence:"later pass evidence",failure_pattern:"Later pass evidence can be omitted without the response barrier.",classification:"permanent_rule_candidate",rule_target:"eval",proposed_rule:"Require the response barrier before aggregation.",verification_eval_update:"Add a response-barrier eval mutation.",scope_and_exclusions:"Applies to multi-pass review aggregation only.",promotion_decision:"promote"}] else . end
     ' >"$response_path"
 }
 
@@ -394,6 +395,15 @@ p0p4_write_skill_eval_responses() {
                     medium-implement-only-consumes-not-applicable-preparation-qa-obligation)
                         build_medium_implement_only_not_applicable_qa_handoff_response "$response_path" "$required_summary"
                         ;;
+                    ordinary-implement-only-carries-not-applicable-preparation-result)
+                        build_medium_implement_only_not_applicable_preparation_result_response "$response_path" "$required_summary" false
+                        ;;
+                    ordinary-implement-only-carries-not-applicable-preparation-readiness-result)
+                        build_medium_implement_only_not_applicable_preparation_result_response "$response_path" "$required_summary" true
+                        ;;
+                    ordinary-implement-only-carries-existing-system-preparation-readiness-result)
+                        build_medium_implement_only_existing_system_preparation_readiness_result_response "$response_path" "$required_summary"
+                        ;;
                     large-prepare-only-terminal-route)
                         build_large_prepare_only_terminal_response "$response_path" "$required_summary"
                         ;;
@@ -497,6 +507,8 @@ p0p4_write_skill_eval_responses() {
                               {batch_id:"batch-1",review_snapshot_id:"snapshot-1",review_pass_id:"pass-closure",perspective:"closure_verification",coverage_obligation:"verify previously fixed finding",assigned_scope:["scope-1"],scope_item_id:"scope-1",applicable_concern:"previously_fixed",terminal_state:"completed",coverage_status:"complete",coverage_disposition:"inspected_no_risk",evidence:"The previously fixed item was independently rechecked on the fresh snapshot."}
                             ])' "$response_path" >"${response_path}.post-fix"
                         mv "${response_path}.post-fix" "$response_path"
+                        jq '.review_finding_rule_distillation = [{finding:"aggregate-fixed-1",evidence:"The fresh closure pass verified the original finding closed.",failure_pattern:"A previously fixed invariant requires explicit closure evidence.",classification:"permanent_rule_candidate",rule_target:"eval",proposed_rule:"Require a rule-distillation entry for every must-fix fixed item.",verification_eval_update:"Add fixed-item distillation mutations.",scope_and_exclusions:"Applies to fixed must-fix findings in the final summary.",promotion_decision:"promote"}]' "$response_path" >"${response_path}.distillation"
+                        mv "${response_path}.distillation" "$response_path"
                         if [[ "$id" == "post-fix-verified-closure-with-incomplete-coverage" ]]; then
                             jq '.final_summary.coverage_complete = false
                                 | .final_summary.result = "HAS_REMAINING_ITEMS"
@@ -518,7 +530,8 @@ p0p4_write_skill_eval_responses() {
                                 | .final_summary.aggregated_findings = [{aggregate_finding_id:"aggregate-fixed-1",finding_id:"review_pass:pass-closure:finding-regressed-1",source_finding_ids:["review_pass:pass-closure:finding-regressed-1"],source_provenance:[{source_kind:"review_pass",source_id:"pass-closure"}],locus:"response barrier",file:"src/review.ts",line:1,invariant:"the original fix remains effective",failure_mechanism:"the fresh closure pass reproduced the original failure",severity:"must-fix",description:"The original fixed finding regressed.",evidence:"The fresh closure pass reproduced the failure.",smallest_useful_fix:"Repair the original invariant and re-run closure verification.",confidence_pct:99}]
                                 | .final_summary.aggregation_ledger += [{source_provenance:[{source_kind:"review_pass",source_id:"pass-closure"}],source_finding_ids:["review_pass:pass-closure:finding-regressed-1"],aggregate_finding_id:"aggregate-fixed-1",disposition:"retained",rationale:"The fresh closure pass retained the regressed original aggregate finding."}]
                                 | .final_summary.coverage_ledger |= map(if .review_pass_id == "pass-closure" then .coverage_disposition = "finding" | .finding_ids = ["review_pass:pass-closure:finding-regressed-1"] | .evidence = "The closure pass reproduced the original failure." else . end)
-                                | .final_summary.remaining_items = [{severity:"must-fix",file:"src/review.ts",description:"The original fixed finding regressed.",reason_unresolved:"A fresh repair and closure pass are required."}]' "$response_path" >"${response_path}.regressed"
+                                | .final_summary.remaining_items = [{severity:"must-fix",file:"src/review.ts",description:"The original fixed finding regressed.",reason_unresolved:"A fresh repair and closure pass are required."}]
+                                | .review_finding_rule_distillation = [{finding:"aggregate-fixed-1",evidence:"The fresh closure pass reproduced the failure.",failure_pattern:"A previously fixed invariant regressed on the fresh snapshot.",classification:"permanent_rule_candidate",rule_target:"eval",proposed_rule:"Require closure verification to retain regressions.",verification_eval_update:"Add a closure-regression mutation.",scope_and_exclusions:"Applies to post-fix closure only.",promotion_decision:"promote"}]' "$response_path" >"${response_path}.regressed"
                             mv "${response_path}.regressed" "$response_path"
                         fi
                         ;;
@@ -530,7 +543,8 @@ p0p4_write_skill_eval_responses() {
                             | .source_finding_ids = ["spec_review:finding-1"]
                             | .source_provenance = [{source_kind: "spec_review", source_id: "spec-review-1"}]
                             | .description = "Spec Review mismatch")]
-                            | .final_summary.aggregation_ledger += [{source_provenance: [{source_kind: "spec_review", source_id: "spec-review-1"}], source_finding_ids: ["spec_review:finding-1"], aggregate_finding_id: "aggregate-spec-1", disposition: "retained", rationale: "Retained Spec Review finding."}]' "$response_path" >"${response_path}.spec"
+                            | .final_summary.aggregation_ledger += [{source_provenance: [{source_kind: "spec_review", source_id: "spec-review-1"}], source_finding_ids: ["spec_review:finding-1"], aggregate_finding_id: "aggregate-spec-1", disposition: "retained", rationale: "Retained Spec Review finding."}]
+                            | .review_finding_rule_distillation += [{finding:"aggregate-spec-1",evidence:"Spec Review mismatch evidence.",failure_pattern:"Specification mismatch remained after independent review.",classification:"one_off_fix",rule_target:"checklist",proposed_rule:"Preserve the spec mismatch in aggregation.",verification_eval_update:"Add an audit spec-review aggregation mutation.",scope_and_exclusions:"Applies to this retained spec mismatch.",promotion_decision:"defer"}]' "$response_path" >"${response_path}.spec"
                         mv "${response_path}.spec" "$response_path"
                         p0p4_add_assistant_review_audit_report "$response_path" "${response_path}.audit"
                         ;;
@@ -1710,21 +1724,23 @@ fi
 test_start "assistant-review runtime grader represents an all-terminal blocked review batch"
 assistant_review_blocked_case="incomplete-review-batch-never-cleans"
 assistant_review_blocked_response="$passing_response_dir/assistant-review/$assistant_review_blocked_case.txt"
+assistant_review_blocked_skill_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-blocked-review-skill.XXXXXX")"
+p0p4_register_cleanup "$assistant_review_blocked_skill_root"
+assistant_review_blocked_skill="$assistant_review_blocked_skill_root/assistant-review"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review" "$assistant_review_blocked_skill"
+jq '(.cases[] | select(.id == "incomplete-review-batch-never-cleans") | .machine_expectations.structured_json_assertions[] | select(.operator == "array_field_values_exact" and .path == ["final_summary", "coverage_ledger"] and .field == "terminal_state") | .expected_values) = ["completed", "completed", "blocked", "blocked"]' "$assistant_review_blocked_skill/evals/cases.json" >"$assistant_review_blocked_skill_root/cases.json"
+mv "$assistant_review_blocked_skill_root/cases.json" "$assistant_review_blocked_skill/evals/cases.json"
 cp "$assistant_review_blocked_response" "$assistant_review_blocked_response.original"
 jq '.final_summary.coverage_ledger |= map(if .review_pass_id == "pass-runtime" then .terminal_state = "blocked" | .evidence = "The required lifecycle pass returned BLOCKED with a concrete evidence gap." else . end)
     | .final_summary.batch_summaries[0].terminal_response_count = .final_summary.batch_summaries[0].expected_response_count
     | .audit_report.batch_summaries[0].terminal_response_count = .final_summary.batch_summaries[0].expected_response_count' "$assistant_review_blocked_response" >"$assistant_review_r9_output"
 mv "$assistant_review_r9_output" "$assistant_review_blocked_response"
-if bash -c '
-    FRAMEWORK_DIR="$1"
-    REPO_ROOT="$1"
-    source "$2"
-    assistant_review_artifact_schema_valid "$3" "$4" \
-      && assistant_review_lifecycle_semantics_valid "$3" "$4" "" "" "$5"
-' _ "$FRAMEWORK_DIR" "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh" "$assistant_review_blocked_case" "$assistant_review_blocked_response" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"; then
+if "$skill_eval_runner" --responses "$passing_response_dir" --skill "$assistant_review_blocked_skill" --case "$assistant_review_blocked_case" >"$assistant_review_r9_output" 2>&1 \
+    && grep -Fq $'PASS\tassistant-review\t'"$assistant_review_blocked_case" "$assistant_review_r9_output" \
+    && grep -Fq 'structured_json_assertion_failures=0' "$assistant_review_r9_output"; then
     pass
 else
-    fail "assistant-review runtime grader rejected a response-backed all-terminal BLOCKED batch"
+    fail "assistant-review runtime grader rejected a response-backed all-terminal BLOCKED batch without finding-rule distillation"
 fi
 mv "$assistant_review_blocked_response.original" "$assistant_review_blocked_response"
 
@@ -3477,6 +3493,138 @@ else
     fail "approved QA obligation mutations were not rejected by every transition case: ${approved_qa_mutation_failures[*]}"
 fi
 
+test_start "actual grader preserves the complete approved preparation result across ordinary and obligation-carrying implementation packets"
+approved_preparation_result_failures=()
+for approved_preparation_case_and_builder in \
+    "small-input-implement-only-promotes-deferred-harness-obligation build_medium_implement_only_harness_handoff_response" \
+    "medium-implement-only-consumes-preparation-harness-obligation build_medium_implement_only_harness_handoff_response" \
+    "medium-implement-only-consumes-not-applicable-preparation-harness-obligation build_medium_implement_only_not_applicable_harness_handoff_response" \
+    "medium-implement-only-consumes-preparation-qa-obligation build_medium_implement_only_qa_handoff_response" \
+    "medium-implement-only-consumes-not-applicable-preparation-qa-obligation build_medium_implement_only_not_applicable_qa_handoff_response" \
+    "ordinary-implement-only-carries-not-applicable-preparation-result build_medium_implement_only_not_applicable_preparation_result_response" \
+    "ordinary-implement-only-carries-not-applicable-preparation-readiness-result build_medium_implement_only_not_applicable_preparation_readiness_result_response" \
+    "ordinary-implement-only-carries-existing-system-preparation-readiness-result build_medium_implement_only_existing_system_preparation_readiness_result_response"; do
+    approved_preparation_case_id="${approved_preparation_case_and_builder%% *}"
+    approved_preparation_builder="${approved_preparation_case_and_builder#* }"
+    if ! run_isolated_workflow_routing_mutations \
+        "$approved_preparation_case_id" \
+        "$approved_preparation_builder" \
+        'del(.approved_feature_preparation_result)' \
+        'del(.approved_feature_preparation_result, .triage_result.approved_feature_preparation_result, .implementation_steps[0].approved_feature_preparation_result)' \
+        '(.approved_feature_preparation_result.scope) = "drifted root preparation scope"' \
+        '(.triage_result.approved_feature_preparation_result.scope) = "drifted triage preparation scope"' \
+        '(.implementation_steps[0].approved_feature_preparation_result.scope) = "drifted implementation packet preparation scope"' \
+        '(.approved_feature_preparation_result.implementation_implications) = ["synchronized root preparation drift"] | (.triage_result.approved_feature_preparation_result.implementation_implications) = ["synchronized root preparation drift"] | (.implementation_steps[0].approved_feature_preparation_result.implementation_implications) = ["synchronized root preparation drift"]'; then
+        approved_preparation_result_failures+=("$approved_preparation_case_id:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+    fi
+done
+if [[ ${#approved_preparation_result_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "approved preparation result copies were not exactly graded: ${approved_preparation_result_failures[*]}"
+fi
+
+test_start "assistant-workflow fixture binds every implement-only preparation result to a bounded immutable authority"
+preparation_authority_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-preparation-authority.XXXXXX")"
+p0p4_register_cleanup "$preparation_authority_root"
+preparation_authority_skill="$preparation_authority_root/assistant-workflow"
+mkdir -p "$preparation_authority_skill/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$preparation_authority_skill/SKILL.md"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$preparation_authority_skill/evals/cases.json"
+preparation_authority_failures=()
+for preparation_authority_mutation in missing malformed unknown synchronized_authority_and_projection_deletion synchronized_authority_intent_and_projection_deletion missing_triage_projection missing_implementation_step_projection existing_readiness_evidence_drift existing_readiness_preparation_basis; do
+    case "$preparation_authority_mutation" in
+        missing)
+            jq 'del(.canonical_feature_preparation_result_expectations)' "$preparation_authority_skill/evals/cases.json" >"$preparation_authority_root/cases.json"
+            ;;
+        malformed)
+            jq '.canonical_feature_preparation_result_expectations["medium-implement-only-consumes-preparation-harness-obligation"] = {scope:"truncated"}' "$preparation_authority_skill/evals/cases.json" >"$preparation_authority_root/cases.json"
+            ;;
+        unknown)
+            jq '.canonical_feature_preparation_result_expectations.invented = .canonical_feature_preparation_result_expectations["medium-implement-only-consumes-preparation-harness-obligation"]' "$preparation_authority_skill/evals/cases.json" >"$preparation_authority_root/cases.json"
+            ;;
+        synchronized_authority_and_projection_deletion)
+            jq 'del(.canonical_feature_preparation_result_expectations["ordinary-implement-only-carries-not-applicable-preparation-result"]) | (.cases[] | select(.id == "ordinary-implement-only-carries-not-applicable-preparation-result") | .machine_expectations.structured_json_assertions) |= map(select(.operator != "equals_path"))' "$preparation_authority_skill/evals/cases.json" >"$preparation_authority_root/cases.json"
+            ;;
+        synchronized_authority_intent_and_projection_deletion)
+            jq 'del(.canonical_feature_preparation_result_expectations["ordinary-implement-only-carries-not-applicable-preparation-result"]) | (.cases[] | select(.id == "ordinary-implement-only-carries-not-applicable-preparation-result") | .machine_expectations.structured_json_assertions) |= map(select(.operator != "equals_path" and ((.operator != "equals") or (.path != ["execution_intent"]))))' "$preparation_authority_skill/evals/cases.json" >"$preparation_authority_root/cases.json"
+            ;;
+        missing_triage_projection)
+            jq '(.cases[] | select(.id == "ordinary-implement-only-carries-not-applicable-preparation-result") | .machine_expectations.structured_json_assertions) |= map(select(.other_path != ["triage_result", "approved_feature_preparation_result"]))' "$preparation_authority_skill/evals/cases.json" >"$preparation_authority_root/cases.json"
+            ;;
+        missing_implementation_step_projection)
+            jq '(.cases[] | select(.id == "ordinary-implement-only-carries-not-applicable-preparation-result") | .machine_expectations.structured_json_assertions) |= map(select(.other_path != ["implementation_steps", 0, "approved_feature_preparation_result"]))' "$preparation_authority_skill/evals/cases.json" >"$preparation_authority_root/cases.json"
+            ;;
+        existing_readiness_evidence_drift)
+            jq '.canonical_feature_preparation_result_expectations["ordinary-implement-only-carries-existing-system-preparation-readiness-result"].readiness_plan.evidence_ref = "prep/stale"' "$preparation_authority_skill/evals/cases.json" >"$preparation_authority_root/cases.json"
+            ;;
+        existing_readiness_preparation_basis)
+            jq '.canonical_feature_preparation_result_expectations["ordinary-implement-only-carries-existing-system-preparation-readiness-result"].readiness_plan.preparation_basis = "not_applicable"' "$preparation_authority_skill/evals/cases.json" >"$preparation_authority_root/cases.json"
+            ;;
+    esac
+    mv "$preparation_authority_root/cases.json" "$preparation_authority_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$preparation_authority_skill" >"$preparation_authority_root/$preparation_authority_mutation.output" 2>&1; then
+        preparation_authority_failures+=("$preparation_authority_mutation")
+    fi
+    cp "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$preparation_authority_skill/evals/cases.json"
+done
+if [[ ${#preparation_authority_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-workflow preparation-result authority accepted: ${preparation_authority_failures[*]}"
+fi
+
+test_start "direct structured assertion callers infer their fixture skill without an optional fourth argument"
+direct_structured_authority_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-direct-structured-authority.XXXXXX")"
+p0p4_register_cleanup "$direct_structured_authority_root"
+direct_structured_authority_response="$direct_structured_authority_root/response.json"
+build_medium_implement_only_harness_handoff_response "$direct_structured_authority_response" "direct structured authority baseline"
+if direct_structured_failures="$(
+    set -u
+    count_structured_json_assertion_failures \
+        "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" \
+        medium-implement-only-consumes-preparation-harness-obligation \
+        "$direct_structured_authority_response"
+)" && [[ "$direct_structured_failures" == 0 ]]; then
+    pass
+else
+    fail "direct three-argument structured assertion grading did not infer assistant-workflow"
+fi
+
+test_start "assistant-workflow prompt packets expose the immutable preparation-result authority before response generation"
+preparation_authority_prompt_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-preparation-authority-prompts.XXXXXX")"
+p0p4_register_cleanup "$preparation_authority_prompt_root"
+preparation_authority_prompt_case="medium-implement-only-consumes-preparation-harness-obligation"
+preparation_authority_prompt_expectation="$(jq -c --arg id "$preparation_authority_prompt_case" '.canonical_feature_preparation_result_expectations[$id]' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json")"
+preparation_authority_prompt="$preparation_authority_prompt_root/assistant-workflow/$preparation_authority_prompt_case.md"
+if "$skill_eval_runner" --emit-prompts "$preparation_authority_prompt_root" --skill assistant-workflow --case "$preparation_authority_prompt_case" >/dev/null \
+    && grep -Fq "$preparation_authority_prompt_expectation" "$preparation_authority_prompt"; then
+    pass
+else
+    fail "assistant-workflow prompt packet omits the immutable preparation-result authority"
+fi
+
+test_start "actual grader rejects synchronized nested evidence and optional-obligation preparation drift"
+synchronized_preparation_failures=()
+for synchronized_case_and_builder_and_mutation in \
+    'medium-implement-only-consumes-preparation-harness-obligation|build_medium_implement_only_harness_handoff_response|(.approved_feature_preparation_result.feature_preparation_evidence_ref) = "prep/drifted" | (.triage_result.approved_feature_preparation_result.feature_preparation_evidence_ref) = "prep/drifted" | (.implementation_steps[0].approved_feature_preparation_result.feature_preparation_evidence_ref) = "prep/drifted"' \
+    'medium-implement-only-consumes-preparation-harness-obligation|build_medium_implement_only_harness_handoff_response|(.approved_feature_preparation_result.future_harness_obligation.requested_scope) = "Run a drifted harness." | (.triage_result.approved_feature_preparation_result.future_harness_obligation.requested_scope) = "Run a drifted harness." | (.implementation_steps[0].approved_feature_preparation_result.future_harness_obligation.requested_scope) = "Run a drifted harness."' \
+    'medium-implement-only-consumes-preparation-qa-obligation|build_medium_implement_only_qa_handoff_response|(.approved_feature_preparation_result.future_qa_acceptance_obligation.requested_scope) = "Run drifted QA." | (.triage_result.approved_feature_preparation_result.future_qa_acceptance_obligation.requested_scope) = "Run drifted QA." | (.implementation_steps[0].approved_feature_preparation_result.future_qa_acceptance_obligation.requested_scope) = "Run drifted QA."' \
+    'ordinary-implement-only-carries-not-applicable-preparation-readiness-result|build_medium_implement_only_not_applicable_preparation_readiness_result_response|(.approved_feature_preparation_result.readiness_plan.recommended_next_state) = "Drifted readiness." | (.triage_result.approved_feature_preparation_result.readiness_plan.recommended_next_state) = "Drifted readiness." | (.implementation_steps[0].approved_feature_preparation_result.readiness_plan.recommended_next_state) = "Drifted readiness."' \
+    'ordinary-implement-only-carries-existing-system-preparation-readiness-result|build_medium_implement_only_existing_system_preparation_readiness_result_response|(.approved_feature_preparation_result.readiness_plan.evidence_ref) = "prep/drifted" | (.triage_result.approved_feature_preparation_result.readiness_plan.evidence_ref) = "prep/drifted" | (.implementation_steps[0].approved_feature_preparation_result.readiness_plan.evidence_ref) = "prep/drifted"' \
+    'ordinary-implement-only-carries-existing-system-preparation-readiness-result|build_medium_implement_only_existing_system_preparation_readiness_result_response|del(.approved_feature_preparation_result.readiness_plan.evidence_ref, .triage_result.approved_feature_preparation_result.readiness_plan.evidence_ref, .implementation_steps[0].approved_feature_preparation_result.readiness_plan.evidence_ref)' \
+    'ordinary-implement-only-carries-existing-system-preparation-readiness-result|build_medium_implement_only_existing_system_preparation_readiness_result_response|.approved_feature_preparation_result.readiness_plan.preparation_basis = "not_applicable" | .triage_result.approved_feature_preparation_result.readiness_plan.preparation_basis = "not_applicable" | .implementation_steps[0].approved_feature_preparation_result.readiness_plan.preparation_basis = "not_applicable"'; do
+    IFS='|' read -r synchronized_case_id synchronized_builder synchronized_mutation <<<"$synchronized_case_and_builder_and_mutation"
+    if ! run_isolated_workflow_routing_mutations "$synchronized_case_id" "$synchronized_builder" "$synchronized_mutation"; then
+        synchronized_preparation_failures+=("$synchronized_case_id:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+    fi
+done
+if [[ ${#synchronized_preparation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "synchronized preparation-result drift was accepted: ${synchronized_preparation_failures[*]}"
+fi
+
 test_start "actual grader rejects invented harness obligations in every no-harness preparation case"
 invented_harness_failures=()
 for no_harness_case_and_builder in \
@@ -4403,6 +4551,7 @@ jq '
   | .canonical_review_batch_expectations.case_template_refs["future-mapped-canonical-review-case"] = "small_base"
   | .canonical_review_batch_expectations.case_requirements["future-mapped-canonical-review-case"] = {mode:"review", required_artifacts:["final_summary","review_delegation_path"], required_envelope_alias:"final_summary"}
   | .canonical_review_snapshot_expectations["future-mapped-canonical-review-case"] = .canonical_review_snapshot_expectations["trivial-audit-uses-two-isolated-passes"]
+  | .canonical_review_finding_rule_distillation_expectations["future-mapped-canonical-review-case"] = {active_must_fix_aggregate_finding_ids:[],fixed_must_fix_aggregate_finding_ids:[]}
 ' "$review_authority_skill/evals/cases.json" >"$review_authority_root/cases.json"
 mv "$review_authority_root/cases.json" "$review_authority_skill/evals/cases.json"
 p0p4_write_assistant_review_batch_response \
@@ -4693,6 +4842,7 @@ jq '
   | .canonical_review_batch_expectations.case_template_refs["future-mapped-audit-requires-report"] = "trivial_base"
   | .canonical_review_batch_expectations.case_requirements["future-mapped-audit-requires-report"] = {mode:"audit",required_artifacts:["final_summary","audit_report","review_delegation_path"],required_envelope_alias:"final_summary"}
   | .canonical_review_snapshot_expectations["future-mapped-audit-requires-report"] = .canonical_review_snapshot_expectations["trivial-audit-uses-two-isolated-passes"]
+  | .canonical_review_finding_rule_distillation_expectations["future-mapped-audit-requires-report"] = {active_must_fix_aggregate_finding_ids:["aggregate-1"],fixed_must_fix_aggregate_finding_ids:[]}
 ' "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$review_batch_authority_r33_review_skill/evals/cases.json"
 p0p4_write_assistant_review_batch_response \
     "$review_batch_authority_r33_responses/assistant-review/future-mapped-audit-requires-report.txt" \
@@ -4763,6 +4913,230 @@ if [[ ${#review_batch_authority_r33_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "review-batch authority gaps accepted: ${review_batch_authority_r33_failures[*]}"
+fi
+
+test_start "assistant-review prompt packets expose every frozen snapshot and closure authority used by grading"
+review_authority_prompt_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-review-authority-prompts.XXXXXX")"
+p0p4_register_cleanup "$review_authority_prompt_dir"
+review_authority_case="post-fix-review-uses-fresh-snapshot-batch"
+review_snapshot_authority="$(jq -c --arg id "$review_authority_case" '.canonical_review_snapshot_expectations[$id]' "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json")"
+review_closure_authority="$(jq -c --arg id "$review_authority_case" '.canonical_review_closure_expectations[$id]' "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json")"
+review_authority_prompt="$review_authority_prompt_dir/assistant-review/$review_authority_case.md"
+if "$skill_eval_runner" --emit-prompts "$review_authority_prompt_dir" --skill assistant-review --case "$review_authority_case" >/dev/null \
+    && grep -Fq "$review_snapshot_authority" "$review_authority_prompt" \
+    && grep -Fq "$review_closure_authority" "$review_authority_prompt"; then
+    pass
+else
+    fail "assistant-review prompt packet omits frozen snapshot or closure grading authority"
+fi
+
+test_start "assistant-review fixture binds every final-summary case to immutable must-fix distillation authority"
+review_distillation_authority_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-review-distillation-authority.XXXXXX")"
+p0p4_register_cleanup "$review_distillation_authority_root"
+review_distillation_authority_skill="$review_distillation_authority_root/assistant-review"
+mkdir -p "$review_distillation_authority_skill/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" "$review_distillation_authority_skill/SKILL.md"
+cp "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" "$review_distillation_authority_skill/evals/cases.json"
+review_distillation_authority_failures=()
+for review_distillation_authority_mutation in missing unknown missing_case malformed; do
+    case "$review_distillation_authority_mutation" in
+        missing)
+            jq 'del(.canonical_review_finding_rule_distillation_expectations)' "$review_distillation_authority_skill/evals/cases.json" >"$review_distillation_authority_root/cases.json"
+            ;;
+        unknown)
+            jq '.canonical_review_finding_rule_distillation_expectations.invented = {active_must_fix_aggregate_finding_ids:[],fixed_must_fix_aggregate_finding_ids:[]}' "$review_distillation_authority_skill/evals/cases.json" >"$review_distillation_authority_root/cases.json"
+            ;;
+        missing_case)
+            jq 'del(.canonical_review_finding_rule_distillation_expectations["audit-batch-waits-for-all-pass-results"])' "$review_distillation_authority_skill/evals/cases.json" >"$review_distillation_authority_root/cases.json"
+            ;;
+        malformed)
+            jq '.canonical_review_finding_rule_distillation_expectations["audit-batch-waits-for-all-pass-results"] = {active_must_fix_aggregate_finding_ids:"aggregate-1",fixed_must_fix_aggregate_finding_ids:[]}' "$review_distillation_authority_skill/evals/cases.json" >"$review_distillation_authority_root/cases.json"
+            ;;
+    esac
+    mv "$review_distillation_authority_root/cases.json" "$review_distillation_authority_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$review_distillation_authority_skill" >"$review_distillation_authority_root/$review_distillation_authority_mutation.output" 2>&1; then
+        review_distillation_authority_failures+=("$review_distillation_authority_mutation")
+    fi
+    cp "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" "$review_distillation_authority_skill/evals/cases.json"
+done
+if [[ ${#review_distillation_authority_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review distillation authority accepted: ${review_distillation_authority_failures[*]}"
+fi
+
+test_start "assistant-review prompt packets expose immutable must-fix distillation authority before response generation"
+review_distillation_prompt_authority="$(jq -c --arg id "$review_authority_case" '.canonical_review_finding_rule_distillation_expectations[$id]' "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json")"
+if "$skill_eval_runner" --emit-prompts "$review_authority_prompt_dir" --skill assistant-review --case "$review_authority_case" >/dev/null \
+    && grep -Fq "$review_distillation_prompt_authority" "$review_authority_prompt"; then
+    pass
+else
+    fail "assistant-review prompt packet omits immutable must-fix distillation authority"
+fi
+
+test_start "assistant-review permanent-rule reference and producer contract use canonical aggregate finding identities"
+if grep -Fq 'Finding: [canonical aggregate_finding_id]' "$FRAMEWORK_DIR/skills/assistant-review/references/review-finding-permanent-rule.md" \
+    && grep -Fq 'active `aggregated_findings` or `fixed_items`' "$FRAMEWORK_DIR/skills/assistant-review/references/review-finding-permanent-rule.md" \
+    && grep -Fq 'fixed item regresses, keep one deduplicated mapping' "$FRAMEWORK_DIR/skills/assistant-review/references/review-finding-permanent-rule.md" \
+    && ruby -ryaml -e '
+        artifact = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").find { |entry| entry["name"] == "review_finding_rule_distillation" }
+        validation = artifact.fetch("validation")
+        exit validation.include?("aggregated_findings[].aggregate_finding_id") && validation.include?("fixed_items[].aggregate_finding_id") && validation.include?("regressed id present in both") ? 0 : 1
+    ' "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
+    pass
+else
+    fail "assistant-review permanent-rule template drifted from the producer aggregate_finding_id contract"
+fi
+
+test_start "production assistant-review grading rejects must-fix findings without exact rule distillation"
+review_distillation_red_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-review-distillation-red.XXXXXX")"
+p0p4_register_cleanup "$review_distillation_red_dir"
+mkdir -p "$review_distillation_red_dir/assistant-review"
+review_distillation_red_response="$review_distillation_red_dir/assistant-review/audit-batch-waits-for-all-pass-results.txt"
+p0p4_write_assistant_review_batch_response "$review_distillation_red_response" "all expected responses later pass runtime/lifecycle must-fix single final audit report" "HAS_REMAINING_ITEMS" true complete true
+p0p4_add_assistant_review_audit_report "$review_distillation_red_response" "$review_distillation_red_dir/audit.json"
+review_distillation_failures=()
+if ! "$skill_eval_runner" --responses "$review_distillation_red_dir" --skill assistant-review --case audit-batch-waits-for-all-pass-results >"$review_distillation_red_dir/baseline" 2>&1; then
+    review_distillation_failures+=(baseline)
+else
+    cp "$review_distillation_red_response" "$review_distillation_red_response.original"
+    while IFS='|' read -r label filter; do
+        jq "$filter" "$review_distillation_red_response.original" >"$review_distillation_red_dir/$label.json"
+        mv "$review_distillation_red_dir/$label.json" "$review_distillation_red_response"
+        if "$skill_eval_runner" --responses "$review_distillation_red_dir" --skill assistant-review --case audit-batch-waits-for-all-pass-results >"$review_distillation_red_dir/$label.output" 2>&1 \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$review_distillation_red_dir/$label.output"; then
+            review_distillation_failures+=("$label")
+        fi
+        cp "$review_distillation_red_response.original" "$review_distillation_red_response"
+    done <<'EOF_REVIEW_DISTILLATION_MUTATIONS'
+missing|del(.review_finding_rule_distillation)
+mismatched|.review_finding_rule_distillation[0].finding = "aggregate-foreign"
+duplicate|.review_finding_rule_distillation += [.review_finding_rule_distillation[0]]
+extra|.review_finding_rule_distillation += [{finding:"aggregate-extra",evidence:"extra evidence",failure_pattern:"extra pattern",classification:"one_off_fix",rule_target:"none",proposed_rule:"no action",verification_eval_update:"no update",scope_and_exclusions:"none",promotion_decision:"reject"}]
+downgrade_and_missing|.final_summary.aggregated_findings[0].severity = "should-fix" | del(.review_finding_rule_distillation)
+EOF_REVIEW_DISTILLATION_MUTATIONS
+fi
+if [[ ${#review_distillation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "production assistant-review grading accepted invalid must-fix rule distillation: ${review_distillation_failures[*]}"
+fi
+
+test_start "production assistant-review grading requires fixed must-fix rule distillation exactly once"
+review_fixed_distillation_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-review-fixed-distillation.XXXXXX")"
+p0p4_register_cleanup "$review_fixed_distillation_dir"
+p0p4_write_skill_eval_responses "$review_fixed_distillation_dir"
+review_fixed_distillation_response="$review_fixed_distillation_dir/assistant-review/post-fix-review-uses-fresh-snapshot-batch.txt"
+review_fixed_distillation_failures=()
+if ! "$skill_eval_runner" --responses "$review_fixed_distillation_dir" --skill assistant-review --case post-fix-review-uses-fresh-snapshot-batch >"$review_fixed_distillation_dir/baseline" 2>&1; then
+    review_fixed_distillation_failures+=(baseline)
+else
+    cp "$review_fixed_distillation_response" "$review_fixed_distillation_response.original"
+    while IFS='|' read -r label filter; do
+        jq "$filter" "$review_fixed_distillation_response.original" >"$review_fixed_distillation_dir/$label.json"
+        mv "$review_fixed_distillation_dir/$label.json" "$review_fixed_distillation_response"
+        if "$skill_eval_runner" --responses "$review_fixed_distillation_dir" --skill assistant-review --case post-fix-review-uses-fresh-snapshot-batch >"$review_fixed_distillation_dir/$label.output" 2>&1 \
+            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$review_fixed_distillation_dir/$label.output"; then
+            review_fixed_distillation_failures+=("$label")
+        fi
+        cp "$review_fixed_distillation_response.original" "$review_fixed_distillation_response"
+    done <<'EOF_REVIEW_FIXED_DISTILLATION_MUTATIONS'
+missing|del(.review_finding_rule_distillation)
+foreign|.review_finding_rule_distillation[0].finding = "aggregate-foreign"
+duplicate|.review_finding_rule_distillation += [.review_finding_rule_distillation[0]]
+downgrade_and_missing|.final_summary.fixed_items[0].severity = "should-fix" | del(.review_finding_rule_distillation)
+EOF_REVIEW_FIXED_DISTILLATION_MUTATIONS
+fi
+if [[ ${#review_fixed_distillation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "production assistant-review grading accepted invalid fixed must-fix rule distillation: ${review_fixed_distillation_failures[*]}"
+fi
+
+test_start "production assistant-review grading rejects a regressed must-fix downgrade with its distillation removed"
+review_regressed_distillation_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-review-regressed-distillation.XXXXXX")"
+p0p4_register_cleanup "$review_regressed_distillation_dir"
+p0p4_write_skill_eval_responses "$review_regressed_distillation_dir"
+review_regressed_distillation_response="$review_regressed_distillation_dir/assistant-review/post-fix-review-regression-remains-open.txt"
+if ! "$skill_eval_runner" --responses "$review_regressed_distillation_dir" --skill assistant-review --case post-fix-review-regression-remains-open >"$review_regressed_distillation_dir/baseline" 2>&1; then
+    fail "regressed must-fix distillation baseline did not pass"
+else
+    jq '.final_summary.aggregated_findings[0].severity = "should-fix" | .final_summary.fixed_items[0].severity = "should-fix" | del(.review_finding_rule_distillation)' "$review_regressed_distillation_response" >"$review_regressed_distillation_dir/downgraded.json"
+    mv "$review_regressed_distillation_dir/downgraded.json" "$review_regressed_distillation_response"
+    if "$skill_eval_runner" --responses "$review_regressed_distillation_dir" --skill assistant-review --case post-fix-review-regression-remains-open >"$review_regressed_distillation_dir/downgraded.output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$review_regressed_distillation_dir/downgraded.output"; then
+        fail "production assistant-review grading accepted a regressed must-fix downgrade without distillation"
+    else
+        pass
+    fi
+fi
+
+test_start "production assistant-review grading rejects malformed optional rule distillation"
+review_optional_distillation_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-review-optional-distillation.XXXXXX")"
+p0p4_register_cleanup "$review_optional_distillation_dir"
+mkdir -p "$review_optional_distillation_dir/assistant-review"
+review_optional_distillation_failures=()
+
+audit_optional_response="$review_optional_distillation_dir/assistant-review/trivial-audit-uses-two-isolated-passes.txt"
+p0p4_write_assistant_review_batch_response "$audit_optional_response" "two isolated passes direct fallback coverage all expected responses" CLEAN true complete false
+jq '.final_summary.final_batch_plan.scope_size = "trivial"' "$audit_optional_response" >"$review_optional_distillation_dir/trivial-audit.json"
+mv "$review_optional_distillation_dir/trivial-audit.json" "$audit_optional_response"
+p0p4_add_assistant_review_audit_report "$audit_optional_response" "$review_optional_distillation_dir/trivial-audit-report.json"
+jq '.review_finding_rule_distillation = [{finding:"aggregate-malformed"}]' "$audit_optional_response" >"$review_optional_distillation_dir/audit-malformed.json"
+mv "$review_optional_distillation_dir/audit-malformed.json" "$audit_optional_response"
+if "$skill_eval_runner" --responses "$review_optional_distillation_dir" --skill assistant-review --case trivial-audit-uses-two-isolated-passes >"$review_optional_distillation_dir/audit-malformed.output" 2>&1 \
+    || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$review_optional_distillation_dir/audit-malformed.output"; then
+    review_optional_distillation_failures+=(audit-malformed-optional-distillation)
+fi
+
+p0p4_write_skill_eval_responses "$review_optional_distillation_dir/review-baseline"
+review_optional_response="$review_optional_distillation_dir/assistant-review/post-fix-review-uses-fresh-snapshot-batch.txt"
+cp "$review_optional_distillation_dir/review-baseline/assistant-review/post-fix-review-uses-fresh-snapshot-batch.txt" "$review_optional_response"
+jq '.final_summary.fixed_items[0].severity = "should-fix" | .review_finding_rule_distillation = [{finding:"aggregate-malformed"}]' "$review_optional_response" >"$review_optional_distillation_dir/review-malformed.json"
+mv "$review_optional_distillation_dir/review-malformed.json" "$review_optional_response"
+if "$skill_eval_runner" --responses "$review_optional_distillation_dir" --skill assistant-review --case post-fix-review-uses-fresh-snapshot-batch >"$review_optional_distillation_dir/review-malformed.output" 2>&1 \
+    || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$review_optional_distillation_dir/review-malformed.output"; then
+    review_optional_distillation_failures+=(review-malformed-optional-distillation)
+fi
+
+if [[ ${#review_optional_distillation_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "optional rule-distillation mutations were accepted: ${review_optional_distillation_failures[*]}"
+fi
+
+test_start "production assistant-review grading accepts a unique should-fix mapping and one regressed active-fixed mapping"
+review_distillation_mapping_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-review-distillation-mapping.XXXXXX")"
+p0p4_register_cleanup "$review_distillation_mapping_dir"
+mkdir -p "$review_distillation_mapping_dir/assistant-review"
+review_distillation_mapping_failures=()
+review_distillation_mapping_skill="$review_distillation_mapping_dir/skill-copy/assistant-review"
+mkdir -p "$review_distillation_mapping_dir/skill-copy"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review" "$review_distillation_mapping_skill"
+jq '(.cases[] | select(.id == "audit-batch-waits-for-all-pass-results") | .machine_expectations.structured_json_assertions[] | select(.operator == "array_field_values_exact" and .path == ["final_summary", "aggregated_findings"] and .field == "finding_id") | .expected_values) += ["review_pass:pass-contract:finding-should-fix-1"]' "$review_distillation_mapping_skill/evals/cases.json" >"$review_distillation_mapping_dir/cases.json"
+mv "$review_distillation_mapping_dir/cases.json" "$review_distillation_mapping_skill/evals/cases.json"
+should_fix_response="$review_distillation_mapping_dir/assistant-review/audit-batch-waits-for-all-pass-results.txt"
+p0p4_write_assistant_review_batch_response "$should_fix_response" "all expected responses later pass runtime/lifecycle must-fix single final audit report" HAS_REMAINING_ITEMS true complete true
+jq '
+  .final_summary.aggregated_findings += [{aggregate_finding_id:"aggregate-should-fix-1",finding_id:"review_pass:pass-contract:finding-should-fix-1",source_finding_ids:["review_pass:pass-contract:finding-should-fix-1"],source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],locus:"response contract",file:"src/review.ts",line:2,invariant:"optional rule mapping remains tied to a canonical aggregate",failure_mechanism:"A recurring should-fix can be lost from rule distillation.",severity:"should-fix",description:"Recurring should-fix mapping requires a stable aggregate id.",evidence:"contract pass evidence",smallest_useful_fix:"Retain the optional mapping.",confidence_pct:90}]
+  | .final_summary.aggregation_ledger += [{source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],source_finding_ids:["review_pass:pass-contract:finding-should-fix-1"],aggregate_finding_id:"aggregate-should-fix-1",disposition:"retained",rationale:"Retained recurring should-fix."}]
+  | .final_summary.coverage_ledger[0].coverage_disposition = "finding"
+  | .final_summary.coverage_ledger[0].finding_ids = ["review_pass:pass-contract:finding-should-fix-1"]
+  | .review_finding_rule_distillation += [{finding:"aggregate-should-fix-1",evidence:"contract pass evidence",failure_pattern:"A recurring should-fix can be lost from rule distillation.",classification:"permanent_rule_candidate",rule_target:"eval",proposed_rule:"Retain unique recurring should-fix mappings.",verification_eval_update:"Add an optional mapping baseline.",scope_and_exclusions:"Applies only to the canonical should-fix aggregate.",promotion_decision:"promote"}]' "$should_fix_response" >"$review_distillation_mapping_dir/should-fix.json"
+mv "$review_distillation_mapping_dir/should-fix.json" "$should_fix_response"
+p0p4_add_assistant_review_audit_report "$should_fix_response" "$review_distillation_mapping_dir/should-fix-audit.json"
+if ! "$skill_eval_runner" --responses "$review_distillation_mapping_dir" --skill "$review_distillation_mapping_skill" --case audit-batch-waits-for-all-pass-results >"$review_distillation_mapping_dir/should-fix.output" 2>&1; then
+    review_distillation_mapping_failures+=(should-fix-unique-mapping-baseline)
+fi
+
+p0p4_write_skill_eval_responses "$review_distillation_mapping_dir/regressed-baseline"
+if ! "$skill_eval_runner" --responses "$review_distillation_mapping_dir/regressed-baseline" --skill assistant-review --case post-fix-review-regression-remains-open >"$review_distillation_mapping_dir/regressed.output" 2>&1; then
+    review_distillation_mapping_failures+=(regressed-active-fixed-single-mapping-baseline)
+fi
+if [[ ${#review_distillation_mapping_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "should-fix or regressed rule-distillation mapping behavior is incomplete: ${review_distillation_mapping_failures[*]}"
 fi
 
 test_start "skill eval runner preflights Ruby modules before operational work while help stays dependency-free"

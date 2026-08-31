@@ -15,6 +15,10 @@ No separate plan document needed. Include directly in your response:
 
 ```markdown
 **Goal:** [1 sentence]
+**Authoritative packet fields:**
+- execution_intent: [implement_only | end_to_end]
+- feature_preparation_scope: [not_applicable | existing_system]
+- approved_feature_preparation_result: [required exact complete typed approved_feature_preparation_result unchanged when execution_intent=implement_only; otherwise N/A]
 **Artifact Contract:**
 - Artifact type: [code | docs | report | dataset | chart | slide_deck | plan | eval | PR | config | other]
 - Required files or deliverables: [exact paths or named artifact]
@@ -35,7 +39,7 @@ No separate plan document needed. Include directly in your response:
 
 ## Executable Task Packet (`execution_intent != prepare_only`)
 
-For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan in delegated mode, or that the main session can execute in direct fallback mode while preserving the same role evidence.
+For Medium and Large/Mega plans, write implementation work as executable task packets instead of descriptive step lists. Each packet is the authoritative packet and a self-contained brief that a Code Writer or Builder/Tester can execute without re-interpreting the plan in delegated mode, or that the main session can execute in direct fallback mode while preserving the same role evidence.
 
 ```markdown
 ### Task [ID]: [short name]
@@ -44,7 +48,9 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
-- Feature preparation scope: [not_applicable | existing_system]
+- execution_intent: [implement_only | end_to_end]
+- feature_preparation_scope: [not_applicable | existing_system]
+- approved_feature_preparation_result: [required exact complete typed approved_feature_preparation_result unchanged when execution_intent=implement_only; otherwise N/A]
 - Feature preparation evidence ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise N/A]
 - Feature preparation QA/acceptance obligation: [required exact approved object when the preparation result contains future_qa_acceptance_obligation; include requested_scope, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise N/A]
 - Architecture Decision Pack: [fresh pack ref, or N/A with concrete reason]
@@ -175,6 +181,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 - Assumed (not explicitly asked): [assumption and reasoning]
 - Non-goals: [what's explicitly out of scope]
 - Reuse search: [copy the CodeMapper result; not_applicable needs a concrete reason, otherwise include searches, candidates or no_candidate_reason, decision, and decision_rationale]
+- Implement-only preparation result: [execution_intent=implement_only: copy the exact typed approved_feature_preparation_result, feature_preparation_scope, and applicable evidence/basis unchanged into every implementation step and task packet; otherwise N/A]
 
 ## Architecture Decision Pack
 - Pack ref / mode: [ref] | [lightweight | required | review_intensive], or `N/A: [concrete reason]`

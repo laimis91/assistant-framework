@@ -64,6 +64,14 @@ A continuation packet must include these fields:
 - Architecture Decision Pack: [ref or N/A with concrete reason]
 - Output contract:
 
+## Implement-only Preparation Continuity
+
+Include this section only when the active execution intent is `implement_only`; otherwise omit it. For `prepare_only` or `end_to_end`, do not relabel the active intent or fabricate approved implementation authority.
+
+- Execution intent: [implement_only]
+- Feature-preparation scope: [not_applicable | existing_system]
+- Approved preparation result: [copy the complete typed approved_feature_preparation_result unchanged]
+
 ## Work State
 - Completed:
 - In progress:

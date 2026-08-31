@@ -82,7 +82,43 @@ artifacts:
         type: enum
         required: true
         enum_values: [prepare_only, implement_only, end_to_end]
-        validation: "prepare_only records preparation completion without Build or changed-files evidence; implement_only consumes approved preparation evidence; end_to_end follows the selected phased workflow and input eligibility rules."
+        validation: "prepare_only records preparation completion without Build or changed-files evidence; implement_only consumes the approved preparation result; end_to_end follows the selected phased workflow and input eligibility rules."
+      - name: approved_feature_preparation_result
+        type: object
+        required: conditional
+        condition: "execution_intent == implement_only"
+        validation: "Equals the approved input result unchanged so triage cannot drop a not_applicable preparation's scope, gaps, decisions, implications, readiness context, future obligations, or next step."
+        object_fields:
+          - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - {name: scope, type: string, required: true}
+          - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+          - {name: evidence_gaps, type: "string[]", required: true}
+          - {name: open_decisions, type: "string[]", required: true}
+          - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+          - name: readiness_plan
+            type: object
+            required: false
+            object_fields:
+              - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: recommended_next_state, type: string, required: true}
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - name: future_qa_acceptance_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+          - name: future_harness_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+          - {name: recommended_next_step, type: string, required: true}
       - name: qa_evaluation_mode
         type: enum
         required: true
@@ -1706,8 +1742,8 @@ artifacts:
     required: conditional
     condition: "no task journal/equivalent carried-forward state exists, or explicit non-standard handoff is requested"
     description: "Compression-safe continuation packet following references/context-handoff-templates.md"
-    validation: "Pinned context is separated from summarized/pruned context and exact next action is present"
-    on_fail: "When no task journal/equivalent state exists or explicit non-standard handoff is requested, create a handoff packet with Active Task, Pinned Requirements, Work State, Verification, Context Hygiene, and Exact Next Action"
+    validation: "Pinned context is separated from summarized/pruned context and exact next action is present. For execution_intent=implement_only, it also carries execution_intent, feature_preparation_scope, and approved_feature_preparation_result carried unchanged so the resumed workflow cannot lose approved preparation evidence or future obligations."
+    on_fail: "When no task journal/equivalent state exists or explicit non-standard handoff is requested, create a handoff packet with Active Task, Pinned Requirements, Work State, Verification, Context Hygiene, and Exact Next Action; for execution_intent=implement_only, also copy the complete typed approved preparation result unchanged."
     object_fields:
       - name: active_task
         type: string
@@ -1727,6 +1763,52 @@ artifacts:
       - name: exact_next_action
         type: string
         required: true
+      - name: execution_intent
+        type: enum
+        required: conditional
+        condition: "execution_intent == implement_only"
+        enum_values: [implement_only]
+      - name: feature_preparation_scope
+        type: enum
+        required: conditional
+        condition: "execution_intent == implement_only"
+        enum_values: [not_applicable, existing_system]
+      - name: approved_feature_preparation_result
+        type: object
+        required: conditional
+        condition: "execution_intent == implement_only"
+        validation: "Equals the approved input result carried unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
+        object_fields:
+          - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - {name: scope, type: string, required: true}
+          - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+          - {name: evidence_gaps, type: "string[]", required: true}
+          - {name: open_decisions, type: "string[]", required: true}
+          - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+          - name: readiness_plan
+            type: object
+            required: false
+            object_fields:
+              - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: recommended_next_state, type: string, required: true}
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - name: future_qa_acceptance_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+          - name: future_harness_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+          - {name: recommended_next_step, type: string, required: true}
 
 
   - name: artifact_contract

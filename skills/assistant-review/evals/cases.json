@@ -183,6 +183,16 @@
       {"aggregate_finding_id":"aggregate-fixed-1","source_finding_ids":["review_pass:pass-runtime:finding-fixed-1"],"source_provenance":[{"source_kind":"review_pass","source_id":"pass-runtime"}]}
     ]
   },
+  "canonical_review_finding_rule_distillation_expectations": {
+    "audit-batch-waits-for-all-pass-results": {"active_must_fix_aggregate_finding_ids":["aggregate-1"],"fixed_must_fix_aggregate_finding_ids":[]},
+    "incomplete-review-batch-never-cleans": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]},
+    "post-fix-review-uses-fresh-snapshot-batch": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":["aggregate-fixed-1"]},
+    "post-fix-verified-closure-with-incomplete-coverage": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":["aggregate-fixed-1"]},
+    "post-fix-review-regression-remains-open": {"active_must_fix_aggregate_finding_ids":["aggregate-fixed-1"],"fixed_must_fix_aggregate_finding_ids":["aggregate-fixed-1"]},
+    "audit-spec-review-fail-continues-complete-batch": {"active_must_fix_aggregate_finding_ids":["aggregate-1","aggregate-spec-1"],"fixed_must_fix_aggregate_finding_ids":[]},
+    "in-flight-mutation-invalidates-review-batch": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]},
+    "trivial-audit-uses-two-isolated-passes": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]}
+  },
   "canonical_review_snapshot_expectations": {
     "audit-batch-waits-for-all-pass-results": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
     "incomplete-review-batch-never-cleans": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},

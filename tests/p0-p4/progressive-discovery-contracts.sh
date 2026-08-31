@@ -413,6 +413,15 @@ write_workflow_eval_responses() {
                 medium-implement-only-consumes-not-applicable-preparation-qa-obligation)
                     build_medium_implement_only_not_applicable_qa_handoff_response "$response_path" "$required_summary"
                     ;;
+                ordinary-implement-only-carries-not-applicable-preparation-result)
+                    build_medium_implement_only_not_applicable_preparation_result_response "$response_path" "$required_summary"
+                    ;;
+                ordinary-implement-only-carries-not-applicable-preparation-readiness-result)
+                    build_medium_implement_only_not_applicable_preparation_readiness_result_response "$response_path" "$required_summary"
+                    ;;
+                ordinary-implement-only-carries-existing-system-preparation-readiness-result)
+                    build_medium_implement_only_existing_system_preparation_readiness_result_response "$response_path" "$required_summary"
+                    ;;
                 large-prepare-only-terminal-route)
                     build_large_prepare_only_terminal_response "$response_path" "$required_summary"
                     ;;

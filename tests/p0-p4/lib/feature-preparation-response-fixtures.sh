@@ -47,6 +47,11 @@ p0p4_filter_workflow_eval_cases() {
     case_ids="$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(length > 0))')"
     jq --argjson case_ids "$case_ids" '
         .cases |= map(select(.id as $case_id | $case_ids | index($case_id)))
+        | if .canonical_feature_preparation_result_expectations == null then .
+          else .canonical_feature_preparation_result_expectations |= with_entries(
+            select(.key as $case_id | $case_ids | index($case_id))
+          )
+          end
         | if .canonical_review_batch_expectations == null then .
           else
             (.canonical_review_batch_expectations.case_template_refs | with_entries(
@@ -520,6 +525,17 @@ build_medium_implement_only_harness_handoff_response() {
           execution_prerequisite: "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted.",
           source_feature_preparation_evidence_ref: "prep/medium-feature"
         };
+      def approved_result:
+        {
+          execution_status: "not_started",
+          scope: "Preserve the approved existing VIEWING route behavior.",
+          feature_preparation_evidence_ref: "prep/medium-feature",
+          evidence_gaps: [],
+          open_decisions: [],
+          implementation_implications: ["Consume the approved route-preservation evidence without broadening behavior."],
+          future_harness_obligation: {requested_scope: "Run the explicitly requested trace/replay harness during future implementation.", evidence_basis: ["The user explicitly requested trace/replay harness evidence for future implementation."], execution_prerequisite: "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted."},
+          recommended_next_step: "Carry this approved preparation result unchanged through the bounded implementation packet."
+        };
       def artifact_refs:
         [
           {artifact_id:"done-contract",artifact_type:"done_contract",producer:"orchestrator",consumer:"implementation executor",location_ref:"plan/implementation-transition#done-contract",schema_or_contract:"assistant-workflow done_contract",validation_status:"valid",summary:"Accepted implementation-owned Done Contract."},
@@ -536,6 +552,7 @@ build_medium_implement_only_harness_handoff_response() {
         execution_intent: "implement_only",
         feature_preparation_scope: "existing_system",
         approved_feature_preparation_evidence_ref: "prep/medium-feature",
+        approved_feature_preparation_result: approved_result,
         approved_feature_preparation_harness_obligation: approved_obligation,
         completion_policy: {
           controller_intensity: "strict",
@@ -551,6 +568,7 @@ build_medium_implement_only_harness_handoff_response() {
           risk_tier: "moderate",
           size: "medium",
           execution_intent: "implement_only",
+          approved_feature_preparation_result: approved_result,
           controller_intensity: "strict",
           plan_mode: "approval_required",
           harness_capable: true,
@@ -661,6 +679,7 @@ build_medium_implement_only_harness_handoff_response() {
           deliverable_type: "behavior",
           requirement_ids: ["R1"],
           feature_preparation_evidence_ref: "prep/medium-feature",
+          approved_feature_preparation_result: approved_result,
           feature_preparation_harness_obligation: approved_obligation,
           files_to_create: [],
           files_to_modify: ["src/route.ts"],
@@ -717,6 +736,7 @@ build_medium_implement_only_not_applicable_harness_handoff_response() {
     jq '
         .feature_preparation_scope = "not_applicable"
         | del(.approved_feature_preparation_evidence_ref)
+        | del(.approved_feature_preparation_result.feature_preparation_evidence_ref, .triage_result.approved_feature_preparation_result.feature_preparation_evidence_ref, .implementation_steps[0].approved_feature_preparation_result.feature_preparation_evidence_ref)
         | del(.approved_feature_preparation_harness_obligation.source_feature_preparation_evidence_ref)
         | .approved_feature_preparation_harness_obligation.source_preparation_basis = "not_applicable"
         | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "Feature: binary acceptance", "Feature: new behavior tested", "Feature: contract/config/telemetry/docs impacts checked", "approved not_applicable preparation basis", "Done Contract", "Harness Recipe", "Harness runtime artifact refs"]
@@ -745,6 +765,10 @@ build_medium_implement_only_qa_handoff_response() {
         };
         .approved_feature_preparation_qa_acceptance_obligation = qa_obligation
         | .implementation_steps[0].feature_preparation_qa_acceptance_obligation = qa_obligation
+        | .approved_feature_preparation_result.future_qa_acceptance_obligation = {requested_scope: "Run the explicitly requested QA/acceptance evaluation.", execution_prerequisite: "Run after Build and Code Reviewer evidence in the approved implementation workflow."}
+        | .triage_result.approved_feature_preparation_result.future_qa_acceptance_obligation = .approved_feature_preparation_result.future_qa_acceptance_obligation
+        | .implementation_steps[0].approved_feature_preparation_result.future_qa_acceptance_obligation = .approved_feature_preparation_result.future_qa_acceptance_obligation
+        | del(.approved_feature_preparation_result.future_harness_obligation, .triage_result.approved_feature_preparation_result.future_harness_obligation, .implementation_steps[0].approved_feature_preparation_result.future_harness_obligation)
         | del(.approved_feature_preparation_harness_obligation, .done_contract, .harness_recipe, .harness_run_state, .trace_ledger, .replay_packet)
         | del(.implementation_steps[0].feature_preparation_harness_obligation, .implementation_steps[0].done_contract_ref, .implementation_steps[0].harness_recipe_ref)
         | .completion_policy.selection_reason = "The accepted deferred QA obligation activates the existing post-Build acceptance route."
@@ -768,10 +792,134 @@ build_medium_implement_only_not_applicable_qa_handoff_response() {
     build_medium_implement_only_qa_handoff_response "$response_path" "$summary"
     jq '
         .feature_preparation_scope = "not_applicable"
-        | del(.approved_feature_preparation_evidence_ref, .approved_feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref)
+        | del(.approved_feature_preparation_evidence_ref, .approved_feature_preparation_result.feature_preparation_evidence_ref, .triage_result.approved_feature_preparation_result.feature_preparation_evidence_ref, .implementation_steps[0].approved_feature_preparation_result.feature_preparation_evidence_ref, .approved_feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref)
         | .approved_feature_preparation_qa_acceptance_obligation.source_preparation_basis = "not_applicable"
         | .implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_preparation_basis = "not_applicable"
         | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "approved not_applicable preparation basis", "post-Build Code Reviewer evidence", "QA Evaluator acceptance evidence"]
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
+}
+
+build_medium_implement_only_not_applicable_preparation_result_response() {
+    local response_path="$1"
+    local summary="$2"
+    local include_readiness="${3:-false}"
+
+    jq -n --arg summary "$summary" --argjson include_readiness "$include_readiness" '
+      def approved_result:
+        {
+          execution_status: "not_started",
+          scope: "Create the approved new read-only route behavior.",
+          evidence_gaps: [],
+          open_decisions: ["Select the bounded implementation slice."],
+          implementation_implications: ["Implement the approved new route without inventing existing-system evidence."],
+          recommended_next_step: "Execute the bounded approved implementation packet."
+        } + (if $include_readiness then {
+          readiness_plan: {
+            preparation_basis: "not_applicable",
+            implementation_implications: ["Implement the approved new route without inventing existing-system evidence."],
+            open_decisions: ["Select the bounded implementation slice."],
+            recommended_next_state: "Execute the bounded approved implementation packet.",
+            execution_status: "not_started"
+          }
+        } else {} end);
+      {
+        summary: $summary,
+        size: "medium",
+        execution_intent: "implement_only",
+        feature_preparation_scope: "not_applicable",
+        approved_feature_preparation_result: approved_result,
+        completion_policy: {
+          controller_intensity: "standard",
+          build_execution_lane: "bounded_executor",
+          plan_mode: "approval_required",
+          architecture_design_mode: "not_applicable",
+          workflow_state_mode: "journal",
+          manual_verification_mode: "not_required",
+          selection_reason: "Ordinary implementation carries the approved preparation result without activating QA or harness gates."
+        },
+        triage_result: {
+          task_type: "feature",
+          risk_tier: "moderate",
+          size: "medium",
+          controller_intensity: "standard",
+          plan_mode: "approval_required",
+          execution_intent: "implement_only",
+          approved_feature_preparation_result: approved_result,
+          qa_evaluation_mode: "not_required",
+          harness_capable: false,
+          architecture_design_mode: "not_applicable",
+          architecture_design_trigger_reasons: ["The approved slice does not change an architecture boundary."],
+          build_execution_lane: "bounded_executor",
+          workflow_state_mode: "journal",
+          manual_verification_mode: "not_required",
+          required_gates: ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "approved not_applicable preparation basis"],
+          required_agents: ["bounded executor", "Code Reviewer"],
+          subagent_policy_state: "delegation_triggered",
+          subagent_execution_mode: "delegated",
+          subagent_trigger_scope: ["Build bounded executor and Review Code Reviewer"],
+          search_mode: "none",
+          candidate_scope_scan: {
+            likely_touched_paths: ["src/new-route.ts", "test/new-route_test.ts"],
+            symbols_or_terms_searched: ["new route"],
+            adjacent_surfaces: ["route dispatch"],
+            confidence: "high",
+            unknowns: []
+          }
+        },
+        plan_document: "Approved implementation plan: execute the bounded new-route packet and retain the approved preparation result unchanged.",
+        implementation_steps: [{
+          order: 1,
+          slice_id: "new-route",
+          slice_name: "Create new read-only route",
+          name: "Implement the approved new route",
+          task_id: "new-route-1",
+          description: "Implement only the approved new route behavior.",
+          observable_increment: "The new route returns the approved read-only result.",
+          deliverable_type: "behavior",
+          requirement_ids: ["R1"],
+          approved_feature_preparation_result: approved_result,
+          files_to_create: ["src/new-route.ts"],
+          files_to_modify: [],
+          files_to_test: ["test/new-route_test.ts"],
+          enabling_changes_included: ["none"],
+          depends_on: [],
+          tdd_applies: true,
+          acceptance_criteria: ["The new route returns the approved read-only result."],
+          reuse_search: {applicability:"not_applicable", applicability_reason:"The approved preparation result establishes a new bounded route."},
+          test_criteria: ["Run the focused new-route behavior test."],
+          implementation_notes: ["Keep the approved preparation result unchanged."],
+          verification_command: ["bash", "tests/new-route-behavior-contracts.sh"],
+          expected_success_signal: "Focused new-route behavior verification passes.",
+          evidence_to_record: ["Focused test result and reviewed diff."],
+          deviation_rollback_rule: "Return to Plan if the implementation requires scope outside the approved result."
+        }]
+      }
+    ' >"$response_path"
+}
+
+build_medium_implement_only_not_applicable_preparation_readiness_result_response() {
+    build_medium_implement_only_not_applicable_preparation_result_response "$1" "$2" true
+}
+
+build_medium_implement_only_existing_system_preparation_readiness_result_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_medium_implement_only_not_applicable_preparation_result_response "$response_path" "$summary" true
+    jq '
+        .feature_preparation_scope = "existing_system"
+        | .approved_feature_preparation_evidence_ref = "prep/medium-feature"
+        | .approved_feature_preparation_result.feature_preparation_evidence_ref = "prep/medium-feature"
+        | .triage_result.approved_feature_preparation_result.feature_preparation_evidence_ref = "prep/medium-feature"
+        | .implementation_steps[0].approved_feature_preparation_result.feature_preparation_evidence_ref = "prep/medium-feature"
+        | .implementation_steps[0].feature_preparation_evidence_ref = "prep/medium-feature"
+        | .approved_feature_preparation_result.readiness_plan |= (del(.preparation_basis) | .evidence_ref = "prep/medium-feature")
+        | .triage_result.approved_feature_preparation_result.readiness_plan |= (del(.preparation_basis) | .evidence_ref = "prep/medium-feature")
+        | .implementation_steps[0].approved_feature_preparation_result.readiness_plan |= (del(.preparation_basis) | .evidence_ref = "prep/medium-feature")
+        | .completion_policy.selection_reason = "Ordinary implementation carries the approved existing-system preparation result unchanged."
+        | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "approved feature-preparation evidence"]
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
 }

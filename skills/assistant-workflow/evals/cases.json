@@ -3806,9 +3806,11 @@
       ],
       "machine_expectations": {
         "required_substrings": ["small", "medium", "strict", "approved_feature_preparation_harness_obligation", "Build not started"],
-        "forbidden_substrings": ["harness_capable=false", "Build started", "feature_preparation_result"],
+        "forbidden_substrings": ["harness_capable=false", "Build started"],
         "structured_json_assertions": [
           {"operator": "equals", "path": ["execution_intent"], "expected": "implement_only"},
+          {"operator": "equals_path", "path": ["approved_feature_preparation_result"], "other_path": ["triage_result", "approved_feature_preparation_result"]},
+          {"operator": "equals_path", "path": ["approved_feature_preparation_result"], "other_path": ["implementation_steps", 0, "approved_feature_preparation_result"]},
           {"operator": "equals", "path": ["size"], "expected": "medium"},
           {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
           {"operator": "equals", "path": ["approved_feature_preparation_evidence_ref"], "expected": "prep/medium-feature"},
@@ -3918,9 +3920,11 @@
       ],
       "machine_expectations": {
         "required_substrings": ["implement_only", "approved_feature_preparation_harness_obligation", "harness_capable", "Done Contract", "Harness Recipe", "Build not started"],
-        "forbidden_substrings": ["harness_capable=false", "Build started", "feature_preparation_result"],
+        "forbidden_substrings": ["harness_capable=false", "Build started"],
         "structured_json_assertions": [
           {"operator": "equals", "path": ["execution_intent"], "expected": "implement_only"},
+          {"operator": "equals_path", "path": ["approved_feature_preparation_result"], "other_path": ["triage_result", "approved_feature_preparation_result"]},
+          {"operator": "equals_path", "path": ["approved_feature_preparation_result"], "other_path": ["implementation_steps", 0, "approved_feature_preparation_result"]},
           {"operator": "equals", "path": ["size"], "expected": "medium"},
           {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
           {"operator": "equals", "path": ["approved_feature_preparation_evidence_ref"], "expected": "prep/medium-feature"},
@@ -4030,9 +4034,11 @@
       ],
       "machine_expectations": {
         "required_substrings": ["implement_only", "not_applicable", "approved_feature_preparation_harness_obligation", "harness_capable", "Done Contract", "Harness Recipe", "Build not started"],
-        "forbidden_substrings": ["approved_feature_preparation_evidence_ref", "source_feature_preparation_evidence_ref", "harness_entry_state", "Build started", "feature_preparation_result"],
+        "forbidden_substrings": ["approved_feature_preparation_evidence_ref", "source_feature_preparation_evidence_ref", "harness_entry_state", "Build started"],
         "structured_json_assertions": [
           {"operator": "equals", "path": ["execution_intent"], "expected": "implement_only"},
+          {"operator": "equals_path", "path": ["approved_feature_preparation_result"], "other_path": ["triage_result", "approved_feature_preparation_result"]},
+          {"operator": "equals_path", "path": ["approved_feature_preparation_result"], "other_path": ["implementation_steps", 0, "approved_feature_preparation_result"]},
           {"operator": "equals", "path": ["size"], "expected": "medium"},
           {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "not_applicable"},
           {"operator": "path_absent", "path": ["approved_feature_preparation_evidence_ref"]},
@@ -4131,6 +4137,8 @@
         "forbidden_substrings": ["approved_feature_preparation_harness_obligation", "Harness Recipe"],
         "structured_json_assertions": [
           {"operator":"equals","path":["execution_intent"],"expected":"implement_only"},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["triage_result","approved_feature_preparation_result"]},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["implementation_steps",0,"approved_feature_preparation_result"]},
           {"operator":"equals","path":["feature_preparation_scope"],"expected":"existing_system"},
           {"operator":"equals","path":["approved_feature_preparation_evidence_ref"],"expected":"prep/medium-feature"},
           {"operator":"equals","path":["approved_feature_preparation_qa_acceptance_obligation","requested_scope"],"expected":"Run the explicitly requested QA/acceptance evaluation."},
@@ -4175,6 +4183,8 @@
         "forbidden_substrings": ["approved_feature_preparation_evidence_ref", "source_feature_preparation_evidence_ref", "Harness Recipe"],
         "structured_json_assertions": [
           {"operator":"equals","path":["execution_intent"],"expected":"implement_only"},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["triage_result","approved_feature_preparation_result"]},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["implementation_steps",0,"approved_feature_preparation_result"]},
           {"operator":"equals","path":["feature_preparation_scope"],"expected":"not_applicable"},
           {"operator":"path_absent","path":["approved_feature_preparation_evidence_ref"]},
           {"operator":"equals","path":["approved_feature_preparation_qa_acceptance_obligation","source_preparation_basis"],"expected":"not_applicable"},
@@ -4586,6 +4596,125 @@
           {"operator": "path_absent", "path": ["single_slice_rationale"]},
           {"operator": "path_absent", "path": ["slice_verification_summary"]},
           {"operator": "path_absent", "path": ["user_approval"]}
+        ]
+      }
+    },
+    {
+      "id": "ordinary-implement-only-carries-not-applicable-preparation-result",
+      "title": "Ordinary implementation carries the approved not-applicable preparation result",
+      "category": "feature_preparation_transition",
+      "purpose": "Checks that an ordinary implementation preserves the complete approved preparation outcome even when no existing-system evidence, QA, or harness obligation applies.",
+      "prompt": "Implement the approved new route packet. The preparation basis is not applicable, no QA or harness obligation was approved, and no readiness plan was supplied. Return one valid JSON object.",
+      "setup_context": [
+        "execution_intent is implement_only and feature_preparation_scope is not_applicable.",
+        "The approved preparation result has no readiness plan, future QA obligation, or future harness obligation."
+      ],
+      "expected_behavior": [
+        "Carries the exact approved preparation result at the implementation input, triage, and executable implementation step.",
+        "Keeps ordinary QA and harness routing inactive without inventing existing-system evidence."
+      ],
+      "pass_criteria": [
+        "Every supported implementation projection equals the approved result exactly.",
+        "The baseline carries no readiness plan."
+      ],
+      "fail_signals": [
+        "Drops or changes an approved preparation field.",
+        "Invents evidence, QA, or harness routing."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["implement_only", "not_applicable", "approved_feature_preparation_result", "bounded_executor"],
+        "forbidden_substrings": ["approved_feature_preparation_evidence_ref", "approved_feature_preparation_harness_obligation", "approved_feature_preparation_qa_acceptance_obligation", "readiness_plan"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["execution_intent"],"expected":"implement_only"},
+          {"operator":"equals","path":["feature_preparation_scope"],"expected":"not_applicable"},
+          {"operator":"path_absent","path":["approved_feature_preparation_evidence_ref"]},
+          {"operator":"equals","path":["approved_feature_preparation_result","execution_status"],"expected":"not_started"},
+          {"operator":"equals","path":["approved_feature_preparation_result","scope"],"expected":"Create the approved new read-only route behavior."},
+          {"operator":"equals","path":["approved_feature_preparation_result","evidence_gaps"],"expected":[]},
+          {"operator":"equals","path":["approved_feature_preparation_result","open_decisions"],"expected":["Select the bounded implementation slice."]},
+          {"operator":"equals","path":["approved_feature_preparation_result","implementation_implications"],"expected":["Implement the approved new route without inventing existing-system evidence."]},
+          {"operator":"equals","path":["approved_feature_preparation_result","recommended_next_step"],"expected":"Execute the bounded approved implementation packet."},
+          {"operator":"path_absent","path":["approved_feature_preparation_result","feature_preparation_evidence_ref"]},
+          {"operator":"path_absent","path":["approved_feature_preparation_result","readiness_plan"]},
+          {"operator":"path_absent","path":["approved_feature_preparation_result","future_harness_obligation"]},
+          {"operator":"path_absent","path":["approved_feature_preparation_result","future_qa_acceptance_obligation"]},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["triage_result","approved_feature_preparation_result"]},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["implementation_steps",0,"approved_feature_preparation_result"]},
+          {"operator":"equals","path":["triage_result","qa_evaluation_mode"],"expected":"not_required"},
+          {"operator":"equals","path":["triage_result","harness_capable"],"expected":false},
+          {"operator":"equals","path":["completion_policy","controller_intensity"],"expected":"standard"},
+          {"operator":"equals","path":["completion_policy","build_execution_lane"],"expected":"bounded_executor"},
+          {"operator":"path_absent","path":["approved_feature_preparation_harness_obligation"]},
+          {"operator":"path_absent","path":["approved_feature_preparation_qa_acceptance_obligation"]}
+        ]
+      }
+    },
+    {
+      "id": "ordinary-implement-only-carries-not-applicable-preparation-readiness-result",
+      "title": "Ordinary implementation retains approved not-applicable readiness context",
+      "category": "feature_preparation_transition",
+      "purpose": "Checks the optional readiness-context branch of the same ordinary implementation handoff.",
+      "prompt": "Implement the approved new route packet. The preparation basis is not applicable and the approved preparation result includes readiness context. Return one valid JSON object.",
+      "setup_context": [
+        "execution_intent is implement_only and feature_preparation_scope is not_applicable.",
+        "No QA or harness obligation applies; the approved result includes a readiness plan."
+      ],
+      "expected_behavior": [
+        "Carries the exact readiness context through triage and the executable implementation step.",
+        "Keeps ordinary QA and harness routing inactive."
+      ],
+      "pass_criteria": ["All supported projections retain the same readiness context."],
+      "fail_signals": ["Drops or changes approved readiness context."],
+      "machine_expectations": {
+        "required_substrings": ["implement_only", "not_applicable", "readiness_plan", "approved_feature_preparation_result"],
+        "forbidden_substrings": ["approved_feature_preparation_evidence_ref", "approved_feature_preparation_harness_obligation", "approved_feature_preparation_qa_acceptance_obligation"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["execution_intent"],"expected":"implement_only"},
+          {"operator":"equals","path":["feature_preparation_scope"],"expected":"not_applicable"},
+          {"operator":"equals","path":["approved_feature_preparation_result","readiness_plan","preparation_basis"],"expected":"not_applicable"},
+          {"operator":"equals","path":["approved_feature_preparation_result","readiness_plan","execution_status"],"expected":"not_started"},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["triage_result","approved_feature_preparation_result"]},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["implementation_steps",0,"approved_feature_preparation_result"]},
+          {"operator":"equals","path":["triage_result","qa_evaluation_mode"],"expected":"not_required"},
+          {"operator":"equals","path":["triage_result","harness_capable"],"expected":false},
+          {"operator":"path_absent","path":["approved_feature_preparation_evidence_ref"]},
+          {"operator":"path_absent","path":["approved_feature_preparation_harness_obligation"]},
+          {"operator":"path_absent","path":["approved_feature_preparation_qa_acceptance_obligation"]}
+        ]
+      }
+    },
+    {
+      "id": "ordinary-implement-only-carries-existing-system-preparation-readiness-result",
+      "title": "Ordinary implementation retains approved existing-system readiness context",
+      "category": "feature_preparation_transition",
+      "purpose": "Checks the existing-system readiness branch without activating a deferred QA or harness obligation.",
+      "prompt": "Implement the approved existing-system route packet. The approved preparation result includes readiness context bound to prep/medium-feature. Return one valid JSON object.",
+      "setup_context": [
+        "execution_intent is implement_only and feature_preparation_scope is existing_system.",
+        "The approved preparation result and its readiness plan are both bound to approved_feature_preparation_evidence_ref prep/medium-feature.",
+        "No QA or harness obligation applies."
+      ],
+      "expected_behavior": [
+        "Carries the exact approved existing-system readiness context through triage and the executable implementation step.",
+        "Keeps ordinary QA and harness routing inactive."
+      ],
+      "pass_criteria": ["Every supported implementation projection retains the same evidence-bound readiness context."],
+      "fail_signals": ["Drops or changes the preparation evidence binding or readiness context."],
+      "machine_expectations": {
+        "required_substrings": ["implement_only", "existing_system", "prep/medium-feature", "readiness_plan", "approved_feature_preparation_result"],
+        "forbidden_substrings": ["approved_feature_preparation_harness_obligation", "approved_feature_preparation_qa_acceptance_obligation", "preparation_basis"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["execution_intent"],"expected":"implement_only"},
+          {"operator":"equals","path":["feature_preparation_scope"],"expected":"existing_system"},
+          {"operator":"equals","path":["approved_feature_preparation_evidence_ref"],"expected":"prep/medium-feature"},
+          {"operator":"equals","path":["approved_feature_preparation_result","readiness_plan","evidence_ref"],"expected":"prep/medium-feature"},
+          {"operator":"path_absent","path":["approved_feature_preparation_result","readiness_plan","preparation_basis"]},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["triage_result","approved_feature_preparation_result"]},
+          {"operator":"equals_path","path":["approved_feature_preparation_result"],"other_path":["implementation_steps",0,"approved_feature_preparation_result"]},
+          {"operator":"equals","path":["triage_result","qa_evaluation_mode"],"expected":"not_required"},
+          {"operator":"equals","path":["triage_result","harness_capable"],"expected":false},
+          {"operator":"path_absent","path":["approved_feature_preparation_harness_obligation"]},
+          {"operator":"path_absent","path":["approved_feature_preparation_qa_acceptance_obligation"]}
         ]
       }
     },
@@ -5929,5 +6058,112 @@
         ]
       }
     }
-  ]
+  ],
+  "canonical_feature_preparation_result_expectations": {
+    "small-input-implement-only-promotes-deferred-harness-obligation": {
+      "execution_status": "not_started",
+      "scope": "Preserve the approved existing VIEWING route behavior.",
+      "feature_preparation_evidence_ref": "prep/medium-feature",
+      "evidence_gaps": [],
+      "open_decisions": [],
+      "implementation_implications": ["Consume the approved route-preservation evidence without broadening behavior."],
+      "future_harness_obligation": {
+        "requested_scope": "Run the explicitly requested trace/replay harness during future implementation.",
+        "evidence_basis": ["The user explicitly requested trace/replay harness evidence for future implementation."],
+        "execution_prerequisite": "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted."
+      },
+      "recommended_next_step": "Carry this approved preparation result unchanged through the bounded implementation packet."
+    },
+    "medium-implement-only-consumes-preparation-harness-obligation": {
+      "execution_status": "not_started",
+      "scope": "Preserve the approved existing VIEWING route behavior.",
+      "feature_preparation_evidence_ref": "prep/medium-feature",
+      "evidence_gaps": [],
+      "open_decisions": [],
+      "implementation_implications": ["Consume the approved route-preservation evidence without broadening behavior."],
+      "future_harness_obligation": {
+        "requested_scope": "Run the explicitly requested trace/replay harness during future implementation.",
+        "evidence_basis": ["The user explicitly requested trace/replay harness evidence for future implementation."],
+        "execution_prerequisite": "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted."
+      },
+      "recommended_next_step": "Carry this approved preparation result unchanged through the bounded implementation packet."
+    },
+    "medium-implement-only-consumes-not-applicable-preparation-harness-obligation": {
+      "execution_status": "not_started",
+      "scope": "Preserve the approved existing VIEWING route behavior.",
+      "evidence_gaps": [],
+      "open_decisions": [],
+      "implementation_implications": ["Consume the approved route-preservation evidence without broadening behavior."],
+      "future_harness_obligation": {
+        "requested_scope": "Run the explicitly requested trace/replay harness during future implementation.",
+        "evidence_basis": ["The user explicitly requested trace/replay harness evidence for future implementation."],
+        "execution_prerequisite": "Activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted."
+      },
+      "recommended_next_step": "Carry this approved preparation result unchanged through the bounded implementation packet."
+    },
+    "medium-implement-only-consumes-preparation-qa-obligation": {
+      "execution_status": "not_started",
+      "scope": "Preserve the approved existing VIEWING route behavior.",
+      "feature_preparation_evidence_ref": "prep/medium-feature",
+      "evidence_gaps": [],
+      "open_decisions": [],
+      "implementation_implications": ["Consume the approved route-preservation evidence without broadening behavior."],
+      "recommended_next_step": "Carry this approved preparation result unchanged through the bounded implementation packet.",
+      "future_qa_acceptance_obligation": {
+        "requested_scope": "Run the explicitly requested QA/acceptance evaluation.",
+        "execution_prerequisite": "Run after Build and Code Reviewer evidence in the approved implementation workflow."
+      }
+    },
+    "medium-implement-only-consumes-not-applicable-preparation-qa-obligation": {
+      "execution_status": "not_started",
+      "scope": "Preserve the approved existing VIEWING route behavior.",
+      "evidence_gaps": [],
+      "open_decisions": [],
+      "implementation_implications": ["Consume the approved route-preservation evidence without broadening behavior."],
+      "recommended_next_step": "Carry this approved preparation result unchanged through the bounded implementation packet.",
+      "future_qa_acceptance_obligation": {
+        "requested_scope": "Run the explicitly requested QA/acceptance evaluation.",
+        "execution_prerequisite": "Run after Build and Code Reviewer evidence in the approved implementation workflow."
+      }
+    },
+    "ordinary-implement-only-carries-not-applicable-preparation-result": {
+      "execution_status": "not_started",
+      "scope": "Create the approved new read-only route behavior.",
+      "evidence_gaps": [],
+      "open_decisions": ["Select the bounded implementation slice."],
+      "implementation_implications": ["Implement the approved new route without inventing existing-system evidence."],
+      "recommended_next_step": "Execute the bounded approved implementation packet."
+    },
+    "ordinary-implement-only-carries-not-applicable-preparation-readiness-result": {
+      "execution_status": "not_started",
+      "scope": "Create the approved new read-only route behavior.",
+      "evidence_gaps": [],
+      "open_decisions": ["Select the bounded implementation slice."],
+      "implementation_implications": ["Implement the approved new route without inventing existing-system evidence."],
+      "recommended_next_step": "Execute the bounded approved implementation packet.",
+      "readiness_plan": {
+        "preparation_basis": "not_applicable",
+        "implementation_implications": ["Implement the approved new route without inventing existing-system evidence."],
+        "open_decisions": ["Select the bounded implementation slice."],
+        "recommended_next_state": "Execute the bounded approved implementation packet.",
+        "execution_status": "not_started"
+      }
+    },
+    "ordinary-implement-only-carries-existing-system-preparation-readiness-result": {
+      "execution_status": "not_started",
+      "scope": "Create the approved new read-only route behavior.",
+      "feature_preparation_evidence_ref": "prep/medium-feature",
+      "evidence_gaps": [],
+      "open_decisions": ["Select the bounded implementation slice."],
+      "implementation_implications": ["Implement the approved new route without inventing existing-system evidence."],
+      "recommended_next_step": "Execute the bounded approved implementation packet.",
+      "readiness_plan": {
+        "evidence_ref": "prep/medium-feature",
+        "implementation_implications": ["Implement the approved new route without inventing existing-system evidence."],
+        "open_decisions": ["Select the bounded implementation slice."],
+        "recommended_next_state": "Execute the bounded approved implementation packet.",
+        "execution_status": "not_started"
+      }
+    }
+  }
 }

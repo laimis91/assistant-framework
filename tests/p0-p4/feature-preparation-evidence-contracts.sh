@@ -85,6 +85,8 @@ if ruby -ryaml -e '
   input_fields = input.fetch("fields").to_h { |field| [field.fetch("name"), field] }
   scope = input_fields.fetch("feature_preparation_scope")
   approved_ref = input_fields.fetch("approved_feature_preparation_evidence_ref")
+  approved_result = input_fields.fetch("approved_feature_preparation_result")
+  approved_result_fields = approved_result.fetch("object_fields").map { |field| field.fetch("name") }
   approved_harness = input_fields.fetch("approved_feature_preparation_harness_obligation")
   approved_harness_fields = approved_harness.fetch("object_fields").map { |field| field.fetch("name") }
   approved_harness_field_map = approved_harness.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
@@ -141,6 +143,8 @@ if ruby -ryaml -e '
     harness_fields = fields.fetch("feature_preparation_harness_obligation").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
     qa_fields = fields.fetch("feature_preparation_qa_acceptance_obligation").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
     fields.fetch("feature_preparation_scope").fetch("enum_values") == %w[not_applicable existing_system] &&
+      fields.fetch("approved_feature_preparation_result").fetch("type") == "object" &&
+      fields.fetch("approved_feature_preparation_result")["condition"] == "execution_intent == implement_only" &&
       fields.fetch("feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
       fields.fetch("feature_preparation_harness_obligation").fetch("type") == "object" &&
       harness_fields.fetch("source_feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
@@ -166,6 +170,9 @@ if ruby -ryaml -e '
     approved_ref["required"] == "conditional" &&
     approved_ref["condition"] == "execution_intent == implement_only and feature_preparation_scope == existing_system" &&
     approved_ref["on_missing"] == "fail" &&
+    approved_result["required"] == "conditional" &&
+    approved_result["condition"] == "execution_intent == implement_only" &&
+    approved_result_fields == %w[execution_status scope feature_preparation_evidence_ref evidence_gaps open_decisions implementation_implications readiness_plan future_qa_acceptance_obligation future_harness_obligation recommended_next_step] &&
     approved_harness["required"] == "conditional" &&
     approved_harness["condition"].include?("execution_intent == implement_only") &&
     approved_harness_fields == %w[requested_scope evidence_basis execution_prerequisite source_feature_preparation_evidence_ref source_preparation_basis] &&
@@ -189,15 +196,16 @@ if ruby -ryaml -e '
     test_results["required"] == "conditional" &&
     test_results["condition"] == "execution_intent != prepare_only and (runnable tests exist or task changes behavior)" &&
     pack_ref && pack_ref["condition"] == "feature_preparation_scope == existing_system" &&
-    discover_gate && discover_gate["condition"] == "feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present or approved_feature_preparation_qa_acceptance_obligation is present" &&
+    discover_gate && discover_gate["condition"] == "execution_intent == implement_only or feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present or approved_feature_preparation_qa_acceptance_obligation is present" &&
     discover_gate.fetch("check").include?("approved_feature_preparation_evidence_ref") &&
     plan_gate && plan_gate["condition"] == "feature_preparation_scope == existing_system" &&
     invariant && invariant["condition"] == "feature_preparation_scope == existing_system" &&
     entry_names.include?("execution_intent") &&
     preparation_names.include?("approved_feature_preparation_evidence_ref") &&
+    preparation_names.include?("approved_feature_preparation_result") &&
     preparation_names.include?("approved_feature_preparation_harness_obligation") &&
     preparation_names.include?("approved_feature_preparation_qa_acceptance_obligation") &&
-    skill.include?("approved_feature_preparation_harness_obligation` or `approved_feature_preparation_qa_acceptance_obligation") &&
+    skill.include?("approved_feature_preparation_result") &&
     skill.include?("typed `not_applicable` source binding before Decompose, Plan, or Build") &&
     invariant_names.include?("INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY") &&
     scoped_handoffs &&
@@ -1715,6 +1723,115 @@ if ruby -rjson -e '
     pass
 else
     fail "strict journal evidence or optional readiness-Plan inherited-root/no-execution coverage is incomplete"
+fi
+
+test_start "implement-only packets retain the typed approved preparation result through triage and execution handoffs"
+if ruby -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0))
+  output = YAML.load_file(ARGV.fetch(1))
+  handoffs = YAML.load_file(ARGV.fetch(2))
+  plan_template = File.read(ARGV.fetch(3))
+  sub_task_template = File.read(ARGV.fetch(4))
+  journal_template = File.read(ARGV.fetch(5))
+  context_handoff_template = File.read(ARGV.fetch(6))
+  result = output.fetch("artifacts").find { |artifact| artifact["name"] == "feature_preparation_result" }
+  result_fields = result.fetch("object_fields").map { |field| field.fetch("name") }
+  approved = input.fetch("fields").find { |field| field["name"] == "approved_feature_preparation_result" }
+  approved_fields = approved&.fetch("object_fields", [])&.map { |field| field.fetch("name") }
+  shape = lambda do |field|
+    {
+      "name" => field["name"], "type" => field["type"], "required" => field["required"], "condition" => field["condition"],
+      "enum_values" => field["enum_values"], "min_items" => field["min_items"],
+      "object_fields" => Array(field["object_fields"]).map { |child| shape.call(child) }
+    }
+  end
+  triage = output.fetch("artifacts").find { |artifact| artifact["name"] == "triage_result" }
+  triage_approved = triage&.fetch("object_fields", [])&.find { |field| field["name"] == "approved_feature_preparation_result" }
+  context_handoff = output.fetch("artifacts").find { |artifact| artifact["name"] == "context_handoff_packet" }
+  context_fields = context_handoff.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  context_approved = context_fields["approved_feature_preparation_result"]
+  context_carry = context_fields.dig("execution_intent", "type") == "enum" &&
+    context_fields.dig("execution_intent", "enum_values") == %w[implement_only] &&
+    context_fields.dig("execution_intent", "required") == "conditional" &&
+    context_fields.dig("execution_intent", "condition") == "execution_intent == implement_only" &&
+    context_fields.dig("feature_preparation_scope", "type") == "enum" &&
+    context_fields.dig("feature_preparation_scope", "enum_values") == %w[not_applicable existing_system] &&
+    context_fields.dig("feature_preparation_scope", "required") == "conditional" &&
+    context_fields.dig("feature_preparation_scope", "condition") == "execution_intent == implement_only" &&
+    context_approved && shape.call(context_approved) == shape.call(approved) &&
+    context_handoff.fetch("validation").include?("execution_intent=implement_only") &&
+    context_handoff.fetch("validation").include?("carried unchanged") &&
+    context_handoff_template.include?("## Implement-only Preparation Continuity") &&
+    context_handoff_template.include?("- Execution intent: [implement_only]") &&
+    context_handoff_template.include?("- Feature-preparation scope: [not_applicable | existing_system]") &&
+    context_handoff_template.include?("- Approved preparation result: [copy the complete typed approved_feature_preparation_result unchanged]")
+  required_handoffs = %w[orchestrator_to_code_mapper orchestrator_to_explorer orchestrator_to_architect_decompose orchestrator_to_architect orchestrator_to_code_writer orchestrator_to_builder_tester]
+  carried = required_handoffs.all? do |name|
+    handoff = handoffs.fetch("handoffs").find { |item| item["name"] == name }
+    fields = handoff&.fetch("context_fields", [])&.to_h { |item| [item["name"], item] }
+    field = fields && fields["approved_feature_preparation_result"]
+    field && shape.call(field) == shape.call(approved) &&
+      fields.dig("execution_intent", "type") == "enum" &&
+      fields.dig("execution_intent", "enum_values")&.include?("implement_only") &&
+      fields.dig("feature_preparation_scope", "type") == "enum" &&
+      fields.dig("feature_preparation_scope", "enum_values") == %w[not_applicable existing_system]
+  end
+  plan_steps = handoffs.fetch("handoffs").find { |item| item["name"] == "orchestrator_to_architect" }.fetch("return_fields").find { |field| field["name"] == "implementation_steps" }
+  plan_result = plan_steps.fetch("object_fields").find { |field| field["name"] == "approved_feature_preparation_result" }
+  task_packets = %w[orchestrator_to_code_writer orchestrator_to_builder_tester].map do |name|
+    handoff = handoffs.fetch("handoffs").find { |item| item["name"] == name }
+    handoff.fetch("context_fields").find { |field| field["name"] == "current_task_packet" }.fetch("object_fields").find { |field| field["name"] == "approved_feature_preparation_result" }
+  end
+  exit(approved && approved["type"] == "object" && approved["required"] == "conditional" &&
+       approved["condition"] == "execution_intent == implement_only" && approved_fields == result_fields &&
+       triage_approved && shape.call(triage_approved) == shape.call(approved) && context_carry && carried &&
+       shape.call(plan_result) == shape.call(approved) && task_packets.all? { |field| shape.call(field) == shape.call(approved) } &&
+       [plan_template, sub_task_template, journal_template].all? { |template| template.include?("approved_feature_preparation_result") && template.include?("feature_preparation_scope") } ? 0 : 1)
+' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/references/plan-template.md" "$workflow_dir/references/sub-task-brief-template.md" "$workflow_dir/references/task-journal-template.md" "$workflow_dir/references/context-handoff-templates.md"; then
+    pass
+else
+    fail "implement-only workflow does not carry the exact typed approved preparation result through triage and execution handoffs"
+fi
+
+test_start "every implement-only executable packet carries the approved preparation result inside its authoritative fields"
+if ruby -e '
+  plan_template = File.read(ARGV.fetch(0))
+  sub_task_template = File.read(ARGV.fetch(1))
+  fields = [
+    "- execution_intent: [implement_only | end_to_end]",
+    "- feature_preparation_scope: [not_applicable | existing_system]",
+    "- approved_feature_preparation_result: [required exact complete typed approved_feature_preparation_result unchanged when execution_intent=implement_only; otherwise N/A]"
+  ]
+  inline_packet = plan_template[/^## Small Tasks .*?(?=^## Executable Task Packet)/m]
+  executable_packet = plan_template[/^## Executable Task Packet .*?(?=^## Slice Manifest)/m]
+  strict_slice_packet = sub_task_template[/^### Strict slice packet .*?(?=^### Supporting context)/m]
+  valid = [inline_packet, executable_packet, strict_slice_packet].all? do |packet|
+    packet && packet.downcase.include?("authoritative packet") && fields.all? { |field| packet.include?(field) }
+  end
+  exit(valid ? 0 : 1)
+' "$workflow_dir/references/plan-template.md" "$workflow_dir/references/sub-task-brief-template.md"; then
+    pass
+else
+    fail "an implement-only executable packet can rely on preparation fields outside its authoritative packet"
+fi
+
+test_start "continuation handoffs carry implementation preparation only in the implement-only branch"
+if ruby -e '
+  template = File.read(ARGV.fetch(0))
+  section = template[/^## Implement-only Preparation Continuity.*?(?=^## Work State)/m]
+  conditional = "Include this section only when the active execution intent is `implement_only`; otherwise omit it. For `prepare_only` or `end_to_end`, do not relabel the active intent or fabricate approved implementation authority."
+  fields = [
+    "- Execution intent: [implement_only]",
+    "- Feature-preparation scope: [not_applicable | existing_system]",
+    "- Approved preparation result: [copy the complete typed approved_feature_preparation_result unchanged]"
+  ]
+  valid = section && section.include?(conditional) && fields.all? { |field| section.include?(field) } &&
+    template.scan("- Execution intent: [implement_only]").length == 1
+  exit(valid ? 0 : 1)
+' "$workflow_dir/references/context-handoff-templates.md"; then
+    pass
+else
+    fail "continuation handoff template does not keep implement-only preparation continuity conditional and reciprocal"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

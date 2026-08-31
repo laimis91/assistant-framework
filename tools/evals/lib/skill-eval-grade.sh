@@ -689,6 +689,44 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
           provenance.all? { |source| source.is_a?(Hash) && source["source_kind"] == "review_pass" }
       end
       valid &&= aggregated_gap_ids.uniq.length == aggregated_gap_ids.length && aggregated_gap_ids.sort == current_gap_ids.sort
+
+      required_distillation_ids = (
+        findings.select { |finding| finding["severity"] == "must-fix" }.map { |finding| finding["aggregate_finding_id"] } +
+        fixed.select { |item| item.is_a?(Hash) && item["severity"] == "must-fix" }.map { |item| item["aggregate_finding_id"] }
+      ).uniq
+      canonical_distillation_ids = (
+        findings.map { |finding| finding["aggregate_finding_id"] } +
+        fixed.select { |item| item.is_a?(Hash) }.map { |item| item["aggregate_finding_id"] }
+      ).uniq
+      if explicit_artifact_name.empty?
+        distillation_authority = fixture.dig("canonical_review_finding_rule_distillation_expectations", case_id)
+        if distillation_authority
+          expected_active_ids = distillation_authority["active_must_fix_aggregate_finding_ids"]
+          expected_fixed_ids = distillation_authority["fixed_must_fix_aggregate_finding_ids"]
+          actual_active_ids = findings.select { |finding| finding["severity"] == "must-fix" }.map { |finding| finding["aggregate_finding_id"] }
+          actual_fixed_ids = fixed.select { |item| item.is_a?(Hash) && item["severity"] == "must-fix" }.map { |item| item["aggregate_finding_id"] }
+          valid &&= expected_active_ids.is_a?(Array) && expected_fixed_ids.is_a?(Array) &&
+            actual_active_ids.sort == expected_active_ids.sort && actual_fixed_ids.sort == expected_fixed_ids.sort &&
+            required_distillation_ids.sort == (expected_active_ids + expected_fixed_ids).uniq.sort
+        end
+        distillation = outer_response["review_finding_rule_distillation"]
+        required_fields = %w[finding evidence failure_pattern classification rule_target proposed_rule verification_eval_update scope_and_exclusions promotion_decision]
+        if distillation
+          valid &&= distillation.is_a?(Array) && distillation.all? do |entry|
+            entry.is_a?(Hash) && entry.keys.sort == required_fields.sort &&
+              required_fields.select { |field| !%w[classification rule_target promotion_decision].include?(field) }.all? { |field| nonblank.call(entry[field]) } &&
+              %w[one_off_fix permanent_rule_candidate no_action].include?(entry["classification"]) &&
+              %w[checklist input_contract output_contract phase_gate handoff eval template skill_reference none].include?(entry["rule_target"]) &&
+              %w[promote defer reject].include?(entry["promotion_decision"])
+          end
+          distillation_ids = distillation.is_a?(Array) ? distillation.map { |entry| entry["finding"] } : []
+          valid &&= distillation_ids.all? { |finding_id| canonical_distillation_ids.include?(finding_id) } &&
+            distillation_ids.uniq.length == distillation_ids.length &&
+            required_distillation_ids.all? { |finding_id| distillation_ids.include?(finding_id) }
+        else
+          valid &&= required_distillation_ids.empty?
+        end
+      end
     else
       valid = false
     end
@@ -1110,13 +1148,37 @@ count_assistant_review_canonical_envelope_failures() {
     fi
 }
 
+canonical_feature_preparation_result_authority_valid() {
+    local skill_name="$1"
+    local fixture_file="$2"
+    local id="$3"
+    local response_path="$4"
+    local authority
+
+    [[ "$skill_name" == "assistant-workflow" ]] || return 0
+    authority="$(jq -c --arg id "$id" '.canonical_feature_preparation_result_expectations?[$id] // empty' "$fixture_file")"
+    [[ -n "$authority" ]] || return 0
+
+    jq -e --argjson authority "$authority" '
+        .approved_feature_preparation_result == $authority
+        and .triage_result.approved_feature_preparation_result == $authority
+        and (.implementation_steps | type == "array" and length > 0)
+        and all(.implementation_steps[]; type == "object" and .approved_feature_preparation_result == $authority)
+    ' "$response_path" >/dev/null
+}
+
 count_structured_json_assertion_failures() {
     local fixture_file="$1"
     local id="$2"
     local response_path="$3"
+    local skill_name="${4:-}"
     local assertion
     local structured_assertion_count
     local failures=0
+
+    if [[ -z "$skill_name" ]]; then
+        skill_name="$(jq -r 'if (.skill | type) == "string" then .skill elif (.skill | type) == "object" then .skill.name // .skill_name // empty else .skill_name // empty end' "$fixture_file")"
+    fi
 
     structured_assertion_count="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length' "$fixture_file")"
 
@@ -1204,6 +1266,10 @@ count_structured_json_assertion_failures() {
             failures=$((failures + 1))
         fi
     done < <(jq -c --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.structured_json_assertions[]?' "$fixture_file")
+
+    if ! canonical_feature_preparation_result_authority_valid "$skill_name" "$fixture_file" "$id" "$response_path"; then
+        failures=$((failures + 1))
+    fi
 
     # Preparation-only responses have a fixed no-execution boundary. Keep this
     # structural guard independent of prose anchors so every declared response
@@ -1300,7 +1366,7 @@ grade_responses() {
                 ordered_failures="$(count_ordered_substring_failures "$fixture_file" "$id" "$response_path")"
                 seeded_failures="$(count_seeded_defect_failures "$fixture_file" "$id" "$response_path")"
                 false_positive_failures="$(count_false_positive_marker_failures "$fixture_file" "$id" "$response_path")"
-                structured_failures="$(count_structured_json_assertion_failures "$fixture_file" "$id" "$response_path")"
+                structured_failures="$(count_structured_json_assertion_failures "$fixture_file" "$id" "$response_path" "$skill_name")"
                 canonical_envelope_failures="$(count_assistant_review_canonical_envelope_failures "$skill_name" "$id" "$response_path" "$fixture_file")"
                 structured_failures=$((structured_failures + canonical_envelope_failures))
                 if [[ "$fail_signal_hits" -gt 0 ]]; then

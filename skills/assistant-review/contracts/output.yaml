@@ -127,10 +127,10 @@ artifacts:
   - name: review_finding_rule_distillation
     type: object[]
     required: conditional
-    condition: "review has blocker or must-fix findings, or a finding exposes recurring process, contract, checklist, or eval gaps"
+    condition: "review has active or fixed must-fix findings, or a non-must-fix canonical finding exposes recurring process, contract, checklist, or eval gaps"
     description: "Classification of review findings into one-off fixes versus permanent rule candidates"
-    validation: "Each applicable finding must include evidence, failure pattern, classification, target, proposed rule or no-action rationale, verification/eval update, scope/exclusions, and promotion decision"
-    on_fail: "Load references/review-finding-permanent-rule.md and classify blocker/must-fix findings before final review output"
+    validation: "Every present entry must include evidence, failure pattern, classification, target, proposed rule or no-action rationale, verification/eval update, scope/exclusions, and promotion decision. Its finding exactly equals one canonical aggregated_findings[].aggregate_finding_id or fixed_items[].aggregate_finding_id; entries are unique. Every unique must-fix id from active aggregated_findings and fixed_items appears exactly once, including a regressed id present in both. Additional recurring-gap entries are allowed only for other canonical finding ids."
+    on_fail: "Load references/review-finding-permanent-rule.md and classify each active or fixed must-fix finding before final review output"
     object_fields:
       - name: finding
         type: string

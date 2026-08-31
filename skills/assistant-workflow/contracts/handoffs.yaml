@@ -73,6 +73,53 @@ handoffs:
         type: string
         required: true
         description: "What the task is about — scopes the mapping"
+      - name: execution_intent
+        type: enum
+        required: true
+        enum_values: [prepare_only, implement_only, end_to_end]
+        description: "Execution discriminator required to evaluate preparation-result applicability locally"
+      - name: feature_preparation_scope
+        type: enum
+        required: true
+        enum_values: [not_applicable, existing_system]
+        description: "Preparation basis discriminator retained during implementation discovery"
+      - name: approved_feature_preparation_result
+        type: object
+        required: conditional
+        condition: "execution_intent == implement_only"
+        description: "Approved typed preparation outcome constraining implementation discovery"
+        validation: "Equals the approved input result unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
+        object_fields: &approved_feature_preparation_result_fields
+          - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - {name: scope, type: string, required: true}
+          - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+          - {name: evidence_gaps, type: "string[]", required: true}
+          - {name: open_decisions, type: "string[]", required: true}
+          - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+          - name: readiness_plan
+            type: object
+            required: false
+            object_fields:
+              - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: recommended_next_state, type: string, required: true}
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - name: future_qa_acceptance_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+          - name: future_harness_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+          - {name: recommended_next_step, type: string, required: true}
       - name: task_type
         type: enum
         required: true
@@ -444,6 +491,21 @@ handoffs:
       - name: task_description
         type: string
         required: true
+      - name: execution_intent
+        type: enum
+        required: true
+        enum_values: [prepare_only, implement_only, end_to_end]
+      - name: feature_preparation_scope
+        type: enum
+        required: true
+        enum_values: [not_applicable, existing_system]
+      - name: approved_feature_preparation_result
+        type: object
+        required: conditional
+        condition: "execution_intent == implement_only"
+        description: "Approved typed preparation outcome constraining implementation discovery"
+        validation: "Equals the approved input result unchanged."
+        object_fields: *approved_feature_preparation_result_fields
       - name: focus_areas
         type: string[]
         required: true
@@ -554,11 +616,23 @@ handoffs:
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         description: "Current Architecture Decision Pack reference; Architect consumes it rather than rediscovering its facts"
         validation: "Resolves to a fresh pack with boundaries, design-pressure checks, Type Ledger, quality scenarios, verification, and invalidation conditions"
+      - name: execution_intent
+        type: enum
+        required: true
+        enum_values: [prepare_only, implement_only, end_to_end]
+        description: "Execution discriminator required to evaluate preparation-result applicability locally"
       - name: feature_preparation_scope
         type: enum
         required: true
         enum_values: [not_applicable, existing_system]
         description: "Whether decomposition must preserve classifications from existing-system feature preparation"
+      - name: approved_feature_preparation_result
+        type: object
+        required: conditional
+        condition: "execution_intent == implement_only"
+        description: "Approved typed preparation outcome constraining decomposition"
+        validation: "Equals the approved_feature_preparation_result input unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
+        object_fields: *approved_feature_preparation_result_fields
       - name: feature_preparation_evidence_ref
         type: string
         required: conditional
@@ -806,11 +880,23 @@ handoffs:
         condition: "architecture_design_mode in [lightweight, required, review_intensive]"
         description: "Fresh typed Architecture Decision Pack reference"
         validation: "Resolves to the pack that owns the current selected design, design-pressure conclusions, semantic type decisions, quality scenarios, and review scope"
+      - name: execution_intent
+        type: enum
+        required: true
+        enum_values: [prepare_only, implement_only, end_to_end]
+        description: "Execution discriminator required to evaluate preparation-result applicability locally"
       - name: feature_preparation_scope
         type: enum
         required: true
         enum_values: [not_applicable, existing_system]
         description: "Whether executable task packets must carry existing-system behavior classifications"
+      - name: approved_feature_preparation_result
+        type: object
+        required: conditional
+        condition: "execution_intent == implement_only"
+        description: "Approved typed preparation outcome used to produce task packets"
+        validation: "Equals the approved_feature_preparation_result input unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
+        object_fields: *approved_feature_preparation_result_fields
       - name: feature_preparation_evidence_ref
         type: string
         required: conditional
@@ -1101,6 +1187,12 @@ handoffs:
             condition: "feature_preparation_scope == existing_system"
             description: "Completed or approved evidence ref carried unchanged into this executable packet"
             validation: "Resolves to the classifications and implementation implications this packet implements"
+          - name: approved_feature_preparation_result
+            type: object
+            required: conditional
+            condition: "execution_intent == implement_only"
+            validation: "Equals the approved input result and Plan handoff unchanged."
+            object_fields: *approved_feature_preparation_result_fields
           - name: feature_preparation_harness_obligation
             type: object
             required: conditional
@@ -1408,11 +1500,23 @@ handoffs:
         required: true
         enum_values: [not_applicable, lightweight, required, review_intensive]
         description: "Whether the current task packet is constrained by an Architecture Decision Pack"
+      - name: execution_intent
+        type: enum
+        required: true
+        enum_values: [prepare_only, implement_only, end_to_end]
+        description: "Execution discriminator required to evaluate preparation-result applicability locally"
       - name: feature_preparation_scope
         type: enum
         required: true
         enum_values: [not_applicable, existing_system]
         description: "Whether the Build packet is constrained by existing-system feature-preparation evidence"
+      - name: approved_feature_preparation_result
+        type: object
+        required: conditional
+        condition: "execution_intent == implement_only"
+        description: "Approved typed preparation outcome constraining this Build handoff"
+        validation: "Equals the approved_feature_preparation_result input and current task packet unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
+        object_fields: *approved_feature_preparation_result_fields
       - name: feature_preparation_evidence_ref
         type: string
         required: conditional
@@ -1482,6 +1586,12 @@ handoffs:
             condition: "feature_preparation_scope == existing_system"
             description: "Completed or approved feature-preparation evidence ref constraining this Build step"
             validation: "Resolves to the preserved behavior, explicit changes, conflicts, gaps, and implementation implications for this packet"
+          - name: approved_feature_preparation_result
+            type: object
+            required: conditional
+            condition: "execution_intent == implement_only"
+            validation: "Equals the approved input result and Plan projection unchanged."
+            object_fields: *approved_feature_preparation_result_fields
           - name: feature_preparation_harness_obligation
             type: object
             required: conditional
@@ -1962,11 +2072,23 @@ handoffs:
         required: true
         enum_values: [not_applicable, lightweight, required, review_intensive]
         description: "Whether verification must consume Architecture Decision Pack commitments"
+      - name: execution_intent
+        type: enum
+        required: true
+        enum_values: [prepare_only, implement_only, end_to_end]
+        description: "Execution discriminator required to evaluate preparation-result applicability locally"
       - name: feature_preparation_scope
         type: enum
         required: true
         enum_values: [not_applicable, existing_system]
         description: "Whether verification must check existing-system feature-preparation classifications"
+      - name: approved_feature_preparation_result
+        type: object
+        required: conditional
+        condition: "execution_intent == implement_only"
+        description: "Approved typed preparation outcome constraining verification"
+        validation: "Equals the approved_feature_preparation_result input and current task packet unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
+        object_fields: *approved_feature_preparation_result_fields
       - name: feature_preparation_evidence_ref
         type: string
         required: conditional
@@ -2032,6 +2154,12 @@ handoffs:
             condition: "feature_preparation_scope == existing_system"
             description: "Completed or approved evidence ref whose preservation and gap classifications verification must check"
             validation: "Resolves to the same feature-preparation evidence ref consumed by CodeWriter"
+          - name: approved_feature_preparation_result
+            type: object
+            required: conditional
+            condition: "execution_intent == implement_only"
+            validation: "Equals the approved input result and CodeWriter task packet unchanged."
+            object_fields: *approved_feature_preparation_result_fields
           - name: feature_preparation_harness_obligation
             type: object
             required: conditional

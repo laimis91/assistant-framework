@@ -84,6 +84,7 @@ Loop / Experiment Routing:
 - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation; appendix only when harness_capable=true or QA criteria independently apply]
 - Progressive current map: [N/A for ordinary bounded work with progressive_route_clear_consumption_state=not_applicable and progressive_sequence_readiness_state=not_applicable, or after progressive_artifact_retention_state=terminally_archived; otherwise retain the retained canonical reference chain. The current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical typed entries; every current-map deferred uncertainty retains unlocking_decision_item_ref to a current-map predecessor; retired/excluded/history entries may remain outside current refs]
 Plan approval: prepare_only optional readiness never waits; [N/A for none | readiness record only for inline] | execution_intent != prepare_only: [N/A for none/inline | yes/no + date for approval_required]
+Approved preparation result: [for implement_only, retain the complete typed approved_feature_preparation_result and feature_preparation_scope unchanged through resume, Plan, and every task packet; otherwise N/A]
 
 ## Agent Dispatch Log
 [subagent evidence required by completion gates]

@@ -46,13 +46,13 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [execution_intent, feature_preparation_scope, approved_feature_preparation_evidence_ref, approved_feature_preparation_harness_obligation, approved_feature_preparation_qa_acceptance_obligation]
+        names: [execution_intent, feature_preparation_scope, approved_feature_preparation_evidence_ref, approved_feature_preparation_result, approved_feature_preparation_harness_obligation, approved_feature_preparation_qa_acceptance_obligation]
       - id: workflow-feature-preparation-output
         path: contracts/output.yaml
         section: artifacts
         key: name
         names: [feature_preparation_evidence, feature_preparation_result]
-    budget_words: 5600
+    budget_words: 5900
   progressive_discovery:
     references:
       - references/progressive-discovery.md

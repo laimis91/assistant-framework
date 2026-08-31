@@ -2,8 +2,7 @@
 
 Use this reference whenever `feature_preparation_scope=existing_system`.
 Prepare-only and end-to-end work produce the evidence during Discover;
-implement-only work must resolve the approved evidence ref carried by its
-packet before Build. It is provider-neutral: a
+implement-only work resolves the approved result before Build. It is provider-neutral: a
 requirement source may be a ticket, brief, issue, conversation, or local
 document; design evidence may be supplied, not applicable, or unavailable.
 
@@ -35,8 +34,9 @@ For each scoped behavior or proposed open question, create one
 For `execution_intent=prepare_only`, finish with `Execution not started` and do
 not manufacture changed-files, Build, test-run, or code-review evidence. For
 `execution_intent=end_to_end`, pass the same gate before Plan or Build. For
-`execution_intent=implement_only`, consume the approved ref rather than
-reconstructing missing preparation.
+`execution_intent=implement_only`, consumes the approved result unchanged.
+Existing-system work also resolves its evidence ref; not_applicable retains its
+scope, gaps, decisions, implications, readiness, obligations, and next step.
 
 Prepare-only routes from Discover to Preparation Completion. Readiness Plan
 context is optional; Decompose, Design, Build, Review, implementation

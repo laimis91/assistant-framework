@@ -25,9 +25,12 @@ Role: [Implementer | Architect | Code Reviewer | QA Evaluator | Reviewer compati
 Project: [name]
 Parent task: [one-sentence description of the mega task]
 This is slice [N] of [total]. Other slice packets are handling: [list].
+Execution intent: [prepare_only | implement_only | end_to_end]
+Feature-preparation scope: [not_applicable | existing_system]
+Approved preparation result: [for implement_only, copy the complete typed approved_feature_preparation_result unchanged, including optional readiness/future obligations; otherwise N/A]
 
 ### Strict slice packet (execution contract)
-This packet is the executable contract for the slice. Supporting context below cannot satisfy or override these fields. If any required field is missing, return `NEEDS_CONTEXT` instead of executing from loose Goal/Scope prose.
+This strict slice packet is the authoritative packet and executable contract for the slice. Supporting context below cannot satisfy or override these fields. If any required field is missing, return `NEEDS_CONTEXT` instead of executing from loose Goal/Scope prose.
 
 - slice_id: [approved slice id]
 - slice_name: [approved slice name]
@@ -43,7 +46,9 @@ This packet is the executable contract for the slice. Supporting context below c
   - [setup, contracts, wiring, config, or "none"]
 - depends_on:
   - [slice id, or "none"]
-- feature_preparation_scope: not_applicable | existing_system
+- execution_intent: [implement_only | end_to_end]
+- feature_preparation_scope: [not_applicable | existing_system]
+- approved_feature_preparation_result: [required exact complete typed approved_feature_preparation_result unchanged when execution_intent=implement_only; otherwise N/A]
 - feature_preparation_evidence_ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise not_applicable]
 - feature_preparation_harness_obligation: [required exact approved object when the preparation result contains future_harness_obligation; include requested_scope, evidence_basis, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
 - feature_preparation_qa_acceptance_obligation: [required exact approved object when the preparation result contains future_qa_acceptance_obligation; include requested_scope, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
@@ -59,6 +64,7 @@ This packet is the executable contract for the slice. Supporting context below c
 - deviation_rollback_rule: [what to do if required files/behavior differ from this packet]
 
 ### Supporting context (not the execution contract)
+- Execution intent, feature-preparation scope, and approved preparation result here are summaries only; the strict slice packet fields above are authoritative.
 - Parent goal: [one-sentence description of the mega task]
 - Adjacent slices: [what other slice packets are handling]
 - Relevant files/modules: [context only; strict files_to_* fields above control execution]

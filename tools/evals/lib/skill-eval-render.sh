@@ -58,6 +58,42 @@ emit_prompts() {
                       + ($fixture.canonical_review_batch_expectations.templates[$template_ref] | tojson)
                       + "\n```\n\n"
                     else "" end;
+                def canonical_review_snapshot_expectation_section($fixture; $case_id):
+                  ($fixture.canonical_review_snapshot_expectations[$case_id]? // null) as $authority
+                  | if $authority != null then
+                      "### Canonical Review Snapshot Expectation\n\n"
+                      + "This exact frozen snapshot authority is part of the selected case and is evaluated by the local grader.\n\n"
+                      + "```json\n"
+                      + ($authority | tojson)
+                      + "\n```\n\n"
+                    else "" end;
+                def canonical_review_closure_expectation_section($fixture; $case_id):
+                  ($fixture.canonical_review_closure_expectations[$case_id]? // null) as $authority
+                  | if $authority != null then
+                      "### Canonical Review Closure Expectation\n\n"
+                      + "This exact frozen closure authority is part of the selected case and is evaluated by the local grader.\n\n"
+                      + "```json\n"
+                      + ($authority | tojson)
+                      + "\n```\n\n"
+                    else "" end;
+                def canonical_review_finding_rule_distillation_expectation_section($fixture; $case_id):
+                  ($fixture.canonical_review_finding_rule_distillation_expectations[$case_id]? // null) as $authority
+                  | if $authority != null then
+                      "### Canonical Review Finding Rule Distillation Expectation\n\n"
+                      + "This immutable authority defines the exact active and fixed must-fix aggregate_finding_id values that require one deduplicated rule-distillation mapping.\n\n"
+                      + "```json\n"
+                      + ($authority | tojson)
+                      + "\n```\n\n"
+                    else "" end;
+                def canonical_feature_preparation_result_expectation_section($fixture; $case_id):
+                  ($fixture.canonical_feature_preparation_result_expectations[$case_id]? // null) as $authority
+                  | if $authority != null then
+                      "### Canonical Feature-Preparation Result Expectation\n\n"
+                      + "This exact approved preparation result is immutable across the implementation input, triage, and implementation-step projections.\n\n"
+                      + "```json\n"
+                      + ($authority | tojson)
+                      + "\n```\n\n"
+                    else "" end;
                 . as $fixture
                 | .cases[]
                 | select(.id == $id)
@@ -75,6 +111,10 @@ emit_prompts() {
                   + seeded_defects_section
                   + "## Machine Expectations\n\n"
                   + canonical_review_batch_expectation_section($fixture; .id)
+                  + canonical_review_snapshot_expectation_section($fixture; .id)
+                  + canonical_review_closure_expectation_section($fixture; .id)
+                  + canonical_review_finding_rule_distillation_expectation_section($fixture; .id)
+                  + canonical_feature_preparation_result_expectation_section($fixture; .id)
                   + "### Required Substrings\n\n"
                   + bullets(.machine_expectations.required_substrings) + "\n\n"
                   + "### Forbidden Substrings\n\n"
