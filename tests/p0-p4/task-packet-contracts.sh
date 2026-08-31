@@ -32,7 +32,7 @@ fi
 test_start "workflow executable task packet carries conditional feature-preparation bindings in its own section"
 plan_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
 packet_section="$(awk '/^## Executable Task Packet( |$)/{capture=1; next} capture && /^## /{exit} capture{print}' "$plan_template")"
-if [[ "$packet_section" == *"- Feature preparation scope: [not_applicable | existing_system]"* ]] \
+if [[ "$packet_section" == *"- feature_preparation_scope: [not_applicable | existing_system]"* ]] \
     && [[ "$packet_section" == *"- Feature preparation evidence ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise N/A]"* ]]; then
     pass
 else

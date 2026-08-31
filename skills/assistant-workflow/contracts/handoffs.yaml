@@ -89,7 +89,7 @@ handoffs:
         condition: "execution_intent == implement_only"
         description: "Approved typed preparation outcome constraining implementation discovery"
         validation: "Equals the approved input result unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
-        object_fields: &approved_feature_preparation_result_fields
+        object_fields:
           - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
           - {name: scope, type: string, required: true}
           - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
@@ -505,7 +505,37 @@ handoffs:
         condition: "execution_intent == implement_only"
         description: "Approved typed preparation outcome constraining implementation discovery"
         validation: "Equals the approved input result unchanged."
-        object_fields: *approved_feature_preparation_result_fields
+        object_fields:
+          - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - {name: scope, type: string, required: true}
+          - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+          - {name: evidence_gaps, type: "string[]", required: true}
+          - {name: open_decisions, type: "string[]", required: true}
+          - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+          - name: readiness_plan
+            type: object
+            required: false
+            object_fields:
+              - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: recommended_next_state, type: string, required: true}
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - name: future_qa_acceptance_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+          - name: future_harness_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+          - {name: recommended_next_step, type: string, required: true}
       - name: focus_areas
         type: string[]
         required: true
@@ -632,7 +662,37 @@ handoffs:
         condition: "execution_intent == implement_only"
         description: "Approved typed preparation outcome constraining decomposition"
         validation: "Equals the approved_feature_preparation_result input unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
-        object_fields: *approved_feature_preparation_result_fields
+        object_fields:
+          - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - {name: scope, type: string, required: true}
+          - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+          - {name: evidence_gaps, type: "string[]", required: true}
+          - {name: open_decisions, type: "string[]", required: true}
+          - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+          - name: readiness_plan
+            type: object
+            required: false
+            object_fields:
+              - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: recommended_next_state, type: string, required: true}
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - name: future_qa_acceptance_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+          - name: future_harness_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+          - {name: recommended_next_step, type: string, required: true}
       - name: feature_preparation_evidence_ref
         type: string
         required: conditional
@@ -896,7 +956,37 @@ handoffs:
         condition: "execution_intent == implement_only"
         description: "Approved typed preparation outcome used to produce task packets"
         validation: "Equals the approved_feature_preparation_result input unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
-        object_fields: *approved_feature_preparation_result_fields
+        object_fields:
+          - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - {name: scope, type: string, required: true}
+          - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+          - {name: evidence_gaps, type: "string[]", required: true}
+          - {name: open_decisions, type: "string[]", required: true}
+          - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+          - name: readiness_plan
+            type: object
+            required: false
+            object_fields:
+              - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: recommended_next_state, type: string, required: true}
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - name: future_qa_acceptance_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+          - name: future_harness_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+          - {name: recommended_next_step, type: string, required: true}
       - name: feature_preparation_evidence_ref
         type: string
         required: conditional
@@ -1192,7 +1282,37 @@ handoffs:
             required: conditional
             condition: "execution_intent == implement_only"
             validation: "Equals the approved input result and Plan handoff unchanged."
-            object_fields: *approved_feature_preparation_result_fields
+            object_fields:
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - {name: scope, type: string, required: true}
+              - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: evidence_gaps, type: "string[]", required: true}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - name: readiness_plan
+                type: object
+                required: false
+                object_fields:
+                  - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+                  - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+                  - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+                  - {name: open_decisions, type: "string[]", required: true}
+                  - {name: recommended_next_state, type: string, required: true}
+                  - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - name: future_qa_acceptance_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - name: future_harness_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - {name: recommended_next_step, type: string, required: true}
           - name: feature_preparation_harness_obligation
             type: object
             required: conditional
@@ -1516,7 +1636,37 @@ handoffs:
         condition: "execution_intent == implement_only"
         description: "Approved typed preparation outcome constraining this Build handoff"
         validation: "Equals the approved_feature_preparation_result input and current task packet unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
-        object_fields: *approved_feature_preparation_result_fields
+        object_fields:
+          - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - {name: scope, type: string, required: true}
+          - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+          - {name: evidence_gaps, type: "string[]", required: true}
+          - {name: open_decisions, type: "string[]", required: true}
+          - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+          - name: readiness_plan
+            type: object
+            required: false
+            object_fields:
+              - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: recommended_next_state, type: string, required: true}
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - name: future_qa_acceptance_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+          - name: future_harness_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+          - {name: recommended_next_step, type: string, required: true}
       - name: feature_preparation_evidence_ref
         type: string
         required: conditional
@@ -1591,7 +1741,37 @@ handoffs:
             required: conditional
             condition: "execution_intent == implement_only"
             validation: "Equals the approved input result and Plan projection unchanged."
-            object_fields: *approved_feature_preparation_result_fields
+            object_fields:
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - {name: scope, type: string, required: true}
+              - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: evidence_gaps, type: "string[]", required: true}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - name: readiness_plan
+                type: object
+                required: false
+                object_fields:
+                  - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+                  - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+                  - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+                  - {name: open_decisions, type: "string[]", required: true}
+                  - {name: recommended_next_state, type: string, required: true}
+                  - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - name: future_qa_acceptance_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - name: future_harness_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - {name: recommended_next_step, type: string, required: true}
           - name: feature_preparation_harness_obligation
             type: object
             required: conditional
@@ -2088,7 +2268,37 @@ handoffs:
         condition: "execution_intent == implement_only"
         description: "Approved typed preparation outcome constraining verification"
         validation: "Equals the approved_feature_preparation_result input and current task packet unchanged, including scope, gaps, decisions, implementation implications, optional readiness plan/future obligations, and recommended next step."
-        object_fields: *approved_feature_preparation_result_fields
+        object_fields:
+          - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - {name: scope, type: string, required: true}
+          - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+          - {name: evidence_gaps, type: "string[]", required: true}
+          - {name: open_decisions, type: "string[]", required: true}
+          - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+          - name: readiness_plan
+            type: object
+            required: false
+            object_fields:
+              - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: recommended_next_state, type: string, required: true}
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+          - name: future_qa_acceptance_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+          - name: future_harness_obligation
+            type: object
+            required: false
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+          - {name: recommended_next_step, type: string, required: true}
       - name: feature_preparation_evidence_ref
         type: string
         required: conditional
@@ -2159,7 +2369,37 @@ handoffs:
             required: conditional
             condition: "execution_intent == implement_only"
             validation: "Equals the approved input result and CodeWriter task packet unchanged."
-            object_fields: *approved_feature_preparation_result_fields
+            object_fields:
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - {name: scope, type: string, required: true}
+              - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: evidence_gaps, type: "string[]", required: true}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - name: readiness_plan
+                type: object
+                required: false
+                object_fields:
+                  - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+                  - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+                  - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+                  - {name: open_decisions, type: "string[]", required: true}
+                  - {name: recommended_next_state, type: string, required: true}
+                  - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - name: future_qa_acceptance_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - name: future_harness_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - {name: recommended_next_step, type: string, required: true}
           - name: feature_preparation_harness_obligation
             type: object
             required: conditional
