@@ -352,6 +352,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [delegated, sequential_fallback]
+        validation: "Exactly equals peer_review.peer_review_execution_mode."
       - name: subagent_policy_state
         type: enum
         required: true
@@ -481,9 +482,11 @@ artifacts:
         type: string
         required: conditional
         condition: "peer_review_execution_mode == delegated"
+        validation: "Exactly equals peer_review.peer_reviewer_identity."
       - name: peer_review_assignment_id
         type: string
         required: true
+        validation: "Exactly equals peer_review.peer_review_assignment_id."
       - name: peer_review_revision_disposition_id
         type: string
         required: conditional
@@ -494,6 +497,7 @@ artifacts:
         type: string
         required: conditional
         condition: "peer_review_execution_mode == sequential_fallback"
+        validation: "Exactly equals peer_review.peer_review_fallback_pass_id and is distinct from every fallback_lens_passes.root_pass_id."
       - name: lens_fallback_evidence
         type: object
         required: conditional

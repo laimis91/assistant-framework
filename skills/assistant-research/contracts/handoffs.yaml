@@ -31,14 +31,17 @@ semantic_types:
     description: "Independent review outcome for the root-owned initial synthesis."
 
 dispatch_protocol:
-  activation: "Required only when research_method == five_lens_briefing. source_research remains policy=not_required and execution=not_applicable; this skill instruction triggers five-lens delegation unless an evidenced exception applies."
-  frozen_packet_rule: "all lens assignment packets are frozen before first dispatch. Every packet has the same scope baseline and exactly one LensKind; no packet includes sibling results, dispatch returns, contradiction mapping, or synthesis."
-  delegated_compliance: "Requires five distinct native dispatch or agent identities covering every LensKind exactly once plus one distinct ResearchPeerReviewer identity. The same model may serve multiple independent lens assignments; missing lens, duplicate lens, root-authored lens in delegated mode, or peer reviewer reused as a lens fails delegated compliance."
-  wave_rule: "Capacity-bounded waves are allowed only when wave coverage is exact, disjoint, exhaustive, and each wave size is within proven adapter capacity. Later waves cannot consume earlier results."
-  synthesis_ownership: "After all five LensResearcher returns validate, the root Orchestrator alone builds the contradiction map and initial synthesis. LensResearcher never owns cross-lens synthesis."
-  retry_rule: "one same-assignment schema-correction retry is allowed for one invalid lens return. After that retry, a failed lens stage reruns the complete lens stage via evidenced fallback or block; never mix partial delegated and root-authored results while claiming independence."
-  peer_review_rule: "A distinct ResearchPeerReviewer reviews the root initial synthesis after synthesis. Reviewer-only failure may retain validated delegated lenses and use a separately recorded reviewer fallback."
-  sequential_fallback_rule: "Sequential fallback is allowed only for explicit opt-out, real failed or unavailable dispatch mechanism, supported configuration proof, or exact policy block. It runs five frozen-packet root passes, records reduced independence, omits invented references, and performs peer critique as a separate fresh pass."
+  - name: common_research_protocol
+    activation: "Required only when research_method == five_lens_briefing. source_research remains policy=not_required and execution=not_applicable; this skill instruction triggers five-lens delegation unless an evidenced exception applies."
+    frozen_packet_rule: "all lens assignment packets are frozen before first dispatch. Every packet has the same scope baseline and exactly one LensKind; no packet includes sibling results, dispatch returns, contradiction mapping, or synthesis."
+    synthesis_ownership: "After all five LensResearcher returns validate, the root Orchestrator alone builds the contradiction map and initial synthesis. LensResearcher never owns cross-lens synthesis."
+    sequential_fallback_rule: "Sequential fallback is allowed only for explicit opt-out, real failed or unavailable dispatch mechanism, supported configuration proof, or exact policy block. It runs five frozen-packet root passes, records reduced independence, omits invented references, and performs peer critique as a separate fresh pass."
+  - name: orchestrator_to_lens_researcher
+    delegated_compliance: "Requires five distinct native dispatch or agent identities covering every LensKind exactly once. The same model may serve multiple independent lens assignments; missing lens, duplicate lens, or root-authored lens in delegated mode fails delegated compliance."
+    wave_rule: "Capacity-bounded waves are allowed only when wave coverage is exact, disjoint, exhaustive, and each wave size is within proven adapter capacity. Later waves cannot consume earlier results."
+    retry_rule: "one same-assignment schema-correction retry is allowed for one invalid lens return. After that retry, rerun the complete lens stage via evidenced fallback or block; never mix partial delegated and root-authored results while claiming independence."
+  - name: orchestrator_to_research_peer_reviewer
+    peer_review_rule: "A distinct ResearchPeerReviewer reviews the root initial synthesis after synthesis. Reviewer-only failure may retain validated delegated lenses and use a separately recorded reviewer fallback."
 
 handoffs:
   - name: orchestrator_to_lens_researcher
@@ -137,6 +140,7 @@ handoffs:
       - {name: process_id, type: string, required: true}
       - {name: assignment_id, type: string, required: true}
       - {name: packet_id, type: string, required: true}
+      - {name: packet_set_id, type: string, required: true}
       - {name: packet_content_digest, type: string, required: true}
       - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
       - name: lens_result
@@ -185,6 +189,7 @@ handoffs:
       - {name: status_detail, type: string, required: conditional, condition: "status in [NEEDS_CONTEXT, BLOCKED]", description: "Why the assignment cannot produce a usable LensResearchResult without inventing research."}
       - {name: blocker_type, type: enum, required: conditional, condition: "status == BLOCKED", enum_values: [invalid_assignment, policy_blocked, tool_failure]}
       - {name: blocker_evidence, type: "string[]", required: conditional, condition: "status == BLOCKED", min_items: 1}
+    on_missing_field: "Re-dispatch the same LensResearcher assignment once with an explicit missing-field request. After that one schema-correction retry, rerun the complete lens stage through evidenced sequential fallback or block; do not accept a partial mixed result or invent fields."
 
   - name: orchestrator_to_research_peer_reviewer
     from: Orchestrator
@@ -306,6 +311,7 @@ handoffs:
         type: string[]
         required: true
         description: "Unverified, inaccessible, stale, or unsupported decision-critical source claims; empty only when none exist."
+        validation: "Non-empty whenever verified_source_evidence is empty; otherwise records verified-source limitations or is empty only when none exist."
       - name: high_stakes_context
         type: object
         required: true
@@ -338,8 +344,12 @@ handoffs:
       - {name: status_detail, type: string, required: conditional, condition: "status in [NEEDS_CONTEXT, BLOCKED]"}
       - {name: blocker_type, type: enum, required: conditional, condition: "status == BLOCKED", enum_values: [missing_review_context, policy_blocked, tool_failure]}
       - {name: blocker_evidence, type: "string[]", required: conditional, condition: "status == BLOCKED", min_items: 1}
+    on_missing_field: "Request one peer correction with the exact missing field. If it remains invalid or unusable, retain valid lens evidence and run a separate fresh reviewer-only fallback with concrete evidence, or block; do not invent peer fields or let the worker self-attest orchestration metadata."
 
 return_validation:
-  lens_stage: "For delegated lens mode validate assignment_id, packet_id, packet_set_id, packet_content_digest, LensKind, return schema, status, typed evidence, and source/URL claims against the matching frozen assignment/manifest entry; validate exactly five unique native identities. DONE and DONE_WITH_CONCERNS require a complete LensResearchResult and evidence. NEEDS_CONTEXT or BLOCKED require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence; do not invent research. For sequential fallback validate exactly five frozen root passes with root_pass_id, matching packet content_digest, and no dispatch_identity, plus concrete fallback evidence."
-  peer_review_stage: "Validate peer_review_assignment_id echoes the active dispatch and apply the status/verdict truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions. Usable statuses require complete critique and calibrated evidence; failure statuses require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence. When verdict=revise, the orchestrator—not the worker—records revision_disposition covering every required revision exactly once as applied or claim_downgraded, assigns revision_disposition_id, and records an exactly equal peer_review_revision_disposition_id; unresolved revision blocks presentation. Workers do not self-report execution or fallback orchestration metadata or native peer identity; the orchestrator alone records those fields in final peer_review/process evidence. Empty verified_source_evidence with verification_gaps is valid and must downgrade or block unsupported claims. For reviewer-only fallback retain valid delegated lens evidence, validate the orchestrator-owned peer_review_fallback_pass_id and separate concrete fallback evidence, and never erase lens dispatch evidence."
-  fallback_evidence: "Record explicit opt-out, actual spawn failure/unavailability, supported configuration proof, or exact policy block; policy blocks include exact active rule/no exception; no fallback record contains invented native dispatch references."
+  - name: common_return_validation
+    validation: "Record explicit opt-out, actual spawn failure/unavailability, supported configuration proof, or exact policy block; policy blocks include exact active rule/no exception; no fallback record contains invented native dispatch references."
+  - name: orchestrator_to_lens_researcher
+    validation: "For delegated lens mode validate assignment_id, packet_id, packet_set_id, packet_content_digest, LensKind, return schema, status, typed evidence, and source/URL claims against the matching frozen assignment/manifest entry; validate exactly five unique native identities. DONE and DONE_WITH_CONCERNS require a complete LensResearchResult and evidence. NEEDS_CONTEXT or BLOCKED require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence; do not invent research. For sequential fallback validate exactly five frozen root passes with root_pass_id, matching packet content_digest, and no dispatch_identity, plus concrete fallback evidence."
+  - name: orchestrator_to_research_peer_reviewer
+    validation: "Validate peer_review_assignment_id echoes the active dispatch and apply the status/verdict truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions. Usable statuses require complete critique and calibrated evidence; failure statuses require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence. When verdict=revise, the orchestrator—not the worker—records revision_disposition covering every required revision exactly once as applied or claim_downgraded, assigns revision_disposition_id, and records an exactly equal peer_review_revision_disposition_id; unresolved revision blocks presentation. Workers do not self-report execution or fallback orchestration metadata or native peer identity; the orchestrator alone records those fields in final peer_review/process evidence. Empty verified_source_evidence requires non-empty verification_gaps and must downgrade or block unsupported claims. For reviewer-only fallback retain valid delegated lens evidence, validate the orchestrator-owned peer_review_fallback_pass_id and separate concrete fallback evidence, and never erase lens dispatch evidence."

@@ -9,7 +9,7 @@ fields:
   - name: question
     type: string
     required: true
-    description: "Research question."
+    description: "Question."
     validation: "Non-empty. Must be specific enough to search for — not 'tell me about stuff'."
     on_missing: ask
     ask_prompt: "What would you like me to research?"
@@ -18,7 +18,7 @@ fields:
     type: enum
     required: true
     enum_values: [quick, standard, extensive, deep]
-    description: "Research depth."
+    description: "Tier."
     validation: "quick five_lens_briefing normalizes to standard; preserves five_lens_briefing with a tier normalization disclosure. Its post-normalization tiers are standard, extensive, deep; quick remains valid for source_research."
     on_missing: infer
     infer_from: >
@@ -31,7 +31,7 @@ fields:
     type: enum
     required: true
     enum_values: [research, investigate]
-    description: "Research tool."
+    description: "Tool."
     on_missing: infer
     infer_from: >
       Broad exploration ('what options exist', 'compare') → research.
@@ -41,7 +41,7 @@ fields:
     type: enum
     required: true
     enum_values: [source_research, five_lens_briefing]
-    description: "Source-first or five-lens briefing."
+    description: "Method."
     on_missing: infer
     infer_from: >
       Simple lookup, direct facts, or ordinary source collection → source_research.
@@ -51,30 +51,28 @@ fields:
   - name: user_role_or_goal
     type: string
     required: false
-    description: "User role."
+    description: "Role."
     default: "unspecified"
 
   - name: output_purpose
     type: string
     required: false
     description: "Research use."
-    examples:
-      - "Informing a technology decision"
-      - "Background for a plan phase"
-      - "Answering a user question"
-      - "Due diligence on a vendor"
+    default: "Answering the user research question"
+    on_missing: infer
+    infer_from: "Default to answer the user research question."
 
   - name: known_context
     type: string[]
     required: false
-    description: "Known context."
+    description: "Context."
     default: []
 
   - name: search_resource_budget
     type: object
     required: conditional
     condition: "research_method == five_lens_briefing"
-    description: "Five-lens limits."
+    description: "Budget."
     validation: "standard=3 queries, 4 sources, and 10 minutes per lens / 15 queries, 20 sources, and 50 minutes overall; extensive=5, 6, and 15 / 25, 30, and 75; deep=8, 10, and 25 / 40, 50, and 125. Deep stops at saturation or its hard ceiling. Exhaustion records gaps and LOW confidence."
     on_missing: infer
     infer_from: "Apply this validation mapping by tier; source_research remains proportional."
@@ -91,7 +89,7 @@ fields:
     type: enum
     required: true
     enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
-    description: "Delegation policy state resolved before selecting direct or fallback execution"
+    description: "Policy state."
     validation: "source_research=not_required; five_lens_briefing=delegation_triggered unless an admissible exception is evidenced."
     on_missing: infer
     infer_from: "source_research => not_required; five_lens_briefing => delegation_triggered unless an exception is evidenced."
@@ -100,7 +98,7 @@ fields:
     type: enum
     required: true
     enum_values: [delegated, sequential_fallback, not_applicable]
-    description: "Execution mode selected after subagent_policy_state"
+    description: "Execution mode."
     validation: "source_research => not_applicable; exceptions => sequential_fallback only with evidence."
     on_missing: infer
     infer_from: "Derive from policy state; fallback requires evidence."
@@ -110,14 +108,14 @@ fields:
     required: conditional
     condition: "subagent_policy_state == delegation_triggered"
     min_items: 1
-    description: "Applicable instruction or user scope that triggered five-lens delegation"
+    description: "Delegation trigger."
     on_missing: fail
 
   - name: policy_blocking_source
     type: string
     required: conditional
     condition: "subagent_policy_state == policy_disallowed"
-    description: "Exact active policy rule that blocks dispatch and confirms no exception applies"
+    description: "Active policy block."
     validation: "Names the active blocking rule and no-exception basis, not a generic preference."
     on_missing: fail
 
@@ -125,7 +123,7 @@ fields:
     type: object
     required: conditional
     condition: "subagent_execution_mode == sequential_fallback"
-    description: "Concrete admissible evidence for five-lens or peer-review fallback"
+    description: "Fallback evidence."
     validation: "Records explicit opt-out, actual spawn failure/unavailability, supported configuration proof, or exact policy block; never fabricates native dispatch references."
     on_missing: fail
     object_fields:

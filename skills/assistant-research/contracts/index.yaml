@@ -66,6 +66,28 @@ load_sets:
         key: name
         name_from: selected_research_handoff
         allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
+      - id: research-common-dispatch-protocol
+        path: contracts/handoffs.yaml
+        section: dispatch_protocol
+        key: name
+        names: [common_research_protocol]
+      - id: research-selected-dispatch-protocol
+        path: contracts/handoffs.yaml
+        section: dispatch_protocol
+        key: name
+        name_from: selected_research_handoff
+        allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
+      - id: research-common-return-validation
+        path: contracts/handoffs.yaml
+        section: return_validation
+        key: name
+        names: [common_return_validation]
+      - id: research-selected-return-validation
+        path: contracts/handoffs.yaml
+        section: return_validation
+        key: name
+        name_from: selected_research_handoff
+        allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
     budget_words: 5500
   investigate:
     references:

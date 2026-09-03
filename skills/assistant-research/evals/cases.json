@@ -270,6 +270,8 @@
           {"operator": "equals", "path": ["peer_review", "verdict"], "expected": "revise"},
           {"operator": "equals", "path": ["peer_review", "required_revisions"], "expected": ["downgrade unsupported claim"]},
           {"operator": "equals_path", "path": ["five_lens_process_evidence", "peer_review_assignment_id"], "other_path": ["peer_review", "peer_review_assignment_id"]},
+          {"operator": "equals_path", "path": ["five_lens_process_evidence", "peer_review_execution_mode"], "other_path": ["peer_review", "peer_review_execution_mode"]},
+          {"operator": "equals_path", "path": ["five_lens_process_evidence", "peer_reviewer_identity"], "other_path": ["peer_review", "peer_reviewer_identity"]},
           {"operator": "equals_path", "path": ["five_lens_process_evidence", "peer_review_revision_disposition_id"], "other_path": ["peer_review", "revision_disposition_id"]},
           {"operator": "array_object_values_exact", "path": ["peer_review", "revision_disposition"], "fields": ["required_revision", "outcome", "closure_evidence"], "expected_objects": [{"required_revision": "downgrade unsupported claim", "outcome": "claim_downgraded", "closure_evidence": "claim confidence updated"}]}
         ]
@@ -329,7 +331,29 @@
           "peer_review_execution_mode: delegated",
           "reduced_independence: false",
           "partial mixed compliance",
-          "fabricated fallback dispatch refs"
+          "fabricated fallback dispatch refs",
+          "dispatch_identity"
+        ],
+        "structured_json_assertions": [
+          {"operator": "equals", "path": ["five_lens_process_evidence", "lens_execution_mode"], "expected": "sequential_fallback"},
+          {"operator": "equals", "path": ["five_lens_process_evidence", "peer_review_execution_mode"], "expected": "sequential_fallback"},
+          {"operator": "equals", "path": ["five_lens_process_evidence", "reduced_independence"], "expected": true},
+          {"operator": "path_absent", "path": ["five_lens_process_evidence", "lens_dispatches"]},
+          {"operator": "path_absent", "path": ["five_lens_process_evidence", "wave_coverage"]},
+          {"operator": "path_absent", "path": ["five_lens_process_evidence", "peer_reviewer_identity"]},
+          {"operator": "path_absent", "path": ["peer_review", "peer_reviewer_identity"]},
+          {"operator": "array_object_values_exact", "path": ["five_lens_process_evidence", "fallback_lens_passes"], "fields": ["lens_kind", "assignment_id", "packet_id", "packet_set_id", "packet_content_digest", "root_pass_id", "return_validated"], "expected_objects": [{"lens_kind": "practitioner", "assignment_id": "fallback-assignment-1", "packet_id": "packet-practitioner", "packet_set_id": "fallback-packet-set-1", "packet_content_digest": "sha256:practitioner", "root_pass_id": "root-pass-1", "return_validated": true}, {"lens_kind": "academic_or_technical_expert", "assignment_id": "fallback-assignment-2", "packet_id": "packet-academic", "packet_set_id": "fallback-packet-set-1", "packet_content_digest": "sha256:academic", "root_pass_id": "root-pass-2", "return_validated": true}, {"lens_kind": "skeptic", "assignment_id": "fallback-assignment-3", "packet_id": "packet-skeptic", "packet_set_id": "fallback-packet-set-1", "packet_content_digest": "sha256:skeptic", "root_pass_id": "root-pass-3", "return_validated": true}, {"lens_kind": "economist_or_incentives_analyst", "assignment_id": "fallback-assignment-4", "packet_id": "packet-economist", "packet_set_id": "fallback-packet-set-1", "packet_content_digest": "sha256:economist", "root_pass_id": "root-pass-4", "return_validated": true}, {"lens_kind": "historian_or_pattern_matcher", "assignment_id": "fallback-assignment-5", "packet_id": "packet-historian", "packet_set_id": "fallback-packet-set-1", "packet_content_digest": "sha256:historian", "root_pass_id": "root-pass-5", "return_validated": true}]},
+          {"operator": "equals", "path": ["five_lens_process_evidence", "lens_fallback_evidence", "basis"], "expected": "spawn_failure_or_unavailable"},
+          {"operator": "nonempty_string", "path": ["five_lens_process_evidence", "lens_fallback_evidence", "detail"]},
+          {"operator": "nonempty_string", "path": ["five_lens_process_evidence", "lens_fallback_evidence", "evidence_ref"]},
+          {"operator": "equals", "path": ["five_lens_process_evidence", "peer_review_fallback_evidence", "basis"], "expected": "spawn_failure_or_unavailable"},
+          {"operator": "nonempty_string", "path": ["five_lens_process_evidence", "peer_review_fallback_evidence", "detail"]},
+          {"operator": "nonempty_string", "path": ["five_lens_process_evidence", "peer_review_fallback_evidence", "evidence_ref"]},
+          {"operator": "equals_path", "path": ["five_lens_process_evidence", "peer_review_assignment_id"], "other_path": ["peer_review", "peer_review_assignment_id"]},
+          {"operator": "equals_path", "path": ["five_lens_process_evidence", "peer_review_execution_mode"], "other_path": ["peer_review", "peer_review_execution_mode"]},
+          {"operator": "nonempty_string", "path": ["five_lens_process_evidence", "peer_review_fallback_pass_id"]},
+          {"operator": "equals", "path": ["five_lens_process_evidence", "peer_review_fallback_pass_id"], "expected": "peer-root-pass-1"},
+          {"operator": "equals_path", "path": ["five_lens_process_evidence", "peer_review_fallback_pass_id"], "other_path": ["peer_review", "peer_review_fallback_pass_id"]}
         ]
       }
     },

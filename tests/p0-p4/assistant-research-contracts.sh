@@ -25,12 +25,59 @@ write_research_eval_responses() {
                 | (.machine_expectations.structured_json_assertions? // [] | length > 0)
             ' "$research_evals" >/dev/null; then
             write_delegated_five_lens_eval_response "$output_dir/assistant-research/$case_id.txt"
+        elif [[ "$case_id" == "five-lens-sequential-fallback-preserves-process-evidence" ]] \
+            && jq -e --arg case_id "$case_id" '
+                .cases[] | select(.id == $case_id)
+                | (.machine_expectations.structured_json_assertions? // [] | length > 0)
+            ' "$research_evals" >/dev/null; then
+            write_fallback_five_lens_eval_response "$output_dir/assistant-research/$case_id.txt"
         else
             jq -r --arg case_id "$case_id" '
                 .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]
             ' "$research_evals" >"$output_dir/assistant-research/$case_id.txt"
         fi
     done < <(jq -r '.cases[].id' "$research_evals")
+}
+
+write_fallback_five_lens_eval_response() {
+    local response_path="$1"
+    local report
+
+    report="$(jq -r '
+        .cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence")
+        | .machine_expectations.required_substrings | join("\\n")
+    ' "$research_evals")"
+    jq -n --arg report "$report" '
+      {
+        report: $report,
+        research_method: "five_lens_briefing",
+        tier: "extensive",
+        peer_review: {
+          peer_review_execution_mode: "sequential_fallback",
+          peer_review_assignment_id: "fallback-peer-assignment-1",
+          peer_review_fallback_pass_id: "peer-root-pass-1",
+          status: "DONE",
+          verdict: "accepted",
+          required_revisions: []
+        },
+        five_lens_process_evidence: {
+          lens_execution_mode: "sequential_fallback",
+          peer_review_execution_mode: "sequential_fallback",
+          reduced_independence: true,
+          fallback_lens_passes: [
+            {lens_kind: "practitioner", assignment_id: "fallback-assignment-1", packet_id: "packet-practitioner", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:practitioner", root_pass_id: "root-pass-1", return_validated: true},
+            {lens_kind: "academic_or_technical_expert", assignment_id: "fallback-assignment-2", packet_id: "packet-academic", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:academic", root_pass_id: "root-pass-2", return_validated: true},
+            {lens_kind: "skeptic", assignment_id: "fallback-assignment-3", packet_id: "packet-skeptic", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:skeptic", root_pass_id: "root-pass-3", return_validated: true},
+            {lens_kind: "economist_or_incentives_analyst", assignment_id: "fallback-assignment-4", packet_id: "packet-economist", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:economist", root_pass_id: "root-pass-4", return_validated: true},
+            {lens_kind: "historian_or_pattern_matcher", assignment_id: "fallback-assignment-5", packet_id: "packet-historian", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:historian", root_pass_id: "root-pass-5", return_validated: true}
+          ],
+          peer_review_assignment_id: "fallback-peer-assignment-1",
+          peer_review_fallback_pass_id: "peer-root-pass-1",
+          lens_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "dispatch unavailable", evidence_ref: "spawn-error-1"},
+          peer_review_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "peer dispatch unavailable", evidence_ref: "peer-spawn-error-1"}
+        }
+      }
+    ' >"$response_path"
 }
 
 write_delegated_five_lens_eval_response() {
@@ -116,6 +163,8 @@ research_structured_mutation_is_rejected() {
         accepted_with_unresolved_revisions) mutation_filter='.peer_review.verdict = "accepted"' ;;
         revise_without_required_revisions) mutation_filter='.peer_review.required_revisions = []' ;;
         blocked_presentation) mutation_filter='.peer_review.status = "BLOCKED" | .peer_review.verdict = "accepted"' ;;
+        peer_execution_mode_mismatch) mutation_filter='.five_lens_process_evidence.peer_review_execution_mode = "sequential_fallback"' ;;
+        peer_identity_mismatch) mutation_filter='.five_lens_process_evidence.peer_reviewer_identity = "peer-native-other"' ;;
         *) return 2 ;;
     esac
     jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
@@ -126,7 +175,39 @@ research_structured_mutation_is_rejected() {
 
     grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output" \
         && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
-        && grep -Eq 'structured_json_assertion_failures=[1-9]' "$eval_output"
+        && (grep -Eq 'structured_json_assertion_failures=[1-9]' "$eval_output" \
+            || grep -Eq 'forbidden_substring_hits=[1-9]' "$eval_output")
+}
+
+research_fallback_structured_mutation_is_rejected() {
+    local mutation="$1"
+    local case_id="five-lens-sequential-fallback-preserves-process-evidence"
+    local case_count eval_dir eval_output response_path mutation_filter
+
+    case_count="$(jq '.cases | length' "$research_evals")"
+    eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-fallback-negative.XXXXXX")"
+    eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-fallback-negative-output.XXXXXX")"
+    p0p4_register_cleanup "$eval_dir" "$eval_output"
+    write_research_eval_responses "$eval_dir"
+    response_path="$eval_dir/assistant-research/$case_id.txt"
+    case "$mutation" in
+        false_return_validated) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].return_validated = false' ;;
+        packet_binding_mismatch) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].packet_content_digest = "sha256:tampered"' ;;
+        fallback_dispatch_identity_leakage) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].dispatch_identity = "fabricated-native"' ;;
+        peer_fallback_and_evidence_mismatch) mutation_filter='.five_lens_process_evidence.peer_review_fallback_pass_id = "peer-root-pass-other" | .five_lens_process_evidence.lens_fallback_evidence.detail = "" | .five_lens_process_evidence.peer_review_fallback_evidence.evidence_ref = ""' ;;
+        peer_fallback_reuses_lens_pass) mutation_filter='.peer_review.peer_review_fallback_pass_id = "root-pass-1" | .five_lens_process_evidence.peer_review_fallback_pass_id = "root-pass-1"' ;;
+        *) return 2 ;;
+    esac
+    jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
+
+    if "$research_eval_runner" --responses "$eval_dir" --skill assistant-research >"$eval_output" 2>&1; then
+        return 1
+    fi
+
+    grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output" \
+        && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
+        && (grep -Eq 'structured_json_assertion_failures=[1-9]' "$eval_output" \
+            || grep -Eq 'forbidden_substring_hits=[1-9]' "$eval_output")
 }
 
 research_forbidden_response_is_rejected() {
@@ -343,7 +424,8 @@ if printf '%s\n' "$fallback_lens_schema" | grep -Eq -- 'name:[[:space:]]*dispatc
 fi
 
 peer_handoff_schema="$(awk '
-    /- name: orchestrator_to_research_peer_reviewer/ { active = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
     active { print }
     active && /^  - name: / && $0 !~ /orchestrator_to_research_peer_reviewer/ { exit }
 ' "$research_handoffs")"
@@ -404,7 +486,8 @@ for term in \
     fi
 done
 peer_handoff_schema="$(awk '
-    /- name: orchestrator_to_research_peer_reviewer/ { active = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
     active { print }
     active && /^  - name: / && $0 !~ /orchestrator_to_research_peer_reviewer/ { exit }
 ' "$research_handoffs")"
@@ -470,7 +553,8 @@ fi
 test_start "assistant-research source-unavailable lens returns stay complete and peer workers remain orchestration-blind"
 source_return_missing=()
 lens_handoff_schema="$(awk '
-    /- name: orchestrator_to_lens_researcher/ { active = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_lens_researcher/ { active = 1 }
     active { print }
     active && /^  - name: / && $0 !~ /orchestrator_to_lens_researcher/ { exit }
 ' "$research_handoffs")"
@@ -490,7 +574,8 @@ if printf '%s\n' "$lens_result_schema" | grep -A4 -E '^              - name: sou
     source_return_missing+=("lens_result follow-up sources_or_verified_urls must allow empty inference/unresolved evidence")
 fi
 peer_handoff_schema="$(awk '
-    /- name: orchestrator_to_research_peer_reviewer/ { active = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
     active { print }
     active && /^  - name: / && $0 !~ /orchestrator_to_research_peer_reviewer/ { exit }
 ' "$research_handoffs")"
@@ -561,12 +646,14 @@ for term in \
     fi
 done
 lens_handoff_schema="$(awk '
-    /- name: orchestrator_to_lens_researcher/ { active = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_lens_researcher/ { active = 1 }
     active { print }
     active && /^  - name: / && $0 !~ /orchestrator_to_lens_researcher/ { exit }
 ' "$research_handoffs")"
 peer_handoff_schema="$(awk '
-    /- name: orchestrator_to_research_peer_reviewer/ { active = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
     active { print }
     active && /^return_validation:/ { exit }
 ' "$research_handoffs")"
@@ -798,7 +885,8 @@ process_evidence_schema="$(awk '
     active && /^  - name: conflicts$/ { exit }
 ' "$research_output")"
 peer_handoff_return="$(awk '
-    /- name: orchestrator_to_research_peer_reviewer/ { active = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
     active && /    return_fields:/ { in_return = 1 }
     in_return { print }
     active && /^return_validation:/ { exit }
@@ -879,7 +967,8 @@ output_peer_schema="$(awk '
     active && /^  - name: five_lens_process_evidence$/ { exit }
 ' "$research_output")"
 peer_return_schema="$(awk '
-    /- name: orchestrator_to_research_peer_reviewer/ { active = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
     active && /    return_fields:/ { in_return = 1 }
     in_return { print }
     active && /^return_validation:/ { exit }
@@ -914,7 +1003,8 @@ fi
 test_start "assistant-research freezes content-addressed ordered lens packets"
 immutable_packet_missing=()
 lens_handoff_schema="$(awk '
-    /- name: orchestrator_to_lens_researcher/ { active = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_lens_researcher/ { active = 1 }
     active { print }
     active && /^  - name: orchestrator_to_research_peer_reviewer/ { exit }
 ' "$research_handoffs")"
@@ -953,6 +1043,8 @@ if ! jq -e '
     and any(.[]; .operator == "array_object_values_exact" and .path == ["five_lens_process_evidence","lens_dispatches"])
     and any(.[]; . == {"operator":"equals","path":["peer_review","verdict"],"expected":"revise"})
     and any(.[]; . == {"operator":"equals","path":["peer_review","required_revisions"],"expected":["downgrade unsupported claim"]})
+    and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_review_execution_mode"],"other_path":["peer_review","peer_review_execution_mode"]})
+    and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_reviewer_identity"],"other_path":["peer_review","peer_reviewer_identity"]})
     and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_review_revision_disposition_id"],"other_path":["peer_review","revision_disposition_id"]})
 ' <<<"$delegated_assertions" >/dev/null; then
     structured_oracle_missing+=("delegated structured JSON assertions for dispatch, fallback absence, and revision identity")
@@ -973,15 +1065,28 @@ if [[ "${#structured_oracle_missing[@]}" -eq 0 ]] \
     && research_structured_mutation_is_rejected revision_disposition_id_mismatch \
     && research_structured_mutation_is_rejected accepted_with_unresolved_revisions \
     && research_structured_mutation_is_rejected revise_without_required_revisions \
-    && research_structured_mutation_is_rejected blocked_presentation; then
+    && research_structured_mutation_is_rejected blocked_presentation \
+    && research_structured_mutation_is_rejected peer_execution_mode_mismatch \
+    && research_structured_mutation_is_rejected peer_identity_mismatch; then
     pass
 else
     fail "assistant-research delegated structured eval oracle is incomplete or accepts a process-evidence mutation: ${structured_oracle_missing[*]}"
 fi
 
+test_start "assistant-research eval structurally validates sequential fallback without native leakage"
+if research_fallback_structured_mutation_is_rejected false_return_validated \
+    && research_fallback_structured_mutation_is_rejected packet_binding_mismatch \
+    && research_fallback_structured_mutation_is_rejected fallback_dispatch_identity_leakage \
+    && research_fallback_structured_mutation_is_rejected peer_fallback_reuses_lens_pass; then
+    pass
+else
+    fail "assistant-research fallback structured eval oracle accepts invalid fallback evidence"
+fi
+
 test_start "assistant-research scopes peer follow-up validation to the peer handoff subtree"
 peer_lens_schema="$(awk '
-    /- name: orchestrator_to_research_peer_reviewer/ { peer = 1 }
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { peer = 1 }
     peer && /- name: validated_lens_results/ { results = 1 }
     results { print }
     results && /^      - name: findings/ { exit }
@@ -1010,6 +1115,94 @@ if peer_follow_up_shape_complete "$peer_follow_up_schema" \
     pass
 else
     fail "assistant-research peer follow-up schema is not scoped or deletion of its nested sources field is accepted"
+fi
+
+test_start "assistant-research PR-53 handoff recovery, bindings, and fallback oracle stay strict"
+pr53_missing=()
+lens_return_schema="$(printf '%s\n' "$lens_handoff_schema" | awk '/return_fields:/ { active = 1 } active { print }')"
+if ! printf '%s\n' "$lens_return_schema" | grep -Fq -- '{name: packet_set_id, type: string, required: true}'; then
+    pr53_missing+=("lens return packet_set_id")
+fi
+output_purpose_schema="$(awk '
+    /- name: output_purpose/ { active = 1 }
+    active { print }
+    active && /^  - name: / && $0 !~ /output_purpose/ { exit }
+' "$FRAMEWORK_DIR/skills/assistant-research/contracts/input.yaml")"
+if ! printf '%s\n' "$output_purpose_schema" | grep -Fq -- 'on_missing: infer' \
+    || ! printf '%s\n' "$output_purpose_schema" | grep -Fq -- 'user research question'; then
+    pr53_missing+=("safe output_purpose inference")
+fi
+peer_context_schema="$(awk '
+    /^handoffs:/ { handoffs = 1 }
+    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
+    active { print }
+    active && /^    return_fields:/ { exit }
+' "$research_handoffs")"
+if ! printf '%s\n' "$peer_context_schema" | awk '/name: verification_gaps/ { active = 1 } active { print } active && /name: high_stakes_context/ { exit }' \
+    | grep -Fq -- 'Non-empty whenever verified_source_evidence is empty'; then
+    pr53_missing+=("verification gaps for empty evidence")
+fi
+if ! grep -Fq -- 'id: research-common-dispatch-protocol' "$research_index" \
+    || ! grep -Fq -- 'id: research-selected-return-validation' "$research_index"; then
+    pr53_missing+=("selectable handoff protocol bundles")
+fi
+for binding in \
+    'peer_review.peer_review_assignment_id' \
+    'peer_review.peer_review_execution_mode' \
+    'peer_review.peer_reviewer_identity' \
+    'peer_review.peer_review_fallback_pass_id'; do
+    if ! printf '%s\n' "$process_evidence_schema" | grep -Fq -- "Exactly equals $binding"; then
+        pr53_missing+=("process peer binding: $binding")
+    fi
+done
+fallback_assertions="$(jq -c '.cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence") | .machine_expectations.structured_json_assertions // []' "$research_evals")"
+if ! jq -e '
+    length >= 10
+    and any(.[]; . == {"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"sequential_fallback"})
+    and any(.[]; .operator == "array_object_values_exact" and .path == ["five_lens_process_evidence","fallback_lens_passes"])
+    and any(.[]; . == {"operator":"path_absent","path":["five_lens_process_evidence","lens_dispatches"]})
+    and any(.[]; . == {"operator":"path_absent","path":["five_lens_process_evidence","wave_coverage"]})
+    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_pass_id"]})
+    and any(.[]; . == {"operator":"equals","path":["five_lens_process_evidence","peer_review_fallback_pass_id"],"expected":"peer-root-pass-1"})
+    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","lens_fallback_evidence","detail"]})
+    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","lens_fallback_evidence","evidence_ref"]})
+    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_evidence","detail"]})
+    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_evidence","evidence_ref"]})
+    and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_review_fallback_pass_id"],"other_path":["peer_review","peer_review_fallback_pass_id"]})
+' <<<"$fallback_assertions" >/dev/null; then
+    pr53_missing+=("structured sequential fallback oracle")
+fi
+if ! printf '%s\n' "$process_evidence_schema" | grep -Fq -- 'distinct from every fallback_lens_passes.root_pass_id'; then
+    pr53_missing+=("peer fallback pass must differ from every lens root pass")
+fi
+for handoff_name in orchestrator_to_lens_researcher orchestrator_to_research_peer_reviewer; do
+    handoff_slice="$(awk -v handoff_name="$handoff_name" '
+        /^handoffs:/ { handoffs = 1 }
+        handoffs && $0 == "  - name: " handoff_name { active = 1 }
+        active { print }
+        active && /^  - name: / && $0 != "  - name: " handoff_name { exit }
+    ' "$research_handoffs")"
+    if ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'on_missing_field:'; then
+        pr53_missing+=("$handoff_name actionable on_missing_field")
+    elif [[ "$handoff_name" == "orchestrator_to_lens_researcher" ]] \
+        && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'same LensResearcher assignment once' \
+            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'complete lens stage' \
+            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'fallback or block'); then
+        pr53_missing+=("lens on_missing_field must cap retry then fallback-or-block")
+    elif [[ "$handoff_name" == "orchestrator_to_research_peer_reviewer" ]] \
+        && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'one peer correction' \
+            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'reviewer-only fallback' \
+            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'or block'); then
+        pr53_missing+=("peer on_missing_field must cap correction then reviewer fallback-or-block")
+    fi
+done
+if ! jq -e '.cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence") | .machine_expectations.forbidden_substrings | index("dispatch_identity")' "$research_evals" >/dev/null; then
+    pr53_missing+=("fallback raw dispatch identity rejection")
+fi
+if [[ "${#pr53_missing[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research PR-53 contract repair missing: ${pr53_missing[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

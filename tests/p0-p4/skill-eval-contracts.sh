@@ -383,6 +383,41 @@ p0p4_write_assistant_research_delegated_response() {
     ' >"$response_path"
 }
 
+p0p4_write_assistant_research_fallback_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    jq -n --arg summary "$summary" '
+        {
+          summary: $summary,
+          peer_review: {
+            peer_review_execution_mode: "sequential_fallback",
+            peer_review_assignment_id: "fallback-peer-assignment-1",
+            peer_review_fallback_pass_id: "peer-root-pass-1",
+            status: "DONE",
+            verdict: "accepted",
+            required_revisions: []
+          },
+          five_lens_process_evidence: {
+            lens_execution_mode: "sequential_fallback",
+            peer_review_execution_mode: "sequential_fallback",
+            reduced_independence: true,
+            fallback_lens_passes: [
+              {lens_kind: "practitioner", assignment_id: "fallback-assignment-1", packet_id: "packet-practitioner", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:practitioner", root_pass_id: "root-pass-1", return_validated: true},
+              {lens_kind: "academic_or_technical_expert", assignment_id: "fallback-assignment-2", packet_id: "packet-academic", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:academic", root_pass_id: "root-pass-2", return_validated: true},
+              {lens_kind: "skeptic", assignment_id: "fallback-assignment-3", packet_id: "packet-skeptic", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:skeptic", root_pass_id: "root-pass-3", return_validated: true},
+              {lens_kind: "economist_or_incentives_analyst", assignment_id: "fallback-assignment-4", packet_id: "packet-economist", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:economist", root_pass_id: "root-pass-4", return_validated: true},
+              {lens_kind: "historian_or_pattern_matcher", assignment_id: "fallback-assignment-5", packet_id: "packet-historian", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:historian", root_pass_id: "root-pass-5", return_validated: true}
+            ],
+            peer_review_assignment_id: "fallback-peer-assignment-1",
+            peer_review_fallback_pass_id: "peer-root-pass-1",
+            lens_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "dispatch unavailable", evidence_ref: "spawn-error-1"},
+            peer_review_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "peer dispatch unavailable", evidence_ref: "peer-spawn-error-1"}
+          }
+        }
+    ' >"$response_path"
+}
+
 p0p4_write_skill_eval_responses() {
     local output_dir="$1"
     local omit_skill="${2:-}"
@@ -662,6 +697,9 @@ p0p4_write_skill_eval_responses() {
                 case "$skill_name:$id" in
                     assistant-research:five-lens-decision-briefing-uses-storm-style-workflow)
                         p0p4_write_assistant_research_delegated_response "$response_path" "$required_summary"
+                        ;;
+                    assistant-research:five-lens-sequential-fallback-preserves-process-evidence)
+                        p0p4_write_assistant_research_fallback_response "$response_path" "$required_summary"
                         ;;
                     assistant-thinking:feature-preparation-candidates-require-evidence)
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["Existing observable effects require workflow evidence before promotion."], recommendation: "Keep the concern as a candidate and complete feature preparation.", confidence: "medium", gaps_or_assumptions: ["No canonical feature-preparation evidence row is available."], evidence_or_observations: ["ACTIVE code and behavioral tests identify selection, highlight, and viewport focus."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus unless evidence authorizes a change", promotion_status: "requires_feature_preparation_evidence", rationale: "Implementation and behavioral tests must be inspected before promotion."}]}' >"$response_path"
