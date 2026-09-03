@@ -60,10 +60,22 @@ Orchestrator alone synthesizes validated results; a separate
 ResearchPeerReviewer critiques that initial synthesis.
 
 Freeze an ordered five-entry packet manifest: each entry has `packet_id`, its
-exact LensKind, and a `content_digest` over the canonical complete frozen
-packet. `packet_set_digest` binds that ordered manifest. Every delegated
+exact LensKind, and a `content_digest`. A ContentDigest is `sha256:` plus 64
+lowercase hex SHA-256 over the exact UTF-8 bytes produced by RFC 8785 JSON
+Canonicalization Scheme (JCS), with no trailing newline. Packet preimages include every
+packet field except `content_digest`; packet-set preimage is its ordered
+`packet_id`, `lens_kind`, `content_digest` manifest. Every delegated
 dispatch or fallback root pass repeats the matching packet content digest; any
 mismatch invalidates the complete lens stage.
+
+After validating a usable return, recompute `lens_result_digest` over the RFC
+8785 JCS bytes of `lens_result` only. Carry its LensKind, assignment ID, and digest unchanged into
+an authoritative five-entry `accepted_lens_results` ledger that exactly equals
+the peer-review input. Carry the same identity into the process record,
+perspective scan, and question trace;
+the presented fields must be exact projections of that accepted result. Preserve
+valid empty source arrays for inference-only or unresolved results rather than
+inventing a source marker.
 
 This skill instruction sets `subagent_policy_state=delegation_triggered` and
 `subagent_execution_mode=delegated` without a separate permission question.
@@ -85,6 +97,12 @@ sources, and 10 minutes per lens (15/20/50 overall); extensive allows 5/6/15
 saturation or its hard ceiling. When a limit is exhausted, record gaps and
 downgrade confidence instead of extending the search. These five-lens ceilings
 do not change proportional direct `source_research` behavior.
+Record SearchResourceUsage for every lens and the root: actual queries/sources,
+elapsed minutes, termination state, exhausted dimensions, and downgrade
+evidence. Summed query/source uses must match root totals, while root elapsed is
+observed wall-clock. It is at least the sum of sequential fallback pass times,
+or the sum of each delegated wave's maximum member time. Usable output cannot exceed a ceiling; reaching one records
+an explicit gap and LOW lens confidence, while an over-ceiling run blocks.
 
 ## Candidate mechanisms
 
@@ -97,6 +115,13 @@ validation method.
 ## Mandatory: URL Verification
 **Every URL presented to the user MUST be verified.** See `url-verify.md`.
 AI agents hallucinate plausible-looking URLs routinely. Never present an unverified URL.
+Evidence that is verifiable only through a repository, authenticated source, or
+offline authoritative source remains valid without a URL. Record its method and
+a stable repository-relative locator, opaque connector/record identifier, or
+bibliographic citation. A public URL must be globally routable and successfully
+checked; reserved domains and private, loopback, link-local, or alternate-encoded
+addresses are not public evidence. Never expose credentials, tokens, PII,
+parent traversal, or absolute host paths in that reference.
 
 ## Mandatory: Confidence Scoring
 Every research finding gets a confidence level:

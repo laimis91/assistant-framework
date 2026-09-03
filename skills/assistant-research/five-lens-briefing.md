@@ -56,7 +56,11 @@ distinct model identities: one model may serve multiple isolated assignments.
 
 The packet set includes an ordered five-entry manifest. Each entry binds
 `packet_id`, its exact LensKind, and a `content_digest` over the canonical
-complete frozen packet; `packet_set_digest` binds those ordered contents.
+complete frozen packet. ContentDigest is `sha256:` plus 64 lowercase hex
+SHA-256 over the exact UTF-8 bytes produced by RFC 8785 JSON Canonicalization
+Scheme (JCS), with no trailing newline; packet preimage excludes `content_digest` and
+`packet_set_digest` applies the same construction to the ordered manifest array
+whose entries contain exactly `packet_id`, `lens_kind`, and `content_digest`.
 Every delegated dispatch or fallback root pass repeats the matching packet
 content digest. A changed packet body or digest mismatch invalidates the entire
 lens stage.
@@ -65,6 +69,21 @@ Validate each return against its frozen assignment before accepting it. One
 same-assignment schema-correction retry is allowed. If the lens stage still
 fails, rerun the complete lens stage through evidenced sequential fallback or
 block—never present a partial delegated/root mixture as independent research.
+For every usable return, recompute `lens_result_digest` over the RFC 8785 JCS
+bytes of `lens_result` only. Retain the five authoritative bodies in
+`accepted_lens_results`, exactly equal to the peer input. The process record,
+perspective scan, and question trace must repeat the matching LensKind, assignment ID, and digest,
+and their presented lens fields must exactly project that accepted result,
+including an empty source array when inference-only or unresolved evidence has
+a recorded gap.
+
+Record actual query/source uses, elapsed minutes, termination state, exhausted
+dimensions, and downgrade evidence for every lens plus overall query/source
+totals and observed wall-clock elapsed. A usable record never exceeds a
+configured ceiling. Sequential fallback wall-clock is at least the sum of pass
+times; delegated wall-clock is at least the sum of each wave's maximum member
+time. Ceiling exhaustion requires an explicit gap and LOW lens
+confidence; an over-ceiling run blocks.
 
 Sequential fallback is only for explicit opt-out, real failed/unavailable
 mechanism, supported configuration proof, or exact policy block. It still runs
@@ -94,7 +113,8 @@ Analyze the topic through five lenses. Use real sources where available; when a 
 For each lens produce:
 
 - core position in 2-3 sentences
-- strongest evidence or source class
+- exact sources or verified URLs from the accepted lens result; preserve an
+  empty array for inference-only or unresolved evidence with a recorded gap
 - likely blind spot
 - one unique insight no other lens supplied
 - confidence level and source notes
@@ -111,6 +131,13 @@ For each lens:
 - retain every material follow-up prompted by the first answer, contradiction, or gap; do not impose a numeric cap
 - for each follow-up, record its question, answer or gap, sources/verified URLs, and evidence status; when no material follow-up exists, record one typed `none_needed` decision
 - label whether each answer is source-backed, inference-only, or unresolved
+
+Decision-critical evidence may use a verified public URL, repository-relative
+locator, opaque authenticated connector/record identifier, or offline
+bibliographic citation. Non-URL methods do not fabricate a URL. Public URLs are
+successfully checked and globally routable, never reserved-domain, private,
+loopback, link-local, or alternate-encoded addresses. Keep every reference free
+of credentials, tokens, PII, parent traversal, and absolute host paths.
 
 Do not synthesize from a lens until its key question and at least one answer/gap entry are recorded. If source access is unavailable, keep the question trace and mark answers as inference-only or unresolved rather than pretending they are source-backed.
 

@@ -1,0 +1,241 @@
+research_jcs_node() {
+    local operation="$1"
+    shift
+
+    node - "$operation" "$@" <<'NODE'
+const crypto = require("crypto");
+const fs = require("fs");
+const net = require("net");
+const operation = process.argv[2];
+const args = process.argv.slice(3);
+const lenses = ["practitioner", "academic_or_technical_expert", "skeptic", "economist_or_incentives_analyst", "historian_or_pattern_matcher"];
+function assertUnicodeScalars(value) {
+  if (typeof value === "string") {
+    for (let index = 0; index < value.length; index += 1) {
+      const codeUnit = value.charCodeAt(index);
+      if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+        const next = value.charCodeAt(index + 1);
+        if (!Number.isInteger(next) || next < 0xdc00 || next > 0xdfff) throw new Error("JCS rejects an unpaired high surrogate");
+        index += 1;
+      } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+        throw new Error("JCS rejects an unpaired low surrogate");
+      }
+    }
+  } else if (Array.isArray(value)) {
+    value.forEach(assertUnicodeScalars);
+  } else if (value && typeof value === "object") {
+    Object.entries(value).forEach(([key, child]) => { assertUnicodeScalars(key); assertUnicodeScalars(child); });
+  }
+}
+function jcs(value) {
+  if (Array.isArray(value)) return `[${value.map(jcs).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${jcs(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function canonical(value) { assertUnicodeScalars(value); return jcs(value); }
+function digest(value) { return `sha256:${crypto.createHash("sha256").update(canonical(value), "utf8").digest("hex")}`; }
+function equal(left, right) { return canonical(left) === canonical(right); }
+const lensResultFields = ["core_position", "lens_question", "answer_or_gap", "sources_or_verified_urls", "follow_ups", "evidence_status", "likely_blind_spot", "unique_insight", "confidence", "gaps"];
+function lensResultBody(result) { return Object.fromEntries(lensResultFields.map(key => [key, result[key]])); }
+function usage(mode, lens) {
+  if (mode === "delegated") return {actual_queries: 3, actual_sources: 4, elapsed_minutes: 10, termination_state: "saturation", exhausted_dimensions: [], confidence_downgraded: false};
+  const gap = `Query, source, and time ceilings reached before confirming ${lens} coverage.`;
+  return {actual_queries: 5, actual_sources: 6, elapsed_minutes: 15, termination_state: "ceiling_exhausted", exhausted_dimensions: ["queries", "sources", "elapsed_time"], exhaustion_gap: gap, confidence_downgraded: true};
+}
+function lensResult(mode, lens) {
+  const fallback = mode === "sequential_fallback";
+  const gap = `Query, source, and time ceilings reached before confirming ${lens} coverage.`;
+  return {
+    core_position: fallback ? `Unresolved position for ${lens}` : `Position for ${lens}`,
+    lens_question: `Question for ${lens}`,
+    answer_or_gap: fallback ? `Unresolved answer for ${lens}` : `Answer for ${lens}`,
+    sources_or_verified_urls: fallback ? [] : [`source:research-corpus:${lens}`],
+    follow_ups: [{decision: "none_needed", answer_or_gap: fallback ? `No additional follow-up after ceilings for ${lens}` : `No material follow-up for ${lens}`, sources_or_verified_urls: fallback ? [] : [`source:research-corpus:${lens}`], evidence_status: fallback ? "unresolved" : "source_backed"}],
+    evidence_status: fallback ? "unresolved" : "source_backed",
+    likely_blind_spot: fallback ? `Unverified source coverage for ${lens}` : `Blind spot for ${lens}`,
+    unique_insight: fallback ? `Fallback insight for ${lens}` : `Insight for ${lens}`,
+    confidence: fallback ? "low" : "medium",
+    gaps: fallback ? [gap] : []
+  };
+}
+function packet(mode, lens, ordinal) {
+  return {packet_id: `packet-${["practitioner", "academic", "skeptic", "economist", "historian"][ordinal]}`, packet_set_id: mode === "delegated" ? "packet-set-1" : "fallback-packet-set-1", question: "Should we adopt the tool?", tier: "extensive", user_role_or_goal: "architecture decision", output_purpose: "Answer the research question", known_context: ["local fixture"], evidence_budget: "six sources", search_resource_budget: {per_lens_max_queries: 5, per_lens_max_sources: 6, per_lens_max_minutes: 15, overall_max_queries: 25, overall_max_sources: 30, overall_max_minutes: 75, stop_condition: "saturation_or_hard_ceiling"}, source_policy: "public sources", isolation_policy: "sibling blind", lens_kind: lens, packet_frozen_at: "2026-09-03T10:00:00Z"};
+}
+function build(mode, report) {
+  const isFallback = mode === "sequential_fallback";
+  const packets = lenses.map((lens, index) => { const value = packet(mode, lens, index); return {...value, content_digest: digest(value)}; });
+  const manifest = packets.map(({packet_id, lens_kind, content_digest}) => ({packet_id, lens_kind, content_digest}));
+  const records = lenses.map((lens, index) => {
+    const assignment_id = isFallback ? `fallback-assignment-${index + 1}` : `assignment-${index + 1}`;
+    const result = lensResult(mode, lens);
+    const resultDigest = digest(result);
+    const resourceUsage = usage(mode, lens);
+    const common = {lens_kind: lens, assignment_id, packet_id: packets[index].packet_id, packet_set_id: packets[index].packet_set_id, packet_content_digest: packets[index].content_digest, lens_result_digest: resultDigest, search_resource_usage: resourceUsage, return_validated: true};
+    return isFallback ? {...common, root_pass_id: `root-pass-${index + 1}`} : {...common, dispatch_identity: `lens-native-${index + 1}`, wave_id: "wave-1"};
+  });
+  const overall = isFallback ? {actual_queries: 25, actual_sources: 30, elapsed_minutes: 75, termination_state: "ceiling_exhausted", exhausted_dimensions: ["queries", "sources", "elapsed_time"], exhaustion_gap: "Overall ceilings reached before cross-lens verification.", confidence_downgraded: true} : {actual_queries: 15, actual_sources: 20, elapsed_minutes: 10, termination_state: "saturation", exhausted_dimensions: [], confidence_downgraded: false};
+  const accepted_lens_results = records.map(record => { const result = lensResult(mode, record.lens_kind); return {lens_kind: record.lens_kind, assignment_id: record.assignment_id, lens_result_digest: record.lens_result_digest, ...result}; });
+  const process = {lens_execution_mode: mode, peer_review_execution_mode: mode, subagent_policy_state: isFallback ? "subagents_unavailable" : "delegation_triggered", subagent_trigger_scope: isFallback ? undefined : ["five_lens_briefing"], reduced_independence: isFallback, frozen_packet_set: {packet_set_id: packets[0].packet_set_id, packet_set_digest: digest(manifest), packet_ids: packets.map(p => p.packet_id), packet_manifest_order: packets.map(p => p.packet_id), packet_manifest: manifest, packet_set_frozen_at: "2026-09-03T10:00:00Z", pre_dispatch_record_id: "pre-dispatch-1", first_lens_execution_at: "2026-09-03T10:01:00Z", first_lens_execution_evidence_ref: "execution-log-1"}, frozen_assignment_packet_ids: packets.map(p => p.packet_id), accepted_lens_results, search_resource_budget: packets[0].search_resource_budget, overall_resource_usage: overall, root_synthesis_ownership: "orchestrator_only"};
+  if (isFallback) Object.assign(process, {fallback_lens_passes: records, peer_review_assignment_id: "fallback-peer-assignment-1", peer_review_fallback_pass_id: "peer-root-pass-1", lens_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "dispatch unavailable", evidence_ref: "spawn-error-1"}, peer_review_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "peer dispatch unavailable", evidence_ref: "peer-spawn-error-1"}});
+  else Object.assign(process, {lens_dispatches: records, wave_coverage: [{wave_id: "wave-1", capacity: 5, lens_kinds: lenses}], peer_review_assignment_id: "peer-assignment-1", peer_reviewer_identity: "peer-native-1", peer_review_revision_disposition_id: "revision-closure-1"});
+  const peerUsableFields = {confidence_scores: ["medium"], weakest_claim: "The evidence base is limited to the frozen fixture.", bias_or_lens_dominance: "No lens dominates the root synthesis.", missing_sixth_perspective: "No additional perspective is required for this fixture.", falsification_test: "Compare against an independent source record.", revised_recommendation_if_needed: "Retain calibrated confidence.", evidence: [{source: "source:peer-review", detail: "Peer reviewed the accepted lens ledger.", evidence_status: "source_backed"}]};
+  const peer_review = isFallback ? {peer_review_execution_mode: mode, peer_review_assignment_id: "fallback-peer-assignment-1", peer_review_fallback_pass_id: "peer-root-pass-1", status: "DONE", verdict: "accepted", required_revisions: [], ...peerUsableFields} : {peer_review_execution_mode: mode, peer_review_assignment_id: "peer-assignment-1", peer_reviewer_identity: "peer-native-1", status: "DONE_WITH_CONCERNS", verdict: "revise", required_revisions: ["downgrade unsupported claim"], revision_disposition_id: "revision-closure-1", revision_disposition: [{required_revision: "downgrade unsupported claim", outcome: "claim_downgraded", closure_evidence: "claim confidence updated"}], ...peerUsableFields};
+  const perspective_scan = accepted_lens_results.map(result => ({lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, core_position: result.core_position, sources_or_verified_urls: result.sources_or_verified_urls, likely_blind_spot: result.likely_blind_spot, unique_insight: result.unique_insight, confidence: result.confidence}));
+  const question_trace = accepted_lens_results.map(result => ({lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, question: result.lens_question, answer: result.answer_or_gap, sources_or_verified_urls: result.sources_or_verified_urls, follow_ups: result.follow_ups, evidence_status: result.evidence_status}));
+  return {report, research_method: "five_lens_briefing", tier: "extensive", peer_review, five_lens_process_evidence: process, perspective_scan, question_trace, gaps: isFallback ? ["Overall ceilings left source confirmation unresolved."] : []};
+}
+function validate(response) {
+  const errors = [];
+  const expect = (condition, message) => { if (!condition) errors.push(message); };
+  const process = response.five_lens_process_evidence || {};
+  const mode = process.lens_execution_mode;
+  const records = mode === "delegated" ? process.lens_dispatches : process.fallback_lens_passes;
+  const budget = process.search_resource_budget || {};
+  expect(Array.isArray(records) && records.length === 5, "records:exact-five");
+  expect(mode === "delegated" || mode === "sequential_fallback", "process:execution-mode");
+  if (mode === "delegated") {
+    expect(!Object.hasOwn(process, "fallback_lens_passes"), "process:no-fallback-leakage");
+    expect(process.subagent_policy_state === "delegation_triggered" && Array.isArray(process.subagent_trigger_scope) && process.subagent_trigger_scope.length > 0 && process.root_synthesis_ownership === "orchestrator_only" && process.peer_review_execution_mode === response.peer_review?.peer_review_execution_mode && response.peer_review?.peer_review_execution_mode === "delegated" && response.peer_review?.peer_reviewer_identity === process.peer_reviewer_identity && response.peer_review?.verdict === "revise" && Array.isArray(response.peer_review?.required_revisions) && response.peer_review.required_revisions.length > 0 && response.peer_review?.revision_disposition_id === process.peer_review_revision_disposition_id, "peer:delegated-binding");
+  } else {
+    expect(!Object.hasOwn(process, "lens_dispatches") && !Object.hasOwn(process, "peer_reviewer_identity") && process.root_synthesis_ownership === "orchestrator_only" && response.peer_review?.peer_review_execution_mode === "sequential_fallback" && response.peer_review?.peer_review_fallback_pass_id === process.peer_review_fallback_pass_id && typeof process.lens_fallback_evidence?.detail === "string" && process.lens_fallback_evidence.detail.length > 0 && typeof process.lens_fallback_evidence?.evidence_ref === "string" && process.lens_fallback_evidence.evidence_ref.length > 0 && typeof process.peer_review_fallback_evidence?.evidence_ref === "string" && process.peer_review_fallback_evidence.evidence_ref.length > 0, "peer:fallback-binding");
+  }
+  const manifest = process.frozen_packet_set && process.frozen_packet_set.packet_manifest;
+  const packetById = new Map((manifest || []).map(packet => [packet.packet_id, packet]));
+  expect(Array.isArray(manifest) && manifest.length === 5 && equal(manifest.map(packet => packet.packet_id), process.frozen_packet_set?.packet_manifest_order) && equal(process.frozen_assignment_packet_ids, process.frozen_packet_set?.packet_manifest_order) && equal(process.frozen_packet_set?.packet_ids, process.frozen_packet_set?.packet_manifest_order) && !Object.hasOwn(process, "frozen_assignment_packets"), "packet-manifest:projection");
+  expect(process.frozen_packet_set && process.frozen_packet_set.packet_set_digest === digest(manifest), "packet-set:digest");
+  const seen = new Set(), identities = new Set(), rootPasses = new Set();
+  let querySum = 0, sourceSum = 0, elapsedSum = 0, elapsedMax = 0;
+  for (const record of records || []) {
+    const accepted = (process.accepted_lens_results || []).find(value => value.lens_kind === record.lens_kind);
+    const result = accepted && lensResultBody(accepted);
+    const usage = record.search_resource_usage;
+    const packet = packetById.get(record.packet_id);
+    expect(lenses.includes(record.lens_kind) && !seen.has(record.lens_kind), "record:lens-identity"); seen.add(record.lens_kind);
+    expect(record.return_validated === true, "record:return-validated");
+    if (mode === "delegated") { expect(typeof record.dispatch_identity === "string" && record.dispatch_identity.length > 0 && !identities.has(record.dispatch_identity), "record:dispatch-identity"); identities.add(record.dispatch_identity); }
+    else { expect(!Object.hasOwn(record, "dispatch_identity") && typeof record.root_pass_id === "string" && record.root_pass_id.length > 0 && !rootPasses.has(record.root_pass_id), "record:fallback-identity"); rootPasses.add(record.root_pass_id); }
+    expect(packet && typeof packet.content_digest === "string" && /^sha256:[0-9a-f]{64}$/.test(packet.content_digest), "packet:digest-format");
+    expect(record.packet_content_digest === packet?.content_digest, "packet:binding");
+    expect((process.accepted_lens_results || []).length === 5 && accepted && accepted.assignment_id === record.assignment_id && accepted.lens_result_digest === record.lens_result_digest && record.lens_result_digest === digest(result) && !Object.hasOwn(record, "accepted_worker_return"), "accepted-ledger:digest-and-projection");
+    const perspective = (response.perspective_scan || []).find(value => value.lens === record.lens_kind);
+    expect(perspective && perspective.assignment_id === record.assignment_id && perspective.lens_result_digest === record.lens_result_digest && perspective.core_position === result?.core_position && equal(perspective.sources_or_verified_urls, result?.sources_or_verified_urls) && perspective.likely_blind_spot === result?.likely_blind_spot && perspective.unique_insight === result?.unique_insight && perspective.confidence === result?.confidence, "perspective:projection");
+    const trace = (response.question_trace || []).find(value => value.lens === record.lens_kind);
+    expect(trace && trace.assignment_id === record.assignment_id && trace.lens_result_digest === record.lens_result_digest && trace.question === result?.lens_question && trace.answer === result?.answer_or_gap && equal(trace.sources_or_verified_urls, result?.sources_or_verified_urls) && equal(trace.follow_ups, result?.follow_ups) && trace.evidence_status === result?.evidence_status, "question-trace:projection");
+    const sourceReferenceValid = source => {
+      if (typeof source !== "string" || source.trim().length === 0) return false;
+      if (!/^https?:\/\//i.test(source)) return true;
+      let url; try { url = new URL(source); } catch { return false; }
+      const host = url.hostname.toLowerCase().replace(/\.$/, "");
+      if (url.protocol !== "https:" || url.username || url.password || !host || host === "localhost" || /(?:\.invalid|\.localhost|\.local|\.internal|\.test|\.example)$/.test(host) || /^[0-9]+$/.test(host)) return false;
+      if (net.isIP(host) === 4) {
+        const [a, b] = host.split(".").map(Number);
+        return !(a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && (b === 0 || b === 168 || b === 2)) || (a === 198 && (b === 18 || b === 19 || b === 51)) || (a === 203 && b === 0));
+      }
+      return !(net.isIP(host) === 6 && (host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") || host.startsWith("::ffff:")));
+    };
+    const sourcesValid = (status, sources, gaps, label) => {
+      const populated = Array.isArray(sources) && sources.length > 0;
+      expect(Array.isArray(sources) && sources.every(sourceReferenceValid) && (status !== "source_backed" || populated) && (populated || (Array.isArray(gaps) && gaps.length > 0)), label);
+    };
+    sourcesValid(result?.evidence_status, result?.sources_or_verified_urls, result?.gaps, "sources:accepted-result");
+    for (const followUp of result?.follow_ups || []) sourcesValid(followUp?.evidence_status, followUp?.sources_or_verified_urls, result?.gaps, "sources:follow-up");
+    const validUsage = usage && ["actual_queries","actual_sources","elapsed_minutes"].every(key => Number.isInteger(usage[key]) && usage[key] >= 0) && usage.actual_queries <= budget.per_lens_max_queries && usage.actual_sources <= budget.per_lens_max_sources && usage.elapsed_minutes <= budget.per_lens_max_minutes;
+    expect(validUsage, "usage:per-lens-ceiling");
+    const exhausted = usage?.termination_state === "ceiling_exhausted";
+    const complete = ["completed_scope", "saturation"].includes(usage?.termination_state);
+    const dimensions = usage?.exhausted_dimensions || [];
+    const dimensionCeilings = {queries: [usage?.actual_queries, budget.per_lens_max_queries], sources: [usage?.actual_sources, budget.per_lens_max_sources], elapsed_time: [usage?.elapsed_minutes, budget.per_lens_max_minutes]};
+    const dimensionsValid = dimensions.length === new Set(dimensions).size && dimensions.every(dimension => Object.hasOwn(dimensionCeilings, dimension));
+    expect(dimensionsValid && ((complete && dimensions.length === 0 && !usage?.exhaustion_gap && usage?.confidence_downgraded === false) || (exhausted && dimensions.length > 0 && dimensions.every(dimension => dimensionCeilings[dimension][0] === dimensionCeilings[dimension][1]) && typeof usage?.exhaustion_gap === "string" && usage.exhaustion_gap.length > 0 && usage.confidence_downgraded === true && result?.confidence === "low" && result?.gaps?.includes(usage.exhaustion_gap))), "usage:termination-truth-table");
+    querySum += usage?.actual_queries || 0; sourceSum += usage?.actual_sources || 0; elapsedSum += usage?.elapsed_minutes || 0; elapsedMax = Math.max(elapsedMax, usage?.elapsed_minutes || 0);
+  }
+  const assignments = new Set((Array.isArray(records) ? records : []).map(record => record?.assignment_id));
+  expect(assignments.size === lenses.length && !assignments.has(undefined), "record:unique-assignments");
+  const freeze = process.frozen_packet_set || {};
+  const freezeTimestamp = Date.parse(freeze.packet_set_frozen_at);
+  const firstLensTimestamp = Date.parse(freeze.first_lens_execution_at);
+  expect(typeof freeze.pre_dispatch_record_id === "string" && freeze.pre_dispatch_record_id.length > 0 && typeof freeze.first_lens_execution_evidence_ref === "string" && freeze.first_lens_execution_evidence_ref.length > 0 && Number.isFinite(freezeTimestamp) && Number.isFinite(firstLensTimestamp) && freezeTimestamp < firstLensTimestamp, "packet-freeze:proof");
+  const canonicalBudget = {standard: [3, 4, 10, 15, 20, 50], extensive: [5, 6, 15, 25, 30, 75], deep: [8, 10, 25, 40, 50, 125]}[response.tier];
+  const budgetValues = [budget.per_lens_max_queries, budget.per_lens_max_sources, budget.per_lens_max_minutes, budget.overall_max_queries, budget.overall_max_sources, budget.overall_max_minutes];
+  expect(Array.isArray(canonicalBudget) && equal(budgetValues, canonicalBudget) && budget.stop_condition === "saturation_or_hard_ceiling", "usage:canonical-budget");
+  let scheduleElapsedLowerBound = elapsedSum;
+  if (mode === "delegated") {
+    const waves = process.wave_coverage;
+    const coveredLenses = new Set(), waveIds = new Set();
+    let delegatedCriticalPath = 0;
+    expect(Array.isArray(waves) && waves.length > 0, "waves:present");
+    for (const wave of waves || []) {
+      const waveLenses = wave?.lens_kinds;
+      const waveValid = typeof wave?.wave_id === "string" && wave.wave_id.length > 0 && !waveIds.has(wave.wave_id) && Number.isInteger(wave.capacity) && wave.capacity >= 1 && Array.isArray(waveLenses) && waveLenses.length > 0 && waveLenses.length <= wave.capacity && waveLenses.length === new Set(waveLenses).size && waveLenses.every(lens => lenses.includes(lens) && !coveredLenses.has(lens));
+      expect(waveValid, "waves:coverage");
+      if (!waveValid) continue;
+      waveIds.add(wave.wave_id);
+      waveLenses.forEach(lens => coveredLenses.add(lens));
+      const waveRecords = (Array.isArray(records) ? records : []).filter(record => record.wave_id === wave.wave_id);
+      expect(equal(waveRecords.map(record => record.lens_kind), waveLenses), "waves:record-membership");
+      if (waveRecords.length === waveLenses.length) delegatedCriticalPath += Math.max(...waveRecords.map(record => record.search_resource_usage?.elapsed_minutes || 0));
+    }
+    expect(coveredLenses.size === lenses.length && lenses.every(lens => coveredLenses.has(lens)) && (Array.isArray(records) ? records : []).every(record => waveIds.has(record.wave_id)), "waves:exhaustive-record-coverage");
+    scheduleElapsedLowerBound = delegatedCriticalPath;
+  }
+  const overall = process.overall_resource_usage;
+  const overallDimensions = overall?.exhausted_dimensions || [];
+  const overallCeilings = {queries: [overall?.actual_queries, budget.overall_max_queries], sources: [overall?.actual_sources, budget.overall_max_sources], elapsed_time: [overall?.elapsed_minutes, budget.overall_max_minutes]};
+  const overallDimensionsValid = overallDimensions.length === new Set(overallDimensions).size && overallDimensions.every(dimension => Object.hasOwn(overallCeilings, dimension));
+  const overallComplete = ["completed_scope", "saturation"].includes(overall?.termination_state);
+  const overallExhausted = overall?.termination_state === "ceiling_exhausted";
+  const overallTruthTable = overallDimensionsValid && ((overallComplete && overallDimensions.length === 0 && !overall?.exhaustion_gap && overall?.confidence_downgraded === false) || (overallExhausted && overallDimensions.length > 0 && overallDimensions.every(dimension => overallCeilings[dimension][0] === overallCeilings[dimension][1]) && typeof overall?.exhaustion_gap === "string" && overall.exhaustion_gap.length > 0 && overall.confidence_downgraded === true));
+  expect(overall && [overall.actual_queries, overall.actual_sources, overall.elapsed_minutes].every(Number.isInteger) && overall.actual_queries >= 0 && overall.actual_sources >= 0 && overall.elapsed_minutes >= 0 && overall.actual_queries === querySum && overall.actual_sources === sourceSum && overall.actual_queries <= budget.overall_max_queries && overall.actual_sources <= budget.overall_max_sources && overall.elapsed_minutes >= scheduleElapsedLowerBound && overall.elapsed_minutes <= budget.overall_max_minutes && overallTruthTable, "usage:overall-sums-schedule-wall-clock-and-termination");
+  if (mode === "sequential_fallback") expect(!rootPasses.has(process.peer_review_fallback_pass_id), "peer:fallback-fresh-pass");
+  const peer = response.peer_review || {};
+  const usablePeer = ["DONE", "DONE_WITH_CONCERNS"].includes(peer.status);
+  const peerVerdictValid = (peer.status === "DONE" && peer.verdict === "accepted") || (peer.status === "DONE_WITH_CONCERNS" && ["accepted_with_concerns", "revise"].includes(peer.verdict)) || (["NEEDS_CONTEXT", "BLOCKED"].includes(peer.status) && peer.verdict === "blocked");
+  const peerUsableFields = ["confidence_scores", "weakest_claim", "bias_or_lens_dominance", "missing_sixth_perspective", "falsification_test", "revised_recommendation_if_needed", "evidence"];
+  const peerUsableComplete = peerUsableFields.every(field => Array.isArray(peer[field]) ? peer[field].length > 0 : typeof peer[field] === "string" && peer[field].length > 0);
+  const revisions = peer.required_revisions;
+  const revisionClosure = peer.revision_disposition;
+  const reviseClosureValid = peer.verdict !== "revise" || (Array.isArray(revisions) && revisions.length > 0 && typeof peer.revision_disposition_id === "string" && peer.revision_disposition_id.length > 0 && Array.isArray(revisionClosure) && revisionClosure.length === revisions.length && revisionClosure.every(item => revisions.includes(item?.required_revision) && ["applied", "claim_downgraded"].includes(item?.outcome) && typeof item?.closure_evidence === "string" && item.closure_evidence.length > 0));
+  expect(peerVerdictValid && (!usablePeer || (peerUsableComplete && Array.isArray(revisions) && (peer.verdict === "revise" ? revisions.length > 0 : revisions.length === 0))) && reviseClosureValid, "peer:status-and-revision-truth-table");
+  if (mode === "delegated") expect(!identities.has(peer.peer_reviewer_identity), "peer:distinct-from-lens-identities");
+  if (errors.length) { console.error([...new Set(errors)].join("\n")); return false; }
+  return true;
+}
+function refreshDerived(response) {
+  const process = response.five_lens_process_evidence || {};
+  const results = Array.isArray(process.accepted_lens_results) ? process.accepted_lens_results : [];
+  const records = process.lens_execution_mode === "delegated" ? process.lens_dispatches : process.fallback_lens_passes;
+  for (const result of results) {
+    result.lens_result_digest = digest(lensResultBody(result));
+    for (const record of records || []) if (record.lens_kind === result.lens_kind) { record.assignment_id = result.assignment_id; record.lens_result_digest = result.lens_result_digest; }
+  }
+  response.perspective_scan = results.map(result => ({lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, core_position: result.core_position, sources_or_verified_urls: result.sources_or_verified_urls, likely_blind_spot: result.likely_blind_spot, unique_insight: result.unique_insight, confidence: result.confidence}));
+  response.question_trace = results.map(result => ({lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, question: result.lens_question, answer: result.answer_or_gap, sources_or_verified_urls: result.sources_or_verified_urls, follow_ups: result.follow_ups, evidence_status: result.evidence_status}));
+  return response;
+}
+if (operation === "canonical") process.stdout.write(canonical(JSON.parse(args[0])));
+else if (operation === "digest") process.stdout.write(digest(JSON.parse(args[0])));
+else if (operation === "build") process.stdout.write(JSON.stringify(build(args[0], args[1])));
+else if (operation === "validate") process.exitCode = validate(JSON.parse(fs.readFileSync(args[0], "utf8"))) ? 0 : 1;
+else if (operation === "refresh") process.stdout.write(JSON.stringify(refreshDerived(JSON.parse(fs.readFileSync(args[0], "utf8")))));
+else throw new Error(`unknown research JCS operation: ${operation}`);
+NODE
+}
+
+research_jcs_canonical_json() { local json; json="$(cat)"; research_jcs_node canonical "$json"; }
+research_content_digest_json() { local json; json="$(cat)"; research_jcs_node digest "$json"; }
+research_response_oracle_is_valid() { research_jcs_node validate "$1"; }
+research_refresh_response_derivatives() { local response_path="$1"; research_jcs_node refresh "$response_path" >"$response_path.refresh" && mv "$response_path.refresh" "$response_path"; }
+
+write_schema_valid_five_lens_eval_response() {
+    local mode="$1"
+    local response_path="$2"
+    local case_id report
+
+    if [[ "$mode" == "delegated" ]]; then
+        case_id="five-lens-decision-briefing-uses-storm-style-workflow"
+    else
+        case_id="five-lens-sequential-fallback-preserves-process-evidence"
+    fi
+    report="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings | join("\\n")' "$research_evals")"
+    research_jcs_node build "$mode" "$report" >"$response_path"
+}

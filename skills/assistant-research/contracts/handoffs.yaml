@@ -6,6 +6,12 @@ contract: handoffs
 skill: assistant-research
 
 semantic_types:
+  - name: ContentDigest
+    kind: value_object
+    description: "`sha256:` plus 64 lowercase hexadecimal SHA-256 characters computed over the exact UTF-8 bytes produced by RFC 8785 JSON Canonicalization Scheme (JCS). JCS supplies deterministic object-key ordering, array preservation, string escaping, Unicode handling, number serialization, and whitespace elimination; no trailing newline is hashed."
+  - name: SearchResourceUsage
+    kind: value_object
+    description: "Non-negative actual query/source counts, elapsed minutes, termination state, exhausted dimensions, exhaustion gap, and confidence-downgrade evidence measured against SearchResourceBudget ceilings. Overall elapsed is observed process wall-clock: at least the sum of sequential root-pass elapsed values, or at least the sum of the maximum lens elapsed in each ordered delegated wave."
   - name: LensKind
     kind: closed_enum
     values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]
@@ -67,10 +73,10 @@ handoffs:
         type: object
         required: true
         description: "Immutable FrozenPacketSet shared by every lens assignment before dispatch."
-        validation: "Contains exactly five packet IDs, an ordered packet manifest, and a digest over its ordered manifest contents recorded before any lens execution; packet_set_frozen_at precedes first_lens_execution_at recorded by process evidence."
+        validation: "Contains exactly five packet IDs and one ordered manifest entry per LensKind. packet_set_digest is ContentDigest over the RFC 8785 JCS bytes of the JSON array of manifest objects containing exactly packet_id, lens_kind, and content_digest in packet_manifest_order; packet_set_frozen_at precedes first_lens_execution_at recorded by process evidence."
         object_fields:
           - {name: packet_set_id, type: string, required: true}
-          - {name: packet_set_digest, type: string, required: true}
+          - {name: packet_set_digest, type: string, required: true, validation: "ContentDigest over the ordered packet_manifest preimage; never includes packet_set_digest itself."}
           - {name: packet_ids, type: "string[]", required: true, min_items: 5, max_items: 5}
           - {name: packet_manifest_order, type: "string[]", required: true, min_items: 5, max_items: 5}
           - name: packet_manifest
@@ -78,7 +84,7 @@ handoffs:
             required: true
             min_items: 5
             max_items: 5
-            validation: "Ordered five-entry manifest has packet_id, exact LensKind, and content_digest over each canonical complete frozen packet."
+            validation: "Ordered entries bind packet_id, exact LensKind, and the matching frozen packet ContentDigest."
             object_fields:
               - {name: packet_id, type: string, required: true}
               - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
@@ -89,11 +95,11 @@ handoffs:
         type: object
         required: true
         description: "FrozenLensAssignmentPacket containing only common scope and this assigned LensKind."
-        validation: "Immutable before first dispatch; excludes sibling results, prior waves, contradiction_map, synthesis_briefing, peer_review, and recommendation."
+        validation: "Immutable before first dispatch; excludes sibling results, prior waves, contradiction_map, synthesis_briefing, peer_review, and recommendation. content_digest is ContentDigest over the RFC 8785 JCS bytes of a JSON object containing exactly packet_id, packet_set_id, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, isolation_policy, lens_kind, and packet_frozen_at; it excludes content_digest itself."
         object_fields:
           - {name: packet_id, type: string, required: true}
           - {name: packet_set_id, type: string, required: true}
-          - {name: content_digest, type: string, required: true, description: "Digest of this canonical complete frozen packet; matches its packet_manifest entry."}
+          - {name: content_digest, type: string, required: true, description: "Non-self-referential ContentDigest of the exact packet preimage; matches its packet_manifest entry.", validation: "Uses the ContentDigest format and excludes this field from its preimage."}
           - {name: question, type: string, required: true}
           - {name: tier, type: enum, required: true, enum_values: [standard, extensive, deep]}
           - {name: user_role_or_goal, type: string, required: true}
@@ -142,6 +148,19 @@ handoffs:
       - {name: packet_id, type: string, required: true}
       - {name: packet_set_id, type: string, required: true}
       - {name: packet_content_digest, type: string, required: true}
+      - {name: lens_result_digest, type: string, required: conditional, condition: "status in [DONE, DONE_WITH_CONCERNS]", validation: "ContentDigest over the RFC 8785 JCS bytes of lens_result only; lens_result contains no digest field. It must be recomputed before the return is accepted."}
+      - name: search_resource_usage
+        type: object
+        required: true
+        validation: "Actuals are non-negative. completed_scope and saturation remain within matching per-lens ceilings. ceiling_exhausted equals at least one ceiling and requires non-empty exhausted_dimensions, exhaustion_gap, confidence_downgraded=true, lens_result.confidence=low, and that gap in lens_result.gaps. over_ceiling is invalid for a usable return and requires status=BLOCKED with typed blocker evidence."
+        object_fields:
+          - {name: actual_queries, type: int, required: true}
+          - {name: actual_sources, type: int, required: true}
+          - {name: elapsed_minutes, type: int, required: true}
+          - {name: termination_state, type: enum, required: true, enum_values: [completed_scope, saturation, ceiling_exhausted, blocked, over_ceiling]}
+          - {name: exhausted_dimensions, type: "string[]", required: true, validation: "Unique subset of [queries, sources, elapsed_time]; non-empty for ceiling_exhausted or over_ceiling and empty for completed_scope or saturation."}
+          - {name: exhaustion_gap, type: string, required: conditional, condition: "termination_state in [ceiling_exhausted, over_ceiling]"}
+          - {name: confidence_downgraded, type: boolean, required: true}
       - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
       - name: lens_result
         type: object
@@ -209,10 +228,11 @@ handoffs:
         min_items: 5
         max_items: 5
         description: "Exactly five validated LensResearchResult records, one per LensKind."
-        validation: "No missing, duplicate, or root-authored lens may be accepted as delegated evidence unless the separately recorded lens fallback mode applies."
+        validation: "No missing, duplicate, or root-authored lens may be accepted as delegated evidence unless the separately recorded lens fallback mode applies. Reconstruct lens_result from exactly core_position, lens_question, answer_or_gap, sources_or_verified_urls, follow_ups, evidence_status, likely_blind_spot, unique_insight, confidence, and gaps; recompute lens_result_digest over that object only, excluding lens_kind, assignment_id, and lens_result_digest. The recomputed digest and exact accepted fields match the worker return, process record, perspective_scan, and question_trace for the same LensKind and assignment_id."
         object_fields:
           - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
           - {name: assignment_id, type: string, required: true}
+          - {name: lens_result_digest, type: string, required: true}
           - {name: core_position, type: string, required: true}
           - {name: lens_question, type: string, required: true}
           - {name: answer_or_gap, type: string, required: true}
@@ -301,11 +321,14 @@ handoffs:
       - name: verified_source_evidence
         type: object[]
         required: true
-        description: "Decision-critical verified source evidence."
+        description: "Decision-critical evidence with a transport-neutral verification method and stable non-secret reference."
+        validation: "public_url requires verified_url equal to verification_reference, a successfully checked globally routable HTTPS URL, and rejects reserved domains, non-global address ranges, alternate numeric address encodings, private, loopback, and link-local endpoints. local_repository requires a repository-relative path plus optional revision or line locator; authenticated_source requires an opaque connector and record identifier, never its endpoint; offline_authoritative_source requires a bibliographic citation. Non-URL methods omit verified_url. Every reference rejects URI userinfo, credential/token/secret material, PII-shaped data, parent traversal, and absolute host paths."
         object_fields:
           - {name: claim, type: string, required: true}
           - {name: source, type: string, required: true}
-          - {name: verified_url, type: string, required: true}
+          - {name: verification_method, type: enum, required: true, enum_values: [public_url, local_repository, authenticated_source, offline_authoritative_source]}
+          - {name: verification_reference, type: string, required: true, validation: "Stable non-secret reference with method-specific shape: globally routable public HTTPS URL, repository-relative locator, opaque connector/record identifier, or bibliographic citation. It contains no credential, token, secret, PII, reserved/private/loopback/link-local endpoint, parent traversal, or absolute host path."}
+          - {name: verified_url, type: string, required: conditional, condition: "verification_method == public_url", validation: "Required only for public_url, exactly equals verification_reference, is successfully checked globally routable HTTPS rather than a reserved or non-global endpoint, and is absent for non-URL methods."}
           - {name: verification_detail, type: string, required: true}
       - name: verification_gaps
         type: string[]
@@ -350,6 +373,6 @@ return_validation:
   - name: common_return_validation
     validation: "Record explicit opt-out, actual spawn failure/unavailability, supported configuration proof, or exact policy block; policy blocks include exact active rule/no exception; no fallback record contains invented native dispatch references."
   - name: orchestrator_to_lens_researcher
-    validation: "For delegated lens mode validate assignment_id, packet_id, packet_set_id, packet_content_digest, LensKind, return schema, status, typed evidence, and source/URL claims against the matching frozen assignment/manifest entry; validate exactly five unique native identities. DONE and DONE_WITH_CONCERNS require a complete LensResearchResult and evidence. NEEDS_CONTEXT or BLOCKED require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence; do not invent research. For sequential fallback validate exactly five frozen root passes with root_pass_id, matching packet content_digest, and no dispatch_identity, plus concrete fallback evidence."
+    validation: "For delegated lens mode validate assignment_id, packet_id, packet_set_id, packet_content_digest, LensKind, return schema, status, typed evidence, source claims, recomputed lens_result_digest, and SearchResourceUsage against the matching frozen assignment, manifest, and budget; validate exactly five unique native identities. DONE and DONE_WITH_CONCERNS require a complete LensResearchResult and evidence. ceiling_exhausted requires a LOW-confidence result and explicit gap; over_ceiling forces BLOCKED. NEEDS_CONTEXT or BLOCKED require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence; do not invent research. For sequential fallback validate exactly five frozen root passes with root_pass_id, matching packet and result digests, exact usage, no dispatch_identity, and concrete fallback evidence."
   - name: orchestrator_to_research_peer_reviewer
-    validation: "Validate peer_review_assignment_id echoes the active dispatch and apply the status/verdict truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions. Usable statuses require complete critique and calibrated evidence; failure statuses require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence. When verdict=revise, the orchestrator—not the worker—records revision_disposition covering every required revision exactly once as applied or claim_downgraded, assigns revision_disposition_id, and records an exactly equal peer_review_revision_disposition_id; unresolved revision blocks presentation. Workers do not self-report execution or fallback orchestration metadata or native peer identity; the orchestrator alone records those fields in final peer_review/process evidence. Empty verified_source_evidence requires non-empty verification_gaps and must downgrade or block unsupported claims. For reviewer-only fallback retain valid delegated lens evidence, validate the orchestrator-owned peer_review_fallback_pass_id and separate concrete fallback evidence, and never erase lens dispatch evidence."
+    validation: "Validate peer_review_assignment_id echoes the active dispatch and each validated lens carries the recomputed result digest for the same assignment used by process and presentation artifacts. Apply the status/verdict truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions. Usable statuses require complete critique and calibrated evidence; failure statuses require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence. When verdict=revise, the orchestrator—not the worker—records revision_disposition covering every required revision exactly once as applied or claim_downgraded, assigns revision_disposition_id, and records an exactly equal peer_review_revision_disposition_id; unresolved revision blocks presentation. Workers do not self-report execution or fallback orchestration metadata or native peer identity; the orchestrator alone records those fields in final peer_review/process evidence. Every verified_source_evidence row follows its method/reference/conditional-URL rule; an empty ledger requires non-empty verification_gaps and downgrade or block. For reviewer-only fallback retain valid delegated lens evidence, validate the orchestrator-owned peer_review_fallback_pass_id and separate concrete fallback evidence, and never erase lens dispatch evidence."

@@ -49,14 +49,24 @@ gates:
         on_fail: "Label unsourced lens inferences as LOW confidence or gather sources before upgrading confidence"
 
       - id: S7
-        check: "For five_lens_briefing: each required lens has at least one perspective-guided research question, a source-grounded answer or explicit gap, source notes/verified URLs, typed follow_ups retaining every material follow-up or one none_needed decision, and evidence status before contradiction mapping"
+        check: "For five_lens_briefing: each required lens has at least one perspective-guided research question, a source-grounded answer or explicit gap, the exact accepted sources_or_verified_urls array (possibly empty only for inference_only or unresolved with a recorded gap), typed follow_ups retaining every material follow-up or one none_needed decision, and evidence status before contradiction mapping"
         condition: "research_method == five_lens_briefing"
         on_fail: "Build the question trace/evidence ledger from five-lens-briefing.md before moving to contradiction mapping or synthesis"
 
       - id: S8
-        check: "For five_lens_briefing: immutable frozen_packet_set has an ordered five-entry packet manifest with packet_id, exact LensKind, and content_digest over each canonical complete frozen packet; packet_set_digest binds ordered manifest contents; pre_dispatch_record_id is recorded before first_lens_execution_at and first_lens_execution_evidence_ref proves that ordering; every dispatch or root pass binds packet_id, packet_set_id, and matching packet content_digest; delegated waves are capacity-bounded, exact, disjoint, and exhaustive, and later waves cannot consume earlier results"
+        check: "For five_lens_briefing: ContentDigest is sha256: plus 64 lowercase hexadecimal SHA-256 characters over the exact UTF-8 bytes produced by RFC 8785 JSON Canonicalization Scheme, with no trailing newline; frozen packet preimage contains exactly the declared packet fields except content_digest; packet_set_digest covers the ordered packet_id/lens_kind/content_digest manifest; pre_dispatch_record_id and timestamp precede first_lens_execution_at; every dispatch or root pass binds packet_id, packet_set_id, and matching packet digest; delegated waves are capacity-bounded, exact, disjoint, and exhaustive, and later waves cannot consume earlier results"
         condition: "research_method == five_lens_briefing"
         on_fail: "Freeze all packets, repair wave coverage, and restart the complete lens stage before using any lens result"
+
+      - id: S8A
+        check: "For five_lens_briefing: accepted_lens_results retains exactly five authoritative LensResearchResult bodies and exactly equals the peer validated results; every result has a recomputed lens_result_digest over RFC 8785 JCS bytes of lens_result only, and the same LensKind, assignment_id, and digest appear exactly once in its dispatch or root-pass record, perspective_scan, and question_trace, whose presented fields exactly project that accepted result, including valid empty source arrays for inference_only or unresolved results"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Reject stale or substituted lens content and rebuild every downstream lens artifact from the matching validated result before synthesis"
+
+      - id: S8B
+        check: "For five_lens_briefing: every lens execution records non-negative actual query/source counts, elapsed minutes, termination state, exhausted dimensions, and confidence-downgrade evidence; overall query/source totals equal per-lens sums, and observed overall wall-clock is at least the sequential pass sum or the sum of per-wave maximum elapsed values; usable results never exceed ceilings, and ceiling exhaustion records an explicit gap with LOW lens confidence"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Block over-ceiling output or restore exact usage, exhaustion gaps, and confidence downgrade evidence before synthesis"
 
       - id: S9
         check: "For five_lens_briefing sequential fallback lens mode: sequential_fallback_evidence records explicit opt-out, real spawn failure/unavailability, supported configuration proof, or exact policy block; policy_disallowed also records exact policy_blocking_source with no exception; exactly five frozen root passes cover LensKind exactly once, bind the frozen packet set, have no native dispatch identity, carry admissible lens fallback evidence, and record reduced independence"
@@ -156,6 +166,11 @@ gates:
         check: "For five_lens_briefing: peer_review has a usable DONE or DONE_WITH_CONCERNS status and a compatible accepted, accepted_with_concerns, or revise verdict; accepted and accepted_with_concerns have required_revisions=[]; revise has one or more required_revisions and an orchestrator-owned revision_disposition covering every required revision exactly once as applied or claim_downgraded, with revision_disposition_id exactly equal to process peer_review_revision_disposition_id; unresolved revision blocks presentation; NEEDS_CONTEXT or BLOCKED cannot reach presentation unless a valid fresh fallback completed"
         condition: "research_method == five_lens_briefing"
         on_fail: "Block presentation or complete and validate a fresh peer fallback; do not finalize an unusable peer status."
+
+      - id: VR5
+        check: "For five_lens_briefing: each decision-critical verified_source_evidence row uses a method-specific safe reference; public_url is successfully checked globally routable HTTPS, rejects reserved domains and non-global or alternate-encoded addresses, and equals verified_url, while local_repository, authenticated_source, and offline_authoritative_source omit verified_url and expose no URI userinfo, credentials, tokens, secrets, PII, parent traversal, or absolute host paths"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Replace the unsafe reference with a repository-relative locator, opaque connector/record identifier, or bibliographic citation; record a verification gap when no safe stable reference exists."
 
 # ─────────────────────────────────────────────
 # Research invariants

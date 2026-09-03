@@ -20,6 +20,7 @@ source "$SCRIPT_DIR/lib/skill-eval-common.sh"
 source "$SCRIPT_DIR/lib/skill-eval-inventory.sh"
 source "$SCRIPT_DIR/lib/skill-eval-fixtures.sh"
 source "$SCRIPT_DIR/lib/skill-eval-render.sh"
+source "$SCRIPT_DIR/lib/skill-eval-semantic-validators.sh"
 source "$SCRIPT_DIR/lib/skill-eval-grade.sh"
 source "$SCRIPT_DIR/lib/skill-eval-activation.sh"
 

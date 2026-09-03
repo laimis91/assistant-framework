@@ -3,6 +3,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assistant-research-fixtures.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
@@ -333,89 +334,14 @@ p0p4_write_assistant_research_delegated_response() {
     local response_path="$1"
     local summary="$2"
 
-    jq -n --arg summary "$summary" '
-        {
-          summary: $summary,
-          peer_review: {
-            peer_review_execution_mode: "delegated",
-            peer_review_assignment_id: "peer-assignment-1",
-            peer_reviewer_identity: "peer-native-1",
-            status: "DONE_WITH_CONCERNS",
-            verdict: "revise",
-            required_revisions: ["downgrade unsupported claim"],
-            revision_disposition_id: "revision-closure-1",
-            revision_disposition: [
-              {required_revision: "downgrade unsupported claim", outcome: "claim_downgraded", closure_evidence: "claim confidence updated"}
-            ]
-          },
-          five_lens_process_evidence: {
-            lens_execution_mode: "delegated",
-            peer_review_execution_mode: "delegated",
-            reduced_independence: false,
-            frozen_packet_set: {
-              packet_set_id: "packet-set-1",
-              packet_set_digest: "sha256:packet-set-1",
-              packet_manifest_order: ["packet-practitioner", "packet-academic", "packet-skeptic", "packet-economist", "packet-historian"],
-              packet_manifest: [
-                {packet_id: "packet-practitioner", lens_kind: "practitioner", content_digest: "sha256:practitioner"},
-                {packet_id: "packet-academic", lens_kind: "academic_or_technical_expert", content_digest: "sha256:academic"},
-                {packet_id: "packet-skeptic", lens_kind: "skeptic", content_digest: "sha256:skeptic"},
-                {packet_id: "packet-economist", lens_kind: "economist_or_incentives_analyst", content_digest: "sha256:economist"},
-                {packet_id: "packet-historian", lens_kind: "historian_or_pattern_matcher", content_digest: "sha256:historian"}
-              ],
-              packet_set_frozen_at: "2026-09-03T10:00:00Z",
-              pre_dispatch_record_id: "pre-dispatch-1",
-              first_lens_execution_at: "2026-09-03T10:01:00Z",
-              first_lens_execution_evidence_ref: "execution-log-1"
-            },
-            lens_dispatches: [
-              {lens_kind: "practitioner", dispatch_identity: "lens-native-1", assignment_id: "assignment-1", packet_id: "packet-practitioner", packet_set_id: "packet-set-1", packet_content_digest: "sha256:practitioner", wave_id: "wave-1", return_validated: true},
-              {lens_kind: "academic_or_technical_expert", dispatch_identity: "lens-native-2", assignment_id: "assignment-2", packet_id: "packet-academic", packet_set_id: "packet-set-1", packet_content_digest: "sha256:academic", wave_id: "wave-1", return_validated: true},
-              {lens_kind: "skeptic", dispatch_identity: "lens-native-3", assignment_id: "assignment-3", packet_id: "packet-skeptic", packet_set_id: "packet-set-1", packet_content_digest: "sha256:skeptic", wave_id: "wave-1", return_validated: true},
-              {lens_kind: "economist_or_incentives_analyst", dispatch_identity: "lens-native-4", assignment_id: "assignment-4", packet_id: "packet-economist", packet_set_id: "packet-set-1", packet_content_digest: "sha256:economist", wave_id: "wave-1", return_validated: true},
-              {lens_kind: "historian_or_pattern_matcher", dispatch_identity: "lens-native-5", assignment_id: "assignment-5", packet_id: "packet-historian", packet_set_id: "packet-set-1", packet_content_digest: "sha256:historian", wave_id: "wave-1", return_validated: true}
-            ],
-            peer_review_assignment_id: "peer-assignment-1",
-            peer_reviewer_identity: "peer-native-1",
-            peer_review_revision_disposition_id: "revision-closure-1"
-          }
-        }
-    ' >"$response_path"
+    research_jcs_node build delegated "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
 }
 
 p0p4_write_assistant_research_fallback_response() {
     local response_path="$1"
     local summary="$2"
 
-    jq -n --arg summary "$summary" '
-        {
-          summary: $summary,
-          peer_review: {
-            peer_review_execution_mode: "sequential_fallback",
-            peer_review_assignment_id: "fallback-peer-assignment-1",
-            peer_review_fallback_pass_id: "peer-root-pass-1",
-            status: "DONE",
-            verdict: "accepted",
-            required_revisions: []
-          },
-          five_lens_process_evidence: {
-            lens_execution_mode: "sequential_fallback",
-            peer_review_execution_mode: "sequential_fallback",
-            reduced_independence: true,
-            fallback_lens_passes: [
-              {lens_kind: "practitioner", assignment_id: "fallback-assignment-1", packet_id: "packet-practitioner", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:practitioner", root_pass_id: "root-pass-1", return_validated: true},
-              {lens_kind: "academic_or_technical_expert", assignment_id: "fallback-assignment-2", packet_id: "packet-academic", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:academic", root_pass_id: "root-pass-2", return_validated: true},
-              {lens_kind: "skeptic", assignment_id: "fallback-assignment-3", packet_id: "packet-skeptic", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:skeptic", root_pass_id: "root-pass-3", return_validated: true},
-              {lens_kind: "economist_or_incentives_analyst", assignment_id: "fallback-assignment-4", packet_id: "packet-economist", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:economist", root_pass_id: "root-pass-4", return_validated: true},
-              {lens_kind: "historian_or_pattern_matcher", assignment_id: "fallback-assignment-5", packet_id: "packet-historian", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:historian", root_pass_id: "root-pass-5", return_validated: true}
-            ],
-            peer_review_assignment_id: "fallback-peer-assignment-1",
-            peer_review_fallback_pass_id: "peer-root-pass-1",
-            lens_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "dispatch unavailable", evidence_ref: "spawn-error-1"},
-            peer_review_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "peer dispatch unavailable", evidence_ref: "peer-spawn-error-1"}
-          }
-        }
-    ' >"$response_path"
+    research_jcs_node build sequential_fallback "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
 }
 
 p0p4_write_skill_eval_responses() {

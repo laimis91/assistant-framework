@@ -12,6 +12,7 @@ research_phase_gates="$FRAMEWORK_DIR/skills/assistant-research/contracts/phase-g
 research_handoffs="$FRAMEWORK_DIR/skills/assistant-research/contracts/handoffs.yaml"
 research_evals="$FRAMEWORK_DIR/skills/assistant-research/evals/cases.json"
 research_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assistant-research-fixtures.sh"
 
 write_research_eval_responses() {
     local output_dir="$1"
@@ -24,13 +25,13 @@ write_research_eval_responses() {
                 .cases[] | select(.id == $case_id)
                 | (.machine_expectations.structured_json_assertions? // [] | length > 0)
             ' "$research_evals" >/dev/null; then
-            write_delegated_five_lens_eval_response "$output_dir/assistant-research/$case_id.txt"
+            write_schema_valid_five_lens_eval_response delegated "$output_dir/assistant-research/$case_id.txt"
         elif [[ "$case_id" == "five-lens-sequential-fallback-preserves-process-evidence" ]] \
             && jq -e --arg case_id "$case_id" '
                 .cases[] | select(.id == $case_id)
                 | (.machine_expectations.structured_json_assertions? // [] | length > 0)
             ' "$research_evals" >/dev/null; then
-            write_fallback_five_lens_eval_response "$output_dir/assistant-research/$case_id.txt"
+            write_schema_valid_five_lens_eval_response sequential_fallback "$output_dir/assistant-research/$case_id.txt"
         else
             jq -r --arg case_id "$case_id" '
                 .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]
@@ -39,125 +40,22 @@ write_research_eval_responses() {
     done < <(jq -r '.cases[].id' "$research_evals")
 }
 
-write_fallback_five_lens_eval_response() {
-    local response_path="$1"
-    local report
-
-    report="$(jq -r '
-        .cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence")
-        | .machine_expectations.required_substrings | join("\\n")
-    ' "$research_evals")"
-    jq -n --arg report "$report" '
-      {
-        report: $report,
-        research_method: "five_lens_briefing",
-        tier: "extensive",
-        peer_review: {
-          peer_review_execution_mode: "sequential_fallback",
-          peer_review_assignment_id: "fallback-peer-assignment-1",
-          peer_review_fallback_pass_id: "peer-root-pass-1",
-          status: "DONE",
-          verdict: "accepted",
-          required_revisions: []
-        },
-        five_lens_process_evidence: {
-          lens_execution_mode: "sequential_fallback",
-          peer_review_execution_mode: "sequential_fallback",
-          reduced_independence: true,
-          fallback_lens_passes: [
-            {lens_kind: "practitioner", assignment_id: "fallback-assignment-1", packet_id: "packet-practitioner", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:practitioner", root_pass_id: "root-pass-1", return_validated: true},
-            {lens_kind: "academic_or_technical_expert", assignment_id: "fallback-assignment-2", packet_id: "packet-academic", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:academic", root_pass_id: "root-pass-2", return_validated: true},
-            {lens_kind: "skeptic", assignment_id: "fallback-assignment-3", packet_id: "packet-skeptic", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:skeptic", root_pass_id: "root-pass-3", return_validated: true},
-            {lens_kind: "economist_or_incentives_analyst", assignment_id: "fallback-assignment-4", packet_id: "packet-economist", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:economist", root_pass_id: "root-pass-4", return_validated: true},
-            {lens_kind: "historian_or_pattern_matcher", assignment_id: "fallback-assignment-5", packet_id: "packet-historian", packet_set_id: "fallback-packet-set-1", packet_content_digest: "sha256:historian", root_pass_id: "root-pass-5", return_validated: true}
-          ],
-          peer_review_assignment_id: "fallback-peer-assignment-1",
-          peer_review_fallback_pass_id: "peer-root-pass-1",
-          lens_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "dispatch unavailable", evidence_ref: "spawn-error-1"},
-          peer_review_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "peer dispatch unavailable", evidence_ref: "peer-spawn-error-1"}
-        }
-      }
-    ' >"$response_path"
-}
-
-write_delegated_five_lens_eval_response() {
-    local response_path="$1"
-    local report
-
-    report="$(jq -r '
-        .cases[] | select(.id == "five-lens-decision-briefing-uses-storm-style-workflow")
-        | .machine_expectations.required_substrings | join("\\n")
-    ' "$research_evals")"
-    jq -n --arg report "$report" '
-      {
-        report: $report,
-        research_method: "five_lens_briefing",
-        tier: "extensive",
-        peer_review: {
-          peer_review_execution_mode: "delegated",
-          peer_review_assignment_id: "peer-assignment-1",
-          peer_reviewer_identity: "peer-native-1",
-          status: "DONE_WITH_CONCERNS",
-          verdict: "revise",
-          required_revisions: ["downgrade unsupported claim"],
-          revision_disposition_id: "revision-closure-1",
-          revision_disposition: [
-            {required_revision: "downgrade unsupported claim", outcome: "claim_downgraded", closure_evidence: "claim confidence updated"}
-          ]
-        },
-        five_lens_process_evidence: {
-          lens_execution_mode: "delegated",
-          peer_review_execution_mode: "delegated",
-          reduced_independence: false,
-          frozen_packet_set: {
-            packet_set_id: "packet-set-1",
-            packet_set_digest: "sha256:packet-set-1",
-            packet_manifest_order: ["packet-practitioner", "packet-academic", "packet-skeptic", "packet-economist", "packet-historian"],
-            packet_manifest: [
-              {packet_id: "packet-practitioner", lens_kind: "practitioner", content_digest: "sha256:practitioner"},
-              {packet_id: "packet-academic", lens_kind: "academic_or_technical_expert", content_digest: "sha256:academic"},
-              {packet_id: "packet-skeptic", lens_kind: "skeptic", content_digest: "sha256:skeptic"},
-              {packet_id: "packet-economist", lens_kind: "economist_or_incentives_analyst", content_digest: "sha256:economist"},
-              {packet_id: "packet-historian", lens_kind: "historian_or_pattern_matcher", content_digest: "sha256:historian"}
-            ],
-            packet_set_frozen_at: "2026-09-03T10:00:00Z",
-            pre_dispatch_record_id: "pre-dispatch-1",
-            first_lens_execution_at: "2026-09-03T10:01:00Z",
-            first_lens_execution_evidence_ref: "execution-log-1"
-          },
-          lens_dispatches: [
-            {lens_kind: "practitioner", dispatch_identity: "lens-native-1", assignment_id: "assignment-1", packet_id: "packet-practitioner", packet_set_id: "packet-set-1", packet_content_digest: "sha256:practitioner", wave_id: "wave-1", return_validated: true},
-            {lens_kind: "academic_or_technical_expert", dispatch_identity: "lens-native-2", assignment_id: "assignment-2", packet_id: "packet-academic", packet_set_id: "packet-set-1", packet_content_digest: "sha256:academic", wave_id: "wave-1", return_validated: true},
-            {lens_kind: "skeptic", dispatch_identity: "lens-native-3", assignment_id: "assignment-3", packet_id: "packet-skeptic", packet_set_id: "packet-set-1", packet_content_digest: "sha256:skeptic", wave_id: "wave-1", return_validated: true},
-            {lens_kind: "economist_or_incentives_analyst", dispatch_identity: "lens-native-4", assignment_id: "assignment-4", packet_id: "packet-economist", packet_set_id: "packet-set-1", packet_content_digest: "sha256:economist", wave_id: "wave-1", return_validated: true},
-            {lens_kind: "historian_or_pattern_matcher", dispatch_identity: "lens-native-5", assignment_id: "assignment-5", packet_id: "packet-historian", packet_set_id: "packet-set-1", packet_content_digest: "sha256:historian", wave_id: "wave-1", return_validated: true}
-          ],
-          peer_review_assignment_id: "peer-assignment-1",
-          peer_reviewer_identity: "peer-native-1",
-          peer_review_revision_disposition_id: "revision-closure-1"
-        }
-      }
-    ' >"$response_path"
-}
-
 research_structured_mutation_is_rejected() {
     local mutation="$1"
     local case_id="five-lens-decision-briefing-uses-storm-style-workflow"
-    local case_count eval_dir eval_output response_path mutation_filter
+    local eval_dir response_path mutation_filter
 
-    case_count="$(jq '.cases | length' "$research_evals")"
     eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-structured-negative.XXXXXX")"
-    eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-structured-negative-output.XXXXXX")"
-    p0p4_register_cleanup "$eval_dir" "$eval_output"
+    p0p4_register_cleanup "$eval_dir"
     write_research_eval_responses "$eval_dir"
     response_path="$eval_dir/assistant-research/$case_id.txt"
     case "$mutation" in
         duplicate_identity) mutation_filter='.five_lens_process_evidence.lens_dispatches[1].dispatch_identity = .five_lens_process_evidence.lens_dispatches[0].dispatch_identity' ;;
         missing_identity) mutation_filter='del(.five_lens_process_evidence.lens_dispatches[4].dispatch_identity)' ;;
         false_return_validated) mutation_filter='.five_lens_process_evidence.lens_dispatches[0].return_validated = false' ;;
-        packet_binding_mismatch) mutation_filter='.five_lens_process_evidence.lens_dispatches[0].packet_content_digest = "sha256:tampered"' ;;
+        packet_binding_mismatch) mutation_filter='.five_lens_process_evidence.lens_dispatches[0].packet_content_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' ;;
         ordering_failure) mutation_filter='.five_lens_process_evidence.frozen_packet_set.packet_manifest_order |= reverse' ;;
-        content_digest_drift) mutation_filter='.five_lens_process_evidence.frozen_packet_set.packet_manifest[0].content_digest = "sha256:tampered"' ;;
+        content_digest_drift) mutation_filter='.five_lens_process_evidence.frozen_packet_set.packet_manifest[0].content_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' ;;
         fallback_leakage) mutation_filter='.five_lens_process_evidence.fallback_lens_passes = []' ;;
         revision_disposition_id_mismatch) mutation_filter='.five_lens_process_evidence.peer_review_revision_disposition_id = "revision-closure-other"' ;;
         accepted_with_unresolved_revisions) mutation_filter='.peer_review.verdict = "accepted"' ;;
@@ -165,49 +63,167 @@ research_structured_mutation_is_rejected() {
         blocked_presentation) mutation_filter='.peer_review.status = "BLOCKED" | .peer_review.verdict = "accepted"' ;;
         peer_execution_mode_mismatch) mutation_filter='.five_lens_process_evidence.peer_review_execution_mode = "sequential_fallback"' ;;
         peer_identity_mismatch) mutation_filter='.five_lens_process_evidence.peer_reviewer_identity = "peer-native-other"' ;;
+        perspective_digest_mismatch) mutation_filter='.perspective_scan[0].lens_result_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' ;;
+        perspective_assignment_mismatch) mutation_filter='.perspective_scan[0].assignment_id = "assignment-other"' ;;
+        perspective_content_drift) mutation_filter='.perspective_scan[0].core_position = "Tampered perspective position"' ;;
+        question_trace_content_drift) mutation_filter='.question_trace[0].answer = "Tampered answer"' ;;
+        accepted_result_body_drift) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].core_position = "Tampered accepted result"' ;;
+        accepted_result_assignment_drift) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].assignment_id = "assignment-other"' ;;
+        peer_result_projection_drift) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].unique_insight = "Tampered ledger projection"' ;;
+        process_result_digest_mismatch) mutation_filter='.five_lens_process_evidence.lens_dispatches[0].lens_result_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' ;;
+        missing_per_lens_usage) mutation_filter='del(.five_lens_process_evidence.lens_dispatches[0].search_resource_usage)' ;;
+        negative_per_lens_usage) mutation_filter='.five_lens_process_evidence.lens_dispatches[0].search_resource_usage.actual_sources = -1' ;;
+        per_lens_actual_over_ceiling) mutation_filter='.five_lens_process_evidence.lens_dispatches[0].search_resource_usage.actual_queries = 6' ;;
+        overall_totals_over_ceiling) mutation_filter='.five_lens_process_evidence.overall_resource_usage.actual_queries = 26' ;;
+        overall_query_sum_drift) mutation_filter='.five_lens_process_evidence.overall_resource_usage.actual_queries = 14' ;;
+        wall_clock_drift) mutation_filter='.five_lens_process_evidence.overall_resource_usage.elapsed_minutes = 9' ;;
+        peer_blocked_revise) mutation_filter='.peer_review.status = "BLOCKED" | .peer_review.verdict = "revise"' ;;
+        missing_required_revisions) mutation_filter='del(.peer_review.required_revisions)' ;;
+        missing_revision_disposition) mutation_filter='del(.peer_review.revision_disposition)' ;;
+        peer_identity_reused_from_lens) mutation_filter='.peer_review.peer_reviewer_identity = .five_lens_process_evidence.lens_dispatches[0].dispatch_identity | .five_lens_process_evidence.peer_reviewer_identity = .five_lens_process_evidence.lens_dispatches[0].dispatch_identity' ;;
+        reversed_freeze_proof) mutation_filter='.five_lens_process_evidence.frozen_packet_set.packet_set_frozen_at = "2026-09-03T10:02:00Z"' ;;
+        missing_freeze_proof) mutation_filter='del(.five_lens_process_evidence.frozen_packet_set.first_lens_execution_evidence_ref)' ;;
+        huge_budget_loop_forever) mutation_filter='.five_lens_process_evidence.search_resource_budget = {per_lens_max_queries:999,per_lens_max_sources:999,per_lens_max_minutes:999,overall_max_queries:9999,overall_max_sources:9999,overall_max_minutes:9999,stop_condition:"loop_forever"}' ;;
+        source_invalid_domain) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://example.invalid/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://example.invalid/follow-up"]' ;;
+        source_private_loopback) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://127.0.0.1./research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://192.0.2.1/follow-up"]' ;;
+        source_backed_empty) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = []' ;;
+        synchronized_assignments) mutation_filter='.five_lens_process_evidence.accepted_lens_results |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.lens_dispatches |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.peer_review_assignment_id = "assignment-shared" | .peer_review.peer_review_assignment_id = "assignment-shared"' ;;
+        missing_delegated_trigger_scope) mutation_filter='del(.five_lens_process_evidence.subagent_trigger_scope)' ;;
+        lens_worker_synthesis) mutation_filter='.five_lens_process_evidence.root_synthesis_ownership = "lens_worker"' ;;
+        schedule_wall_clock_drift) mutation_filter='
+            .five_lens_process_evidence.lens_dispatches[2].wave_id = "wave-2"
+            | .five_lens_process_evidence.lens_dispatches[3].wave_id = "wave-2"
+            | .five_lens_process_evidence.lens_dispatches[4].wave_id = "wave-2"
+            | .five_lens_process_evidence.wave_coverage = [
+                {wave_id:"wave-1",capacity:2,lens_kinds:["practitioner","academic_or_technical_expert"]},
+                {wave_id:"wave-2",capacity:3,lens_kinds:["skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]}
+              ]
+            | .five_lens_process_evidence.overall_resource_usage.elapsed_minutes = 19' ;;
         *) return 2 ;;
     esac
     jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
+    case "$mutation" in
+        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments) research_refresh_response_derivatives "$response_path" ;;
+    esac
 
-    if "$research_eval_runner" --responses "$eval_dir" --skill assistant-research >"$eval_output" 2>&1; then
+    if research_response_oracle_is_valid "$response_path"; then
+        printf 'accepted mutation: %s\n' "$mutation" >&2
         return 1
     fi
-
-    grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output" \
-        && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
-        && (grep -Eq 'structured_json_assertion_failures=[1-9]' "$eval_output" \
-            || grep -Eq 'forbidden_substring_hits=[1-9]' "$eval_output")
 }
 
 research_fallback_structured_mutation_is_rejected() {
     local mutation="$1"
     local case_id="five-lens-sequential-fallback-preserves-process-evidence"
-    local case_count eval_dir eval_output response_path mutation_filter
+    local eval_dir response_path mutation_filter
 
-    case_count="$(jq '.cases | length' "$research_evals")"
     eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-fallback-negative.XXXXXX")"
-    eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-fallback-negative-output.XXXXXX")"
-    p0p4_register_cleanup "$eval_dir" "$eval_output"
+    p0p4_register_cleanup "$eval_dir"
     write_research_eval_responses "$eval_dir"
     response_path="$eval_dir/assistant-research/$case_id.txt"
     case "$mutation" in
         false_return_validated) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].return_validated = false' ;;
-        packet_binding_mismatch) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].packet_content_digest = "sha256:tampered"' ;;
+        packet_binding_mismatch) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].packet_content_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' ;;
         fallback_dispatch_identity_leakage) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].dispatch_identity = "fabricated-native"' ;;
         peer_fallback_and_evidence_mismatch) mutation_filter='.five_lens_process_evidence.peer_review_fallback_pass_id = "peer-root-pass-other" | .five_lens_process_evidence.lens_fallback_evidence.detail = "" | .five_lens_process_evidence.peer_review_fallback_evidence.evidence_ref = ""' ;;
         peer_fallback_reuses_lens_pass) mutation_filter='.peer_review.peer_review_fallback_pass_id = "root-pass-1" | .five_lens_process_evidence.peer_review_fallback_pass_id = "root-pass-1"' ;;
+        perspective_digest_mismatch) mutation_filter='.perspective_scan[0].lens_result_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' ;;
+        perspective_assignment_mismatch) mutation_filter='.perspective_scan[0].assignment_id = "fallback-assignment-other"' ;;
+        perspective_content_drift) mutation_filter='.perspective_scan[0].core_position = "Tampered fallback perspective"' ;;
+        question_trace_content_drift) mutation_filter='.question_trace[0].question = "Tampered fallback question"' ;;
+        accepted_result_body_drift) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].answer_or_gap = "Tampered fallback accepted result"' ;;
+        accepted_result_assignment_drift) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].assignment_id = "fallback-assignment-other"' ;;
+        peer_result_projection_drift) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].gaps = []' ;;
+        process_result_digest_mismatch) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].lens_result_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' ;;
+        missing_per_lens_usage) mutation_filter='del(.five_lens_process_evidence.fallback_lens_passes[0].search_resource_usage)' ;;
+        negative_per_lens_usage) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].search_resource_usage.actual_sources = -1' ;;
+        per_lens_actual_over_ceiling) mutation_filter='.five_lens_process_evidence.fallback_lens_passes[0].search_resource_usage.actual_queries = 6' ;;
+        overall_totals_over_ceiling) mutation_filter='.five_lens_process_evidence.overall_resource_usage.actual_sources = 31' ;;
+        overall_query_sum_drift) mutation_filter='.five_lens_process_evidence.overall_resource_usage.actual_queries = 24' ;;
+        wall_clock_drift) mutation_filter='.five_lens_process_evidence.overall_resource_usage.elapsed_minutes = 14' ;;
+        schedule_wall_clock_drift) mutation_filter='.five_lens_process_evidence.overall_resource_usage.elapsed_minutes = 74' ;;
+        exhausted_without_low_confidence) mutation_filter='.perspective_scan[0].confidence = "medium"' ;;
+        exhaustion_without_explicit_gap) mutation_filter='del(.five_lens_process_evidence.fallback_lens_passes[0].search_resource_usage.exhaustion_gap)' ;;
+        missing_lens_fallback_evidence_ref) mutation_filter='del(.five_lens_process_evidence.lens_fallback_evidence.evidence_ref)' ;;
         *) return 2 ;;
     esac
     jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
 
-    if "$research_eval_runner" --responses "$eval_dir" --skill assistant-research >"$eval_output" 2>&1; then
-        return 1
-    fi
+    ! research_response_oracle_is_valid "$response_path"
+}
 
-    grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output" \
-        && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
-        && (grep -Eq 'structured_json_assertion_failures=[1-9]' "$eval_output" \
-            || grep -Eq 'forbidden_substring_hits=[1-9]' "$eval_output")
+research_verified_source_evidence_is_valid() {
+    ruby -rjson -ruri -ripaddr -e '
+        def unsafe_text?(text)
+          text.match?(/token|secret|api[_-]?key|password|bearer|credential|session=|authorization/i) ||
+            text.match?(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\b\d{3}-\d{2}-\d{4}\b|\b\d{3}[ .-]\d{3}[ .-]\d{4}\b/i)
+        end
+        def public_host?(host)
+          normalized = host.downcase.delete_suffix(".")
+          return false if normalized.empty? || normalized == "localhost" || normalized.end_with?(".localhost", ".internal", ".local", ".invalid")
+          address = if normalized.match?(/\A\d+\z/) && Integer(normalized, 10) <= 0xffff_ffff
+            IPAddr.new_ntoh([Integer(normalized, 10)].pack("N"))
+          else
+            IPAddr.new(normalized)
+          end
+          return true unless address
+          non_global_ranges = if address.ipv4?
+            %w[0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24 224.0.0.0/4 240.0.0.0/4]
+          else
+            %w[::/128 ::1/128 100::/64 2001:db8::/32 fc00::/7 fe80::/10 ff00::/8]
+          end
+          return false if address.loopback? || address.private? || address.link_local? || non_global_ranges.any? { |cidr| IPAddr.new(cidr).include?(address) }
+          mapped = address.respond_to?(:ipv4_mapped?) && address.ipv4_mapped? ? address.native : nil
+          return true unless mapped
+          mapped_non_global = %w[0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24 224.0.0.0/4 240.0.0.0/4]
+          !(mapped.loopback? || mapped.private? || mapped.link_local? || mapped_non_global.any? { |cidr| IPAddr.new(cidr).include?(mapped) })
+        rescue IPAddr::InvalidAddressError, ArgumentError
+          true
+        end
+        evidence = JSON.parse(STDIN.read)
+        method = evidence["verification_method"]
+        reference = evidence["verification_reference"]
+        url = evidence["verified_url"]
+        exit 1 unless %w[public_url local_repository authenticated_source offline_authoritative_source].include?(method)
+        exit 1 unless reference.is_a?(String) && reference == reference.strip && !reference.empty?
+        exit 1 if [reference, url].compact.any? { |text| !text.is_a?(String) || unsafe_text?(text) }
+        valid = case method
+        when "public_url"
+          begin
+            uri = URI.parse(url)
+            url == reference && uri.scheme == "https" && uri.host && uri.userinfo.nil? && public_host?(uri.host)
+          rescue URI::InvalidURIError, TypeError
+            false
+          end
+        when "local_repository"
+          !evidence.key?("verified_url") && reference.match?(%r{\A(?!/)(?!.*(?:\A|/)\.\.(?:/|\z))[A-Za-z0-9._/-]+(?:#[A-Za-z0-9._:-]+)?\z})
+        when "authenticated_source"
+          !evidence.key?("verified_url") && reference.match?(/\Aconnector:[A-Za-z0-9._-]+\/record:[A-Za-z0-9._-]+\z/)
+        else
+          !evidence.key?("verified_url") && reference.match?(/\Acitation:[^\s].*\z/)
+        end
+        exit(valid ? 0 : 1)
+    '
+}
+
+research_sha256_stream() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 | awk '{print $1}'
+    else
+        return 127
+    fi
+}
+
+research_content_digest_contract_is_strict() {
+    local contract_text="$1"
+
+    grep -Fq -- 'lowercase hexadecimal SHA-256' <<<"$contract_text" \
+        && grep -Fq -- 'RFC 8785 JSON Canonicalization Scheme (JCS)' <<<"$contract_text" \
+        && grep -Fq -- 'content_digest is ContentDigest over the RFC 8785 JCS bytes of a JSON object containing exactly' <<<"$contract_text" \
+        && grep -Fq -- 'it excludes content_digest itself' <<<"$contract_text" \
+        && grep -Fq -- 'Uses the ContentDigest format and excludes this field from its preimage.' <<<"$contract_text"
 }
 
 research_forbidden_response_is_rejected() {
@@ -257,6 +273,62 @@ research_old_five_lens_response_is_rejected() {
     grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output" \
         && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
         && grep -Fq 'missing_required_substrings=1' "$eval_output"
+}
+
+research_official_response_mutation_is_rejected() {
+    local mutation="$1"
+    local case_id="five-lens-decision-briefing-uses-storm-style-workflow"
+    local eval_dir eval_output response_path mutation_filter manifest_digest
+
+    case "$mutation" in
+        missing_lens_fallback_evidence_ref) case_id="five-lens-sequential-fallback-preserves-process-evidence" ;;
+    esac
+    eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-official-negative.XXXXXX")"
+    eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-official-negative-output.XXXXXX")"
+    p0p4_register_cleanup "$eval_dir" "$eval_output"
+    write_research_eval_responses "$eval_dir"
+    response_path="$eval_dir/assistant-research/$case_id.txt"
+    if ! "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1; then
+        printf 'official runner rejected its generated baseline: %s\n' "$mutation" >&2
+        return 1
+    fi
+    case "$mutation" in
+        accepted_result_body_with_unchanged_digest) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].core_position = "Tampered accepted result"' ;;
+        missing_per_lens_usage) mutation_filter='del(.five_lens_process_evidence.lens_dispatches[0].search_resource_usage)' ;;
+        hidden_extra_accepted_result_field) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].invented_hidden_field = "must not be accepted"' ;;
+        missing_resource_budget) mutation_filter='del(.five_lens_process_evidence.search_resource_budget)' ;;
+        hidden_packet_manifest_field) mutation_filter='.five_lens_process_evidence.frozen_packet_set.packet_manifest[0].invented_hidden_field = "must not enter the digest preimage"' ;;
+        peer_blocked_revise) mutation_filter='.peer_review.status = "BLOCKED" | .peer_review.verdict = "revise"' ;;
+        missing_required_revisions) mutation_filter='del(.peer_review.required_revisions)' ;;
+        missing_revision_disposition) mutation_filter='del(.peer_review.revision_disposition)' ;;
+        peer_identity_reused_from_lens) mutation_filter='.peer_review.peer_reviewer_identity = .five_lens_process_evidence.lens_dispatches[0].dispatch_identity | .five_lens_process_evidence.peer_reviewer_identity = .five_lens_process_evidence.lens_dispatches[0].dispatch_identity' ;;
+        reversed_freeze_proof) mutation_filter='.five_lens_process_evidence.frozen_packet_set.packet_set_frozen_at = "2026-09-03T10:02:00Z"' ;;
+        missing_freeze_proof) mutation_filter='del(.five_lens_process_evidence.frozen_packet_set.first_lens_execution_evidence_ref)' ;;
+        huge_budget_loop_forever) mutation_filter='.five_lens_process_evidence.search_resource_budget = {per_lens_max_queries:999,per_lens_max_sources:999,per_lens_max_minutes:999,overall_max_queries:9999,overall_max_sources:9999,overall_max_minutes:9999,stop_condition:"loop_forever"}' ;;
+        source_invalid_domain) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://example.invalid/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://example.invalid/follow-up"]' ;;
+        source_private_loopback) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://127.0.0.1./research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://192.0.2.1/follow-up"]' ;;
+        source_backed_empty) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = []' ;;
+        synchronized_assignments) mutation_filter='.five_lens_process_evidence.accepted_lens_results |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.lens_dispatches |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.peer_review_assignment_id = "assignment-shared" | .peer_review.peer_review_assignment_id = "assignment-shared"' ;;
+        missing_delegated_trigger_scope) mutation_filter='del(.five_lens_process_evidence.subagent_trigger_scope)' ;;
+        lens_worker_synthesis) mutation_filter='.five_lens_process_evidence.root_synthesis_ownership = "lens_worker"' ;;
+        missing_lens_fallback_evidence_ref) mutation_filter='del(.five_lens_process_evidence.lens_fallback_evidence.evidence_ref)' ;;
+        *) return 2 ;;
+    esac
+    jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
+    if [[ "$mutation" == "hidden_packet_manifest_field" ]]; then
+        manifest_digest="$(jq '.five_lens_process_evidence.frozen_packet_set.packet_manifest' "$response_path" | research_content_digest_json)"
+        jq --arg digest "$manifest_digest" '.five_lens_process_evidence.frozen_packet_set.packet_set_digest = $digest' "$response_path" >"$response_path.mutated" \
+            && mv "$response_path.mutated" "$response_path"
+    fi
+    case "$mutation" in
+        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments) research_refresh_response_derivatives "$response_path" ;;
+    esac
+
+    if "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1; then
+        printf 'official runner accepted mutation: %s\n' "$mutation" >&2
+        return 1
+    fi
+    grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output"
 }
 
 test_start "assistant-research candidate mechanisms stay evidence-backed and unproven"
@@ -679,7 +751,10 @@ for term in \
     'packet_frozen_at' \
     'first_lens_execution_at' \
     'search_resource_budget'; do
-    if ! printf '%s\n%s\n%s\n%s\n' "$lens_handoff_schema" "$peer_handoff_schema" "$output_peer_schema" "$process_evidence_schema" | grep -Fq -- "$term"; then
+    if ! grep -Fq -- "$term" <<<"$lens_handoff_schema
+$peer_handoff_schema
+$output_peer_schema
+$process_evidence_schema"; then
         v3_process_repair_missing+=("handoff/output lifecycle: $term")
     fi
 done
@@ -1017,10 +1092,11 @@ for term in \
     'packet_manifest_order' \
     'packet_manifest' \
     'content_digest' \
-    'ordered manifest contents' \
+    'ordered manifest array' \
     'packet_content_digest' \
-    'matching packet content_digest'; do
-    if ! printf '%s\n%s\n' "$lens_handoff_schema" "$process_evidence_schema" | grep -Fq -- "$term"; then
+    'matching non-self-referential packet content_digest'; do
+    if ! grep -Fq -- "$term" <<<"$lens_handoff_schema
+$process_evidence_schema"; then
         immutable_packet_missing+=("immutable packet contract: $term")
     fi
 done
@@ -1037,13 +1113,12 @@ delegated_assertions="$(jq -c '
     | .machine_expectations.structured_json_assertions // []
 ' "$research_evals")"
 if ! jq -e '
-    length >= 10
+    length >= 4
     and any(.[]; . == {"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"delegated"})
     and any(.[]; . == {"operator":"path_absent","path":["five_lens_process_evidence","fallback_lens_passes"]})
-    and any(.[]; .operator == "array_object_values_exact" and .path == ["five_lens_process_evidence","lens_dispatches"])
+    and any(.[]; .operator == "array_field_values_exact" and .path == ["five_lens_process_evidence","lens_dispatches"] and .field == "lens_kind")
+    and any(.[]; .operator == "array_field_values_exact" and .path == ["five_lens_process_evidence","accepted_lens_results"] and .field == "lens_kind")
     and any(.[]; . == {"operator":"equals","path":["peer_review","verdict"],"expected":"revise"})
-    and any(.[]; . == {"operator":"equals","path":["peer_review","required_revisions"],"expected":["downgrade unsupported claim"]})
-    and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_review_execution_mode"],"other_path":["peer_review","peer_review_execution_mode"]})
     and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_reviewer_identity"],"other_path":["peer_review","peer_reviewer_identity"]})
     and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_review_revision_disposition_id"],"other_path":["peer_review","revision_disposition_id"]})
 ' <<<"$delegated_assertions" >/dev/null; then
@@ -1067,20 +1142,118 @@ if [[ "${#structured_oracle_missing[@]}" -eq 0 ]] \
     && research_structured_mutation_is_rejected revise_without_required_revisions \
     && research_structured_mutation_is_rejected blocked_presentation \
     && research_structured_mutation_is_rejected peer_execution_mode_mismatch \
-    && research_structured_mutation_is_rejected peer_identity_mismatch; then
+    && research_structured_mutation_is_rejected peer_identity_mismatch \
+    && research_structured_mutation_is_rejected perspective_digest_mismatch \
+    && research_structured_mutation_is_rejected perspective_assignment_mismatch \
+    && research_structured_mutation_is_rejected perspective_content_drift \
+    && research_structured_mutation_is_rejected question_trace_content_drift \
+    && research_structured_mutation_is_rejected accepted_result_body_drift \
+    && research_structured_mutation_is_rejected accepted_result_assignment_drift \
+    && research_structured_mutation_is_rejected peer_result_projection_drift \
+    && research_structured_mutation_is_rejected process_result_digest_mismatch \
+    && research_structured_mutation_is_rejected missing_per_lens_usage \
+    && research_structured_mutation_is_rejected negative_per_lens_usage \
+    && research_structured_mutation_is_rejected per_lens_actual_over_ceiling \
+    && research_structured_mutation_is_rejected overall_totals_over_ceiling \
+    && research_structured_mutation_is_rejected overall_query_sum_drift \
+    && research_structured_mutation_is_rejected wall_clock_drift \
+    && research_structured_mutation_is_rejected schedule_wall_clock_drift \
+    && research_structured_mutation_is_rejected peer_blocked_revise \
+    && research_structured_mutation_is_rejected missing_required_revisions \
+    && research_structured_mutation_is_rejected missing_revision_disposition \
+    && research_structured_mutation_is_rejected peer_identity_reused_from_lens \
+    && research_structured_mutation_is_rejected reversed_freeze_proof \
+    && research_structured_mutation_is_rejected missing_freeze_proof \
+    && research_structured_mutation_is_rejected huge_budget_loop_forever \
+    && research_structured_mutation_is_rejected source_invalid_domain \
+    && research_structured_mutation_is_rejected source_private_loopback \
+    && research_structured_mutation_is_rejected source_backed_empty \
+    && research_structured_mutation_is_rejected synchronized_assignments \
+    && research_structured_mutation_is_rejected missing_delegated_trigger_scope \
+    && research_structured_mutation_is_rejected lens_worker_synthesis; then
     pass
 else
-    fail "assistant-research delegated structured eval oracle is incomplete or accepts a process-evidence mutation: ${structured_oracle_missing[*]}"
+    fail "assistant-research delegated structured eval oracle is incomplete or accepts a process-evidence mutation: ${structured_oracle_missing[*]-}"
 fi
 
 test_start "assistant-research eval structurally validates sequential fallback without native leakage"
 if research_fallback_structured_mutation_is_rejected false_return_validated \
     && research_fallback_structured_mutation_is_rejected packet_binding_mismatch \
     && research_fallback_structured_mutation_is_rejected fallback_dispatch_identity_leakage \
-    && research_fallback_structured_mutation_is_rejected peer_fallback_reuses_lens_pass; then
+    && research_fallback_structured_mutation_is_rejected peer_fallback_reuses_lens_pass \
+    && research_fallback_structured_mutation_is_rejected perspective_digest_mismatch \
+    && research_fallback_structured_mutation_is_rejected perspective_assignment_mismatch \
+    && research_fallback_structured_mutation_is_rejected perspective_content_drift \
+    && research_fallback_structured_mutation_is_rejected question_trace_content_drift \
+    && research_fallback_structured_mutation_is_rejected accepted_result_body_drift \
+    && research_fallback_structured_mutation_is_rejected accepted_result_assignment_drift \
+    && research_fallback_structured_mutation_is_rejected peer_result_projection_drift \
+    && research_fallback_structured_mutation_is_rejected process_result_digest_mismatch \
+    && research_fallback_structured_mutation_is_rejected missing_per_lens_usage \
+    && research_fallback_structured_mutation_is_rejected negative_per_lens_usage \
+    && research_fallback_structured_mutation_is_rejected per_lens_actual_over_ceiling \
+    && research_fallback_structured_mutation_is_rejected overall_totals_over_ceiling \
+    && research_fallback_structured_mutation_is_rejected overall_query_sum_drift \
+    && research_fallback_structured_mutation_is_rejected wall_clock_drift \
+    && research_fallback_structured_mutation_is_rejected schedule_wall_clock_drift \
+    && research_fallback_structured_mutation_is_rejected exhausted_without_low_confidence \
+    && research_fallback_structured_mutation_is_rejected exhaustion_without_explicit_gap \
+    && research_fallback_structured_mutation_is_rejected missing_lens_fallback_evidence_ref; then
     pass
 else
     fail "assistant-research fallback structured eval oracle accepts invalid fallback evidence"
+fi
+
+test_start "assistant-research official response grading rejects semantic process-evidence mutations"
+if research_official_response_mutation_is_rejected accepted_result_body_with_unchanged_digest \
+    && research_official_response_mutation_is_rejected missing_per_lens_usage \
+    && research_official_response_mutation_is_rejected hidden_extra_accepted_result_field \
+    && research_official_response_mutation_is_rejected missing_resource_budget \
+    && research_official_response_mutation_is_rejected hidden_packet_manifest_field \
+    && research_official_response_mutation_is_rejected peer_blocked_revise \
+    && research_official_response_mutation_is_rejected missing_required_revisions \
+    && research_official_response_mutation_is_rejected missing_revision_disposition \
+    && research_official_response_mutation_is_rejected peer_identity_reused_from_lens \
+    && research_official_response_mutation_is_rejected reversed_freeze_proof \
+    && research_official_response_mutation_is_rejected missing_freeze_proof \
+    && research_official_response_mutation_is_rejected huge_budget_loop_forever \
+    && research_official_response_mutation_is_rejected source_invalid_domain \
+    && research_official_response_mutation_is_rejected source_private_loopback \
+    && research_official_response_mutation_is_rejected source_backed_empty \
+    && research_official_response_mutation_is_rejected synchronized_assignments \
+    && research_official_response_mutation_is_rejected missing_delegated_trigger_scope \
+    && research_official_response_mutation_is_rejected lens_worker_synthesis \
+    && research_official_response_mutation_is_rejected missing_lens_fallback_evidence_ref; then
+    pass
+else
+    fail "assistant-research official response grading accepted a semantic process-evidence mutation"
+fi
+
+test_start "assistant-research fixture validation keeps semantic evaluators closed-world"
+semantic_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-semantic-fixture.XXXXXX")"
+semantic_fixture_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-semantic-fixture-output.XXXXXX")"
+p0p4_register_cleanup "$semantic_fixture_root" "$semantic_fixture_output"
+cp -R "$FRAMEWORK_DIR/skills/assistant-research" "$semantic_fixture_root/assistant-research"
+semantic_fixture="$semantic_fixture_root/assistant-research/evals/cases.json"
+jq '(.cases[] | select(.id == "five-lens-decision-briefing-uses-storm-style-workflow") | .semantic_validator) = "untrusted.command"' \
+    "$semantic_fixture" >"$semantic_fixture.next" && mv "$semantic_fixture.next" "$semantic_fixture"
+unknown_semantic_validator_rejected=false
+if ! "$research_eval_runner" --validate-fixture --skill "$semantic_fixture_root/assistant-research" >"$semantic_fixture_output" 2>&1 \
+    && grep -Fq -- 'semantic_validator must be the allowlisted assistant-research.five_lens_v3' "$semantic_fixture_output"; then
+    unknown_semantic_validator_rejected=true
+fi
+cp "$research_evals" "$semantic_fixture"
+jq 'del(.cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence") | .semantic_validator)' \
+    "$semantic_fixture" >"$semantic_fixture.next" && mv "$semantic_fixture.next" "$semantic_fixture"
+partial_semantic_validator_declaration_rejected=false
+if ! "$research_eval_runner" --validate-fixture --skill "$semantic_fixture_root/assistant-research" >"$semantic_fixture_output" 2>&1 \
+    && grep -Fq -- 'semantic_validator must be declared by exactly the two five-lens assistant-research cases' "$semantic_fixture_output"; then
+    partial_semantic_validator_declaration_rejected=true
+fi
+if [[ "$unknown_semantic_validator_rejected" == true && "$partial_semantic_validator_declaration_rejected" == true ]]; then
+    pass
+else
+    fail "assistant-research fixture validation accepted an unknown or partially declared semantic evaluator"
 fi
 
 test_start "assistant-research scopes peer follow-up validation to the peer handoff subtree"
@@ -1157,16 +1330,12 @@ for binding in \
 done
 fallback_assertions="$(jq -c '.cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence") | .machine_expectations.structured_json_assertions // []' "$research_evals")"
 if ! jq -e '
-    length >= 10
+    length >= 12
     and any(.[]; . == {"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"sequential_fallback"})
-    and any(.[]; .operator == "array_object_values_exact" and .path == ["five_lens_process_evidence","fallback_lens_passes"])
+    and any(.[]; .operator == "array_field_values_exact" and .path == ["five_lens_process_evidence","fallback_lens_passes"] and .field == "lens_kind")
+    and any(.[]; .operator == "array_field_values_exact" and .path == ["five_lens_process_evidence","accepted_lens_results"] and .field == "lens_kind")
     and any(.[]; . == {"operator":"path_absent","path":["five_lens_process_evidence","lens_dispatches"]})
-    and any(.[]; . == {"operator":"path_absent","path":["five_lens_process_evidence","wave_coverage"]})
-    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_pass_id"]})
-    and any(.[]; . == {"operator":"equals","path":["five_lens_process_evidence","peer_review_fallback_pass_id"],"expected":"peer-root-pass-1"})
     and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","lens_fallback_evidence","detail"]})
-    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","lens_fallback_evidence","evidence_ref"]})
-    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_evidence","detail"]})
     and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_evidence","evidence_ref"]})
     and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_review_fallback_pass_id"],"other_path":["peer_review","peer_review_fallback_pass_id"]})
 ' <<<"$fallback_assertions" >/dev/null; then
@@ -1203,6 +1372,169 @@ if [[ "${#pr53_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-research PR-53 contract repair missing: ${pr53_missing[*]}"
+fi
+
+test_start "assistant-research binds canonical digests, result projections, usage, and non-URL verification"
+integrity_missing=()
+for term in ContentDigest SearchResourceUsage 'lowercase hexadecimal SHA-256' 'RFC 8785 JSON Canonicalization Scheme (JCS)' 'number serialization' 'no trailing newline is hashed' 'lens_result_digest'; do
+    if ! grep -Fq -- "$term" "$research_handoffs"; then integrity_missing+=("handoff: $term"); fi
+done
+for term in lens_result_digest search_resource_usage overall_resource_usage verification_method verification_reference; do
+    if ! grep -Fq -- "$term" "$research_output" && ! grep -Fq -- "$term" "$research_handoffs"; then integrity_missing+=("contract: $term"); fi
+done
+for term in local_repository authenticated_source offline_authoritative_source 'Exactly one matching LensKind, assignment_id, and recomputed lens_result_digest' 'usable output never exceeds overall ceilings'; do
+    if ! grep -Fq -- "$term" "$research_output" && ! grep -Fq -- "$term" "$research_handoffs"; then integrity_missing+=("rule: $term"); fi
+done
+if [[ "${#integrity_missing[@]}" -eq 0 ]]; then pass; else fail "assistant-research integrity contract missing: ${integrity_missing[*]}"; fi
+
+test_start "assistant-research executable verified-source evidence predicate enforces method-specific URL rules"
+if printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://www.iana.org/domains/example","verified_url":"https://www.iana.org/domains/example"}' \
+    | research_verified_source_evidence_is_valid \
+    && printf '%s\n' '{"verification_method":"local_repository","verification_reference":"skills/assistant-research/contracts/handoffs.yaml#verified_source_evidence"}' \
+    | research_verified_source_evidence_is_valid \
+    && printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"connector:research-index/record:source-1"}' \
+        | research_verified_source_evidence_is_valid \
+    && printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"citation:ISBN-978-0-00-000000-0"}' \
+        | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://example.invalid/source"}' \
+        | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"local_repository"}' \
+        | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"publication:stable-citation","verified_url":"https://example.invalid/source"}' \
+        | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"http://example.invalid/source","verified_url":"http://example.invalid/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://user:token@example.invalid/source","verified_url":"https://user:token@example.invalid/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://127.0.0.1/source","verified_url":"https://127.0.0.1/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[::1]/source","verified_url":"https://[::1]/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://catalog.invalid/source","verified_url":"https://catalog.invalid/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[fd00::1]/source","verified_url":"https://[fd00::1]/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[::ffff:127.0.0.1]/source","verified_url":"https://[::ffff:127.0.0.1]/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://2130706433/source","verified_url":"https://2130706433/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://catalog.internal/source","verified_url":"https://catalog.internal/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://198.51.100.1/source","verified_url":"https://198.51.100.1/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://192.0.2.1/source","verified_url":"https://192.0.2.1/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://203.0.113.1/source","verified_url":"https://203.0.113.1/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[2001:db8::1]/source","verified_url":"https://[2001:db8::1]/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[ff02::1]/source","verified_url":"https://[ff02::1]/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[::]/source","verified_url":"https://[::]/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"../secrets#record"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"/Users/name/repo#record"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"connector:private/record:person@example.com"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"https://user:token@connector.invalid/record:source-1"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"connector:private.internal/record:token-placeholder"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"citation:123-45-6789"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"citation:555-123-4567"}' | research_verified_source_evidence_is_valid \
+    && ruby -ryaml -e '
+        handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+        peer = handoffs.find { |handoff| handoff["name"] == "orchestrator_to_research_peer_reviewer" }
+        evidence = peer.fetch("context_fields").find { |field| field["name"] == "verified_source_evidence" }
+        fields = evidence.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+        method = fields.fetch("verification_method")
+        reference = fields.fetch("verification_reference")
+        url = fields.fetch("verified_url")
+        guard = evidence.fetch("validation") + " " + reference.fetch("validation")
+        exit method["type"] == "enum" && method["enum_values"] == ["public_url", "local_repository", "authenticated_source", "offline_authoritative_source"] &&
+          reference["type"] == "string" && reference["required"] == true &&
+          url["type"] == "string" && url["required"] == "conditional" &&
+          url["condition"] == "verification_method == public_url" &&
+          url.fetch("validation").include?("absent") && url.fetch("validation").include?("non-URL") &&
+          ["credential", "token", "PII", "private", "absolute host path"].all? { |term| guard.include?(term) } ? 0 : 1
+    ' "$research_handoffs"; then
+    pass
+else
+    fail "assistant-research verified-source evidence predicate or conditional contract fields accepted an invalid URL method combination"
+fi
+
+test_start "assistant-research JCS rejects unpaired surrogates and accepts paired Unicode scalars"
+lone_high_surrogate='{"value":"\uD800"}'
+lone_low_surrogate='{"value":"\uDC00"}'
+lone_high_key='{"\uD800":"value"}'
+paired_surrogate='{"value":"\uD83D\uDE00"}'
+if ! printf '%s' "$lone_high_surrogate" | research_jcs_canonical_json >/dev/null 2>&1 \
+    && ! printf '%s' "$lone_low_surrogate" | research_jcs_canonical_json >/dev/null 2>&1 \
+    && ! printf '%s' "$lone_high_key" | research_jcs_canonical_json >/dev/null 2>&1 \
+    && [[ "$(printf '%s' "$paired_surrogate" | research_jcs_canonical_json)" == '{"value":"😀"}' ]]; then
+    pass
+else
+    fail "assistant-research JCS canonicalization accepted an unpaired surrogate or rejected a valid Unicode scalar"
+fi
+
+test_start "assistant-research canonical ContentDigest excludes self fields and preserves manifest order"
+packet_preimage_a='{"packet_id":"packet-practitioner","packet_set_id":"packet-set-1","content_digest":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","question":"Should we adopt the tool?","tier":"extensive","user_role_or_goal":"architecture decision","output_purpose":"Answer the research question","known_context":["local fixture"],"evidence_budget":"six sources","search_resource_budget":{"per_lens_max_queries":5,"per_lens_max_sources":6,"per_lens_max_minutes":15,"overall_max_queries":25,"overall_max_sources":30,"overall_max_minutes":75,"stop_condition":"saturation_or_hard_ceiling"},"source_policy":"public sources","isolation_policy":"sibling blind","lens_kind":"practitioner","packet_frozen_at":"2026-09-03T10:00:00Z"}'
+packet_preimage_b='{"packet_frozen_at":"2026-09-03T10:00:00Z","lens_kind":"practitioner","isolation_policy":"sibling blind","source_policy":"public sources","search_resource_budget":{"stop_condition":"saturation_or_hard_ceiling","overall_max_minutes":75,"overall_max_sources":30,"overall_max_queries":25,"per_lens_max_minutes":15,"per_lens_max_sources":6,"per_lens_max_queries":5},"evidence_budget":"six sources","known_context":["local fixture"],"output_purpose":"Answer the research question","user_role_or_goal":"architecture decision","tier":"extensive","question":"Should we adopt the tool?","content_digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000","packet_set_id":"packet-set-1","packet_id":"packet-practitioner"}'
+canonical_packet_a="$(jq 'del(.content_digest)' <<<"$packet_preimage_a" | research_jcs_canonical_json)"
+canonical_packet_b="$(jq 'del(.content_digest)' <<<"$packet_preimage_b" | research_jcs_canonical_json)"
+packet_digest_a="$(jq 'del(.content_digest)' <<<"$packet_preimage_a" | research_content_digest_json)"
+packet_digest_b="$(jq 'del(.content_digest)' <<<"$packet_preimage_b" | research_content_digest_json)"
+packet_digest_mutated="$(jq '.question = "Should we defer the tool?" | del(.content_digest)' <<<"$packet_preimage_a" | research_content_digest_json)"
+manifest_a='[{"packet_id":"packet-practitioner","lens_kind":"practitioner","content_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"packet_id":"packet-academic","lens_kind":"academic_or_technical_expert","content_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]'
+manifest_b='[{"packet_id":"packet-academic","lens_kind":"academic_or_technical_expert","content_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},{"packet_id":"packet-practitioner","lens_kind":"practitioner","content_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]'
+manifest_digest_a="$(printf '%s' "$manifest_a" | research_content_digest_json)"
+manifest_digest_b="$(printf '%s' "$manifest_b" | research_content_digest_json)"
+jcs_vector='{"z":"é","control":"\u000f\n\"\\\\","whole":1.0,"negative_zero":-0.0,"small":1e-7,"large":1e21}'
+jcs_vector_canonical="$(printf '%s' "$jcs_vector" | research_jcs_canonical_json)"
+content_digest_contract="$(printf '%s\n%s\n' "$(sed -n '1,125p' "$research_handoffs")" "$(sed -n '360,385p' "$research_output")")"
+content_digest_without_preimage="$(sed '/content_digest is ContentDigest over the RFC 8785 JCS bytes of a JSON object containing exactly/d' <<<"$content_digest_contract")"
+content_digest_without_exclusion="$(sed 's/it excludes content_digest itself/omits the self-field rule/' <<<"$content_digest_contract")"
+content_digest_without_algorithm="$(sed '/lowercase hexadecimal SHA-256/d' <<<"$content_digest_contract")"
+if jq -e 'has("content_digest")' <<<"$packet_preimage_a" >/dev/null \
+    && [[ "$canonical_packet_a" == "$canonical_packet_b" ]] \
+    && [[ "$packet_digest_a" == "$packet_digest_b" ]] \
+    && [[ "$packet_digest_a" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    && [[ "$packet_digest_a" != "$packet_digest_mutated" ]] \
+    && [[ "$manifest_digest_a" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    && [[ "$manifest_digest_a" != "$manifest_digest_b" ]] \
+    && [[ "$jcs_vector_canonical" == *'"negative_zero":0'* ]] \
+    && [[ "$jcs_vector_canonical" == *'"whole":1'* ]] \
+    && [[ "$jcs_vector_canonical" == *'"small":1e-7'* ]] \
+    && [[ "$jcs_vector_canonical" == *'"large":1e+21'* ]] \
+    && grep -Fq '\u000f' <<<"$jcs_vector_canonical" \
+    && grep -Fq '\n' <<<"$jcs_vector_canonical" \
+    && grep -Fq '\\' <<<"$jcs_vector_canonical" \
+    && [[ "$jcs_vector_canonical" == *'"z":"é"'* ]] \
+    && research_content_digest_contract_is_strict "$content_digest_contract" \
+    && ! research_content_digest_contract_is_strict "$content_digest_without_preimage" \
+    && ! research_content_digest_contract_is_strict "$content_digest_without_exclusion" \
+    && ! research_content_digest_contract_is_strict "$content_digest_without_algorithm"; then
+    pass
+else
+    fail "assistant-research ContentDigest oracle did not enforce canonical preimages, self-field exclusion, or ordered manifests"
+fi
+
+test_start "assistant-research relational resource oracle accepts an alternate under-ceiling response"
+alternate_response="$(mktemp "${TMPDIR:-/tmp}/assistant-research-under-ceiling.XXXXXX")"
+p0p4_register_cleanup "$alternate_response"
+research_jcs_node build delegated alternate >"$alternate_response"
+jq '
+  .five_lens_process_evidence.lens_dispatches |= map(
+    .search_resource_usage = {actual_queries:2,actual_sources:3,elapsed_minutes:8,termination_state:"saturation",exhausted_dimensions:[],confidence_downgraded:false}
+  )
+  | .five_lens_process_evidence.overall_resource_usage = {actual_queries:10,actual_sources:15,elapsed_minutes:8,termination_state:"saturation",exhausted_dimensions:[],confidence_downgraded:false}
+' "$alternate_response" >"$alternate_response.next" && mv "$alternate_response.next" "$alternate_response"
+if research_response_oracle_is_valid "$alternate_response"; then
+    pass
+else
+    fail "assistant-research relational resource oracle rejected a valid alternate under-ceiling response"
+fi
+
+test_start "assistant-research relational resource oracle accepts a valid multi-wave delegated schedule"
+multi_wave_response="$(mktemp "${TMPDIR:-/tmp}/assistant-research-multi-wave.XXXXXX")"
+p0p4_register_cleanup "$multi_wave_response"
+research_jcs_node build delegated alternate >"$multi_wave_response"
+jq '
+  .five_lens_process_evidence.lens_dispatches[2].wave_id = "wave-2"
+  | .five_lens_process_evidence.lens_dispatches[3].wave_id = "wave-2"
+  | .five_lens_process_evidence.lens_dispatches[4].wave_id = "wave-2"
+  | .five_lens_process_evidence.wave_coverage = [
+      {wave_id:"wave-1",capacity:2,lens_kinds:["practitioner","academic_or_technical_expert"]},
+      {wave_id:"wave-2",capacity:3,lens_kinds:["skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]}
+    ]
+  | .five_lens_process_evidence.overall_resource_usage.elapsed_minutes = 20
+' "$multi_wave_response" >"$multi_wave_response.next" && mv "$multi_wave_response.next" "$multi_wave_response"
+if research_response_oracle_is_valid "$multi_wave_response"; then
+    pass
+else
+    fail "assistant-research relational resource oracle rejected a valid multi-wave delegated schedule"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
