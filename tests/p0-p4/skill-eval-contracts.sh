@@ -344,6 +344,13 @@ p0p4_write_assistant_research_fallback_response() {
     research_jcs_node build sequential_fallback "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
 }
 
+p0p4_write_assistant_research_mixed_peer_fallback_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    research_jcs_node build delegated_peer_fallback "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
+}
+
 p0p4_write_skill_eval_responses() {
     local output_dir="$1"
     local omit_skill="${2:-}"
@@ -623,6 +630,9 @@ p0p4_write_skill_eval_responses() {
                 case "$skill_name:$id" in
                     assistant-research:five-lens-decision-briefing-uses-storm-style-workflow)
                         p0p4_write_assistant_research_delegated_response "$response_path" "$required_summary"
+                        ;;
+                    assistant-research:five-lens-delegated-lenses-sequential-peer-fallback)
+                        p0p4_write_assistant_research_mixed_peer_fallback_response "$response_path" "$required_summary"
                         ;;
                     assistant-research:five-lens-sequential-fallback-preserves-process-evidence)
                         p0p4_write_assistant_research_fallback_response "$response_path" "$required_summary"

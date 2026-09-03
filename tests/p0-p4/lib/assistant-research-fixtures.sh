@@ -62,42 +62,56 @@ function packet(mode, lens, ordinal) {
   return {packet_id: `packet-${["practitioner", "academic", "skeptic", "economist", "historian"][ordinal]}`, packet_set_id: mode === "delegated" ? "packet-set-1" : "fallback-packet-set-1", question: "Should we adopt the tool?", tier: "extensive", user_role_or_goal: "architecture decision", output_purpose: "Answer the research question", known_context: ["local fixture"], evidence_budget: "six sources", search_resource_budget: {per_lens_max_queries: 5, per_lens_max_sources: 6, per_lens_max_minutes: 15, overall_max_queries: 25, overall_max_sources: 30, overall_max_minutes: 75, stop_condition: "saturation_or_hard_ceiling"}, source_policy: "public sources", isolation_policy: "sibling blind", lens_kind: lens, packet_frozen_at: "2026-09-03T10:00:00Z"};
 }
 function build(mode, report) {
-  const isFallback = mode === "sequential_fallback";
-  const packets = lenses.map((lens, index) => { const value = packet(mode, lens, index); return {...value, content_digest: digest(value)}; });
+  const lensMode = mode === "sequential_fallback" ? "sequential_fallback" : "delegated";
+  const peerMode = mode === "delegated_peer_fallback" || mode === "sequential_fallback" ? "sequential_fallback" : "delegated";
+  const isFallback = lensMode === "sequential_fallback";
+  const packets = lenses.map((lens, index) => { const value = packet(lensMode, lens, index); return {...value, content_digest: digest(value)}; });
   const manifest = packets.map(({packet_id, lens_kind, content_digest}) => ({packet_id, lens_kind, content_digest}));
   const records = lenses.map((lens, index) => {
     const assignment_id = isFallback ? `fallback-assignment-${index + 1}` : `assignment-${index + 1}`;
-    const result = lensResult(mode, lens);
+    const result = lensResult(lensMode, lens);
     const resultDigest = digest(result);
-    const resourceUsage = usage(mode, lens);
+    const resourceUsage = usage(lensMode, lens);
     const common = {lens_kind: lens, assignment_id, packet_id: packets[index].packet_id, packet_set_id: packets[index].packet_set_id, packet_content_digest: packets[index].content_digest, lens_result_digest: resultDigest, search_resource_usage: resourceUsage, return_validated: true};
     return isFallback ? {...common, root_pass_id: `root-pass-${index + 1}`} : {...common, dispatch_identity: `lens-native-${index + 1}`, wave_id: "wave-1"};
   });
   const overall = isFallback ? {actual_queries: 25, actual_sources: 30, elapsed_minutes: 75, termination_state: "ceiling_exhausted", exhausted_dimensions: ["queries", "sources", "elapsed_time"], exhaustion_gap: "Overall ceilings reached before cross-lens verification.", confidence_downgraded: true} : {actual_queries: 15, actual_sources: 20, elapsed_minutes: 10, termination_state: "saturation", exhausted_dimensions: [], confidence_downgraded: false};
-  const accepted_lens_results = records.map(record => { const result = lensResult(mode, record.lens_kind); return {lens_kind: record.lens_kind, assignment_id: record.assignment_id, lens_result_digest: record.lens_result_digest, ...result}; });
-  const process = {lens_execution_mode: mode, peer_review_execution_mode: mode, subagent_policy_state: isFallback ? "subagents_unavailable" : "delegation_triggered", subagent_trigger_scope: isFallback ? undefined : ["five_lens_briefing"], reduced_independence: isFallback, frozen_packet_set: {packet_set_id: packets[0].packet_set_id, packet_set_digest: digest(manifest), packet_ids: packets.map(p => p.packet_id), packet_manifest_order: packets.map(p => p.packet_id), packet_manifest: manifest, packet_set_frozen_at: "2026-09-03T10:00:00Z", pre_dispatch_record_id: "pre-dispatch-1", first_lens_execution_at: "2026-09-03T10:01:00Z", first_lens_execution_evidence_ref: "execution-log-1"}, frozen_assignment_packet_ids: packets.map(p => p.packet_id), accepted_lens_results, search_resource_budget: packets[0].search_resource_budget, overall_resource_usage: overall, root_synthesis_ownership: "orchestrator_only"};
-  if (isFallback) Object.assign(process, {fallback_lens_passes: records, peer_review_assignment_id: "fallback-peer-assignment-1", peer_review_fallback_pass_id: "peer-root-pass-1", lens_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "dispatch unavailable", evidence_ref: "spawn-error-1"}, peer_review_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "peer dispatch unavailable", evidence_ref: "peer-spawn-error-1"}});
-  else Object.assign(process, {lens_dispatches: records, wave_coverage: [{wave_id: "wave-1", capacity: 5, lens_kinds: lenses}], peer_review_assignment_id: "peer-assignment-1", peer_reviewer_identity: "peer-native-1", peer_review_revision_disposition_id: "revision-closure-1"});
+  const accepted_lens_results = records.map(record => { const result = lensResult(lensMode, record.lens_kind); return {lens_kind: record.lens_kind, assignment_id: record.assignment_id, lens_result_digest: record.lens_result_digest, ...result}; });
+  const process = {lens_execution_mode: lensMode, peer_review_execution_mode: peerMode, subagent_policy_state: isFallback ? "subagents_unavailable" : "delegation_triggered", subagent_trigger_scope: isFallback ? undefined : ["five_lens_briefing"], reduced_independence: isFallback || peerMode === "sequential_fallback", frozen_packet_set: {packet_set_id: packets[0].packet_set_id, packet_set_digest: digest(manifest), packet_ids: packets.map(p => p.packet_id), packet_manifest_order: packets.map(p => p.packet_id), packet_manifest: manifest, packet_set_frozen_at: "2026-09-03T10:00:00Z", pre_dispatch_record_id: "pre-dispatch-1", first_lens_execution_at: "2026-09-03T10:01:00Z", first_lens_execution_evidence_ref: "execution-log-1"}, frozen_assignment_packet_ids: packets.map(p => p.packet_id), accepted_lens_results, search_resource_budget: packets[0].search_resource_budget, overall_resource_usage: overall, root_synthesis_ownership: "orchestrator_only"};
+  if (isFallback) Object.assign(process, {fallback_lens_passes: records, lens_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "dispatch unavailable", evidence_ref: "spawn-error-1"}});
+  else Object.assign(process, {lens_dispatches: records, wave_coverage: [{wave_id: "wave-1", capacity: 5, lens_kinds: lenses}]});
+  if (peerMode === "sequential_fallback") Object.assign(process, {peer_review_assignment_id: isFallback ? "fallback-peer-assignment-1" : "peer-fallback-assignment-1", peer_review_fallback_pass_id: "peer-root-pass-1", peer_review_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "peer dispatch unavailable", evidence_ref: "peer-spawn-error-1"}});
+  else Object.assign(process, {peer_review_assignment_id: "peer-assignment-1", peer_reviewer_identity: "peer-native-1", peer_review_revision_disposition_id: "revision-closure-1"});
   const peerUsableFields = {confidence_scores: ["medium"], weakest_claim: "The evidence base is limited to the frozen fixture.", bias_or_lens_dominance: "No lens dominates the root synthesis.", missing_sixth_perspective: "No additional perspective is required for this fixture.", falsification_test: "Compare against an independent source record.", revised_recommendation_if_needed: "Retain calibrated confidence.", evidence: [{source: "source:peer-review", detail: "Peer reviewed the accepted lens ledger.", evidence_status: "source_backed"}]};
-  const peer_review = isFallback ? {peer_review_execution_mode: mode, peer_review_assignment_id: "fallback-peer-assignment-1", peer_review_fallback_pass_id: "peer-root-pass-1", status: "DONE", verdict: "accepted", required_revisions: [], ...peerUsableFields} : {peer_review_execution_mode: mode, peer_review_assignment_id: "peer-assignment-1", peer_reviewer_identity: "peer-native-1", status: "DONE_WITH_CONCERNS", verdict: "revise", required_revisions: ["downgrade unsupported claim"], revision_disposition_id: "revision-closure-1", revision_disposition: [{required_revision: "downgrade unsupported claim", outcome: "claim_downgraded", closure_evidence: "claim confidence updated"}], ...peerUsableFields};
+  const peer_review = peerMode === "sequential_fallback" ? {peer_review_execution_mode: peerMode, peer_review_assignment_id: process.peer_review_assignment_id, peer_review_fallback_pass_id: process.peer_review_fallback_pass_id, status: "DONE", verdict: "accepted", required_revisions: [], ...peerUsableFields} : {peer_review_execution_mode: peerMode, peer_review_assignment_id: "peer-assignment-1", peer_reviewer_identity: "peer-native-1", status: "DONE_WITH_CONCERNS", verdict: "revise", required_revisions: ["downgrade unsupported claim"], revision_disposition_id: "revision-closure-1", revision_disposition: [{required_revision: "downgrade unsupported claim", outcome: "claim_downgraded", closure_evidence: "claim confidence updated"}], ...peerUsableFields};
   const perspective_scan = accepted_lens_results.map(result => ({lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, core_position: result.core_position, sources_or_verified_urls: result.sources_or_verified_urls, likely_blind_spot: result.likely_blind_spot, unique_insight: result.unique_insight, confidence: result.confidence}));
   const question_trace = accepted_lens_results.map(result => ({lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, question: result.lens_question, answer: result.answer_or_gap, sources_or_verified_urls: result.sources_or_verified_urls, follow_ups: result.follow_ups, evidence_status: result.evidence_status}));
-  return {report, research_method: "five_lens_briefing", tier: "extensive", peer_review, five_lens_process_evidence: process, perspective_scan, question_trace, gaps: isFallback ? ["Overall ceilings left source confirmation unresolved."] : []};
+  const gaps = isFallback ? ["Overall ceilings left source confirmation unresolved."] : [];
+  return {report, research_method: "five_lens_briefing", tier: "extensive", findings: [{finding: isFallback ? "Source confirmation remains unresolved." : "The evidence supports a calibrated investigation.", confidence: isFallback ? "low" : "medium", sources: ["source:research-corpus:summary"]}], conflicts: [], peer_review, five_lens_process_evidence: process, perspective_scan, question_trace, contradiction_map: {direct_conflicts: [], strongest_evidence: isFallback ? "No source-backed conclusion is available." : "Validated lens source identifiers.", weakest_evidence: isFallback ? "Ceiling-exhausted source coverage." : "Fixture-only evidence scope.", consensus: [isFallback ? "Further confirmation is required." : "Proceed only with verification."], biggest_unresolved_question: "Whether independent source confirmation changes the recommendation.", missing_angle_or_gap: isFallback ? "Independent source confirmation." : "Production evidence beyond the fixture."}, synthesis_briefing: {executive_summary: isFallback ? "The available process evidence is insufficient for adoption." : "The fixture supports a bounded verification step.", ranked_key_findings: ["All five lenses completed their assigned process.", isFallback ? "Ceilings exhausted before source confirmation." : "The accepted results retain their source identifiers.", "The recommendation remains calibrated to the evidence."], hidden_connection: "The frozen packet ledger makes synthesis traceable.", actionable_implication: "Run an independent source check before adopting the tool.", recommendation: "investigate_further", high_stakes_caveat: "This fixture is educational due diligence, not financial, legal, medical, or professional advice.", frontier_question: "Which independent source would most change the decision?"}, summary: isFallback ? "Do not adopt until independent source confirmation is available." : "Investigate further before deciding whether to adopt the tool.", gaps};
 }
 function validate(response) {
   const errors = [];
   const expect = (condition, message) => { if (!condition) errors.push(message); };
   const process = response.five_lens_process_evidence || {};
   const mode = process.lens_execution_mode;
+  const peerMode = process.peer_review_execution_mode;
   const records = mode === "delegated" ? process.lens_dispatches : process.fallback_lens_passes;
   const budget = process.search_resource_budget || {};
   expect(Array.isArray(records) && records.length === 5, "records:exact-five");
   expect(mode === "delegated" || mode === "sequential_fallback", "process:execution-mode");
   if (mode === "delegated") {
     expect(!Object.hasOwn(process, "fallback_lens_passes"), "process:no-fallback-leakage");
-    expect(process.subagent_policy_state === "delegation_triggered" && Array.isArray(process.subagent_trigger_scope) && process.subagent_trigger_scope.length > 0 && process.root_synthesis_ownership === "orchestrator_only" && process.peer_review_execution_mode === response.peer_review?.peer_review_execution_mode && response.peer_review?.peer_review_execution_mode === "delegated" && response.peer_review?.peer_reviewer_identity === process.peer_reviewer_identity && response.peer_review?.verdict === "revise" && Array.isArray(response.peer_review?.required_revisions) && response.peer_review.required_revisions.length > 0 && response.peer_review?.revision_disposition_id === process.peer_review_revision_disposition_id, "peer:delegated-binding");
+    expect(process.subagent_policy_state === "delegation_triggered" && Array.isArray(process.subagent_trigger_scope) && process.subagent_trigger_scope.length > 0 && process.root_synthesis_ownership === "orchestrator_only", "lens:delegated-binding");
   } else {
-    expect(!Object.hasOwn(process, "lens_dispatches") && !Object.hasOwn(process, "peer_reviewer_identity") && process.root_synthesis_ownership === "orchestrator_only" && response.peer_review?.peer_review_execution_mode === "sequential_fallback" && response.peer_review?.peer_review_fallback_pass_id === process.peer_review_fallback_pass_id && typeof process.lens_fallback_evidence?.detail === "string" && process.lens_fallback_evidence.detail.length > 0 && typeof process.lens_fallback_evidence?.evidence_ref === "string" && process.lens_fallback_evidence.evidence_ref.length > 0 && typeof process.peer_review_fallback_evidence?.evidence_ref === "string" && process.peer_review_fallback_evidence.evidence_ref.length > 0, "peer:fallback-binding");
+    expect(!Object.hasOwn(process, "lens_dispatches") && process.root_synthesis_ownership === "orchestrator_only" && typeof process.lens_fallback_evidence?.detail === "string" && process.lens_fallback_evidence.detail.length > 0 && typeof process.lens_fallback_evidence?.evidence_ref === "string" && process.lens_fallback_evidence.evidence_ref.length > 0, "lens:fallback-binding");
+  }
+  const peer = response.peer_review || {};
+  expect(peerMode === "delegated" || peerMode === "sequential_fallback", "peer:execution-mode");
+  expect(peer.peer_review_execution_mode === peerMode && peer.peer_review_assignment_id === process.peer_review_assignment_id, "peer:assignment-binding");
+  if (peerMode === "delegated") {
+    expect(typeof process.peer_reviewer_identity === "string" && process.peer_reviewer_identity.length > 0 && peer.peer_reviewer_identity === process.peer_reviewer_identity && peer.verdict === "revise" && Array.isArray(peer.required_revisions) && peer.required_revisions.length > 0 && peer.revision_disposition_id === process.peer_review_revision_disposition_id && !Object.hasOwn(process, "peer_review_fallback_pass_id"), "peer:delegated-binding");
+  } else {
+    expect(!Object.hasOwn(process, "peer_reviewer_identity") && peer.peer_review_fallback_pass_id === process.peer_review_fallback_pass_id && typeof process.peer_review_fallback_evidence?.detail === "string" && process.peer_review_fallback_evidence.detail.length > 0 && typeof process.peer_review_fallback_evidence?.evidence_ref === "string" && process.peer_review_fallback_evidence.evidence_ref.length > 0, "peer:fallback-binding");
   }
   const manifest = process.frozen_packet_set && process.frozen_packet_set.packet_manifest;
   const packetById = new Map((manifest || []).map(packet => [packet.packet_id, packet]));
@@ -125,20 +139,31 @@ function validate(response) {
       if (typeof source !== "string" || source.trim().length === 0) return false;
       if (!/^https?:\/\//i.test(source)) return true;
       let url; try { url = new URL(source); } catch { return false; }
-      const host = url.hostname.toLowerCase().replace(/\.$/, "");
-      if (url.protocol !== "https:" || url.username || url.password || !host || host === "localhost" || /(?:\.invalid|\.localhost|\.local|\.internal|\.test|\.example)$/.test(host) || /^[0-9]+$/.test(host)) return false;
+      const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+      const discardOnly100Prefix = value => {
+        if (net.isIP(value) !== 6) return false;
+        const [left, right] = value.split("::");
+        const leftGroups = left ? left.split(":") : [];
+        const rightGroups = right === undefined ? [] : right ? right.split(":") : [];
+        const groups = right === undefined ? leftGroups : [...leftGroups, ...Array(8 - leftGroups.length - rightGroups.length).fill("0"), ...rightGroups];
+        return groups.length === 8 && [0x100, 0, 0, 0].every((expected, index) => Number.parseInt(groups[index], 16) === expected);
+      };
+      if (url.protocol !== "https:" || url.username || url.password || !host || ["localhost", "invalid", "local", "internal", "test", "example"].includes(host) || /(?:\.invalid|\.localhost|\.local|\.internal|\.test|\.example)$/.test(host) || /^[0-9]+$/.test(host) || (!net.isIP(host) && !host.includes("."))) return false;
       if (net.isIP(host) === 4) {
         const [a, b] = host.split(".").map(Number);
         return !(a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && (b === 0 || b === 168 || b === 2)) || (a === 198 && (b === 18 || b === 19 || b === 51)) || (a === 203 && b === 0));
       }
-      return !(net.isIP(host) === 6 && (host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") || host.startsWith("::ffff:")));
+      return !(net.isIP(host) === 6 && (host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") || host.startsWith("::ffff:") || discardOnly100Prefix(host)));
     };
     const sourcesValid = (status, sources, gaps, label) => {
       const populated = Array.isArray(sources) && sources.length > 0;
       expect(Array.isArray(sources) && sources.every(sourceReferenceValid) && (status !== "source_backed" || populated) && (populated || (Array.isArray(gaps) && gaps.length > 0)), label);
     };
     sourcesValid(result?.evidence_status, result?.sources_or_verified_urls, result?.gaps, "sources:accepted-result");
-    for (const followUp of result?.follow_ups || []) sourcesValid(followUp?.evidence_status, followUp?.sources_or_verified_urls, result?.gaps, "sources:follow-up");
+    const followUps = result?.follow_ups;
+    const noneNeeded = Array.isArray(followUps) ? followUps.filter(followUp => followUp?.decision === "none_needed") : [];
+    expect(Array.isArray(followUps) && followUps.length > 0 && ((noneNeeded.length === 1 && followUps.length === 1) || (noneNeeded.length === 0 && followUps.every(followUp => followUp?.decision === "follow_up" && typeof followUp?.question === "string" && followUp.question.length > 0))), "follow-ups:exclusive-none-needed");
+    for (const followUp of followUps || []) sourcesValid(followUp?.evidence_status, followUp?.sources_or_verified_urls, result?.gaps, "sources:follow-up");
     const validUsage = usage && ["actual_queries","actual_sources","elapsed_minutes"].every(key => Number.isInteger(usage[key]) && usage[key] >= 0) && usage.actual_queries <= budget.per_lens_max_queries && usage.actual_sources <= budget.per_lens_max_sources && usage.elapsed_minutes <= budget.per_lens_max_minutes;
     expect(validUsage, "usage:per-lens-ceiling");
     const exhausted = usage?.termination_state === "ceiling_exhausted";
@@ -186,8 +211,7 @@ function validate(response) {
   const overallExhausted = overall?.termination_state === "ceiling_exhausted";
   const overallTruthTable = overallDimensionsValid && ((overallComplete && overallDimensions.length === 0 && !overall?.exhaustion_gap && overall?.confidence_downgraded === false) || (overallExhausted && overallDimensions.length > 0 && overallDimensions.every(dimension => overallCeilings[dimension][0] === overallCeilings[dimension][1]) && typeof overall?.exhaustion_gap === "string" && overall.exhaustion_gap.length > 0 && overall.confidence_downgraded === true));
   expect(overall && [overall.actual_queries, overall.actual_sources, overall.elapsed_minutes].every(Number.isInteger) && overall.actual_queries >= 0 && overall.actual_sources >= 0 && overall.elapsed_minutes >= 0 && overall.actual_queries === querySum && overall.actual_sources === sourceSum && overall.actual_queries <= budget.overall_max_queries && overall.actual_sources <= budget.overall_max_sources && overall.elapsed_minutes >= scheduleElapsedLowerBound && overall.elapsed_minutes <= budget.overall_max_minutes && overallTruthTable, "usage:overall-sums-schedule-wall-clock-and-termination");
-  if (mode === "sequential_fallback") expect(!rootPasses.has(process.peer_review_fallback_pass_id), "peer:fallback-fresh-pass");
-  const peer = response.peer_review || {};
+  if (peerMode === "sequential_fallback") expect(!rootPasses.has(process.peer_review_fallback_pass_id), "peer:fallback-fresh-pass");
   const usablePeer = ["DONE", "DONE_WITH_CONCERNS"].includes(peer.status);
   const peerVerdictValid = (peer.status === "DONE" && peer.verdict === "accepted") || (peer.status === "DONE_WITH_CONCERNS" && ["accepted_with_concerns", "revise"].includes(peer.verdict)) || (["NEEDS_CONTEXT", "BLOCKED"].includes(peer.status) && peer.verdict === "blocked");
   const peerUsableFields = ["confidence_scores", "weakest_claim", "bias_or_lens_dominance", "missing_sixth_perspective", "falsification_test", "revised_recommendation_if_needed", "evidence"];
@@ -195,8 +219,19 @@ function validate(response) {
   const revisions = peer.required_revisions;
   const revisionClosure = peer.revision_disposition;
   const reviseClosureValid = peer.verdict !== "revise" || (Array.isArray(revisions) && revisions.length > 0 && typeof peer.revision_disposition_id === "string" && peer.revision_disposition_id.length > 0 && Array.isArray(revisionClosure) && revisionClosure.length === revisions.length && revisionClosure.every(item => revisions.includes(item?.required_revision) && ["applied", "claim_downgraded"].includes(item?.outcome) && typeof item?.closure_evidence === "string" && item.closure_evidence.length > 0));
-  expect(peerVerdictValid && (!usablePeer || (peerUsableComplete && Array.isArray(revisions) && (peer.verdict === "revise" ? revisions.length > 0 : revisions.length === 0))) && reviseClosureValid, "peer:status-and-revision-truth-table");
-  if (mode === "delegated") expect(!identities.has(peer.peer_reviewer_identity), "peer:distinct-from-lens-identities");
+  expect(usablePeer && peerVerdictValid && peerUsableComplete && Array.isArray(revisions) && (peer.verdict === "revise" ? revisions.length > 0 : revisions.length === 0) && reviseClosureValid, "peer:status-and-revision-truth-table");
+  if (peerMode === "delegated") expect(!identities.has(peer.peer_reviewer_identity), "peer:distinct-from-lens-identities");
+  expect(process.reduced_independence === (mode === "sequential_fallback" || peerMode === "sequential_fallback"), "process:reduced-independence");
+  const nonblank = value => typeof value === "string" && value.length > 0;
+  const sources = value => Array.isArray(value) && value.length > 0 && value.every(nonblank);
+  const findings = response.findings;
+  expect(Array.isArray(findings) && findings.length > 0 && findings.every(finding => nonblank(finding?.finding) && ["high", "medium", "low"].includes(finding?.confidence) && sources(finding?.sources) && (!Object.hasOwn(finding, "verified_urls") || sources(finding.verified_urls))), "artifacts:findings");
+  expect(Array.isArray(response.conflicts) && response.conflicts.every(conflict => ["claim_a", "source_a", "claim_b", "source_b", "assessment"].every(key => nonblank(conflict?.[key]))), "artifacts:conflicts");
+  expect(Array.isArray(response.gaps) && response.gaps.every(nonblank) && nonblank(response.summary), "artifacts:gaps-and-summary");
+  const contradiction = response.contradiction_map || {};
+  expect(Array.isArray(contradiction.direct_conflicts) && contradiction.direct_conflicts.every(nonblank) && nonblank(contradiction.strongest_evidence) && nonblank(contradiction.weakest_evidence) && Array.isArray(contradiction.consensus) && contradiction.consensus.every(nonblank) && nonblank(contradiction.biggest_unresolved_question) && nonblank(contradiction.missing_angle_or_gap), "artifacts:contradiction-map");
+  const synthesis = response.synthesis_briefing || {};
+  expect(nonblank(synthesis.executive_summary) && Array.isArray(synthesis.ranked_key_findings) && synthesis.ranked_key_findings.length >= 3 && synthesis.ranked_key_findings.every(nonblank) && nonblank(synthesis.hidden_connection) && nonblank(synthesis.actionable_implication) && ["do", "wait", "avoid", "investigate_further"].includes(synthesis.recommendation) && nonblank(synthesis.frontier_question), "artifacts:synthesis-briefing");
   if (errors.length) { console.error([...new Set(errors)].join("\n")); return false; }
   return true;
 }
@@ -233,6 +268,8 @@ write_schema_valid_five_lens_eval_response() {
 
     if [[ "$mode" == "delegated" ]]; then
         case_id="five-lens-decision-briefing-uses-storm-style-workflow"
+    elif [[ "$mode" == "delegated_peer_fallback" ]]; then
+        case_id="five-lens-delegated-lenses-sequential-peer-fallback"
     else
         case_id="five-lens-sequential-fallback-preserves-process-evidence"
     fi

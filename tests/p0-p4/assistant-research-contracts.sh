@@ -32,6 +32,12 @@ write_research_eval_responses() {
                 | (.machine_expectations.structured_json_assertions? // [] | length > 0)
             ' "$research_evals" >/dev/null; then
             write_schema_valid_five_lens_eval_response sequential_fallback "$output_dir/assistant-research/$case_id.txt"
+        elif [[ "$case_id" == "five-lens-delegated-lenses-sequential-peer-fallback" ]] \
+            && jq -e --arg case_id "$case_id" '
+                .cases[] | select(.id == $case_id)
+                | (.machine_expectations.structured_json_assertions? // [] | length > 0)
+            ' "$research_evals" >/dev/null; then
+            write_schema_valid_five_lens_eval_response delegated_peer_fallback "$output_dir/assistant-research/$case_id.txt"
         else
             jq -r --arg case_id "$case_id" '
                 .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]
@@ -90,6 +96,17 @@ research_structured_mutation_is_rejected() {
         synchronized_assignments) mutation_filter='.five_lens_process_evidence.accepted_lens_results |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.lens_dispatches |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.peer_review_assignment_id = "assignment-shared" | .peer_review.peer_review_assignment_id = "assignment-shared"' ;;
         missing_delegated_trigger_scope) mutation_filter='del(.five_lens_process_evidence.subagent_trigger_scope)' ;;
         lens_worker_synthesis) mutation_filter='.five_lens_process_evidence.root_synthesis_ownership = "lens_worker"' ;;
+        missing_findings) mutation_filter='del(.findings)' ;;
+        missing_conflicts) mutation_filter='del(.conflicts)' ;;
+        missing_gaps) mutation_filter='del(.gaps)' ;;
+        missing_summary) mutation_filter='del(.summary)' ;;
+        missing_contradiction_map) mutation_filter='del(.contradiction_map)' ;;
+        missing_synthesis_briefing) mutation_filter='del(.synthesis_briefing)' ;;
+        duplicate_none_needed) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].follow_ups += [.five_lens_process_evidence.accepted_lens_results[0].follow_ups[0]]' ;;
+        mixed_none_needed_follow_up) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].follow_ups += [{decision:"follow_up",question:"What independent source can verify this?",answer_or_gap:"No independent source has been checked.",sources_or_verified_urls:["source:research-corpus:follow-up"],evidence_status:"source_backed"}]' ;;
+        source_reserved_local) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://metadata.local/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://metadata.local/follow-up"]' ;;
+        source_bare_hostname) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://metadata/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://metadata/follow-up"]' ;;
+        source_ipv6_discard_only) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[100::1]/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[100::1]/follow-up"]' ;;
         schedule_wall_clock_drift) mutation_filter='
             .five_lens_process_evidence.lens_dispatches[2].wave_id = "wave-2"
             | .five_lens_process_evidence.lens_dispatches[3].wave_id = "wave-2"
@@ -103,7 +120,7 @@ research_structured_mutation_is_rejected() {
     esac
     jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
     case "$mutation" in
-        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments) research_refresh_response_derivatives "$response_path" ;;
+        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments|duplicate_none_needed|mixed_none_needed_follow_up|source_reserved_local|source_bare_hostname) research_refresh_response_derivatives "$response_path" ;;
     esac
 
     if research_response_oracle_is_valid "$response_path"; then
@@ -281,7 +298,8 @@ research_official_response_mutation_is_rejected() {
     local eval_dir eval_output response_path mutation_filter manifest_digest
 
     case "$mutation" in
-        missing_lens_fallback_evidence_ref) case_id="five-lens-sequential-fallback-preserves-process-evidence" ;;
+        missing_lens_fallback_evidence_ref|unusable_peer_needs_context|unusable_peer_blocked) case_id="five-lens-sequential-fallback-preserves-process-evidence" ;;
+        stale_revision_metadata|invalid_peer_fallback_basis) case_id="five-lens-delegated-lenses-sequential-peer-fallback" ;;
     esac
     eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-official-negative.XXXXXX")"
     eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-official-negative-output.XXXXXX")"
@@ -312,6 +330,33 @@ research_official_response_mutation_is_rejected() {
         missing_delegated_trigger_scope) mutation_filter='del(.five_lens_process_evidence.subagent_trigger_scope)' ;;
         lens_worker_synthesis) mutation_filter='.five_lens_process_evidence.root_synthesis_ownership = "lens_worker"' ;;
         missing_lens_fallback_evidence_ref) mutation_filter='del(.five_lens_process_evidence.lens_fallback_evidence.evidence_ref)' ;;
+        missing_findings) mutation_filter='del(.findings)' ;;
+        missing_conflicts) mutation_filter='del(.conflicts)' ;;
+        missing_gaps) mutation_filter='del(.gaps)' ;;
+        missing_summary) mutation_filter='del(.summary)' ;;
+        missing_contradiction_map) mutation_filter='del(.contradiction_map)' ;;
+        missing_synthesis_briefing) mutation_filter='del(.synthesis_briefing)' ;;
+        unusable_peer_needs_context) mutation_filter='.peer_review.status = "NEEDS_CONTEXT" | .peer_review.verdict = "blocked" | .peer_review.open_questions = ["Which source is required to complete review?"] | .peer_review.status_detail = "Peer review cannot yet produce a usable verdict." | del(.peer_review.confidence_scores,.peer_review.weakest_claim,.peer_review.bias_or_lens_dominance,.peer_review.missing_sixth_perspective,.peer_review.falsification_test,.peer_review.revised_recommendation_if_needed,.peer_review.evidence,.peer_review.required_revisions)' ;;
+        unusable_peer_blocked) mutation_filter='.peer_review.status = "BLOCKED" | .peer_review.verdict = "blocked" | .peer_review.open_questions = ["Which dependency prevents peer review?"] | .peer_review.status_detail = "Peer review is blocked by unavailable evidence." | .peer_review.blocker_type = "tool_failure" | .peer_review.blocker_evidence = ["fixture-peer-blocker"] | del(.peer_review.confidence_scores,.peer_review.weakest_claim,.peer_review.bias_or_lens_dominance,.peer_review.missing_sixth_perspective,.peer_review.falsification_test,.peer_review.revised_recommendation_if_needed,.peer_review.evidence,.peer_review.required_revisions)' ;;
+        duplicate_none_needed) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].follow_ups += [.five_lens_process_evidence.accepted_lens_results[0].follow_ups[0]]' ;;
+        mixed_none_needed_follow_up) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].follow_ups += [{decision:"follow_up",question:"What independent source can verify this?",answer_or_gap:"No independent source has been checked.",sources_or_verified_urls:["source:research-corpus:follow-up"],evidence_status:"source_backed"}]' ;;
+        source_reserved_local) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://metadata.local/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://metadata.local/follow-up"]' ;;
+        source_bare_hostname) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://metadata/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://metadata/follow-up"]' ;;
+        source_ipv6_discard_only) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[100::1]/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[100::1]/follow-up"]' ;;
+        peer_process_assignment_mismatch) mutation_filter='.five_lens_process_evidence.peer_review_assignment_id = "peer-assignment-other"' ;;
+        finding_source_reserved_local) mutation_filter='.findings[0].sources = ["https://metadata.local/research"]' ;;
+        hidden_finding_field) mutation_filter='.findings[0].unexpected = "hidden"' ;;
+        delegated_policy_state_mismatch) mutation_filter='.five_lens_process_evidence.subagent_policy_state = "subagents_unavailable"' ;;
+        stale_revision_metadata) mutation_filter='.five_lens_process_evidence.peer_review_revision_disposition_id = "stale-revision"' ;;
+        invalid_peer_fallback_basis) mutation_filter='.five_lens_process_evidence.peer_review_fallback_evidence.basis = "unknown"' ;;
+        missing_high_stakes_caveat) mutation_filter='del(.synthesis_briefing.high_stakes_caveat)' ;;
+        malformed_findings) mutation_filter='.findings = {}' ;;
+        malformed_conflicts) mutation_filter='.conflicts = {}' ;;
+        malformed_perspective_scan) mutation_filter='.perspective_scan = {}' ;;
+        malformed_question_trace) mutation_filter='.question_trace = {}' ;;
+        malformed_peer_evidence) mutation_filter='.peer_review.evidence = {}' ;;
+        malformed_revision_disposition) mutation_filter='.peer_review.revision_disposition = {}' ;;
+        malformed_required_revisions) mutation_filter='.peer_review.required_revisions = {}' ;;
         *) return 2 ;;
     esac
     jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
@@ -321,14 +366,29 @@ research_official_response_mutation_is_rejected() {
             && mv "$response_path.mutated" "$response_path"
     fi
     case "$mutation" in
-        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments) research_refresh_response_derivatives "$response_path" ;;
+        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments|duplicate_none_needed|mixed_none_needed_follow_up|source_reserved_local|source_bare_hostname|source_ipv6_discard_only) research_refresh_response_derivatives "$response_path" ;;
     esac
 
     if "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1; then
         printf 'official runner accepted mutation: %s\n' "$mutation" >&2
         return 1
     fi
-    grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output"
+    grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output" \
+        && { case "$mutation" in malformed_*) ! grep -Fq 'TypeError:' "$eval_output" ;; *) true ;; esac; }
+}
+
+research_mixed_peer_fallback_official_runner_is_accepted() {
+    local case_id="five-lens-delegated-lenses-sequential-peer-fallback"
+    local eval_dir eval_output response_path report
+
+    eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-mixed-peer.XXXXXX")"
+    eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-mixed-peer-output.XXXXXX")"
+    p0p4_register_cleanup "$eval_dir" "$eval_output"
+    write_research_eval_responses "$eval_dir"
+    response_path="$eval_dir/assistant-research/$case_id.txt"
+    report="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings | join("\\n")' "$research_evals")"
+    research_jcs_node build delegated_peer_fallback "$report" >"$response_path"
+    "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1
 }
 
 test_start "assistant-research candidate mechanisms stay evidence-backed and unproven"
@@ -1170,7 +1230,17 @@ if [[ "${#structured_oracle_missing[@]}" -eq 0 ]] \
     && research_structured_mutation_is_rejected source_backed_empty \
     && research_structured_mutation_is_rejected synchronized_assignments \
     && research_structured_mutation_is_rejected missing_delegated_trigger_scope \
-    && research_structured_mutation_is_rejected lens_worker_synthesis; then
+    && research_structured_mutation_is_rejected lens_worker_synthesis \
+    && research_structured_mutation_is_rejected missing_findings \
+    && research_structured_mutation_is_rejected missing_conflicts \
+    && research_structured_mutation_is_rejected missing_gaps \
+    && research_structured_mutation_is_rejected missing_summary \
+    && research_structured_mutation_is_rejected missing_contradiction_map \
+    && research_structured_mutation_is_rejected missing_synthesis_briefing \
+    && research_structured_mutation_is_rejected duplicate_none_needed \
+    && research_structured_mutation_is_rejected mixed_none_needed_follow_up \
+    && research_structured_mutation_is_rejected source_reserved_local \
+    && research_structured_mutation_is_rejected source_bare_hostname; then
     pass
 else
     fail "assistant-research delegated structured eval oracle is incomplete or accepts a process-evidence mutation: ${structured_oracle_missing[*]-}"
@@ -1223,7 +1293,35 @@ if research_official_response_mutation_is_rejected accepted_result_body_with_unc
     && research_official_response_mutation_is_rejected synchronized_assignments \
     && research_official_response_mutation_is_rejected missing_delegated_trigger_scope \
     && research_official_response_mutation_is_rejected lens_worker_synthesis \
-    && research_official_response_mutation_is_rejected missing_lens_fallback_evidence_ref; then
+    && research_official_response_mutation_is_rejected missing_lens_fallback_evidence_ref \
+    && research_official_response_mutation_is_rejected missing_findings \
+    && research_official_response_mutation_is_rejected missing_conflicts \
+    && research_official_response_mutation_is_rejected missing_gaps \
+    && research_official_response_mutation_is_rejected missing_summary \
+    && research_official_response_mutation_is_rejected missing_contradiction_map \
+    && research_official_response_mutation_is_rejected missing_synthesis_briefing \
+    && research_official_response_mutation_is_rejected unusable_peer_needs_context \
+    && research_official_response_mutation_is_rejected unusable_peer_blocked \
+    && research_official_response_mutation_is_rejected duplicate_none_needed \
+    && research_official_response_mutation_is_rejected mixed_none_needed_follow_up \
+    && research_official_response_mutation_is_rejected source_reserved_local \
+    && research_official_response_mutation_is_rejected source_bare_hostname \
+    && research_official_response_mutation_is_rejected source_ipv6_discard_only \
+    && research_official_response_mutation_is_rejected peer_process_assignment_mismatch \
+    && research_official_response_mutation_is_rejected finding_source_reserved_local \
+    && research_official_response_mutation_is_rejected hidden_finding_field \
+    && research_official_response_mutation_is_rejected delegated_policy_state_mismatch \
+    && research_official_response_mutation_is_rejected stale_revision_metadata \
+    && research_official_response_mutation_is_rejected invalid_peer_fallback_basis \
+    && research_official_response_mutation_is_rejected missing_high_stakes_caveat \
+    && research_official_response_mutation_is_rejected malformed_findings \
+    && research_official_response_mutation_is_rejected malformed_conflicts \
+    && research_official_response_mutation_is_rejected malformed_perspective_scan \
+    && research_official_response_mutation_is_rejected malformed_question_trace \
+    && research_official_response_mutation_is_rejected malformed_peer_evidence \
+    && research_official_response_mutation_is_rejected malformed_revision_disposition \
+    && research_official_response_mutation_is_rejected malformed_required_revisions \
+    && research_mixed_peer_fallback_official_runner_is_accepted; then
     pass
 else
     fail "assistant-research official response grading accepted a semantic process-evidence mutation"
@@ -1243,11 +1341,11 @@ if ! "$research_eval_runner" --validate-fixture --skill "$semantic_fixture_root/
     unknown_semantic_validator_rejected=true
 fi
 cp "$research_evals" "$semantic_fixture"
-jq 'del(.cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence") | .semantic_validator)' \
+jq 'del(.cases[] | select(.id == "five-lens-delegated-lenses-sequential-peer-fallback") | .semantic_validator)' \
     "$semantic_fixture" >"$semantic_fixture.next" && mv "$semantic_fixture.next" "$semantic_fixture"
 partial_semantic_validator_declaration_rejected=false
 if ! "$research_eval_runner" --validate-fixture --skill "$semantic_fixture_root/assistant-research" >"$semantic_fixture_output" 2>&1 \
-    && grep -Fq -- 'semantic_validator must be declared by exactly the two five-lens assistant-research cases' "$semantic_fixture_output"; then
+    && grep -Fq -- 'semantic_validator must be declared by exactly the three five-lens assistant-research cases' "$semantic_fixture_output"; then
     partial_semantic_validator_declaration_rejected=true
 fi
 if [[ "$unknown_semantic_validator_rejected" == true && "$partial_semantic_validator_declaration_rejected" == true ]]; then
@@ -1535,6 +1633,21 @@ if research_response_oracle_is_valid "$multi_wave_response"; then
     pass
 else
     fail "assistant-research relational resource oracle rejected a valid multi-wave delegated schedule"
+fi
+
+test_start "assistant-research fixture oracle permits an adjacent global IPv6 source"
+global_ipv6_response="$(mktemp "${TMPDIR:-/tmp}/assistant-research-global-ipv6.XXXXXX")"
+p0p4_register_cleanup "$global_ipv6_response"
+research_jcs_node build delegated alternate >"$global_ipv6_response"
+jq '
+  .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[100:0:0:1::1]/research"]
+  | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[100:0:0:1::1]/follow-up"]
+' "$global_ipv6_response" >"$global_ipv6_response.next" && mv "$global_ipv6_response.next" "$global_ipv6_response"
+research_refresh_response_derivatives "$global_ipv6_response"
+if research_response_oracle_is_valid "$global_ipv6_response"; then
+    pass
+else
+    fail "assistant-research fixture oracle rejected an adjacent global IPv6 source"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

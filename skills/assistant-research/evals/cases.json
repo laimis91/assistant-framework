@@ -256,7 +256,7 @@
           "lens_fallback_evidence",
           "peer_review_fallback_evidence"
         ],
-        "structured_json_assertions": [{"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"delegated"},{"operator":"equals","path":["five_lens_process_evidence","peer_review_execution_mode"],"expected":"delegated"},{"operator":"equals","path":["five_lens_process_evidence","subagent_policy_state"],"expected":"delegation_triggered"},{"operator":"equals","path":["five_lens_process_evidence","reduced_independence"],"expected":false},{"operator":"path_absent","path":["five_lens_process_evidence","fallback_lens_passes"]},{"operator":"path_absent","path":["five_lens_process_evidence","peer_review_fallback_pass_id"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","lens_dispatches"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","lens_dispatches"],"fields":["assignment_id","lens_result_digest","packet_id","packet_set_id","packet_content_digest"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","accepted_lens_results"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","accepted_lens_results"],"fields":["assignment_id","lens_result_digest","core_position","lens_question","answer_or_gap"]},{"operator":"array_field_values_exact","path":["perspective_scan"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_field_values_exact","path":["question_trace"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","lens_dispatches"],"fields":["dispatch_identity","wave_id"]},{"operator":"equals","path":["peer_review","verdict"],"expected":"revise"},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_assignment_id"],"other_path":["peer_review","peer_review_assignment_id"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_reviewer_identity"],"other_path":["peer_review","peer_reviewer_identity"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_revision_disposition_id"],"other_path":["peer_review","revision_disposition_id"]}]
+        "structured_json_assertions": [{"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"delegated"},{"operator":"equals","path":["five_lens_process_evidence","peer_review_execution_mode"],"expected":"delegated"},{"operator":"equals","path":["five_lens_process_evidence","subagent_policy_state"],"expected":"delegation_triggered"},{"operator":"equals","path":["five_lens_process_evidence","reduced_independence"],"expected":false},{"operator":"path_absent","path":["five_lens_process_evidence","fallback_lens_passes"]},{"operator":"path_absent","path":["five_lens_process_evidence","peer_review_fallback_pass_id"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","lens_dispatches"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","lens_dispatches"],"fields":["assignment_id","lens_result_digest","packet_id","packet_set_id","packet_content_digest"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","accepted_lens_results"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","accepted_lens_results"],"fields":["assignment_id","lens_result_digest","core_position","lens_question","answer_or_gap"]},{"operator":"array_field_values_exact","path":["perspective_scan"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_field_values_exact","path":["question_trace"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","lens_dispatches"],"fields":["dispatch_identity","wave_id"]},{"operator":"equals","path":["peer_review","verdict"],"expected":"revise"},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_assignment_id"],"other_path":["peer_review","peer_review_assignment_id"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_reviewer_identity"],"other_path":["peer_review","peer_reviewer_identity"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_revision_disposition_id"],"other_path":["peer_review","revision_disposition_id"]},{"operator":"nonempty_string","path":["synthesis_briefing","high_stakes_caveat"]}]
       }
     },
     {
@@ -319,6 +319,64 @@
           "dispatch_identity"
         ],
         "structured_json_assertions": [{"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"sequential_fallback"},{"operator":"equals","path":["five_lens_process_evidence","peer_review_execution_mode"],"expected":"sequential_fallback"},{"operator":"equals","path":["five_lens_process_evidence","subagent_policy_state"],"expected":"subagents_unavailable"},{"operator":"equals","path":["five_lens_process_evidence","reduced_independence"],"expected":true},{"operator":"path_absent","path":["five_lens_process_evidence","lens_dispatches"]},{"operator":"path_absent","path":["five_lens_process_evidence","peer_reviewer_identity"]},{"operator":"path_absent","path":["peer_review","peer_reviewer_identity"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","fallback_lens_passes"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","fallback_lens_passes"],"fields":["assignment_id","lens_result_digest","packet_id","packet_set_id","packet_content_digest"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","accepted_lens_results"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","accepted_lens_results"],"fields":["assignment_id","lens_result_digest","core_position","lens_question","answer_or_gap"]},{"operator":"array_field_values_exact","path":["perspective_scan"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_field_values_exact","path":["question_trace"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","fallback_lens_passes"],"fields":["root_pass_id"]},{"operator":"equals","path":["five_lens_process_evidence","lens_fallback_evidence","basis"],"expected":"spawn_failure_or_unavailable"},{"operator":"nonempty_string","path":["five_lens_process_evidence","lens_fallback_evidence","detail"]},{"operator":"equals","path":["five_lens_process_evidence","peer_review_fallback_evidence","basis"],"expected":"spawn_failure_or_unavailable"},{"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_evidence","evidence_ref"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_fallback_pass_id"],"other_path":["peer_review","peer_review_fallback_pass_id"]}]
+      }
+    },
+    {
+      "id": "five-lens-delegated-lenses-sequential-peer-fallback",
+      "semantic_validator": "assistant-research.five_lens_v3",
+      "title": "Delegated lenses permit an evidenced sequential peer fallback",
+      "category": "five_lens_briefing",
+      "purpose": "Checks that a completed delegated lens stage can use a separate evidenced sequential peer fallback without fabricating a native peer identity or treating the mixed mode as partial compliance.",
+      "prompt": "Create a five-lens briefing where all LensResearcher dispatches completed, but the separate peer reviewer dispatch is unavailable and must use the permitted sequential peer fallback.",
+      "setup_context": [
+        "The assistant-research skill instructions are active.",
+        "Five delegated LensResearcher dispatches completed against frozen sibling-blind packets.",
+        "Only the separate ResearchPeerReviewer dispatch is unavailable; its fallback evidence and fresh root pass are recorded."
+      ],
+      "expected_behavior": [
+        "Uses lens_execution_mode: delegated and peer_review_execution_mode: sequential_fallback.",
+        "Retains exactly five native delegated lens records, packet bindings, wave coverage, and delegation-triggered policy state.",
+        "Records a fresh peer_review_fallback_pass_id and peer_review_fallback_evidence with reduced_independence: true.",
+        "Does not emit fallback_lens_passes, lens_fallback_evidence, a native peer_reviewer_identity, or revision disposition metadata for the accepted fallback peer."
+      ],
+      "pass_criteria": [
+        "The response proves the delegated lens stage and peer fallback stage independently.",
+        "The response discloses reduced independence while keeping a usable peer result.",
+        "The response contains no fabricated native peer identity or fallback lens evidence."
+      ],
+      "fail_signals": [
+        "Treats a reviewer-only fallback as partial mixed compliance.",
+        "Invents a native peer identity or reuses a lens dispatch identity.",
+        "Converts the completed delegated lens stage into fallback_lens_passes."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Method: five_lens_briefing",
+          "FIVE-LENS PROCESS EVIDENCE",
+          "lens_execution_mode: delegated",
+          "peer_review_execution_mode: sequential_fallback",
+          "subagent_policy_state: delegation_triggered",
+          "lens_dispatches",
+          "dispatch_identity",
+          "wave_coverage",
+          "assignment_id",
+          "packet_id",
+          "packet_set_id",
+          "return_validated",
+          "peer_review_fallback_pass_id",
+          "peer_review_fallback_evidence",
+          "reduced_independence: true",
+          "GAPS"
+        ],
+        "forbidden_substrings": [
+          "fallback_lens_passes",
+          "lens_fallback_evidence",
+          "peer_reviewer_identity",
+          "peer_review_revision_disposition_id",
+          "partial mixed compliance",
+          "fabricated fallback dispatch refs"
+        ],
+        "structured_json_assertions": [{"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"delegated"},{"operator":"equals","path":["five_lens_process_evidence","peer_review_execution_mode"],"expected":"sequential_fallback"},{"operator":"equals","path":["five_lens_process_evidence","subagent_policy_state"],"expected":"delegation_triggered"},{"operator":"equals","path":["five_lens_process_evidence","reduced_independence"],"expected":true},{"operator":"path_absent","path":["five_lens_process_evidence","fallback_lens_passes"]},{"operator":"path_absent","path":["five_lens_process_evidence","lens_fallback_evidence"]},{"operator":"path_absent","path":["five_lens_process_evidence","peer_reviewer_identity"]},{"operator":"path_absent","path":["peer_review","peer_reviewer_identity"]},{"operator":"path_absent","path":["five_lens_process_evidence","peer_review_revision_disposition_id"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","lens_dispatches"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","lens_dispatches"],"fields":["dispatch_identity","assignment_id","lens_result_digest","packet_id","packet_set_id","packet_content_digest","wave_id"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","accepted_lens_results"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_assignment_id"],"other_path":["peer_review","peer_review_assignment_id"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_fallback_pass_id"],"other_path":["peer_review","peer_review_fallback_pass_id"]},{"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_evidence","evidence_ref"]}]
       }
     },
     {

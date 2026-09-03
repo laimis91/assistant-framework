@@ -134,16 +134,29 @@ function publicUrlValid(value) {
   let url; try { url = new URL(value); } catch { return false; }
   if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  if (!host || host.endsWith(".") || host === "localhost" || /(?:\.invalid|\.localhost|\.test|\.example|\.internal)$/.test(host) || /^(?:0x|0)[0-9a-f]+$/i.test(host) || /^[0-9]+$/.test(host)) return false;
+  const specialUseHost = new Set(["local", "localhost", "invalid", "test", "example", "internal"]);
+  if (!host || host.endsWith(".") || specialUseHost.has(host) || (!net.isIP(host) && !host.includes(".")) || /(?:\.local|\.localhost|\.invalid|\.test|\.example|\.internal)$/.test(host) || /^(?:0x|0)[0-9a-f]+$/i.test(host) || /^[0-9]+$/.test(host)) return false;
   if (net.isIP(host) === 4) {
     if (host.split(".").some(part => part.length > 1 && part.startsWith("0"))) return false;
     const [a, b, c] = host.split(".").map(Number);
     if (a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 192 && b === 0 && (c === 0 || c === 2)) || (a === 198 && (b === 18 || b === 19)) || (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113)) return false;
   }
   if (net.isIP(host) === 6) {
-    if (host === "::" || host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") || host.startsWith("ff") || host.startsWith("::ffff:") || host.startsWith("2001:db8:")) return false;
+    if (host === "::" || host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") || host.startsWith("ff") || host.startsWith("::ffff:") || host.startsWith("2001:db8:") || ipv6DiscardOnly(host)) return false;
   }
   return true;
+}
+function ipv6DiscardOnly(host) {
+  if (host.includes(".")) return false;
+  const parts = host.split("::");
+  if (parts.length > 2) return false;
+  const left = parts[0] ? parts[0].split(":") : [];
+  const right = parts.length === 2 && parts[1] ? parts[1].split(":") : [];
+  if (left.concat(right).some(part => !/^[0-9a-f]{1,4}$/i.test(part))) return false;
+  const omitted = 8 - left.length - right.length;
+  if ((parts.length === 1 && omitted !== 0) || (parts.length === 2 && omitted < 1)) return false;
+  const groups = [...left, ...Array(omitted).fill("0"), ...right].map(part => parseInt(part, 16));
+  return groups.length === 8 && groups[0] === 0x100 && groups[1] === 0 && groups[2] === 0 && groups[3] === 0;
 }
 function sourceReferencesValid(sources, evidenceStatus, gaps, label) {
   if (!Array.isArray(sources) || !sources.every(nonblank)) { fail(`${label}: nonblank source identifiers required`); return; }
@@ -151,18 +164,23 @@ function sourceReferencesValid(sources, evidenceStatus, gaps, label) {
   if (!Array.isArray(gaps) || !gaps.every(nonblank)) fail(`${label}: nonblank gaps array required`);
   if (evidenceStatus === 'source_backed' && sources.length === 0) fail(`${label}: source-backed result requires a source`);
   if (['inference_only', 'unresolved'].includes(evidenceStatus) && sources.length === 0 && gaps.length === 0) fail(`${label}: empty non-source evidence requires a gap`);
-  for (const source of sources) {
-    if (/\.\.|(?:^|[\\/])~?(?:Users|home|private|var)(?:[\\/]|$)|(?:token|secret|password|api[_-]?key|email)=/i.test(source)) fail(`${label}: unsafe source reference`);
-    let parsed; try { parsed = new URL(source); } catch { parsed = undefined; }
-    if ((parsed && ["http:", "https:"].includes(parsed.protocol)) || /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(source)) {
-      if (!publicUrlValid(source)) fail(`${label}: non-public URL source`);
-    }
+  for (const source of sources) sourceReferenceValid(source, label);
+}
+function sourceReferenceValid(source, label) {
+  if (!nonblank(source)) { fail(`${label}: nonblank source identifiers required`); return false; }
+  if (/\.\.|(?:^|[\\/])~?(?:Users|home|private|var)(?:[\\/]|$)|(?:token|secret|password|api[_-]?key|email)=/i.test(source)) { fail(`${label}: unsafe source reference`); return false; }
+  let parsed; try { parsed = new URL(source); } catch { parsed = undefined; }
+  if ((parsed && ["http:", "https:"].includes(parsed.protocol)) || /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(source)) {
+    if (!publicUrlValid(source)) { fail(`${label}: non-public URL source`); return false; }
   }
+  return true;
 }
 function acceptedResultValid(result, label) {
   if (!["core_position", "lens_question", "answer_or_gap", "likely_blind_spot", "unique_insight"].every(key => nonblank(result[key])) || !["high", "medium", "low"].includes(result.confidence)) fail(`${label}: required result fields`);
   sourceReferencesValid(result.sources_or_verified_urls, result.evidence_status, result.gaps, label);
   if (!Array.isArray(result.follow_ups) || result.follow_ups.length === 0) { fail(`${label}: follow-ups required`); return; }
+  const noneNeeded = result.follow_ups.filter(followUp => followUp?.decision === "none_needed");
+  if ((noneNeeded.length > 0 && (noneNeeded.length !== 1 || result.follow_ups.length !== 1)) || (noneNeeded.length === 0 && !result.follow_ups.every(followUp => followUp?.decision === "follow_up"))) fail(`${label}: follow-up none_needed exclusivity`);
   for (const followUp of result.follow_ups) {
     const followUpKeys = followUp?.decision === "follow_up" ? ["decision", "question", "answer_or_gap", "sources_or_verified_urls", "evidence_status"] : ["decision", "answer_or_gap", "sources_or_verified_urls", "evidence_status"];
     if (!exactKeys(followUp, followUpKeys, `${label} follow-up`) || !["follow_up", "none_needed"].includes(followUp.decision) || !nonblank(followUp.answer_or_gap) || (followUp.decision === "follow_up" && !nonblank(followUp.question))) fail(`${label}: follow-up shape`);
@@ -172,9 +190,9 @@ function acceptedResultValid(result, label) {
 function validTimestamp(value) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
 }
-function peerReviewValid(peer, mode, process, lensIdentities, rootPasses) {
-  if (!peer || typeof peer !== "object" || peer.peer_review_execution_mode !== mode || !nonblank(peer.peer_review_assignment_id) || !["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"].includes(peer.status) || !["accepted", "accepted_with_concerns", "revise", "blocked"].includes(peer.verdict)) { fail("peer review: required status/binding"); return; }
-  if (mode === "delegated") {
+function peerReviewValid(peer, peerMode, process, lensIdentities, rootPasses) {
+  if (!peer || typeof peer !== "object" || peer.peer_review_execution_mode !== peerMode || !nonblank(peer.peer_review_assignment_id) || peer.peer_review_assignment_id !== process.peer_review_assignment_id || !["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"].includes(peer.status) || !["accepted", "accepted_with_concerns", "revise", "blocked"].includes(peer.verdict)) { fail("peer review: required status/binding"); return; }
+  if (peerMode === "delegated") {
     if (!nonblank(peer.peer_reviewer_identity) || lensIdentities.has(peer.peer_reviewer_identity) || process.peer_reviewer_identity !== peer.peer_reviewer_identity) fail("peer review: distinct delegated identity");
   } else if (!nonblank(peer.peer_review_fallback_pass_id) || rootPasses.has(peer.peer_review_fallback_pass_id) || process.peer_review_fallback_pass_id !== peer.peer_review_fallback_pass_id || Object.hasOwn(peer, "peer_reviewer_identity")) fail("peer review: fresh fallback pass");
   const usable = ["DONE", "DONE_WITH_CONCERNS"].includes(peer.status);
@@ -184,32 +202,55 @@ function peerReviewValid(peer, mode, process, lensIdentities, rootPasses) {
   if (usable) {
     const usableFields = ["confidence_scores", "weakest_claim", "bias_or_lens_dominance", "missing_sixth_perspective", "falsification_test", "revised_recommendation_if_needed", "evidence"];
     if (!Array.isArray(peer.confidence_scores) || peer.confidence_scores.length === 0 || !peer.confidence_scores.every(nonblank) || !usableFields.slice(1, 6).every(field => nonblank(peer[field])) || !Array.isArray(peer.evidence) || peer.evidence.length === 0) fail("peer review: usable critique fields");
-    for (const item of peer.evidence || []) if (!item || !nonblank(item.source) || !nonblank(item.detail) || !["source_backed", "inference_only", "unresolved"].includes(item.evidence_status)) fail("peer review: usable evidence");
+    const peerEvidence = Array.isArray(peer.evidence) ? peer.evidence : [];
+    for (const item of peerEvidence) if (!item || !nonblank(item.source) || !nonblank(item.detail) || !["source_backed", "inference_only", "unresolved"].includes(item.evidence_status)) fail("peer review: usable evidence");
   } else if (!Array.isArray(peer.open_questions) || peer.open_questions.length === 0 || !peer.open_questions.every(nonblank) || !nonblank(peer.status_detail)) fail("peer review: blocked context fields");
   if (peer.status === "BLOCKED" && (!["missing_review_context", "policy_blocked", "tool_failure"].includes(peer.blocker_type) || !Array.isArray(peer.blocker_evidence) || peer.blocker_evidence.length === 0 || !peer.blocker_evidence.every(nonblank))) fail("peer review: blocker fields");
+  if (!usable) fail("peer review: non-final status");
+  const requiredRevisions = Array.isArray(peer.required_revisions) ? peer.required_revisions : [];
   if (["accepted", "accepted_with_concerns"].includes(peer.verdict)) {
-    if (!Array.isArray(peer.required_revisions) || peer.required_revisions.length !== 0 || Object.hasOwn(peer, "revision_disposition_id") || Object.hasOwn(peer, "revision_disposition")) fail("peer review: accepted revision closure");
+    if (!Array.isArray(peer.required_revisions) || requiredRevisions.length !== 0 || Object.hasOwn(peer, "revision_disposition_id") || Object.hasOwn(peer, "revision_disposition")) fail("peer review: accepted revision closure");
   }
+  if (peer.verdict !== "revise" && (Object.hasOwn(process, "peer_review_revision_disposition_id") || Object.hasOwn(peer, "revision_disposition_id") || Object.hasOwn(peer, "revision_disposition"))) fail("peer review: non-revise revision closure leakage");
   if (peer.verdict === "revise") {
-    if (!Array.isArray(peer.required_revisions) || peer.required_revisions.length === 0 || !peer.required_revisions.every(nonblank) || new Set(peer.required_revisions).size !== peer.required_revisions.length || !nonblank(peer.revision_disposition_id) || !Array.isArray(peer.revision_disposition) || peer.revision_disposition.length !== peer.required_revisions.length || process.peer_review_revision_disposition_id !== peer.revision_disposition_id) fail("peer review: revision closure required");
+    if (!Array.isArray(peer.required_revisions) || requiredRevisions.length === 0 || !requiredRevisions.every(nonblank) || new Set(requiredRevisions).size !== requiredRevisions.length || !nonblank(peer.revision_disposition_id) || !Array.isArray(peer.revision_disposition) || peer.revision_disposition.length !== requiredRevisions.length || process.peer_review_revision_disposition_id !== peer.revision_disposition_id) fail("peer review: revision closure required");
     const closed = new Set();
-    for (const disposition of peer.revision_disposition || []) {
-      if (!exactKeys(disposition, ["required_revision", "outcome", "closure_evidence"], "peer revision disposition") || !peer.required_revisions.includes(disposition.required_revision) || closed.has(disposition.required_revision) || !["applied", "claim_downgraded"].includes(disposition.outcome) || !nonblank(disposition.closure_evidence)) fail("peer review: invalid revision disposition");
+    const revisionDisposition = Array.isArray(peer.revision_disposition) ? peer.revision_disposition : [];
+    for (const disposition of revisionDisposition) {
+      if (!exactKeys(disposition, ["required_revision", "outcome", "closure_evidence"], "peer revision disposition") || !requiredRevisions.includes(disposition.required_revision) || closed.has(disposition.required_revision) || !["applied", "claim_downgraded"].includes(disposition.outcome) || !nonblank(disposition.closure_evidence)) fail("peer review: invalid revision disposition");
       closed.add(disposition?.required_revision);
     }
-    if (closed.size !== peer.required_revisions.length) fail("peer review: incomplete revision closure");
+    if (closed.size !== requiredRevisions.length) fail("peer review: incomplete revision closure");
   }
+}
+function finalArtifactsValid(response) {
+  const findings = response.findings;
+  if (!Array.isArray(findings) || findings.length === 0) fail("final artifacts: findings required");
+  for (const finding of Array.isArray(findings) ? findings : []) {
+    if (!allowedKeys(finding, ["finding", "confidence", "sources", "verified_urls"], "final finding") || !nonblank(finding.finding) || !["high", "medium", "low"].includes(finding.confidence) || !Array.isArray(finding.sources) || finding.sources.length === 0 || !finding.sources.every(source => sourceReferenceValid(source, "final finding source")) || (Object.hasOwn(finding, "verified_urls") && (!Array.isArray(finding.verified_urls) || !finding.verified_urls.every(publicUrlValid)))) fail("final artifacts: finding shape");
+  }
+  const conflicts = response.conflicts;
+  if (!Array.isArray(conflicts)) fail("final artifacts: conflicts array required");
+  for (const conflict of Array.isArray(conflicts) ? conflicts : []) if (!exactKeys(conflict, ["claim_a", "source_a", "claim_b", "source_b", "assessment"], "final conflict") || !Object.values(conflict).every(nonblank)) fail("final artifacts: conflict shape");
+  if (!Array.isArray(response.gaps) || !response.gaps.every(nonblank) || !nonblank(response.summary)) fail("final artifacts: gaps and summary required");
+  const contradiction = response.contradiction_map;
+  if (!exactKeys(contradiction, ["direct_conflicts", "strongest_evidence", "weakest_evidence", "consensus", "biggest_unresolved_question", "missing_angle_or_gap"], "contradiction map") || !Array.isArray(contradiction.direct_conflicts) || !contradiction.direct_conflicts.every(nonblank) || !Array.isArray(contradiction.consensus) || !contradiction.consensus.every(nonblank) || !["strongest_evidence", "weakest_evidence", "biggest_unresolved_question", "missing_angle_or_gap"].every(field => nonblank(contradiction[field]))) fail("final artifacts: contradiction map");
+  const synthesis = response.synthesis_briefing;
+  const synthesisKeys = ["executive_summary", "ranked_key_findings", "hidden_connection", "actionable_implication", "recommendation", "high_stakes_caveat", "frontier_question"];
+  if (!allowedKeys(synthesis, synthesisKeys, "synthesis briefing") || !nonblank(synthesis?.executive_summary) || !Array.isArray(synthesis?.ranked_key_findings) || synthesis.ranked_key_findings.length < 3 || !synthesis.ranked_key_findings.every(nonblank) || !nonblank(synthesis?.hidden_connection) || !nonblank(synthesis?.actionable_implication) || !["do", "wait", "avoid", "investigate_further"].includes(synthesis?.recommendation) || (Object.hasOwn(synthesis || {}, "high_stakes_caveat") && !nonblank(synthesis.high_stakes_caveat)) || !nonblank(synthesis?.frontier_question)) fail("final artifacts: synthesis briefing");
 }
 let response;
 try { response = JSON.parse(fs.readFileSync(responsePath, "utf8")); } catch { fail("response: valid JSON required"); }
 if (response) {
   validateUnicode(response);
   if (response.research_method !== "five_lens_briefing") fail("response: five_lens_briefing required");
+  finalArtifactsValid(response);
   const process = response.five_lens_process_evidence;
-  const mode = process?.lens_execution_mode;
-  if (!process || !["delegated", "sequential_fallback"].includes(mode)) fail("process: supported execution mode required");
+  const lensMode = process?.lens_execution_mode;
+  const peerMode = process?.peer_review_execution_mode;
+  if (!process || !["delegated", "sequential_fallback"].includes(lensMode) || !["delegated", "sequential_fallback"].includes(peerMode)) fail("process: supported execution modes required");
   else {
-    const records = Array.isArray(mode === "delegated" ? process.lens_dispatches : process.fallback_lens_passes) ? (mode === "delegated" ? process.lens_dispatches : process.fallback_lens_passes) : [];
+    const records = Array.isArray(lensMode === "delegated" ? process.lens_dispatches : process.fallback_lens_passes) ? (lensMode === "delegated" ? process.lens_dispatches : process.fallback_lens_passes) : [];
     if (records.length !== 5) fail("process: exactly five lens records required");
     const packetSet = process.frozen_packet_set;
     const manifest = packetSet?.packet_manifest;
@@ -224,9 +265,13 @@ if (response) {
     const budget = process.search_resource_budget;
     budgetValid(budget, response.tier);
     const identities = new Set(); const rootPasses = new Set(); const assignmentIds = new Set();
+    const perspectiveScan = Array.isArray(response.perspective_scan) ? response.perspective_scan : [];
+    const questionTrace = Array.isArray(response.question_trace) ? response.question_trace : [];
+    if (!Array.isArray(response.perspective_scan)) fail("perspective scan: array required");
+    if (!Array.isArray(response.question_trace)) fail("question trace: array required");
     for (const record of records || []) {
       const label = `lens record ${record?.lens_kind || "unknown"}`;
-      const recordKeys = mode === "delegated" ? ["lens_kind", "dispatch_identity", "assignment_id", "packet_id", "packet_set_id", "packet_content_digest", "lens_result_digest", "search_resource_usage", "wave_id", "return_validated"] : ["lens_kind", "assignment_id", "packet_id", "packet_set_id", "packet_content_digest", "lens_result_digest", "search_resource_usage", "root_pass_id", "return_validated"];
+      const recordKeys = lensMode === "delegated" ? ["lens_kind", "dispatch_identity", "assignment_id", "packet_id", "packet_set_id", "packet_content_digest", "lens_result_digest", "search_resource_usage", "wave_id", "return_validated"] : ["lens_kind", "assignment_id", "packet_id", "packet_set_id", "packet_content_digest", "lens_result_digest", "search_resource_usage", "root_pass_id", "return_validated"];
       if (!exactKeys(record, recordKeys, label)) continue;
       const result = byLens.get(record?.lens_kind);
       if (!result || !exactKeys(result, acceptedKeys, `accepted result ${record?.lens_kind || "unknown"}`)) continue;
@@ -238,21 +283,34 @@ if (response) {
       if (record.return_validated !== true) fail(`${label}: return must be validated`);
       if (!nonblank(record.assignment_id) || assignmentIds.has(record.assignment_id)) fail(`${label}: unique assignment id`);
       assignmentIds.add(record.assignment_id);
-      if (mode === "delegated") { if (!nonblank(record.dispatch_identity) || identities.has(record.dispatch_identity)) fail(`${label}: unique native identity`); identities.add(record.dispatch_identity); }
+      if (lensMode === "delegated") { if (!nonblank(record.dispatch_identity) || identities.has(record.dispatch_identity)) fail(`${label}: unique native identity`); identities.add(record.dispatch_identity); }
       else { if (!nonblank(record.root_pass_id) || rootPasses.has(record.root_pass_id)) fail(`${label}: unique fallback pass`); rootPasses.add(record.root_pass_id); }
       usageValid(record.search_resource_usage, budget || {}, lensResult, label);
-      const perspective = (response.perspective_scan || []).find(item => item?.lens === record.lens_kind);
-      const trace = (response.question_trace || []).find(item => item?.lens === record.lens_kind);
+      const perspective = perspectiveScan.find(item => item?.lens === record.lens_kind);
+      const trace = questionTrace.find(item => item?.lens === record.lens_kind);
       if (!perspective || !equal(perspective, {lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, core_position: result.core_position, sources_or_verified_urls: result.sources_or_verified_urls, likely_blind_spot: result.likely_blind_spot, unique_insight: result.unique_insight, confidence: result.confidence})) fail(`${label}: perspective projection`);
       if (!trace || !equal(trace, {lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, question: result.lens_question, answer: result.answer_or_gap, sources_or_verified_urls: result.sources_or_verified_urls, follow_ups: result.follow_ups, evidence_status: result.evidence_status})) fail(`${label}: question trace projection`);
     }
     if (!exactLensSet((records || []).map(record => record?.lens_kind))) fail("process: records must cover each lens once");
-    overallUsageValid(process.overall_resource_usage, budget || {}, records || [], mode, process);
+    overallUsageValid(process.overall_resource_usage, budget || {}, records || [], lensMode, process);
     if (process.root_synthesis_ownership !== "orchestrator_only") fail("process: root synthesis ownership");
-    if (mode === "delegated") {
-      if (process.peer_review_execution_mode !== "delegated" || process.reduced_independence !== false || !Array.isArray(process.subagent_trigger_scope) || process.subagent_trigger_scope.length === 0 || !process.subagent_trigger_scope.every(nonblank)) fail("process: delegated lifecycle binding");
-    } else if (process.peer_review_execution_mode !== "sequential_fallback" || process.reduced_independence !== true || ![process.lens_fallback_evidence, process.peer_review_fallback_evidence].every(evidence => evidence && nonblank(evidence.basis) && nonblank(evidence.detail) && nonblank(evidence.evidence_ref))) fail("process: fallback evidence binding");
-    peerReviewValid(response.peer_review, mode, process, identities, rootPasses);
+    if (process.reduced_independence !== (lensMode === "sequential_fallback" || peerMode === "sequential_fallback")) fail("process: reduced-independence mode binding");
+    if (lensMode === "delegated") {
+      if (process.subagent_policy_state !== "delegation_triggered" || !Array.isArray(process.subagent_trigger_scope) || process.subagent_trigger_scope.length === 0 || !process.subagent_trigger_scope.every(nonblank) || Object.hasOwn(process, "fallback_lens_passes") || Object.hasOwn(process, "lens_fallback_evidence") || Object.hasOwn(process, "policy_blocking_source")) fail("process: delegated lens lifecycle");
+    } else {
+      const lensFallback = process.lens_fallback_evidence;
+      const fallbackPairValid = (process.subagent_policy_state === "delegation_opted_out" && lensFallback?.basis === "explicit_opt_out")
+        || (process.subagent_policy_state === "subagents_unavailable" && ["spawn_failure_or_unavailable", "supported_configuration_proof"].includes(lensFallback?.basis))
+        || (process.subagent_policy_state === "policy_disallowed" && lensFallback?.basis === "exact_policy_block");
+      const policyBlockingSourceValid = process.subagent_policy_state === "policy_disallowed"
+        ? nonblank(process.policy_blocking_source)
+        : !Object.hasOwn(process, "policy_blocking_source");
+      if (!fallbackPairValid || !lensFallback || !nonblank(lensFallback.detail) || !nonblank(lensFallback.evidence_ref) || !policyBlockingSourceValid || Object.hasOwn(process, "lens_dispatches") || Object.hasOwn(process, "subagent_trigger_scope")) fail("process: fallback lens lifecycle");
+    }
+    if (peerMode === "delegated") {
+      if (!nonblank(process.peer_reviewer_identity) || !nonblank(process.peer_review_assignment_id) || Object.hasOwn(process, "peer_review_fallback_pass_id") || Object.hasOwn(process, "peer_review_fallback_evidence")) fail("process: delegated peer lifecycle");
+    } else if (!nonblank(process.peer_review_assignment_id) || !nonblank(process.peer_review_fallback_pass_id) || !process.peer_review_fallback_evidence || !["explicit_opt_out", "spawn_failure_or_unavailable", "supported_configuration_proof", "exact_policy_block"].includes(process.peer_review_fallback_evidence.basis) || !nonblank(process.peer_review_fallback_evidence.detail) || !nonblank(process.peer_review_fallback_evidence.evidence_ref) || Object.hasOwn(process, "peer_reviewer_identity") || Object.hasOwn(process, "peer_review_revision_disposition_id")) fail("process: fallback peer lifecycle");
+    peerReviewValid(response.peer_review, peerMode, process, identities, rootPasses);
   }
 }
 if (errors.length) {
