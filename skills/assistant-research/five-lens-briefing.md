@@ -31,7 +31,57 @@ For finance/trading, legal, medical, safety-critical, or similarly high-impact d
 
 State the topic, user role/goal if known, decision being informed, and evidence budget. Ask only if a missing answer materially changes source selection or interpretation and cannot be inferred.
 
-### 2. Perspective scan
+An explicit `quick` request for this method normalizes to `standard` while
+preserving `five_lens_briefing`; disclose that tier normalization. The valid
+five-lens tiers are `standard`, `extensive`, and `deep`.
+
+Use the frozen numeric search resource budget: standard is at most 3 queries,
+4 sources, and 10 minutes per lens (15/20/50 overall); extensive is 5/6/15
+(25/30/75 overall); deep is 8/10/25 (40/50/125 overall). Deep stops at
+saturation or its hard ceiling. Record budget exhaustion as gaps and LOW
+confidence; do not continue searching indefinitely.
+
+### 2. Freeze, dispatch, and validate the perspective scan
+
+Before the first dispatch, freeze exactly five sibling-blind assignment packets
+as one immutable packet set with a set ID, digest, and pre-dispatch timestamp:
+one for each named lens below. A packet contains shared scope, evidence budget,
+and its LensKind only; it excludes sibling results, prior waves, contradiction
+mapping, synthesis, recommendation, and peer review. Dispatch one independent
+`LensResearcher` identity per packet. Capacity-bounded waves are allowed when
+their coverage is exact, disjoint, and exhaustive; later waves cannot consume earlier results.
+Each frozen packet also carries an explicit source_policy and isolation_policy.
+Independent dispatch means distinct native dispatch or agent identities, not
+distinct model identities: one model may serve multiple isolated assignments.
+
+The packet set includes an ordered five-entry manifest. Each entry binds
+`packet_id`, its exact LensKind, and a `content_digest` over the canonical
+complete frozen packet; `packet_set_digest` binds those ordered contents.
+Every delegated dispatch or fallback root pass repeats the matching packet
+content digest. A changed packet body or digest mismatch invalidates the entire
+lens stage.
+
+Validate each return against its frozen assignment before accepting it. One
+same-assignment schema-correction retry is allowed. If the lens stage still
+fails, rerun the complete lens stage through evidenced sequential fallback or
+block—never present a partial delegated/root mixture as independent research.
+
+Sequential fallback is only for explicit opt-out, real failed/unavailable
+mechanism, supported configuration proof, or exact policy block. It still runs
+five frozen-packet root passes, records reduced independence, omits invented
+references, and retains peer critique as a separate fresh pass.
+
+Every delegated dispatch or fallback root pass binds both its packet ID and
+packet-set ID. Record the first lens execution timestamp after the set freeze;
+this ordering proves later waves did not alter the frozen assignments.
+
+Set `subagent_policy_state=delegation_triggered` and
+`subagent_execution_mode=delegated` for this skill-instruction-triggered
+method without a separate permission question. For fallback, record concrete
+`sequential_fallback_evidence`; an exact policy block also records
+`policy_blocking_source` and its no-exception basis.
+
+### 3. Perspective scan results
 
 Analyze the topic through five lenses. Use real sources where available; when a lens is reasoned from general domain knowledge rather than sourced evidence, label it LOW confidence until verified.
 
@@ -49,7 +99,7 @@ For each lens produce:
 - one unique insight no other lens supplied
 - confidence level and source notes
 
-### 3. Question trace / evidence ledger
+### 4. Question trace / evidence ledger
 
 STORM is not just fixed perspectives; it is perspective-guided question asking with retrieval-backed answers and follow-up questions before synthesis. Before building the contradiction map, create a lightweight question trace:
 
@@ -64,9 +114,11 @@ For each lens:
 
 Do not synthesize from a lens until its key question and at least one answer/gap entry are recorded. If source access is unavailable, keep the question trace and mark answers as inference-only or unresolved rather than pretending they are source-backed.
 
-### 4. Contradiction map
+### 5. Root-owned contradiction map
 
-Find where the lenses disagree. The disagreements are usually the highest-value part of the briefing.
+After all five results validate, the root Orchestrator alone builds the
+contradiction map. The disagreements are usually the highest-value part of the
+briefing.
 
 Include:
 
@@ -77,7 +129,7 @@ Include:
 - the biggest unresolved question
 - what none of the lenses addressed
 
-### 5. Synthesis briefing
+### 6. Root-owned synthesis briefing
 
 Combine the scan and contradiction map into a decision-ready briefing:
 
@@ -89,9 +141,19 @@ Combine the scan and contradiction map into a decision-ready briefing:
 - recommended action: do / wait / avoid / investigate further, with high-stakes caveats when applicable
 - frontier question that would most change the conclusion
 
-### 6. Peer review
+### 7. Independent peer review
 
-Self-critique before presenting:
+Dispatch a distinct `ResearchPeerReviewer` after the root initial synthesis.
+The reviewer critiques rather than rewrites root-owned synthesis; it must be a
+separate identity from every LensResearcher. If only peer review fails, retain
+validated lens results and use a separately recorded reviewer fallback.
+The Orchestrator creates `peer_review_assignment_id`, the worker echoes it, and
+the Orchestrator—not the worker—records native peer reviewer identity metadata.
+When no decision-critical source can be verified, pass an empty verified-source
+ledger with verification gaps; peer review must downgrade or block unsupported
+claims rather than inventing evidence or refusing the review.
+
+The peer review must assess:
 
 - confidence score for each major claim
 - weakest claim and how to verify it
@@ -99,6 +161,17 @@ Self-critique before presenting:
 - missing sixth perspective that could change the conclusion
 - evidence that would falsify the recommendation
 - revision to the recommendation if the critique changes it
+
+When verdict is `revise`, the root Orchestrator records a revision disposition
+for every required revision exactly once: `applied` or `claim_downgraded`, with
+closure evidence. The peer worker does not self-attest those changes. An
+unresolved revision blocks presentation. The Orchestrator records
+`revision_disposition_id` in peer review and repeats that exact value as
+`peer_review_revision_disposition_id` in process evidence.
+
+For `accepted` and `accepted_with_concerns`, `required_revisions` is empty. A
+`revise` verdict has one or more required revisions and complete orchestrator-
+owned dispositions for each. Unusable or blocked peer results cannot present.
 
 ## Verification rule
 
@@ -184,6 +257,14 @@ PEER REVIEW
 - Missing sixth perspective: ...
 - Falsification test: ...
 - Revised recommendation if needed: ...
+
+FIVE-LENS PROCESS EVIDENCE
+- Frozen packet-set ID/digest, ordered packet manifest/content digests, pre-dispatch record ID, and first-execution evidence: ...
+- Lens mode and exact five dispatches/root passes with assignment/packet-set/content-digest bindings and return_validated: ...
+- Peer assignment, native identity or fresh fallback pass, and mode: ...
+- Reduced independence and admissible fallback evidence, if applicable: ...
+- Search resource budget and exhaustion gaps, if any: ...
+- Revision disposition ID matching peer review and applied/downgraded closure, when verdict=revise: ...
 
 SOURCES / VERIFIED URLS
 - ...

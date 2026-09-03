@@ -1,7 +1,7 @@
 # Research Input Contract
 # Resolve these fields before starting any research activity.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: input
 skill: assistant-research
 
@@ -9,7 +9,7 @@ fields:
   - name: question
     type: string
     required: true
-    description: "The question or topic to research"
+    description: "Research question."
     validation: "Non-empty. Must be specific enough to search for — not 'tell me about stuff'."
     on_missing: ask
     ask_prompt: "What would you like me to research?"
@@ -18,7 +18,8 @@ fields:
     type: enum
     required: true
     enum_values: [quick, standard, extensive, deep]
-    description: "Research depth — determines evidence budget, source diversity, and effort"
+    description: "Research depth."
+    validation: "quick five_lens_briefing normalizes to standard; preserves five_lens_briefing with a tier normalization disclosure. Its post-normalization tiers are standard, extensive, deep; quick remains valid for source_research."
     on_missing: infer
     infer_from: >
       Simple factual question with likely single answer → quick.
@@ -30,7 +31,7 @@ fields:
     type: enum
     required: true
     enum_values: [research, investigate]
-    description: "Which research tool to use"
+    description: "Research tool."
     on_missing: infer
     infer_from: >
       Broad exploration ('what options exist', 'compare') → research.
@@ -40,7 +41,7 @@ fields:
     type: enum
     required: true
     enum_values: [source_research, five_lens_briefing]
-    description: "Source-first lookup versus STORM-inspired multi-perspective decision briefing"
+    description: "Source-first or five-lens briefing."
     on_missing: infer
     infer_from: >
       Simple lookup, direct facts, or ordinary source collection → source_research.
@@ -50,13 +51,13 @@ fields:
   - name: user_role_or_goal
     type: string
     required: false
-    description: "The user's role, decision, or intended action that the briefing should optimize for"
+    description: "User role."
     default: "unspecified"
 
   - name: output_purpose
     type: string
     required: false
-    description: "What the research results will be used for — scopes the search"
+    description: "Research use."
     examples:
       - "Informing a technology decision"
       - "Background for a plan phase"
@@ -66,10 +67,73 @@ fields:
   - name: known_context
     type: string[]
     required: false
-    description: "What the user already knows — avoid re-researching known facts"
+    description: "Known context."
     default: []
 
+  - name: search_resource_budget
+    type: object
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "Five-lens limits."
+    validation: "standard=3 queries, 4 sources, and 10 minutes per lens / 15 queries, 20 sources, and 50 minutes overall; extensive=5, 6, and 15 / 25, 30, and 75; deep=8, 10, and 25 / 40, 50, and 125. Deep stops at saturation or its hard ceiling. Exhaustion records gaps and LOW confidence."
+    on_missing: infer
+    infer_from: "Apply this validation mapping by tier; source_research remains proportional."
+    object_fields:
+      - {name: per_lens_max_queries, type: int, required: true}
+      - {name: per_lens_max_sources, type: int, required: true}
+      - {name: per_lens_max_minutes, type: int, required: true}
+      - {name: overall_max_queries, type: int, required: true}
+      - {name: overall_max_sources, type: int, required: true}
+      - {name: overall_max_minutes, type: int, required: true}
+      - {name: stop_condition, type: enum, required: true, enum_values: [saturation_or_hard_ceiling]}
+
+  - name: subagent_policy_state
+    type: enum
+    required: true
+    enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
+    description: "Delegation policy state resolved before selecting direct or fallback execution"
+    validation: "source_research=not_required; five_lens_briefing=delegation_triggered unless an admissible exception is evidenced."
+    on_missing: infer
+    infer_from: "source_research => not_required; five_lens_briefing => delegation_triggered unless an exception is evidenced."
+
+  - name: subagent_execution_mode
+    type: enum
+    required: true
+    enum_values: [delegated, sequential_fallback, not_applicable]
+    description: "Execution mode selected after subagent_policy_state"
+    validation: "source_research => not_applicable; exceptions => sequential_fallback only with evidence."
+    on_missing: infer
+    infer_from: "Derive from policy state; fallback requires evidence."
+
+  - name: subagent_trigger_scope
+    type: string[]
+    required: conditional
+    condition: "subagent_policy_state == delegation_triggered"
+    min_items: 1
+    description: "Applicable instruction or user scope that triggered five-lens delegation"
+    on_missing: fail
+
+  - name: policy_blocking_source
+    type: string
+    required: conditional
+    condition: "subagent_policy_state == policy_disallowed"
+    description: "Exact active policy rule that blocks dispatch and confirms no exception applies"
+    validation: "Names the active blocking rule and no-exception basis, not a generic preference."
+    on_missing: fail
+
+  - name: sequential_fallback_evidence
+    type: object
+    required: conditional
+    condition: "subagent_execution_mode == sequential_fallback"
+    description: "Concrete admissible evidence for five-lens or peer-review fallback"
+    validation: "Records explicit opt-out, actual spawn failure/unavailability, supported configuration proof, or exact policy block; never fabricates native dispatch references."
+    on_missing: fail
+    object_fields:
+      - {name: basis, type: enum, required: true, enum_values: [explicit_opt_out, spawn_failure_or_unavailable, supported_configuration_proof, exact_policy_block]}
+      - {name: detail, type: string, required: true}
+      - {name: evidence_ref, type: string, required: true}
+
 # Validation behavior:
-# 1. Resolve question, tier, tool, and research_method before any search activity
+# 1. Resolve question, tier, tool, research_method, subagent_policy_state, and subagent_execution_mode before any search activity
 # 2. Log: >> Research: {tier} | tool: {tool} | method: {research_method} | question: "{question (truncated to 80 chars)}"
 # 3. Read the corresponding tool file (research.md, five-lens-briefing.md, or investigate.md) for detailed instructions

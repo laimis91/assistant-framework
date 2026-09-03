@@ -329,6 +329,60 @@ p0p4_write_assistant_review_architecture_pack_response() {
     ' >"$response_path"
 }
 
+p0p4_write_assistant_research_delegated_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    jq -n --arg summary "$summary" '
+        {
+          summary: $summary,
+          peer_review: {
+            peer_review_execution_mode: "delegated",
+            peer_review_assignment_id: "peer-assignment-1",
+            peer_reviewer_identity: "peer-native-1",
+            status: "DONE_WITH_CONCERNS",
+            verdict: "revise",
+            required_revisions: ["downgrade unsupported claim"],
+            revision_disposition_id: "revision-closure-1",
+            revision_disposition: [
+              {required_revision: "downgrade unsupported claim", outcome: "claim_downgraded", closure_evidence: "claim confidence updated"}
+            ]
+          },
+          five_lens_process_evidence: {
+            lens_execution_mode: "delegated",
+            peer_review_execution_mode: "delegated",
+            reduced_independence: false,
+            frozen_packet_set: {
+              packet_set_id: "packet-set-1",
+              packet_set_digest: "sha256:packet-set-1",
+              packet_manifest_order: ["packet-practitioner", "packet-academic", "packet-skeptic", "packet-economist", "packet-historian"],
+              packet_manifest: [
+                {packet_id: "packet-practitioner", lens_kind: "practitioner", content_digest: "sha256:practitioner"},
+                {packet_id: "packet-academic", lens_kind: "academic_or_technical_expert", content_digest: "sha256:academic"},
+                {packet_id: "packet-skeptic", lens_kind: "skeptic", content_digest: "sha256:skeptic"},
+                {packet_id: "packet-economist", lens_kind: "economist_or_incentives_analyst", content_digest: "sha256:economist"},
+                {packet_id: "packet-historian", lens_kind: "historian_or_pattern_matcher", content_digest: "sha256:historian"}
+              ],
+              packet_set_frozen_at: "2026-09-03T10:00:00Z",
+              pre_dispatch_record_id: "pre-dispatch-1",
+              first_lens_execution_at: "2026-09-03T10:01:00Z",
+              first_lens_execution_evidence_ref: "execution-log-1"
+            },
+            lens_dispatches: [
+              {lens_kind: "practitioner", dispatch_identity: "lens-native-1", assignment_id: "assignment-1", packet_id: "packet-practitioner", packet_set_id: "packet-set-1", packet_content_digest: "sha256:practitioner", wave_id: "wave-1", return_validated: true},
+              {lens_kind: "academic_or_technical_expert", dispatch_identity: "lens-native-2", assignment_id: "assignment-2", packet_id: "packet-academic", packet_set_id: "packet-set-1", packet_content_digest: "sha256:academic", wave_id: "wave-1", return_validated: true},
+              {lens_kind: "skeptic", dispatch_identity: "lens-native-3", assignment_id: "assignment-3", packet_id: "packet-skeptic", packet_set_id: "packet-set-1", packet_content_digest: "sha256:skeptic", wave_id: "wave-1", return_validated: true},
+              {lens_kind: "economist_or_incentives_analyst", dispatch_identity: "lens-native-4", assignment_id: "assignment-4", packet_id: "packet-economist", packet_set_id: "packet-set-1", packet_content_digest: "sha256:economist", wave_id: "wave-1", return_validated: true},
+              {lens_kind: "historian_or_pattern_matcher", dispatch_identity: "lens-native-5", assignment_id: "assignment-5", packet_id: "packet-historian", packet_set_id: "packet-set-1", packet_content_digest: "sha256:historian", wave_id: "wave-1", return_validated: true}
+            ],
+            peer_review_assignment_id: "peer-assignment-1",
+            peer_reviewer_identity: "peer-native-1",
+            peer_review_revision_disposition_id: "revision-closure-1"
+          }
+        }
+    ' >"$response_path"
+}
+
 p0p4_write_skill_eval_responses() {
     local output_dir="$1"
     local omit_skill="${2:-}"
@@ -606,6 +660,9 @@ p0p4_write_skill_eval_responses() {
             fi
             if jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
                 case "$skill_name:$id" in
+                    assistant-research:five-lens-decision-briefing-uses-storm-style-workflow)
+                        p0p4_write_assistant_research_delegated_response "$response_path" "$required_summary"
+                        ;;
                     assistant-thinking:feature-preparation-candidates-require-evidence)
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["Existing observable effects require workflow evidence before promotion."], recommendation: "Keep the concern as a candidate and complete feature preparation.", confidence: "medium", gaps_or_assumptions: ["No canonical feature-preparation evidence row is available."], evidence_or_observations: ["ACTIVE code and behavioral tests identify selection, highlight, and viewport focus."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus unless evidence authorizes a change", promotion_status: "requires_feature_preparation_evidence", rationale: "Implementation and behavioral tests must be inspected before promotion."}]}' >"$response_path"
                         ;;

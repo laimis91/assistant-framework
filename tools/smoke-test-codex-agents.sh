@@ -18,14 +18,18 @@ code-mapper|gpt-5.6-luna|low|paths
 code-reviewer|gpt-5.6-sol|xhigh|correctness
 code-writer|gpt-5.6-terra|high|smallest
 explorer|gpt-5.6-terra|medium|evidence
+lens-researcher|gpt-5.6-terra|medium|independent
 qa-evaluator|gpt-5.6-sol|high|acceptance
+research-peer-reviewer|gpt-5.6-sol|high|independent
 reviewer|gpt-5.6-sol|xhigh|compatibility'
 
 representative_specs='code-mapper|gpt-5.6-luna|low
 explorer|gpt-5.6-terra|medium
 code-writer|gpt-5.6-terra|high
 architect|gpt-5.6-sol|xhigh
-qa-evaluator|gpt-5.6-sol|high'
+qa-evaluator|gpt-5.6-sol|high
+lens-researcher|gpt-5.6-terra|medium
+research-peer-reviewer|gpt-5.6-sol|high'
 
 config_failure() {
     printf 'CONFIG_MISMATCH %s\n' "$1" >&2
@@ -60,7 +64,7 @@ check_source_config() {
         done | LC_ALL=C sort
     )"
     if [[ "$actual_inventory" != "$expected_inventory" ]]; then
-        config_failure 'source agent inventory is not the expected eight fixed roles'
+        config_failure 'source agent inventory is not the expected ten fixed roles'
         return 1
     fi
 
@@ -116,7 +120,7 @@ if ! check_source_config; then
 fi
 
 if [[ "$mode" == "--check-only" ]]; then
-    printf 'STATIC_CHECK_OK agents=8 representatives=5\n'
+    printf 'STATIC_CHECK_OK agents=10 representatives=7\n'
     exit 0
 fi
 
@@ -176,6 +180,12 @@ prompt_for_role() {
             ;;
         qa-evaluator)
             printf '%s' 'Call spawn_agent exactly once with agent_type set to qa-evaluator. Tell that child to call no tools and return exactly ROLE_SMOKE_OK qa-evaluator. Wait for it, spawn no other agent, then return exactly PARENT_SMOKE_OK qa-evaluator.'
+            ;;
+        lens-researcher)
+            printf '%s' 'Call spawn_agent exactly once with agent_type set to lens-researcher. Tell that child to call no tools and return exactly ROLE_SMOKE_OK lens-researcher. Wait for it, spawn no other agent, then return exactly PARENT_SMOKE_OK lens-researcher.'
+            ;;
+        research-peer-reviewer)
+            printf '%s' 'Call spawn_agent exactly once with agent_type set to research-peer-reviewer. Tell that child to call no tools and return exactly ROLE_SMOKE_OK research-peer-reviewer. Wait for it, spawn no other agent, then return exactly PARENT_SMOKE_OK research-peer-reviewer.'
             ;;
         *)
             return 1
@@ -325,8 +335,8 @@ done <<EOF
 $representative_specs
 EOF
 
-if [[ "$verified_probe_count" -ne 5 ]]; then
-    runtime_failure "verified_probe_count=$verified_probe_count expected=5"
+if [[ "$verified_probe_count" -ne 7 ]]; then
+    runtime_failure "verified_probe_count=$verified_probe_count expected=7"
     exit 1
 fi
 

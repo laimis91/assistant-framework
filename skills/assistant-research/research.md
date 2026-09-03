@@ -34,6 +34,10 @@ For each major claim, seek at least 2 credible sources or mark the claim LOW con
 ## Five-Lens Briefing
 Use `five-lens-briefing.md` when the question is not just "what is true?" but "how should I understand this and what should I do?" The method requires a perspective scan, contradiction map, synthesis, and peer review. It is compatible with standard, extensive, or deep tiers depending on risk and evidence needs.
 
+If the user explicitly requests `quick` with `five_lens_briefing`, normalize the
+tier to `standard`, preserve the selected five-lens method, and disclose the
+tier normalization. `quick` remains valid for ordinary `source_research`.
+
 ## Deep Investigation
 Iterative progressive research:
 1. Broad landscape scan across differentiated source classes
@@ -41,9 +45,46 @@ Iterative progressive research:
 3. Deep-dive the highest-value findings
 4. Repeat until coverage is sufficient
 
-## Adapter-Aware Delegation
+## Delegation by method
 
-Research angles are required; subagent dispatch is optional. If the active adapter and user/tool policy permit parallel agents, each angle can be delegated independently. If not, run the angles sequentially in the main session and record that delegation was unavailable. Never reduce source diversity just because delegation is unavailable.
+`source_research` is direct-capable: research angles are required, while
+`subagent_policy_state=not_required` and
+`subagent_execution_mode=not_applicable`. Never reduce source diversity because
+delegation is unavailable.
+
+`five_lens_briefing` is a Process method. Freeze one sibling-blind assignment
+packet for each required LensKind before the first dispatch, then send one
+independent LensResearcher per lens through the selected handoff. Capacity may
+require waves, but later waves cannot consume earlier results. The root
+Orchestrator alone synthesizes validated results; a separate
+ResearchPeerReviewer critiques that initial synthesis.
+
+Freeze an ordered five-entry packet manifest: each entry has `packet_id`, its
+exact LensKind, and a `content_digest` over the canonical complete frozen
+packet. `packet_set_digest` binds that ordered manifest. Every delegated
+dispatch or fallback root pass repeats the matching packet content digest; any
+mismatch invalidates the complete lens stage.
+
+This skill instruction sets `subagent_policy_state=delegation_triggered` and
+`subagent_execution_mode=delegated` without a separate permission question.
+Record a non-empty trigger scope. An opt-out, actual spawn failure or supported
+configuration proof sets sequential fallback evidence; an exact policy block
+also records its blocking source and no-exception basis.
+
+Use sequential fallback only for explicit opt-out, real dispatch failure or
+unavailability, supported configuration proof, or an exact policy block. Run
+five frozen-packet root passes, record reduced independence, and retain peer
+critique as a separate fresh pass. After one same-assignment schema-correction
+retry, rerun the complete lens stage through evidenced fallback or block; do
+not mix partial delegated and root-authored lenses while claiming independence.
+
+For five-lens work, carry a numeric bounded search resource budget through the
+root process and every frozen packet. Standard allows at most 3 queries, 4
+sources, and 10 minutes per lens (15/20/50 overall); extensive allows 5/6/15
+(25/30/75 overall); deep allows 8/10/25 (40/50/125 overall). Deep stops at
+saturation or its hard ceiling. When a limit is exhausted, record gaps and
+downgrade confidence instead of extending the search. These five-lens ceilings
+do not change proportional direct `source_research` behavior.
 
 ## Candidate mechanisms
 

@@ -1,7 +1,7 @@
 # Research Output Contract
 # Defines what a completed research activity MUST produce.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: output
 skill: assistant-research
 
@@ -95,6 +95,7 @@ artifacts:
     condition: "research_method == five_lens_briefing"
     description: "Five expert lenses used before synthesis"
     min_items: 5
+    max_items: 5
     validation: "Includes practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, and historian_or_pattern_matcher lenses with confidence levels and source notes."
     on_fail: "Re-run the perspective scan using five-lens-briefing.md before synthesizing."
     object_fields:
@@ -125,6 +126,7 @@ artifacts:
     condition: "research_method == five_lens_briefing"
     description: "STORM-style per-lens question trace and evidence ledger before contradiction mapping"
     min_items: 5
+    max_items: 5
     validation: "Includes at least one perspective-guided research question per required lens, a source-grounded answer or explicit gap, source notes or verified URLs, every material evidence-prompted follow-up question or an explicit none_needed decision, and evidence status."
     on_fail: "Build the question trace/evidence ledger before contradiction mapping or synthesis; do not synthesize directly from fixed lenses."
     object_fields:
@@ -244,28 +246,274 @@ artifacts:
     type: object
     required: conditional
     condition: "research_method == five_lens_briefing"
-    description: "Self-critique of the briefing before final presentation"
-    validation: "Includes confidence scores, weakest claim, bias check, missing sixth perspective, falsification test, and revised recommendation if needed."
-    on_fail: "Run the peer review step and revise or downgrade claims before finalizing."
+    description: "Independent ResearchPeerReviewer critique of the root-owned briefing before final presentation"
+    validation: "Includes execution mode and peer assignment binding. Truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked with open_questions and status detail, and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions plus complete orchestrator-owned closure. Usable statuses include critique/evidence; delegated mode records a distinct native peer reviewer identity and fallback mode records a fresh fallback pass without fabricated identity."
+    on_fail: "Run the separate ResearchPeerReviewer step and revise or downgrade claims before finalizing."
     object_fields:
+      - name: peer_review_execution_mode
+        type: enum
+        required: true
+        enum_values: [delegated, sequential_fallback]
+      - name: peer_review_assignment_id
+        type: string
+        required: true
+        description: "Orchestrator-created assignment identity echoed across peer handoff, peer result, and process evidence"
+      - name: peer_reviewer_identity
+        type: string
+        required: conditional
+        condition: "peer_review_execution_mode == delegated"
+        description: "Distinct native ResearchPeerReviewer dispatch identity"
+      - name: peer_review_fallback_pass_id
+        type: string
+        required: conditional
+        condition: "peer_review_execution_mode == sequential_fallback"
+        description: "Separate fresh root peer-critique pass identity; never a fabricated native dispatch reference"
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]
+      - name: verdict
+        type: enum
+        required: true
+        enum_values: [accepted, accepted_with_concerns, revise, blocked]
+        validation: "DONE => accepted; DONE_WITH_CONCERNS => accepted_with_concerns or revise; NEEDS_CONTEXT => verdict=blocked; BLOCKED => verdict=blocked. Contradictory BLOCKED plus accepted, accepted_with_concerns, or revise is invalid."
       - name: confidence_scores
         type: string[]
-        required: true
+        required: conditional
+        condition: "status in [DONE, DONE_WITH_CONCERNS]"
       - name: weakest_claim
         type: string
-        required: true
-      - name: bias_check
+        required: conditional
+        condition: "status in [DONE, DONE_WITH_CONCERNS]"
+      - name: bias_or_lens_dominance
         type: string
-        required: true
+        required: conditional
+        condition: "status in [DONE, DONE_WITH_CONCERNS]"
       - name: missing_sixth_perspective
         type: string
-        required: true
+        required: conditional
+        condition: "status in [DONE, DONE_WITH_CONCERNS]"
       - name: falsification_test
         type: string
-        required: true
+        required: conditional
+        condition: "status in [DONE, DONE_WITH_CONCERNS]"
       - name: revised_recommendation_if_needed
         type: string
+        required: conditional
+        condition: "status in [DONE, DONE_WITH_CONCERNS]"
+      - name: required_revisions
+        type: string[]
+        required: conditional
+        condition: "status in [DONE, DONE_WITH_CONCERNS]"
+        validation: "accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions."
+      - name: revision_disposition_id
+        type: string
+        required: conditional
+        condition: "verdict == revise"
+        description: "Orchestrator-owned identity for the required revision closure."
+      - name: revision_disposition
+        type: object[]
+        required: conditional
+        condition: "verdict == revise"
+        min_items: 1
+        description: "Orchestrator-owned closure for every peer-required revision before presentation."
+        validation: "Covers every required_revisions entry exactly once with outcome=applied or claim_downgraded, is identified by revision_disposition_id, and unresolved revision blocks presentation."
+        object_fields:
+          - {name: required_revision, type: string, required: true}
+          - {name: outcome, type: enum, required: true, enum_values: [applied, claim_downgraded]}
+          - {name: closure_evidence, type: string, required: true}
+      - name: evidence
+        type: object[]
+        required: conditional
+        condition: "status in [DONE, DONE_WITH_CONCERNS]"
+        min_items: 1
+        object_fields:
+          - {name: source, type: string, required: true}
+          - {name: detail, type: string, required: true}
+          - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
+      - {name: open_questions, type: "string[]", required: conditional, condition: "status in [NEEDS_CONTEXT, BLOCKED]", min_items: 1}
+      - {name: status_detail, type: string, required: conditional, condition: "status in [NEEDS_CONTEXT, BLOCKED]"}
+      - {name: blocker_type, type: enum, required: conditional, condition: "status == BLOCKED", enum_values: [missing_review_context, policy_blocked, tool_failure]}
+      - {name: blocker_evidence, type: "string[]", required: conditional, condition: "status == BLOCKED", min_items: 1}
+
+  - name: five_lens_process_evidence
+    type: object
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    description: "FiveLensProcessEvidence proving independent lens dispatch or the constrained fallback path"
+    validation: "Records mode, exact LensKind coverage, frozen-packet proof, wave coverage, root synthesis ownership, peer-review identity, return validation, and any reduced-independence fallback basis."
+    on_fail: "Do not claim an independent briefing; restore missing process evidence, rerun the complete lens stage through evidenced fallback, or block."
+    object_fields:
+      - name: lens_execution_mode
+        type: enum
         required: true
+        enum_values: [delegated, sequential_fallback]
+      - name: peer_review_execution_mode
+        type: enum
+        required: true
+        enum_values: [delegated, sequential_fallback]
+      - name: subagent_policy_state
+        type: enum
+        required: true
+        enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
+      - name: frozen_packet_set
+        type: object
+        required: true
+        description: "Immutable pre-dispatch record that proves all five assignment packets froze before any lens execution."
+        validation: "packet_set_frozen_at precedes first_lens_execution_at; packet_set_digest binds the ordered manifest contents (packet_id, LensKind, content_digest); and every dispatch or root pass binds packet_id, packet_set_id, and matching packet content_digest to this set."
+        object_fields:
+          - {name: packet_set_id, type: string, required: true}
+          - {name: packet_set_digest, type: string, required: true}
+          - {name: packet_ids, type: "string[]", required: true, min_items: 5, max_items: 5}
+          - {name: packet_manifest_order, type: "string[]", required: true, min_items: 5, max_items: 5}
+          - name: packet_manifest
+            type: object[]
+            required: true
+            min_items: 5
+            max_items: 5
+            validation: "Ordered five-entry manifest has one exact LensKind per packet_id and a content_digest over the canonical complete frozen packet."
+            object_fields:
+              - {name: packet_id, type: string, required: true}
+              - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
+              - {name: content_digest, type: string, required: true}
+          - {name: packet_set_frozen_at, type: string, required: true}
+          - {name: pre_dispatch_record_id, type: string, required: true}
+          - {name: first_lens_execution_at, type: string, required: true}
+          - {name: first_lens_execution_evidence_ref, type: string, required: true}
+      - name: subagent_trigger_scope
+        type: string[]
+        required: conditional
+        condition: "subagent_policy_state == delegation_triggered"
+        min_items: 1
+      - name: policy_blocking_source
+        type: string
+        required: conditional
+        condition: "subagent_policy_state == policy_disallowed"
+      - name: frozen_assignment_packet_ids
+        type: string[]
+        required: true
+        min_items: 5
+        max_items: 5
+        validation: "Exactly five frozen packet identities, one for each required LensKind, equal to frozen_packet_set.packet_manifest_order and created before first lens execution."
+      - name: search_resource_budget
+        type: object
+        required: true
+        description: "SearchResourceBudget used by every frozen lens packet and the complete five-lens process."
+        validation: "Carries numeric per-lens and overall query, source, and time ceilings; deep stops at saturation or its hard ceiling, and exhaustion records gaps with downgraded confidence."
+        object_fields:
+          - {name: per_lens_max_queries, type: int, required: true}
+          - {name: per_lens_max_sources, type: int, required: true}
+          - {name: per_lens_max_minutes, type: int, required: true}
+          - {name: overall_max_queries, type: int, required: true}
+          - {name: overall_max_sources, type: int, required: true}
+          - {name: overall_max_minutes, type: int, required: true}
+          - {name: stop_condition, type: enum, required: true, enum_values: [saturation_or_hard_ceiling]}
+      - name: lens_dispatches
+        type: object[]
+        required: conditional
+        condition: "lens_execution_mode == delegated"
+        min_items: 5
+        max_items: 5
+        validation: "Exactly five unique native dispatch identities cover the required LensKind enum exactly once and each binds the matching packet content_digest from frozen_packet_set.packet_manifest."
+        object_fields:
+          - name: lens_kind
+            type: enum
+            required: true
+            enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]
+          - name: dispatch_identity
+            type: string
+            required: true
+          - name: assignment_id
+            type: string
+            required: true
+          - name: packet_id
+            type: string
+            required: true
+          - name: packet_set_id
+            type: string
+            required: true
+          - name: packet_content_digest
+            type: string
+            required: true
+          - name: wave_id
+            type: string
+            required: true
+          - name: return_validated
+            type: boolean
+            required: true
+      - name: fallback_lens_passes
+        type: object[]
+        required: conditional
+        condition: "lens_execution_mode == sequential_fallback"
+        min_items: 5
+        max_items: 5
+        validation: "Exactly five root passes cover the required LensKind enum exactly once, bind matching packet content_digest from frozen_packet_set.packet_manifest, and contain no native dispatch_identity."
+        object_fields:
+          - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
+          - {name: assignment_id, type: string, required: true}
+          - {name: packet_id, type: string, required: true}
+          - {name: packet_set_id, type: string, required: true}
+          - {name: packet_content_digest, type: string, required: true}
+          - {name: root_pass_id, type: string, required: true}
+          - {name: return_validated, type: boolean, required: true}
+      - name: wave_coverage
+        type: object[]
+        required: conditional
+        condition: "lens_execution_mode == delegated"
+        min_items: 1
+        validation: "Waves are capacity-bounded and their LensKind coverage is exact, disjoint, and exhaustive."
+        object_fields:
+          - name: wave_id
+            type: string
+            required: true
+          - name: capacity
+            type: int
+            required: true
+          - name: lens_kinds
+            type: string[]
+            required: true
+            min_items: 1
+      - name: root_synthesis_ownership
+        type: enum
+        required: true
+        enum_values: [orchestrator_only]
+      - name: peer_reviewer_identity
+        type: string
+        required: conditional
+        condition: "peer_review_execution_mode == delegated"
+      - name: peer_review_assignment_id
+        type: string
+        required: true
+      - name: peer_review_revision_disposition_id
+        type: string
+        required: conditional
+        condition: "peer_review.verdict == revise"
+        description: "Orchestrator-owned revision_disposition identity binding the revised peer artifact to this process evidence."
+        validation: "Exactly equals peer_review.revision_disposition_id."
+      - name: peer_review_fallback_pass_id
+        type: string
+        required: conditional
+        condition: "peer_review_execution_mode == sequential_fallback"
+      - name: lens_fallback_evidence
+        type: object
+        required: conditional
+        condition: "lens_execution_mode == sequential_fallback"
+        object_fields:
+          - {name: basis, type: enum, required: true, enum_values: [explicit_opt_out, spawn_failure_or_unavailable, supported_configuration_proof, exact_policy_block]}
+          - {name: detail, type: string, required: true}
+          - {name: evidence_ref, type: string, required: true}
+      - name: peer_review_fallback_evidence
+        type: object
+        required: conditional
+        condition: "peer_review_execution_mode == sequential_fallback"
+        object_fields:
+          - {name: basis, type: enum, required: true, enum_values: [explicit_opt_out, spawn_failure_or_unavailable, supported_configuration_proof, exact_policy_block]}
+          - {name: detail, type: string, required: true}
+          - {name: evidence_ref, type: string, required: true}
+      - name: reduced_independence
+        type: boolean
+        required: true
+        validation: "reduced_independence is true whenever lens_execution_mode or peer_review_execution_mode is sequential_fallback; false only when both are delegated."
 
 
   - name: conflicts
@@ -322,7 +570,10 @@ artifacts:
 # - {direct conflicts, consensus, unresolved question, missing angle}
 #
 # SYNTHESIS / PEER REVIEW (required when method=five_lens_briefing)
-# - {decision-ready synthesis and self-critique}
+# - {root-owned decision-ready synthesis and separate ResearchPeerReviewer critique}
+#
+# FIVE-LENS PROCESS EVIDENCE (required when method=five_lens_briefing)
+# - {frozen packet-set ID/digest and ordering, exact five dispatches or root passes, assignment/packet bindings, return validation, peer assignment/identity or fallback, execution modes, reduced independence, and resource budget}
 #
 # FINDINGS
 # 1. {source-backed factual claim or decision insight} — confidence: {HIGH/MEDIUM/LOW}
@@ -353,7 +604,7 @@ artifacts:
 # 4. conflicts[] is present (may be empty)
 # 5. gaps[] is present (may be empty)
 # 6. Low-confidence findings are explicitly flagged
-# 7. For five_lens_briefing, perspective_scan, question_trace, contradiction_map, synthesis_briefing, and peer_review are present
+# 7. For five_lens_briefing, perspective_scan, question_trace, contradiction_map, synthesis_briefing, peer_review, and five_lens_process_evidence are present
 # 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, source notes/verified URLs, follow_ups[] retaining every material follow-up or one typed none_needed decision, and evidence status before synthesis
 # 9. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless stronger action is justified by verified evidence and user context
 # 10. candidate_mechanisms exists when why/how/cause/improvement mechanisms were requested, and every candidate has evidence, confidence, counterevidence_or_conflicts, gaps, validation_method, and non-proven claim_status

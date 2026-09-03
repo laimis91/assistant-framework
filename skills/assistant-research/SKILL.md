@@ -24,34 +24,50 @@ explicit conflicts, and honest evidence gaps at proportional depth.
   decision criteria and cannot be inferred safely.
 - Do not call a single-source claim HIGH confidence unless a primary/official
   source directly supports it.
-- Fit evidence budgets and research angles to the active adapter; do not hardcode
-  mandatory subagent counts.
+- Keep `source_research` direct-capable. For `five_lens_briefing`, use the
+  declared five-lens Process handoffs and do not substitute a single-agent
+  perspective scan for independent lens evidence.
 
 ## Progressive Contract Loading
 
-Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`, and
-`contracts/phase-gates.yaml`.
+Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`,
+`contracts/phase-gates.yaml`, and `contracts/handoffs.yaml`.
 
 Read `contracts/index.yaml` first and load only the active boundary:
 
-- `entry` for question, tier, method, role/goal, purpose, and known context;
+- `entry` for question, tier, method, role/goal, purpose, known context, and
+  resolved subagent policy/execution/fallback evidence;
 - `current_phase` for SEARCH, SYNTHESIZE, or VERIFY;
 - `source_research`, `five_lens`, or `investigate` only after method selection; and
+- `selected_handoff` before every LensResearcher or ResearchPeerReviewer dispatch and return validation; and
 - `completion` only for the artifact being returned.
 
 Missing or invalid selectors fall back to the full named canonical contract. Do
 not load every contract or research method at entry.
 
-Migration note: assistant-research contracts are v2.0. For
-`five_lens_briefing`, the required singular `follow_up_question` and
-`follow_up_answer_or_gap` fields are replaced by required typed `follow_ups`.
-Each collection retains every material follow-up, or one typed `none_needed`
-decision when none exists; v1 consumers must adapt before accepting v2 output.
+Migration note: assistant-research contracts are v3.0 and the skill is now a
+Process contract. v2 follow-up migration context remains: singular
+`follow_up_question` and `follow_up_answer_or_gap` became required typed
+`follow_ups`, preserving every material follow-up or one `none_needed` decision.
+v3 adds declared handoffs: five frozen, sibling-blind assignment packets for
+the exact LensKind enum, root-only synthesis, and a distinct peer reviewer;
+v2 consumers must adapt before accepting v3 process evidence.
 
 ## Ownership
 
 assistant-research owns source selection, evidence synthesis, confidence, and
 URL verification. Generic workflow may coordinate the task, but specialist gates are authoritative.
+
+For `five_lens_briefing`, the root Orchestrator freezes exactly five
+assignment packets before dispatching one independent LensResearcher per named
+lens. Orchestrator alone builds the contradiction map and initial synthesis
+after validated returns. A distinct ResearchPeerReviewer then critiques that
+synthesis. Sequential fallback is constrained to the documented admissible
+bases and records reduced independence; it never claims delegated independence.
+Resolve `subagent_policy_state` before dispatch: this skill instruction makes
+five-lens delegation `delegation_triggered` without another permission prompt.
+Only documented opt-out, real unavailability, or an exact policy block permits
+`sequential_fallback`; `source_research` remains `not_required/not_applicable`.
 
 ## Method Selection
 
@@ -75,6 +91,12 @@ counterevidence, gaps, and a validation method—not proven-cause language.
 Return status/confidence, concise answer, source-backed findings, candidate
 mechanisms when applicable, verified sources, conflicts, gaps, and five-lens
 artifacts only when that method ran.
+
+For five_lens_briefing, include FIVE-LENS PROCESS EVIDENCE: frozen packet-set
+ID/digest and pre-dispatch ordering, exact lens execution records,
+assignment/packet-set bindings, return validation, peer assignment/identity or
+fallback, execution modes, reduced-independence state, and the bounded search
+resource budget. The root Orchestrator owns this lifecycle record.
 
 ## Stop Rules
 

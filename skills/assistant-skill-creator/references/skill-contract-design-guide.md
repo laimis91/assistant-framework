@@ -351,8 +351,8 @@ handoffs:
 
 | Category | Skills | Contract files | Rationale |
 |---|---|---|---|
-| **Process** (multi-phase, subagents) | workflow, review, tdd, security | input + output + phase-gates + handoffs | Full pipeline with transitions and delegation |
-| **Analysis** (structured reasoning) | thinking, research, ideate | input + output + phase-gates | Multi-step pipeline but no subagent delegation |
+| **Process** (multi-phase, subagents) | workflow, review, tdd, security, research | input + output + phase-gates + handoffs | Full pipeline with transitions and declared delegation |
+| **Analysis** (structured reasoning) | thinking, ideate | input + output + phase-gates | Multi-step pipeline but no subagent delegation |
 | **Utility** (single-purpose) | docs, diagrams, onboard, telos | input + output | Single-pass execution, no phases to gate |
 
 Infer a skill category in this order: Process first when its purpose mentions a
