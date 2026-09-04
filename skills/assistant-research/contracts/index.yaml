@@ -20,7 +20,7 @@ load_sets:
         section: fields
         key: name
         names: [question, tier, tool, research_method, user_role_or_goal, output_purpose, known_context, search_resource_budget, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, sequential_fallback_evidence]
-    budget_words: 1500
+    budget_words: 1600
   current_phase:
     selectors:
       - id: research-current-phase
@@ -57,7 +57,7 @@ load_sets:
         section: fields
         key: name
         names: [research_method]
-    budget_words: 4500
+    budget_words: 5000
   selected_handoff:
     selectors:
       - id: research-selected-handoff
@@ -107,7 +107,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [findings, candidate_mechanisms, perspective_scan, question_trace, contradiction_map, synthesis_briefing, peer_review, five_lens_process_evidence, conflicts, gaps, summary]
+        allowed_names: [findings, candidate_mechanisms, perspective_scan, question_trace, contradiction_map, synthesis_briefing, high_stakes_recommendation_basis, peer_review, five_lens_process_evidence, conflicts, gaps, summary]
     budget_words: 6000
 
 fallback:

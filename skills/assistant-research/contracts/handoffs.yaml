@@ -35,6 +35,9 @@ semantic_types:
     kind: closed_enum
     values: [accepted, accepted_with_concerns, revise, blocked]
     description: "Independent review outcome for the root-owned initial synthesis."
+  - name: PeerReviewInputBinding
+    kind: lifecycle_record
+    description: "Canonical peer-review input preimage and ContentDigest binding the exact synthesis, validated lenses, independence state, evidence ledger, gaps, and high-stakes context reviewed by ResearchPeerReviewer."
 
 dispatch_protocol:
   - name: common_research_protocol
@@ -95,7 +98,7 @@ handoffs:
         type: object
         required: true
         description: "FrozenLensAssignmentPacket containing only common scope and this assigned LensKind."
-        validation: "Immutable before first dispatch; excludes sibling results, prior waves, contradiction_map, synthesis_briefing, peer_review, and recommendation. content_digest is ContentDigest over the RFC 8785 JCS bytes of a JSON object containing exactly packet_id, packet_set_id, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, isolation_policy, lens_kind, and packet_frozen_at; it excludes content_digest itself."
+        validation: "Immutable before first dispatch; packet_frozen_at is less than or equal to frozen_packet_set.packet_set_frozen_at and strictly before the process first_lens_execution_at. Excludes sibling results, prior waves, contradiction_map, synthesis_briefing, peer_review, and recommendation. content_digest is ContentDigest over the RFC 8785 JCS bytes of a JSON object containing exactly packet_id, packet_set_id, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, isolation_policy, lens_kind, and packet_frozen_at; it excludes content_digest itself."
         object_fields:
           - {name: packet_id, type: string, required: true}
           - {name: packet_set_id, type: string, required: true}
@@ -188,8 +191,9 @@ handoffs:
               - name: sources_or_verified_urls
                 type: string[]
                 required: true
-                validation: "Empty only for inference_only or unresolved and answer_or_gap records the source-access gap; source_backed requires source or verified URL evidence."
+                validation: "Empty only for inference_only or unresolved when this follow-up's own gaps array is non-empty; source_backed requires source or verified URL evidence."
               - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
+              - {name: gaps, type: "string[]", required: true, validation: "Non-empty when this follow-up is source-empty inference_only or unresolved."}
           - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
           - {name: likely_blind_spot, type: string, required: true}
           - {name: unique_insight, type: string, required: true}
@@ -218,6 +222,7 @@ handoffs:
     context_fields:
       - {name: process_id, type: string, required: true}
       - {name: peer_review_assignment_id, type: string, required: true, description: "Orchestrator-created peer-review assignment identity that the worker must echo."}
+      - {name: peer_review_input_digest, type: string, required: true, description: "ContentDigest of the exact PeerReviewInputBinding preimage that the peer worker must echo unchanged."}
       - {name: original_question, type: string, required: true}
       - {name: tier, type: enum, required: true, enum_values: [standard, extensive, deep]}
       - {name: user_role_or_goal, type: string, required: true}
@@ -251,8 +256,9 @@ handoffs:
               - name: sources_or_verified_urls
                 type: string[]
                 required: true
-                validation: "Empty only for inference_only or unresolved and answer_or_gap records the source-access gap; source_backed requires source or verified URL evidence."
+                validation: "Empty only for inference_only or unresolved when this follow-up's own gaps array is non-empty; source_backed requires source or verified URL evidence."
               - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
+              - {name: gaps, type: "string[]", required: true, validation: "Non-empty when this follow-up is source-empty inference_only or unresolved."}
           - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
           - {name: likely_blind_spot, type: string, required: true}
           - {name: unique_insight, type: string, required: true}
@@ -261,7 +267,8 @@ handoffs:
       - name: findings
         type: object[]
         required: true
-        min_items: 1
+        min_items: 0
+        validation: "May be [] only when every validated lens result is source-empty inference_only or unresolved and gaps is non-empty; otherwise retains at least one source-backed finding."
         object_fields:
           - {name: finding, type: string, required: true}
           - {name: confidence, type: enum, required: true, enum_values: [high, medium, low]}
@@ -317,7 +324,18 @@ handoffs:
           - {name: hidden_connection, type: string, required: true}
           - {name: actionable_implication, type: string, required: true}
           - {name: recommendation, type: enum, required: true, enum_values: [do, wait, avoid, investigate_further]}
+          - {name: high_stakes_caveat, type: string, required: conditional, condition: "high_stakes_context.applicable == true"}
           - {name: frontier_question, type: string, required: true}
+      - name: lens_execution_provenance
+        type: object
+        required: true
+        description: "Exact lens independence state the peer reviewer must consider when assessing lens dominance and confidence."
+        validation: "This is lens-only provenance: reduced_independence exactly equals lens_execution_mode == sequential_fallback. Delegated mode requires reduced_independence=false and literal not_applicable fallback_basis/fallback_evidence_ref. Sequential fallback requires reduced_independence=true, its exact admissible lens_fallback_evidence basis, and its exact evidence_ref. Overall process reduced_independence may separately reflect peer fallback."
+        object_fields:
+          - {name: lens_execution_mode, type: enum, required: true, enum_values: [delegated, sequential_fallback]}
+          - {name: reduced_independence, type: boolean, required: true}
+          - {name: fallback_basis, type: enum, required: true, enum_values: [not_applicable, explicit_opt_out, spawn_failure_or_unavailable, supported_configuration_proof, exact_policy_block]}
+          - {name: fallback_evidence_ref, type: string, required: true, validation: "Exactly literal not_applicable in delegated mode; otherwise exactly lens_fallback_evidence.evidence_ref."}
       - name: verified_source_evidence
         type: object[]
         required: true
@@ -341,11 +359,14 @@ handoffs:
         object_fields:
           - {name: applicable, type: boolean, required: true}
           - {name: caveat_or_not_applicable_reason, type: string, required: true}
+          - {name: user_context_status, type: enum, required: true, enum_values: [explicit, unresolved, not_applicable], validation: "applicable=false requires not_applicable; applicable=true requires explicit or unresolved."}
+          - {name: user_context_basis, type: string, required: true, validation: "applicable=false requires literal not_applicable; applicable=true with explicit status requires concrete user-provided decision context, while unresolved status records the missing context and blocks stronger recommendations."}
       - {name: return_schema_ref, type: string, required: true}
     return_fields:
       - {name: status, type: enum, required: true, enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]}
       - {name: process_id, type: string, required: true}
       - {name: peer_review_assignment_id, type: string, required: true}
+      - {name: peer_review_input_digest, type: string, required: true, validation: "Exactly echoes the active PeerReviewInputBinding ContentDigest."}
       - {name: verdict, type: enum, required: true, enum_values: [accepted, accepted_with_concerns, revise, blocked], validation: "Truth table: DONE => accepted; DONE_WITH_CONCERNS => accepted_with_concerns or revise; NEEDS_CONTEXT => verdict=blocked; BLOCKED => verdict=blocked. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions. BLOCKED plus accepted, accepted_with_concerns, or revise is invalid."}
       - {name: confidence_scores, type: "string[]", required: conditional, condition: "status in [DONE, DONE_WITH_CONCERNS]"}
       - {name: weakest_claim, type: string, required: conditional, condition: "status in [DONE, DONE_WITH_CONCERNS]"}
@@ -353,6 +374,7 @@ handoffs:
       - {name: missing_sixth_perspective, type: string, required: conditional, condition: "status in [DONE, DONE_WITH_CONCERNS]"}
       - {name: falsification_test, type: string, required: conditional, condition: "status in [DONE, DONE_WITH_CONCERNS]"}
       - {name: revised_recommendation_if_needed, type: string, required: conditional, condition: "status in [DONE, DONE_WITH_CONCERNS]"}
+      - {name: supported_recommendation, type: enum, required: conditional, condition: "status in [DONE, DONE_WITH_CONCERNS]", enum_values: [do, wait, avoid, investigate_further], validation: "For every usable DONE or DONE_WITH_CONCERNS result, the final synthesis recommendation must exactly equal this peer-supported value."}
       - {name: required_revisions, type: "string[]", required: conditional, condition: "status in [DONE, DONE_WITH_CONCERNS]", validation: "accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions."}
       - name: evidence
         type: object[]
@@ -375,4 +397,4 @@ return_validation:
   - name: orchestrator_to_lens_researcher
     validation: "For delegated lens mode validate assignment_id, packet_id, packet_set_id, packet_content_digest, LensKind, return schema, status, typed evidence, source claims, recomputed lens_result_digest, and SearchResourceUsage against the matching frozen assignment, manifest, and budget; validate exactly five unique native identities. DONE and DONE_WITH_CONCERNS require a complete LensResearchResult and evidence. ceiling_exhausted requires a LOW-confidence result and explicit gap; over_ceiling forces BLOCKED. NEEDS_CONTEXT or BLOCKED require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence; do not invent research. For sequential fallback validate exactly five frozen root passes with root_pass_id, matching packet and result digests, exact usage, no dispatch_identity, and concrete fallback evidence."
   - name: orchestrator_to_research_peer_reviewer
-    validation: "Validate peer_review_assignment_id echoes the active dispatch and each validated lens carries the recomputed result digest for the same assignment used by process and presentation artifacts. Apply the status/verdict truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions. Usable statuses require complete critique and calibrated evidence; failure statuses require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence. When verdict=revise, the orchestrator—not the worker—records revision_disposition covering every required revision exactly once as applied or claim_downgraded, assigns revision_disposition_id, and records an exactly equal peer_review_revision_disposition_id; unresolved revision blocks presentation. Workers do not self-report execution or fallback orchestration metadata or native peer identity; the orchestrator alone records those fields in final peer_review/process evidence. Every verified_source_evidence row follows its method/reference/conditional-URL rule; an empty ledger requires non-empty verification_gaps and downgrade or block. For reviewer-only fallback retain valid delegated lens evidence, validate the orchestrator-owned peer_review_fallback_pass_id and separate concrete fallback evidence, and never erase lens dispatch evidence."
+    validation: "Validate peer_review_assignment_id and peer_review_input_digest echo the active canonical PeerReviewInputBinding, including the exact validated lenses, lens execution provenance, initial synthesis, verified evidence, gaps, and high-stakes context. Each validated lens carries the recomputed result digest for the same assignment used by process and presentation artifacts. Apply the status/verdict truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions. Usable statuses require complete critique, calibrated evidence, and supported_recommendation; the final synthesis recommendation exactly equals supported_recommendation. Failure statuses require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence. When verdict=revise, including sequential peer fallback, the orchestrator—not the worker—records revision_disposition covering every required revision exactly once as applied or claim_downgraded, assigns revision_disposition_id, records an exactly equal peer_review_revision_disposition_id, and binds every disposition to final_synthesis_digest; unresolved revision blocks presentation. Workers do not self-report execution or fallback orchestration metadata or native peer identity; the orchestrator alone records those fields in final peer_review/process evidence. Every verified_source_evidence row follows its method/reference/conditional-URL rule; an empty ledger requires non-empty verification_gaps and downgrade or block. For reviewer-only fallback retain valid delegated lens evidence, validate the orchestrator-owned peer_review_fallback_pass_id and separate concrete fallback evidence, and never erase lens dispatch evidence."

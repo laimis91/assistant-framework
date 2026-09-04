@@ -380,6 +380,27 @@
       }
     },
     {
+      "id": "five-lens-quick-normalizes-to-standard",
+      "semantic_validator": "assistant-research.five_lens_v3",
+      "title": "Quick five-lens requests retain standard normalization evidence",
+      "category": "five_lens_briefing",
+      "purpose": "Checks that an explicit quick five-lens request is retained as a standard-budget briefing with an auditable normalization disclosure.",
+      "prompt": "Quickly create a five-lens briefing for this decision; retain the normalization evidence in the final process record.",
+      "setup_context": ["The assistant-research skill instructions are active.", "The requester explicitly selected quick while requiring five_lens_briefing."],
+      "expected_behavior": ["Preserves five_lens_briefing while normalizing quick to standard.", "Records requested_tier=quick, effective_tier=standard, and a nonblank normalization disclosure.", "Uses the standard frozen search resource budget rather than a quick budget."],
+      "pass_criteria": ["The response contains the complete five-lens process evidence and an auditable quick-to-standard tier resolution."],
+      "fail_signals": ["Retains quick as the effective five-lens tier.", "Omits requested-tier evidence or the normalization disclosure.", "Uses extensive or quick ceilings after a quick request."],
+      "machine_expectations": {
+        "required_substrings": ["Method: five_lens_briefing", "quick", "standard", "tier_resolution", "requested_tier", "effective_tier", "normalization_disclosure", "FIVE-LENS PROCESS EVIDENCE"],
+        "forbidden_substrings": ["effective_tier: quick", "quick budget retained", "tier normalization omitted"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["five_lens_process_evidence","tier_resolution","requested_tier"],"expected":"quick"},
+          {"operator":"equals","path":["five_lens_process_evidence","tier_resolution","effective_tier"],"expected":"standard"},
+          {"operator":"nonempty_string","path":["five_lens_process_evidence","tier_resolution","normalization_disclosure"]}
+        ]
+      }
+    },
+    {
       "id": "five-lens-retains-all-material-follow-ups",
       "title": "Five-lens question traces retain every material follow-up",
       "category": "five_lens_briefing",

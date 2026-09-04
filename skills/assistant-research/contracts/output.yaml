@@ -11,8 +11,8 @@ artifacts:
     required: true
     condition: always
     description: "Research findings with confidence scores and source attribution"
-    min_items: 1
-    validation: "At least one finding. Each must have a confidence level."
+    min_items: 0
+    validation: "At least one source-backed finding is required except when research_method=five_lens_briefing, every accepted LensResearchResult is source-empty with evidence_status inference_only or unresolved, and top-level gaps is non-empty. Only that evidence-empty completion may use findings=[]. Each finding has a confidence level and at least one source."
     object_fields:
       - name: finding
         type: string
@@ -157,7 +157,7 @@ artifacts:
         required: true
         description: "Every material follow-up prompted by this answer, contradiction, or gap, or one typed none_needed decision"
         validation: "Every material follow-up is retained exactly once with a question, answer_or_gap, sources_or_verified_urls, and evidence_status. An empty collection is invalid; use one none_needed decision only when no material follow-up exists, and none_needed cannot coexist with material follow-ups for the same trace."
-        on_fail: "Record every material follow-up or add one typed none_needed decision before synthesis."
+        on_fail: "Reject the malformed lens result and request one same-assignment correction for the exact follow-up field; if it remains invalid, rerun the complete lens stage through evidenced fallback or block rather than inventing follow-up evidence."
         min_items: 1
         object_fields:
           - name: decision
@@ -174,11 +174,15 @@ artifacts:
           - name: sources_or_verified_urls
             type: string[]
             required: true
-            validation: "Exactly equals the accepted follow-up. Empty only for inference_only or unresolved when answer_or_gap records the source-access gap."
+            validation: "Exactly equals the accepted follow-up. Empty only for inference_only or unresolved when this follow-up's own gaps array is non-empty."
           - name: evidence_status
             type: enum
             required: true
             enum_values: [source_backed, inference_only, unresolved]
+          - name: gaps
+            type: string[]
+            required: true
+            validation: "Non-empty when sources_or_verified_urls is empty and evidence_status is inference_only or unresolved; otherwise records this follow-up's own unresolved evidence limits."
       - name: evidence_status
         type: enum
         required: true
@@ -247,6 +251,20 @@ artifacts:
         type: string
         required: true
 
+  - name: high_stakes_recommendation_basis
+    type: object
+    required: conditional
+    condition: "research_method == five_lens_briefing and five_lens_process_evidence.peer_review_input_binding.high_stakes_context.applicable == true and synthesis_briefing.recommendation in [do, wait, avoid]"
+    description: "Typed evidence binding required before a high-stakes recommendation is stronger than investigate_further."
+    validation: "Absent unless the high-stakes recommendation is do, wait, or avoid. recommendation exactly equals synthesis_briefing.recommendation; verified_decision_critical_urls are non-empty verified evidence references retained in peer_review_input_binding.verified_source_evidence; high_stakes_context.user_context_status=explicit; user_context_basis exactly equals peer_review_input_binding.high_stakes_context.user_context_basis and appears in every retained frozen_assignment_packets[].known_context entry; peer_review_input_digest exactly equals the retained peer input; and peer_supported_recommendation exactly equals peer_review.supported_recommendation and the final recommendation."
+    on_fail: "Downgrade the recommendation to investigate_further or restart the complete lens stage with the explicit user context frozen into every assignment packet, then retain the exact verified evidence and peer support bindings before presentation."
+    object_fields:
+      - {name: recommendation, type: enum, required: true, enum_values: [do, wait, avoid]}
+      - {name: verified_decision_critical_urls, type: "string[]", required: true, min_items: 1}
+      - {name: user_context_basis, type: string, required: true, validation: "Non-blank explicit user context; never literal not_applicable when a stronger high-stakes recommendation is presented."}
+      - {name: peer_review_input_digest, type: string, required: true}
+      - {name: peer_supported_recommendation, type: enum, required: true, enum_values: [do, wait, avoid]}
+
   - name: peer_review
     type: object
     required: conditional
@@ -263,6 +281,10 @@ artifacts:
         type: string
         required: true
         description: "Orchestrator-created assignment identity echoed across peer handoff, peer result, and process evidence"
+      - name: peer_review_input_digest
+        type: string
+        required: true
+        validation: "Exactly equals five_lens_process_evidence.peer_review_input_binding.peer_review_input_digest and the peer-review input ContentDigest."
       - name: peer_reviewer_identity
         type: string
         required: conditional
@@ -306,6 +328,12 @@ artifacts:
         type: string
         required: conditional
         condition: "status in [DONE, DONE_WITH_CONCERNS]"
+      - name: supported_recommendation
+        type: enum
+        required: conditional
+        condition: "status in [DONE, DONE_WITH_CONCERNS]"
+        enum_values: [do, wait, avoid, investigate_further]
+        validation: "For every usable DONE or DONE_WITH_CONCERNS result, exactly equals synthesis_briefing.recommendation and the peer worker's supported_recommendation."
       - name: required_revisions
         type: string[]
         required: conditional
@@ -327,6 +355,7 @@ artifacts:
           - {name: required_revision, type: string, required: true}
           - {name: outcome, type: enum, required: true, enum_values: [applied, claim_downgraded]}
           - {name: closure_evidence, type: string, required: true}
+          - {name: resulting_synthesis_digest, type: string, required: true, validation: "Exactly equals five_lens_process_evidence.final_synthesis_digest."}
       - name: evidence
         type: object[]
         required: conditional
@@ -362,6 +391,15 @@ artifacts:
         type: enum
         required: true
         enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
+      - name: tier_resolution
+        type: object
+        required: true
+        description: "Requested five-lens tier, normalized effective tier, and required normalization disclosure."
+        validation: "requested_tier=quick requires effective_tier=standard and a non-blank normalization_disclosure. Every non-quick requested_tier requires normalization_disclosure=not_applicable. effective_tier exactly equals the presented output tier and selects the retained search_resource_budget ceilings."
+        object_fields:
+          - {name: requested_tier, type: enum, required: true, enum_values: [not_explicitly_requested, quick, standard, extensive, deep]}
+          - {name: effective_tier, type: enum, required: true, enum_values: [standard, extensive, deep]}
+          - {name: normalization_disclosure, type: string, required: true, validation: "Non-blank disclosure only when requested_tier=quick; otherwise exactly literal not_applicable."}
       - name: frozen_packet_set
         type: object
         required: true
@@ -401,6 +439,38 @@ artifacts:
         min_items: 5
         max_items: 5
         validation: "Exactly five frozen packet identities, one for each required LensKind, equal to frozen_packet_set.packet_manifest_order and created before first lens execution."
+      - name: frozen_assignment_packets
+        type: object[]
+        required: true
+        min_items: 5
+        max_items: 5
+        description: "Exact retained FrozenLensAssignmentPacket preimages, one for each manifest entry."
+        validation: "Exactly five ordered packet bodies match frozen_packet_set.packet_manifest_order and manifest LensKinds. Every packet_frozen_at is less than or equal to frozen_packet_set.packet_set_frozen_at and strictly before frozen_packet_set.first_lens_execution_at. Recompute each content_digest from the RFC 8785 JCS object containing exactly packet_id, packet_set_id, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, isolation_policy, lens_kind, and packet_frozen_at; the digest excludes itself and exactly equals the matching manifest entry and dispatch/root-pass binding."
+        object_fields:
+          - {name: packet_id, type: string, required: true}
+          - {name: packet_set_id, type: string, required: true}
+          - {name: content_digest, type: string, required: true, validation: "ContentDigest over this exact non-self-referential FrozenLensAssignmentPacket preimage."}
+          - {name: question, type: string, required: true}
+          - {name: tier, type: enum, required: true, enum_values: [standard, extensive, deep]}
+          - {name: user_role_or_goal, type: string, required: true}
+          - {name: output_purpose, type: string, required: true}
+          - {name: known_context, type: "string[]", required: true}
+          - {name: evidence_budget, type: string, required: true}
+          - name: search_resource_budget
+            type: object
+            required: true
+            object_fields:
+              - {name: per_lens_max_queries, type: int, required: true}
+              - {name: per_lens_max_sources, type: int, required: true}
+              - {name: per_lens_max_minutes, type: int, required: true}
+              - {name: overall_max_queries, type: int, required: true}
+              - {name: overall_max_sources, type: int, required: true}
+              - {name: overall_max_minutes, type: int, required: true}
+              - {name: stop_condition, type: enum, required: true, enum_values: [saturation_or_hard_ceiling]}
+          - {name: source_policy, type: string, required: true}
+          - {name: isolation_policy, type: string, required: true}
+          - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
+          - {name: packet_frozen_at, type: string, required: true}
       - name: search_resource_budget
         type: object
         required: true
@@ -442,6 +512,7 @@ artifacts:
               - {name: answer_or_gap, type: string, required: true}
               - {name: sources_or_verified_urls, type: "string[]", required: true}
               - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
+              - {name: gaps, type: "string[]", required: true, validation: "Non-empty when this follow-up is source-empty inference_only or unresolved."}
           - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
           - {name: likely_blind_spot, type: string, required: true}
           - {name: unique_insight, type: string, required: true}
@@ -542,6 +613,82 @@ artifacts:
         type: enum
         required: true
         enum_values: [orchestrator_only]
+      - name: peer_review_input_binding
+        type: object
+        required: true
+        description: "Retained canonical preimage sent to the peer reviewer; peer_review_input_digest excludes itself."
+        validation: "Its exact keys are peer_review_input_digest, peer_review_assignment_id, initial_synthesis, validated_lens_results, lens_execution_provenance, verified_source_evidence, verification_gaps, and high_stakes_context. Recompute peer_review_input_digest from the RFC 8785 JCS object of every other listed field in this order-independent object; it exactly equals the peer context, peer return, and retained peer_review digest."
+        object_fields:
+          - {name: peer_review_input_digest, type: string, required: true, validation: "ContentDigest of this binding excluding peer_review_input_digest itself."}
+          - {name: peer_review_assignment_id, type: string, required: true}
+          - name: initial_synthesis
+            type: object
+            required: true
+            validation: "Exactly equals synthesis_briefing for accepted or accepted_with_concerns; revise may differ only through complete revision disposition whose resulting_synthesis_digest equals final_synthesis_digest."
+            object_fields:
+              - {name: executive_summary, type: string, required: true}
+              - {name: ranked_key_findings, type: "string[]", required: true, min_items: 3}
+              - {name: hidden_connection, type: string, required: true}
+              - {name: actionable_implication, type: string, required: true}
+              - {name: recommendation, type: enum, required: true, enum_values: [do, wait, avoid, investigate_further]}
+              - {name: high_stakes_caveat, type: string, required: conditional, condition: "high_stakes_context.applicable == true"}
+              - {name: frontier_question, type: string, required: true}
+          - name: validated_lens_results
+            type: object[]
+            required: true
+            min_items: 5
+            max_items: 5
+            validation: "Exactly equals accepted_lens_results including each full result body and recomputed digest."
+            object_fields:
+              - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
+              - {name: assignment_id, type: string, required: true}
+              - {name: lens_result_digest, type: string, required: true}
+              - {name: core_position, type: string, required: true}
+              - {name: lens_question, type: string, required: true}
+              - {name: answer_or_gap, type: string, required: true}
+              - {name: sources_or_verified_urls, type: "string[]", required: true}
+              - name: follow_ups
+                type: object[]
+                required: true
+                min_items: 1
+                object_fields:
+                  - {name: decision, type: enum, required: true, enum_values: [follow_up, none_needed]}
+                  - {name: question, type: string, required: conditional, condition: "decision == follow_up"}
+                  - {name: answer_or_gap, type: string, required: true}
+                  - {name: sources_or_verified_urls, type: "string[]", required: true}
+                  - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
+                  - {name: gaps, type: "string[]", required: true, validation: "Non-empty when this follow-up is source-empty inference_only or unresolved."}
+              - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
+              - {name: likely_blind_spot, type: string, required: true}
+              - {name: unique_insight, type: string, required: true}
+              - {name: confidence, type: enum, required: true, enum_values: [high, medium, low]}
+              - {name: gaps, type: "string[]", required: true}
+          - name: lens_execution_provenance
+            type: object
+            required: true
+            validation: "Exactly records the lens-only independence state sent to peer review: reduced_independence exactly equals lens_execution_mode == sequential_fallback. Delegated mode uses fallback_basis and fallback_evidence_ref literal not_applicable; fallback mode repeats the exact retained lens fallback basis and evidence reference. Overall process reduced_independence may also reflect a separate peer fallback."
+            object_fields:
+              - {name: lens_execution_mode, type: enum, required: true, enum_values: [delegated, sequential_fallback]}
+              - {name: reduced_independence, type: boolean, required: true}
+              - {name: fallback_basis, type: enum, required: true, enum_values: [not_applicable, explicit_opt_out, spawn_failure_or_unavailable, supported_configuration_proof, exact_policy_block]}
+              - {name: fallback_evidence_ref, type: string, required: true, validation: "Exactly literal not_applicable in delegated mode; otherwise exactly lens_fallback_evidence.evidence_ref."}
+          - name: verified_source_evidence
+            type: object[]
+            required: true
+            validation: "Exact peer-reviewed decision-critical verification ledger."
+          - {name: verification_gaps, type: "string[]", required: true}
+          - name: high_stakes_context
+            type: object
+            required: true
+            object_fields:
+              - {name: applicable, type: boolean, required: true}
+              - {name: caveat_or_not_applicable_reason, type: string, required: true}
+              - {name: user_context_status, type: enum, required: true, enum_values: [explicit, unresolved, not_applicable], validation: "applicable=false requires not_applicable; applicable=true requires explicit or unresolved."}
+              - {name: user_context_basis, type: string, required: true, validation: "applicable=false requires literal not_applicable; applicable=true with explicit status requires concrete user-provided decision context, while unresolved status records the missing context and blocks stronger recommendations."}
+      - name: final_synthesis_digest
+        type: string
+        required: true
+        validation: "ContentDigest of the exact presented synthesis_briefing object. It equals the digest of peer_review_input_binding.initial_synthesis for accepted or accepted_with_concerns; revise requires every revision_disposition.resulting_synthesis_digest to equal this value."
       - name: peer_reviewer_identity
         type: string
         required: conditional
@@ -678,13 +825,13 @@ artifacts:
 # - {what we couldn't find}
 #
 # Completeness check:
-# 1. findings[] has at least 1 entry
+# 1. findings[] has at least 1 source-backed entry, except source-empty five-lens inference/unresolved completion may use [] with non-empty gaps[]
 # 2. Every finding has confidence level assigned
 # 3. Every URL presented was verified (no unverified URLs)
 # 4. conflicts[] is present (may be empty)
 # 5. gaps[] is present (may be empty)
 # 6. Low-confidence findings are explicitly flagged
 # 7. For five_lens_briefing, perspective_scan, question_trace, contradiction_map, synthesis_briefing, peer_review, and five_lens_process_evidence are present
-# 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, the accepted result's exact sources/verified URLs array (possibly empty only for inference_only or unresolved with a recorded gap), follow_ups[] retaining every material follow-up or one typed none_needed decision, and evidence status before synthesis
-# 9. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless stronger action is justified by verified evidence and user context
+# 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, the accepted result's exact sources/verified URLs array (possibly empty only for inference_only or unresolved with a recorded gap), follow_ups[] retaining every material follow-up or one typed none_needed decision with own gaps, and evidence status before synthesis
+# 9. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless high_stakes_recommendation_basis binds stronger action to verified evidence, user context, and peer support
 # 10. candidate_mechanisms exists when why/how/cause/improvement mechanisms were requested, and every candidate has evidence, confidence, counterevidence_or_conflicts, gaps, validation_method, and non-proven claim_status

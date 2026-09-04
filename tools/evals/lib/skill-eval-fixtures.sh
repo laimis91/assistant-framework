@@ -976,13 +976,13 @@ validate_fixture() {
 
     validation_error="$(jq -r --arg skill_name "$skill_name" '
         def five_lens_case_ids:
-          ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-delegated-lenses-sequential-peer-fallback", "five-lens-sequential-fallback-preserves-process-evidence"];
+          ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-delegated-lenses-sequential-peer-fallback", "five-lens-quick-normalizes-to-standard", "five-lens-sequential-fallback-preserves-process-evidence"];
         [ .cases[] | .id ] as $case_ids
         | [ .cases[] | select(has("semantic_validator")) | {id, semantic_validator} ] as $declared
         | if $skill_name == "assistant-research" and (five_lens_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "five-lens assistant-research cases must declare their semantic validator"
           elif ($declared | length) == 0 then empty
           elif $skill_name != "assistant-research" then "semantic_validator is only supported for assistant-research"
-          elif ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the three five-lens assistant-research cases"
+          elif ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the four five-lens assistant-research cases"
           elif ($declared | all(.semantic_validator == "assistant-research.five_lens_v3")) then empty
           else "semantic_validator must be the allowlisted assistant-research.five_lens_v3" end
     ' "$fixture_file")" || die "Fixture is not valid JSON: $(display_path "$fixture_file")"

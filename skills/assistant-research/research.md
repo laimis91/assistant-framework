@@ -36,7 +36,10 @@ Use `five-lens-briefing.md` when the question is not just "what is true?" but "h
 
 If the user explicitly requests `quick` with `five_lens_briefing`, normalize the
 tier to `standard`, preserve the selected five-lens method, and disclose the
-tier normalization. `quick` remains valid for ordinary `source_research`.
+tier normalization. Record the requested tier, effective tier, and disclosure
+in `five_lens_process_evidence.tier_resolution`; use literal
+`not_applicable` as the disclosure when the requested tier was not `quick`.
+`quick` remains valid for ordinary `source_research`.
 
 ## Deep Investigation
 Iterative progressive research:
@@ -59,14 +62,16 @@ require waves, but later waves cannot consume earlier results. The root
 Orchestrator alone synthesizes validated results; a separate
 ResearchPeerReviewer critiques that initial synthesis.
 
-Freeze an ordered five-entry packet manifest: each entry has `packet_id`, its
-exact LensKind, and a `content_digest`. A ContentDigest is `sha256:` plus 64
+Freeze an ordered five-entry packet manifest and retain the exact five frozen
+packet bodies in final process evidence: each entry has `packet_id`, its exact
+LensKind, and a `content_digest`. A ContentDigest is `sha256:` plus 64
 lowercase hex SHA-256 over the exact UTF-8 bytes produced by RFC 8785 JSON
 Canonicalization Scheme (JCS), with no trailing newline. Packet preimages include every
 packet field except `content_digest`; packet-set preimage is its ordered
 `packet_id`, `lens_kind`, `content_digest` manifest. Every delegated
-dispatch or fallback root pass repeats the matching packet content digest; any
-mismatch invalidates the complete lens stage.
+dispatch or fallback root pass repeats the matching packet content digest;
+recompute every retained packet digest from its canonical preimage before use.
+Any mismatch invalidates the complete lens stage.
 
 After validating a usable return, recompute `lens_result_digest` over the RFC
 8785 JCS bytes of `lens_result` only. Carry its LensKind, assignment ID, and digest unchanged into
@@ -75,7 +80,9 @@ the peer-review input. Carry the same identity into the process record,
 perspective scan, and question trace;
 the presented fields must be exact projections of that accepted result. Preserve
 valid empty source arrays for inference-only or unresolved results rather than
-inventing a source marker.
+inventing a source marker. Every follow-up carries its own `gaps` array; an
+empty-source inference-only or unresolved follow-up names its own non-empty gap
+instead of borrowing a parent-lens gap.
 
 This skill instruction sets `subagent_policy_state=delegation_triggered` and
 `subagent_execution_mode=delegated` without a separate permission question.

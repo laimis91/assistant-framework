@@ -21,6 +21,14 @@ For finance/trading, legal, medical, safety-critical, or similarly high-impact d
 
 - frame the output as educational due diligence and decision support, not professional advice or an instruction to act
 - state user-context and risk caveats before any recommendation
+- retain `user_context_status` as `explicit`, `unresolved`, or
+  `not_applicable`: a non-high-stakes topic uses `not_applicable` and literal
+  `user_context_basis=not_applicable`; a high-stakes topic uses `explicit` or
+  `unresolved`
+- a stronger recommendation requires `user_context_status=explicit` and the
+  same concrete `user_context_basis` frozen in every assignment packet's
+  `known_context` before any lens execution; `investigate_further` may retain
+  unresolved context
 - verify decision-critical claims with real sources before strengthening a recommendation
 - default the recommendation to `investigate_further` unless verified evidence, explicit user context, and the peer review all support a stronger `do`, `wait`, or `avoid` recommendation
 - never recommend executing a trade, legal action, medical action, or other irreversible high-stakes action without qualified professional/user approval
@@ -32,8 +40,11 @@ For finance/trading, legal, medical, safety-critical, or similarly high-impact d
 State the topic, user role/goal if known, decision being informed, and evidence budget. Ask only if a missing answer materially changes source selection or interpretation and cannot be inferred.
 
 An explicit `quick` request for this method normalizes to `standard` while
-preserving `five_lens_briefing`; disclose that tier normalization. The valid
-five-lens tiers are `standard`, `extensive`, and `deep`.
+preserving `five_lens_briefing`; disclose that tier normalization. Record
+`tier_resolution.requested_tier`, `effective_tier`, and
+`normalization_disclosure` in final process evidence (use `not_applicable` for
+the disclosure when quick was not requested). The valid five-lens tiers are
+`standard`, `extensive`, and `deep`.
 
 Use the frozen numeric search resource budget: standard is at most 3 queries,
 4 sources, and 10 minutes per lens (15/20/50 overall); extensive is 5/6/15
@@ -54,16 +65,22 @@ Each frozen packet also carries an explicit source_policy and isolation_policy.
 Independent dispatch means distinct native dispatch or agent identities, not
 distinct model identities: one model may serve multiple isolated assignments.
 
-The packet set includes an ordered five-entry manifest. Each entry binds
-`packet_id`, its exact LensKind, and a `content_digest` over the canonical
+The packet set includes an ordered five-entry manifest and the final process
+evidence retains all five exact `FrozenLensAssignmentPacket` bodies. Each entry
+binds `packet_id`, its exact LensKind, and a `content_digest` over the canonical
 complete frozen packet. ContentDigest is `sha256:` plus 64 lowercase hex
 SHA-256 over the exact UTF-8 bytes produced by RFC 8785 JSON Canonicalization
 Scheme (JCS), with no trailing newline; packet preimage excludes `content_digest` and
 `packet_set_digest` applies the same construction to the ordered manifest array
 whose entries contain exactly `packet_id`, `lens_kind`, and `content_digest`.
 Every delegated dispatch or fallback root pass repeats the matching packet
-content digest. A changed packet body or digest mismatch invalidates the entire
-lens stage.
+content digest. Recompute every manifest content digest from the retained
+packet preimage before accepting it. A changed packet body or digest mismatch
+invalidates the entire lens stage.
+
+Every `packet_frozen_at` is at or before `packet_set_frozen_at` and strictly
+before the first lens execution. Any later packet timestamp invalidates the
+complete lens stage; do not repair a single late packet after dispatch.
 
 Validate each return against its frozen assignment before accepting it. One
 same-assignment schema-correction retry is allowed. If the lens stage still
@@ -129,8 +146,13 @@ For each lens:
 - answer it with source-grounded evidence when tools/sources are available
 - record sources or verified URLs used for the answer
 - retain every material follow-up prompted by the first answer, contradiction, or gap; do not impose a numeric cap
-- for each follow-up, record its question, answer or gap, sources/verified URLs, and evidence status; when no material follow-up exists, record one typed `none_needed` decision
+- for each follow-up, record its question, answer or gap, sources/verified URLs, evidence status, and its own gaps array; when no material follow-up exists, record one typed `none_needed` decision
 - label whether each answer is source-backed, inference-only, or unresolved
+
+Reject a malformed follow-up or a source-empty inference-only/unresolved
+follow-up without its own non-empty gap. Request one same-assignment schema
+correction; if it remains invalid, rerun the complete lens stage through
+evidenced fallback or block rather than inventing follow-up evidence.
 
 Decision-critical evidence may use a verified public URL, repository-relative
 locator, opaque authenticated connector/record identifier, or offline
@@ -174,8 +196,15 @@ Dispatch a distinct `ResearchPeerReviewer` after the root initial synthesis.
 The reviewer critiques rather than rewrites root-owned synthesis; it must be a
 separate identity from every LensResearcher. If only peer review fails, retain
 validated lens results and use a separately recorded reviewer fallback.
-The Orchestrator creates `peer_review_assignment_id`, the worker echoes it, and
-the Orchestrator—not the worker—records native peer reviewer identity metadata.
+The Orchestrator creates `peer_review_assignment_id`, freezes a canonical
+peer-review input preimage and digest, and sends that digest with the exact
+validated lens ledger, lens execution provenance, synthesis, verification
+evidence, gaps, and high-stakes context. The worker echoes the digest and its
+supported recommendation; the Orchestrator—not the worker—records native peer
+reviewer identity metadata. For every usable peer result, the final
+recommendation must equal the peer-supported recommendation. The final presentation must equal the reviewed
+initial synthesis for accepted verdicts, or be bound to complete revision
+closure for revise.
 When no decision-critical source can be verified, pass an empty verified-source
 ledger with verification gaps; peer review must downgrade or block unsupported
 claims rather than inventing evidence or refusing the review.
@@ -189,12 +218,13 @@ The peer review must assess:
 - evidence that would falsify the recommendation
 - revision to the recommendation if the critique changes it
 
-When verdict is `revise`, the root Orchestrator records a revision disposition
+When verdict is `revise`, including sequential peer fallback, the root Orchestrator records a revision disposition
 for every required revision exactly once: `applied` or `claim_downgraded`, with
 closure evidence. The peer worker does not self-attest those changes. An
 unresolved revision blocks presentation. The Orchestrator records
 `revision_disposition_id` in peer review and repeats that exact value as
-`peer_review_revision_disposition_id` in process evidence.
+`peer_review_revision_disposition_id` in process evidence. Each disposition
+also records the resulting final-synthesis digest.
 
 For `accepted` and `accepted_with_concerns`, `required_revisions` is empty. A
 `revise` verdict has one or more required revisions and complete orchestrator-
@@ -239,14 +269,16 @@ QUESTION TRACE / EVIDENCE LEDGER
      Answer or open gap: ...
      Sources / verified URLs: ...
      Evidence status: source-backed / inference-only / unresolved
+     Gaps: [own unresolved evidence limits, if any]
    - decision: follow_up
      Question: [second material follow-up]
      Answer or open gap: ...
      Sources / verified URLs: ...
      Evidence status: source-backed / inference-only / unresolved
+     Gaps: [own unresolved evidence limits, if any]
    Evidence status: source-backed / inference-only / unresolved
 2. Academic / technical expert — ...
-3. Skeptic — Follow-ups: [{decision: none_needed, answer_or_gap: no material follow-up, sources_or_verified_urls: [verified source], evidence_status: source-backed}]
+3. Skeptic — Follow-ups: [{decision: none_needed, answer_or_gap: no material follow-up, sources_or_verified_urls: [verified source], evidence_status: source-backed, gaps: []}]
 4. Economist / incentives analyst — ...
 5. Historian / pattern matcher — ...
 
@@ -263,6 +295,9 @@ FINDINGS
    Sources: [source names]
    Verified URLs: [verified URLs, if any]
 2. ...
+   If every accepted lens result is source-empty inference-only or unresolved,
+   emit no findings and retain the concrete top-level gaps rather than inventing
+   a source-backed summary.
 
 CONFLICTS
 - [source or lens A] says X; [source or lens B] says Y — [assessment]
@@ -287,11 +322,12 @@ PEER REVIEW
 
 FIVE-LENS PROCESS EVIDENCE
 - Frozen packet-set ID/digest, ordered packet manifest/content digests, pre-dispatch record ID, and first-execution evidence: ...
+- Retained five frozen packet preimages, tier resolution, peer-review input digest/preimage, and final synthesis digest: ...
 - Lens mode and exact five dispatches/root passes with assignment/packet-set/content-digest bindings and return_validated: ...
 - Peer assignment, native identity or fresh fallback pass, and mode: ...
 - Reduced independence and admissible fallback evidence, if applicable: ...
 - Search resource budget and exhaustion gaps, if any: ...
-- Revision disposition ID matching peer review and applied/downgraded closure, when verdict=revise: ...
+- Revision disposition ID matching peer review and applied/downgraded closure with resulting synthesis digest, when verdict=revise: ...
 
 SOURCES / VERIFIED URLS
 - ...

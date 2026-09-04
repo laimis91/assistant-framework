@@ -50,8 +50,12 @@ Process contract. v2 follow-up migration context remains: singular
 `follow_up_question` and `follow_up_answer_or_gap` became required typed
 `follow_ups`, preserving every material follow-up or one `none_needed` decision.
 v3 adds declared handoffs: five frozen, sibling-blind assignment packets for
-the exact LensKind enum, root-only synthesis, and a distinct peer reviewer;
-v2 consumers must adapt before accepting v3 process evidence.
+the exact LensKind enum, root-only synthesis, and a distinct peer reviewer.
+The still-unreleased v3.0 contract also retains canonical packet and peer-input
+preimages, tier-resolution evidence, and high-stakes recommendation bindings;
+v2 consumers must adapt before accepting v3 process evidence. Do not silently
+coerce a v2-shaped artifact: migrate it to every required v3.0 lifecycle field
+or fail/re-run the affected stage.
 
 ## Ownership
 
@@ -92,11 +96,13 @@ Return status/confidence, concise answer, source-backed findings, candidate
 mechanisms when applicable, verified sources, conflicts, gaps, and five-lens
 artifacts only when that method ran.
 
-For five_lens_briefing, include FIVE-LENS PROCESS EVIDENCE: frozen packet-set
-ID/digest and pre-dispatch ordering, exact lens execution records,
+For five_lens_briefing, include FIVE-LENS PROCESS EVIDENCE: tier resolution,
+frozen packet-set ID/digest and retained canonical packet preimages,
+pre-dispatch ordering, exact lens execution records,
 assignment/packet-set bindings, return validation, peer assignment/identity or
 fallback, execution modes, reduced-independence state, and the bounded search
-resource budget. The root Orchestrator owns this lifecycle record.
+resource budget. Bind final synthesis to the exact peer-reviewed input or a
+complete revision closure. The root Orchestrator owns this lifecycle record.
 
 ## Stop Rules
 

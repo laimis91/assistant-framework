@@ -351,6 +351,13 @@ p0p4_write_assistant_research_mixed_peer_fallback_response() {
     research_jcs_node build delegated_peer_fallback "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
 }
 
+p0p4_write_assistant_research_quick_normalized_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    research_jcs_node build quick_normalized "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
+}
+
 p0p4_write_skill_eval_responses() {
     local output_dir="$1"
     local omit_skill="${2:-}"
@@ -636,6 +643,9 @@ p0p4_write_skill_eval_responses() {
                         ;;
                     assistant-research:five-lens-sequential-fallback-preserves-process-evidence)
                         p0p4_write_assistant_research_fallback_response "$response_path" "$required_summary"
+                        ;;
+                    assistant-research:five-lens-quick-normalizes-to-standard)
+                        p0p4_write_assistant_research_quick_normalized_response "$response_path" "$required_summary"
                         ;;
                     assistant-thinking:feature-preparation-candidates-require-evidence)
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["Existing observable effects require workflow evidence before promotion."], recommendation: "Keep the concern as a candidate and complete feature preparation.", confidence: "medium", gaps_or_assumptions: ["No canonical feature-preparation evidence row is available."], evidence_or_observations: ["ACTIVE code and behavioral tests identify selection, highlight, and viewport focus."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus unless evidence authorizes a change", promotion_status: "requires_feature_preparation_evidence", rationale: "Implementation and behavioral tests must be inspected before promotion."}]}' >"$response_path"

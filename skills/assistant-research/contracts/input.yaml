@@ -19,7 +19,7 @@ fields:
     required: true
     enum_values: [quick, standard, extensive, deep]
     description: "Tier."
-    validation: "quick five_lens_briefing normalizes to standard; preserves five_lens_briefing with a tier normalization disclosure. Its post-normalization tiers are standard, extensive, deep; quick remains valid for source_research."
+    validation: "quick five_lens_briefing normalizes to standard; preserves five_lens_briefing with a tier normalization disclosure retained in five_lens_process_evidence.tier_resolution. Its post-normalization tiers are standard, extensive, deep; quick remains valid for source_research."
     on_missing: infer
     infer_from: >
       Simple factual question with likely single answer → quick.
