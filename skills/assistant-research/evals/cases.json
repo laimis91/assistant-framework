@@ -34,7 +34,7 @@
         "Logs the research tier and question before search activity.",
         "Applies an evidence budget using differentiated angles such as direct evidence, alternatives, and counter-evidence.",
         "Sets research_method=source_research, subagent_policy_state=not_required, and subagent_execution_mode=not_applicable; this ordinary comparison is not a decision-grade five-lens request.",
-        "Synthesizes findings with HIGH, MEDIUM, or LOW confidence based on source count and quality.",
+        "Uses HIGH only when 3+ independent agreeing sources include primary/official evidence; one authoritative source is MEDIUM.",
         "Reports CONFLICTS even when none are found.",
         "Reports GAPS for unanswered or weakly supported questions."
       ],
@@ -43,12 +43,12 @@
         "The response includes confidence-scored findings.",
         "The response distinguishes sources from verified URLs.",
         "The response includes conflicts and gaps sections.",
-        "The response does not present single-source findings as HIGH confidence."
+        "The response does not present fewer than three independent sources or evidence without primary/official support as HIGH confidence."
       ],
       "fail_signals": [
         "Gives a free-form recommendation with no confidence levels.",
         "Omits conflicts or gaps.",
-        "Treats one source as HIGH confidence without justification.",
+        "Treats one authoritative source, or three secondary-only sources, as HIGH confidence.",
         "Uses duplicate search angles for standard tier.",
         "Claims a fixed number of parallel agents is mandatory in every adapter."
       ],
@@ -133,6 +133,15 @@
     {
       "id": "five-lens-decision-briefing-uses-storm-style-workflow",
       "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Research whether I should invest money in a new AI coding assistant company for my .NET architecture work. I want a decision-grade briefing, not a generic summary.",
+          "user_role_or_goal": "Investor evaluating an AI coding assistant company for .NET architecture work",
+          "output_purpose": "Decision-grade investment due diligence"
+        },
+        "required_topic_terms": ["invest", "AI coding assistant", ".NET architecture"],
+        "follow_up_requirements": []
+      },
       "title": "Five-lens decision briefing uses perspective scan and peer review",
       "category": "five_lens_briefing",
       "purpose": "Checks that decision-grade research uses the five-lens method, contradiction map, synthesis, verification, and peer review instead of a one-shot summary.",
@@ -149,6 +158,7 @@
         "Allows capacity-bounded waves without leaking earlier lens results into later assignments, and validates each return against its frozen packet.",
         "Builds a STORM-style question trace/evidence ledger: at least one per-lens research question, source-grounded answer or explicit gap, source notes/verified URLs, every material evidence-prompted follow-up or an explicit none_needed decision, and evidence status before synthesis.",
         "Builds a contradiction map before synthesis.",
+        "Binds the case-owned invest, AI coding assistant, and .NET architecture terms to substantive structured content rather than satisfying them only in report or metadata fields.",
         "Produces a recommendation no stronger than the verified evidence supports.",
         "Root alone builds the contradiction map and initial synthesis after all validated lens results, then a distinct ResearchPeerReviewer runs peer review and identifies weakest claim, bias, missing perspective, and falsification test.",
         "Uses sequential fallback only with concrete opt-out, spawn failure/unavailability, supported configuration proof, or exact policy block evidence; records reduced independence and keeps peer critique as a separate fresh pass without fabricated native dispatch references.",
@@ -262,6 +272,15 @@
     {
       "id": "five-lens-sequential-fallback-preserves-process-evidence",
       "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Should we adopt the tool?",
+          "user_role_or_goal": "architecture decision",
+          "output_purpose": "Answer the research question"
+        },
+        "required_topic_terms": [],
+        "follow_up_requirements": []
+      },
       "title": "Five-lens sequential fallback preserves complete non-native process evidence",
       "category": "five_lens_briefing",
       "purpose": "Checks that an evidenced sequential fallback records five frozen root passes and a fresh peer fallback without fabricating delegated identities.",
@@ -324,6 +343,15 @@
     {
       "id": "five-lens-delegated-lenses-sequential-peer-fallback",
       "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Should we adopt the tool?",
+          "user_role_or_goal": "architecture decision",
+          "output_purpose": "Answer the research question"
+        },
+        "required_topic_terms": [],
+        "follow_up_requirements": []
+      },
       "title": "Delegated lenses permit an evidenced sequential peer fallback",
       "category": "five_lens_briefing",
       "purpose": "Checks that a completed delegated lens stage can use a separate evidenced sequential peer fallback without fabricating a native peer identity or treating the mixed mode as partial compliance.",
@@ -382,6 +410,15 @@
     {
       "id": "five-lens-quick-normalizes-to-standard",
       "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Should we adopt the tool?",
+          "user_role_or_goal": "architecture decision",
+          "output_purpose": "Answer the research question"
+        },
+        "required_topic_terms": [],
+        "follow_up_requirements": []
+      },
       "title": "Quick five-lens requests retain standard normalization evidence",
       "category": "five_lens_briefing",
       "purpose": "Checks that an explicit quick five-lens request is retained as a standard-budget briefing with an auditable normalization disclosure.",
@@ -402,6 +439,19 @@
     },
     {
       "id": "five-lens-retains-all-material-follow-ups",
+      "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Should we adopt the tool?",
+          "user_role_or_goal": "architecture decision",
+          "output_purpose": "Answer the research question"
+        },
+        "required_topic_terms": [],
+        "follow_up_requirements": [
+          {"lens_kind": "practitioner", "decision": "follow_up", "exact_count": 2},
+          {"lens_kind": "skeptic", "decision": "none_needed", "exact_count": 1}
+        ]
+      },
       "title": "Five-lens question traces retain every material follow-up",
       "category": "five_lens_briefing",
       "purpose": "Checks that the evidence ledger retains all material follow-ups rather than collapsing them into one singular field.",

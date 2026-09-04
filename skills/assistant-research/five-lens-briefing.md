@@ -64,6 +64,10 @@ their coverage is exact, disjoint, and exhaustive; later waves cannot consume ea
 Each frozen packet also carries an explicit source_policy and isolation_policy.
 Independent dispatch means distinct native dispatch or agent identities, not
 distinct model identities: one model may serve multiple isolated assignments.
+All five packets have equal `question`, `tier`, `user_role_or_goal`,
+`output_purpose`, `known_context`, `evidence_budget`, `search_resource_budget`,
+`source_policy`, and `isolation_policy`; identity, LensKind, digest, and freeze
+time remain per-packet.
 
 The packet set includes an ordered five-entry manifest and the final process
 evidence retains all five exact `FrozenLensAssignmentPacket` bodies. Each entry
@@ -116,6 +120,8 @@ Set `subagent_policy_state=delegation_triggered` and
 method without a separate permission question. For fallback, record concrete
 `sequential_fallback_evidence`; an exact policy block also records
 `policy_blocking_source` and its no-exception basis.
+Global opt-out or policy-disallowed state forces peer `sequential_fallback`
+with matching admissible evidence and forbids peer subagent dispatch.
 
 ### 3. Perspective scan results
 
@@ -160,6 +166,7 @@ bibliographic citation. Non-URL methods do not fabricate a URL. Public URLs are
 successfully checked and globally routable, never reserved-domain, private,
 loopback, link-local, or alternate-encoded addresses. Keep every reference free
 of credentials, tokens, PII, parent traversal, and absolute host paths.
+Conflict references obey these rules.
 
 Do not synthesize from a lens until its key question and at least one answer/gap entry are recorded. If source access is unavailable, keep the question trace and mark answers as inference-only or unresolved rather than pretending they are source-backed.
 
@@ -197,11 +204,12 @@ The reviewer critiques rather than rewrites root-owned synthesis; it must be a
 separate identity from every LensResearcher. If only peer review fails, retain
 validated lens results and use a separately recorded reviewer fallback.
 The Orchestrator creates `peer_review_assignment_id`, freezes a canonical
-peer-review input preimage and digest, and sends that digest with the exact
-validated lens ledger, lens execution provenance, synthesis, verification
-evidence, gaps, and high-stakes context. The worker echoes the digest and its
-supported recommendation; the Orchestrator—not the worker—records native peer
-reviewer identity metadata. For every usable peer result, the final
+peer-input preimage and digest covering final-equal findings, conflicts and
+contradiction map; mechanisms normalized to `[]` when absent; validated lenses;
+lens provenance; initial synthesis; verified evidence; `verification_gaps`
+equal to top-level `gaps`; and high-stakes context. The worker echoes the digest
+and supported recommendation; only the Orchestrator records native peer
+identity. For every usable peer result, the final
 recommendation must equal the peer-supported recommendation. The final presentation must equal the reviewed
 initial synthesis for accepted verdicts, or be bound to complete revision
 closure for revise.
@@ -219,12 +227,14 @@ The peer review must assess:
 - revision to the recommendation if the critique changes it
 
 When verdict is `revise`, including sequential peer fallback, the root Orchestrator records a revision disposition
-for every required revision exactly once: `applied` or `claim_downgraded`, with
+for every required synthesis revision exactly once: `applied` or `claim_downgraded`, with
 closure evidence. The peer worker does not self-attest those changes. An
 unresolved revision blocks presentation. The Orchestrator records
 `revision_disposition_id` in peer review and repeats that exact value as
 `peer_review_revision_disposition_id` in process evidence. Each disposition
 also records the resulting final-synthesis digest.
+Disposition closes synthesis revisions only. Changing findings, mechanisms,
+conflicts, or the map requires a new peer input and fresh review.
 
 For `accepted` and `accepted_with_concerns`, `required_revisions` is empty. A
 `revise` verdict has one or more required revisions and complete orchestrator-
@@ -232,12 +242,16 @@ owned dispositions for each. Unusable or blocked peer results cannot present.
 
 ## Verification rule
 
-The five-lens method produces hypotheses and structure; it does not replace source verification. Before finalizing:
+Five-lens structure does not replace source verification:
 
 - verify the top 3-5 decision-critical claims with real sources when tools are available
 - keep URLs only if verified per `url-verify.md`
 - downgrade or mark as gaps any claim that could not be verified
 - separate "lens inference" from "source-backed finding"
+- for HIGH, retain exact `source_provenance` rows (`source`, `independence_key`,
+  `authority`: primary/official/secondary) whose source set equals public
+  string `sources`; HIGH requires both 3+ independence keys and a
+  primary/official row, while one authoritative source is MEDIUM
 
 ## Output format
 
@@ -293,6 +307,7 @@ CONTRADICTION MAP
 FINDINGS
 1. [source-backed factual claim or decision insight] — confidence: [HIGH/MEDIUM/LOW]
    Sources: [source names]
+   Source provenance, required for HIGH: [{source, independence_key, authority}, ...]
    Verified URLs: [verified URLs, if any]
 2. ...
    If every accepted lens result is source-empty inference-only or unresolved,
@@ -322,12 +337,12 @@ PEER REVIEW
 
 FIVE-LENS PROCESS EVIDENCE
 - Frozen packet-set ID/digest, ordered packet manifest/content digests, pre-dispatch record ID, and first-execution evidence: ...
-- Retained five frozen packet preimages, tier resolution, peer-review input digest/preimage, and final synthesis digest: ...
+- Retained frozen packets with equal scope, tier resolution, bound peer-input preimage, and final synthesis digest: ...
 - Lens mode and exact five dispatches/root passes with assignment/packet-set/content-digest bindings and return_validated: ...
 - Peer assignment, native identity or fresh fallback pass, and mode: ...
 - Reduced independence and admissible fallback evidence, if applicable: ...
 - Search resource budget and exhaustion gaps, if any: ...
-- Revision disposition ID matching peer review and applied/downgraded closure with resulting synthesis digest, when verdict=revise: ...
+- Synthesis-only revision disposition/digest when revise; artifact changes require fresh peer review: ...
 
 SOURCES / VERIFIED URLS
 - ...

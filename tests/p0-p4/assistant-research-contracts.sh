@@ -44,6 +44,12 @@ write_research_eval_responses() {
                 | (.machine_expectations.structured_json_assertions? // [] | length > 0)
             ' "$research_evals" >/dev/null; then
             write_schema_valid_five_lens_eval_response quick_normalized "$output_dir/assistant-research/$case_id.txt"
+        elif [[ "$case_id" == "five-lens-retains-all-material-follow-ups" ]] \
+            && jq -e --arg case_id "$case_id" '
+                .cases[] | select(.id == $case_id)
+                | .semantic_validator == "assistant-research.five_lens_v3"
+            ' "$research_evals" >/dev/null; then
+            write_schema_valid_five_lens_eval_response retained_follow_ups "$output_dir/assistant-research/$case_id.txt"
         else
             jq -r --arg case_id "$case_id" '
                 .cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]
@@ -323,6 +329,13 @@ research_prepare_high_stakes_stronger_response() {
     jq --arg context "$explicit_context" '
       .synthesis_briefing.recommendation = "do"
       | .peer_review.supported_recommendation = "do"
+      | .findings[0].confidence = "high"
+      | .findings[0].sources = ["source:fixture-primary", "source:fixture-official", "source:fixture-secondary"]
+      | .findings[0].source_provenance = [
+          {source:"source:fixture-primary",independence_key:"fixture-primary",authority:"primary"},
+          {source:"source:fixture-official",independence_key:"fixture-official",authority:"official"},
+          {source:"source:fixture-secondary",independence_key:"fixture-secondary",authority:"secondary"}
+        ]
       | .findings[0].verified_urls = ["https://www.iana.org/domains/example"]
       | .five_lens_process_evidence.peer_review_input_binding.high_stakes_context.user_context_status = "explicit"
       | .five_lens_process_evidence.peer_review_input_binding.high_stakes_context.user_context_basis = $context
@@ -341,7 +354,9 @@ research_official_response_mutation_is_rejected() {
     case "$mutation" in
         missing_lens_fallback_evidence_ref|unusable_peer_needs_context|unusable_peer_blocked|follow_up_own_gap_drift) case_id="five-lens-sequential-fallback-preserves-process-evidence" ;;
         stale_revision_metadata|invalid_peer_fallback_basis|accepted_final_synthesis_substitution) case_id="five-lens-delegated-lenses-sequential-peer-fallback" ;;
-        missing_tier_normalization_disclosure|quick_effective_tier_drift) case_id="five-lens-quick-normalizes-to-standard" ;;
+        missing_tier_normalization_disclosure|quick_effective_tier_drift|duplicate_perspective_lens|duplicate_question_trace_lens) case_id="five-lens-quick-normalizes-to-standard" ;;
+        follow_up_requirement_drift) case_id="five-lens-retains-all-material-follow-ups" ;;
+        opt_out_allows_delegated_peer|policy_block_allows_delegated_peer) case_id="five-lens-sequential-fallback-preserves-process-evidence" ;;
     esac
     eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-official-negative.XXXXXX")"
     eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-official-negative-output.XXXXXX")"
@@ -390,6 +405,60 @@ research_official_response_mutation_is_rejected() {
         source_ipv6_discard_only) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[100::1]/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[100::1]/follow-up"]' ;;
         peer_process_assignment_mismatch) mutation_filter='.five_lens_process_evidence.peer_review_assignment_id = "peer-assignment-other"' ;;
         finding_source_reserved_local) mutation_filter='.findings[0].sources = ["https://metadata.local/research"]' ;;
+        finding_high_without_provenance) mutation_filter='.findings[0].confidence = "high" | del(.findings[0].source_provenance)' ;;
+        finding_high_single_official) mutation_filter='.findings[0].confidence = "high" | .findings[0].sources = ["source:fixture-official"] | .findings[0].source_provenance = [{source:"source:fixture-official",independence_key:"fixture-official",authority:"official"}]' ;;
+        finding_high_three_secondary) mutation_filter='.findings[0].confidence = "high" | .findings[0].sources = ["source:fixture-secondary-a","source:fixture-secondary-b","source:fixture-secondary-c"] | .findings[0].source_provenance = [{source:"source:fixture-secondary-a",independence_key:"fixture-a",authority:"secondary"},{source:"source:fixture-secondary-b",independence_key:"fixture-b",authority:"secondary"},{source:"source:fixture-secondary-c",independence_key:"fixture-c",authority:"secondary"}]' ;;
+        conflict_source_private_loopback) mutation_filter='.conflicts = [{claim_a:"Fixture claim A",source_a:"https://127.0.0.1/private",claim_b:"Fixture claim B",source_b:"https://metadata.local/private",assessment:"The claims conflict."}]' ;;
+        embedded_local_repository_traversal) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_reference = "skills/assistant-research/../private-note"' ;;
+        invalid_verified_evidence_shape) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence += [{claim:"",source:"source:unsupported",verification_method:"unsupported_method",verification_reference:"records/unsupported",verification_detail:"Unsupported fixture evidence."}]' ;;
+        windows_absolute_local_repository) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_reference = "C:\\Users\\fixture\\private-note"' ;;
+        whitespace_local_repository) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_reference = "skills/assistant-research/contracts/output.yaml\nprivate-note"' ;;
+        peer_binding_findings_drift) mutation_filter='.findings[0].finding = "Changed final finding after peer review"' ;;
+        peer_binding_candidate_drift) mutation_filter='.candidate_mechanisms = [{mechanism:"Changed final candidate",claim_status:"candidate",evidence:[{source:"source:changed-candidate",detail:"Candidate-only support.",evidence_status:"source_backed"}],confidence:"low",counterevidence_or_conflicts:["No counterevidence found."],gaps:["Independent validation pending."],validation_method:"Run an independent comparison."}]' ;;
+        peer_binding_conflicts_drift) mutation_filter='.conflicts = [{claim_a:"changed A",source_a:"source:changed-a",claim_b:"changed B",source_b:"source:changed-b",assessment:"changed"}]' ;;
+        peer_binding_contradiction_drift) mutation_filter='.contradiction_map.strongest_evidence = "Changed final contradiction evidence"' ;;
+        duplicate_perspective_lens) mutation_filter='.perspective_scan[4] = .perspective_scan[0]' ;;
+        duplicate_question_trace_lens) mutation_filter='.question_trace[4] = .question_trace[0]' ;;
+        common_packet_scope_drift) mutation_filter='.five_lens_process_evidence.frozen_assignment_packets[0].known_context += ["Drifted common scope"]' ;;
+        semantic_context_scope_drift) mutation_filter='.five_lens_process_evidence.frozen_assignment_packets |= map(.question = "Should we adopt the tool?")' ;;
+        follow_up_requirement_drift) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].follow_ups |= .[0:1]' ;;
+        opt_out_allows_delegated_peer) mutation_filter='
+            .five_lens_process_evidence.peer_review_execution_mode = "delegated"
+            | .five_lens_process_evidence.subagent_policy_state = "delegation_opted_out"
+            | .five_lens_process_evidence.lens_fallback_evidence = {basis:"explicit_opt_out",detail:"Process-wide user opt-out prohibits subagent delegation.",evidence_ref:"user-opt-out-1"}
+            | del(.five_lens_process_evidence.peer_review_fallback_pass_id,.five_lens_process_evidence.peer_review_fallback_evidence)
+            | .five_lens_process_evidence.peer_review_assignment_id = "peer-assignment-1"
+            | .five_lens_process_evidence.peer_reviewer_identity = "peer-native-1"
+            | .peer_review.peer_review_execution_mode = "delegated"
+            | .peer_review.peer_review_assignment_id = "peer-assignment-1"
+            | .peer_review.peer_reviewer_identity = "peer-native-1"
+            | del(.peer_review.peer_review_fallback_pass_id)' ;;
+        policy_block_allows_delegated_peer) mutation_filter='
+            .five_lens_process_evidence.peer_review_execution_mode = "delegated"
+            | .five_lens_process_evidence.subagent_policy_state = "policy_disallowed"
+            | .five_lens_process_evidence.policy_blocking_source = "codex-rules/no-subagents"
+            | .five_lens_process_evidence.lens_fallback_evidence = {basis:"exact_policy_block",detail:"Exact process-wide policy prohibits subagent delegation.",evidence_ref:"policy-record-1"}
+            | del(.five_lens_process_evidence.peer_review_fallback_pass_id,.five_lens_process_evidence.peer_review_fallback_evidence)
+            | .five_lens_process_evidence.peer_review_assignment_id = "peer-assignment-1"
+            | .five_lens_process_evidence.peer_reviewer_identity = "peer-native-1"
+            | .peer_review.peer_review_execution_mode = "delegated"
+            | .peer_review.peer_review_assignment_id = "peer-assignment-1"
+            | .peer_review.peer_reviewer_identity = "peer-native-1"
+            | del(.peer_review.peer_review_fallback_pass_id)' ;;
+        topic_substantive_fields_generic|topic_terms_only_assignment_id|topic_terms_only_unique_insight) mutation_filter='
+            .five_lens_process_evidence.accepted_lens_results |= map(.core_position = "Generic position" | .lens_question = "Generic question" | .answer_or_gap = "Generic answer" | .likely_blind_spot = "Generic blind spot" | .unique_insight = "Generic insight")
+            | .findings[0].finding = "Generic finding"
+            | .synthesis_briefing.executive_summary = "Generic executive summary"
+            | .synthesis_briefing.ranked_key_findings = ["Generic finding one","Generic finding two","Generic finding three"]
+            | .synthesis_briefing.hidden_connection = "Generic hidden connection"
+            | .synthesis_briefing.actionable_implication = "Generic action"
+            | .synthesis_briefing.frontier_question = "Generic frontier question"
+            | .contradiction_map.strongest_evidence = "Generic strongest evidence"
+            | .contradiction_map.weakest_evidence = "Generic weakest evidence"
+            | .contradiction_map.consensus = ["Generic consensus"]
+            | .contradiction_map.biggest_unresolved_question = "Generic unresolved question"
+            | .contradiction_map.missing_angle_or_gap = "Generic gap"
+            | .summary = "Generic summary"' ;;
         hidden_finding_field) mutation_filter='.findings[0].unexpected = "hidden"' ;;
         delegated_policy_state_mismatch) mutation_filter='.five_lens_process_evidence.subagent_policy_state = "subagents_unavailable"' ;;
         stale_revision_metadata) mutation_filter='.five_lens_process_evidence.peer_review_revision_disposition_id = "stale-revision"' ;;
@@ -422,13 +491,21 @@ research_official_response_mutation_is_rejected() {
         *) return 2 ;;
     esac
     jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
+    case "$mutation" in
+        topic_terms_only_assignment_id)
+            jq '.five_lens_process_evidence.accepted_lens_results |= map(.assignment_id = "assignment-\(.lens_kind)-invest AI coding assistant .NET architecture")' "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
+            ;;
+        topic_terms_only_unique_insight)
+            jq '.five_lens_process_evidence.accepted_lens_results[0].unique_insight = "invest AI coding assistant .NET architecture"' "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
+            ;;
+    esac
     if [[ "$mutation" == "hidden_packet_manifest_field" ]]; then
         manifest_digest="$(jq '.five_lens_process_evidence.frozen_packet_set.packet_manifest' "$response_path" | research_content_digest_json)"
         jq --arg digest "$manifest_digest" '.five_lens_process_evidence.frozen_packet_set.packet_set_digest = $digest' "$response_path" >"$response_path.mutated" \
             && mv "$response_path.mutated" "$response_path"
     fi
     case "$mutation" in
-        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments|duplicate_none_needed|mixed_none_needed_follow_up|source_reserved_local|source_bare_hostname|source_ipv6_discard_only) research_refresh_response_derivatives "$response_path" ;;
+        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments|duplicate_none_needed|mixed_none_needed_follow_up|source_reserved_local|source_bare_hostname|source_ipv6_discard_only|finding_high_without_provenance|finding_high_single_official|finding_high_three_secondary|conflict_source_private_loopback|embedded_local_repository_traversal|invalid_verified_evidence_shape|windows_absolute_local_repository|whitespace_local_repository|common_packet_scope_drift|semantic_context_scope_drift|follow_up_requirement_drift|opt_out_allows_delegated_peer|policy_block_allows_delegated_peer|topic_substantive_fields_generic|topic_terms_only_assignment_id|topic_terms_only_unique_insight) research_refresh_response_derivatives "$response_path" ;;
         peer_input_ledger_rebound_stale_peer_digest)
             stale_peer_input_digest="$(jq -r '.peer_review.peer_review_input_digest' "$response_path")"
             research_refresh_response_derivatives "$response_path"
@@ -452,7 +529,8 @@ research_official_response_mutation_is_rejected() {
         return 1
     fi
     grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output" \
-        && { case "$mutation" in malformed_*) ! grep -Fq 'TypeError:' "$eval_output" ;; *) true ;; esac; }
+        && { case "$mutation" in malformed_*) ! grep -Fq 'TypeError:' "$eval_output" ;; *) true ;; esac; } \
+        && { case "$mutation" in finding_high_single_official|finding_high_three_secondary|invalid_verified_evidence_shape|windows_absolute_local_repository|whitespace_local_repository|peer_binding_findings_drift|peer_binding_candidate_drift|peer_binding_conflicts_drift|peer_binding_contradiction_drift|common_packet_scope_drift|topic_substantive_fields_generic|topic_terms_only_assignment_id|topic_terms_only_unique_insight|duplicate_perspective_lens|duplicate_question_trace_lens|opt_out_allows_delegated_peer|policy_block_allows_delegated_peer) grep -Fq 'semantic_validation_failures=1' "$eval_output" ;; *) true ;; esac; }
 }
 
 research_mixed_peer_fallback_official_runner_is_accepted() {
@@ -1109,7 +1187,7 @@ if [[ "${#branch_eval_missing[@]}" -eq 0 ]] \
         "five unique native dispatch identities"; then
     pass
 else
-    fail "assistant-research eval branches are mixed or do not reject mixed delegated/fallback evidence: ${branch_eval_missing[*]}"
+    fail "assistant-research eval branches are mixed or do not reject mixed delegated/fallback evidence: ${branch_eval_missing[*]-}"
 fi
 
 test_start "assistant-research closes peer revisions and binds freeze evidence canonically"
@@ -1414,6 +1492,28 @@ if research_official_response_mutation_is_rejected accepted_result_body_with_unc
     && research_official_response_mutation_is_rejected source_ipv6_discard_only \
     && research_official_response_mutation_is_rejected peer_process_assignment_mismatch \
     && research_official_response_mutation_is_rejected finding_source_reserved_local \
+    && research_official_response_mutation_is_rejected finding_high_without_provenance \
+    && research_official_response_mutation_is_rejected finding_high_single_official \
+    && research_official_response_mutation_is_rejected finding_high_three_secondary \
+    && research_official_response_mutation_is_rejected conflict_source_private_loopback \
+    && research_official_response_mutation_is_rejected embedded_local_repository_traversal \
+    && research_official_response_mutation_is_rejected invalid_verified_evidence_shape \
+    && research_official_response_mutation_is_rejected windows_absolute_local_repository \
+    && research_official_response_mutation_is_rejected whitespace_local_repository \
+    && research_official_response_mutation_is_rejected peer_binding_findings_drift \
+    && research_official_response_mutation_is_rejected peer_binding_candidate_drift \
+    && research_official_response_mutation_is_rejected peer_binding_conflicts_drift \
+    && research_official_response_mutation_is_rejected peer_binding_contradiction_drift \
+    && research_official_response_mutation_is_rejected duplicate_perspective_lens \
+    && research_official_response_mutation_is_rejected duplicate_question_trace_lens \
+    && research_official_response_mutation_is_rejected common_packet_scope_drift \
+    && research_official_response_mutation_is_rejected semantic_context_scope_drift \
+    && research_official_response_mutation_is_rejected follow_up_requirement_drift \
+    && research_official_response_mutation_is_rejected opt_out_allows_delegated_peer \
+    && research_official_response_mutation_is_rejected policy_block_allows_delegated_peer \
+    && research_official_response_mutation_is_rejected topic_substantive_fields_generic \
+    && research_official_response_mutation_is_rejected topic_terms_only_assignment_id \
+    && research_official_response_mutation_is_rejected topic_terms_only_unique_insight \
     && research_official_response_mutation_is_rejected hidden_finding_field \
     && research_official_response_mutation_is_rejected delegated_policy_state_mismatch \
     && research_official_response_mutation_is_rejected stale_revision_metadata \
@@ -1469,7 +1569,7 @@ jq 'del(.cases[] | select(.id == "five-lens-quick-normalizes-to-standard") | .se
     "$semantic_fixture" >"$semantic_fixture.next" && mv "$semantic_fixture.next" "$semantic_fixture"
 partial_semantic_validator_declaration_rejected=false
 if ! "$research_eval_runner" --validate-fixture --skill "$semantic_fixture_root/assistant-research" >"$semantic_fixture_output" 2>&1 \
-    && grep -Fq -- 'semantic_validator must be declared by exactly the four five-lens assistant-research cases' "$semantic_fixture_output"; then
+    && grep -Fq -- 'semantic_validator must be declared by exactly the five five-lens assistant-research cases' "$semantic_fixture_output"; then
     partial_semantic_validator_declaration_rejected=true
 fi
 if [[ "$unknown_semantic_validator_rejected" == true && "$partial_semantic_validator_declaration_rejected" == true ]]; then
@@ -1640,7 +1740,10 @@ if printf '%s\n' '{"verification_method":"public_url","verification_reference":"
     && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[ff02::1]/source","verified_url":"https://[ff02::1]/source"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[::]/source","verified_url":"https://[::]/source"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"../secrets#record"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"skills/assistant-research/../private-note"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"/Users/name/repo#record"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"C:\\Users\\fixture\\private-note"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"skills/assistant-research/contracts/output.yaml\nprivate-note"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"connector:private/record:person@example.com"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"https://user:token@connector.invalid/record:source-1"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"connector:private.internal/record:token-placeholder"}' | research_verified_source_evidence_is_valid \
@@ -1772,6 +1875,40 @@ if research_response_oracle_is_valid "$global_ipv6_response"; then
     pass
 else
     fail "assistant-research fixture oracle rejected an adjacent global IPv6 source"
+fi
+
+test_start "assistant-research semantic fixtures bind common packet scope and required follow-ups"
+semantic_context_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-semantic-context.XXXXXX")"
+p0p4_register_cleanup "$semantic_context_fixture_root"
+write_research_eval_responses "$semantic_context_fixture_root"
+semantic_context_failures=()
+while IFS= read -r semantic_case_id; do
+    semantic_context="$(jq -c --arg case_id "$semantic_case_id" '.cases[] | select(.id == $case_id) | .semantic_context' "$research_evals")"
+    semantic_response="$semantic_context_fixture_root/assistant-research/$semantic_case_id.txt"
+    if [[ ! -s "$semantic_response" ]] \
+        || ! jq -e --arg case_id "$semantic_case_id" --argjson context "$semantic_context" '
+            . as $response
+            | .five_lens_process_evidence.frozen_assignment_packets as $packets
+            | ($context.packet_scope) as $scope
+            | ($context.follow_up_requirements) as $requirements
+            | ($context.required_topic_terms) as $topic_terms
+            | ($topic_terms | type == "array")
+            and (if $case_id == "five-lens-decision-briefing-uses-storm-style-workflow" then $topic_terms == ["invest", "AI coding assistant", ".NET architecture"] else $topic_terms == [] end)
+            and ($packets | length == 5 and all(.[]; .question == $scope.question and .user_role_or_goal == $scope.user_role_or_goal and .output_purpose == $scope.output_purpose))
+            and all($requirements[];
+                . as $requirement
+                | ([$response.five_lens_process_evidence.accepted_lens_results[] | select(.lens_kind == $requirement.lens_kind).follow_ups[] | select(.decision == $requirement.decision)] | length) == $requirement.exact_count
+              )
+        ' "$semantic_response" >/dev/null \
+        || ! research_response_oracle_is_valid "$semantic_response"; then
+        semantic_context_failures+=("$semantic_case_id")
+    fi
+done < <(jq -r '.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .id' "$research_evals")
+if [[ "$(jq '[.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3")] | length' "$research_evals")" == "5" ]] \
+    && [[ "${#semantic_context_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research semantic fixture context or follow-up binding invalid: ${semantic_context_failures[*]-}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

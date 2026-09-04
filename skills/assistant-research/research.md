@@ -71,6 +71,10 @@ packet field except `content_digest`; packet-set preimage is its ordered
 `packet_id`, `lens_kind`, `content_digest` manifest. Every delegated
 dispatch or fallback root pass repeats the matching packet content digest;
 recompute every retained packet digest from its canonical preimage before use.
+All five bodies have equal `question`, `tier`, `user_role_or_goal`,
+`output_purpose`, `known_context`, `evidence_budget`, `search_resource_budget`,
+`source_policy`, and `isolation_policy`; only identity, LensKind, digest, and
+freeze time may vary.
 Any mismatch invalidates the complete lens stage.
 
 After validating a usable return, recompute `lens_result_digest` over the RFC
@@ -84,11 +88,20 @@ inventing a source marker. Every follow-up carries its own `gaps` array; an
 empty-source inference-only or unresolved follow-up names its own non-empty gap
 instead of borrowing a parent-lens gap.
 
+Peer input binds the assignment; final-equal `findings`, `conflicts`, and
+`contradiction_map`; normalized `candidate_mechanisms` (`[]` if absent);
+initial synthesis; validated lenses; lens provenance; verified evidence;
+`verification_gaps` equal to top-level `gaps`; and high-stakes context. Changing
+the four bound artifacts requires fresh peer review; disposition closes only
+synthesis revisions.
+
 This skill instruction sets `subagent_policy_state=delegation_triggered` and
 `subagent_execution_mode=delegated` without a separate permission question.
 Record a non-empty trigger scope. An opt-out, actual spawn failure or supported
 configuration proof sets sequential fallback evidence; an exact policy block
 also records its blocking source and no-exception basis.
+Global opt-out or policy-disallowed state forces peer `sequential_fallback`
+with matching admissible evidence and forbids peer subagent dispatch.
 
 Use sequential fallback only for explicit opt-out, real dispatch failure or
 unavailability, supported configuration proof, or an exact policy block. Run
@@ -129,17 +142,23 @@ bibliographic citation. A public URL must be globally routable and successfully
 checked; reserved domains and private, loopback, link-local, or alternate-encoded
 addresses are not public evidence. Never expose credentials, tokens, PII,
 parent traversal, or absolute host paths in that reference.
+Apply the same safe reference and public-URL rules to both sides of every
+conflict record.
 
 ## Mandatory: Confidence Scoring
 Every research finding gets a confidence level:
 
 | Level | Criteria |
 |---|---|
-| **HIGH** | 3+ independent sources agree, primary/official source found |
+| **HIGH** | `source_provenance` proves both 3+ unique independence keys and at least one primary/official source |
 | **MEDIUM** | 2 sources agree, or 1 authoritative source |
 | **LOW** | Single source, or sources conflict |
 
-Always show confidence level with findings. Flag LOW-confidence findings explicitly.
+Keep public `sources` as strings. Optional `source_provenance` has exact
+`source`, `independence_key`, and `authority` (`primary`, `official`, or
+`secondary`) rows whose unique source set equals `sources`; HIGH requires it,
+3+ independent agreeing sources, and primary/official evidence.
+Always show confidence and flag LOW explicitly.
 
 ## Output format
 
@@ -151,6 +170,7 @@ Evidence budget: [source/angle target and whether it was met]
 FINDINGS
 1. [finding] — confidence: HIGH
    Sources: [source 1], [source 2]
+   Source provenance: [{source, independence_key, authority}, ...]
 2. [finding] — confidence: MEDIUM
    Source: [source]
 3. [finding] — confidence: LOW (single source, unverified)

@@ -10,18 +10,22 @@ semantic_validator_id_for_case() {
 
 assistant_research_five_lens_v3_valid() {
     local response_path="$1"
+    local fixture_file="$2"
+    local case_id="$3"
 
-    node - "$response_path" <<'NODE'
+    node - "$response_path" "$fixture_file" "$case_id" <<'NODE'
 const crypto = require("crypto");
 const fs = require("fs");
 const net = require("net");
 const responsePath = process.argv[2];
+const fixturePath = process.argv[3];
+const caseId = process.argv[4];
 const lenses = ["practitioner", "academic_or_technical_expert", "skeptic", "economist_or_incentives_analyst", "historian_or_pattern_matcher"];
 const resultKeys = ["core_position", "lens_question", "answer_or_gap", "sources_or_verified_urls", "follow_ups", "evidence_status", "likely_blind_spot", "unique_insight", "confidence", "gaps"];
 const acceptedKeys = ["lens_kind", "assignment_id", "lens_result_digest", ...resultKeys];
 const packetKeys = ["packet_id", "packet_set_id", "content_digest", "question", "tier", "user_role_or_goal", "output_purpose", "known_context", "evidence_budget", "search_resource_budget", "source_policy", "isolation_policy", "lens_kind", "packet_frozen_at"];
 const synthesisBaseKeys = ["executive_summary", "ranked_key_findings", "hidden_connection", "actionable_implication", "recommendation", "frontier_question"];
-const peerBindingKeys = ["peer_review_input_digest", "peer_review_assignment_id", "initial_synthesis", "validated_lens_results", "lens_execution_provenance", "verified_source_evidence", "verification_gaps", "high_stakes_context"];
+const peerBindingKeys = ["peer_review_input_digest", "peer_review_assignment_id", "initial_synthesis", "validated_lens_results", "findings", "candidate_mechanisms", "conflicts", "contradiction_map", "lens_execution_provenance", "verified_source_evidence", "verification_gaps", "high_stakes_context"];
 const errors = [];
 const fail = message => errors.push(message);
 const nonblank = value => typeof value === "string" && value.trim().length > 0;
@@ -222,7 +226,7 @@ function verifiedSourceEvidenceValid(rows, label) {
     const keys = method === "public_url" ? ["claim", "source", "verification_method", "verification_reference", "verified_url", "verification_detail"] : ["claim", "source", "verification_method", "verification_reference", "verification_detail"];
     if (!exactKeys(row, keys, `${label} row`) || !nonblank(row.claim) || !nonblank(row.source) || !["public_url", "local_repository", "authenticated_source", "offline_authoritative_source"].includes(method) || !nonblank(row.verification_reference) || !nonblank(row.verification_detail)) { valid = false; continue; }
     if (method === "public_url" && (row.verified_url !== row.verification_reference || !publicUrlValid(row.verified_url))) { fail(`${label}: public URL row`); valid = false; }
-    if (method === "local_repository" && (/^(?:\/|~|\.\.\/)/.test(row.verification_reference) || /:\/\//.test(row.verification_reference) || !/^[^\s]+/.test(row.verification_reference))) { fail(`${label}: local repository row`); valid = false; }
+    if (method === "local_repository" && !/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+(?:#[A-Za-z0-9._:-]+)?$/.test(row.verification_reference)) { fail(`${label}: local repository row`); valid = false; }
     if (method === "authenticated_source" && (!/^connector:[^\s/]+\/record:[^\s]+$/.test(row.verification_reference) || /(?:token|secret|password|api[_-]?key|email)=/i.test(row.verification_reference))) { fail(`${label}: authenticated source row`); valid = false; }
     if (method === "offline_authoritative_source" && (!/^(?:citation|isbn|doi):/i.test(row.verification_reference) || /:\/\//.test(row.verification_reference))) { fail(`${label}: offline source row`); valid = false; }
   }
@@ -232,6 +236,8 @@ function retainedPacketsValid(process, packetSet, manifest, effectiveTier, budge
   const retained = process.frozen_assignment_packets;
   if (!Array.isArray(retained) || retained.length !== lenses.length) { fail("retained packets: exact five required"); return; }
   if (!equal(retained.map(packet => packet?.packet_id), packetSet.packet_manifest_order) || !exactLensSet(retained.map(packet => packet?.lens_kind))) fail("retained packets: ordered lens set");
+  const sharedPacketFields = ["question", "tier", "user_role_or_goal", "output_purpose", "known_context", "evidence_budget", "search_resource_budget", "source_policy", "isolation_policy"];
+  if (!retained.every(packet => sharedPacketFields.every(field => equal(packet?.[field], retained[0]?.[field])))) fail("retained packets: common scope binding");
   const manifestById = new Map((Array.isArray(manifest) ? manifest : []).map(packet => [packet.packet_id, packet]));
   for (const packet of retained) {
     if (!exactKeys(packet, packetKeys, "retained packet") || !nonblank(packet.packet_id) || !nonblank(packet.packet_set_id) || !nonblank(packet.question) || !nonblank(packet.user_role_or_goal) || !nonblank(packet.output_purpose) || !Array.isArray(packet.known_context) || !packet.known_context.every(nonblank) || !nonblank(packet.evidence_budget) || !nonblank(packet.source_policy) || !nonblank(packet.isolation_policy) || !lenses.includes(packet.lens_kind) || !validTimestamp(packet.packet_frozen_at)) { fail("retained packets: shape"); continue; }
@@ -240,8 +246,8 @@ function retainedPacketsValid(process, packetSet, manifest, effectiveTier, budge
     if (packet.packet_set_id !== packetSet?.packet_set_id || packet.tier !== effectiveTier || !equal(packet.search_resource_budget, budget) || !manifestEntry || manifestEntry.lens_kind !== packet.lens_kind || manifestEntry.content_digest !== packet.content_digest || !contentDigest(packet.content_digest) || packet.content_digest !== digest(preimage) || Date.parse(packet.packet_frozen_at) > Date.parse(packetSet?.packet_set_frozen_at) || Date.parse(packet.packet_frozen_at) >= Date.parse(packetSet?.first_lens_execution_at)) fail("retained packets: digest/binding");
   }
 }
-function peerInputBindingValid(binding, process, accepted, lensMode) {
-  if (!exactKeys(binding, peerBindingKeys, "peer review input binding") || !contentDigest(binding?.peer_review_input_digest) || !nonblank(binding?.peer_review_assignment_id) || binding.peer_review_assignment_id !== process.peer_review_assignment_id || !Array.isArray(binding.validated_lens_results) || !equal(binding.validated_lens_results, accepted) || !Array.isArray(binding.verification_gaps) || !binding.verification_gaps.every(nonblank)) { fail("peer review input binding: shape/binding"); return false; }
+function peerInputBindingValid(binding, process, accepted, lensMode, response) {
+  if (!exactKeys(binding, peerBindingKeys, "peer review input binding") || !contentDigest(binding?.peer_review_input_digest) || !nonblank(binding?.peer_review_assignment_id) || binding.peer_review_assignment_id !== process.peer_review_assignment_id || !Array.isArray(binding.validated_lens_results) || !equal(binding.validated_lens_results, accepted) || !equal(binding.findings, response.findings) || !equal(binding.candidate_mechanisms, response.candidate_mechanisms) || !equal(binding.conflicts, response.conflicts) || !equal(binding.contradiction_map, response.contradiction_map) || !Array.isArray(binding.verification_gaps) || !binding.verification_gaps.every(nonblank) || !equal(binding.verification_gaps, response.gaps)) { fail("peer review input binding: shape/binding"); return false; }
   const provenance = binding.lens_execution_provenance;
   if (!exactKeys(provenance, ["lens_execution_mode", "reduced_independence", "fallback_basis", "fallback_evidence_ref"], "peer lens execution provenance") || provenance.lens_execution_mode !== lensMode || provenance.reduced_independence !== (lensMode === "sequential_fallback")) fail("peer lens execution provenance: process binding");
   if (lensMode === "delegated" && (provenance.fallback_basis !== "not_applicable" || provenance.fallback_evidence_ref !== "not_applicable")) fail("peer lens execution provenance: delegated fallback leakage");
@@ -253,6 +259,46 @@ function peerInputBindingValid(binding, process, accepted, lensMode) {
   const preimage = Object.fromEntries(peerBindingKeys.filter(key => key !== "peer_review_input_digest").map(key => [key, binding[key]]));
   if (binding.peer_review_input_digest !== digest(preimage)) fail("peer review input binding: digest");
   return evidenceValid;
+}
+function substantiveText(values) {
+  return values.filter(nonblank).join("\n");
+}
+function semanticContextValid(context, retainedPackets, accepted, response) {
+  if (!exactKeys(context, ["packet_scope", "follow_up_requirements", "required_topic_terms"], "semantic context") || !exactKeys(context?.packet_scope, ["question", "user_role_or_goal", "output_purpose"], "semantic packet scope") || !Object.values(context.packet_scope).every(nonblank) || !Array.isArray(context.follow_up_requirements) || !Array.isArray(context.required_topic_terms) || !context.required_topic_terms.every(nonblank) || new Set(context.required_topic_terms).size !== context.required_topic_terms.length) { fail("semantic context: required shape"); return; }
+  const requirementLenses = new Set();
+  for (const requirement of context.follow_up_requirements) {
+    if (!exactKeys(requirement, ["lens_kind", "decision", "exact_count"], "semantic follow-up requirement") || !lenses.includes(requirement.lens_kind) || requirementLenses.has(requirement.lens_kind) || !["follow_up", "none_needed"].includes(requirement.decision) || !Number.isInteger(requirement.exact_count) || requirement.exact_count < 1) { fail("semantic context: follow-up requirement"); continue; }
+    requirementLenses.add(requirement.lens_kind);
+    const result = Array.isArray(accepted) ? accepted.find(item => item?.lens_kind === requirement.lens_kind) : undefined;
+    if (!result || !Array.isArray(result.follow_ups) || result.follow_ups.length !== requirement.exact_count || !result.follow_ups.every(followUp => followUp?.decision === requirement.decision)) fail("semantic context: follow-up binding");
+  }
+  if (!Array.isArray(retainedPackets) || retainedPackets.length !== lenses.length || !retainedPackets.every(packet => packet?.question === context.packet_scope.question && packet?.user_role_or_goal === context.packet_scope.user_role_or_goal && packet?.output_purpose === context.packet_scope.output_purpose)) fail("semantic context: packet scope binding");
+  const acceptedText = substantiveText((Array.isArray(accepted) ? accepted : []).flatMap(result => [result?.core_position, result?.lens_question, result?.answer_or_gap, result?.likely_blind_spot, result?.unique_insight]));
+  const finalClaimText = substantiveText([
+    ...(Array.isArray(response?.findings) ? response.findings.flatMap(finding => [finding?.finding]) : []),
+    ...(Array.isArray(response?.candidate_mechanisms) ? response.candidate_mechanisms.flatMap(mechanism => [mechanism?.mechanism, ...(Array.isArray(mechanism?.evidence) ? mechanism.evidence.map(evidence => evidence?.detail) : []), ...(Array.isArray(mechanism?.counterevidence_or_conflicts) ? mechanism.counterevidence_or_conflicts : []), ...(Array.isArray(mechanism?.gaps) ? mechanism.gaps : []), mechanism?.validation_method]) : []),
+    ...(Array.isArray(response?.conflicts) ? response.conflicts.flatMap(conflict => [conflict?.claim_a, conflict?.claim_b, conflict?.assessment]) : [])
+  ]);
+  const contradiction = response?.contradiction_map;
+  const synthesis = response?.synthesis_briefing;
+  const synthesisText = substantiveText([
+    ...(Array.isArray(contradiction?.direct_conflicts) ? contradiction.direct_conflicts : []),
+    contradiction?.strongest_evidence,
+    contradiction?.weakest_evidence,
+    ...(Array.isArray(contradiction?.consensus) ? contradiction.consensus : []),
+    contradiction?.biggest_unresolved_question,
+    contradiction?.missing_angle_or_gap,
+    synthesis?.executive_summary,
+    ...(Array.isArray(synthesis?.ranked_key_findings) ? synthesis.ranked_key_findings : []),
+    synthesis?.hidden_connection,
+    synthesis?.actionable_implication,
+    synthesis?.high_stakes_caveat,
+    synthesis?.frontier_question,
+    response?.summary
+  ]);
+  const requiredGroups = [acceptedText, synthesisText, ...(nonblank(finalClaimText) ? [finalClaimText] : [])];
+  if (!nonblank(acceptedText) || !nonblank(synthesisText)) fail("semantic context: substantive groups required");
+  if (!context.required_topic_terms.every(term => requiredGroups.every(group => group.toLowerCase().includes(term.toLowerCase())))) fail("semantic context: required topic term binding");
 }
 function peerReviewValid(peer, peerMode, process, lensIdentities, rootPasses, binding, finalSynthesisDigest, finalRecommendation) {
   const peerKeys = ["peer_review_execution_mode", "peer_review_assignment_id", "peer_reviewer_identity", "peer_review_fallback_pass_id", "peer_review_input_digest", "status", "verdict", "confidence_scores", "weakest_claim", "bias_or_lens_dominance", "missing_sixth_perspective", "falsification_test", "revised_recommendation_if_needed", "supported_recommendation", "required_revisions", "revision_disposition_id", "revision_disposition", "evidence", "open_questions", "status_detail", "blocker_type", "blocker_evidence"];
@@ -294,11 +340,15 @@ function finalArtifactsValid(response, accepted) {
   const evidenceEmptyCompletion = Array.isArray(accepted) && accepted.length === lenses.length && accepted.every(result => ["inference_only", "unresolved"].includes(result?.evidence_status) && Array.isArray(result.sources_or_verified_urls) && result.sources_or_verified_urls.length === 0);
   if (!Array.isArray(findings) || (findings.length === 0 && (!evidenceEmptyCompletion || !Array.isArray(response.gaps) || response.gaps.length === 0))) fail("final artifacts: findings required unless evidence-empty completion has gaps");
   for (const finding of Array.isArray(findings) ? findings : []) {
-    if (!allowedKeys(finding, ["finding", "confidence", "sources", "verified_urls"], "final finding") || !nonblank(finding.finding) || !["high", "medium", "low"].includes(finding.confidence) || !Array.isArray(finding.sources) || finding.sources.length === 0 || !finding.sources.every(source => sourceReferenceValid(source, "final finding source")) || (Object.hasOwn(finding, "verified_urls") && (!Array.isArray(finding.verified_urls) || !finding.verified_urls.every(publicUrlValid)))) fail("final artifacts: finding shape");
+    const provenance = finding?.source_provenance;
+    const sourceSet = new Set(Array.isArray(finding?.sources) ? finding.sources : []);
+    const provenanceSourceSet = new Set(Array.isArray(provenance) ? provenance.map(row => row?.source) : []);
+    const provenanceValid = Array.isArray(provenance) && provenance.length === provenanceSourceSet.size && provenance.every(row => exactKeys(row, ["source", "independence_key", "authority"], "final finding source provenance") && nonblank(row.source) && sourceReferenceValid(row.source, "final finding provenance source") && nonblank(row.independence_key) && ["primary", "official", "secondary"].includes(row.authority)) && sourceSet.size === provenanceSourceSet.size && [...sourceSet].every(source => provenanceSourceSet.has(source));
+    if (!allowedKeys(finding, ["finding", "confidence", "sources", "verified_urls", "source_provenance"], "final finding") || !nonblank(finding?.finding) || !["high", "medium", "low"].includes(finding?.confidence) || !Array.isArray(finding?.sources) || finding.sources.length === 0 || !finding.sources.every(source => sourceReferenceValid(source, "final finding source")) || (Object.hasOwn(finding, "verified_urls") && (!Array.isArray(finding.verified_urls) || !finding.verified_urls.every(publicUrlValid))) || (Object.hasOwn(finding, "source_provenance") && !provenanceValid) || (finding.confidence === "high" && (!provenanceValid || new Set(provenance.map(row => row.independence_key)).size < 3 || !provenance.some(row => ["primary", "official"].includes(row.authority))))) fail("final artifacts: finding shape");
   }
   const conflicts = response.conflicts;
   if (!Array.isArray(conflicts)) fail("final artifacts: conflicts array required");
-  for (const conflict of Array.isArray(conflicts) ? conflicts : []) if (!exactKeys(conflict, ["claim_a", "source_a", "claim_b", "source_b", "assessment"], "final conflict") || !Object.values(conflict).every(nonblank)) fail("final artifacts: conflict shape");
+  for (const conflict of Array.isArray(conflicts) ? conflicts : []) if (!exactKeys(conflict, ["claim_a", "source_a", "claim_b", "source_b", "assessment"], "final conflict") || !Object.values(conflict).every(nonblank) || !sourceReferenceValid(conflict.source_a, "final conflict source_a") || !sourceReferenceValid(conflict.source_b, "final conflict source_b")) fail("final artifacts: conflict shape");
   if (!Array.isArray(response.gaps) || !response.gaps.every(nonblank) || !nonblank(response.summary)) fail("final artifacts: gaps and summary required");
   const contradiction = response.contradiction_map;
   if (!exactKeys(contradiction, ["direct_conflicts", "strongest_evidence", "weakest_evidence", "consensus", "biggest_unresolved_question", "missing_angle_or_gap"], "contradiction map") || !Array.isArray(contradiction.direct_conflicts) || !contradiction.direct_conflicts.every(nonblank) || !Array.isArray(contradiction.consensus) || !contradiction.consensus.every(nonblank) || !["strongest_evidence", "weakest_evidence", "biggest_unresolved_question", "missing_angle_or_gap"].every(field => nonblank(contradiction[field]))) fail("final artifacts: contradiction map");
@@ -317,10 +367,17 @@ function highStakesRecommendationValid(response, binding, peer, retainedPackets)
   if (!basis.verified_decision_critical_urls.every(url => publicEvidenceUrls.has(url))) fail("high-stakes recommendation: public evidence binding");
   if (!Array.isArray(retainedPackets) || retainedPackets.length !== lenses.length || !retainedPackets.every(packet => Array.isArray(packet.known_context) && packet.known_context.includes(basis.user_context_basis))) fail("high-stakes recommendation: retained user context binding");
 }
+let fixtureCase;
+try {
+  const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+  fixtureCase = Array.isArray(fixture?.cases) ? fixture.cases.find(item => item?.id === caseId) : undefined;
+  if (!fixtureCase) fail("semantic context: selected fixture case required");
+} catch { fail("semantic context: readable fixture case required"); }
 let response;
 try { response = JSON.parse(fs.readFileSync(responsePath, "utf8")); } catch { fail("response: valid JSON required"); }
 if (response) {
   validateUnicode(response);
+  if (!Object.hasOwn(response, "candidate_mechanisms")) response.candidate_mechanisms = [];
   if (response.research_method !== "five_lens_briefing") fail("response: five_lens_briefing required");
   const process = response.five_lens_process_evidence;
   const lensMode = process?.lens_execution_mode;
@@ -351,6 +408,8 @@ if (response) {
     const questionTrace = Array.isArray(response.question_trace) ? response.question_trace : [];
     if (!Array.isArray(response.perspective_scan)) fail("perspective scan: array required");
     if (!Array.isArray(response.question_trace)) fail("question trace: array required");
+    if (!exactLensSet(perspectiveScan.map(item => item?.lens))) fail("perspective scan: exact five unique lenses required");
+    if (!exactLensSet(questionTrace.map(item => item?.lens))) fail("question trace: exact five unique lenses required");
     for (const record of records || []) {
       const label = `lens record ${record?.lens_kind || "unknown"}`;
       const recordKeys = lensMode === "delegated" ? ["lens_kind", "dispatch_identity", "assignment_id", "packet_id", "packet_set_id", "packet_content_digest", "lens_result_digest", "search_resource_usage", "wave_id", "return_validated"] : ["lens_kind", "assignment_id", "packet_id", "packet_set_id", "packet_content_digest", "lens_result_digest", "search_resource_usage", "root_pass_id", "return_validated"];
@@ -390,10 +449,11 @@ if (response) {
       if (!fallbackPairValid || !lensFallback || !nonblank(lensFallback.detail) || !nonblank(lensFallback.evidence_ref) || !policyBlockingSourceValid || Object.hasOwn(process, "lens_dispatches") || Object.hasOwn(process, "subagent_trigger_scope")) fail("process: fallback lens lifecycle");
     }
     if (peerMode === "delegated") {
-      if (!nonblank(process.peer_reviewer_identity) || !nonblank(process.peer_review_assignment_id) || Object.hasOwn(process, "peer_review_fallback_pass_id") || Object.hasOwn(process, "peer_review_fallback_evidence")) fail("process: delegated peer lifecycle");
-    } else if (!nonblank(process.peer_review_assignment_id) || !nonblank(process.peer_review_fallback_pass_id) || !process.peer_review_fallback_evidence || !["explicit_opt_out", "spawn_failure_or_unavailable", "supported_configuration_proof", "exact_policy_block"].includes(process.peer_review_fallback_evidence.basis) || !nonblank(process.peer_review_fallback_evidence.detail) || !nonblank(process.peer_review_fallback_evidence.evidence_ref) || Object.hasOwn(process, "peer_reviewer_identity")) fail("process: fallback peer lifecycle");
+      if (!nonblank(process.peer_reviewer_identity) || !nonblank(process.peer_review_assignment_id) || ["delegation_opted_out", "policy_disallowed"].includes(process.subagent_policy_state) || Object.hasOwn(process, "peer_review_fallback_pass_id") || Object.hasOwn(process, "peer_review_fallback_evidence")) fail("process: delegated peer lifecycle");
+    } else if (!nonblank(process.peer_review_assignment_id) || !nonblank(process.peer_review_fallback_pass_id) || !process.peer_review_fallback_evidence || !["explicit_opt_out", "spawn_failure_or_unavailable", "supported_configuration_proof", "exact_policy_block"].includes(process.peer_review_fallback_evidence.basis) || (process.subagent_policy_state === "delegation_opted_out" && process.peer_review_fallback_evidence.basis !== "explicit_opt_out") || (process.subagent_policy_state === "policy_disallowed" && process.peer_review_fallback_evidence.basis !== "exact_policy_block") || !nonblank(process.peer_review_fallback_evidence.detail) || !nonblank(process.peer_review_fallback_evidence.evidence_ref) || Object.hasOwn(process, "peer_reviewer_identity")) fail("process: fallback peer lifecycle");
     const binding = process.peer_review_input_binding;
-    peerInputBindingValid(binding, process, accepted, lensMode);
+    if (!peerInputBindingValid(binding, process, accepted, lensMode, response)) fail("peer review input binding: invalid evidence");
+    semanticContextValid(fixtureCase?.semantic_context, process.frozen_assignment_packets, accepted, response);
     const highStakesApplicable = binding?.high_stakes_context?.applicable === true;
     synthesisValid(response.synthesis_briefing, highStakesApplicable, "synthesis briefing");
     synthesisValid(binding?.initial_synthesis, highStakesApplicable, "peer initial synthesis");
@@ -413,9 +473,11 @@ NODE
 run_semantic_validator() {
     local validator_id="$1"
     local response_path="$2"
+    local fixture_file="$3"
+    local case_id="$4"
 
     case "$validator_id" in
-        assistant-research.five_lens_v3) assistant_research_five_lens_v3_valid "$response_path" ;;
+        assistant-research.five_lens_v3) assistant_research_five_lens_v3_valid "$response_path" "$fixture_file" "$case_id" ;;
         *)
             echo "Unknown semantic validator: $validator_id" >&2
             return 1

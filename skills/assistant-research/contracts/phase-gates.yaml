@@ -44,7 +44,7 @@ gates:
         on_fail: "Read five-lens-briefing.md and dispatch or evidenced-fallback the complete missing lens stage before synthesizing"
 
       - id: S6
-        check: "For five_lens_briefing: lens inferences are separated from source-backed findings and weakly sourced lens claims are marked LOW confidence"
+        check: "For five_lens_briefing: lens inferences are separated from source-backed findings and weakly sourced lens claims are marked LOW confidence; a HIGH final finding retains source_provenance whose source set exactly matches findings[].sources and proves both at least three unique independence keys and at least one primary/official source"
         condition: "research_method == five_lens_briefing"
         on_fail: "Label unsourced lens inferences as LOW confidence or gather sources before upgrading confidence"
 
@@ -54,7 +54,7 @@ gates:
         on_fail: "Build the question trace/evidence ledger from five-lens-briefing.md before moving to contradiction mapping or synthesis"
 
       - id: S8
-        check: "For five_lens_briefing: ContentDigest is sha256: plus 64 lowercase hexadecimal SHA-256 characters over the exact UTF-8 bytes produced by RFC 8785 JSON Canonicalization Scheme, with no trailing newline; final process evidence retains exactly five FrozenLensAssignmentPacket preimages, every packet_frozen_at is less than or equal to packet_set_frozen_at and strictly before first_lens_execution_at, each manifest content_digest recomputes from its exact declared fields except content_digest, packet_set_digest covers the ordered packet_id/lens_kind/content_digest manifest, and retained bodies are ordered/bound to it; pre_dispatch_record_id and timestamp precede first_lens_execution_at; every dispatch or root pass binds packet_id, packet_set_id, and matching packet digest; delegated waves are capacity-bounded, exact, disjoint, and exhaustive, and later waves cannot consume earlier results"
+        check: "For five_lens_briefing: ContentDigest is sha256: plus 64 lowercase hexadecimal SHA-256 characters over the exact UTF-8 bytes produced by RFC 8785 JSON Canonicalization Scheme, with no trailing newline; final process evidence retains exactly five FrozenLensAssignmentPacket preimages whose question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, and isolation_policy are exactly equal; every packet_frozen_at is less than or equal to packet_set_frozen_at and strictly before first_lens_execution_at, each manifest content_digest recomputes from its exact declared fields except content_digest, packet_set_digest covers the ordered packet_id/lens_kind/content_digest manifest, and retained bodies are ordered/bound to it; pre_dispatch_record_id and timestamp precede first_lens_execution_at; every dispatch or root pass binds packet_id, packet_set_id, and matching packet digest; delegated waves are capacity-bounded, exact, disjoint, and exhaustive, and later waves cannot consume earlier results"
         condition: "research_method == five_lens_briefing"
         on_fail: "Freeze all packets, repair wave coverage, and restart the complete lens stage before using any lens result"
 
@@ -87,11 +87,11 @@ gates:
     exit_assertions:
 
       - id: SY1
-        check: "Findings are cross-validated — claims appearing in multiple sources get higher confidence"
+        check: "Findings are cross-validated. A source_provenance set, when present, has exactly the same unique sources as findings[].sources; HIGH requires both at least three unique independence_key values and at least one primary/official authority row, while one authoritative source is MEDIUM."
         on_fail: "Compare findings across sources before assigning confidence levels"
 
       - id: SY2
-        check: "Conflicting information is identified and assessed — not silently ignored"
+        check: "Conflicting information is identified and assessed — not silently ignored — and every conflict source_a/source_b obeys the same safe source-reference and globally routable public-URL rules as finding sources"
         on_fail: "Check for contradictions between sources and document in conflicts[]"
 
       - id: SY3
@@ -99,7 +99,7 @@ gates:
         on_fail: "Review what was asked vs. what was found. Document the delta in gaps[]"
 
       - id: SY4
-        check: "Each finding has a confidence level assigned based on source count and quality"
+        check: "Each finding has a confidence level assigned from typed independence and authority provenance: HIGH requires both at least three unique independence keys and at least one primary/official source; one authoritative source is MEDIUM"
         on_fail: "Assign confidence levels per the HIGH/MEDIUM/LOW criteria in output contract"
 
       - id: SY_CANDIDATE_MECHANISMS
@@ -118,7 +118,7 @@ gates:
         on_fail: "Create the contradiction map before writing the synthesis"
 
       - id: SY7
-        check: "For five_lens_briefing: the root-only contradiction map and initial synthesis use all five valid lens results and the question trace/evidence ledger before peer review; a canonical PeerReviewInputBinding retains and digests exactly the peer assignment, initial synthesis, validated lens results, lens execution provenance, verified source evidence, verification gaps, and high-stakes context."
+        check: "For five_lens_briefing: the root-only contradiction map and initial synthesis use all five valid lens results and the question trace/evidence ledger before peer review; a canonical PeerReviewInputBinding retains and digests exactly the peer assignment, final-equal findings, normalized candidate_mechanisms ([] when absent), final-equal conflicts, final-equal contradiction_map, initial synthesis, validated lens results, lens execution provenance, verified source evidence, verification_gaps exactly equal to top-level gaps, and high-stakes context."
         condition: "research_method == five_lens_briefing"
         on_fail: "Revise root synthesis with all five valid lens results before dispatching the separate peer reviewer from five-lens-briefing.md"
 
@@ -163,12 +163,12 @@ gates:
         on_fail: "Rewrite candidate mechanisms as hypotheses, add validation_method and gaps, or move validated source-backed claims to findings with evidence."
 
       - id: VR4
-        check: "For five_lens_briefing: peer_review has a usable DONE or DONE_WITH_CONCERNS status and a compatible accepted, accepted_with_concerns, or revise verdict; peer_review_input_digest is exactly bound across peer context, return, retained peer review, and process binding; accepted and accepted_with_concerns have required_revisions=[] and final_synthesis_digest equals the reviewed initial synthesis digest; revise in delegated or sequential fallback mode has one or more required_revisions and an orchestrator-owned revision_disposition covering every required revision exactly once as applied or claim_downgraded, with revision_disposition_id exactly equal to process peer_review_revision_disposition_id and every resulting_synthesis_digest equal to final_synthesis_digest; peer_review.supported_recommendation equals final recommendation. Unresolved revision blocks presentation; NEEDS_CONTEXT or BLOCKED cannot reach presentation unless a valid fresh fallback completed"
+        check: "For five_lens_briefing: peer_review has a usable DONE or DONE_WITH_CONCERNS status and a compatible accepted, accepted_with_concerns, or revise verdict; peer_review_input_digest is exactly bound across peer context, return, retained peer review, and process binding; findings, normalized candidate_mechanisms, conflicts, contradiction_map, and verification_gaps remain exactly equal to their final top-level artifacts; accepted and accepted_with_concerns have required_revisions=[] and final_synthesis_digest equals the reviewed initial synthesis digest; revise in delegated or sequential fallback mode has one or more required synthesis revisions and an orchestrator-owned revision_disposition covering every required revision exactly once as applied or claim_downgraded, with revision_disposition_id exactly equal to process peer_review_revision_disposition_id and every resulting_synthesis_digest equal to final_synthesis_digest; peer_review.supported_recommendation equals final recommendation. Current revision disposition closes synthesis changes only; any later change to findings, candidate_mechanisms, conflicts, or contradiction_map requires a fresh peer review and digest. Unresolved revision blocks presentation; NEEDS_CONTEXT or BLOCKED cannot reach presentation unless a valid fresh fallback completed"
         condition: "research_method == five_lens_briefing"
         on_fail: "Block presentation or complete and validate a fresh peer fallback; do not finalize an unusable peer status."
 
       - id: VR5
-        check: "For five_lens_briefing: each decision-critical verified_source_evidence row uses a method-specific safe reference; public_url is successfully checked globally routable HTTPS, rejects reserved domains and non-global or alternate-encoded addresses, and equals verified_url, while local_repository, authenticated_source, and offline_authoritative_source omit verified_url and expose no URI userinfo, credentials, tokens, secrets, PII, parent traversal, or absolute host paths"
+        check: "For five_lens_briefing: each decision-critical verified_source_evidence row uses a method-specific safe reference; public_url is successfully checked globally routable HTTPS, rejects reserved domains and non-global or alternate-encoded addresses, and equals verified_url, while local_repository, authenticated_source, and offline_authoritative_source omit verified_url and expose no URI userinfo, credentials, tokens, secrets, PII, parent traversal, or absolute host paths. Every URL-shaped conflict source_a/source_b follows the same globally routable public-URL rule, and non-URL conflict references follow the same safe-reference rule."
         condition: "research_method == five_lens_briefing"
         on_fail: "Replace the unsafe reference with a repository-relative locator, opaque connector/record identifier, or bibliographic citation; record a verification gap when no safe stable reference exists."
 
@@ -187,7 +187,7 @@ invariants:
     on_fail: "Verify or remove the URL. Dead links erode trust."
 
   - id: INV2
-    check: "Confidence levels are evidence-based, not assumed — single source cannot be HIGH"
+    check: "Confidence levels are evidence-based: HIGH requires source_provenance with both at least three unique independence_key values and at least one primary/official authority row; one authoritative source is MEDIUM"
     scope: all_phases
     on_fail: "Downgrade confidence to match actual source count and quality"
 
@@ -197,7 +197,7 @@ invariants:
     on_fail: "Reformat output to match the required FINDINGS/CONFLICTS/GAPS structure"
 
   - id: INV4
-    check: "source_research is direct-capable with policy=not_required and execution=not_applicable; five_lens_briefing is delegation_triggered by skill instruction and may use sequential fallback only with an evidenced admissible basis"
+    check: "source_research is direct-capable with policy=not_required and execution=not_applicable; five_lens_briefing is delegation_triggered by skill instruction and may use sequential fallback only with an evidenced admissible basis; delegation_opted_out or policy_disallowed forces peer review into matching sequential fallback and forbids peer subagent dispatch"
     scope: all_phases
     on_fail: "Use the selected method's required process mode and record admissible fallback evidence before continuing"
 

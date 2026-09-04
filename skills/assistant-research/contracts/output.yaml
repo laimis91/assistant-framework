@@ -12,7 +12,7 @@ artifacts:
     condition: always
     description: "Research findings with confidence scores and source attribution"
     min_items: 0
-    validation: "At least one source-backed finding is required except when research_method=five_lens_briefing, every accepted LensResearchResult is source-empty with evidence_status inference_only or unresolved, and top-level gaps is non-empty. Only that evidence-empty completion may use findings=[]. Each finding has a confidence level and at least one source."
+    validation: "At least one source-backed finding is required except when research_method=five_lens_briefing, every accepted LensResearchResult is source-empty with evidence_status inference_only or unresolved, and top-level gaps is non-empty. Only that evidence-empty completion may use findings=[]. Each finding has a confidence level and at least one source. When source_provenance is present, its unique source set exactly equals sources. High confidence requires source_provenance with both at least three unique independence_key values and at least one primary/official authority row; one authoritative source is medium."
     object_fields:
       - name: finding
         type: string
@@ -23,7 +23,7 @@ artifacts:
         required: true
         enum_values: [high, medium, low]
         validation: >
-          high: 3+ independent sources agree, or primary/official source found.
+          high: source_provenance is present, 3+ unique independence_key values agree, and at least one source_provenance row is primary/official.
           medium: 2 sources agree, or 1 authoritative source.
           low: single source, or sources conflict.
       - name: sources
@@ -31,6 +31,16 @@ artifacts:
         required: true
         min_items: 1
         description: "Source names or descriptions (URLs go in verified_urls)"
+      - name: source_provenance
+        type: object[]
+        required: conditional
+        condition: "confidence == high"
+        description: "Typed provenance for confidence calibration while sources remains the backward-compatible public string array."
+        validation: "When present, every exact row contains only source, independence_key, and authority, and the unique source set exactly equals sources. Required for high confidence."
+        object_fields:
+          - {name: source, type: string, required: true}
+          - {name: independence_key, type: string, required: true}
+          - {name: authority, type: enum, required: true, enum_values: [primary, official, secondary]}
       - name: verified_urls
         type: string[]
         required: false
@@ -386,11 +396,12 @@ artifacts:
         type: enum
         required: true
         enum_values: [delegated, sequential_fallback]
-        validation: "Exactly equals peer_review.peer_review_execution_mode."
+        validation: "Exactly equals peer_review.peer_review_execution_mode. delegation_opted_out or policy_disallowed forces sequential_fallback."
       - name: subagent_policy_state
         type: enum
         required: true
         enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
+        validation: "delegation_opted_out and policy_disallowed force peer_review_execution_mode=sequential_fallback with the matching admissible peer fallback basis; no peer subagent dispatch is allowed."
       - name: tier_resolution
         type: object
         required: true
@@ -445,7 +456,7 @@ artifacts:
         min_items: 5
         max_items: 5
         description: "Exact retained FrozenLensAssignmentPacket preimages, one for each manifest entry."
-        validation: "Exactly five ordered packet bodies match frozen_packet_set.packet_manifest_order and manifest LensKinds. Every packet_frozen_at is less than or equal to frozen_packet_set.packet_set_frozen_at and strictly before frozen_packet_set.first_lens_execution_at. Recompute each content_digest from the RFC 8785 JCS object containing exactly packet_id, packet_set_id, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, isolation_policy, lens_kind, and packet_frozen_at; the digest excludes itself and exactly equals the matching manifest entry and dispatch/root-pass binding."
+        validation: "Exactly five ordered packet bodies match frozen_packet_set.packet_manifest_order and manifest LensKinds. Across all five packets, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, and isolation_policy are exactly equal. Every packet_frozen_at is less than or equal to frozen_packet_set.packet_set_frozen_at and strictly before frozen_packet_set.first_lens_execution_at. Recompute each content_digest from the RFC 8785 JCS object containing exactly packet_id, packet_set_id, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, isolation_policy, lens_kind, and packet_frozen_at; the digest excludes itself and exactly equals the matching manifest entry and dispatch/root-pass binding."
         object_fields:
           - {name: packet_id, type: string, required: true}
           - {name: packet_set_id, type: string, required: true}
@@ -617,10 +628,14 @@ artifacts:
         type: object
         required: true
         description: "Retained canonical preimage sent to the peer reviewer; peer_review_input_digest excludes itself."
-        validation: "Its exact keys are peer_review_input_digest, peer_review_assignment_id, initial_synthesis, validated_lens_results, lens_execution_provenance, verified_source_evidence, verification_gaps, and high_stakes_context. Recompute peer_review_input_digest from the RFC 8785 JCS object of every other listed field in this order-independent object; it exactly equals the peer context, peer return, and retained peer_review digest."
+        validation: "Its exact keys are peer_review_input_digest, peer_review_assignment_id, findings, candidate_mechanisms, conflicts, contradiction_map, initial_synthesis, validated_lens_results, lens_execution_provenance, verified_source_evidence, verification_gaps, and high_stakes_context. findings, conflicts, and contradiction_map exactly equal the final top-level artifacts; candidate_mechanisms exactly equals the final top-level artifact when present and is normalized to [] when absent; verification_gaps exactly equals top-level gaps. Recompute peer_review_input_digest from the RFC 8785 JCS object of every other listed field in this order-independent object; it exactly equals the peer context, peer return, and retained peer_review digest. Any change to findings, candidate_mechanisms, conflicts, or contradiction_map requires a fresh peer review and digest; current revision_disposition closes synthesis changes only."
         object_fields:
           - {name: peer_review_input_digest, type: string, required: true, validation: "ContentDigest of this binding excluding peer_review_input_digest itself."}
           - {name: peer_review_assignment_id, type: string, required: true}
+          - {name: findings, type: "object[]", required: true, validation: "Exactly equals the final top-level findings artifact, including source provenance when present."}
+          - {name: candidate_mechanisms, type: "object[]", required: true, validation: "Exactly equals final top-level candidate_mechanisms when present; otherwise exactly []."}
+          - {name: conflicts, type: "object[]", required: true, validation: "Exactly equals the final top-level conflicts artifact."}
+          - {name: contradiction_map, type: object, required: true, validation: "Exactly equals the final top-level contradiction_map artifact."}
           - name: initial_synthesis
             type: object
             required: true
@@ -676,7 +691,7 @@ artifacts:
             type: object[]
             required: true
             validation: "Exact peer-reviewed decision-critical verification ledger."
-          - {name: verification_gaps, type: "string[]", required: true}
+          - {name: verification_gaps, type: "string[]", required: true, validation: "Exactly equals the final top-level gaps artifact."}
           - name: high_stakes_context
             type: object
             required: true
@@ -688,7 +703,7 @@ artifacts:
       - name: final_synthesis_digest
         type: string
         required: true
-        validation: "ContentDigest of the exact presented synthesis_briefing object. It equals the digest of peer_review_input_binding.initial_synthesis for accepted or accepted_with_concerns; revise requires every revision_disposition.resulting_synthesis_digest to equal this value."
+        validation: "ContentDigest of the exact presented synthesis_briefing object. It equals the digest of peer_review_input_binding.initial_synthesis for accepted or accepted_with_concerns; revise requires every revision_disposition.resulting_synthesis_digest to equal this value. Revision disposition closes synthesis changes only; changing findings, candidate_mechanisms, conflicts, or contradiction_map requires a fresh peer review and peer_review_input_digest."
       - name: peer_reviewer_identity
         type: string
         required: conditional
@@ -748,7 +763,7 @@ artifacts:
     required: true
     condition: always
     description: "Conflicting information found across sources"
-    validation: "Empty list is valid — but the field must be present to confirm conflicts were checked"
+    validation: "Empty list is valid — but the field must be present to confirm conflicts were checked. source_a and source_b obey the same safe source-reference and globally routable public-URL rules as finding sources."
     object_fields:
       - name: claim_a
         type: string
@@ -756,12 +771,14 @@ artifacts:
       - name: source_a
         type: string
         required: true
+        validation: "Safe source reference; URL-shaped values are verified globally routable HTTPS, and every value excludes credentials, secrets, PII, traversal, and absolute host paths."
       - name: claim_b
         type: string
         required: true
       - name: source_b
         type: string
         required: true
+        validation: "Safe source reference; URL-shaped values are verified globally routable HTTPS, and every value excludes credentials, secrets, PII, traversal, and absolute host paths."
       - name: assessment
         type: string
         required: true
@@ -805,6 +822,7 @@ artifacts:
 # FINDINGS
 # 1. {source-backed factual claim or decision insight} — confidence: {HIGH/MEDIUM/LOW}
 #    Sources: {source 1}, {source 2}
+#    Source provenance: {source, independence_key, authority rows; required for HIGH}
 #    Verified URLs: {verified URL 1, verified URL 2 if any}
 # 2. ...
 #
@@ -826,7 +844,7 @@ artifacts:
 #
 # Completeness check:
 # 1. findings[] has at least 1 source-backed entry, except source-empty five-lens inference/unresolved completion may use [] with non-empty gaps[]
-# 2. Every finding has confidence level assigned
+# 2. Every finding has confidence assigned; HIGH has valid source_provenance
 # 3. Every URL presented was verified (no unverified URLs)
 # 4. conflicts[] is present (may be empty)
 # 5. gaps[] is present (may be empty)

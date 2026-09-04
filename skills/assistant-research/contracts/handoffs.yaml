@@ -37,14 +37,17 @@ semantic_types:
     description: "Independent review outcome for the root-owned initial synthesis."
   - name: PeerReviewInputBinding
     kind: lifecycle_record
-    description: "Canonical peer-review input preimage and ContentDigest binding the exact synthesis, validated lenses, independence state, evidence ledger, gaps, and high-stakes context reviewed by ResearchPeerReviewer."
+    description: "Canonical peer-review input preimage and ContentDigest binding the exact findings, normalized candidate mechanisms, conflicts, contradiction map, synthesis, validated lenses, independence state, evidence ledger, gaps, and high-stakes context reviewed by ResearchPeerReviewer."
+  - name: FindingSourceProvenance
+    kind: value_object
+    description: "Exact source identity, independence key, and authority class supporting one final finding while preserving the public findings[].sources string-array representation."
 
 dispatch_protocol:
   - name: common_research_protocol
     activation: "Required only when research_method == five_lens_briefing. source_research remains policy=not_required and execution=not_applicable; this skill instruction triggers five-lens delegation unless an evidenced exception applies."
-    frozen_packet_rule: "all lens assignment packets are frozen before first dispatch. Every packet has the same scope baseline and exactly one LensKind; no packet includes sibling results, dispatch returns, contradiction mapping, or synthesis."
+    frozen_packet_rule: "all lens assignment packets are frozen before first dispatch. Every packet has exactly equal question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, and isolation_policy plus exactly one distinct LensKind; no packet includes sibling results, dispatch returns, contradiction mapping, or synthesis."
     synthesis_ownership: "After all five LensResearcher returns validate, the root Orchestrator alone builds the contradiction map and initial synthesis. LensResearcher never owns cross-lens synthesis."
-    sequential_fallback_rule: "Sequential fallback is allowed only for explicit opt-out, real failed or unavailable dispatch mechanism, supported configuration proof, or exact policy block. It runs five frozen-packet root passes, records reduced independence, omits invented references, and performs peer critique as a separate fresh pass."
+    sequential_fallback_rule: "Sequential fallback is allowed only for explicit opt-out, real failed or unavailable dispatch mechanism, supported configuration proof, or exact policy block. It runs five frozen-packet root passes, records reduced independence, omits invented references, and performs peer critique as a separate fresh pass. A global delegation opt-out or policy-disallowed state also forces peer_review_execution_mode=sequential_fallback with the matching admissible peer fallback basis; it cannot dispatch a peer subagent."
   - name: orchestrator_to_lens_researcher
     delegated_compliance: "Requires five distinct native dispatch or agent identities covering every LensKind exactly once. The same model may serve multiple independent lens assignments; missing lens, duplicate lens, or root-authored lens in delegated mode fails delegated compliance."
     wave_rule: "Capacity-bounded waves are allowed only when wave coverage is exact, disjoint, exhaustive, and each wave size is within proven adapter capacity. Later waves cannot consume earlier results."
@@ -98,7 +101,7 @@ handoffs:
         type: object
         required: true
         description: "FrozenLensAssignmentPacket containing only common scope and this assigned LensKind."
-        validation: "Immutable before first dispatch; packet_frozen_at is less than or equal to frozen_packet_set.packet_set_frozen_at and strictly before the process first_lens_execution_at. Excludes sibling results, prior waves, contradiction_map, synthesis_briefing, peer_review, and recommendation. content_digest is ContentDigest over the RFC 8785 JCS bytes of a JSON object containing exactly packet_id, packet_set_id, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, isolation_policy, lens_kind, and packet_frozen_at; it excludes content_digest itself."
+        validation: "Immutable before first dispatch; packet_frozen_at is less than or equal to frozen_packet_set.packet_set_frozen_at and strictly before the process first_lens_execution_at. Across all five retained packets, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, and isolation_policy are exactly equal. Excludes sibling results, prior waves, contradiction_map, synthesis_briefing, peer_review, and recommendation. content_digest is ContentDigest over the RFC 8785 JCS bytes of a JSON object containing exactly packet_id, packet_set_id, question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, isolation_policy, lens_kind, and packet_frozen_at; it excludes content_digest itself."
         object_fields:
           - {name: packet_id, type: string, required: true}
           - {name: packet_set_id, type: string, required: true}
@@ -268,16 +271,25 @@ handoffs:
         type: object[]
         required: true
         min_items: 0
-        validation: "May be [] only when every validated lens result is source-empty inference_only or unresolved and gaps is non-empty; otherwise retains at least one source-backed finding."
+        validation: "Exactly equals final findings. May be [] only when every validated lens result is source-empty inference_only or unresolved and gaps is non-empty; otherwise retains at least one source-backed finding."
         object_fields:
           - {name: finding, type: string, required: true}
-          - {name: confidence, type: enum, required: true, enum_values: [high, medium, low]}
+          - {name: confidence, type: enum, required: true, enum_values: [high, medium, low], validation: "high requires source_provenance with both at least three unique independence_key values and at least one primary/official authority row; one authoritative source is medium."}
           - {name: sources, type: "string[]", required: true, min_items: 1}
+          - name: source_provenance
+            type: object[]
+            required: conditional
+            condition: "confidence == high"
+            validation: "When present, exact rows contain only source, independence_key, and authority; the unique source set exactly equals sources. Required for high confidence."
+            object_fields:
+              - {name: source, type: string, required: true}
+              - {name: independence_key, type: string, required: true}
+              - {name: authority, type: enum, required: true, enum_values: [primary, official, secondary]}
           - {name: verified_urls, type: "string[]", required: false}
       - name: candidate_mechanisms
         type: object[]
-        required: false
-        default: []
+        required: true
+        validation: "Exact top-level candidate_mechanisms when present; otherwise the required peer-input projection is normalized to []."
         object_fields:
           - {name: mechanism, type: string, required: true}
           - {name: claim_status, type: enum, required: true, enum_values: [candidate, needs_validation, unsupported, rejected]}
@@ -296,17 +308,19 @@ handoffs:
       - name: conflicts
         type: object[]
         required: true
+        validation: "Exactly equals final conflicts. source_a and source_b obey the same safe source-reference and globally routable public-URL rules as finding sources."
         object_fields:
           - {name: claim_a, type: string, required: true}
-          - {name: source_a, type: string, required: true}
+          - {name: source_a, type: string, required: true, validation: "Safe source reference; URL-shaped values are verified globally routable HTTPS, and every value excludes credentials, secrets, PII, traversal, and absolute host paths."}
           - {name: claim_b, type: string, required: true}
-          - {name: source_b, type: string, required: true}
+          - {name: source_b, type: string, required: true, validation: "Safe source reference; URL-shaped values are verified globally routable HTTPS, and every value excludes credentials, secrets, PII, traversal, and absolute host paths."}
           - {name: assessment, type: string, required: true}
-      - {name: gaps, type: "string[]", required: true}
+      - {name: gaps, type: "string[]", required: true, validation: "Exactly equals verification_gaps and the final top-level gaps array."}
       - name: contradiction_map
         type: object
         required: true
         description: "Root-only contradiction map after validated lens collection."
+        validation: "Exactly equals the final contradiction_map."
         object_fields:
           - {name: direct_conflicts, type: "string[]", required: true}
           - {name: strongest_evidence, type: string, required: true}
@@ -352,7 +366,7 @@ handoffs:
         type: string[]
         required: true
         description: "Unverified, inaccessible, stale, or unsupported decision-critical source claims; empty only when none exist."
-        validation: "Non-empty whenever verified_source_evidence is empty; otherwise records verified-source limitations or is empty only when none exist."
+        validation: "Exactly equals the final top-level gaps array and the peer context gaps projection. Non-empty whenever verified_source_evidence is empty; otherwise records verified-source limitations or is empty only when none exist."
       - name: high_stakes_context
         type: object
         required: true
@@ -397,4 +411,4 @@ return_validation:
   - name: orchestrator_to_lens_researcher
     validation: "For delegated lens mode validate assignment_id, packet_id, packet_set_id, packet_content_digest, LensKind, return schema, status, typed evidence, source claims, recomputed lens_result_digest, and SearchResourceUsage against the matching frozen assignment, manifest, and budget; validate exactly five unique native identities. DONE and DONE_WITH_CONCERNS require a complete LensResearchResult and evidence. ceiling_exhausted requires a LOW-confidence result and explicit gap; over_ceiling forces BLOCKED. NEEDS_CONTEXT or BLOCKED require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence; do not invent research. For sequential fallback validate exactly five frozen root passes with root_pass_id, matching packet and result digests, exact usage, no dispatch_identity, and concrete fallback evidence."
   - name: orchestrator_to_research_peer_reviewer
-    validation: "Validate peer_review_assignment_id and peer_review_input_digest echo the active canonical PeerReviewInputBinding, including the exact validated lenses, lens execution provenance, initial synthesis, verified evidence, gaps, and high-stakes context. Each validated lens carries the recomputed result digest for the same assignment used by process and presentation artifacts. Apply the status/verdict truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions. Usable statuses require complete critique, calibrated evidence, and supported_recommendation; the final synthesis recommendation exactly equals supported_recommendation. Failure statuses require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence. When verdict=revise, including sequential peer fallback, the orchestrator—not the worker—records revision_disposition covering every required revision exactly once as applied or claim_downgraded, assigns revision_disposition_id, records an exactly equal peer_review_revision_disposition_id, and binds every disposition to final_synthesis_digest; unresolved revision blocks presentation. Workers do not self-report execution or fallback orchestration metadata or native peer identity; the orchestrator alone records those fields in final peer_review/process evidence. Every verified_source_evidence row follows its method/reference/conditional-URL rule; an empty ledger requires non-empty verification_gaps and downgrade or block. For reviewer-only fallback retain valid delegated lens evidence, validate the orchestrator-owned peer_review_fallback_pass_id and separate concrete fallback evidence, and never erase lens dispatch evidence."
+    validation: "Validate peer_review_assignment_id and peer_review_input_digest echo the active canonical PeerReviewInputBinding, including exact final-equal findings, normalized candidate_mechanisms, conflicts, contradiction_map, validated lenses, lens execution provenance, initial synthesis, verified evidence, verification_gaps exactly equal to top-level gaps, and high-stakes context. Each validated lens carries the recomputed result digest for the same assignment used by process and presentation artifacts. Apply the status/verdict truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions. Usable statuses require complete critique, calibrated evidence, and supported_recommendation; the final synthesis recommendation exactly equals supported_recommendation. Failure statuses require open_questions and typed status detail, while BLOCKED also requires blocker_type and blocker_evidence. When verdict=revise, including sequential peer fallback, the orchestrator—not the worker—records revision_disposition covering every required synthesis revision exactly once as applied or claim_downgraded, assigns revision_disposition_id, records an exactly equal peer_review_revision_disposition_id, and binds every disposition to final_synthesis_digest; current revision disposition closes synthesis changes only. Any change to findings, candidate_mechanisms, conflicts, or contradiction_map requires a fresh peer review and digest. Unresolved revision blocks presentation. Workers do not self-report execution or fallback orchestration metadata or native peer identity; the orchestrator alone records those fields in final peer_review/process evidence. Every finding source provenance row satisfies its confidence truth table, every verified_source_evidence row follows its method/reference/conditional-URL rule, and conflict source references obey the same safe/public-source rules; an empty ledger requires non-empty verification_gaps and downgrade or block. For reviewer-only fallback retain valid delegated lens evidence, validate the orchestrator-owned peer_review_fallback_pass_id and separate concrete fallback evidence, and never erase lens dispatch evidence. Global delegation opt-out or policy-disallowed state requires peer fallback with the matching admissible basis."

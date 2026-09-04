@@ -926,6 +926,32 @@ validate_fixture() {
             empty
           end;
 
+        def case_semantic_context($index):
+          if has("semantic_context") then
+            .semantic_context as $context
+            | if ($context | type) != "object" or ($context | keys | sort) != ["follow_up_requirements", "packet_scope", "required_topic_terms"] then
+                "case[\($index)].semantic_context must contain exactly packet_scope, follow_up_requirements, and required_topic_terms"
+              elif ($context.packet_scope? | type) != "object" or ($context.packet_scope | keys | sort) != ["output_purpose", "question", "user_role_or_goal"] then
+                "case[\($index)].semantic_context.packet_scope must contain exactly question, user_role_or_goal, and output_purpose"
+              elif ($context.packet_scope | [.question, .user_role_or_goal, .output_purpose] | all(.[]; nonempty_string) | not) then
+                "case[\($index)].semantic_context.packet_scope fields must be non-empty strings"
+              elif ($context.required_topic_terms? | type) != "array" or ($context.required_topic_terms | all(.[]; nonempty_string) | not) then
+                "case[\($index)].semantic_context.required_topic_terms must be an array of non-empty strings"
+              elif ($context.required_topic_terms | unique | length) != ($context.required_topic_terms | length) then
+                "case[\($index)].semantic_context.required_topic_terms values must be unique"
+              elif ($context.follow_up_requirements? | type) != "array" then
+                "case[\($index)].semantic_context.follow_up_requirements must be an array"
+              elif ($context.follow_up_requirements | all(.[]; type == "object" and (keys | sort) == ["decision", "exact_count", "lens_kind"] and (.lens_kind as $lens | ["practitioner", "academic_or_technical_expert", "skeptic", "economist_or_incentives_analyst", "historian_or_pattern_matcher"] | index($lens) != null) and (.decision as $decision | ["follow_up", "none_needed"] | index($decision) != null) and (.exact_count | type == "number" and . > 0 and (. % 1) == 0)) | not) then
+                "case[\($index)].semantic_context.follow_up_requirements rows must be exact typed requirements"
+              elif ($context.follow_up_requirements | map(.lens_kind) | unique | length) != ($context.follow_up_requirements | length) then
+                "case[\($index)].semantic_context.follow_up_requirements lens_kind values must be unique"
+              else empty
+              end
+          elif has("semantic_validator") then
+            "case[\($index)] semantic_validator requires semantic_context"
+          else empty
+          end;
+
         if type != "object" then
           "fixture root must be a JSON object"
         else
@@ -959,7 +985,8 @@ validate_fixture() {
                  case_string_array($index; "pass_criteria"),
                  case_string_array($index; "fail_signals"),
                  case_machine_expectations($index),
-                 case_seeded_defects($index)
+                 case_seeded_defects($index),
+                 case_semantic_context($index)
                end
            else empty end)
         end
@@ -976,13 +1003,13 @@ validate_fixture() {
 
     validation_error="$(jq -r --arg skill_name "$skill_name" '
         def five_lens_case_ids:
-          ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-delegated-lenses-sequential-peer-fallback", "five-lens-quick-normalizes-to-standard", "five-lens-sequential-fallback-preserves-process-evidence"];
+          ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-delegated-lenses-sequential-peer-fallback", "five-lens-quick-normalizes-to-standard", "five-lens-retains-all-material-follow-ups", "five-lens-sequential-fallback-preserves-process-evidence"];
         [ .cases[] | .id ] as $case_ids
         | [ .cases[] | select(has("semantic_validator")) | {id, semantic_validator} ] as $declared
         | if $skill_name == "assistant-research" and (five_lens_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "five-lens assistant-research cases must declare their semantic validator"
           elif ($declared | length) == 0 then empty
           elif $skill_name != "assistant-research" then "semantic_validator is only supported for assistant-research"
-          elif ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the four five-lens assistant-research cases"
+          elif ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the five five-lens assistant-research cases"
           elif ($declared | all(.semantic_validator == "assistant-research.five_lens_v3")) then empty
           else "semantic_validator must be the allowlisted assistant-research.five_lens_v3" end
     ' "$fixture_file")" || die "Fixture is not valid JSON: $(display_path "$fixture_file")"

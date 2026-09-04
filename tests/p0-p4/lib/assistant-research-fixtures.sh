@@ -42,45 +42,64 @@ function usage(mode, lens, tier) {
   const gap = `Query, source, and time ceilings reached before confirming ${lens} coverage.`;
   return {actual_queries: 5, actual_sources: 6, elapsed_minutes: 15, termination_state: "ceiling_exhausted", exhausted_dimensions: ["queries", "sources", "elapsed_time"], exhaustion_gap: gap, confidence_downgraded: true};
 }
-function lensResult(mode, lens) {
+function lensResult(mode, lens, followUpRequirements, topicTerms) {
   const fallback = mode === "sequential_fallback";
   const gap = `Query, source, and time ceilings reached before confirming ${lens} coverage.`;
+  const topic = Array.isArray(topicTerms) && topicTerms.length > 0 ? `${topicTerms.join("; ")}: ` : "";
+  const requirement = (followUpRequirements || []).find(value => value.lens_kind === lens);
+  const follow_ups = requirement
+    ? Array.from({length: requirement.exact_count}, (_, index) => requirement.decision === "follow_up"
+      ? {decision: "follow_up", question: `Follow-up ${index + 1} for ${lens}`, answer_or_gap: `Additional verification question ${index + 1} for ${lens}.`, sources_or_verified_urls: [`source:research-corpus:${lens}:follow-up-${index + 1}`], evidence_status: "source_backed", gaps: []}
+      : {decision: "none_needed", answer_or_gap: `No material follow-up for ${lens}.`, sources_or_verified_urls: [`source:research-corpus:${lens}`], evidence_status: "source_backed", gaps: []})
+    : [{decision: "none_needed", answer_or_gap: fallback ? `No additional follow-up after ceilings for ${lens}` : `No material follow-up for ${lens}`, sources_or_verified_urls: fallback ? [] : [`source:research-corpus:${lens}`], evidence_status: fallback ? "unresolved" : "source_backed", gaps: fallback ? [gap] : []}];
   return {
-    core_position: fallback ? `Unresolved position for ${lens}` : `Position for ${lens}`,
-    lens_question: `Question for ${lens}`,
-    answer_or_gap: fallback ? `Unresolved answer for ${lens}` : `Answer for ${lens}`,
+    core_position: fallback ? `${topic}Unresolved position for ${lens}` : `${topic}Position for ${lens}`,
+    lens_question: `${topic}Question for ${lens}`,
+    answer_or_gap: fallback ? `${topic}Unresolved answer for ${lens}` : `${topic}Answer for ${lens}`,
     sources_or_verified_urls: fallback ? [] : [`source:research-corpus:${lens}`],
-    follow_ups: [{decision: "none_needed", answer_or_gap: fallback ? `No additional follow-up after ceilings for ${lens}` : `No material follow-up for ${lens}`, sources_or_verified_urls: fallback ? [] : [`source:research-corpus:${lens}`], evidence_status: fallback ? "unresolved" : "source_backed", gaps: fallback ? [gap] : []}],
+    follow_ups,
     evidence_status: fallback ? "unresolved" : "source_backed",
-    likely_blind_spot: fallback ? `Unverified source coverage for ${lens}` : `Blind spot for ${lens}`,
-    unique_insight: fallback ? `Fallback insight for ${lens}` : `Insight for ${lens}`,
+    likely_blind_spot: fallback ? `${topic}Unverified source coverage for ${lens}` : `${topic}Blind spot for ${lens}`,
+    unique_insight: fallback ? `${topic}Fallback insight for ${lens}` : `${topic}Insight for ${lens}`,
     confidence: fallback ? "low" : "medium",
     gaps: fallback ? [gap] : []
   };
 }
-function packet(mode, lens, ordinal, tier) {
+function packet(mode, lens, ordinal, tier, packetScope) {
   const budget = tier === "standard" ? {per_lens_max_queries: 3, per_lens_max_sources: 4, per_lens_max_minutes: 10, overall_max_queries: 15, overall_max_sources: 20, overall_max_minutes: 50, stop_condition: "saturation_or_hard_ceiling"} : {per_lens_max_queries: 5, per_lens_max_sources: 6, per_lens_max_minutes: 15, overall_max_queries: 25, overall_max_sources: 30, overall_max_minutes: 75, stop_condition: "saturation_or_hard_ceiling"};
-  return {packet_id: `packet-${["practitioner", "academic", "skeptic", "economist", "historian"][ordinal]}`, packet_set_id: mode === "delegated" ? "packet-set-1" : "fallback-packet-set-1", question: "Should we adopt the tool?", tier, user_role_or_goal: "architecture decision", output_purpose: "Answer the research question", known_context: ["local fixture"], evidence_budget: "six sources", search_resource_budget: budget, source_policy: "public sources", isolation_policy: "sibling blind", lens_kind: lens, packet_frozen_at: "2026-09-03T10:00:00Z"};
+  return {packet_id: `packet-${["practitioner", "academic", "skeptic", "economist", "historian"][ordinal]}`, packet_set_id: mode === "delegated" ? "packet-set-1" : "fallback-packet-set-1", question: packetScope.question, tier, user_role_or_goal: packetScope.user_role_or_goal, output_purpose: packetScope.output_purpose, known_context: ["local fixture"], evidence_budget: "six sources", search_resource_budget: budget, source_policy: "public sources", isolation_policy: "sibling blind", lens_kind: lens, packet_frozen_at: "2026-09-03T10:00:00Z"};
 }
-function build(mode, report) {
+function semanticContext(value) {
+  const fallback = {packet_scope: {question: "Should we adopt the tool?", user_role_or_goal: "architecture decision", output_purpose: "Answer the research question"}, follow_up_requirements: []};
+  if (!value) return fallback;
+  const context = JSON.parse(value);
+  return context && context.packet_scope && Array.isArray(context.follow_up_requirements) ? context : fallback;
+}
+function build(mode, report, semanticContextValue) {
   const lensMode = ["sequential_fallback", "sequential_fallback_revise"].includes(mode) ? "sequential_fallback" : "delegated";
   const peerMode = mode === "delegated_peer_fallback" || lensMode === "sequential_fallback" ? "sequential_fallback" : "delegated";
   const isFallback = lensMode === "sequential_fallback";
   const peerRevise = mode === "sequential_fallback_revise" || peerMode === "delegated";
   const requestedTier = mode === "quick_normalized" ? "quick" : "extensive";
   const effectiveTier = requestedTier === "quick" ? "standard" : "extensive";
-  const packets = lenses.map((lens, index) => { const value = packet(lensMode, lens, index, effectiveTier); return {...value, content_digest: digest(value)}; });
+  const context = semanticContext(semanticContextValue);
+  const packetScope = context.packet_scope;
+  const followUpRequirements = context.follow_up_requirements;
+  const topicTerms = Array.isArray(context.required_topic_terms) && context.required_topic_terms.length > 0
+    ? context.required_topic_terms
+    : (/invest/i.test(packetScope.question) && /AI coding assistant/i.test(packetScope.question) && /\.NET architecture/i.test(packetScope.question) ? ["invest", "AI coding assistant", ".NET architecture"] : []);
+  const packets = lenses.map((lens, index) => { const value = packet(lensMode, lens, index, effectiveTier, packetScope); return {...value, content_digest: digest(value)}; });
   const manifest = packets.map(({packet_id, lens_kind, content_digest}) => ({packet_id, lens_kind, content_digest}));
   const records = lenses.map((lens, index) => {
     const assignment_id = isFallback ? `fallback-assignment-${index + 1}` : `assignment-${index + 1}`;
-    const result = lensResult(lensMode, lens);
+    const result = lensResult(lensMode, lens, followUpRequirements, topicTerms);
     const resultDigest = digest(result);
     const resourceUsage = usage(lensMode, lens, effectiveTier);
     const common = {lens_kind: lens, assignment_id, packet_id: packets[index].packet_id, packet_set_id: packets[index].packet_set_id, packet_content_digest: packets[index].content_digest, lens_result_digest: resultDigest, search_resource_usage: resourceUsage, return_validated: true};
     return isFallback ? {...common, root_pass_id: `root-pass-${index + 1}`} : {...common, dispatch_identity: `lens-native-${index + 1}`, wave_id: "wave-1"};
   });
   const overall = isFallback ? {actual_queries: 25, actual_sources: 30, elapsed_minutes: 75, termination_state: "ceiling_exhausted", exhausted_dimensions: ["queries", "sources", "elapsed_time"], exhaustion_gap: "Overall ceilings reached before cross-lens verification.", confidence_downgraded: true} : {actual_queries: effectiveTier === "standard" ? 10 : 15, actual_sources: effectiveTier === "standard" ? 15 : 20, elapsed_minutes: 10, termination_state: "saturation", exhausted_dimensions: [], confidence_downgraded: false};
-  const accepted_lens_results = records.map(record => { const result = lensResult(lensMode, record.lens_kind); return {lens_kind: record.lens_kind, assignment_id: record.assignment_id, lens_result_digest: record.lens_result_digest, ...result}; });
+  const accepted_lens_results = records.map(record => { const result = lensResult(lensMode, record.lens_kind, followUpRequirements, topicTerms); return {lens_kind: record.lens_kind, assignment_id: record.assignment_id, lens_result_digest: record.lens_result_digest, ...result}; });
   const provenance = {lens_execution_mode: lensMode, reduced_independence: isFallback, fallback_basis: isFallback ? "spawn_failure_or_unavailable" : "not_applicable", fallback_evidence_ref: isFallback ? "spawn-error-1" : "not_applicable"};
   const process = {lens_execution_mode: lensMode, peer_review_execution_mode: peerMode, subagent_policy_state: isFallback ? "subagents_unavailable" : "delegation_triggered", subagent_trigger_scope: isFallback ? undefined : ["five_lens_briefing"], reduced_independence: isFallback || peerMode === "sequential_fallback", tier_resolution: {requested_tier: requestedTier, effective_tier: effectiveTier, normalization_disclosure: requestedTier === "quick" ? "quick normalized to standard for five_lens_briefing" : "not_applicable"}, frozen_packet_set: {packet_set_id: packets[0].packet_set_id, packet_set_digest: digest(manifest), packet_ids: packets.map(p => p.packet_id), packet_manifest_order: packets.map(p => p.packet_id), packet_manifest: manifest, packet_set_frozen_at: "2026-09-03T10:00:00Z", pre_dispatch_record_id: "pre-dispatch-1", first_lens_execution_at: "2026-09-03T10:01:00Z", first_lens_execution_evidence_ref: "execution-log-1"}, frozen_assignment_packet_ids: packets.map(p => p.packet_id), frozen_assignment_packets: packets, accepted_lens_results, search_resource_budget: packets[0].search_resource_budget, overall_resource_usage: overall, root_synthesis_ownership: "orchestrator_only"};
   if (isFallback) Object.assign(process, {fallback_lens_passes: records, lens_fallback_evidence: {basis: "spawn_failure_or_unavailable", detail: "dispatch unavailable", evidence_ref: "spawn-error-1"}});
@@ -91,16 +110,21 @@ function build(mode, report) {
   const perspective_scan = accepted_lens_results.map(result => ({lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, core_position: result.core_position, sources_or_verified_urls: result.sources_or_verified_urls, likely_blind_spot: result.likely_blind_spot, unique_insight: result.unique_insight, confidence: result.confidence}));
   const question_trace = accepted_lens_results.map(result => ({lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, question: result.lens_question, answer: result.answer_or_gap, sources_or_verified_urls: result.sources_or_verified_urls, follow_ups: result.follow_ups, evidence_status: result.evidence_status}));
   const gaps = isFallback ? ["Overall ceilings left source confirmation unresolved."] : [];
-  const synthesis_briefing = {executive_summary: isFallback ? "The available process evidence is insufficient for adoption." : "The fixture supports a bounded verification step.", ranked_key_findings: ["All five lenses completed their assigned process.", isFallback ? "Ceilings exhausted before source confirmation." : "The accepted results retain their source identifiers.", "The recommendation remains calibrated to the evidence."], hidden_connection: "The frozen packet ledger makes synthesis traceable.", actionable_implication: "Run an independent source check before adopting the tool.", recommendation: "investigate_further", high_stakes_caveat: "This fixture is educational due diligence, not financial, legal, medical, or professional advice.", frontier_question: "Which independent source would most change the decision?"};
+  const topic = topicTerms.length > 0 ? `${topicTerms.join("; ")}: ` : "";
+  const synthesis_briefing = {executive_summary: isFallback ? `${topic}The available process evidence is insufficient for adoption.` : `${topic}The fixture supports a bounded verification step.`, ranked_key_findings: [`${topic}All five lenses completed their assigned process.`, isFallback ? `${topic}Ceilings exhausted before source confirmation.` : `${topic}The accepted results retain their source identifiers.`, `${topic}The recommendation remains calibrated to the evidence.`], hidden_connection: `${topic}The frozen packet ledger makes synthesis traceable.`, actionable_implication: `${topic}Run an independent source check before adopting the tool.`, recommendation: "investigate_further", high_stakes_caveat: "This fixture is educational due diligence, not financial, legal, medical, or professional advice.", frontier_question: `${topic}Which independent source would most change the decision?`};
   const high_stakes_context = {applicable: true, caveat_or_not_applicable_reason: synthesis_briefing.high_stakes_caveat, user_context_status: "unresolved", user_context_basis: "No decision-specific user constraints were supplied."};
   const verified_source_evidence = [{claim: "Fixture decision evidence", source: "source:research-corpus:summary", verification_method: "local_repository", verification_reference: "skills/assistant-research/contracts/output.yaml", verification_detail: "Fixture-local stable reference."}];
-  const peer_review_input_binding = {peer_review_assignment_id: process.peer_review_assignment_id, initial_synthesis: synthesis_briefing, validated_lens_results: accepted_lens_results, lens_execution_provenance: provenance, verified_source_evidence, verification_gaps: gaps, high_stakes_context};
+  const findings = isFallback ? [] : [{finding: `${topic}The evidence supports a calibrated investigation.`, confidence: "medium", sources: ["source:research-corpus:summary"], source_provenance: [{source: "source:research-corpus:summary", independence_key: "research-corpus", authority: "secondary"}]}];
+  const candidate_mechanisms = [];
+  const conflicts = [];
+  const contradiction_map = {direct_conflicts: [], strongest_evidence: isFallback ? `${topic}No source-backed conclusion is available.` : `${topic}Validated lens source identifiers.`, weakest_evidence: isFallback ? `${topic}Ceiling-exhausted source coverage.` : `${topic}Fixture-only evidence scope.`, consensus: [isFallback ? `${topic}Further confirmation is required.` : `${topic}Proceed only with verification.`], biggest_unresolved_question: `${topic}Whether independent source confirmation changes the recommendation.`, missing_angle_or_gap: isFallback ? `${topic}Independent source confirmation.` : `${topic}Production evidence beyond the fixture.`};
+  const peer_review_input_binding = {peer_review_assignment_id: process.peer_review_assignment_id, initial_synthesis: synthesis_briefing, validated_lens_results: accepted_lens_results, lens_execution_provenance: provenance, verified_source_evidence, verification_gaps: gaps, high_stakes_context, findings, candidate_mechanisms, conflicts, contradiction_map};
   peer_review_input_binding.peer_review_input_digest = digest(peer_review_input_binding);
   process.peer_review_input_binding = peer_review_input_binding;
   process.final_synthesis_digest = digest(synthesis_briefing);
   const reviseFields = peerRevise ? {status: "DONE_WITH_CONCERNS", verdict: "revise", required_revisions: ["downgrade unsupported claim"], revision_disposition_id: "revision-closure-1", revision_disposition: [{required_revision: "downgrade unsupported claim", outcome: "claim_downgraded", closure_evidence: "claim confidence updated", resulting_synthesis_digest: process.final_synthesis_digest}]} : {status: "DONE", verdict: "accepted", required_revisions: []};
   const peer_review = peerMode === "sequential_fallback" ? {peer_review_execution_mode: peerMode, peer_review_assignment_id: process.peer_review_assignment_id, peer_review_fallback_pass_id: process.peer_review_fallback_pass_id, peer_review_input_digest: peer_review_input_binding.peer_review_input_digest, supported_recommendation: "investigate_further", ...reviseFields, ...peerUsableFields} : {peer_review_execution_mode: peerMode, peer_review_assignment_id: "peer-assignment-1", peer_reviewer_identity: "peer-native-1", peer_review_input_digest: peer_review_input_binding.peer_review_input_digest, supported_recommendation: "investigate_further", ...reviseFields, ...peerUsableFields};
-  return {report, research_method: "five_lens_briefing", tier: effectiveTier, findings: isFallback ? [] : [{finding: "The evidence supports a calibrated investigation.", confidence: "medium", sources: ["source:research-corpus:summary"]}], conflicts: [], peer_review, five_lens_process_evidence: process, perspective_scan, question_trace, contradiction_map: {direct_conflicts: [], strongest_evidence: isFallback ? "No source-backed conclusion is available." : "Validated lens source identifiers.", weakest_evidence: isFallback ? "Ceiling-exhausted source coverage." : "Fixture-only evidence scope.", consensus: [isFallback ? "Further confirmation is required." : "Proceed only with verification."], biggest_unresolved_question: "Whether independent source confirmation changes the recommendation.", missing_angle_or_gap: isFallback ? "Independent source confirmation." : "Production evidence beyond the fixture."}, synthesis_briefing, summary: isFallback ? "Do not adopt until independent source confirmation is available." : "Investigate further before deciding whether to adopt the tool.", gaps};
+  return {report, research_method: "five_lens_briefing", tier: effectiveTier, findings, candidate_mechanisms, conflicts, peer_review, five_lens_process_evidence: process, perspective_scan, question_trace, contradiction_map, synthesis_briefing, summary: isFallback ? `${topic}Do not adopt until independent source confirmation is available.` : `${topic}Investigate further before deciding whether to adopt the tool.`, gaps};
 }
 function validate(response) {
   const errors = [];
@@ -127,9 +151,12 @@ function validate(response) {
   } else {
     expect(!Object.hasOwn(process, "peer_reviewer_identity") && peer.peer_review_fallback_pass_id === process.peer_review_fallback_pass_id && typeof process.peer_review_fallback_evidence?.detail === "string" && process.peer_review_fallback_evidence.detail.length > 0 && typeof process.peer_review_fallback_evidence?.evidence_ref === "string" && process.peer_review_fallback_evidence.evidence_ref.length > 0, "peer:fallback-binding");
   }
+  expect(!(peerMode === "delegated" && ["delegation_opted_out", "policy_disallowed"].includes(process.subagent_policy_state)), "peer:global-policy-requires-fallback");
   const manifest = process.frozen_packet_set && process.frozen_packet_set.packet_manifest;
   const packetById = new Map((manifest || []).map(packet => [packet.packet_id, packet]));
-  expect(Array.isArray(manifest) && manifest.length === 5 && equal(manifest.map(packet => packet.packet_id), process.frozen_packet_set?.packet_manifest_order) && equal(process.frozen_assignment_packet_ids, process.frozen_packet_set?.packet_manifest_order) && equal(process.frozen_packet_set?.packet_ids, process.frozen_packet_set?.packet_manifest_order) && Array.isArray(process.frozen_assignment_packets) && process.frozen_assignment_packets.length === 5 && process.frozen_assignment_packets.every(packet => equal(packet, {...packet, content_digest: digest(Object.fromEntries(Object.entries(packet).filter(([key]) => key !== "content_digest")))}) && Date.parse(packet.packet_frozen_at) <= Date.parse(process.frozen_packet_set?.packet_set_frozen_at) && Date.parse(packet.packet_frozen_at) < Date.parse(process.frozen_packet_set?.first_lens_execution_at)) && equal(process.frozen_assignment_packets.map(packet => ({packet_id: packet.packet_id, lens_kind: packet.lens_kind, content_digest: packet.content_digest})), manifest), "packet-manifest:projection");
+  const retainedPackets = process.frozen_assignment_packets || [];
+  const commonPacketScope = retainedPackets[0] && Object.fromEntries(["question", "tier", "user_role_or_goal", "output_purpose", "known_context", "evidence_budget", "search_resource_budget", "source_policy", "isolation_policy"].map(key => [key, retainedPackets[0][key]]));
+  expect(Array.isArray(manifest) && manifest.length === 5 && equal(manifest.map(packet => packet.packet_id), process.frozen_packet_set?.packet_manifest_order) && equal(process.frozen_assignment_packet_ids, process.frozen_packet_set?.packet_manifest_order) && equal(process.frozen_packet_set?.packet_ids, process.frozen_packet_set?.packet_manifest_order) && Array.isArray(retainedPackets) && retainedPackets.length === 5 && retainedPackets.every(packet => equal(packet, {...packet, content_digest: digest(Object.fromEntries(Object.entries(packet).filter(([key]) => key !== "content_digest")))}) && Date.parse(packet.packet_frozen_at) <= Date.parse(process.frozen_packet_set?.packet_set_frozen_at) && Date.parse(packet.packet_frozen_at) < Date.parse(process.frozen_packet_set?.first_lens_execution_at) && equal(Object.fromEntries(Object.keys(commonPacketScope).map(key => [key, packet[key]])), commonPacketScope)) && equal(retainedPackets.map(packet => ({packet_id: packet.packet_id, lens_kind: packet.lens_kind, content_digest: packet.content_digest})), manifest), "packet-manifest:projection");
   expect(process.frozen_packet_set && process.frozen_packet_set.packet_set_digest === digest(manifest), "packet-set:digest");
   const seen = new Set(), identities = new Set(), rootPasses = new Set();
   let querySum = 0, sourceSum = 0, elapsedSum = 0, elapsedMax = 0;
@@ -190,6 +217,9 @@ function validate(response) {
   }
   const assignments = new Set((Array.isArray(records) ? records : []).map(record => record?.assignment_id));
   expect(assignments.size === lenses.length && !assignments.has(undefined), "record:unique-assignments");
+  const projectedLenses = rows => Array.isArray(rows) && rows.length === lenses.length && new Set(rows.map(row => row?.lens)).size === lenses.length && lenses.every(lens => rows.some(row => row?.lens === lens));
+  expect(projectedLenses(response.perspective_scan), "perspective:exact-five-lenses");
+  expect(projectedLenses(response.question_trace), "question-trace:exact-five-lenses");
   const freeze = process.frozen_packet_set || {};
   const freezeTimestamp = Date.parse(freeze.packet_set_frozen_at);
   const firstLensTimestamp = Date.parse(freeze.first_lens_execution_at);
@@ -240,20 +270,63 @@ function validate(response) {
   expect(process.reduced_independence === (mode === "sequential_fallback" || peerMode === "sequential_fallback"), "process:reduced-independence");
   const nonblank = value => typeof value === "string" && value.length > 0;
   const sources = value => Array.isArray(value) && value.length > 0 && value.every(nonblank);
+  const safeReference = value => {
+    if (!nonblank(value) || value !== value.trim() || /(?:^|[\\/])\.\.(?:[\\/]|$)/.test(value) || /^(?:[A-Za-z]:[\\/]|\\\\)/.test(value)) return false;
+    if (!/^https?:\/\//i.test(value)) return !/(?:^|[\\/])~?(?:Users|home|private|var)(?:[\\/]|$)|(?:token|secret|password|api[_-]?key|email)=/i.test(value);
+    try {
+      const url = new URL(value);
+      const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+      if (url.protocol !== "https:" || url.username || url.password || !host || ["localhost", "invalid", "local", "internal", "test", "example"].includes(host) || /(?:\.invalid|\.localhost|\.local|\.internal|\.test|\.example)$/.test(host) || /^[0-9]+$/.test(host) || (!net.isIP(host) && !host.includes("."))) return false;
+      if (net.isIP(host) === 4) {
+        const [a, b] = host.split(".").map(Number);
+        return !(a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && (b === 0 || b === 168 || b === 2)) || (a === 198 && (b === 18 || b === 19 || b === 51)) || (a === 203 && b === 0));
+      }
+      return !(net.isIP(host) === 6 && (host === "::" || host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") || host.startsWith("ff") || host.startsWith("::ffff:") || host.startsWith("2001:db8:") || host.startsWith("100:0:0:0:")));
+    } catch { return false; }
+  };
+  const verifiedEvidenceValid = rows => Array.isArray(rows) && rows.every(row => {
+    if (!row || !nonblank(row.claim) || !nonblank(row.source) || !nonblank(row.verification_reference) || !nonblank(row.verification_detail)) return false;
+    if (row.verification_method === "local_repository") return !Object.hasOwn(row, "verified_url") && !/\s/.test(row.verification_reference) && safeReference(row.verification_reference);
+    if (row.verification_method === "public_url") return row.verified_url === row.verification_reference && safeReference(row.verified_url);
+    if (row.verification_method === "authenticated_source") return !Object.hasOwn(row, "verified_url") && /^connector:[A-Za-z0-9._-]+\/record:[A-Za-z0-9._-]+$/.test(row.verification_reference);
+    return row.verification_method === "offline_authoritative_source" && !Object.hasOwn(row, "verified_url") && /^citation:[^\s].*$/.test(row.verification_reference);
+  });
+  const provenanceValid = finding => {
+    const rows = finding?.source_provenance;
+    if (!Array.isArray(rows)) return finding?.confidence !== "high";
+    const shape = rows.every(row => row && typeof row === "object" && Object.keys(row).length === 3 && nonblank(row.source) && nonblank(row.independence_key) && ["primary", "official", "secondary"].includes(row.authority));
+    const sourcesMatch = shape && new Set(rows.map(row => row.source)).size === rows.length && new Set(finding?.sources || []).size === (finding?.sources || []).length && equal([...new Set(rows.map(row => row.source))].sort(), [...(finding?.sources || [])].sort());
+    const highValid = finding?.confidence !== "high" || (sourcesMatch && new Set(rows.map(row => row.independence_key)).size >= 3 && rows.some(row => ["primary", "official"].includes(row.authority)));
+    return sourcesMatch && highValid;
+  };
   const findings = response.findings;
   const sourceEmptyCompletion = (process.accepted_lens_results || []).every(result => Array.isArray(result?.sources_or_verified_urls) && result.sources_or_verified_urls.length === 0 && ["inference_only", "unresolved"].includes(result.evidence_status));
-  const findingsValid = Array.isArray(findings) && ((findings.length > 0 && findings.every(finding => nonblank(finding?.finding) && ["high", "medium", "low"].includes(finding?.confidence) && sources(finding?.sources) && (!Object.hasOwn(finding, "verified_urls") || sources(finding.verified_urls)))) || (findings.length === 0 && sourceEmptyCompletion && Array.isArray(response.gaps) && response.gaps.length > 0));
+  const findingsValid = Array.isArray(findings) && ((findings.length > 0 && findings.every(finding => nonblank(finding?.finding) && ["high", "medium", "low"].includes(finding?.confidence) && sources(finding?.sources) && provenanceValid(finding) && (!Object.hasOwn(finding, "verified_urls") || sources(finding.verified_urls)))) || (findings.length === 0 && sourceEmptyCompletion && Array.isArray(response.gaps) && response.gaps.length > 0));
   expect(findingsValid, "artifacts:findings");
-  expect(Array.isArray(response.conflicts) && response.conflicts.every(conflict => ["claim_a", "source_a", "claim_b", "source_b", "assessment"].every(key => nonblank(conflict?.[key]))), "artifacts:conflicts");
+  expect(Array.isArray(response.candidate_mechanisms), "artifacts:candidate-mechanisms-normalized");
+  expect(Array.isArray(response.conflicts) && response.conflicts.every(conflict => ["claim_a", "claim_b", "assessment"].every(key => nonblank(conflict?.[key])) && safeReference(conflict.source_a) && safeReference(conflict.source_b)), "artifacts:conflicts");
   expect(Array.isArray(response.gaps) && response.gaps.every(nonblank) && nonblank(response.summary), "artifacts:gaps-and-summary");
   const contradiction = response.contradiction_map || {};
   expect(Array.isArray(contradiction.direct_conflicts) && contradiction.direct_conflicts.every(nonblank) && nonblank(contradiction.strongest_evidence) && nonblank(contradiction.weakest_evidence) && Array.isArray(contradiction.consensus) && contradiction.consensus.every(nonblank) && nonblank(contradiction.biggest_unresolved_question) && nonblank(contradiction.missing_angle_or_gap), "artifacts:contradiction-map");
   const synthesis = response.synthesis_briefing || {};
   expect(nonblank(synthesis.executive_summary) && Array.isArray(synthesis.ranked_key_findings) && synthesis.ranked_key_findings.length >= 3 && synthesis.ranked_key_findings.every(nonblank) && nonblank(synthesis.hidden_connection) && nonblank(synthesis.actionable_implication) && ["do", "wait", "avoid", "investigate_further"].includes(synthesis.recommendation) && nonblank(synthesis.frontier_question), "artifacts:synthesis-briefing");
+  const packetQuestion = retainedPackets[0]?.question || "";
+  const topicTerms = /invest/i.test(packetQuestion) && /AI coding assistant/i.test(packetQuestion) && /\.NET architecture/i.test(packetQuestion) ? ["invest", "AI coding assistant", ".NET architecture"] : [];
+  const topicGroupContainsTerms = value => nonblank(value) && topicTerms.every(term => value.toLowerCase().includes(term.toLowerCase()));
+  const joinedText = values => values.filter(nonblank).join("\n");
+  const acceptedTopicText = joinedText((process.accepted_lens_results || []).flatMap(result => [result?.core_position, result?.lens_question, result?.answer_or_gap, result?.likely_blind_spot, result?.unique_insight]));
+  const finalClaimTopicText = joinedText([
+    ...(response.findings || []).map(finding => finding?.finding),
+    ...(response.candidate_mechanisms || []).flatMap(mechanism => [mechanism?.mechanism, ...(Array.isArray(mechanism?.evidence) ? mechanism.evidence.map(evidence => evidence?.detail) : []), ...(Array.isArray(mechanism?.counterevidence_or_conflicts) ? mechanism.counterevidence_or_conflicts : []), ...(Array.isArray(mechanism?.gaps) ? mechanism.gaps : []), mechanism?.validation_method]),
+    ...(response.conflicts || []).flatMap(conflict => [conflict?.claim_a, conflict?.claim_b, conflict?.assessment])
+  ]);
+  const synthesisTopicText = joinedText([...(contradiction.direct_conflicts || []), contradiction.strongest_evidence, contradiction.weakest_evidence, ...(contradiction.consensus || []), contradiction.biggest_unresolved_question, contradiction.missing_angle_or_gap, synthesis.executive_summary, ...(synthesis.ranked_key_findings || []), synthesis.hidden_connection, synthesis.actionable_implication, synthesis.high_stakes_caveat, synthesis.frontier_question, response.summary]);
+  const topicArtifactsValid = topicTerms.length === 0 || [acceptedTopicText, finalClaimTopicText, synthesisTopicText].filter(nonblank).every(topicGroupContainsTerms);
+  expect(topicArtifactsValid, "semantic-context:required-topic-terms");
   const binding = process.peer_review_input_binding;
   const bindingPreimage = binding && Object.fromEntries(Object.entries(binding).filter(([key]) => key !== "peer_review_input_digest"));
   const provenance = binding?.lens_execution_provenance;
-  expect(exactKeys(binding, ["peer_review_input_digest", "peer_review_assignment_id", "initial_synthesis", "validated_lens_results", "lens_execution_provenance", "verified_source_evidence", "verification_gaps", "high_stakes_context"]) && binding.peer_review_input_digest === digest(bindingPreimage) && binding.peer_review_assignment_id === peer.peer_review_assignment_id && equal(binding.initial_synthesis, synthesis) && equal(binding.validated_lens_results, process.accepted_lens_results) && exactKeys(provenance, ["lens_execution_mode", "reduced_independence", "fallback_basis", "fallback_evidence_ref"]) && provenance.lens_execution_mode === mode && provenance.reduced_independence === (mode === "sequential_fallback") && ((mode === "delegated" && provenance.fallback_basis === "not_applicable" && provenance.fallback_evidence_ref === "not_applicable") || (mode === "sequential_fallback" && provenance.fallback_basis === process.lens_fallback_evidence?.basis && provenance.fallback_evidence_ref === process.lens_fallback_evidence?.evidence_ref)) && peer.peer_review_input_digest === binding.peer_review_input_digest && process.final_synthesis_digest === digest(synthesis) && peer.supported_recommendation === synthesis.recommendation, "peer-input-and-synthesis:binding");
+  expect(exactKeys(binding, ["peer_review_input_digest", "peer_review_assignment_id", "initial_synthesis", "validated_lens_results", "lens_execution_provenance", "verified_source_evidence", "verification_gaps", "high_stakes_context", "findings", "candidate_mechanisms", "conflicts", "contradiction_map"]) && binding.peer_review_input_digest === digest(bindingPreimage) && binding.peer_review_assignment_id === peer.peer_review_assignment_id && equal(binding.initial_synthesis, synthesis) && equal(binding.validated_lens_results, process.accepted_lens_results) && equal(binding.findings, response.findings) && equal(binding.candidate_mechanisms, response.candidate_mechanisms) && equal(binding.conflicts, response.conflicts) && equal(binding.contradiction_map, response.contradiction_map) && equal(binding.verification_gaps, response.gaps) && verifiedEvidenceValid(binding.verified_source_evidence) && exactKeys(provenance, ["lens_execution_mode", "reduced_independence", "fallback_basis", "fallback_evidence_ref"]) && provenance.lens_execution_mode === mode && provenance.reduced_independence === (mode === "sequential_fallback") && ((mode === "delegated" && provenance.fallback_basis === "not_applicable" && provenance.fallback_evidence_ref === "not_applicable") || (mode === "sequential_fallback" && provenance.fallback_basis === process.lens_fallback_evidence?.basis && provenance.fallback_evidence_ref === process.lens_fallback_evidence?.evidence_ref)) && peer.peer_review_input_digest === binding.peer_review_input_digest && process.final_synthesis_digest === digest(synthesis) && peer.supported_recommendation === synthesis.recommendation, "peer-input-and-synthesis:binding");
   const context = binding?.high_stakes_context;
   const stronger = ["do", "wait", "avoid"].includes(synthesis.recommendation);
   const basis = response.high_stakes_recommendation_basis;
@@ -292,6 +365,11 @@ function refreshDerived(response) {
     binding.peer_review_assignment_id = response.peer_review?.peer_review_assignment_id;
     binding.initial_synthesis = response.synthesis_briefing;
     binding.validated_lens_results = results;
+    binding.findings = response.findings;
+    binding.candidate_mechanisms = response.candidate_mechanisms;
+    binding.conflicts = response.conflicts;
+    binding.contradiction_map = response.contradiction_map;
+    binding.verification_gaps = response.gaps;
     binding.lens_execution_provenance = {lens_execution_mode: process.lens_execution_mode, reduced_independence: process.lens_execution_mode === "sequential_fallback", fallback_basis: process.lens_execution_mode === "sequential_fallback" ? process.lens_fallback_evidence?.basis : "not_applicable", fallback_evidence_ref: process.lens_execution_mode === "sequential_fallback" ? process.lens_fallback_evidence?.evidence_ref : "not_applicable"};
     binding.peer_review_input_digest = digest(Object.fromEntries(Object.entries(binding).filter(([key]) => key !== "peer_review_input_digest")));
     if (response.peer_review) response.peer_review.peer_review_input_digest = binding.peer_review_input_digest;
@@ -302,7 +380,7 @@ function refreshDerived(response) {
 }
 if (operation === "canonical") process.stdout.write(canonical(JSON.parse(args[0])));
 else if (operation === "digest") process.stdout.write(digest(JSON.parse(args[0])));
-else if (operation === "build") process.stdout.write(JSON.stringify(build(args[0], args[1])));
+else if (operation === "build") process.stdout.write(JSON.stringify(build(args[0], args[1], args[2])));
 else if (operation === "validate") process.exitCode = validate(JSON.parse(fs.readFileSync(args[0], "utf8"))) ? 0 : 1;
 else if (operation === "refresh") process.stdout.write(JSON.stringify(refreshDerived(JSON.parse(fs.readFileSync(args[0], "utf8")))));
 else throw new Error(`unknown research JCS operation: ${operation}`);
@@ -317,7 +395,7 @@ research_refresh_response_derivatives() { local response_path="$1"; research_jcs
 write_schema_valid_five_lens_eval_response() {
     local mode="$1"
     local response_path="$2"
-    local case_id report
+    local case_id report semantic_context
 
     if [[ "$mode" == "delegated" ]]; then
         case_id="five-lens-decision-briefing-uses-storm-style-workflow"
@@ -325,9 +403,12 @@ write_schema_valid_five_lens_eval_response() {
         case_id="five-lens-quick-normalizes-to-standard"
     elif [[ "$mode" == "delegated_peer_fallback" ]]; then
         case_id="five-lens-delegated-lenses-sequential-peer-fallback"
+    elif [[ "$mode" == "retained_follow_ups" ]]; then
+        case_id="five-lens-retains-all-material-follow-ups"
     else
         case_id="five-lens-sequential-fallback-preserves-process-evidence"
     fi
     report="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings | join("\\n")' "$research_evals")"
-    research_jcs_node build "$mode" "$report" >"$response_path"
+    semantic_context="$(jq -c --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .semantic_context' "$research_evals")"
+    research_jcs_node build "$mode" "$report" "$semantic_context" >"$response_path"
 }

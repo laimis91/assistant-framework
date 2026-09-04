@@ -1374,7 +1374,7 @@ grade_responses() {
                 structured_failures=$((structured_failures + canonical_envelope_failures))
                 semantic_validator="$(semantic_validator_id_for_case "$fixture_file" "$id")"
                 semantic_failures=0
-                if [[ -n "$semantic_validator" ]] && ! run_semantic_validator "$semantic_validator" "$response_path"; then
+                if [[ -n "$semantic_validator" ]] && ! run_semantic_validator "$semantic_validator" "$response_path" "$fixture_file" "$id"; then
                     semantic_failures=1
                 fi
                 if [[ "$fail_signal_hits" -gt 0 ]]; then

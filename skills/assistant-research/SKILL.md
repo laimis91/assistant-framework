@@ -22,8 +22,8 @@ conflicts, and honest evidence gaps.
 
 - Ask only when scope changes source selection, jurisdiction/domain, depth, or
   decision criteria and cannot be inferred safely.
-- Do not call a single-source claim HIGH confidence unless a primary/official
-  source directly supports it.
+- HIGH requires 3+ independent agreeing sources plus primary/official evidence;
+  one authoritative source is MEDIUM.
 - Keep `source_research` direct-capable. For `five_lens_briefing`, use the
   declared five-lens Process handoffs and do not substitute a single-agent
   perspective scan for independent lens evidence.
