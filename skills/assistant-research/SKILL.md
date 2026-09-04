@@ -7,8 +7,8 @@ description: "Gather and synthesize source-backed information. Use for explicit 
 
 ## Goal
 
-Answer research questions with source-weighted findings, verified URLs,
-explicit conflicts, and honest evidence gaps at proportional depth.
+Answer proportionally with source-weighted findings, verified URLs, explicit
+conflicts, and honest evidence gaps.
 
 ## Success Criteria
 
@@ -45,22 +45,17 @@ Read `contracts/index.yaml` first and load only the active boundary:
 Missing or invalid selectors fall back to the full named canonical contract. Do
 not load every contract or research method at entry.
 
-Migration note: assistant-research contracts are v3.0 and the skill is now a
-Process contract. v2 follow-up migration context remains: singular
-`follow_up_question` and `follow_up_answer_or_gap` became required typed
-`follow_ups`, preserving every material follow-up or one `none_needed` decision.
-v3 adds declared handoffs: five frozen, sibling-blind assignment packets for
-the exact LensKind enum, root-only synthesis, and a distinct peer reviewer.
-The still-unreleased v3.0 contract also retains canonical packet and peer-input
-preimages, tier-resolution evidence, and high-stakes recommendation bindings;
-v2 consumers must adapt before accepting v3 process evidence. Do not silently
-coerce a v2-shaped artifact: migrate it to every required v3.0 lifecycle field
-or fail/re-run the affected stage.
+Migration note: assistant-research contracts are v3.0. Convert v2 follow-up
+fields to typed `follow_ups`, retaining each material follow-up or one
+`none_needed`. v3 requires five frozen, sibling-blind assignment packets,
+root-only synthesis, distinct peer review, canonical packet/peer-input
+preimages, tier resolution, and high-stakes bindings. Reject or re-run
+incomplete v3 artifacts.
 
 ## Ownership
 
-assistant-research owns source selection, evidence synthesis, confidence, and
-URL verification. Generic workflow may coordinate the task, but specialist gates are authoritative.
+assistant-research owns source selection, synthesis, confidence, and URL
+verification. Its specialist gates are authoritative.
 
 For `five_lens_briefing`, the root Orchestrator freezes exactly five
 assignment packets before dispatching one independent LensResearcher per named
@@ -75,8 +70,8 @@ Only documented opt-out, real unavailability, or an exact policy block permits
 
 ## Method Selection
 
-- **source_research** — factual lookup, comparison, and source collection. Load
-  `source_research`; choose quick, standard, extensive, or deep tier by risk.
+- **source_research** — factual lookup and comparison. Load `source_research`;
+  choose tier by risk.
 - **five_lens_briefing** — decision-grade work needing perspectives,
   contradictions, incentives, synthesis, and peer review. Load `five_lens`.
 - **investigate** — deep entity/domain analysis with ethical boundaries. Load
