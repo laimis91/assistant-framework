@@ -55,6 +55,7 @@ workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
 telos_fixture="$FRAMEWORK_DIR/skills/assistant-telos/evals/cases.json"
 workflow_fixture="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
+research_evals="$FRAMEWORK_DIR/skills/assistant-research/evals/cases.json"
 
 p0p4_skill_eval_default_fixtures() {
     find "$FRAMEWORK_DIR/skills" \
@@ -334,28 +335,45 @@ p0p4_write_assistant_research_delegated_response() {
     local response_path="$1"
     local summary="$2"
 
-    research_jcs_node build delegated "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
+    write_schema_valid_five_lens_eval_response delegated "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
 }
 
 p0p4_write_assistant_research_fallback_response() {
     local response_path="$1"
     local summary="$2"
 
-    research_jcs_node build sequential_fallback "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
+    write_schema_valid_five_lens_eval_response sequential_fallback "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
 }
 
 p0p4_write_assistant_research_mixed_peer_fallback_response() {
     local response_path="$1"
     local summary="$2"
 
-    research_jcs_node build delegated_peer_fallback "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
+    write_schema_valid_five_lens_eval_response delegated_peer_fallback "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
 }
 
 p0p4_write_assistant_research_quick_normalized_response() {
     local response_path="$1"
     local summary="$2"
 
-    research_jcs_node build quick_normalized "$summary" | jq --arg summary "$summary" '.summary = $summary' >"$response_path"
+    write_schema_valid_five_lens_eval_response quick_normalized "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
+}
+
+p0p4_write_assistant_research_retained_follow_ups_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    write_schema_valid_five_lens_eval_response retained_follow_ups "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
 }
 
 p0p4_write_skill_eval_responses() {
@@ -633,7 +651,8 @@ p0p4_write_skill_eval_responses() {
                 esac
                 continue
             fi
-            if jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+            if [[ "$skill_name" == "assistant-research" ]] \
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | .semantic_validator == "assistant-research.five_lens_v3"' "$fixture_file" >/dev/null; then
                 case "$skill_name:$id" in
                     assistant-research:five-lens-decision-briefing-uses-storm-style-workflow)
                         p0p4_write_assistant_research_delegated_response "$response_path" "$required_summary"
@@ -647,6 +666,17 @@ p0p4_write_skill_eval_responses() {
                     assistant-research:five-lens-quick-normalizes-to-standard)
                         p0p4_write_assistant_research_quick_normalized_response "$response_path" "$required_summary"
                         ;;
+                    assistant-research:five-lens-retains-all-material-follow-ups)
+                        p0p4_write_assistant_research_retained_follow_ups_response "$response_path" "$required_summary"
+                        ;;
+                    *)
+                        fail "unhandled semantic assistant-research eval case: $id"
+                        ;;
+                esac
+                continue
+            fi
+            if jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+                case "$skill_name:$id" in
                     assistant-thinking:feature-preparation-candidates-require-evidence)
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["Existing observable effects require workflow evidence before promotion."], recommendation: "Keep the concern as a candidate and complete feature preparation.", confidence: "medium", gaps_or_assumptions: ["No canonical feature-preparation evidence row is available."], evidence_or_observations: ["ACTIVE code and behavioral tests identify selection, highlight, and viewport focus."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus unless evidence authorizes a change", promotion_status: "requires_feature_preparation_evidence", rationale: "Implementation and behavioral tests must be inspected before promotion."}]}' >"$response_path"
                         ;;
