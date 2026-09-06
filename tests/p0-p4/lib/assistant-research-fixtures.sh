@@ -423,9 +423,10 @@ function validate(response) {
   const binding = process.peer_review_input_binding;
   const acceptedSources = new Set((process.accepted_lens_results || []).flatMap(result => [...(result?.sources_or_verified_urls || []), ...(Array.isArray(result?.follow_ups) ? result.follow_ups.flatMap(followUp => followUp?.sources_or_verified_urls || []) : [])]));
   const verifiedSourceIdentities = new Set((binding?.verified_source_evidence || []).filter(verifiedEvidenceRowValid).flatMap(row => row.verification_method === "public_url" ? [row.source, row.verified_url, publicUrlIdentity(row.verified_url)] : [row.source]));
-  const acceptedSourceIdentities = new Set([...acceptedSources].flatMap(source => [source, publicUrlIdentity(source)]));
-  const findingSourceBound = finding => Array.isArray(finding?.sources) && finding.sources.every(source => acceptedSources.has(source) || verifiedSourceIdentities.has(source) || verifiedSourceIdentities.has(publicUrlIdentity(source)));
-  const findingVerifiedUrlsBound = finding => !Object.hasOwn(finding, "verified_urls") || (sources(finding.verified_urls) && finding.verified_urls.every(url => publicUrlValid(url) && (acceptedSourceIdentities.has(url) || acceptedSourceIdentities.has(publicUrlIdentity(url)) || verifiedSourceIdentities.has(url) || verifiedSourceIdentities.has(publicUrlIdentity(url)))));
+  const verifiedUrlIdentities = new Set((binding?.verified_source_evidence || []).filter(row => verifiedEvidenceRowValid(row) && row.verification_method === "public_url").flatMap(row => [row.verified_url, publicUrlIdentity(row.verified_url)]));
+  const acceptedSourceIdentities = new Set([...acceptedSources].flatMap(source => [source, publicUrlIdentity(source)].filter(Boolean)));
+  const findingSourceBound = finding => Array.isArray(finding?.sources) && finding.sources.every(source => acceptedSources.has(source) || acceptedSourceIdentities.has(source) || acceptedSourceIdentities.has(publicUrlIdentity(source)) || verifiedSourceIdentities.has(source) || verifiedSourceIdentities.has(publicUrlIdentity(source)));
+  const findingVerifiedUrlsBound = finding => !Object.hasOwn(finding, "verified_urls") || (sources(finding.verified_urls) && finding.verified_urls.every(url => publicUrlValid(url) && (acceptedSourceIdentities.has(url) || acceptedSourceIdentities.has(publicUrlIdentity(url)) || verifiedUrlIdentities.has(url) || verifiedUrlIdentities.has(publicUrlIdentity(url)))));
   const findingsValid = Array.isArray(findings) && ((findings.length > 0 && findings.every(finding => nonblank(finding?.finding) && ["high", "medium", "low"].includes(finding?.confidence) && sources(finding?.sources) && finding.sources.every(safeReference) && findingSourceBound(finding) && provenanceValid(finding) && findingVerifiedUrlsBound(finding))) || (findings.length === 0 && sourceEmptyCompletion && Array.isArray(response.gaps) && response.gaps.length > 0));
   expect(findingsValid, "artifacts:findings");
   const candidateMechanismsValid = Array.isArray(response.candidate_mechanisms) && response.candidate_mechanisms.every(mechanism => {
@@ -529,7 +530,6 @@ function refreshDerived(response) {
   const binding = process.peer_review_input_binding;
   if (binding) {
     binding.peer_review_assignment_id = response.peer_review?.peer_review_assignment_id;
-    if (response.peer_review?.verdict !== "revise") binding.initial_synthesis = response.synthesis_briefing;
     binding.validated_lens_results = results;
     binding.findings = response.findings;
     binding.candidate_mechanisms = response.candidate_mechanisms;

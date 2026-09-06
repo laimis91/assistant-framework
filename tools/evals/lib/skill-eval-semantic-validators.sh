@@ -473,17 +473,18 @@ function finalArtifactsValid(response, accepted, binding) {
   ]));
   const verifiedEvidenceRows = (Array.isArray(binding?.verified_source_evidence) ? binding.verified_source_evidence : []).filter(verifiedSourceEvidenceRowValid);
   const verifiedSourceIdentities = new Set(verifiedEvidenceRows.flatMap(row => row.verification_method === "public_url" ? [row.source, row.verified_url, publicUrlIdentity(row.verified_url)] : [row.source]));
-  const acceptedSourceIdentities = new Set([...acceptedSources].flatMap(source => [source, publicUrlIdentity(source)]));
+  const verifiedUrlIdentities = new Set(verifiedEvidenceRows.filter(row => row.verification_method === "public_url").flatMap(row => [row.verified_url, publicUrlIdentity(row.verified_url)]));
+  const acceptedSourceIdentities = new Set([...acceptedSources].flatMap(source => [source, publicUrlIdentity(source)].filter(Boolean)));
   const evidenceSourceAliases = verifiedEvidenceAliases(binding);
   for (const finding of Array.isArray(findings) ? findings : []) {
     const provenance = finding?.source_provenance;
     const sourceSet = new Set(Array.isArray(finding?.sources) ? finding.sources : []);
     const provenanceSourceSet = new Set(Array.isArray(provenance) ? provenance.map(row => row?.source) : []);
     const provenanceValid = Array.isArray(provenance) && provenance.length === provenanceSourceSet.size && provenance.every(row => exactKeys(row, ["source", "independence_key", "authority"], "final finding source provenance") && nonblank(row.source) && sourceReferenceValid(row.source, "final finding provenance source") && nonblank(row.independence_key) && ["primary", "official", "secondary"].includes(row.authority)) && sourceSet.size === provenanceSourceSet.size && [...sourceSet].every(source => provenanceSourceSet.has(source));
-    const sourceResolved = Array.isArray(finding?.sources) && finding.sources.every(source => acceptedSources.has(source) || verifiedSourceIdentities.has(source) || verifiedSourceIdentities.has(publicUrlIdentity(source)));
+    const sourceResolved = Array.isArray(finding?.sources) && finding.sources.every(source => acceptedSources.has(source) || acceptedSourceIdentities.has(source) || acceptedSourceIdentities.has(publicUrlIdentity(source)) || verifiedSourceIdentities.has(source) || verifiedSourceIdentities.has(publicUrlIdentity(source)));
     const canonicalSourceSet = new Set([...sourceSet].map(source => canonicalEvidenceIdentity(source, evidenceSourceAliases)));
     const mediumConfidenceValid = finding?.confidence !== "medium" || canonicalSourceSet.size >= 2 || (provenanceValid && provenance.length === 1 && ["primary", "official"].includes(provenance[0].authority));
-    const verifiedUrlsResolved = !Object.hasOwn(finding, "verified_urls") || (Array.isArray(finding.verified_urls) && finding.verified_urls.every(url => publicUrlValid(url) && (acceptedSourceIdentities.has(url) || acceptedSourceIdentities.has(publicUrlIdentity(url)) || verifiedSourceIdentities.has(url) || verifiedSourceIdentities.has(publicUrlIdentity(url)))));
+    const verifiedUrlsResolved = !Object.hasOwn(finding, "verified_urls") || (Array.isArray(finding.verified_urls) && finding.verified_urls.every(url => publicUrlValid(url) && (acceptedSourceIdentities.has(url) || acceptedSourceIdentities.has(publicUrlIdentity(url)) || verifiedUrlIdentities.has(url) || verifiedUrlIdentities.has(publicUrlIdentity(url)))));
     if (!allowedKeys(finding, ["finding", "confidence", "sources", "verified_urls", "source_provenance"], "final finding") || !nonblank(finding?.finding) || !["high", "medium", "low"].includes(finding?.confidence) || !Array.isArray(finding?.sources) || finding.sources.length === 0 || !finding.sources.every(source => sourceReferenceValid(source, "final finding source")) || !sourceResolved || !verifiedUrlsResolved || (Object.hasOwn(finding, "source_provenance") && !provenanceValid) || !mediumConfidenceValid || (finding.confidence === "high" && (!provenanceValid || canonicalSourceSet.size < 3 || new Set(provenance.map(row => row.independence_key)).size < 3 || !provenance.some(row => ["primary", "official"].includes(row.authority))))) fail("final artifacts: finding shape");
   }
   candidateMechanismsValid(response.candidate_mechanisms, binding);

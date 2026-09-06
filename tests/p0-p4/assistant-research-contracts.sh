@@ -1413,7 +1413,7 @@ for term in \
     'unresolved revision blocks presentation' \
     'pre_dispatch_record_id' \
     'first_lens_execution_evidence_ref'; do
-    if ! printf '%s\n%s\n' "$output_peer_schema" "$process_evidence_schema" | grep -Fq -- "$term"; then
+    if ! grep -Fq -- "$term" <<<"$output_peer_schema"$'\n'"$process_evidence_schema"; then
         closure_and_freeze_missing+=("output lifecycle: $term")
     fi
 done
@@ -2614,8 +2614,17 @@ while IFS='|' read -r expected fixture_name mutation; do
       unbound_verified_url)
         jq '.findings[0].verified_urls = ["https://www.iana.org/unrelated"]' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
         ;;
+      non_public_evidence_url_label)
+        jq '.findings[0].verified_urls = ["https://www.iana.org/uncollected-review-probe"] | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].source = "https://www.iana.org/uncollected-review-probe"' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+      canonical_collected_source)
+        jq '.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://www.iana.org/domains/example"] | .findings[0].sources = ["https://WWW.IANA.ORG/%64omains/example"] | .findings[0].verified_urls = ["https://WWW.IANA.ORG/%64omains/example"]' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+      source_empty_completion)
+        jq '.findings = [] | .gaps = ["Sources remain unavailable."] | .five_lens_process_evidence.accepted_lens_results |= map(.sources_or_verified_urls = [] | .confidence = "low" | .evidence_status = "unresolved" | .gaps = ["Sources remain unavailable."] | .follow_ups |= map(.sources_or_verified_urls = [] | .evidence_status = "unresolved" | .gaps = ["Sources remain unavailable."]))' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
       material_follow_up)
-        jq '.findings = [] | .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [] | .five_lens_process_evidence.accepted_lens_results[0].evidence_status = "inference_only" | .five_lens_process_evidence.accepted_lens_results[0].confidence = "low" | .five_lens_process_evidence.accepted_lens_results[0].gaps = ["Main-source coverage is incomplete."] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups = [{decision:"follow_up",question:"What does the accepted source say?",answer_or_gap:"A source-backed follow-up exists.",sources_or_verified_urls:["source:research-corpus:material-follow-up"],evidence_status:"source_backed",gaps:[]}] | .five_lens_process_evidence.accepted_lens_results[1].sources_or_verified_urls = [] | .five_lens_process_evidence.accepted_lens_results[1].evidence_status = "unresolved" | .five_lens_process_evidence.accepted_lens_results[1].confidence = "low" | .five_lens_process_evidence.accepted_lens_results[1].gaps = ["No source was returned."] | .five_lens_process_evidence.accepted_lens_results[1].follow_ups = [{decision:"none_needed",answer_or_gap:"No material follow-up.",sources_or_verified_urls:[],evidence_status:"unresolved",gaps:["No source was returned."]}]' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        jq '.findings = [] | .gaps = ["Sources remain unavailable."] | .five_lens_process_evidence.accepted_lens_results |= map(.sources_or_verified_urls = [] | .confidence = "low" | .evidence_status = "unresolved" | .gaps = ["Sources remain unavailable."] | .follow_ups |= map(.sources_or_verified_urls = [] | .evidence_status = "unresolved" | .gaps = ["Sources remain unavailable."])) | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0] = {decision:"follow_up",question:"What does the accepted source say?",answer_or_gap:"A source-backed follow-up exists.",sources_or_verified_urls:["source:research-corpus:material-follow-up"],evidence_status:"source_backed",gaps:[]}' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
         ;;
       response_capacity)
         jq '.five_lens_process_evidence.wave_coverage[0].capacity = 999' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
@@ -2630,7 +2639,7 @@ while IFS='|' read -r expected fixture_name mutation; do
         jq '.candidate_mechanisms = [{mechanism:"Alias-count calibration.",claim_status:"candidate",evidence:[{source:"typed-public-label",detail:"A typed public source label.",evidence_status:"source_backed"},{source:"https://www.iana.org/typed-public",detail:"The same typed public source URL.",evidence_status:"source_backed"}],confidence:"medium",counterevidence_or_conflicts:["No conflict recorded."],gaps:["Independent validation remains pending."],validation_method:"Compare a second source."}] | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed public evidence",source:"typed-public-label",verification_method:"public_url",verification_reference:"https://www.iana.org/typed-public",verified_url:"https://www.iana.org/typed-public",verification_detail:"Fixture public evidence."}]' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
         ;;
       delegated_accepted)
-        jq 'del(.peer_review.revision_disposition_id, .peer_review.revision_disposition, .five_lens_process_evidence.peer_review_revision_disposition_id) | .peer_review.status = "DONE" | .peer_review.verdict = "accepted" | .peer_review.required_revisions = []' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        jq 'del(.peer_review.revision_disposition_id, .peer_review.revision_disposition, .five_lens_process_evidence.peer_review_revision_disposition_id) | .peer_review.status = "DONE" | .peer_review.verdict = "accepted" | .peer_review.required_revisions = [] | .five_lens_process_evidence.peer_review_input_binding.initial_synthesis = .synthesis_briefing' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
         ;;
     esac
     research_refresh_response_derivatives "$semantic_closeout_response"
@@ -2642,6 +2651,9 @@ while IFS='|' read -r expected fixture_name mutation; do
 done <<'EOF'
 reject|source-empty-high|source_empty_high
 reject|unbound-verified-url|unbound_verified_url
+reject|non-public-evidence-url-label|non_public_evidence_url_label
+accept|canonical-collected-source|canonical_collected_source
+accept|source-empty-completion|source_empty_completion
 reject|material-follow-up-with-empty-findings|material_follow_up
 reject|response-authored-capacity|response_capacity
 accept|three-waves-with-conservative-capacity-two|multi_wave_capacity_two
@@ -2653,6 +2665,23 @@ if [[ "${#semantic_closeout_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-research close-out semantic regressions: ${semantic_closeout_failures[*]}"
+fi
+
+test_start "assistant-research derivative refresh retains accepted peer initial synthesis"
+retained_peer_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-retained-peer.XXXXXX")"
+p0p4_register_cleanup "$retained_peer_dir"
+retained_peer_response="$retained_peer_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+write_research_eval_responses "$retained_peer_dir"
+jq 'del(.peer_review.revision_disposition_id, .peer_review.revision_disposition, .five_lens_process_evidence.peer_review_revision_disposition_id) | .peer_review.status = "DONE" | .peer_review.verdict = "accepted" | .peer_review.required_revisions = [] | .five_lens_process_evidence.peer_review_input_binding.initial_synthesis = .synthesis_briefing' "$retained_peer_response" >"$retained_peer_response.next" && mv "$retained_peer_response.next" "$retained_peer_response"
+research_refresh_response_derivatives "$retained_peer_response"
+retained_initial_synthesis="$(jq -c '.five_lens_process_evidence.peer_review_input_binding.initial_synthesis' "$retained_peer_response")"
+jq '.synthesis_briefing.executive_summary += " Post-review substitution."' "$retained_peer_response" >"$retained_peer_response.next" && mv "$retained_peer_response.next" "$retained_peer_response"
+research_refresh_response_derivatives "$retained_peer_response"
+if [[ "$retained_initial_synthesis" == "$(jq -c '.five_lens_process_evidence.peer_review_input_binding.initial_synthesis' "$retained_peer_response")" ]] \
+    && ! research_response_oracle_is_valid "$retained_peer_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then
+    pass
+else
+    fail "assistant-research derivative refresh overwrote accepted peer initial synthesis"
 fi
 
 test_start "assistant-research semantic fixture adapter context is typed and required"
