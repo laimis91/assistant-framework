@@ -104,6 +104,7 @@ research_structured_mutation_is_rejected() {
         huge_budget_loop_forever) mutation_filter='.five_lens_process_evidence.search_resource_budget = {per_lens_max_queries:999,per_lens_max_sources:999,per_lens_max_minutes:999,overall_max_queries:9999,overall_max_sources:9999,overall_max_minutes:9999,stop_condition:"loop_forever"}' ;;
         source_invalid_domain) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://example.invalid/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://example.invalid/follow-up"]' ;;
         source_private_loopback) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://127.0.0.1./research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://192.0.2.1/follow-up"]' ;;
+        source_fully_encoded_private_loopback) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https%3A%2F%2F127.0.0.1%2Fresearch"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https%3A%2F%2F127.0.0.1%2Ffollow-up"]' ;;
         source_backed_empty) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = []' ;;
         synchronized_assignments) mutation_filter='.five_lens_process_evidence.accepted_lens_results |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.lens_dispatches |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.peer_review_assignment_id = "assignment-shared" | .peer_review.peer_review_assignment_id = "assignment-shared"' ;;
         missing_delegated_trigger_scope) mutation_filter='del(.five_lens_process_evidence.subagent_trigger_scope)' ;;
@@ -118,7 +119,37 @@ research_structured_mutation_is_rejected() {
         mixed_none_needed_follow_up) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].follow_ups += [{decision:"follow_up",question:"What independent source can verify this?",answer_or_gap:"No independent source has been checked.",sources_or_verified_urls:["source:research-corpus:follow-up"],evidence_status:"source_backed"}]' ;;
         source_reserved_local) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://metadata.local/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://metadata.local/follow-up"]' ;;
         source_bare_hostname) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://metadata/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://metadata/follow-up"]' ;;
-        source_ipv6_discard_only) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[100::1]/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[100::1]/follow-up"]' ;;
+        malformed_candidate_mechanism) mutation_filter='.candidate_mechanisms = [{mechanism:"invest AI coding assistant .NET architecture malformed candidate",claim_status:"candidate",evidence:[{source:"source:research-corpus:summary",detail:"Candidate support.",evidence_status:"source_backed",unexpected:"field"}],confidence:"low",counterevidence_or_conflicts:["No counterevidence found."],gaps:["Independent validation pending."],validation_method:"Run an independent comparison."}]' ;;
+        medium_single_secondary) mutation_filter='.findings[0].confidence = "medium"' ;;
+        private_peer_evidence_url) mutation_filter='.peer_review.evidence[0].source = "https://metadata.local/private"' ;;
+        unbound_final_finding_source) mutation_filter='.findings[0].sources = ["source:unbound-final-finding"]' ;;
+        rebound_unsafe_packet_policies) mutation_filter='.five_lens_process_evidence.frozen_assignment_packets |= map(.source_policy = "public sources" | .isolation_policy = "sibling blind")' ;;
+        source_backed_actual_sources_zero) mutation_filter='.five_lens_process_evidence.lens_dispatches[0].search_resource_usage.actual_sources = 0 | .five_lens_process_evidence.overall_resource_usage.actual_sources = 16' ;;
+        local_repository_public_url) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_reference = "https://www.iana.org/domains/example"' ;;
+        authenticated_source_endpoint) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_method = "authenticated_source" | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_reference = "connector:fixture/record:https://metadata.local/private"' ;;
+        offline_citation_url) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_method = "offline_authoritative_source" | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_reference = "citation:https://metadata.local/private"' ;;
+        medium_single_public_row_aliases) mutation_filter='.findings[0].confidence = "medium" | .findings[0].sources = ["source:fixture-alias", "https://www.iana.org/domains/example"] | del(.findings[0].source_provenance) | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Alias evidence",source:"source:fixture-alias",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Single public evidence row."}]' ;;
+        malformed_peer_url_scheme) mutation_filter='.peer_review.evidence[0].source = "https:metadata.local/peer"' ;;
+        malformed_peer_url_without_colon) mutation_filter='.peer_review.evidence[0].source = "https//metadata.local/peer"' ;;
+        trailing_dot_peer_url) mutation_filter='.peer_review.evidence[0].source = "https://www.iana.org./peer"' ;;
+        medium_host_case_public_url_aliases) mutation_filter='.findings[0].confidence = "medium" | .findings[0].sources = ["https://www.iana.org/domains/example", "https://WWW.IANA.ORG/domains/example", "https://www.%69ana.org/domains/example"] | del(.findings[0].source_provenance) | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"First spelling of one public evidence identity."},{claim:"Canonical public evidence alias",source:"https://WWW.IANA.ORG/domains/example",verification_method:"public_url",verification_reference:"https://WWW.IANA.ORG/domains/example",verified_url:"https://WWW.IANA.ORG/domains/example",verification_detail:"Host-case alias of the same public evidence identity."},{claim:"Canonical encoded-host alias",source:"https://www.%69ana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.%69ana.org/domains/example",verified_url:"https://www.%69ana.org/domains/example",verification_detail:"Percent-encoded-host alias of the same public evidence identity."}]' ;;
+        high_host_case_public_url_aliases) mutation_filter='.findings[0].confidence = "high" | .findings[0].sources = ["https://www.iana.org/domains/example", "https://WWW.IANA.ORG/domains/example", "https://www.%69ana.org/domains/example"] | .findings[0].source_provenance = [{source:"https://www.iana.org/domains/example",independence_key:"first",authority:"official"},{source:"https://WWW.IANA.ORG/domains/example",independence_key:"second",authority:"primary"},{source:"https://www.%69ana.org/domains/example",independence_key:"third",authority:"secondary"}] | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"First spelling."},{claim:"Canonical public evidence alias",source:"https://WWW.IANA.ORG/domains/example",verification_method:"public_url",verification_reference:"https://WWW.IANA.ORG/domains/example",verified_url:"https://WWW.IANA.ORG/domains/example",verification_detail:"Host-case alias."},{claim:"Canonical encoded-host alias",source:"https://www.%69ana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.%69ana.org/domains/example",verified_url:"https://www.%69ana.org/domains/example",verification_detail:"Encoded-host alias."}]' ;;
+        medium_path_percent_encoded_public_url_aliases) mutation_filter='.findings[0].confidence = "medium" | .findings[0].sources = ["https://www.iana.org/domains/example", "https://www.iana.org/%64omains/example", "https://www.iana.org/d%6fmains/example"] | del(.findings[0].source_provenance) | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"First spelling of one public evidence identity."},{claim:"Canonical encoded path alias",source:"https://www.iana.org/%64omains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/%64omains/example",verified_url:"https://www.iana.org/%64omains/example",verification_detail:"Percent-encoded path alias of the same public evidence identity."},{claim:"Canonical encoded path alias",source:"https://www.iana.org/d%6fmains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/d%6fmains/example",verified_url:"https://www.iana.org/d%6fmains/example",verification_detail:"Percent-encoded path alias of the same public evidence identity."}]' ;;
+        high_path_percent_encoded_public_url_aliases) mutation_filter='.findings[0].confidence = "high" | .findings[0].sources = ["https://www.iana.org/domains/example", "https://www.iana.org/%64omains/example", "https://www.iana.org/d%6fmains/example"] | .findings[0].source_provenance = [{source:"https://www.iana.org/domains/example",independence_key:"first",authority:"official"},{source:"https://www.iana.org/%64omains/example",independence_key:"second",authority:"primary"},{source:"https://www.iana.org/d%6fmains/example",independence_key:"third",authority:"secondary"}] | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"First spelling."},{claim:"Canonical encoded path alias",source:"https://www.iana.org/%64omains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/%64omains/example",verified_url:"https://www.iana.org/%64omains/example",verification_detail:"Percent-encoded path alias."},{claim:"Canonical encoded path alias",source:"https://www.iana.org/d%6fmains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/d%6fmains/example",verified_url:"https://www.iana.org/d%6fmains/example",verification_detail:"Percent-encoded path alias."}]' ;;
+        medium_fully_encoded_public_url_aliases) mutation_filter='.findings[0].confidence = "medium" | .findings[0].sources = ["https://www.iana.org/domains/example", "https%3A%2F%2Fwww.iana.org%2Fdomains%2Fexample"] | del(.findings[0].source_provenance) | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Canonical public evidence."}]' ;;
+        high_fully_encoded_public_url_aliases) mutation_filter='.findings[0].confidence = "high" | .findings[0].sources = ["https://www.iana.org/domains/example", "https%3A%2F%2Fwww.iana.org%2Fdomains%2Fexample", "https://www.iana.org/help/example-domains"] | .findings[0].source_provenance = [{source:"https://www.iana.org/domains/example",independence_key:"first",authority:"official"},{source:"https%3A%2F%2Fwww.iana.org%2Fdomains%2Fexample",independence_key:"second",authority:"primary"},{source:"https://www.iana.org/help/example-domains",independence_key:"third",authority:"secondary"}] | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Canonical public evidence."},{claim:"Distinct public evidence",source:"https://www.iana.org/help/example-domains",verification_method:"public_url",verification_reference:"https://www.iana.org/help/example-domains",verified_url:"https://www.iana.org/help/example-domains",verification_detail:"Distinct public evidence."}]' ;;
+        protocol_relative_peer_url) mutation_filter='.peer_review.evidence[0].source = "//metadata.local/peer"' ;;
+        discard_only_compressed_peer_url) mutation_filter='.peer_review.evidence[0].source = "https://[100::1]/peer"' ;;
+        encoded_public_url_secret) mutation_filter='.peer_review.evidence[0].source = "https://www.iana.org/peer?%74oken=private"' ;;
+        encoded_public_url_traversal) mutation_filter='.peer_review.evidence[0].source = "https://www.iana.org/a/%2e%2e/private"' ;;
+        encoded_public_url_pii) mutation_filter='.peer_review.evidence[0].source = "https://www.iana.org/peer?contact=person%40sample.invalid"' ;;
+        encoded_typed_url_secret) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed URL safety evidence",source:"source:typed-url-safety",verification_method:"public_url",verification_reference:"https://www.iana.org/peer?%74oken=private",verified_url:"https://www.iana.org/peer?%74oken=private",verification_detail:"Typed public URL mutation."}]' ;;
+        encoded_typed_url_traversal) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed URL safety evidence",source:"source:typed-url-safety",verification_method:"public_url",verification_reference:"https://www.iana.org/a/%2e%2e/private",verified_url:"https://www.iana.org/a/%2e%2e/private",verification_detail:"Typed public URL mutation."}]' ;;
+        encoded_typed_url_pii) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed URL safety evidence",source:"source:typed-url-safety",verification_method:"public_url",verification_reference:"https://www.iana.org/peer?contact=person%40sample.invalid",verified_url:"https://www.iana.org/peer?contact=person%40sample.invalid",verification_detail:"Typed public URL mutation."}]' ;;
+        encoded_opaque_source_traversal) mutation_filter='.peer_review.evidence[0].source = "source:a/%2e%2e/docs"' ;;
+        encoded_opaque_source_secret) mutation_filter='.peer_review.evidence[0].source = "source:%74oken=redacted"' ;;
+        encoded_opaque_source_pii) mutation_filter='.candidate_mechanisms = [{mechanism:"Candidate source safety mechanism",claim_status:"candidate",evidence:[{source:"source:%65mail=person%40sample.invalid",detail:"Candidate source mutation.",evidence_status:"source_backed"}],confidence:"low",counterevidence_or_conflicts:["No counterevidence recorded."],gaps:["Independent validation remains pending."],validation_method:"Compare independent evidence."}]' ;;
+        opaque_source_credential) mutation_filter='.peer_review.evidence[0].source = "source:credential=opaque-value"' ;;
         schedule_wall_clock_drift) mutation_filter='
             .five_lens_process_evidence.lens_dispatches[2].wave_id = "wave-2"
             | .five_lens_process_evidence.lens_dispatches[3].wave_id = "wave-2"
@@ -132,10 +163,10 @@ research_structured_mutation_is_rejected() {
     esac
     jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
     case "$mutation" in
-        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments|duplicate_none_needed|mixed_none_needed_follow_up|source_reserved_local|source_bare_hostname) research_refresh_response_derivatives "$response_path" ;;
+        source_invalid_domain|source_private_loopback|source_fully_encoded_private_loopback|source_backed_empty|synchronized_assignments|duplicate_none_needed|mixed_none_needed_follow_up|source_reserved_local|source_bare_hostname|malformed_candidate_mechanism|medium_single_secondary|unbound_final_finding_source|rebound_unsafe_packet_policies|local_repository_public_url|authenticated_source_endpoint|offline_citation_url|medium_single_public_row_aliases|medium_host_case_public_url_aliases|medium_path_percent_encoded_public_url_aliases|high_host_case_public_url_aliases|high_path_percent_encoded_public_url_aliases|medium_fully_encoded_public_url_aliases|high_fully_encoded_public_url_aliases|encoded_typed_url_secret|encoded_typed_url_traversal|encoded_typed_url_pii|encoded_opaque_source_traversal|encoded_opaque_source_secret|encoded_opaque_source_pii|opaque_source_credential) research_refresh_response_derivatives "$response_path" ;;
     esac
 
-    if research_response_oracle_is_valid "$response_path"; then
+    if research_response_oracle_is_valid "$response_path" "$case_id"; then
         printf 'accepted mutation: %s\n' "$mutation" >&2
         return 1
     fi
@@ -174,40 +205,70 @@ research_fallback_structured_mutation_is_rejected() {
         exhausted_without_low_confidence) mutation_filter='.perspective_scan[0].confidence = "medium"' ;;
         exhaustion_without_explicit_gap) mutation_filter='del(.five_lens_process_evidence.fallback_lens_passes[0].search_resource_usage.exhaustion_gap)' ;;
         missing_lens_fallback_evidence_ref) mutation_filter='del(.five_lens_process_evidence.lens_fallback_evidence.evidence_ref)' ;;
+        fallback_wave_coverage_leakage) mutation_filter='.five_lens_process_evidence.wave_coverage = [{wave_id:"wave-1",capacity:5,lens_kinds:["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]}]' ;;
         *) return 2 ;;
     esac
     jq "$mutation_filter" "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
 
-    ! research_response_oracle_is_valid "$response_path"
+    ! research_response_oracle_is_valid "$response_path" "$case_id"
 }
 
 research_verified_source_evidence_is_valid() {
     ruby -rjson -ruri -ripaddr -e '
-        def unsafe_text?(text)
-          text.match?(/token|secret|api[_-]?key|password|bearer|credential|session=|authorization/i) ||
-            text.match?(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\b\d{3}-\d{2}-\d{4}\b|\b\d{3}[ .-]\d{3}[ .-]\d{4}\b/i)
+        def unsafe_opaque_reference?(text)
+          return true if text.match?(/%(?![0-9a-f]{2})/i)
+          decoded = URI::DEFAULT_PARSER.unescape(text)
+          text.start_with?("//") || text.match?(%r{\Ahttps?(?::(?!//)|/(?!/)|//(?!/))}i) ||
+            encoded_http_scheme_like?(decoded) ||
+            decoded.match?(/(?:^|[?&#\\\/:_-])(?:token|secret|key|password|email|api[_-]?key|access[_-]?token|bearer|credential|session|authorization)(?:=|$|[\\\/:_-])/i) ||
+            decoded.match?(%r{(?:^|[\\/])\.\.(?:[\\/]|$)}) ||
+            decoded.match?(%r{\A(?:[A-Za-z]:[\\/]|\\\\|/(?:Users|home|private|var)(?:[\\/]|$)|~(?:[\\/]|$))}i) ||
+            decoded.match?(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\b\d{3}-\d{2}-\d{4}\b|\b\d{3}[ .-]\d{3}[ .-]\d{4}\b/i)
+        rescue ArgumentError
+          true
+        end
+        def encoded_http_scheme_like?(text)
+          !text.match?(%r{\Ahttps?://}i) && text.match?(%r{\A(?:h|%(?:25)*(?:68|48))(?:t|%(?:25)*(?:74|54))(?:t|%(?:25)*(?:74|54))(?:p|%(?:25)*(?:70|50))(?:(?:s|%(?:25)*(?:73|53))?(?::|%(?:25)*3a)(?:/|%(?:25)*2f){2})}i)
+        end
+        def safe_url_reference?(text)
+          return false if text.match?(/%(?![0-9a-f]{2})/i)
+          uri = URI.parse(text)
+          sensitive_component = lambda do |component|
+            URI::DEFAULT_PARSER.unescape(component.to_s).sub(/\A[?#]/, "").split(/[&;]/).any? do |field|
+              field.split("=").any? { |part| part.match?(/(?:^|[\\\/:_-])(?:token|secret|key|password|email|api[_-]?key|access[_-]?token|bearer|credential|session|authorization)(?:$|[\\\/:_-])/i) }
+            end
+          end
+          !encoded_http_scheme_like?(text) &&
+            ![uri.query, uri.fragment].compact.any? { |component| sensitive_component.call(component) } &&
+            !URI::DEFAULT_PARSER.unescape(text).match?(%r{(?:^|[\\/])\.\.(?:[\\/]|$)}) &&
+            !URI::DEFAULT_PARSER.unescape(text).match?(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\b\d{3}-\d{2}-\d{4}\b|\b\d{3}[ .-]\d{3}[ .-]\d{4}\b/i)
+        rescue ArgumentError
+          false
         end
         def public_host?(host)
-          normalized = host.downcase.delete_suffix(".")
-          return false if normalized.empty? || normalized == "localhost" || normalized.end_with?(".localhost", ".internal", ".local", ".invalid")
+          normalized = URI::DEFAULT_PARSER.unescape(host).downcase
+          return false if normalized.empty? || normalized.end_with?(".") || %w[local localhost invalid test example internal].include?(normalized) || normalized.end_with?(".localhost", ".internal", ".local", ".invalid", ".test", ".example")
           address = if normalized.match?(/\A\d+\z/) && Integer(normalized, 10) <= 0xffff_ffff
             IPAddr.new_ntoh([Integer(normalized, 10)].pack("N"))
           else
             IPAddr.new(normalized)
           end
-          return true unless address
+          return normalized.include?(".") unless address
+          return true if address.ipv4? && %w[192.0.0.9 192.0.0.10].include?(address.to_s)
           non_global_ranges = if address.ipv4?
-            %w[0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24 224.0.0.0/4 240.0.0.0/4]
+            %w[0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.88.99.0/24 192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24 224.0.0.0/4 240.0.0.0/4]
           else
-            %w[::/128 ::1/128 100::/64 2001:db8::/32 fc00::/7 fe80::/10 ff00::/8]
+            %w[::/128 ::1/128 ::ffff:0:0/96 64:ff9b:1::/48 100::/64 100:0:0:1::/64 2001::/23 2001:db8::/32 3fff::/20 5f00::/16 fc00::/7 fe80::/10 ff00::/8]
           end
+          global_ipv6_exceptions = %w[2001:1::1/128 2001:1::2/128 2001:1::3/128 2001:3::/32 2001:4:112::/48 2001:20::/28 2001:30::/28]
+          return true if address.ipv6? && global_ipv6_exceptions.any? { |cidr| IPAddr.new(cidr).include?(address) }
           return false if address.loopback? || address.private? || address.link_local? || non_global_ranges.any? { |cidr| IPAddr.new(cidr).include?(address) }
           mapped = address.respond_to?(:ipv4_mapped?) && address.ipv4_mapped? ? address.native : nil
           return true unless mapped
-          mapped_non_global = %w[0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24 224.0.0.0/4 240.0.0.0/4]
+          mapped_non_global = %w[0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.88.99.0/24 192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24 224.0.0.0/4 240.0.0.0/4]
           !(mapped.loopback? || mapped.private? || mapped.link_local? || mapped_non_global.any? { |cidr| IPAddr.new(cidr).include?(mapped) })
         rescue IPAddr::InvalidAddressError, ArgumentError
-          true
+          normalized.include?(".") && !normalized.match?(%r{\A\d+(?:\.\d+)*\z})
         end
         evidence = JSON.parse(STDIN.read)
         method = evidence["verification_method"]
@@ -215,21 +276,31 @@ research_verified_source_evidence_is_valid() {
         url = evidence["verified_url"]
         exit 1 unless %w[public_url local_repository authenticated_source offline_authoritative_source].include?(method)
         exit 1 unless reference.is_a?(String) && reference == reference.strip && !reference.empty?
-        exit 1 if [reference, url].compact.any? { |text| !text.is_a?(String) || unsafe_text?(text) }
+        exit 1 if [reference, url].compact.any? { |text| !text.is_a?(String) }
         valid = case method
         when "public_url"
           begin
-            uri = URI.parse(url)
-            url == reference && uri.scheme == "https" && uri.host && uri.userinfo.nil? && public_host?(uri.host)
+            bounded_url = url.is_a?(String) ? (url.match?(%r{\Ahttps?://}i) ? url : URI::DEFAULT_PARSER.unescape(url)) : nil
+            if bounded_url&.match?(%r{\Ahttps?://}i)
+              uri = URI.parse(bounded_url)
+              raw_authority = bounded_url.match(%r{\Ahttps://([^/?#]+)}i)&.[](1)
+              host_port = raw_authority&.sub(%r{\A.*@}, "")
+              raw_host = host_port&.match(%r{\A(\[[^\]]+\]|[^/:?#]+)})&.[](1)
+              alternate_numeric = raw_host && (raw_host.match?(%r{\A(?:0x[0-9a-f]+|0[0-9]+|[0-9]+)\z}i) || raw_host.split(".").any? { |part| part.match?(%r{\A(?:0x[0-9a-f]+|0[0-9]+)\z}i) } || (raw_host.match?(%r{\A\d+(?:\.\d+)+\z}) && raw_host.split(".").length != 4))
+              explicit_port = host_port&.match?(%r{(?:\]|[^:]):\d+\z})
+              url == reference && uri.scheme == "https" && uri.host && uri.userinfo.nil? && !raw_authority.include?("@") && !explicit_port && !alternate_numeric && safe_url_reference?(bounded_url) && public_host?(uri.host)
+            else
+              false
+            end
           rescue URI::InvalidURIError, TypeError
             false
           end
         when "local_repository"
-          !evidence.key?("verified_url") && reference.match?(%r{\A(?!/)(?!.*(?:\A|/)\.\.(?:/|\z))[A-Za-z0-9._/-]+(?:#[A-Za-z0-9._:-]+)?\z})
+          !evidence.key?("verified_url") && !unsafe_opaque_reference?(reference) && reference.match?(%r{\A(?!/)(?!.*(?:\A|/)\.\.(?:/|\z))[A-Za-z0-9._/-]+(?:#[A-Za-z0-9._:-]+)?\z})
         when "authenticated_source"
-          !evidence.key?("verified_url") && reference.match?(/\Aconnector:[A-Za-z0-9._-]+\/record:[A-Za-z0-9._-]+\z/)
+          !evidence.key?("verified_url") && !unsafe_opaque_reference?(reference) && reference.match?(/\Aconnector:[A-Za-z0-9._-]+\/record:[A-Za-z0-9._-]+\z/)
         else
-          !evidence.key?("verified_url") && reference.match?(/\Acitation:[^\s].*\z/)
+          !evidence.key?("verified_url") && !unsafe_opaque_reference?(reference) && reference.match?(/\A(?:citation|isbn|doi):[^\s]+\z/i) && !reference.include?("://") && !reference.match?(%r{\A(?:citation|isbn|doi):(?:/(?:Users|home|private|var)(?:/|\z)|[A-Za-z]:[\\/]|\\\\)}i)
         end
         exit(valid ? 0 : 1)
     '
@@ -340,7 +411,11 @@ research_prepare_high_stakes_stronger_response() {
       | .five_lens_process_evidence.peer_review_input_binding.high_stakes_context.user_context_status = "explicit"
       | .five_lens_process_evidence.peer_review_input_binding.high_stakes_context.user_context_basis = $context
       | .five_lens_process_evidence.frozen_assignment_packets |= map(.known_context += [$context])
-      | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Fixture decision evidence",source:"IANA",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Public fixture evidence."}]
+      | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [
+          {claim:"Fixture primary decision evidence",source:"source:fixture-primary",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Primary public fixture evidence."},
+          {claim:"Fixture official decision evidence",source:"source:fixture-official",verification_method:"public_url",verification_reference:"https://www.iana.org/help/example-domains",verified_url:"https://www.iana.org/help/example-domains",verification_detail:"Official public fixture evidence."},
+          {claim:"Fixture secondary decision evidence",source:"source:fixture-secondary",verification_method:"public_url",verification_reference:"https://www.iana.org/assignments",verified_url:"https://www.iana.org/assignments",verification_detail:"Secondary public fixture evidence."}
+        ]
     ' "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
     research_refresh_response_derivatives "$response_path"
     research_set_high_stakes_recommendation_basis "$response_path"
@@ -361,6 +436,9 @@ research_official_response_mutation_is_rejected() {
     eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-official-negative.XXXXXX")"
     eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-official-negative-output.XXXXXX")"
     p0p4_register_cleanup "$eval_dir" "$eval_output"
+    if [[ "$mutation" == "fallback_wave_coverage_leakage" ]]; then
+        case_id="five-lens-sequential-fallback-preserves-process-evidence"
+    fi
     write_research_eval_responses "$eval_dir"
     response_path="$eval_dir/assistant-research/$case_id.txt"
     if ! "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1; then
@@ -368,7 +446,7 @@ research_official_response_mutation_is_rejected() {
         return 1
     fi
     case "$mutation" in
-        stronger_context_not_applicable|stronger_context_unresolved) research_prepare_high_stakes_stronger_response "$response_path" ;;
+        stronger_context_not_applicable|stronger_context_unresolved|fully_rebound_response_only_high_stakes_context) research_prepare_high_stakes_stronger_response "$response_path" ;;
     esac
     case "$mutation" in
         accepted_result_body_with_unchanged_digest) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].core_position = "Tampered accepted result"' ;;
@@ -385,6 +463,7 @@ research_official_response_mutation_is_rejected() {
         huge_budget_loop_forever) mutation_filter='.five_lens_process_evidence.search_resource_budget = {per_lens_max_queries:999,per_lens_max_sources:999,per_lens_max_minutes:999,overall_max_queries:9999,overall_max_sources:9999,overall_max_minutes:9999,stop_condition:"loop_forever"}' ;;
         source_invalid_domain) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://example.invalid/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://example.invalid/follow-up"]' ;;
         source_private_loopback) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://127.0.0.1./research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://192.0.2.1/follow-up"]' ;;
+        source_fully_encoded_private_loopback) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https%3A%2F%2F127.0.0.1%2Fresearch"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https%3A%2F%2F127.0.0.1%2Ffollow-up"]' ;;
         source_backed_empty) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = []' ;;
         synchronized_assignments) mutation_filter='.five_lens_process_evidence.accepted_lens_results |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.lens_dispatches |= map(.assignment_id = "assignment-shared") | .five_lens_process_evidence.peer_review_assignment_id = "assignment-shared" | .peer_review.peer_review_assignment_id = "assignment-shared"' ;;
         missing_delegated_trigger_scope) mutation_filter='del(.five_lens_process_evidence.subagent_trigger_scope)' ;;
@@ -403,6 +482,40 @@ research_official_response_mutation_is_rejected() {
         source_reserved_local) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://metadata.local/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://metadata.local/follow-up"]' ;;
         source_bare_hostname) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://metadata/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://metadata/follow-up"]' ;;
         source_ipv6_discard_only) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[100::1]/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[100::1]/follow-up"]' ;;
+        source_ipv6_dummy_prefix_compressed) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[100:0:0:1::1]/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[100:0:0:1::1]/follow-up"]' ;;
+        source_ipv6_dummy_prefix_full) mutation_filter='.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[0100:0000:0000:0001:0000:0000:0000:0001]/research"] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[0100:0000:0000:0001:0000:0000:0000:0001]/follow-up"]' ;;
+        medium_path_percent_encoded_public_url_aliases) mutation_filter='.findings[0].confidence = "medium" | .findings[0].sources = ["https://www.iana.org/domains/example", "https://www.iana.org/%64omains/example", "https://www.iana.org/d%6fmains/example"] | del(.findings[0].source_provenance) | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"First spelling of one public evidence identity."},{claim:"Canonical encoded path alias",source:"https://www.iana.org/%64omains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/%64omains/example",verified_url:"https://www.iana.org/%64omains/example",verification_detail:"Percent-encoded path alias of the same public evidence identity."},{claim:"Canonical encoded path alias",source:"https://www.iana.org/d%6fmains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/d%6fmains/example",verified_url:"https://www.iana.org/d%6fmains/example",verification_detail:"Percent-encoded path alias of the same public evidence identity."}]' ;;
+        high_path_percent_encoded_public_url_aliases) mutation_filter='.findings[0].confidence = "high" | .findings[0].sources = ["https://www.iana.org/domains/example", "https://www.iana.org/%64omains/example", "https://www.iana.org/d%6fmains/example"] | .findings[0].source_provenance = [{source:"https://www.iana.org/domains/example",independence_key:"first",authority:"official"},{source:"https://www.iana.org/%64omains/example",independence_key:"second",authority:"primary"},{source:"https://www.iana.org/d%6fmains/example",independence_key:"third",authority:"secondary"}] | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"First spelling."},{claim:"Canonical encoded path alias",source:"https://www.iana.org/%64omains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/%64omains/example",verified_url:"https://www.iana.org/%64omains/example",verification_detail:"Percent-encoded path alias."},{claim:"Canonical encoded path alias",source:"https://www.iana.org/d%6fmains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/d%6fmains/example",verified_url:"https://www.iana.org/d%6fmains/example",verification_detail:"Percent-encoded path alias."}]' ;;
+        medium_fully_encoded_public_url_aliases) mutation_filter='.findings[0].confidence = "medium" | .findings[0].sources = ["https://www.iana.org/domains/example", "https%3A%2F%2Fwww.iana.org%2Fdomains%2Fexample"] | del(.findings[0].source_provenance) | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Canonical public evidence."}]' ;;
+        high_fully_encoded_public_url_aliases) mutation_filter='.findings[0].confidence = "high" | .findings[0].sources = ["https://www.iana.org/domains/example", "https%3A%2F%2Fwww.iana.org%2Fdomains%2Fexample", "https://www.iana.org/help/example-domains"] | .findings[0].source_provenance = [{source:"https://www.iana.org/domains/example",independence_key:"first",authority:"official"},{source:"https%3A%2F%2Fwww.iana.org%2Fdomains%2Fexample",independence_key:"second",authority:"primary"},{source:"https://www.iana.org/help/example-domains",independence_key:"third",authority:"secondary"}] | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Canonical public evidence."},{claim:"Distinct public evidence",source:"https://www.iana.org/help/example-domains",verification_method:"public_url",verification_reference:"https://www.iana.org/help/example-domains",verified_url:"https://www.iana.org/help/example-domains",verification_detail:"Distinct public evidence."}]' ;;
+        high_host_case_public_url_aliases) mutation_filter='.findings[0].confidence = "high" | .findings[0].sources = ["https://www.iana.org/domains/example", "https://WWW.IANA.ORG/domains/example", "https://www.%69ana.org/domains/example"] | .findings[0].source_provenance = [{source:"https://www.iana.org/domains/example",independence_key:"first",authority:"official"},{source:"https://WWW.IANA.ORG/domains/example",independence_key:"second",authority:"primary"},{source:"https://www.%69ana.org/domains/example",independence_key:"third",authority:"secondary"}] | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"First spelling."},{claim:"Canonical public evidence alias",source:"https://WWW.IANA.ORG/domains/example",verification_method:"public_url",verification_reference:"https://WWW.IANA.ORG/domains/example",verified_url:"https://WWW.IANA.ORG/domains/example",verification_detail:"Host-case alias."},{claim:"Canonical encoded-host alias",source:"https://www.%69ana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.%69ana.org/domains/example",verified_url:"https://www.%69ana.org/domains/example",verification_detail:"Encoded-host alias."}]' ;;
+        malformed_candidate_mechanism) mutation_filter='.candidate_mechanisms = [{mechanism:"invest AI coding assistant .NET architecture malformed candidate",claim_status:"candidate",evidence:[{source:"source:research-corpus:summary",detail:"Candidate support.",evidence_status:"source_backed",unexpected:"field"}],confidence:"low",counterevidence_or_conflicts:["No counterevidence found."],gaps:["Independent validation pending."],validation_method:"Run an independent comparison."}]' ;;
+        medium_single_secondary) mutation_filter='.findings[0].confidence = "medium"' ;;
+        private_peer_evidence_url) mutation_filter='.peer_review.evidence[0].source = "https://metadata.local/private"' ;;
+        unbound_final_finding_source) mutation_filter='.findings[0].sources = ["source:unbound-final-finding"]' ;;
+        rebound_unsafe_packet_policies) mutation_filter='.five_lens_process_evidence.frozen_assignment_packets |= map(.source_policy = "public sources" | .isolation_policy = "sibling blind")' ;;
+        source_backed_actual_sources_zero) mutation_filter='.five_lens_process_evidence.lens_dispatches[0].search_resource_usage.actual_sources = 0 | .five_lens_process_evidence.overall_resource_usage.actual_sources = 16' ;;
+        local_repository_public_url) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_reference = "https://www.iana.org/domains/example"' ;;
+        authenticated_source_endpoint) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_method = "authenticated_source" | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_reference = "connector:fixture/record:https://metadata.local/private"' ;;
+        offline_citation_url) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_method = "offline_authoritative_source" | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence[0].verification_reference = "citation:https://metadata.local/private"' ;;
+        medium_single_public_row_aliases) mutation_filter='.findings[0].confidence = "medium" | .findings[0].sources = ["source:fixture-alias", "https://www.iana.org/domains/example"] | del(.findings[0].source_provenance) | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Alias evidence",source:"source:fixture-alias",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Single public evidence row."}]' ;;
+        malformed_peer_url_scheme) mutation_filter='.peer_review.evidence[0].source = "https:metadata.local/peer"' ;;
+        malformed_peer_url_without_colon) mutation_filter='.peer_review.evidence[0].source = "https//metadata.local/peer"' ;;
+        trailing_dot_peer_url) mutation_filter='.peer_review.evidence[0].source = "https://www.iana.org./peer"' ;;
+        medium_host_case_public_url_aliases) mutation_filter='.findings[0].confidence = "medium" | .findings[0].sources = ["https://www.iana.org/domains/example", "https://WWW.IANA.ORG/domains/example", "https://www.%69ana.org/domains/example"] | del(.findings[0].source_provenance) | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Canonical public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"First spelling of one public evidence identity."},{claim:"Canonical public evidence alias",source:"https://WWW.IANA.ORG/domains/example",verification_method:"public_url",verification_reference:"https://WWW.IANA.ORG/domains/example",verified_url:"https://WWW.IANA.ORG/domains/example",verification_detail:"Host-case alias of the same public evidence identity."},{claim:"Canonical encoded-host alias",source:"https://www.%69ana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.%69ana.org/domains/example",verified_url:"https://www.%69ana.org/domains/example",verification_detail:"Percent-encoded-host alias of the same public evidence identity."}]' ;;
+        protocol_relative_peer_url) mutation_filter='.peer_review.evidence[0].source = "//metadata.local/peer"' ;;
+        discard_only_compressed_peer_url) mutation_filter='.peer_review.evidence[0].source = "https://[100::1]/peer"' ;;
+        encoded_public_url_secret) mutation_filter='.peer_review.evidence[0].source = "https://www.iana.org/peer?%74oken=private"' ;;
+        encoded_public_url_traversal) mutation_filter='.peer_review.evidence[0].source = "https://www.iana.org/a/%2e%2e/private"' ;;
+        encoded_public_url_pii) mutation_filter='.peer_review.evidence[0].source = "https://www.iana.org/peer?contact=person%40sample.invalid"' ;;
+        encoded_typed_url_secret) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed URL safety evidence",source:"source:typed-url-safety",verification_method:"public_url",verification_reference:"https://www.iana.org/peer?%74oken=private",verified_url:"https://www.iana.org/peer?%74oken=private",verification_detail:"Typed public URL mutation."}]' ;;
+        encoded_typed_url_traversal) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed URL safety evidence",source:"source:typed-url-safety",verification_method:"public_url",verification_reference:"https://www.iana.org/a/%2e%2e/private",verified_url:"https://www.iana.org/a/%2e%2e/private",verification_detail:"Typed public URL mutation."}]' ;;
+        encoded_typed_url_pii) mutation_filter='.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed URL safety evidence",source:"source:typed-url-safety",verification_method:"public_url",verification_reference:"https://www.iana.org/peer?contact=person%40sample.invalid",verified_url:"https://www.iana.org/peer?contact=person%40sample.invalid",verification_detail:"Typed public URL mutation."}]' ;;
+        encoded_opaque_source_traversal) mutation_filter='.peer_review.evidence[0].source = "source:a/%2e%2e/docs"' ;;
+        encoded_opaque_source_secret) mutation_filter='.peer_review.evidence[0].source = "source:%74oken=redacted"' ;;
+        encoded_opaque_source_pii) mutation_filter='.candidate_mechanisms = [{mechanism:"Candidate source safety mechanism",claim_status:"candidate",evidence:[{source:"source:%65mail=person%40sample.invalid",detail:"Candidate source mutation.",evidence_status:"source_backed"}],confidence:"low",counterevidence_or_conflicts:["No counterevidence recorded."],gaps:["Independent validation remains pending."],validation_method:"Compare independent evidence."}]' ;;
+        opaque_source_credential) mutation_filter='.peer_review.evidence[0].source = "source:credential=opaque-value"' ;;
+        fallback_wave_coverage_leakage) mutation_filter='.five_lens_process_evidence.wave_coverage = [{wave_id:"wave-1",capacity:5,lens_kinds:["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]}]' ;;
         peer_process_assignment_mismatch) mutation_filter='.five_lens_process_evidence.peer_review_assignment_id = "peer-assignment-other"' ;;
         finding_source_reserved_local) mutation_filter='.findings[0].sources = ["https://metadata.local/research"]' ;;
         finding_high_without_provenance) mutation_filter='.findings[0].confidence = "high" | del(.findings[0].source_provenance)' ;;
@@ -486,6 +599,7 @@ research_official_response_mutation_is_rejected() {
         final_synthesis_digest_drift) mutation_filter='.five_lens_process_evidence.final_synthesis_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' ;;
         revision_synthesis_digest_drift) mutation_filter='.peer_review.revision_disposition[0].resulting_synthesis_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' ;;
         high_stakes_do_without_basis) mutation_filter='.synthesis_briefing.recommendation = "do" | .peer_review.supported_recommendation = "do"' ;;
+        fully_rebound_response_only_high_stakes_context) mutation_filter='.' ;;
         missing_tier_normalization_disclosure) mutation_filter='.five_lens_process_evidence.tier_resolution.normalization_disclosure = "not_applicable"' ;;
         quick_effective_tier_drift) mutation_filter='.five_lens_process_evidence.tier_resolution.effective_tier = "extensive"' ;;
         *) return 2 ;;
@@ -505,7 +619,7 @@ research_official_response_mutation_is_rejected() {
             && mv "$response_path.mutated" "$response_path"
     fi
     case "$mutation" in
-        source_invalid_domain|source_private_loopback|source_backed_empty|synchronized_assignments|duplicate_none_needed|mixed_none_needed_follow_up|source_reserved_local|source_bare_hostname|source_ipv6_discard_only|finding_high_without_provenance|finding_high_single_official|finding_high_three_secondary|conflict_source_private_loopback|embedded_local_repository_traversal|invalid_verified_evidence_shape|windows_absolute_local_repository|whitespace_local_repository|common_packet_scope_drift|semantic_context_scope_drift|follow_up_requirement_drift|opt_out_allows_delegated_peer|policy_block_allows_delegated_peer|topic_substantive_fields_generic|topic_terms_only_assignment_id|topic_terms_only_unique_insight) research_refresh_response_derivatives "$response_path" ;;
+        source_invalid_domain|source_private_loopback|source_fully_encoded_private_loopback|source_backed_empty|synchronized_assignments|duplicate_none_needed|mixed_none_needed_follow_up|source_reserved_local|source_bare_hostname|source_ipv6_discard_only|source_ipv6_dummy_prefix_compressed|source_ipv6_dummy_prefix_full|finding_high_without_provenance|finding_high_single_official|finding_high_three_secondary|conflict_source_private_loopback|embedded_local_repository_traversal|invalid_verified_evidence_shape|windows_absolute_local_repository|whitespace_local_repository|common_packet_scope_drift|semantic_context_scope_drift|follow_up_requirement_drift|opt_out_allows_delegated_peer|policy_block_allows_delegated_peer|topic_substantive_fields_generic|topic_terms_only_assignment_id|topic_terms_only_unique_insight|malformed_candidate_mechanism|medium_single_secondary|unbound_final_finding_source|rebound_unsafe_packet_policies|local_repository_public_url|authenticated_source_endpoint|offline_citation_url|medium_single_public_row_aliases|medium_host_case_public_url_aliases|medium_path_percent_encoded_public_url_aliases|high_host_case_public_url_aliases|high_path_percent_encoded_public_url_aliases|medium_fully_encoded_public_url_aliases|high_fully_encoded_public_url_aliases|encoded_typed_url_secret|encoded_typed_url_traversal|encoded_typed_url_pii|encoded_opaque_source_traversal|encoded_opaque_source_secret|encoded_opaque_source_pii|opaque_source_credential) research_refresh_response_derivatives "$response_path" ;;
         peer_input_ledger_rebound_stale_peer_digest)
             stale_peer_input_digest="$(jq -r '.peer_review.peer_review_input_digest' "$response_path")"
             research_refresh_response_derivatives "$response_path"
@@ -518,7 +632,7 @@ research_official_response_mutation_is_rejected() {
         fully_rebound_late_packet_freeze)
             research_refresh_response_derivatives "$response_path"
             ;;
-        stronger_context_not_applicable|stronger_context_unresolved)
+        stronger_context_not_applicable|stronger_context_unresolved|fully_rebound_response_only_high_stakes_context)
             research_refresh_response_derivatives "$response_path"
             research_set_high_stakes_recommendation_basis "$response_path"
             ;;
@@ -528,9 +642,22 @@ research_official_response_mutation_is_rejected() {
         printf 'official runner accepted mutation: %s\n' "$mutation" >&2
         return 1
     fi
-    grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output" \
-        && { case "$mutation" in malformed_*) ! grep -Fq 'TypeError:' "$eval_output" ;; *) true ;; esac; } \
-        && { case "$mutation" in finding_high_single_official|finding_high_three_secondary|invalid_verified_evidence_shape|windows_absolute_local_repository|whitespace_local_repository|peer_binding_findings_drift|peer_binding_candidate_drift|peer_binding_conflicts_drift|peer_binding_contradiction_drift|common_packet_scope_drift|topic_substantive_fields_generic|topic_terms_only_assignment_id|topic_terms_only_unique_insight|duplicate_perspective_lens|duplicate_question_trace_lens|opt_out_allows_delegated_peer|policy_block_allows_delegated_peer) grep -Fq 'semantic_validation_failures=1' "$eval_output" ;; *) true ;; esac; }
+    if ! grep -Fq $'FAIL\tassistant-research\t'"$case_id" "$eval_output"; then
+        printf 'official runner rejected mutation without its case failure record: %s\n' "$mutation" >&2
+        return 1
+    fi
+    if [[ "$mutation" == malformed_* ]] && grep -Fq 'TypeError:' "$eval_output"; then
+        printf 'official runner threw TypeError for malformed mutation: %s\n' "$mutation" >&2
+        return 1
+    fi
+    case "$mutation" in
+        finding_high_single_official|finding_high_three_secondary|invalid_verified_evidence_shape|windows_absolute_local_repository|whitespace_local_repository|peer_binding_findings_drift|peer_binding_candidate_drift|peer_binding_conflicts_drift|peer_binding_contradiction_drift|common_packet_scope_drift|topic_substantive_fields_generic|topic_terms_only_assignment_id|topic_terms_only_unique_insight|duplicate_perspective_lens|duplicate_question_trace_lens|opt_out_allows_delegated_peer|policy_block_allows_delegated_peer)
+            if ! grep -Fq 'semantic_validation_failures=1' "$eval_output"; then
+                printf 'official runner rejected mutation without semantic validation evidence: %s\n' "$mutation" >&2
+                return 1
+            fi
+            ;;
+    esac
 }
 
 research_mixed_peer_fallback_official_runner_is_accepted() {
@@ -549,15 +676,82 @@ research_mixed_peer_fallback_official_runner_is_accepted() {
 
 research_high_stakes_stronger_official_runner_is_accepted() {
     local case_id="five-lens-decision-briefing-uses-storm-style-workflow"
-    local eval_dir eval_output response_path
+    local eval_dir eval_output response_path fixture_root fixture_skill fixture_path original_research_evals status explicit_context
 
     eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-high-stakes.XXXXXX")"
     eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-high-stakes-output.XXXXXX")"
-    p0p4_register_cleanup "$eval_dir" "$eval_output"
+    fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-high-stakes-fixture.XXXXXX")"
+    fixture_skill="$fixture_root/assistant-research"
+    fixture_path="$fixture_skill/evals/cases.json"
+    p0p4_register_cleanup "$eval_dir" "$eval_output" "$fixture_root"
+    mkdir -p "$fixture_skill/evals"
+    cp "$research_skill" "$fixture_skill/SKILL.md"
+    explicit_context='User supplied a capped reversible pilot with no trading authority.'
+    jq --arg context "$explicit_context" '
+      .cases[] |= if .id == "five-lens-decision-briefing-uses-storm-style-workflow" then
+        .prompt += " " + $context
+        | .semantic_context.high_stakes_context.user_context_status = "explicit"
+        | .semantic_context.high_stakes_context.user_context_basis = $context
+      else . end
+    ' "$research_evals" >"$fixture_path"
+    original_research_evals="$research_evals"
+    research_evals="$fixture_path"
     write_research_eval_responses "$eval_dir"
     response_path="$eval_dir/assistant-research/$case_id.txt"
     research_prepare_high_stakes_stronger_response "$response_path"
-    "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1
+    status=0
+    "$research_eval_runner" --responses "$eval_dir" --skill "$fixture_skill" --case "$case_id" >"$eval_output" 2>&1 || status=$?
+    research_evals="$original_research_evals"
+    return "$status"
+}
+
+research_unsafe_high_stakes_decision_critical_url_is_rejected() {
+    local case_id="five-lens-decision-briefing-uses-storm-style-workflow"
+    local eval_dir eval_output response_path fixture_root fixture_skill fixture_path original_research_evals explicit_context private_status official_status
+
+    eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-unsafe-high-stakes.XXXXXX")"
+    eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-research-unsafe-high-stakes-output.XXXXXX")"
+    fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-unsafe-high-stakes-fixture.XXXXXX")"
+    fixture_skill="$fixture_root/assistant-research"
+    fixture_path="$fixture_skill/evals/cases.json"
+    p0p4_register_cleanup "$eval_dir" "$eval_output" "$fixture_root"
+    mkdir -p "$fixture_skill/evals"
+    cp "$research_skill" "$fixture_skill/SKILL.md"
+    explicit_context='User supplied a capped reversible pilot with no trading authority.'
+    jq --arg context "$explicit_context" '
+      .cases[] |= if .id == "five-lens-decision-briefing-uses-storm-style-workflow" then
+        .prompt += " " + $context
+        | .semantic_context.high_stakes_context.user_context_status = "explicit"
+        | .semantic_context.high_stakes_context.user_context_basis = $context
+      else . end
+    ' "$research_evals" >"$fixture_path"
+    original_research_evals="$research_evals"
+    research_evals="$fixture_path"
+    write_research_eval_responses "$eval_dir"
+    response_path="$eval_dir/assistant-research/$case_id.txt"
+    research_prepare_high_stakes_stronger_response "$response_path"
+    jq '
+      .high_stakes_recommendation_basis.verified_decision_critical_urls = ["https://metadata.local/private"]
+      | .high_stakes_recommendation_basis.peer_review_input_digest = .peer_review.peer_review_input_digest
+    ' "$response_path" >"$response_path.mutated" && mv "$response_path.mutated" "$response_path"
+    private_status=0
+    research_response_oracle_is_valid "$response_path" "$case_id" >/dev/null 2>&1 || private_status=$?
+    official_status=0
+    "$research_eval_runner" --responses "$eval_dir" --skill "$fixture_skill" --case "$case_id" >"$eval_output" 2>&1 || official_status=$?
+    research_evals="$original_research_evals"
+    [[ "$private_status" -ne 0 && "$official_status" -ne 0 ]]
+}
+
+research_response_only_high_stakes_context_is_rejected() {
+    local case_id="five-lens-decision-briefing-uses-storm-style-workflow"
+    local eval_dir response_path
+
+    eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-private-high-stakes.XXXXXX")"
+    p0p4_register_cleanup "$eval_dir"
+    write_research_eval_responses "$eval_dir"
+    response_path="$eval_dir/assistant-research/$case_id.txt"
+    research_prepare_high_stakes_stronger_response "$response_path"
+    ! research_response_oracle_is_valid "$response_path" "$case_id"
 }
 
 research_fallback_revise_official_runner_is_accepted() {
@@ -1372,6 +1566,9 @@ if ! printf '%s\n' "$technology_case" | grep -Fq -- 'evidence-only source compar
     || printf '%s\n' "$technology_case" | grep -Fq -- 'decision support'; then
     structured_oracle_missing+=("technology comparison must be evidence-only source_research without decision support")
 fi
+if ! grep -Fq -- 'When research_method=five_lens_briefing, every finding source resolves' "$research_output"; then
+    structured_oracle_missing+=("five-lens finding lineage must not constrain direct source_research")
+fi
 if [[ "${#structured_oracle_missing[@]}" -eq 0 ]] \
     && research_structured_mutation_is_rejected duplicate_identity \
     && research_structured_mutation_is_rejected missing_identity \
@@ -1410,7 +1607,39 @@ if [[ "${#structured_oracle_missing[@]}" -eq 0 ]] \
     && research_structured_mutation_is_rejected huge_budget_loop_forever \
     && research_structured_mutation_is_rejected source_invalid_domain \
     && research_structured_mutation_is_rejected source_private_loopback \
+    && research_structured_mutation_is_rejected source_fully_encoded_private_loopback \
     && research_structured_mutation_is_rejected source_backed_empty \
+    && research_structured_mutation_is_rejected malformed_candidate_mechanism \
+    && research_structured_mutation_is_rejected medium_single_secondary \
+    && research_structured_mutation_is_rejected private_peer_evidence_url \
+    && research_structured_mutation_is_rejected unbound_final_finding_source \
+    && research_structured_mutation_is_rejected rebound_unsafe_packet_policies \
+    && research_structured_mutation_is_rejected source_backed_actual_sources_zero \
+    && research_structured_mutation_is_rejected local_repository_public_url \
+    && research_structured_mutation_is_rejected authenticated_source_endpoint \
+    && research_structured_mutation_is_rejected offline_citation_url \
+    && research_structured_mutation_is_rejected medium_single_public_row_aliases \
+    && research_structured_mutation_is_rejected malformed_peer_url_scheme \
+    && research_structured_mutation_is_rejected malformed_peer_url_without_colon \
+    && research_structured_mutation_is_rejected trailing_dot_peer_url \
+    && research_structured_mutation_is_rejected protocol_relative_peer_url \
+    && research_structured_mutation_is_rejected discard_only_compressed_peer_url \
+    && research_structured_mutation_is_rejected medium_host_case_public_url_aliases \
+    && research_structured_mutation_is_rejected medium_path_percent_encoded_public_url_aliases \
+    && research_structured_mutation_is_rejected medium_fully_encoded_public_url_aliases \
+    && research_structured_mutation_is_rejected encoded_public_url_secret \
+    && research_structured_mutation_is_rejected encoded_public_url_traversal \
+    && research_structured_mutation_is_rejected encoded_public_url_pii \
+    && research_structured_mutation_is_rejected encoded_typed_url_secret \
+    && research_structured_mutation_is_rejected encoded_typed_url_traversal \
+    && research_structured_mutation_is_rejected encoded_typed_url_pii \
+    && research_structured_mutation_is_rejected encoded_opaque_source_traversal \
+    && research_structured_mutation_is_rejected encoded_opaque_source_secret \
+    && research_structured_mutation_is_rejected encoded_opaque_source_pii \
+    && research_structured_mutation_is_rejected opaque_source_credential \
+    && research_structured_mutation_is_rejected high_host_case_public_url_aliases \
+    && research_structured_mutation_is_rejected high_path_percent_encoded_public_url_aliases \
+    && research_structured_mutation_is_rejected high_fully_encoded_public_url_aliases \
     && research_structured_mutation_is_rejected synchronized_assignments \
     && research_structured_mutation_is_rejected missing_delegated_trigger_scope \
     && research_structured_mutation_is_rejected lens_worker_synthesis \
@@ -1433,6 +1662,7 @@ test_start "assistant-research eval structurally validates sequential fallback w
 if research_fallback_structured_mutation_is_rejected false_return_validated \
     && research_fallback_structured_mutation_is_rejected packet_binding_mismatch \
     && research_fallback_structured_mutation_is_rejected fallback_dispatch_identity_leakage \
+    && research_fallback_structured_mutation_is_rejected peer_fallback_and_evidence_mismatch \
     && research_fallback_structured_mutation_is_rejected peer_fallback_reuses_lens_pass \
     && research_fallback_structured_mutation_is_rejected perspective_digest_mismatch \
     && research_fallback_structured_mutation_is_rejected perspective_assignment_mismatch \
@@ -1451,7 +1681,8 @@ if research_fallback_structured_mutation_is_rejected false_return_validated \
     && research_fallback_structured_mutation_is_rejected schedule_wall_clock_drift \
     && research_fallback_structured_mutation_is_rejected exhausted_without_low_confidence \
     && research_fallback_structured_mutation_is_rejected exhaustion_without_explicit_gap \
-    && research_fallback_structured_mutation_is_rejected missing_lens_fallback_evidence_ref; then
+    && research_fallback_structured_mutation_is_rejected missing_lens_fallback_evidence_ref \
+    && research_fallback_structured_mutation_is_rejected fallback_wave_coverage_leakage; then
     pass
 else
     fail "assistant-research fallback structured eval oracle accepts invalid fallback evidence"
@@ -1472,7 +1703,40 @@ if research_official_response_mutation_is_rejected accepted_result_body_with_unc
     && research_official_response_mutation_is_rejected huge_budget_loop_forever \
     && research_official_response_mutation_is_rejected source_invalid_domain \
     && research_official_response_mutation_is_rejected source_private_loopback \
+    && research_official_response_mutation_is_rejected source_fully_encoded_private_loopback \
     && research_official_response_mutation_is_rejected source_backed_empty \
+    && research_official_response_mutation_is_rejected malformed_candidate_mechanism \
+    && research_official_response_mutation_is_rejected medium_single_secondary \
+    && research_official_response_mutation_is_rejected private_peer_evidence_url \
+    && research_official_response_mutation_is_rejected unbound_final_finding_source \
+    && research_official_response_mutation_is_rejected rebound_unsafe_packet_policies \
+    && research_official_response_mutation_is_rejected source_backed_actual_sources_zero \
+    && research_official_response_mutation_is_rejected local_repository_public_url \
+    && research_official_response_mutation_is_rejected authenticated_source_endpoint \
+    && research_official_response_mutation_is_rejected offline_citation_url \
+    && research_official_response_mutation_is_rejected medium_single_public_row_aliases \
+    && research_official_response_mutation_is_rejected malformed_peer_url_scheme \
+    && research_official_response_mutation_is_rejected malformed_peer_url_without_colon \
+    && research_official_response_mutation_is_rejected trailing_dot_peer_url \
+    && research_official_response_mutation_is_rejected protocol_relative_peer_url \
+    && research_official_response_mutation_is_rejected discard_only_compressed_peer_url \
+    && research_official_response_mutation_is_rejected medium_host_case_public_url_aliases \
+    && research_official_response_mutation_is_rejected medium_path_percent_encoded_public_url_aliases \
+    && research_official_response_mutation_is_rejected medium_fully_encoded_public_url_aliases \
+    && research_official_response_mutation_is_rejected encoded_public_url_secret \
+    && research_official_response_mutation_is_rejected encoded_public_url_traversal \
+    && research_official_response_mutation_is_rejected encoded_public_url_pii \
+    && research_official_response_mutation_is_rejected encoded_typed_url_secret \
+    && research_official_response_mutation_is_rejected encoded_typed_url_traversal \
+    && research_official_response_mutation_is_rejected encoded_typed_url_pii \
+    && research_official_response_mutation_is_rejected encoded_opaque_source_traversal \
+    && research_official_response_mutation_is_rejected encoded_opaque_source_secret \
+    && research_official_response_mutation_is_rejected encoded_opaque_source_pii \
+    && research_official_response_mutation_is_rejected opaque_source_credential \
+    && research_official_response_mutation_is_rejected high_host_case_public_url_aliases \
+    && research_official_response_mutation_is_rejected high_path_percent_encoded_public_url_aliases \
+    && research_official_response_mutation_is_rejected high_fully_encoded_public_url_aliases \
+    && research_official_response_mutation_is_rejected fallback_wave_coverage_leakage \
     && research_official_response_mutation_is_rejected synchronized_assignments \
     && research_official_response_mutation_is_rejected missing_delegated_trigger_scope \
     && research_official_response_mutation_is_rejected lens_worker_synthesis \
@@ -1490,6 +1754,8 @@ if research_official_response_mutation_is_rejected accepted_result_body_with_unc
     && research_official_response_mutation_is_rejected source_reserved_local \
     && research_official_response_mutation_is_rejected source_bare_hostname \
     && research_official_response_mutation_is_rejected source_ipv6_discard_only \
+    && research_official_response_mutation_is_rejected source_ipv6_dummy_prefix_compressed \
+    && research_official_response_mutation_is_rejected source_ipv6_dummy_prefix_full \
     && research_official_response_mutation_is_rejected peer_process_assignment_mismatch \
     && research_official_response_mutation_is_rejected finding_source_reserved_local \
     && research_official_response_mutation_is_rejected finding_high_without_provenance \
@@ -1541,9 +1807,12 @@ if research_official_response_mutation_is_rejected accepted_result_body_with_unc
     && research_official_response_mutation_is_rejected final_synthesis_digest_drift \
     && research_official_response_mutation_is_rejected revision_synthesis_digest_drift \
     && research_official_response_mutation_is_rejected high_stakes_do_without_basis \
+    && research_official_response_mutation_is_rejected fully_rebound_response_only_high_stakes_context \
     && research_official_response_mutation_is_rejected missing_tier_normalization_disclosure \
     && research_official_response_mutation_is_rejected quick_effective_tier_drift \
+    && research_response_only_high_stakes_context_is_rejected \
     && research_high_stakes_stronger_official_runner_is_accepted \
+    && research_unsafe_high_stakes_decision_critical_url_is_rejected \
     && research_fallback_revise_official_runner_is_accepted \
     && research_mixed_peer_fallback_official_runner_is_accepted; then
     pass
@@ -1718,6 +1987,16 @@ if printf '%s\n' '{"verification_method":"public_url","verification_reference":"
         | research_verified_source_evidence_is_valid \
     && printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"citation:ISBN-978-0-00-000000-0"}' \
         | research_verified_source_evidence_is_valid \
+    && printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"doi:10.1000/typed-fixture"}' \
+        | research_verified_source_evidence_is_valid \
+    && printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"isbn:978-0-00-000000-0"}' \
+        | research_verified_source_evidence_is_valid \
+    && printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://192.0.1.1/source","verified_url":"https://192.0.1.1/source"}' \
+        | research_verified_source_evidence_is_valid \
+    && printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://198.51.101.1/source","verified_url":"https://198.51.101.1/source"}' \
+        | research_verified_source_evidence_is_valid \
+    && printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://203.0.114.1/source","verified_url":"https://203.0.114.1/source"}' \
+        | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://example.invalid/source"}' \
         | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"local_repository"}' \
@@ -1739,16 +2018,28 @@ if printf '%s\n' '{"verification_method":"public_url","verification_reference":"
     && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[2001:db8::1]/source","verified_url":"https://[2001:db8::1]/source"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[ff02::1]/source","verified_url":"https://[ff02::1]/source"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[::]/source","verified_url":"https://[::]/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://www.iana.org./source","verified_url":"https://www.iana.org./source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://[100::1]/source","verified_url":"https://[100::1]/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://%31%32%37.0.0.1/source","verified_url":"https://%31%32%37.0.0.1/source"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://www.iana.org/peer?%74oken=private","verified_url":"https://www.iana.org/peer?%74oken=private"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://www.iana.org/a/%2e%2e/private","verified_url":"https://www.iana.org/a/%2e%2e/private"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://www.iana.org/peer?contact=person%40sample.invalid","verified_url":"https://www.iana.org/peer?contact=person%40sample.invalid"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://www.iana.org/peer?token=%zz","verified_url":"https://www.iana.org/peer?token=%zz"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"../secrets#record"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"skills/assistant-research/../private-note"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"/Users/name/repo#record"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"C:\\Users\\fixture\\private-note"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"skills/assistant-research/contracts/output.yaml\nprivate-note"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"https://www.iana.org/domains/example"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"https//metadata.local/private"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"local_repository","verification_reference":"//metadata.local/private"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"connector:private/record:person@example.com"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"connector:fixture/record:https://metadata.local/private"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"https://user:token@connector.invalid/record:source-1"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"authenticated_source","verification_reference":"connector:private.internal/record:token-placeholder"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"citation:123-45-6789"}' | research_verified_source_evidence_is_valid \
     && ! printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"citation:555-123-4567"}' | research_verified_source_evidence_is_valid \
+    && ! printf '%s\n' '{"verification_method":"offline_authoritative_source","verification_reference":"citation:https://metadata.local/private"}' | research_verified_source_evidence_is_valid \
     && ruby -ryaml -e '
         handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
         peer = handoffs.find { |handoff| handoff["name"] == "orchestrator_to_research_peer_reviewer" }
@@ -1829,14 +2120,15 @@ fi
 test_start "assistant-research relational resource oracle accepts an alternate under-ceiling response"
 alternate_response="$(mktemp "${TMPDIR:-/tmp}/assistant-research-under-ceiling.XXXXXX")"
 p0p4_register_cleanup "$alternate_response"
-research_jcs_node build delegated alternate >"$alternate_response"
+investment_semantic_context="$(jq -c '.cases[] | select(.id == "five-lens-decision-briefing-uses-storm-style-workflow") | .semantic_context' "$research_evals")"
+research_jcs_node build delegated alternate "$investment_semantic_context" >"$alternate_response"
 jq '
   .five_lens_process_evidence.lens_dispatches |= map(
     .search_resource_usage = {actual_queries:2,actual_sources:3,elapsed_minutes:8,termination_state:"saturation",exhausted_dimensions:[],confidence_downgraded:false}
   )
   | .five_lens_process_evidence.overall_resource_usage = {actual_queries:10,actual_sources:15,elapsed_minutes:8,termination_state:"saturation",exhausted_dimensions:[],confidence_downgraded:false}
 ' "$alternate_response" >"$alternate_response.next" && mv "$alternate_response.next" "$alternate_response"
-if research_response_oracle_is_valid "$alternate_response"; then
+if research_response_oracle_is_valid "$alternate_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then
     pass
 else
     fail "assistant-research relational resource oracle rejected a valid alternate under-ceiling response"
@@ -1845,7 +2137,7 @@ fi
 test_start "assistant-research relational resource oracle accepts a valid multi-wave delegated schedule"
 multi_wave_response="$(mktemp "${TMPDIR:-/tmp}/assistant-research-multi-wave.XXXXXX")"
 p0p4_register_cleanup "$multi_wave_response"
-research_jcs_node build delegated alternate >"$multi_wave_response"
+research_jcs_node build delegated alternate "$investment_semantic_context" >"$multi_wave_response"
 jq '
   .five_lens_process_evidence.lens_dispatches[2].wave_id = "wave-2"
   | .five_lens_process_evidence.lens_dispatches[3].wave_id = "wave-2"
@@ -1856,25 +2148,456 @@ jq '
     ]
   | .five_lens_process_evidence.overall_resource_usage.elapsed_minutes = 20
 ' "$multi_wave_response" >"$multi_wave_response.next" && mv "$multi_wave_response.next" "$multi_wave_response"
-if research_response_oracle_is_valid "$multi_wave_response"; then
+if research_response_oracle_is_valid "$multi_wave_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then
     pass
 else
     fail "assistant-research relational resource oracle rejected a valid multi-wave delegated schedule"
 fi
 
-test_start "assistant-research fixture oracle permits an adjacent global IPv6 source"
+test_start "assistant-research fixture oracle permits an allocated global IPv6 source"
 global_ipv6_response="$(mktemp "${TMPDIR:-/tmp}/assistant-research-global-ipv6.XXXXXX")"
 p0p4_register_cleanup "$global_ipv6_response"
-research_jcs_node build delegated alternate >"$global_ipv6_response"
+research_jcs_node build delegated alternate "$investment_semantic_context" >"$global_ipv6_response"
 jq '
-  .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[100:0:0:1::1]/research"]
-  | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[100:0:0:1::1]/follow-up"]
+  .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://[2001:4860:4860::8888]/research"]
+  | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://[2001:4860:4860::8888]/follow-up"]
+  | .findings[0].sources = ["https://[2001:4860:4860::8888]/research"]
 ' "$global_ipv6_response" >"$global_ipv6_response.next" && mv "$global_ipv6_response.next" "$global_ipv6_response"
 research_refresh_response_derivatives "$global_ipv6_response"
-if research_response_oracle_is_valid "$global_ipv6_response"; then
+if research_response_oracle_is_valid "$global_ipv6_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then
     pass
 else
-    fail "assistant-research fixture oracle rejected an adjacent global IPv6 source"
+    fail "assistant-research fixture oracle rejected an allocated global IPv6 source"
+fi
+
+test_start "assistant-research fixture oracle accepts IANA IPv4 exceptions and admissible DNS references"
+external_reference_response="$(mktemp "${TMPDIR:-/tmp}/assistant-research-external-reference.XXXXXX")"
+p0p4_register_cleanup "$external_reference_response"
+research_jcs_node build delegated alternate "$investment_semantic_context" >"$external_reference_response"
+jq '
+  .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = ["https://192.0.0.9/research"]
+  | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = ["https://localtest.me/follow-up"]
+  | .findings[0].sources = ["https://192.0.0.9/research"]
+' "$external_reference_response" >"$external_reference_response.next" && mv "$external_reference_response.next" "$external_reference_response"
+research_refresh_response_derivatives "$external_reference_response"
+if research_response_oracle_is_valid "$external_reference_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then
+    pass
+else
+    fail "assistant-research fixture oracle rejected IANA IPv4 exceptions or admissible DNS references"
+fi
+
+test_start "assistant-research accepts ordinary semantic public URL paths in private and official whole fixtures"
+public_path_failures=()
+while IFS= read -r public_path; do
+    public_path_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-public-path.XXXXXX")"
+    public_path_response="$public_path_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$public_path_eval_dir"
+    write_research_eval_responses "$public_path_eval_dir"
+    jq --arg source "$public_path" '.peer_review.evidence[0].source = $source' "$public_path_response" >"$public_path_response.next" && mv "$public_path_response.next" "$public_path_response"
+    research_refresh_response_derivatives "$public_path_response"
+    if ! research_response_oracle_is_valid "$public_path_response" "five-lens-decision-briefing-uses-storm-style-workflow" \
+        || ! "$research_eval_runner" --responses "$public_path_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then
+        public_path_failures+=("$public_path")
+    fi
+done <<'EOF'
+https://www.iana.org/private
+https://www.iana.org/oauth/token
+https://www.iana.org/home/about
+https://www.iana.org/var/reference
+https://www.iana.org/Users/guide
+EOF
+if [[ "${#public_path_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research public URL path validation rejected safe whole fixtures: ${public_path_failures[*]}"
+fi
+
+test_start "assistant-research admits one encoded public HTTPS layer and rejects nested URL forms consistently"
+encoded_url_failures=()
+while IFS='|' read -r expected matrix_name source; do
+    encoded_url_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-encoded-url.XXXXXX")"
+    encoded_url_response="$encoded_url_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$encoded_url_eval_dir"
+    write_research_eval_responses "$encoded_url_eval_dir"
+    jq --arg source "$source" '
+      .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [$source]
+      | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = [$source]
+      | .findings[0].sources = [$source]
+      | .peer_review.evidence[0].source = $source
+    ' "$encoded_url_response" >"$encoded_url_response.next" && mv "$encoded_url_response.next" "$encoded_url_response"
+    research_refresh_response_derivatives "$encoded_url_response"
+    if private_output="$(research_response_oracle_is_valid "$encoded_url_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
+    if official_output="$("$research_eval_runner" --responses "$encoded_url_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+    [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || encoded_url_failures+=("$matrix_name:$private_actual/$official_actual")
+done <<'EOF'
+accept|public-depth-1-lower|https%3a%2f%2fwww.iana.org%2fresearch
+reject|private-depth-1-lower|https%3a%2f%2f127.0.0.1%2fresearch
+reject|public-depth-2-upper|https%253A%252F%252Fwww.iana.org%252Fresearch
+reject|private-depth-2-lower|https%253a%252f%252f127.0.0.1%252fresearch
+reject|public-depth-3-lower|https%25253a%25252f%25252fwww.iana.org%25252fresearch
+reject|private-depth-3-upper|HTTPS%25253A%25252F%25252F127.0.0.1%25252Fresearch
+reject|public-depth-4-upper|https%2525253A%2525252F%2525252Fwww.iana.org%2525252Fresearch
+reject|private-depth-4-lower|https%2525253a%2525252f%2525252f127.0.0.1%2525252fresearch
+reject|public-depth-6-lower|https%2525252525253a%2525252525252f%2525252525252fwww.iana.org%2525252525252fresearch
+reject|private-depth-6-upper|HTTPS%2525252525253A%2525252525252F%2525252525252F127.0.0.1%2525252525252Fresearch
+reject|public-depth-2-mixed-slashes|https%253A//www.iana.org%252Fresearch
+reject|private-depth-2-mixed-slashes|https%253a%252F/127.0.0.1%252fresearch
+reject|public-depth-2-encoded-h|%2568ttps%253A%252F%252Fwww.iana.org%252Fresearch
+reject|private-depth-2-encoded-h|%2568tTpS%253a%252f%252f127.0.0.1%252fresearch
+reject|public-depth-3-partial-scheme|h%252574tps%25253A%25252F%25252Fwww.iana.org%25252Fresearch
+reject|private-depth-4-full-scheme|%25252568%25252574%25252574%25252570%25252573%2525253A%2525252F%2525252F127.0.0.1%2525252Fresearch
+reject|public-depth-6-encoded-punctuation|https%2525252525253A%2525252525252F%2525252525252Fwww.iana.org%2525252525252Fresearch
+accept|public-depth-1-encoded-h|%68tTpS%3a%2f%2fwww.iana.org%2fresearch
+accept|safe-opaque-encoded-delimiters|source:opaque%25253Acontrol
+accept|safe-opaque-reserved-delimiter|doi:10.1000%252Fprivate
+EOF
+encoded_scheme_letter_failures=()
+research_nested_http_scheme_reference() {
+    local scheme="$1" depth="$2" host="$3" reference iteration
+    reference="${scheme}%3A%2F%2F${host}%2Fresearch"
+    for ((iteration = 1; iteration < depth; iteration++)); do
+        reference="${reference//%/%25}"
+    done
+    printf '%s' "$reference"
+}
+while IFS='|' read -r matrix_name scheme host; do
+    for depth in 2 3 6; do
+        source="$(research_nested_http_scheme_reference "$scheme" "$depth" "$host")"
+        encoded_scheme_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-encoded-scheme-letter.XXXXXX")"
+        encoded_scheme_response="$encoded_scheme_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+        p0p4_register_cleanup "$encoded_scheme_eval_dir"
+        write_research_eval_responses "$encoded_scheme_eval_dir"
+        jq --arg source "$source" '
+          .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [$source]
+          | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = [$source]
+          | .findings[0].sources = [$source]
+          | .peer_review.evidence[0].source = $source
+        ' "$encoded_scheme_response" >"$encoded_scheme_response.next" && mv "$encoded_scheme_response.next" "$encoded_scheme_response"
+        research_refresh_response_derivatives "$encoded_scheme_response"
+        if private_output="$(research_response_oracle_is_valid "$encoded_scheme_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
+        if official_output="$("$research_eval_runner" --responses "$encoded_scheme_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+        [[ "$private_actual" == reject && "$official_actual" == reject ]] || encoded_scheme_letter_failures+=("${matrix_name}-depth-${depth}:$private_actual/$official_actual")
+    done
+done <<'EOF'
+encoded-h-lower|%68ttps|www.iana.org
+encoded-h-upper|%48TTPS|127.0.0.1
+encoded-t-first-lower|h%74tps|www.iana.org
+encoded-t-first-upper|H%54TPS|127.0.0.1
+encoded-t-second-lower|ht%74ps|www.iana.org
+encoded-t-second-upper|HT%54PS|127.0.0.1
+encoded-p-lower|htt%70s|www.iana.org
+encoded-p-upper|HTT%50S|127.0.0.1
+encoded-s-lower|http%73|www.iana.org
+encoded-s-upper|HTTP%53|127.0.0.1
+EOF
+for depth in 2 3 6; do
+    source="$(research_nested_http_scheme_reference '%48%54t%50%73' "$depth" 'www.iana.org')"
+    encoded_scheme_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-encoded-scheme-mixed.XXXXXX")"
+    encoded_scheme_response="$encoded_scheme_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$encoded_scheme_eval_dir"
+    write_research_eval_responses "$encoded_scheme_eval_dir"
+    jq --arg source "$source" '
+      .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [$source]
+      | .five_lens_process_evidence.accepted_lens_results[0].follow_ups[0].sources_or_verified_urls = [$source]
+      | .findings[0].sources = [$source]
+      | .peer_review.evidence[0].source = $source
+    ' "$encoded_scheme_response" >"$encoded_scheme_response.next" && mv "$encoded_scheme_response.next" "$encoded_scheme_response"
+    research_refresh_response_derivatives "$encoded_scheme_response"
+    if private_output="$(research_response_oracle_is_valid "$encoded_scheme_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
+    if official_output="$("$research_eval_runner" --responses "$encoded_scheme_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+    [[ "$private_actual" == reject && "$official_actual" == reject ]] || encoded_scheme_letter_failures+=("mixed-prefix-depth-${depth}:$private_actual/$official_actual")
+done
+typed_encoded_url_failures=()
+while IFS='|' read -r expected matrix_name source; do
+    evidence="$(jq -cn --arg source "$source" '{verification_method:"public_url",verification_reference:$source,verified_url:$source}')"
+    if research_verified_source_evidence_is_valid <<<"$evidence"; then ruby_actual=accept; else ruby_actual=reject; fi
+    typed_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-typed-url.XXXXXX")"
+    typed_response="$typed_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$typed_eval_dir"
+    write_research_eval_responses "$typed_eval_dir"
+    jq --arg source "$source" '
+      .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed public URL evidence",source:"source:typed-public",verification_method:"public_url",verification_reference:$source,verified_url:$source,verification_detail:"Typed public URL parity fixture."}]
+    ' "$typed_response" >"$typed_response.next" && mv "$typed_response.next" "$typed_response"
+    research_refresh_response_derivatives "$typed_response"
+    if private_output="$(research_response_oracle_is_valid "$typed_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
+    if official_output="$("$research_eval_runner" --responses "$typed_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+    [[ "$ruby_actual" == "$expected" && "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || typed_encoded_url_failures+=("$matrix_name:$ruby_actual/$private_actual/$official_actual")
+done <<'EOF'
+accept|raw-public|https://www.iana.org/research
+accept|raw-public-plus|https://www.iana.org/a+b
+accept|raw-public-percent-space|https://www.iana.org/a%20b
+accept|raw-public-percent-literal|https://www.iana.org/rate%25
+accept|public-depth-1-encoded-h|%68tTpS%3a%2f%2fwww.iana.org%2fresearch
+accept|encoded-public-host|https://www.%69ana.org/research
+reject|encoded-public-trailing-dot-lower|https://www.iana.org%2e/research
+reject|encoded-public-trailing-dot-upper|https://www.iana.org%2E/research
+reject|encoded-localhost-trailing-dot|https://localhost%2e/research
+reject|private-depth-1|https%3A%2F%2F127.0.0.1%2Fresearch
+reject|encoded-private-host|https://%31%32%37.0.0.1/research
+reject|encoded-query-token|https%3A%2F%2Fwww.iana.org%2Fresearch%3Ftoken%3Dprivate
+reject|public-depth-2|https%253A%252F%252Fwww.iana.org%252Fresearch
+reject|public-depth-3|https%25253A%25252F%25252Fwww.iana.org%25252Fresearch
+reject|public-depth-4|https%2525253A%2525252F%2525252Fwww.iana.org%2525252Fresearch
+reject|public-depth-6|https%2525252525253A%2525252525252F%2525252525252Fwww.iana.org%2525252525252Fresearch
+reject|public-depth-2-mixed-slashes|https%253A//www.iana.org%252Fresearch
+reject|private-depth-2-encoded-h|%2568ttps%253A%252F%252F127.0.0.1%252Fresearch
+reject|private-depth-2-encoded-upper-h|%2548TTPS%253A%252F%252F127.0.0.1%252Fresearch
+reject|public-depth-3-partial-scheme|h%252574tps%25253A%25252F%25252Fwww.iana.org%25252Fresearch
+EOF
+if [[ "${#encoded_url_failures[@]}" -eq 0 && "${#encoded_scheme_letter_failures[@]}" -eq 0 && "${#typed_encoded_url_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research encoded URL source-policy parity failed: ${encoded_url_failures[*]-} ${encoded_scheme_letter_failures[*]-} ${typed_encoded_url_failures[*]-}"
+fi
+
+test_start "assistant-research candidate confidence follows canonical source-backed support"
+candidate_confidence_failures=()
+while IFS='|' read -r expected matrix_name confidence evidence; do
+    candidate_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-candidate-confidence.XXXXXX")"
+    candidate_response="$candidate_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$candidate_eval_dir"
+    write_research_eval_responses "$candidate_eval_dir"
+    jq --arg confidence "$confidence" --argjson evidence "$evidence" '
+      .candidate_mechanisms = [{mechanism:"Candidate confidence calibration fixture.",claim_status:"candidate",evidence:$evidence,confidence:$confidence,counterevidence_or_conflicts:["No material conflict recorded."],gaps:["Independent validation remains pending."],validation_method:"Compare independent source-backed evidence."}]
+    ' "$candidate_response" >"$candidate_response.next" && mv "$candidate_response.next" "$candidate_response"
+    research_refresh_response_derivatives "$candidate_response"
+    if private_output="$(research_response_oracle_is_valid "$candidate_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
+    if official_output="$("$research_eval_runner" --responses "$candidate_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+    [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || candidate_confidence_failures+=("$matrix_name:$private_actual/$official_actual")
+done <<'EOF'
+accept|low-single-source-backed|low|[{"source":"source:research-corpus:candidate-a","detail":"One source-backed observation.","evidence_status":"source_backed"}]
+reject|medium-single-source-backed|medium|[{"source":"source:research-corpus:candidate-a","detail":"One source-backed observation.","evidence_status":"source_backed"}]
+reject|high-single-source-backed|high|[{"source":"source:research-corpus:candidate-a","detail":"One source-backed observation.","evidence_status":"source_backed"}]
+accept|low-inference-only|low|[{"source":"source:research-corpus:candidate-a","detail":"Inference-only observation.","evidence_status":"inference_only"}]
+reject|medium-inference-only|medium|[{"source":"source:research-corpus:candidate-a","detail":"Inference-only observation.","evidence_status":"inference_only"}]
+accept|low-unresolved|low|[{"source":"source:research-corpus:candidate-a","detail":"Unresolved observation.","evidence_status":"unresolved"}]
+reject|medium-unresolved|medium|[{"source":"source:research-corpus:candidate-a","detail":"Unresolved observation.","evidence_status":"unresolved"}]
+accept|medium-two-source-backed|medium|[{"source":"source:research-corpus:candidate-a","detail":"First source-backed observation.","evidence_status":"source_backed"},{"source":"source:research-corpus:candidate-b","detail":"Second source-backed observation.","evidence_status":"source_backed"}]
+accept|medium-two-source-backed-plus-inference|medium|[{"source":"source:research-corpus:candidate-a","detail":"First source-backed observation.","evidence_status":"source_backed"},{"source":"source:research-corpus:candidate-b","detail":"Second source-backed observation.","evidence_status":"source_backed"},{"source":"source:research-corpus:candidate-c","detail":"Additional inference observation.","evidence_status":"inference_only"}]
+reject|high-two-source-backed|high|[{"source":"source:research-corpus:candidate-a","detail":"First source-backed observation.","evidence_status":"source_backed"},{"source":"source:research-corpus:candidate-b","detail":"Second source-backed observation.","evidence_status":"source_backed"}]
+accept|high-three-source-backed|high|[{"source":"source:research-corpus:candidate-a","detail":"First source-backed observation.","evidence_status":"source_backed"},{"source":"source:research-corpus:candidate-b","detail":"Second source-backed observation.","evidence_status":"source_backed"},{"source":"source:research-corpus:candidate-c","detail":"Third source-backed observation.","evidence_status":"source_backed"}]
+EOF
+if [[ "${#candidate_confidence_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research candidate confidence parity failed: ${candidate_confidence_failures[*]}"
+fi
+
+test_start "assistant-research classifies explicit non-HTTPS schemes consistently with opaque source identifiers"
+scheme_reference_failures=()
+while IFS='|' read -r expected matrix_name source; do
+    scheme_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-scheme-reference.XXXXXX")"
+    scheme_response="$scheme_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$scheme_eval_dir"
+    write_research_eval_responses "$scheme_eval_dir"
+    jq --arg source "$source" '.peer_review.evidence[0].source = $source' "$scheme_response" >"$scheme_response.next" && mv "$scheme_response.next" "$scheme_response"
+    research_refresh_response_derivatives "$scheme_response"
+    if research_response_oracle_is_valid "$scheme_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then private_actual=accept; else private_actual=reject; fi
+    if "$research_eval_runner" --responses "$scheme_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || scheme_reference_failures+=("$matrix_name:$private_actual/$official_actual")
+done <<'EOF'
+reject|ftp-url|ftp://www.iana.org/research
+reject|file-url|file:///etc/passwd
+accept|https-url|https://www.iana.org/research
+accept|source-opaque|source:research-corpus:peer
+accept|doi-opaque|doi:10.1000/typed-fixture
+accept|citation-opaque|citation:ISBN-978-0-00-000000-0
+EOF
+if [[ "${#scheme_reference_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research source scheme parity failed: ${scheme_reference_failures[*]}"
+fi
+
+test_start "assistant-research classifies IANA special-purpose literal IP sources consistently"
+literal_ip_policy_failures=()
+while IFS='|' read -r expected literal_ip_source; do
+    literal_ip_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-literal-ip.XXXXXX")"
+    literal_ip_response="$literal_ip_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$literal_ip_eval_dir"
+    write_research_eval_responses "$literal_ip_eval_dir"
+    jq --arg source "$literal_ip_source" '.peer_review.evidence[0].source = $source' "$literal_ip_response" >"$literal_ip_response.next" && mv "$literal_ip_response.next" "$literal_ip_response"
+    research_refresh_response_derivatives "$literal_ip_response"
+    if research_response_oracle_is_valid "$literal_ip_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then private_actual=accept; else private_actual=reject; fi
+    if "$research_eval_runner" --responses "$literal_ip_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || literal_ip_policy_failures+=("$literal_ip_source:$private_actual/$official_actual")
+done <<'EOF'
+reject|https://192.88.99.2/research
+accept|https://192.0.0.9/research
+reject|https://[64:ff9b:1::1]/research
+accept|https://[2001:1::1]/research
+accept|https://[2001:1::2]/research
+accept|https://[2001:1::3]/research
+reject|https://[2001:2::1]/research
+accept|https://[2001:3::1]/research
+accept|https://[2001:4:112::1]/research
+reject|https://[2001:5::1]/research
+accept|https://[2001:20::1]/research
+accept|https://[2001:30::1]/research
+reject|https://[3fff::1]/research
+reject|https://[5f00::1]/research
+EOF
+if [[ "${#literal_ip_policy_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research literal IP source-policy parity failed: ${literal_ip_policy_failures[*]}"
+fi
+
+test_start "assistant-research accepts final finding identities from valid typed evidence ledgers"
+typed_evidence_failures=()
+while IFS='|' read -r typed_source typed_method typed_reference; do
+    typed_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-typed-evidence.XXXXXX")"
+    typed_response="$typed_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$typed_eval_dir"
+    write_research_eval_responses "$typed_eval_dir"
+    jq --arg source "$typed_source" --arg method "$typed_method" --arg reference "$typed_reference" '
+      .findings[0].sources = [$source]
+      | del(.findings[0].source_provenance, .findings[0].verified_urls)
+      | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed fixture evidence",source:$source,verification_method:$method,verification_reference:$reference,verification_detail:"Typed fixture evidence validation."}]
+    ' "$typed_response" >"$typed_response.next" && mv "$typed_response.next" "$typed_response"
+    research_refresh_response_derivatives "$typed_response"
+    if ! research_response_oracle_is_valid "$typed_response" "five-lens-decision-briefing-uses-storm-style-workflow" \
+        || ! "$research_eval_runner" --responses "$typed_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then
+        typed_evidence_failures+=("$typed_method")
+    fi
+done <<'EOF'
+source:typed-local|local_repository|skills/assistant-research/contracts/output.yaml
+source:typed-authenticated|authenticated_source|connector:fixture/record:typed-authenticated
+source:typed-offline|offline_authoritative_source|citation:typed-offline
+source:typed-doi|offline_authoritative_source|doi:10.1000/typed-fixture
+source:typed-doi-path|offline_authoritative_source|doi:10.1000/private
+source:typed-isbn|offline_authoritative_source|isbn:978-0-00-000000-0
+EOF
+for identity_confidence in medium high; do
+    identity_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-encoded-identity.XXXXXX")"
+    identity_response="$identity_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$identity_eval_dir"
+    write_research_eval_responses "$identity_eval_dir"
+    if [[ "$identity_confidence" == "medium" ]]; then
+        jq '
+          .findings[0].confidence = "medium"
+          | .findings[0].sources = ["https%3A%2F%2Fwww.iana.org%2Fdomains%2Fexample", "https://www.iana.org/domains%2Fexample"]
+          | del(.findings[0].source_provenance)
+          | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [
+              {claim:"Decoded public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Decoded public fixture evidence."},
+              {claim:"Reserved delimiter public evidence",source:"https://www.iana.org/domains%2Fexample",verification_method:"public_url",verification_reference:"https://www.iana.org/domains%2Fexample",verified_url:"https://www.iana.org/domains%2Fexample",verification_detail:"Reserved delimiter remains a distinct public URL."}
+            ]
+        ' "$identity_response" >"$identity_response.next" && mv "$identity_response.next" "$identity_response"
+    else
+        jq '
+          .findings[0].confidence = "high"
+          | .findings[0].sources = ["https%3A%2F%2Fwww.iana.org%2Fdomains%2Fexample", "https://www.iana.org/domains%2Fexample", "https://www.iana.org/help/example-domains"]
+          | .findings[0].source_provenance = [
+              {source:"https%3A%2F%2Fwww.iana.org%2Fdomains%2Fexample",independence_key:"decoded",authority:"official"},
+              {source:"https://www.iana.org/domains%2Fexample",independence_key:"reserved",authority:"primary"},
+              {source:"https://www.iana.org/help/example-domains",independence_key:"distinct",authority:"secondary"}
+            ]
+          | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [
+              {claim:"Decoded public evidence",source:"https://www.iana.org/domains/example",verification_method:"public_url",verification_reference:"https://www.iana.org/domains/example",verified_url:"https://www.iana.org/domains/example",verification_detail:"Decoded public fixture evidence."},
+              {claim:"Reserved delimiter public evidence",source:"https://www.iana.org/domains%2Fexample",verification_method:"public_url",verification_reference:"https://www.iana.org/domains%2Fexample",verified_url:"https://www.iana.org/domains%2Fexample",verification_detail:"Reserved delimiter remains a distinct public URL."},
+              {claim:"Distinct public evidence",source:"https://www.iana.org/help/example-domains",verification_method:"public_url",verification_reference:"https://www.iana.org/help/example-domains",verified_url:"https://www.iana.org/help/example-domains",verification_detail:"Distinct public fixture evidence."}
+            ]
+        ' "$identity_response" >"$identity_response.next" && mv "$identity_response.next" "$identity_response"
+    fi
+    research_refresh_response_derivatives "$identity_response"
+    if ! research_response_oracle_is_valid "$identity_response" "five-lens-decision-briefing-uses-storm-style-workflow" \
+        || ! "$research_eval_runner" --responses "$identity_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then
+        typed_evidence_failures+=("fully-encoded-$identity_confidence")
+    fi
+done
+if [[ "${#typed_evidence_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research typed verified evidence identities rejected by private or official validation: ${typed_evidence_failures[*]}"
+fi
+
+test_start "assistant-research URL and candidate negative fixtures reach source safety with valid counterparts"
+fixture_safety_failures=()
+while IFS='|' read -r expected fixture_name fixture_kind source; do
+    fixture_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-fixture-safety.XXXXXX")"
+    fixture_response="$fixture_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$fixture_eval_dir"
+    write_research_eval_responses "$fixture_eval_dir"
+    jq --arg kind "$fixture_kind" --arg source "$source" '
+      if $kind == "typed" then
+        .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{
+          claim:"Public fixture evidence",source:"source:typed-public",verification_method:"public_url",
+          verification_reference:$source,verified_url:$source,verification_detail:"Typed source safety fixture."
+        }]
+      else
+        .candidate_mechanisms = [{
+          mechanism:"Candidate fixture mechanism",claim_status:"candidate",
+          evidence:[{source:$source,detail:"Candidate source safety fixture.",evidence_status:"source_backed"}],
+          confidence:"low",counterevidence_or_conflicts:["No counterevidence recorded."],
+          gaps:["Independent validation remains pending."],validation_method:"Compare independent evidence."
+        }]
+      end
+    ' "$fixture_response" >"$fixture_response.next" && mv "$fixture_response.next" "$fixture_response"
+    research_refresh_response_derivatives "$fixture_response"
+    if research_response_oracle_is_valid "$fixture_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then private_actual=accept; else private_actual=reject; fi
+    if "$research_eval_runner" --responses "$fixture_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || fixture_safety_failures+=("$fixture_name:$private_actual/$official_actual")
+done <<'EOF'
+accept|typed-public-control|typed|https://www.iana.org/typed-fixture
+reject|typed-public-secret|typed|https://www.iana.org/typed-fixture?%74oken=private
+accept|candidate-opaque-control|candidate|source:research-corpus:candidate
+reject|candidate-opaque-pii|candidate|source:%65mail=person%40sample.invalid
+EOF
+if [[ "${#fixture_safety_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research source safety fixture coverage failed: ${fixture_safety_failures[*]}"
+fi
+
+test_start "assistant-research typed evidence rejects decoded opaque hazards and accepts static DNS references"
+typed_reference_failures=()
+while IFS='|' read -r expected method reference verified_url; do
+    evidence="$(jq -cn --arg method "$method" --arg reference "$reference" --arg verified_url "$verified_url" '{verification_method:$method,verification_reference:$reference} + (if $method == "public_url" then {verified_url:$verified_url} else {} end)')"
+    if research_verified_source_evidence_is_valid <<<"$evidence"; then
+        actual=accept
+    else
+        actual=reject
+    fi
+    [[ "$actual" == "$expected" ]] || typed_reference_failures+=("$method:$reference")
+done <<'EOF'
+reject|offline_authoritative_source|citation:a/../docs|
+reject|offline_authoritative_source|citation:a/%2e%2e/docs|
+reject|offline_authoritative_source|citation:/Users/redacted/notes|
+reject|offline_authoritative_source|doi:10.1000/example?token=redacted|
+accept|offline_authoritative_source|doi:10.1000/private|
+reject|public_url|https://@www.iana.org/path|https://@www.iana.org/path
+reject|public_url|https://:@www.iana.org/path|https://:@www.iana.org/path
+reject|public_url|https%3A%2F%2F127.0.0.1%2Fpath|https%3A%2F%2F127.0.0.1%2Fpath
+reject|public_url|https://%31%32%37.0.0.1/path|https://%31%32%37.0.0.1/path
+accept|public_url|https://www.%69ana.org/path|https://www.%69ana.org/path
+accept|public_url|https://localtest.me/path|https://localtest.me/path
+accept|public_url|https://192.0.0.9/path|https://192.0.0.9/path
+accept|public_url|https://192.0.0.10/path|https://192.0.0.10/path
+accept|public_url|https://www.iana.org/private|https://www.iana.org/private
+accept|public_url|https://www.iana.org/oauth/token|https://www.iana.org/oauth/token
+accept|public_url|https://www.iana.org/home/about|https://www.iana.org/home/about
+accept|public_url|https://www.iana.org/var/reference|https://www.iana.org/var/reference
+accept|public_url|https://www.iana.org/Users/guide|https://www.iana.org/Users/guide
+reject|public_url|https://192.88.99.2/path|https://192.88.99.2/path
+accept|public_url|https://192.0.0.9/path|https://192.0.0.9/path
+reject|public_url|https://[64:ff9b:1::1]/path|https://[64:ff9b:1::1]/path
+accept|public_url|https://[2001:1::1]/path|https://[2001:1::1]/path
+accept|public_url|https://[2001:1::2]/path|https://[2001:1::2]/path
+accept|public_url|https://[2001:1::3]/path|https://[2001:1::3]/path
+reject|public_url|https://[2001:2::1]/path|https://[2001:2::1]/path
+accept|public_url|https://[2001:3::1]/path|https://[2001:3::1]/path
+accept|public_url|https://[2001:4:112::1]/path|https://[2001:4:112::1]/path
+reject|public_url|https://[2001:5::1]/path|https://[2001:5::1]/path
+accept|public_url|https://[2001:20::1]/path|https://[2001:20::1]/path
+accept|public_url|https://[2001:30::1]/path|https://[2001:30::1]/path
+reject|public_url|https://[3fff::1]/path|https://[3fff::1]/path
+reject|public_url|https://[5f00::1]/path|https://[5f00::1]/path
+reject|public_url|https://192.0.0.8/path|https://192.0.0.8/path
+EOF
+if [[ "${#typed_reference_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research typed evidence source-policy parity failed: ${typed_reference_failures[*]}"
 fi
 
 test_start "assistant-research semantic fixtures bind common packet scope and required follow-ups"
@@ -1900,7 +2623,7 @@ while IFS= read -r semantic_case_id; do
                 | ([$response.five_lens_process_evidence.accepted_lens_results[] | select(.lens_kind == $requirement.lens_kind).follow_ups[] | select(.decision == $requirement.decision)] | length) == $requirement.exact_count
               )
         ' "$semantic_response" >/dev/null \
-        || ! research_response_oracle_is_valid "$semantic_response"; then
+        || ! research_response_oracle_is_valid "$semantic_response" "$semantic_case_id"; then
         semantic_context_failures+=("$semantic_case_id")
     fi
 done < <(jq -r '.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .id' "$research_evals")

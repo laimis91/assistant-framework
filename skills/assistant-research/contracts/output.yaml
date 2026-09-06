@@ -12,7 +12,7 @@ artifacts:
     condition: always
     description: "Research findings with confidence scores and source attribution"
     min_items: 0
-    validation: "At least one source-backed finding is required except when research_method=five_lens_briefing, every accepted LensResearchResult is source-empty with evidence_status inference_only or unresolved, and top-level gaps is non-empty. Only that evidence-empty completion may use findings=[]. Each finding has a confidence level and at least one source. When source_provenance is present, its unique source set exactly equals sources. High confidence requires source_provenance with both at least three unique independence_key values and at least one primary/official authority row; one authoritative source is medium."
+    validation: "At least one source-backed finding is required except when research_method=five_lens_briefing, every accepted LensResearchResult is source-empty with evidence_status inference_only or unresolved, and top-level gaps is non-empty. Only that evidence-empty completion may use findings=[]. When research_method=five_lens_briefing, every finding source resolves to an accepted lens-result/follow-up source or to the source identity of a fully valid typed verified_source_evidence row; a public_url row may also resolve its valid verified_url, but its label and URL are one evidence identity for confidence counting. Each finding has a confidence level and at least one source. When source_provenance is present, its unique source set exactly equals sources. High confidence requires source_provenance with both at least three unique independence_key values and at least one primary/official authority row; medium requires two unique evidence identities or exactly one primary/official provenance row; one secondary source is low."
     object_fields:
       - name: finding
         type: string
@@ -23,8 +23,8 @@ artifacts:
         required: true
         enum_values: [high, medium, low]
         validation: >
-          high: source_provenance is present, 3+ unique independence_key values agree, and at least one source_provenance row is primary/official.
-          medium: 2 sources agree, or 1 authoritative source.
+          high: source_provenance is present, 3+ independent canonical evidence identities and 3+ unique independence_key values agree, and at least one source_provenance row is primary/official.
+          medium: 2 unique evidence identities agree, or 1 authoritative source; a public-ledger label and its verified URL count once.
           low: single source, or sources conflict.
       - name: sources
         type: string[]
@@ -36,9 +36,9 @@ artifacts:
         required: conditional
         condition: "confidence == high"
         description: "Typed provenance for confidence calibration while sources remains the backward-compatible public string array."
-        validation: "When present, every exact row contains only source, independence_key, and authority, and the unique source set exactly equals sources. Required for high confidence."
+        validation: "When present, every exact row contains only source, independence_key, and authority, and the unique source set exactly equals sources. Required for high confidence, which additionally requires three independent canonical evidence identities; case or percent-encoded URL aliases cannot satisfy that threshold."
         object_fields:
-          - {name: source, type: string, required: true}
+          - {name: source, type: string, required: true, validation: "Safe opaque source reference or admissible external HTTPS reference; static validation rejects protocol-relative or malformed URL schemes, userinfo, ports, credentials, secrets, PII, decoded traversal, literal private/reserved IP endpoints, and special-use DNS names. It does not resolve DNS, prove reachability, validate redirects, or certify SSRF safety."}
           - {name: independence_key, type: string, required: true}
           - {name: authority, type: enum, required: true, enum_values: [primary, official, secondary]}
       - name: verified_urls
@@ -372,7 +372,7 @@ artifacts:
         condition: "status in [DONE, DONE_WITH_CONCERNS]"
         min_items: 1
         object_fields:
-          - {name: source, type: string, required: true}
+          - {name: source, type: string, required: true, validation: "Canonical SafeSourceReference: opaque identity or admissible external HTTPS; reject malformed URLs, decoded unsafe content, literal private/reserved IPs, and special-use DNS. Static checks do not resolve DNS or redirects."}
           - {name: detail, type: string, required: true}
           - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
       - {name: open_questions, type: "string[]", required: conditional, condition: "status in [NEEDS_CONTEXT, BLOCKED]", min_items: 1}
@@ -478,8 +478,8 @@ artifacts:
               - {name: overall_max_sources, type: int, required: true}
               - {name: overall_max_minutes, type: int, required: true}
               - {name: stop_condition, type: enum, required: true, enum_values: [saturation_or_hard_ceiling]}
-          - {name: source_policy, type: string, required: true}
-          - {name: isolation_policy, type: string, required: true}
+          - {name: source_policy, type: enum, required: true, enum_values: [verified_sources_only]}
+          - {name: isolation_policy, type: enum, required: true, enum_values: [sibling_blind_no_synthesis]}
           - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
           - {name: packet_frozen_at, type: string, required: true}
       - name: search_resource_budget
@@ -560,7 +560,7 @@ artifacts:
           - name: search_resource_usage
             type: object
             required: true
-            validation: "Non-negative actuals remain within per-lens ceilings for usable returns. ceiling_exhausted equals a ceiling and requires exhausted dimensions, exhaustion_gap, confidence_downgraded=true, and LOW matching perspective confidence. over_ceiling blocks the process."
+            validation: "Non-negative actuals remain within per-lens ceilings for usable returns. actual_sources is at least the count of unique nonblank sources_or_verified_urls returned by this accepted lens result plus its follow_ups; consulted-but-not-returned sources remain allowed. ceiling_exhausted equals a ceiling and requires exhausted dimensions, exhaustion_gap, confidence_downgraded=true, and LOW matching perspective confidence. over_ceiling blocks the process."
             object_fields:
               - {name: actual_queries, type: int, required: true}
               - {name: actual_sources, type: int, required: true}
@@ -592,7 +592,7 @@ artifacts:
           - name: search_resource_usage
             type: object
             required: true
-            validation: "Non-negative actuals remain within per-lens ceilings for usable results. ceiling_exhausted equals a ceiling and requires exhausted dimensions, exhaustion_gap, confidence_downgraded=true, and LOW matching perspective confidence. over_ceiling blocks the process."
+            validation: "Non-negative actuals remain within per-lens ceilings for usable results. actual_sources is at least the count of unique nonblank sources_or_verified_urls returned by this accepted lens result plus its follow_ups; consulted-but-not-returned sources remain allowed. ceiling_exhausted equals a ceiling and requires exhausted dimensions, exhaustion_gap, confidence_downgraded=true, and LOW matching perspective confidence. over_ceiling blocks the process."
             object_fields:
               - {name: actual_queries, type: int, required: true}
               - {name: actual_sources, type: int, required: true}
@@ -608,7 +608,7 @@ artifacts:
         required: conditional
         condition: "lens_execution_mode == delegated"
         min_items: 1
-        validation: "Waves are capacity-bounded and their LensKind coverage is exact, disjoint, and exhaustive."
+        validation: "Waves are capacity-bounded and their LensKind coverage is exact, disjoint, and exhaustive. wave_coverage is forbidden when lens_execution_mode=sequential_fallback."
         object_fields:
           - name: wave_id
             type: string
@@ -763,7 +763,7 @@ artifacts:
     required: true
     condition: always
     description: "Conflicting information found across sources"
-    validation: "Empty list is valid — but the field must be present to confirm conflicts were checked. source_a and source_b obey the same safe source-reference and globally routable public-URL rules as finding sources."
+    validation: "Empty list is valid — but the field must be present to confirm conflicts were checked. source_a and source_b obey the same safe source-reference and admissible external HTTPS-reference rules as finding sources."
     object_fields:
       - name: claim_a
         type: string
@@ -771,14 +771,14 @@ artifacts:
       - name: source_a
         type: string
         required: true
-        validation: "Safe source reference; URL-shaped values are verified globally routable HTTPS, and every value excludes credentials, secrets, PII, traversal, and absolute host paths."
+        validation: "Safe source reference; URL-shaped values are admissible external HTTPS references under static validation, which excludes userinfo, ports, credentials, secrets, PII, traversal, literal private/reserved IP endpoints, and special-use DNS names but does not resolve DNS or validate redirects."
       - name: claim_b
         type: string
         required: true
       - name: source_b
         type: string
         required: true
-        validation: "Safe source reference; URL-shaped values are verified globally routable HTTPS, and every value excludes credentials, secrets, PII, traversal, and absolute host paths."
+        validation: "Safe source reference; URL-shaped values are admissible external HTTPS references under static validation, which excludes userinfo, ports, credentials, secrets, PII, traversal, literal private/reserved IP endpoints, and special-use DNS names but does not resolve DNS or validate redirects."
       - name: assessment
         type: string
         required: true

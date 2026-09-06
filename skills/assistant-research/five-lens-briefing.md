@@ -61,7 +61,9 @@ and its LensKind only; it excludes sibling results, prior waves, contradiction
 mapping, synthesis, recommendation, and peer review. Dispatch one independent
 `LensResearcher` identity per packet. Capacity-bounded waves are allowed when
 their coverage is exact, disjoint, and exhaustive; later waves cannot consume earlier results.
-Each frozen packet also carries an explicit source_policy and isolation_policy.
+Each frozen packet carries `source_policy=verified_sources_only` and
+`isolation_policy=sibling_blind_no_synthesis`; these canonical literals prevent
+response-controlled policy prose from changing the assignment boundary.
 Independent dispatch means distinct native dispatch or agent identities, not
 distinct model identities: one model may serve multiple isolated assignments.
 All five packets have equal `question`, `tier`, `user_role_or_goal`,
@@ -160,12 +162,12 @@ follow-up without its own non-empty gap. Request one same-assignment schema
 correction; if it remains invalid, rerun the complete lens stage through
 evidenced fallback or block rather than inventing follow-up evidence.
 
-Decision-critical evidence may use a verified public URL, repository-relative
-locator, opaque authenticated connector/record identifier, or offline
-bibliographic citation. Non-URL methods do not fabricate a URL. Public URLs are
-successfully checked and globally routable, never reserved-domain, private,
-loopback, link-local, or alternate-encoded addresses. Keep every reference free
-of credentials, tokens, PII, parent traversal, and absolute host paths.
+Decision-critical evidence uses external HTTPS, repository locator, opaque
+connector/record, or offline citation. Public URLs are statically admissible:
+no malformed/protocol-relative form, userinfo, port, secret, PII, traversal,
+literal reserved/private IP, or special-use DNS name. Static checks neither
+resolve DNS nor prove reachability, redirect, or SSRF safety; runtimes validate
+resolved addresses and redirect targets at connect time.
 Conflict references obey these rules.
 
 Do not synthesize from a lens until its key question and at least one answer/gap entry are recorded. If source access is unavailable, keep the question trace and mark answers as inference-only or unresolved rather than pretending they are source-backed.

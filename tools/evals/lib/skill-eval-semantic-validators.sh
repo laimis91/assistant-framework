@@ -26,6 +26,36 @@ const acceptedKeys = ["lens_kind", "assignment_id", "lens_result_digest", ...res
 const packetKeys = ["packet_id", "packet_set_id", "content_digest", "question", "tier", "user_role_or_goal", "output_purpose", "known_context", "evidence_budget", "search_resource_budget", "source_policy", "isolation_policy", "lens_kind", "packet_frozen_at"];
 const synthesisBaseKeys = ["executive_summary", "ranked_key_findings", "hidden_connection", "actionable_implication", "recommendation", "frontier_question"];
 const peerBindingKeys = ["peer_review_input_digest", "peer_review_assignment_id", "initial_synthesis", "validated_lens_results", "findings", "candidate_mechanisms", "conflicts", "contradiction_map", "lens_execution_provenance", "verified_source_evidence", "verification_gaps", "high_stakes_context"];
+const ianaNonGlobalIpv4Cidrs = ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4"];
+const ianaNonGlobalIpv6Cidrs = ["::/128", "::1/128", "::ffff:0:0/96", "64:ff9b:1::/48", "100::/64", "100:0:0:1::/64", "2001::/23", "2001:db8::/32", "3fff::/20", "5f00::/16", "fc00::/7", "fe80::/10", "ff00::/8"];
+const ianaGlobalIpv4Exceptions = new Set(["192.0.0.9", "192.0.0.10"]);
+const ianaGlobalIpv6Exceptions = ["2001:1::1/128", "2001:1::2/128", "2001:1::3/128", "2001:3::/32", "2001:4:112::/48", "2001:20::/28", "2001:30::/28"];
+function ipv4InCidr(host, cidr) {
+  const [base, prefix] = cidr.split("/");
+  const toNumber = value => value.split(".").reduce((result, part) => (result << 8) + Number(part), 0) >>> 0;
+  const shift = 32 - Number(prefix);
+  return (toNumber(host) >>> shift) === (toNumber(base) >>> shift);
+}
+function ipv6ToBigInt(host) {
+  if (host.includes(".")) return undefined;
+  const parts = host.toLowerCase().split("::");
+  if (parts.length > 2) return undefined;
+  const left = parts[0] ? parts[0].split(":") : [];
+  const right = parts.length === 2 && parts[1] ? parts[1].split(":") : [];
+  const omitted = 8 - left.length - right.length;
+  if (left.concat(right).some(part => !/^[0-9a-f]{1,4}$/.test(part)) || (parts.length === 1 && omitted !== 0) || (parts.length === 2 && omitted < 1)) return undefined;
+  return [...left, ...Array(omitted).fill("0"), ...right].reduce((result, part) => (result << 16n) + BigInt(`0x${part}`), 0n);
+}
+function ipv6InCidr(host, cidr) {
+  const [base, prefix] = cidr.split("/");
+  const address = ipv6ToBigInt(host), network = ipv6ToBigInt(base);
+  return address !== undefined && network !== undefined && (address >> BigInt(128 - Number(prefix))) === (network >> BigInt(128 - Number(prefix)));
+}
+function nonGlobalLiteralIp(host) {
+  const family = net.isIP(host);
+  if (family === 4) return !ianaGlobalIpv4Exceptions.has(host) && ianaNonGlobalIpv4Cidrs.some(cidr => ipv4InCidr(host, cidr));
+  return family === 6 && !ianaGlobalIpv6Exceptions.some(cidr => ipv6InCidr(host, cidr)) && ianaNonGlobalIpv6Cidrs.some(cidr => ipv6InCidr(host, cidr));
+}
 const errors = [];
 const fail = message => errors.push(message);
 const nonblank = value => typeof value === "string" && value.trim().length > 0;
@@ -103,6 +133,11 @@ function usageValid(usage, budget, result, label) {
   allowedKeys(usage, keys, label);
   if (!usage || !["actual_queries", "actual_sources", "elapsed_minutes"].every(key => Number.isInteger(usage[key]) && usage[key] >= 0)) { fail(`${label}: non-negative integer actuals required`); return false; }
   if (usage.actual_queries > budget.per_lens_max_queries || usage.actual_sources > budget.per_lens_max_sources || usage.elapsed_minutes > budget.per_lens_max_minutes) fail(`${label}: per-lens ceiling exceeded`);
+  const returnedSources = new Set([
+    ...(Array.isArray(result?.sources_or_verified_urls) ? result.sources_or_verified_urls : []),
+    ...(Array.isArray(result?.follow_ups) ? result.follow_ups.flatMap(followUp => Array.isArray(followUp?.sources_or_verified_urls) ? followUp.sources_or_verified_urls : []) : [])
+  ].filter(nonblank));
+  if (usage.actual_sources < returnedSources.size) fail(`${label}: actual sources cannot undercount returned sources`);
   const dimensions = usage.exhausted_dimensions;
   const ceiling = {queries: [usage.actual_queries, budget.per_lens_max_queries], sources: [usage.actual_sources, budget.per_lens_max_sources], elapsed_time: [usage.elapsed_minutes, budget.per_lens_max_minutes]};
   const dimensionsValid = Array.isArray(dimensions) && dimensions.length === new Set(dimensions).size && dimensions.every(dimension => Object.hasOwn(ceiling, dimension));
@@ -121,7 +156,10 @@ function overallUsageValid(overall, budget, records, mode, process) {
   const sourceSum = records.reduce((sum, record) => sum + (record.search_resource_usage?.actual_sources ?? 0), 0);
   if (overall.actual_queries !== querySum || overall.actual_sources !== sourceSum || overall.actual_queries > budget.overall_max_queries || overall.actual_sources > budget.overall_max_sources || overall.elapsed_minutes > budget.overall_max_minutes) fail("overall usage: sums or ceilings");
   let elapsedLowerBound;
-  if (mode === "sequential_fallback") elapsedLowerBound = records.reduce((sum, record) => sum + (record.search_resource_usage?.elapsed_minutes ?? 0), 0);
+  if (mode === "sequential_fallback") {
+    if (Object.hasOwn(process, "wave_coverage")) fail("sequential fallback: wave coverage is delegated-only");
+    elapsedLowerBound = records.reduce((sum, record) => sum + (record.search_resource_usage?.elapsed_minutes ?? 0), 0);
+  }
   else {
     const waves = process.wave_coverage;
     if (!Array.isArray(waves) || waves.length === 0) { fail("delegated schedule: wave coverage required"); elapsedLowerBound = Infinity; }
@@ -150,33 +188,19 @@ function overallUsageValid(overall, budget, records, mode, process) {
   if (exhausted && (!(dimensions.length > 0 && dimensions.every(dimension => ceiling[dimension][0] === ceiling[dimension][1])) || !nonblank(overall.exhaustion_gap) || overall.confidence_downgraded !== true)) fail("overall usage: ceiling exhaustion truth table");
 }
 function publicUrlValid(value) {
-  if (!nonblank(value) || /(?:^|[?&#])(?:token|secret|key|password|email)=/i.test(value)) return false;
+  if (!nonblank(value) || !decodedUrlSafetyValid(value)) return false;
+  const rawAuthority = value.match(/^https:\/\/([^/?#]+)/i)?.[1];
+  const rawHostPort = rawAuthority?.replace(/^.*@/, "");
+  const rawHost = rawHostPort?.replace(/^\[([^\]]+)\](?::\d+)?$/, "$1").replace(/:\d+$/, "");
+  if (!rawAuthority || rawAuthority.includes("@") || !rawHost || /(?:\]|[^:]):\d+$/.test(rawHostPort) || rawHost.split(".").some(part => /^(?:0x[0-9a-f]+|0[0-9]+)$/i.test(part)) || /^(?:0x[0-9a-f]+|0[0-9]+|[0-9]+)$/i.test(rawHost) || (/^\d+(?:\.\d+)+$/.test(rawHost) && rawHost.split(".").length !== 4)) return false;
   let url; try { url = new URL(value); } catch { return false; }
   if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   const specialUseHost = new Set(["local", "localhost", "invalid", "test", "example", "internal"]);
   if (!host || host.endsWith(".") || specialUseHost.has(host) || (!net.isIP(host) && !host.includes(".")) || /(?:\.local|\.localhost|\.invalid|\.test|\.example|\.internal)$/.test(host) || /^(?:0x|0)[0-9a-f]+$/i.test(host) || /^[0-9]+$/.test(host)) return false;
-  if (net.isIP(host) === 4) {
-    if (host.split(".").some(part => part.length > 1 && part.startsWith("0"))) return false;
-    const [a, b, c] = host.split(".").map(Number);
-    if (a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 192 && b === 0 && (c === 0 || c === 2)) || (a === 198 && (b === 18 || b === 19)) || (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113)) return false;
-  }
-  if (net.isIP(host) === 6) {
-    if (host === "::" || host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") || host.startsWith("ff") || host.startsWith("::ffff:") || host.startsWith("2001:db8:") || ipv6DiscardOnly(host)) return false;
-  }
+  if (net.isIP(host) === 4 && host.split(".").some(part => part.length > 1 && part.startsWith("0"))) return false;
+  if (nonGlobalLiteralIp(host)) return false;
   return true;
-}
-function ipv6DiscardOnly(host) {
-  if (host.includes(".")) return false;
-  const parts = host.split("::");
-  if (parts.length > 2) return false;
-  const left = parts[0] ? parts[0].split(":") : [];
-  const right = parts.length === 2 && parts[1] ? parts[1].split(":") : [];
-  if (left.concat(right).some(part => !/^[0-9a-f]{1,4}$/i.test(part))) return false;
-  const omitted = 8 - left.length - right.length;
-  if ((parts.length === 1 && omitted !== 0) || (parts.length === 2 && omitted < 1)) return false;
-  const groups = [...left, ...Array(omitted).fill("0"), ...right].map(part => parseInt(part, 16));
-  return groups.length === 8 && groups[0] === 0x100 && groups[1] === 0 && groups[2] === 0 && groups[3] === 0;
 }
 function sourceReferencesValid(sources, evidenceStatus, gaps, label) {
   if (!Array.isArray(sources) || !sources.every(nonblank)) { fail(`${label}: nonblank source identifiers required`); return; }
@@ -188,10 +212,24 @@ function sourceReferencesValid(sources, evidenceStatus, gaps, label) {
 }
 function sourceReferenceValid(source, label) {
   if (!nonblank(source)) { fail(`${label}: nonblank source identifiers required`); return false; }
-  if (/\.\.|(?:^|[\\/])~?(?:Users|home|private|var)(?:[\\/]|$)|(?:token|secret|password|api[_-]?key|email)=/i.test(source)) { fail(`${label}: unsafe source reference`); return false; }
+  if (malformedUrlSchemeLike(source)) { fail(`${label}: malformed URL source`); return false; }
+  if (/^https?:\/\//i.test(source)) {
+    if (!publicUrlValid(source)) { fail(`${label}: non-public URL source`); return false; }
+    return true;
+  }
+  let decoded;
+  try { decoded = decodeURIComponent(source); } catch { fail(`${label}: invalid source encoding`); return false; }
+  if (decoded !== source && (/^https?:\/\//i.test(decoded) || malformedUrlSchemeLike(decoded))) {
+    if (malformedUrlSchemeLike(decoded) || !publicUrlValid(decoded)) { fail(`${label}: non-public URL source`); return false; }
+    return true;
+  }
+  if (decoded !== source && encodedHttpSchemeLike(decoded)) { fail(`${label}: multiply encoded URL source`); return false; }
   let parsed; try { parsed = new URL(source); } catch { parsed = undefined; }
   if ((parsed && ["http:", "https:"].includes(parsed.protocol)) || /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(source)) {
     if (!publicUrlValid(source)) { fail(`${label}: non-public URL source`); return false; }
+  } else if (unsafeOpaqueReference(source)) {
+    fail(`${label}: unsafe source reference`);
+    return false;
   }
   return true;
 }
@@ -218,18 +256,71 @@ function synthesisValid(synthesis, highStakesApplicable, label) {
   }
   return true;
 }
+function unsafeOpaqueReference(value) {
+  let decoded;
+  try { decoded = decodeURIComponent(value); } catch { return true; }
+  return malformedUrlSchemeLike(value) || encodedHttpSchemeLike(decoded) || !decodedOpaqueReferenceSafetyValid(value);
+}
+function encodedHttpSchemeLike(value) {
+  return typeof value === "string" && !/^https?:\/\//i.test(value) && /^(?:h|%(?:25)*(?:68|48))(?:t|%(?:25)*(?:74|54))(?:t|%(?:25)*(?:74|54))(?:p|%(?:25)*(?:70|50))(?:(?:s|%(?:25)*(?:73|53))?(?::|%(?:25)*3a)(?:\/|%(?:25)*2f){2})/i.test(value);
+}
+function malformedUrlSchemeLike(value) {
+  return typeof value === "string" && (/^\/\//.test(value) || /^https?(?::(?!\/\/)|\/(?!\/)|\/\/(?!\/))/i.test(value));
+}
+function decodedOpaqueReferenceSafetyValid(value) {
+  let decoded;
+  try { decoded = decodeURIComponent(value); } catch { return false; }
+  return !/(?:^|[?&#\\/:_-])(?:token|secret|key|password|email|api[_-]?key|access[_-]?token|bearer|credential|session|authorization)(?:=|$|[\\/:_-])/i.test(decoded) && !/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(decoded) && !/^(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|private|var)(?:[\\/]|$)|~(?:[\\/]|$))/i.test(decoded) && !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\b\d{3}-\d{2}-\d{4}\b|\b\d{3}[ .-]\d{3}[ .-]\d{4}\b/i.test(decoded);
+}
+function sensitiveUrlComponent(value) {
+  return value.replace(/^[?#]/, "").split(/[&;]/).some(field => field.split("=").some(part => /(?:^|[\\/:_-])(?:token|secret|key|password|email|api[_-]?key|access[_-]?token|bearer|credential|session|authorization)(?:$|[\\/:_-])/i.test(part)));
+}
+function decodedUrlSafetyValid(value) {
+  let decoded, url;
+  try { decoded = decodeURIComponent(value); url = new URL(value); } catch { return false; }
+  return !/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(decoded) && !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\b\d{3}-\d{2}-\d{4}\b|\b\d{3}[ .-]\d{3}[ .-]\d{4}\b/i.test(decoded) && ![url.search, url.hash].some(component => {
+    try { return sensitiveUrlComponent(decodeURIComponent(component)); } catch { return true; }
+  });
+}
+function canonicalPercentEncodedComponent(value) {
+  if (typeof value !== "string" || /%(?![0-9a-f]{2})/i.test(value)) return undefined;
+  return value.replace(/%([0-9a-f]{2})/gi, (match, hex) => {
+    const character = String.fromCharCode(Number.parseInt(hex, 16));
+    return /^[A-Za-z0-9\-._~]$/.test(character) ? character : `%${hex.toUpperCase()}`;
+  });
+}
+function boundedPublicUrl(value) {
+  if (publicUrlValid(value)) return value;
+  let decoded;
+  try { decoded = decodeURIComponent(value); } catch { return undefined; }
+  return decoded !== value && publicUrlValid(decoded) ? decoded : undefined;
+}
+function publicUrlIdentity(value) {
+  const boundedUrl = boundedPublicUrl(value);
+  if (!boundedUrl) return undefined;
+  const url = new URL(boundedUrl);
+  const host = canonicalPercentEncodedComponent(url.hostname.toLowerCase());
+  const path = canonicalPercentEncodedComponent(url.pathname);
+  const search = canonicalPercentEncodedComponent(url.search);
+  const hash = canonicalPercentEncodedComponent(url.hash);
+  return host === undefined || path === undefined || search === undefined || hash === undefined
+    ? undefined
+    : `https://${host}${path}${search}${hash}`;
+}
+function verifiedSourceEvidenceRowValid(row) {
+  const method = row?.verification_method;
+  const keys = method === "public_url" ? ["claim", "source", "verification_method", "verification_reference", "verified_url", "verification_detail"] : ["claim", "source", "verification_method", "verification_reference", "verification_detail"];
+  if (!row || typeof row !== "object" || Array.isArray(row) || Object.keys(row).sort().join("|") !== [...keys].sort().join("|") || !nonblank(row.claim) || !nonblank(row.source) || !sourceReferenceValid(row.source, "verified source evidence source") || !["public_url", "local_repository", "authenticated_source", "offline_authoritative_source"].includes(method) || !nonblank(row.verification_reference) || !nonblank(row.verification_detail)) return false;
+  if (method === "public_url") return row.verified_url === row.verification_reference && boundedPublicUrl(row.verified_url) !== undefined;
+  if (method !== "public_url" && unsafeOpaqueReference(row.verification_reference)) return false;
+  if (method === "local_repository") return /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+(?:#[A-Za-z0-9._:-]+)?$/.test(row.verification_reference);
+  if (method === "authenticated_source") return /^connector:[A-Za-z0-9._-]+\/record:[A-Za-z0-9._-]+$/.test(row.verification_reference);
+  return /^(?:citation|isbn|doi):[^\s]+$/i.test(row.verification_reference) && !/:\/\//.test(row.verification_reference) && !/^(?:citation|isbn|doi):(?:\/(?:Users|home|private|var)(?:\/|$)|[A-Za-z]:[\\/]|\\\\)/i.test(row.verification_reference);
+}
 function verifiedSourceEvidenceValid(rows, label) {
   if (!Array.isArray(rows)) { fail(`${label}: evidence array required`); return false; }
   let valid = true;
-  for (const row of rows) {
-    const method = row?.verification_method;
-    const keys = method === "public_url" ? ["claim", "source", "verification_method", "verification_reference", "verified_url", "verification_detail"] : ["claim", "source", "verification_method", "verification_reference", "verification_detail"];
-    if (!exactKeys(row, keys, `${label} row`) || !nonblank(row.claim) || !nonblank(row.source) || !["public_url", "local_repository", "authenticated_source", "offline_authoritative_source"].includes(method) || !nonblank(row.verification_reference) || !nonblank(row.verification_detail)) { valid = false; continue; }
-    if (method === "public_url" && (row.verified_url !== row.verification_reference || !publicUrlValid(row.verified_url))) { fail(`${label}: public URL row`); valid = false; }
-    if (method === "local_repository" && !/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+(?:#[A-Za-z0-9._:-]+)?$/.test(row.verification_reference)) { fail(`${label}: local repository row`); valid = false; }
-    if (method === "authenticated_source" && (!/^connector:[^\s/]+\/record:[^\s]+$/.test(row.verification_reference) || /(?:token|secret|password|api[_-]?key|email)=/i.test(row.verification_reference))) { fail(`${label}: authenticated source row`); valid = false; }
-    if (method === "offline_authoritative_source" && (!/^(?:citation|isbn|doi):/i.test(row.verification_reference) || /:\/\//.test(row.verification_reference))) { fail(`${label}: offline source row`); valid = false; }
-  }
+  for (const row of rows) if (!verifiedSourceEvidenceRowValid(row)) { fail(`${label}: invalid typed evidence row`); valid = false; }
   return valid;
 }
 function retainedPacketsValid(process, packetSet, manifest, effectiveTier, budget) {
@@ -240,7 +331,7 @@ function retainedPacketsValid(process, packetSet, manifest, effectiveTier, budge
   if (!retained.every(packet => sharedPacketFields.every(field => equal(packet?.[field], retained[0]?.[field])))) fail("retained packets: common scope binding");
   const manifestById = new Map((Array.isArray(manifest) ? manifest : []).map(packet => [packet.packet_id, packet]));
   for (const packet of retained) {
-    if (!exactKeys(packet, packetKeys, "retained packet") || !nonblank(packet.packet_id) || !nonblank(packet.packet_set_id) || !nonblank(packet.question) || !nonblank(packet.user_role_or_goal) || !nonblank(packet.output_purpose) || !Array.isArray(packet.known_context) || !packet.known_context.every(nonblank) || !nonblank(packet.evidence_budget) || !nonblank(packet.source_policy) || !nonblank(packet.isolation_policy) || !lenses.includes(packet.lens_kind) || !validTimestamp(packet.packet_frozen_at)) { fail("retained packets: shape"); continue; }
+    if (!exactKeys(packet, packetKeys, "retained packet") || !nonblank(packet.packet_id) || !nonblank(packet.packet_set_id) || !nonblank(packet.question) || !nonblank(packet.user_role_or_goal) || !nonblank(packet.output_purpose) || !Array.isArray(packet.known_context) || !packet.known_context.every(nonblank) || !nonblank(packet.evidence_budget) || packet.source_policy !== "verified_sources_only" || packet.isolation_policy !== "sibling_blind_no_synthesis" || !lenses.includes(packet.lens_kind) || !validTimestamp(packet.packet_frozen_at)) { fail("retained packets: shape"); continue; }
     const manifestEntry = manifestById.get(packet.packet_id);
     const preimage = Object.fromEntries(packetKeys.filter(key => key !== "content_digest").map(key => [key, packet[key]]));
     if (packet.packet_set_id !== packetSet?.packet_set_id || packet.tier !== effectiveTier || !equal(packet.search_resource_budget, budget) || !manifestEntry || manifestEntry.lens_kind !== packet.lens_kind || manifestEntry.content_digest !== packet.content_digest || !contentDigest(packet.content_digest) || packet.content_digest !== digest(preimage) || Date.parse(packet.packet_frozen_at) > Date.parse(packetSet?.packet_set_frozen_at) || Date.parse(packet.packet_frozen_at) >= Date.parse(packetSet?.first_lens_execution_at)) fail("retained packets: digest/binding");
@@ -263,8 +354,20 @@ function peerInputBindingValid(binding, process, accepted, lensMode, response) {
 function substantiveText(values) {
   return values.filter(nonblank).join("\n");
 }
-function semanticContextValid(context, retainedPackets, accepted, response) {
-  if (!exactKeys(context, ["packet_scope", "follow_up_requirements", "required_topic_terms"], "semantic context") || !exactKeys(context?.packet_scope, ["question", "user_role_or_goal", "output_purpose"], "semantic packet scope") || !Object.values(context.packet_scope).every(nonblank) || !Array.isArray(context.follow_up_requirements) || !Array.isArray(context.required_topic_terms) || !context.required_topic_terms.every(nonblank) || new Set(context.required_topic_terms).size !== context.required_topic_terms.length) { fail("semantic context: required shape"); return; }
+function semanticContextValid(fixtureCase, retainedPackets, accepted, response, binding) {
+  const context = fixtureCase?.semantic_context;
+  if (!exactKeys(context, ["packet_scope", "follow_up_requirements", "required_topic_terms", "high_stakes_context"], "semantic context") || !exactKeys(context?.packet_scope, ["question", "user_role_or_goal", "output_purpose"], "semantic packet scope") || !Object.values(context.packet_scope).every(nonblank) || !Array.isArray(context.follow_up_requirements) || !Array.isArray(context.required_topic_terms) || !context.required_topic_terms.every(nonblank) || new Set(context.required_topic_terms).size !== context.required_topic_terms.length) { fail("semantic context: required shape"); return; }
+  const trustedHighStakes = context.high_stakes_context;
+  const trustedHighStakesValid = exactKeys(trustedHighStakes, ["applicable", "caveat_or_not_applicable_reason", "user_context_status", "user_context_basis"], "semantic high-stakes context")
+    && typeof trustedHighStakes.applicable === "boolean"
+    && nonblank(trustedHighStakes.caveat_or_not_applicable_reason)
+    && ["explicit", "unresolved", "not_applicable"].includes(trustedHighStakes.user_context_status)
+    && nonblank(trustedHighStakes.user_context_basis)
+    && ((trustedHighStakes.applicable && ["explicit", "unresolved"].includes(trustedHighStakes.user_context_status))
+      || (!trustedHighStakes.applicable && trustedHighStakes.caveat_or_not_applicable_reason === "not_applicable" && trustedHighStakes.user_context_status === "not_applicable" && trustedHighStakes.user_context_basis === "not_applicable"));
+  if (!trustedHighStakesValid) { fail("semantic context: high-stakes binding"); return; }
+  if (!equal(binding?.high_stakes_context, trustedHighStakes)) fail("semantic context: high-stakes binding");
+  if (trustedHighStakes.user_context_status === "explicit" && !fixtureCase.prompt?.includes(trustedHighStakes.user_context_basis)) fail("semantic context: explicit user context must be prompt-derived");
   const requirementLenses = new Set();
   for (const requirement of context.follow_up_requirements) {
     if (!exactKeys(requirement, ["lens_kind", "decision", "exact_count"], "semantic follow-up requirement") || !lenses.includes(requirement.lens_kind) || requirementLenses.has(requirement.lens_kind) || !["follow_up", "none_needed"].includes(requirement.decision) || !Number.isInteger(requirement.exact_count) || requirement.exact_count < 1) { fail("semantic context: follow-up requirement"); continue; }
@@ -314,7 +417,7 @@ function peerReviewValid(peer, peerMode, process, lensIdentities, rootPasses, bi
     const usableFields = ["confidence_scores", "weakest_claim", "bias_or_lens_dominance", "missing_sixth_perspective", "falsification_test", "revised_recommendation_if_needed", "evidence"];
     if (!Array.isArray(peer.confidence_scores) || peer.confidence_scores.length === 0 || !peer.confidence_scores.every(nonblank) || !usableFields.slice(1, 6).every(field => nonblank(peer[field])) || !["do", "wait", "avoid", "investigate_further"].includes(peer.supported_recommendation) || peer.supported_recommendation !== finalRecommendation || !Array.isArray(peer.evidence) || peer.evidence.length === 0) fail("peer review: usable critique fields");
     const peerEvidence = Array.isArray(peer.evidence) ? peer.evidence : [];
-    for (const item of peerEvidence) if (!item || !nonblank(item.source) || !nonblank(item.detail) || !["source_backed", "inference_only", "unresolved"].includes(item.evidence_status)) fail("peer review: usable evidence");
+    for (const item of peerEvidence) if (!exactKeys(item, ["source", "detail", "evidence_status"], "peer review evidence") || !nonblank(item.source) || !sourceReferenceValid(item.source, "peer review evidence source") || !nonblank(item.detail) || !["source_backed", "inference_only", "unresolved"].includes(item.evidence_status)) fail("peer review: usable evidence");
   } else if (!Array.isArray(peer.open_questions) || peer.open_questions.length === 0 || !peer.open_questions.every(nonblank) || !nonblank(peer.status_detail)) fail("peer review: blocked context fields");
   if (peer.status === "BLOCKED" && (!["missing_review_context", "policy_blocked", "tool_failure"].includes(peer.blocker_type) || !Array.isArray(peer.blocker_evidence) || peer.blocker_evidence.length === 0 || !peer.blocker_evidence.every(nonblank))) fail("peer review: blocker fields");
   if (!usable) fail("peer review: non-final status");
@@ -335,17 +438,43 @@ function peerReviewValid(peer, peerMode, process, lensIdentities, rootPasses, bi
     if (closed.size !== requiredRevisions.length) fail("peer review: incomplete revision closure");
   }
 }
-function finalArtifactsValid(response, accepted) {
+function candidateMechanismsValid(mechanisms) {
+  if (!Array.isArray(mechanisms)) { fail("candidate mechanisms: array required"); return; }
+  for (const mechanism of mechanisms) {
+    const evidence = mechanism?.evidence;
+    const validEvidence = Array.isArray(evidence) && evidence.length > 0 && evidence.every(row => exactKeys(row, ["source", "detail", "evidence_status"], "candidate mechanism evidence") && nonblank(row.source) && sourceReferenceValid(row.source, "candidate mechanism evidence source") && nonblank(row.detail) && ["source_backed", "inference_only", "unresolved"].includes(row.evidence_status));
+    const sourceBackedIdentities = new Set((Array.isArray(evidence) ? evidence : []).filter(row => row?.evidence_status === "source_backed").map(row => publicUrlIdentity(row.source) || row.source));
+    const unresolvedEvidence = Array.isArray(evidence) && evidence.some(row => row?.evidence_status === "unresolved");
+    const confidenceValid = mechanism?.confidence === "low" || (!unresolvedEvidence && sourceBackedIdentities.size >= 2 && (mechanism?.confidence !== "high" || sourceBackedIdentities.size >= 3));
+    if (!exactKeys(mechanism, ["mechanism", "claim_status", "evidence", "confidence", "counterevidence_or_conflicts", "gaps", "validation_method"], "candidate mechanism") || !nonblank(mechanism?.mechanism) || !["candidate", "needs_validation", "unsupported", "rejected"].includes(mechanism?.claim_status) || !validEvidence || !["high", "medium", "low"].includes(mechanism?.confidence) || !confidenceValid || !Array.isArray(mechanism?.counterevidence_or_conflicts) || !mechanism.counterevidence_or_conflicts.every(nonblank) || !Array.isArray(mechanism?.gaps) || !mechanism.gaps.every(nonblank) || !nonblank(mechanism?.validation_method)) fail("candidate mechanisms: closed-world shape");
+  }
+}
+function finalArtifactsValid(response, accepted, binding) {
   const findings = response.findings;
   const evidenceEmptyCompletion = Array.isArray(accepted) && accepted.length === lenses.length && accepted.every(result => ["inference_only", "unresolved"].includes(result?.evidence_status) && Array.isArray(result.sources_or_verified_urls) && result.sources_or_verified_urls.length === 0);
   if (!Array.isArray(findings) || (findings.length === 0 && (!evidenceEmptyCompletion || !Array.isArray(response.gaps) || response.gaps.length === 0))) fail("final artifacts: findings required unless evidence-empty completion has gaps");
+  const acceptedSources = new Set((Array.isArray(accepted) ? accepted : []).flatMap(result => [
+    ...(Array.isArray(result?.sources_or_verified_urls) ? result.sources_or_verified_urls : []),
+    ...(Array.isArray(result?.follow_ups) ? result.follow_ups.flatMap(followUp => Array.isArray(followUp?.sources_or_verified_urls) ? followUp.sources_or_verified_urls : []) : [])
+  ]));
+  const verifiedEvidenceRows = (Array.isArray(binding?.verified_source_evidence) ? binding.verified_source_evidence : []).filter(verifiedSourceEvidenceRowValid);
+  const verifiedSourceIdentities = new Set(verifiedEvidenceRows.flatMap(row => row.verification_method === "public_url" ? [row.source, row.verified_url, publicUrlIdentity(row.verified_url)] : [row.source]));
+  const evidenceSourceAliases = new Map(verifiedEvidenceRows.flatMap(row => {
+    const reference = row.verification_method === "public_url" ? publicUrlIdentity(row.verified_url) : row.verification_reference;
+    const identity = `ledger:${row.verification_method}:${reference}`;
+    return row.verification_method === "public_url" ? [[row.source, identity], [row.verified_url, identity], [reference, identity]] : [[row.source, identity]];
+  }));
   for (const finding of Array.isArray(findings) ? findings : []) {
     const provenance = finding?.source_provenance;
     const sourceSet = new Set(Array.isArray(finding?.sources) ? finding.sources : []);
     const provenanceSourceSet = new Set(Array.isArray(provenance) ? provenance.map(row => row?.source) : []);
     const provenanceValid = Array.isArray(provenance) && provenance.length === provenanceSourceSet.size && provenance.every(row => exactKeys(row, ["source", "independence_key", "authority"], "final finding source provenance") && nonblank(row.source) && sourceReferenceValid(row.source, "final finding provenance source") && nonblank(row.independence_key) && ["primary", "official", "secondary"].includes(row.authority)) && sourceSet.size === provenanceSourceSet.size && [...sourceSet].every(source => provenanceSourceSet.has(source));
-    if (!allowedKeys(finding, ["finding", "confidence", "sources", "verified_urls", "source_provenance"], "final finding") || !nonblank(finding?.finding) || !["high", "medium", "low"].includes(finding?.confidence) || !Array.isArray(finding?.sources) || finding.sources.length === 0 || !finding.sources.every(source => sourceReferenceValid(source, "final finding source")) || (Object.hasOwn(finding, "verified_urls") && (!Array.isArray(finding.verified_urls) || !finding.verified_urls.every(publicUrlValid))) || (Object.hasOwn(finding, "source_provenance") && !provenanceValid) || (finding.confidence === "high" && (!provenanceValid || new Set(provenance.map(row => row.independence_key)).size < 3 || !provenance.some(row => ["primary", "official"].includes(row.authority))))) fail("final artifacts: finding shape");
+    const sourceResolved = Array.isArray(finding?.sources) && finding.sources.every(source => acceptedSources.has(source) || verifiedSourceIdentities.has(source) || verifiedSourceIdentities.has(publicUrlIdentity(source)));
+    const canonicalSourceSet = new Set([...sourceSet].map(source => evidenceSourceAliases.get(source) || evidenceSourceAliases.get(publicUrlIdentity(source)) || publicUrlIdentity(source) || source));
+    const mediumConfidenceValid = finding?.confidence !== "medium" || canonicalSourceSet.size >= 2 || (provenanceValid && provenance.length === 1 && ["primary", "official"].includes(provenance[0].authority));
+    if (!allowedKeys(finding, ["finding", "confidence", "sources", "verified_urls", "source_provenance"], "final finding") || !nonblank(finding?.finding) || !["high", "medium", "low"].includes(finding?.confidence) || !Array.isArray(finding?.sources) || finding.sources.length === 0 || !finding.sources.every(source => sourceReferenceValid(source, "final finding source")) || !sourceResolved || (Object.hasOwn(finding, "verified_urls") && (!Array.isArray(finding.verified_urls) || !finding.verified_urls.every(publicUrlValid))) || (Object.hasOwn(finding, "source_provenance") && !provenanceValid) || !mediumConfidenceValid || (finding.confidence === "high" && (!provenanceValid || canonicalSourceSet.size < 3 || new Set(provenance.map(row => row.independence_key)).size < 3 || !provenance.some(row => ["primary", "official"].includes(row.authority))))) fail("final artifacts: finding shape");
   }
+  candidateMechanismsValid(response.candidate_mechanisms);
   const conflicts = response.conflicts;
   if (!Array.isArray(conflicts)) fail("final artifacts: conflicts array required");
   for (const conflict of Array.isArray(conflicts) ? conflicts : []) if (!exactKeys(conflict, ["claim_a", "source_a", "claim_b", "source_b", "assessment"], "final conflict") || !Object.values(conflict).every(nonblank) || !sourceReferenceValid(conflict.source_a, "final conflict source_a") || !sourceReferenceValid(conflict.source_b, "final conflict source_b")) fail("final artifacts: conflict shape");
@@ -353,8 +482,11 @@ function finalArtifactsValid(response, accepted) {
   const contradiction = response.contradiction_map;
   if (!exactKeys(contradiction, ["direct_conflicts", "strongest_evidence", "weakest_evidence", "consensus", "biggest_unresolved_question", "missing_angle_or_gap"], "contradiction map") || !Array.isArray(contradiction.direct_conflicts) || !contradiction.direct_conflicts.every(nonblank) || !Array.isArray(contradiction.consensus) || !contradiction.consensus.every(nonblank) || !["strongest_evidence", "weakest_evidence", "biggest_unresolved_question", "missing_angle_or_gap"].every(field => nonblank(contradiction[field]))) fail("final artifacts: contradiction map");
 }
-function highStakesRecommendationValid(response, binding, peer, retainedPackets) {
-  const applicable = binding?.high_stakes_context?.applicable === true;
+function highStakesRecommendationValid(response, binding, peer, retainedPackets, fixtureCase) {
+  const trustedHighStakes = fixtureCase?.semantic_context?.high_stakes_context;
+  if (!equal(binding?.high_stakes_context, trustedHighStakes)) { fail("high-stakes recommendation: trusted context binding"); return; }
+  if (trustedHighStakes?.user_context_status === "explicit" && !fixtureCase.prompt?.includes(trustedHighStakes.user_context_basis)) { fail("high-stakes recommendation: explicit context must be prompt-derived"); return; }
+  const applicable = trustedHighStakes?.applicable === true;
   const recommendation = response.synthesis_briefing?.recommendation;
   const basis = response.high_stakes_recommendation_basis;
   if (!applicable || recommendation === "investigate_further") {
@@ -362,7 +494,7 @@ function highStakesRecommendationValid(response, binding, peer, retainedPackets)
     return;
   }
   const basisKeys = ["recommendation", "verified_decision_critical_urls", "user_context_basis", "peer_review_input_digest", "peer_supported_recommendation"];
-  if (!exactKeys(basis, basisKeys, "high-stakes recommendation basis") || binding.high_stakes_context?.user_context_status !== "explicit" || basis.recommendation !== recommendation || !Array.isArray(basis.verified_decision_critical_urls) || basis.verified_decision_critical_urls.length === 0 || !basis.verified_decision_critical_urls.every(publicUrlValid) || !nonblank(basis.user_context_basis) || basis.user_context_basis === "not_applicable" || basis.user_context_basis !== binding.high_stakes_context.user_context_basis || basis.peer_review_input_digest !== binding.peer_review_input_digest || basis.peer_supported_recommendation !== peer?.supported_recommendation || basis.peer_supported_recommendation !== recommendation) { fail("high-stakes recommendation: binding"); return; }
+  if (!exactKeys(basis, basisKeys, "high-stakes recommendation basis") || trustedHighStakes.user_context_status !== "explicit" || basis.recommendation !== recommendation || !Array.isArray(basis.verified_decision_critical_urls) || basis.verified_decision_critical_urls.length === 0 || !basis.verified_decision_critical_urls.every(publicUrlValid) || !nonblank(basis.user_context_basis) || basis.user_context_basis === "not_applicable" || basis.user_context_basis !== trustedHighStakes.user_context_basis || basis.peer_review_input_digest !== binding.peer_review_input_digest || basis.peer_supported_recommendation !== peer?.supported_recommendation || basis.peer_supported_recommendation !== recommendation) { fail("high-stakes recommendation: binding"); return; }
   const publicEvidenceUrls = new Set((Array.isArray(binding.verified_source_evidence) ? binding.verified_source_evidence : []).filter(row => row?.verification_method === "public_url" && row.verified_url === row.verification_reference && publicUrlValid(row.verified_url)).map(row => row.verified_url));
   if (!basis.verified_decision_critical_urls.every(url => publicEvidenceUrls.has(url))) fail("high-stakes recommendation: public evidence binding");
   if (!Array.isArray(retainedPackets) || retainedPackets.length !== lenses.length || !retainedPackets.every(packet => Array.isArray(packet.known_context) && packet.known_context.includes(basis.user_context_basis))) fail("high-stakes recommendation: retained user context binding");
@@ -402,7 +534,6 @@ if (response) {
     const effectiveTier = tierResolutionValid(process.tier_resolution, response.tier);
     budgetValid(budget, effectiveTier);
     retainedPacketsValid(process, packetSet, manifest, effectiveTier, budget);
-    finalArtifactsValid(response, accepted);
     const identities = new Set(); const rootPasses = new Set(); const assignmentIds = new Set();
     const perspectiveScan = Array.isArray(response.perspective_scan) ? response.perspective_scan : [];
     const questionTrace = Array.isArray(response.question_trace) ? response.question_trace : [];
@@ -453,14 +584,15 @@ if (response) {
     } else if (!nonblank(process.peer_review_assignment_id) || !nonblank(process.peer_review_fallback_pass_id) || !process.peer_review_fallback_evidence || !["explicit_opt_out", "spawn_failure_or_unavailable", "supported_configuration_proof", "exact_policy_block"].includes(process.peer_review_fallback_evidence.basis) || (process.subagent_policy_state === "delegation_opted_out" && process.peer_review_fallback_evidence.basis !== "explicit_opt_out") || (process.subagent_policy_state === "policy_disallowed" && process.peer_review_fallback_evidence.basis !== "exact_policy_block") || !nonblank(process.peer_review_fallback_evidence.detail) || !nonblank(process.peer_review_fallback_evidence.evidence_ref) || Object.hasOwn(process, "peer_reviewer_identity")) fail("process: fallback peer lifecycle");
     const binding = process.peer_review_input_binding;
     if (!peerInputBindingValid(binding, process, accepted, lensMode, response)) fail("peer review input binding: invalid evidence");
-    semanticContextValid(fixtureCase?.semantic_context, process.frozen_assignment_packets, accepted, response);
-    const highStakesApplicable = binding?.high_stakes_context?.applicable === true;
+    finalArtifactsValid(response, accepted, binding);
+    semanticContextValid(fixtureCase, process.frozen_assignment_packets, accepted, response, binding);
+    const highStakesApplicable = fixtureCase?.semantic_context?.high_stakes_context?.applicable === true;
     synthesisValid(response.synthesis_briefing, highStakesApplicable, "synthesis briefing");
     synthesisValid(binding?.initial_synthesis, highStakesApplicable, "peer initial synthesis");
     if (!equal(binding?.initial_synthesis, response.synthesis_briefing) && ["accepted", "accepted_with_concerns"].includes(response.peer_review?.verdict)) fail("peer review: accepted initial/final synthesis drift");
     if (!contentDigest(process.final_synthesis_digest) || process.final_synthesis_digest !== digest(response.synthesis_briefing)) fail("final synthesis: digest");
     peerReviewValid(response.peer_review, peerMode, process, identities, rootPasses, binding, process.final_synthesis_digest, response.synthesis_briefing?.recommendation);
-    highStakesRecommendationValid(response, binding, response.peer_review, process.frozen_assignment_packets);
+    highStakesRecommendationValid(response, binding, response.peer_review, process.frozen_assignment_packets, fixtureCase);
   }
 }
 if (errors.length) {

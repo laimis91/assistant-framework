@@ -140,7 +140,13 @@
           "output_purpose": "Decision-grade investment due diligence"
         },
         "required_topic_terms": ["invest", "AI coding assistant", ".NET architecture"],
-        "follow_up_requirements": []
+        "follow_up_requirements": [],
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
       },
       "title": "Five-lens decision briefing uses perspective scan and peer review",
       "category": "five_lens_briefing",
@@ -279,7 +285,13 @@
           "output_purpose": "Answer the research question"
         },
         "required_topic_terms": [],
-        "follow_up_requirements": []
+        "follow_up_requirements": [],
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
       },
       "title": "Five-lens sequential fallback preserves complete non-native process evidence",
       "category": "five_lens_briefing",
@@ -350,7 +362,13 @@
           "output_purpose": "Answer the research question"
         },
         "required_topic_terms": [],
-        "follow_up_requirements": []
+        "follow_up_requirements": [],
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
       },
       "title": "Delegated lenses permit an evidenced sequential peer fallback",
       "category": "five_lens_briefing",
@@ -417,7 +435,13 @@
           "output_purpose": "Answer the research question"
         },
         "required_topic_terms": [],
-        "follow_up_requirements": []
+        "follow_up_requirements": [],
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
       },
       "title": "Quick five-lens requests retain standard normalization evidence",
       "category": "five_lens_briefing",
@@ -450,7 +474,13 @@
         "follow_up_requirements": [
           {"lens_kind": "practitioner", "decision": "follow_up", "exact_count": 2},
           {"lens_kind": "skeptic", "decision": "none_needed", "exact_count": 1}
-        ]
+        ],
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
       },
       "title": "Five-lens question traces retain every material follow-up",
       "category": "five_lens_briefing",

@@ -50,7 +50,7 @@ dispatch_protocol:
     sequential_fallback_rule: "Sequential fallback is allowed only for explicit opt-out, real failed or unavailable dispatch mechanism, supported configuration proof, or exact policy block. It runs five frozen-packet root passes, records reduced independence, omits invented references, and performs peer critique as a separate fresh pass. A global delegation opt-out or policy-disallowed state also forces peer_review_execution_mode=sequential_fallback with the matching admissible peer fallback basis; it cannot dispatch a peer subagent."
   - name: orchestrator_to_lens_researcher
     delegated_compliance: "Requires five distinct native dispatch or agent identities covering every LensKind exactly once. The same model may serve multiple independent lens assignments; missing lens, duplicate lens, or root-authored lens in delegated mode fails delegated compliance."
-    wave_rule: "Capacity-bounded waves are allowed only when wave coverage is exact, disjoint, exhaustive, and each wave size is within proven adapter capacity. Later waves cannot consume earlier results."
+    wave_rule: "Capacity-bounded waves are allowed only in delegated lens mode, when wave coverage is exact, disjoint, exhaustive, and each wave size is within proven adapter capacity. Sequential fallback forbids wave_coverage. Later waves cannot consume earlier results."
     retry_rule: "one same-assignment schema-correction retry is allowed for one invalid lens return. After that retry, rerun the complete lens stage via evidenced fallback or block; never mix partial delegated and root-authored results while claiming independence."
   - name: orchestrator_to_research_peer_reviewer
     peer_review_rule: "A distinct ResearchPeerReviewer reviews the root initial synthesis after synthesis. Reviewer-only failure may retain validated delegated lenses and use a separately recorded reviewer fallback."
@@ -125,13 +125,15 @@ handoffs:
               - {name: overall_max_minutes, type: int, required: true}
               - {name: stop_condition, type: enum, required: true, enum_values: [saturation_or_hard_ceiling]}
           - name: source_policy
-            type: string
+            type: enum
             required: true
-            description: "Required source-selection and URL-verification policy for this assignment."
+            enum_values: [verified_sources_only]
+            description: "Required verified-source-only selection and URL-verification policy for this assignment."
           - name: isolation_policy
-            type: string
+            type: enum
             required: true
-            description: "Explicit sibling-blind and no-synthesis isolation policy."
+            enum_values: [sibling_blind_no_synthesis]
+            description: "Explicit sibling-blind/no-synthesis isolation policy."
           - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher]}
           - {name: packet_frozen_at, type: string, required: true}
       - name: dispatch_wave
@@ -158,7 +160,7 @@ handoffs:
       - name: search_resource_usage
         type: object
         required: true
-        validation: "Actuals are non-negative. completed_scope and saturation remain within matching per-lens ceilings. ceiling_exhausted equals at least one ceiling and requires non-empty exhausted_dimensions, exhaustion_gap, confidence_downgraded=true, lens_result.confidence=low, and that gap in lens_result.gaps. over_ceiling is invalid for a usable return and requires status=BLOCKED with typed blocker evidence."
+        validation: "Actuals are non-negative. actual_sources is at least the count of unique nonblank sources_or_verified_urls returned by lens_result plus its follow_ups; consulted-but-not-returned sources remain allowed. completed_scope and saturation remain within matching per-lens ceilings. ceiling_exhausted equals at least one ceiling and requires non-empty exhausted_dimensions, exhaustion_gap, confidence_downgraded=true, lens_result.confidence=low, and that gap in lens_result.gaps. over_ceiling is invalid for a usable return and requires status=BLOCKED with typed blocker evidence."
         object_fields:
           - {name: actual_queries, type: int, required: true}
           - {name: actual_sources, type: int, required: true}
@@ -208,7 +210,7 @@ handoffs:
         condition: "status in [DONE, DONE_WITH_CONCERNS]"
         min_items: 1
         object_fields:
-          - {name: source, type: string, required: true}
+          - {name: source, type: string, required: true, validation: "Safe opaque source reference or admissible external HTTPS reference; static validation rejects malformed URL schemes, userinfo, ports, credentials, secrets, PII, traversal, literal private/reserved IP endpoints, and special-use DNS names. It does not resolve DNS, prove reachability, validate redirects, or certify SSRF safety."}
           - {name: detail, type: string, required: true}
           - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
       - {name: open_questions, type: "string[]", required: conditional, condition: "status in [NEEDS_CONTEXT, BLOCKED]", min_items: 1}
@@ -274,15 +276,15 @@ handoffs:
         validation: "Exactly equals final findings. May be [] only when every validated lens result is source-empty inference_only or unresolved and gaps is non-empty; otherwise retains at least one source-backed finding."
         object_fields:
           - {name: finding, type: string, required: true}
-          - {name: confidence, type: enum, required: true, enum_values: [high, medium, low], validation: "high requires source_provenance with both at least three unique independence_key values and at least one primary/official authority row; one authoritative source is medium."}
+          - {name: confidence, type: enum, required: true, enum_values: [high, medium, low], validation: "high requires source_provenance with at least three independent canonical evidence identities, at least three unique independence_key values, and at least one primary/official authority row; medium requires two unique evidence identities or one authoritative source, and a public-ledger source label plus its verified URL count once."}
           - {name: sources, type: "string[]", required: true, min_items: 1}
           - name: source_provenance
             type: object[]
             required: conditional
             condition: "confidence == high"
-            validation: "When present, exact rows contain only source, independence_key, and authority; the unique source set exactly equals sources. Required for high confidence."
+            validation: "When present, exact rows contain only source, independence_key, and authority; the unique source set exactly equals sources. Required for high confidence, which additionally requires three independent canonical evidence identities; case or percent-encoded URL aliases cannot satisfy that threshold."
             object_fields:
-              - {name: source, type: string, required: true}
+              - {name: source, type: string, required: true, validation: "Canonical SafeSourceReference: opaque identity or admissible external HTTPS; reject malformed URLs, decoded unsafe content, literal private/reserved IPs, and special-use DNS. Static checks do not resolve DNS or redirects."}
               - {name: independence_key, type: string, required: true}
               - {name: authority, type: enum, required: true, enum_values: [primary, official, secondary]}
           - {name: verified_urls, type: "string[]", required: false}
@@ -308,12 +310,12 @@ handoffs:
       - name: conflicts
         type: object[]
         required: true
-        validation: "Exactly equals final conflicts. source_a and source_b obey the same safe source-reference and globally routable public-URL rules as finding sources."
+        validation: "Exactly equals final conflicts. source_a and source_b obey the same safe source-reference and admissible external HTTPS-reference rules as finding sources."
         object_fields:
           - {name: claim_a, type: string, required: true}
-          - {name: source_a, type: string, required: true, validation: "Safe source reference; URL-shaped values are verified globally routable HTTPS, and every value excludes credentials, secrets, PII, traversal, and absolute host paths."}
+          - {name: source_a, type: string, required: true, validation: "Safe source reference; URL-shaped values are admissible external HTTPS references under static validation, which excludes userinfo, ports, credentials, secrets, PII, traversal, literal private/reserved IP endpoints, and special-use DNS names but does not resolve DNS or validate redirects."}
           - {name: claim_b, type: string, required: true}
-          - {name: source_b, type: string, required: true, validation: "Safe source reference; URL-shaped values are verified globally routable HTTPS, and every value excludes credentials, secrets, PII, traversal, and absolute host paths."}
+          - {name: source_b, type: string, required: true, validation: "Safe source reference; URL-shaped values are admissible external HTTPS references under static validation, which excludes userinfo, ports, credentials, secrets, PII, traversal, literal private/reserved IP endpoints, and special-use DNS names but does not resolve DNS or validate redirects."}
           - {name: assessment, type: string, required: true}
       - {name: gaps, type: "string[]", required: true, validation: "Exactly equals verification_gaps and the final top-level gaps array."}
       - name: contradiction_map
@@ -354,13 +356,13 @@ handoffs:
         type: object[]
         required: true
         description: "Decision-critical evidence with a transport-neutral verification method and stable non-secret reference."
-        validation: "public_url requires verified_url equal to verification_reference, a successfully checked globally routable HTTPS URL, and rejects reserved domains, non-global address ranges, alternate numeric address encodings, private, loopback, and link-local endpoints. local_repository requires a repository-relative path plus optional revision or line locator; authenticated_source requires an opaque connector and record identifier, never its endpoint; offline_authoritative_source requires a bibliographic citation. Non-URL methods omit verified_url. Every reference rejects URI userinfo, credential/token/secret material, PII-shaped data, parent traversal, and absolute host paths."
+        validation: "public_url requires verified_url equal to verification_reference and an admissible external HTTPS reference: static validation rejects reserved domains, literal non-global address ranges, alternate numeric address encodings, trailing-dot hosts, userinfo, and ports. It does not resolve DNS, prove reachability, validate redirects, or certify SSRF safety; any runtime opening a connection must validate every resolved address and redirect target at connect time. Equivalent host-case and percent-encoded RFC 3986 unreserved characters in public URL host, path, query, or fragment canonicalize to one evidence identity; reserved delimiters remain encoded so distinct URLs do not merge. local_repository requires a repository-relative path plus optional revision or line locator and never a URL. authenticated_source is exactly opaque connector:<id>/record:<id>, never an endpoint or secret/PII-bearing identifier. offline_authoritative_source is an opaque citation:, isbn:, or doi: reference and never a URL. Non-URL methods omit verified_url. Every reference rejects protocol-relative or malformed URL schemes, URI userinfo, credential/token/secret material, PII-shaped data, decoded parent traversal, and absolute host paths."
         object_fields:
           - {name: claim, type: string, required: true}
-          - {name: source, type: string, required: true}
+          - {name: source, type: string, required: true, validation: "Canonical SafeSourceReference: opaque identity or admissible external HTTPS; reject malformed URLs, decoded unsafe content, literal private/reserved IPs, and special-use DNS. Static checks do not resolve DNS or redirects."}
           - {name: verification_method, type: enum, required: true, enum_values: [public_url, local_repository, authenticated_source, offline_authoritative_source]}
-          - {name: verification_reference, type: string, required: true, validation: "Stable non-secret reference with method-specific shape: globally routable public HTTPS URL, repository-relative locator, opaque connector/record identifier, or bibliographic citation. It contains no credential, token, secret, PII, reserved/private/loopback/link-local endpoint, parent traversal, or absolute host path."}
-          - {name: verified_url, type: string, required: conditional, condition: "verification_method == public_url", validation: "Required only for public_url, exactly equals verification_reference, is successfully checked globally routable HTTPS rather than a reserved or non-global endpoint, and is absent for non-URL methods."}
+          - {name: verification_reference, type: string, required: true, validation: "Stable non-secret reference with method-specific shape: admissible external HTTPS reference; repository-relative non-URL locator; opaque connector:<id>/record:<id>; or opaque citation:, isbn:, or doi: reference without a URL. Static HTTPS checks reject literal reserved/private/loopback/link-local IP endpoints and special-use DNS names but do not resolve DNS, prove reachability, validate redirects, or certify SSRF safety. Every method rejects malformed schemes, credential/token/secret material, PII, decoded parent traversal, and absolute host paths."}
+          - {name: verified_url, type: string, required: conditional, condition: "verification_method == public_url", validation: "Required only for public_url, exactly equals verification_reference, is an admissible external HTTPS reference under static checks, and is absent for non-URL methods. Static checks do not resolve DNS, prove reachability, validate redirects, or certify SSRF safety; a runtime network owner validates resolved addresses and redirects at connect time."}
           - {name: verification_detail, type: string, required: true}
       - name: verification_gaps
         type: string[]
@@ -396,7 +398,7 @@ handoffs:
         condition: "status in [DONE, DONE_WITH_CONCERNS]"
         min_items: 1
         object_fields:
-          - {name: source, type: string, required: true}
+          - {name: source, type: string, required: true, validation: "Canonical SafeSourceReference: opaque identity or admissible external HTTPS; reject malformed URLs, decoded unsafe content, literal private/reserved IPs, and special-use DNS. Static checks do not resolve DNS or redirects."}
           - {name: detail, type: string, required: true}
           - {name: evidence_status, type: enum, required: true, enum_values: [source_backed, inference_only, unresolved]}
       - {name: open_questions, type: "string[]", required: conditional, condition: "status in [NEEDS_CONTEXT, BLOCKED]", min_items: 1}

@@ -929,8 +929,8 @@ validate_fixture() {
         def case_semantic_context($index):
           if has("semantic_context") then
             .semantic_context as $context
-            | if ($context | type) != "object" or ($context | keys | sort) != ["follow_up_requirements", "packet_scope", "required_topic_terms"] then
-                "case[\($index)].semantic_context must contain exactly packet_scope, follow_up_requirements, and required_topic_terms"
+            | if ($context | type) != "object" or ($context | keys | sort) != ["follow_up_requirements", "high_stakes_context", "packet_scope", "required_topic_terms"] then
+                "case[\($index)].semantic_context must contain exactly packet_scope, follow_up_requirements, required_topic_terms, and high_stakes_context"
               elif ($context.packet_scope? | type) != "object" or ($context.packet_scope | keys | sort) != ["output_purpose", "question", "user_role_or_goal"] then
                 "case[\($index)].semantic_context.packet_scope must contain exactly question, user_role_or_goal, and output_purpose"
               elif ($context.packet_scope | [.question, .user_role_or_goal, .output_purpose] | all(.[]; nonempty_string) | not) then
@@ -945,6 +945,14 @@ validate_fixture() {
                 "case[\($index)].semantic_context.follow_up_requirements rows must be exact typed requirements"
               elif ($context.follow_up_requirements | map(.lens_kind) | unique | length) != ($context.follow_up_requirements | length) then
                 "case[\($index)].semantic_context.follow_up_requirements lens_kind values must be unique"
+              elif ($context.high_stakes_context? | type) != "object" or ($context.high_stakes_context | keys | sort) != ["applicable", "caveat_or_not_applicable_reason", "user_context_basis", "user_context_status"] then
+                "case[\($index)].semantic_context.high_stakes_context must contain exactly applicable, caveat_or_not_applicable_reason, user_context_status, and user_context_basis"
+              elif ($context.high_stakes_context.applicable | type) != "boolean" or ($context.high_stakes_context.caveat_or_not_applicable_reason | nonempty_string | not) or ($context.high_stakes_context.user_context_status as $status | ["explicit", "unresolved", "not_applicable"] | index($status) == null) or ($context.high_stakes_context.user_context_basis | nonempty_string | not) then
+                "case[\($index)].semantic_context.high_stakes_context has invalid fields"
+              elif (($context.high_stakes_context.applicable and ($context.high_stakes_context.user_context_status | IN("explicit", "unresolved"))) or ((($context.high_stakes_context.applicable | not) and $context.high_stakes_context.caveat_or_not_applicable_reason == "not_applicable" and $context.high_stakes_context.user_context_status == "not_applicable" and $context.high_stakes_context.user_context_basis == "not_applicable")) | not) then
+                "case[\($index)].semantic_context.high_stakes_context violates applicability truth table"
+              elif $context.high_stakes_context.user_context_status == "explicit" and (.prompt | contains($context.high_stakes_context.user_context_basis) | not) then
+                "case[\($index)].semantic_context explicit user_context_basis must appear in prompt"
               else empty
               end
           elif has("semantic_validator") then
