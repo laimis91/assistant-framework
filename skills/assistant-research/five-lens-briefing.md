@@ -59,8 +59,8 @@ as one immutable packet set with a set ID, digest, and pre-dispatch timestamp:
 one for each named lens below. A packet contains shared scope, evidence budget,
 and its LensKind only; it excludes sibling results, prior waves, contradiction
 mapping, synthesis, recommendation, and peer review. Dispatch one independent
-`LensResearcher` identity per packet. Capacity-bounded waves are allowed when
-their coverage is exact, disjoint, and exhaustive; later waves cannot consume earlier results.
+`LensResearcher` identity per packet. Capacity-bounded waves stay within adapter
+capacity with exact, disjoint, exhaustive coverage; later waves cannot consume earlier results.
 Each frozen packet carries `source_policy=verified_sources_only` and
 `isolation_policy=sibling_blind_no_synthesis`; these canonical literals prevent
 response-controlled policy prose from changing the assignment boundary.
@@ -127,7 +127,8 @@ with matching admissible evidence and forbids peer subagent dispatch.
 
 ### 3. Perspective scan results
 
-Analyze the topic through five lenses. Use real sources where available; when a lens is reasoned from general domain knowledge rather than sourced evidence, label it LOW confidence until verified.
+Analyze the topic through five lenses. Use real sources where available; label
+every source-empty inference-only or unresolved lens LOW confidence until verified.
 
 1. **Practitioner** — works with this daily. What practical realities are usually ignored? What would they warn about?
 2. **Academic / technical expert** — studies the evidence. What does the best evidence say? Where does evidence contradict popular belief?
@@ -163,11 +164,11 @@ correction; if it remains invalid, rerun the complete lens stage through
 evidenced fallback or block rather than inventing follow-up evidence.
 
 Decision-critical evidence uses external HTTPS, repository locator, opaque
-connector/record, or offline citation. Public URLs are statically admissible:
+connector/record, or offline citation. Public URLs use bounded static admission:
 no malformed/protocol-relative form, userinfo, port, secret, PII, traversal,
 literal reserved/private IP, or special-use DNS name. Static checks neither
-resolve DNS nor prove reachability, redirect, or SSRF safety; runtimes validate
-resolved addresses and redirect targets at connect time.
+resolve DNS, prove reachability, redirect, or SSRF safety; runtimes validate
+addresses and redirects at connect time. Static decoding is single-pass.
 Conflict references obey these rules.
 
 Do not synthesize from a lens until its key question and at least one answer/gap entry are recorded. If source access is unavailable, keep the question trace and mark answers as inference-only or unresolved rather than pretending they are source-backed.
@@ -234,7 +235,8 @@ closure evidence. The peer worker does not self-attest those changes. An
 unresolved revision blocks presentation. The Orchestrator records
 `revision_disposition_id` in peer review and repeats that exact value as
 `peer_review_revision_disposition_id` in process evidence. Each disposition
-also records the resulting final-synthesis digest.
+also records the final-synthesis digest; `applied` or `claim_downgraded`
+closure changes the peer-reviewed initial synthesis.
 Disposition closes synthesis revisions only. Changing findings, mechanisms,
 conflicts, or the map requires a new peer input and fresh review.
 

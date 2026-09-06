@@ -141,6 +141,9 @@
         },
         "required_topic_terms": ["invest", "AI coding assistant", ".NET architecture"],
         "follow_up_requirements": [],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
         "high_stakes_context": {
           "applicable": true,
           "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
@@ -286,6 +289,9 @@
         },
         "required_topic_terms": [],
         "follow_up_requirements": [],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
         "high_stakes_context": {
           "applicable": true,
           "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
@@ -363,6 +369,9 @@
         },
         "required_topic_terms": [],
         "follow_up_requirements": [],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
         "high_stakes_context": {
           "applicable": true,
           "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
@@ -436,6 +445,9 @@
         },
         "required_topic_terms": [],
         "follow_up_requirements": [],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
         "high_stakes_context": {
           "applicable": true,
           "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
@@ -475,6 +487,9 @@
           {"lens_kind": "practitioner", "decision": "follow_up", "exact_count": 2},
           {"lens_kind": "skeptic", "decision": "none_needed", "exact_count": 1}
         ],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
         "high_stakes_context": {
           "applicable": true,
           "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",

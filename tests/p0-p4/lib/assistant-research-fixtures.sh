@@ -100,7 +100,7 @@ function packet(mode, lens, ordinal, tier, packetScope) {
   return {packet_id: `packet-${["practitioner", "academic", "skeptic", "economist", "historian"][ordinal]}`, packet_set_id: mode === "delegated" ? "packet-set-1" : "fallback-packet-set-1", question: packetScope.question, tier, user_role_or_goal: packetScope.user_role_or_goal, output_purpose: packetScope.output_purpose, known_context: ["local fixture"], evidence_budget: "six sources", search_resource_budget: budget, source_policy: "verified_sources_only", isolation_policy: "sibling_blind_no_synthesis", lens_kind: lens, packet_frozen_at: "2026-09-03T10:00:00Z"};
 }
 function semanticContext(value) {
-  const fallback = {packet_scope: {question: "Should we adopt the tool?", user_role_or_goal: "architecture decision", output_purpose: "Answer the research question"}, follow_up_requirements: [], high_stakes_context: {applicable: true, caveat_or_not_applicable_reason: "This fixture is educational due diligence, not financial, legal, medical, or professional advice.", user_context_status: "unresolved", user_context_basis: "No decision-specific user constraints were supplied."}};
+  const fallback = {packet_scope: {question: "Should we adopt the tool?", user_role_or_goal: "architecture decision", output_purpose: "Answer the research question"}, follow_up_requirements: [], adapter_context: {max_concurrent_lens_workers: 5}, high_stakes_context: {applicable: true, caveat_or_not_applicable_reason: "This fixture is educational due diligence, not financial, legal, medical, or professional advice.", user_context_status: "unresolved", user_context_basis: "No decision-specific user constraints were supplied."}};
   if (!value) return fallback;
   const context = JSON.parse(value);
   return context && context.packet_scope && Array.isArray(context.follow_up_requirements) ? context : fallback;
@@ -142,13 +142,14 @@ function build(mode, report, semanticContextValue) {
   const gaps = isFallback ? ["Overall ceilings left source confirmation unresolved."] : [];
   const topic = topicTerms.length > 0 ? `${topicTerms.join("; ")}: ` : "";
   const synthesis_briefing = {executive_summary: isFallback ? `${topic}The available process evidence is insufficient for adoption.` : `${topic}The fixture supports a bounded verification step.`, ranked_key_findings: [`${topic}All five lenses completed their assigned process.`, isFallback ? `${topic}Ceilings exhausted before source confirmation.` : `${topic}The accepted results retain their source identifiers.`, `${topic}The recommendation remains calibrated to the evidence.`], hidden_connection: `${topic}The frozen packet ledger makes synthesis traceable.`, actionable_implication: `${topic}Run an independent source check before adopting the tool.`, recommendation: "investigate_further", high_stakes_caveat: "This fixture is educational due diligence, not financial, legal, medical, or professional advice.", frontier_question: `${topic}Which independent source would most change the decision?`};
+  const initial_synthesis = peerRevise ? {...synthesis_briefing, executive_summary: `${topic}Initial synthesis pending peer revision.`} : synthesis_briefing;
   const high_stakes_context = context.high_stakes_context;
   const verified_source_evidence = [{claim: "Fixture decision evidence", source: "source:research-corpus:summary", verification_method: "local_repository", verification_reference: "skills/assistant-research/contracts/output.yaml", verification_detail: "Fixture-local stable reference."}];
   const findings = isFallback ? [] : [{finding: `${topic}The evidence supports a calibrated investigation.`, confidence: "low", sources: ["source:research-corpus:practitioner"]}];
   const candidate_mechanisms = [];
   const conflicts = [];
   const contradiction_map = {direct_conflicts: [], strongest_evidence: isFallback ? `${topic}No source-backed conclusion is available.` : `${topic}Validated lens source identifiers.`, weakest_evidence: isFallback ? `${topic}Ceiling-exhausted source coverage.` : `${topic}Fixture-only evidence scope.`, consensus: [isFallback ? `${topic}Further confirmation is required.` : `${topic}Proceed only with verification.`], biggest_unresolved_question: `${topic}Whether independent source confirmation changes the recommendation.`, missing_angle_or_gap: isFallback ? `${topic}Independent source confirmation.` : `${topic}Production evidence beyond the fixture.`};
-  const peer_review_input_binding = {peer_review_assignment_id: process.peer_review_assignment_id, initial_synthesis: synthesis_briefing, validated_lens_results: accepted_lens_results, lens_execution_provenance: provenance, verified_source_evidence, verification_gaps: gaps, high_stakes_context, findings, candidate_mechanisms, conflicts, contradiction_map};
+  const peer_review_input_binding = {peer_review_assignment_id: process.peer_review_assignment_id, initial_synthesis, validated_lens_results: accepted_lens_results, lens_execution_provenance: provenance, verified_source_evidence, verification_gaps: gaps, high_stakes_context, findings, candidate_mechanisms, conflicts, contradiction_map};
   peer_review_input_binding.peer_review_input_digest = digest(peer_review_input_binding);
   process.peer_review_input_binding = peer_review_input_binding;
   process.final_synthesis_digest = digest(synthesis_briefing);
@@ -184,7 +185,7 @@ function validate(response) {
   expect(peerMode === "delegated" || peerMode === "sequential_fallback", "peer:execution-mode");
   expect(peer.peer_review_execution_mode === peerMode && peer.peer_review_assignment_id === process.peer_review_assignment_id, "peer:assignment-binding");
   if (peerMode === "delegated") {
-    expect(typeof process.peer_reviewer_identity === "string" && process.peer_reviewer_identity.length > 0 && peer.peer_reviewer_identity === process.peer_reviewer_identity && peer.verdict === "revise" && Array.isArray(peer.required_revisions) && peer.required_revisions.length > 0 && peer.revision_disposition_id === process.peer_review_revision_disposition_id && !Object.hasOwn(process, "peer_review_fallback_pass_id"), "peer:delegated-binding");
+    expect(typeof process.peer_reviewer_identity === "string" && process.peer_reviewer_identity.length > 0 && peer.peer_reviewer_identity === process.peer_reviewer_identity && !Object.hasOwn(process, "peer_review_fallback_pass_id"), "peer:delegated-binding");
   } else {
     expect(!Object.hasOwn(process, "peer_reviewer_identity") && peer.peer_review_fallback_pass_id === process.peer_review_fallback_pass_id && typeof process.peer_review_fallback_evidence?.detail === "string" && process.peer_review_fallback_evidence.detail.length > 0 && typeof process.peer_review_fallback_evidence?.evidence_ref === "string" && process.peer_review_fallback_evidence.evidence_ref.length > 0, "peer:fallback-binding");
   }
@@ -237,6 +238,7 @@ function validate(response) {
       expect(Array.isArray(sources) && sources.every(sourceReferenceValid) && (status !== "source_backed" || populated) && (populated || (Array.isArray(gaps) && gaps.length > 0)), label);
     };
     sourcesValid(result?.evidence_status, result?.sources_or_verified_urls, result?.gaps, "sources:accepted-result");
+    expect(!(["inference_only", "unresolved"].includes(result?.evidence_status) && Array.isArray(result?.sources_or_verified_urls) && result.sources_or_verified_urls.length === 0) || result?.confidence === "low", "sources:source-empty-requires-low-confidence");
     const followUps = result?.follow_ups;
     const noneNeeded = Array.isArray(followUps) ? followUps.filter(followUp => followUp?.decision === "none_needed") : [];
     expect(Array.isArray(followUps) && followUps.length > 0 && ((noneNeeded.length === 1 && followUps.length === 1) || (noneNeeded.length === 0 && followUps.every(followUp => followUp?.decision === "follow_up" && typeof followUp?.question === "string" && followUp.question.length > 0))), "follow-ups:exclusive-none-needed");
@@ -274,7 +276,7 @@ function validate(response) {
     expect(Array.isArray(waves) && waves.length > 0, "waves:present");
     for (const wave of waves || []) {
       const waveLenses = wave?.lens_kinds;
-      const waveValid = typeof wave?.wave_id === "string" && wave.wave_id.length > 0 && !waveIds.has(wave.wave_id) && Number.isInteger(wave.capacity) && wave.capacity >= 1 && Array.isArray(waveLenses) && waveLenses.length > 0 && waveLenses.length <= wave.capacity && waveLenses.length === new Set(waveLenses).size && waveLenses.every(lens => lenses.includes(lens) && !coveredLenses.has(lens));
+      const waveValid = typeof wave?.wave_id === "string" && wave.wave_id.length > 0 && !waveIds.has(wave.wave_id) && Number.isInteger(wave.capacity) && wave.capacity >= 1 && wave.capacity <= semanticContext.adapter_context?.max_concurrent_lens_workers && Array.isArray(waveLenses) && waveLenses.length > 0 && waveLenses.length <= wave.capacity && waveLenses.length === new Set(waveLenses).size && waveLenses.every(lens => lenses.includes(lens) && !coveredLenses.has(lens));
       expect(waveValid, "waves:coverage");
       if (!waveValid) continue;
       waveIds.add(wave.wave_id);
@@ -301,7 +303,7 @@ function validate(response) {
   const peerUsableComplete = peerUsableFields.every(field => Array.isArray(peer[field]) ? peer[field].length > 0 : typeof peer[field] === "string" && peer[field].length > 0);
   const revisions = peer.required_revisions;
   const revisionClosure = peer.revision_disposition;
-  const reviseClosureValid = peer.verdict !== "revise" || (Array.isArray(revisions) && revisions.length > 0 && typeof peer.revision_disposition_id === "string" && peer.revision_disposition_id.length > 0 && Array.isArray(revisionClosure) && revisionClosure.length === revisions.length && revisionClosure.every(item => revisions.includes(item?.required_revision) && ["applied", "claim_downgraded"].includes(item?.outcome) && typeof item?.closure_evidence === "string" && item.closure_evidence.length > 0 && item.resulting_synthesis_digest === process.final_synthesis_digest));
+  const reviseClosureValid = peer.verdict !== "revise" || (Array.isArray(revisions) && revisions.length > 0 && typeof peer.revision_disposition_id === "string" && peer.revision_disposition_id.length > 0 && peer.revision_disposition_id === process.peer_review_revision_disposition_id && Array.isArray(revisionClosure) && revisionClosure.length === revisions.length && !equal(process.peer_review_input_binding?.initial_synthesis, response.synthesis_briefing) && revisionClosure.every(item => revisions.includes(item?.required_revision) && ["applied", "claim_downgraded"].includes(item?.outcome) && typeof item?.closure_evidence === "string" && item.closure_evidence.length > 0 && item.resulting_synthesis_digest === process.final_synthesis_digest));
   expect(usablePeer && peerVerdictValid && peerUsableComplete && Array.isArray(revisions) && (peer.verdict === "revise" ? revisions.length > 0 : revisions.length === 0) && reviseClosureValid, "peer:status-and-revision-truth-table");
   if (peerMode === "delegated") expect(!identities.has(peer.peer_reviewer_identity), "peer:distinct-from-lens-identities");
   expect(process.reduced_independence === (mode === "sequential_fallback" || peerMode === "sequential_fallback"), "process:reduced-independence");
@@ -416,16 +418,20 @@ function validate(response) {
     return sourcesMatch && highValid && mediumValid;
   };
   const findings = response.findings;
-  const sourceEmptyCompletion = (process.accepted_lens_results || []).every(result => Array.isArray(result?.sources_or_verified_urls) && result.sources_or_verified_urls.length === 0 && ["inference_only", "unresolved"].includes(result.evidence_status));
+  const sourceEmpty = item => Array.isArray(item?.sources_or_verified_urls) && item.sources_or_verified_urls.length === 0 && ["inference_only", "unresolved"].includes(item.evidence_status);
+  const sourceEmptyCompletion = (process.accepted_lens_results || []).every(result => sourceEmpty(result) && Array.isArray(result?.follow_ups) && result.follow_ups.every(sourceEmpty));
   const binding = process.peer_review_input_binding;
   const acceptedSources = new Set((process.accepted_lens_results || []).flatMap(result => [...(result?.sources_or_verified_urls || []), ...(Array.isArray(result?.follow_ups) ? result.follow_ups.flatMap(followUp => followUp?.sources_or_verified_urls || []) : [])]));
   const verifiedSourceIdentities = new Set((binding?.verified_source_evidence || []).filter(verifiedEvidenceRowValid).flatMap(row => row.verification_method === "public_url" ? [row.source, row.verified_url, publicUrlIdentity(row.verified_url)] : [row.source]));
+  const acceptedSourceIdentities = new Set([...acceptedSources].flatMap(source => [source, publicUrlIdentity(source)]));
   const findingSourceBound = finding => Array.isArray(finding?.sources) && finding.sources.every(source => acceptedSources.has(source) || verifiedSourceIdentities.has(source) || verifiedSourceIdentities.has(publicUrlIdentity(source)));
-  const findingsValid = Array.isArray(findings) && ((findings.length > 0 && findings.every(finding => nonblank(finding?.finding) && ["high", "medium", "low"].includes(finding?.confidence) && sources(finding?.sources) && finding.sources.every(safeReference) && findingSourceBound(finding) && provenanceValid(finding) && (!Object.hasOwn(finding, "verified_urls") || (sources(finding.verified_urls) && finding.verified_urls.every(safeReference))))) || (findings.length === 0 && sourceEmptyCompletion && Array.isArray(response.gaps) && response.gaps.length > 0));
+  const findingVerifiedUrlsBound = finding => !Object.hasOwn(finding, "verified_urls") || (sources(finding.verified_urls) && finding.verified_urls.every(url => publicUrlValid(url) && (acceptedSourceIdentities.has(url) || acceptedSourceIdentities.has(publicUrlIdentity(url)) || verifiedSourceIdentities.has(url) || verifiedSourceIdentities.has(publicUrlIdentity(url)))));
+  const findingsValid = Array.isArray(findings) && ((findings.length > 0 && findings.every(finding => nonblank(finding?.finding) && ["high", "medium", "low"].includes(finding?.confidence) && sources(finding?.sources) && finding.sources.every(safeReference) && findingSourceBound(finding) && provenanceValid(finding) && findingVerifiedUrlsBound(finding))) || (findings.length === 0 && sourceEmptyCompletion && Array.isArray(response.gaps) && response.gaps.length > 0));
   expect(findingsValid, "artifacts:findings");
   const candidateMechanismsValid = Array.isArray(response.candidate_mechanisms) && response.candidate_mechanisms.every(mechanism => {
     const evidence = mechanism?.evidence;
-    const sourceBackedIdentities = new Set((Array.isArray(evidence) ? evidence : []).filter(row => row?.evidence_status === "source_backed").map(row => publicUrlIdentity(row.source) || row.source));
+    const evidenceSourceAliases = new Map((process.peer_review_input_binding?.verified_source_evidence || []).filter(verifiedEvidenceRowValid).flatMap(row => { const reference = row.verification_method === "public_url" ? publicUrlIdentity(row.verified_url) : row.verification_reference; const identity = `ledger:${row.verification_method}:${reference}`; return row.verification_method === "public_url" ? [[row.source, identity], [row.verified_url, identity], [reference, identity]] : [[row.source, identity]]; }));
+    const sourceBackedIdentities = new Set((Array.isArray(evidence) ? evidence : []).filter(row => row?.evidence_status === "source_backed").map(row => evidenceSourceAliases.get(row.source) || evidenceSourceAliases.get(publicUrlIdentity(row.source)) || publicUrlIdentity(row.source) || row.source));
     const unresolvedEvidence = Array.isArray(evidence) && evidence.some(row => row?.evidence_status === "unresolved");
     const confidenceValid = mechanism?.confidence === "low" || (!unresolvedEvidence && sourceBackedIdentities.size >= 2 && (mechanism?.confidence !== "high" || sourceBackedIdentities.size >= 3));
     return exactKeys(mechanism, ["mechanism", "claim_status", "evidence", "confidence", "counterevidence_or_conflicts", "gaps", "validation_method"]) && nonblank(mechanism.mechanism) && ["candidate", "needs_validation", "unsupported", "rejected"].includes(mechanism.claim_status) && Array.isArray(evidence) && evidence.length > 0 && evidence.every(row => exactKeys(row, ["source", "detail", "evidence_status"]) && nonblank(row.source) && safeReference(row.source) && nonblank(row.detail) && ["source_backed", "inference_only", "unresolved"].includes(row.evidence_status)) && ["high", "medium", "low"].includes(mechanism.confidence) && confidenceValid && Array.isArray(mechanism.counterevidence_or_conflicts) && mechanism.counterevidence_or_conflicts.every(nonblank) && Array.isArray(mechanism.gaps) && mechanism.gaps.every(nonblank) && nonblank(mechanism.validation_method);
@@ -437,13 +443,16 @@ function validate(response) {
   expect(Array.isArray(contradiction.direct_conflicts) && contradiction.direct_conflicts.every(nonblank) && nonblank(contradiction.strongest_evidence) && nonblank(contradiction.weakest_evidence) && Array.isArray(contradiction.consensus) && contradiction.consensus.every(nonblank) && nonblank(contradiction.biggest_unresolved_question) && nonblank(contradiction.missing_angle_or_gap), "artifacts:contradiction-map");
   const synthesis = response.synthesis_briefing || {};
   expect(nonblank(synthesis.executive_summary) && Array.isArray(synthesis.ranked_key_findings) && synthesis.ranked_key_findings.length >= 3 && synthesis.ranked_key_findings.every(nonblank) && nonblank(synthesis.hidden_connection) && nonblank(synthesis.actionable_implication) && ["do", "wait", "avoid", "investigate_further"].includes(synthesis.recommendation) && nonblank(synthesis.frontier_question), "artifacts:synthesis-briefing");
-  const semanticContextValid = exactKeys(semanticContext, ["packet_scope", "follow_up_requirements", "required_topic_terms", "high_stakes_context"])
+  const semanticContextValid = exactKeys(semanticContext, ["packet_scope", "follow_up_requirements", "required_topic_terms", "high_stakes_context", "adapter_context"])
     && exactKeys(semanticContext.packet_scope, ["question", "user_role_or_goal", "output_purpose"])
     && Object.values(semanticContext.packet_scope).every(nonblank)
     && Array.isArray(semanticContext.required_topic_terms)
     && semanticContext.required_topic_terms.every(nonblank)
     && new Set(semanticContext.required_topic_terms).size === semanticContext.required_topic_terms.length
-    && Array.isArray(semanticContext.follow_up_requirements);
+    && Array.isArray(semanticContext.follow_up_requirements)
+    && exactKeys(semanticContext.adapter_context, ["max_concurrent_lens_workers"])
+    && Number.isSafeInteger(semanticContext.adapter_context.max_concurrent_lens_workers)
+    && semanticContext.adapter_context.max_concurrent_lens_workers > 0;
   expect(semanticContextValid, "semantic-context:fixture-shape");
   expect(Array.isArray(retainedPackets) && retainedPackets.length === 5 && retainedPackets.every(packet => packet?.question === semanticContext.packet_scope?.question && packet?.user_role_or_goal === semanticContext.packet_scope?.user_role_or_goal && packet?.output_purpose === semanticContext.packet_scope?.output_purpose), "semantic-context:packet-scope");
   const semanticFollowUpsValid = Array.isArray(semanticContext.follow_up_requirements) && semanticContext.follow_up_requirements.every(requirement => {
@@ -474,7 +483,7 @@ function validate(response) {
   expect(peerEvidenceValid, "peer:usable-evidence");
   const bindingPreimage = binding && Object.fromEntries(Object.entries(binding).filter(([key]) => key !== "peer_review_input_digest"));
   const provenance = binding?.lens_execution_provenance;
-  expect(exactKeys(binding, ["peer_review_input_digest", "peer_review_assignment_id", "initial_synthesis", "validated_lens_results", "lens_execution_provenance", "verified_source_evidence", "verification_gaps", "high_stakes_context", "findings", "candidate_mechanisms", "conflicts", "contradiction_map"]) && binding.peer_review_input_digest === digest(bindingPreimage) && binding.peer_review_assignment_id === peer.peer_review_assignment_id && equal(binding.initial_synthesis, synthesis) && equal(binding.validated_lens_results, process.accepted_lens_results) && equal(binding.findings, response.findings) && equal(binding.candidate_mechanisms, response.candidate_mechanisms) && equal(binding.conflicts, response.conflicts) && equal(binding.contradiction_map, response.contradiction_map) && equal(binding.verification_gaps, response.gaps) && verifiedEvidenceValid(binding.verified_source_evidence) && exactKeys(provenance, ["lens_execution_mode", "reduced_independence", "fallback_basis", "fallback_evidence_ref"]) && provenance.lens_execution_mode === mode && provenance.reduced_independence === (mode === "sequential_fallback") && ((mode === "delegated" && provenance.fallback_basis === "not_applicable" && provenance.fallback_evidence_ref === "not_applicable") || (mode === "sequential_fallback" && provenance.fallback_basis === process.lens_fallback_evidence?.basis && provenance.fallback_evidence_ref === process.lens_fallback_evidence?.evidence_ref)) && peer.peer_review_input_digest === binding.peer_review_input_digest && process.final_synthesis_digest === digest(synthesis) && peer.supported_recommendation === synthesis.recommendation, "peer-input-and-synthesis:binding");
+  expect(exactKeys(binding, ["peer_review_input_digest", "peer_review_assignment_id", "initial_synthesis", "validated_lens_results", "lens_execution_provenance", "verified_source_evidence", "verification_gaps", "high_stakes_context", "findings", "candidate_mechanisms", "conflicts", "contradiction_map"]) && binding.peer_review_input_digest === digest(bindingPreimage) && binding.peer_review_assignment_id === peer.peer_review_assignment_id && (peer.verdict === "revise" ? !equal(binding.initial_synthesis, synthesis) : equal(binding.initial_synthesis, synthesis)) && equal(binding.validated_lens_results, process.accepted_lens_results) && equal(binding.findings, response.findings) && equal(binding.candidate_mechanisms, response.candidate_mechanisms) && equal(binding.conflicts, response.conflicts) && equal(binding.contradiction_map, response.contradiction_map) && equal(binding.verification_gaps, response.gaps) && verifiedEvidenceValid(binding.verified_source_evidence) && exactKeys(provenance, ["lens_execution_mode", "reduced_independence", "fallback_basis", "fallback_evidence_ref"]) && provenance.lens_execution_mode === mode && provenance.reduced_independence === (mode === "sequential_fallback") && ((mode === "delegated" && provenance.fallback_basis === "not_applicable" && provenance.fallback_evidence_ref === "not_applicable") || (mode === "sequential_fallback" && provenance.fallback_basis === process.lens_fallback_evidence?.basis && provenance.fallback_evidence_ref === process.lens_fallback_evidence?.evidence_ref)) && peer.peer_review_input_digest === binding.peer_review_input_digest && process.final_synthesis_digest === digest(synthesis) && peer.supported_recommendation === synthesis.recommendation, "peer-input-and-synthesis:binding");
   const context = binding?.high_stakes_context;
   const trustedHighStakes = semanticContext.high_stakes_context;
   const stronger = ["do", "wait", "avoid"].includes(synthesis.recommendation);
@@ -520,7 +529,7 @@ function refreshDerived(response) {
   const binding = process.peer_review_input_binding;
   if (binding) {
     binding.peer_review_assignment_id = response.peer_review?.peer_review_assignment_id;
-    binding.initial_synthesis = response.synthesis_briefing;
+    if (response.peer_review?.verdict !== "revise") binding.initial_synthesis = response.synthesis_briefing;
     binding.validated_lens_results = results;
     binding.findings = response.findings;
     binding.candidate_mechanisms = response.candidate_mechanisms;

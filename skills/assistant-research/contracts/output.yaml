@@ -12,7 +12,7 @@ artifacts:
     condition: always
     description: "Research findings with confidence scores and source attribution"
     min_items: 0
-    validation: "At least one source-backed finding is required except when research_method=five_lens_briefing, every accepted LensResearchResult is source-empty with evidence_status inference_only or unresolved, and top-level gaps is non-empty. Only that evidence-empty completion may use findings=[]. When research_method=five_lens_briefing, every finding source resolves to an accepted lens-result/follow-up source or to the source identity of a fully valid typed verified_source_evidence row; a public_url row may also resolve its valid verified_url, but its label and URL are one evidence identity for confidence counting. Each finding has a confidence level and at least one source. When source_provenance is present, its unique source set exactly equals sources. High confidence requires source_provenance with both at least three unique independence_key values and at least one primary/official authority row; medium requires two unique evidence identities or exactly one primary/official provenance row; one secondary source is low."
+    validation: "Findings require a source-backed entry except when five_lens_briefing has every accepted main result and material follow-up source-empty inference_only or unresolved with non-empty top-level gaps. When research_method=five_lens_briefing, every finding source resolves by canonical identity to an accepted lens-result/follow-up source or a valid typed verified_source_evidence row (public_url, local_repository, authenticated_source, or offline_authoritative_source); a public_url label and verified URL count once. High requires source_provenance with three unique independence_key values and one primary/official row; medium requires two evidence identities or one primary/official provenance row; one secondary source is low."
     object_fields:
       - name: finding
         type: string
@@ -45,7 +45,7 @@ artifacts:
         type: string[]
         required: false
         description: "URLs that were verified as accessible"
-        validation: "Every URL listed here was checked and returned a valid response"
+        validation: "Every URL listed here was checked and returned a valid response, and resolves by canonical identity to an accepted collected URL or a typed verified_source_evidence public_url row."
 
   - name: candidate_mechanisms
     type: object[]
@@ -106,7 +106,7 @@ artifacts:
     description: "Five expert lenses used before synthesis"
     min_items: 5
     max_items: 5
-    validation: "Exactly one matching LensKind, assignment_id, and recomputed lens_result_digest exists across the accepted LensResearchResult, peer validated result, process record, perspective_scan, and question_trace. core_position, sources_or_verified_urls, likely_blind_spot, unique_insight, and confidence exactly equal that accepted result, including an empty source array for a valid inference_only or unresolved result."
+    validation: "Exactly one matching LensKind, assignment_id, and recomputed lens_result_digest exists across the accepted LensResearchResult, peer validated result, process record, perspective_scan, and question_trace. core_position, sources_or_verified_urls, likely_blind_spot, unique_insight, and confidence exactly equal that accepted result, including an empty source array only for a LOW-confidence inference_only or unresolved result with a recorded gap."
     on_fail: "Re-run the perspective scan using five-lens-briefing.md before synthesizing."
     object_fields:
       - name: lens
@@ -121,7 +121,7 @@ artifacts:
       - name: sources_or_verified_urls
         type: string[]
         required: true
-        validation: "Exactly equals the accepted LensResearchResult sources_or_verified_urls array; empty only for inference_only or unresolved with a recorded gap."
+        validation: "Exactly equals the accepted LensResearchResult sources_or_verified_urls array; empty only for a LOW-confidence inference_only or unresolved result with a recorded gap."
       - name: likely_blind_spot
         type: string
         required: true
@@ -161,7 +161,7 @@ artifacts:
         type: string[]
         required: true
         description: "Exact accepted LensResearchResult sources array; empty only for inference_only or unresolved with a recorded gap"
-        validation: "Exactly equals the accepted LensResearchResult; source_backed requires at least one source, while inference_only or unresolved may be empty only when the accepted result records why in gaps."
+        validation: "Exactly equals the accepted LensResearchResult; source_backed requires at least one source, while inference_only or unresolved may be empty only at LOW confidence when the accepted result records why in gaps."
       - name: follow_ups
         type: object[]
         required: true
@@ -512,7 +512,7 @@ artifacts:
           - name: sources_or_verified_urls
             type: string[]
             required: true
-            validation: "Empty only for inference_only or unresolved when gaps records why; source_backed requires at least one source."
+            validation: "Empty only for LOW-confidence inference_only or unresolved when gaps records why; source_backed requires at least one source."
           - name: follow_ups
             type: object[]
             required: true
@@ -608,7 +608,7 @@ artifacts:
         required: conditional
         condition: "lens_execution_mode == delegated"
         min_items: 1
-        validation: "Waves are capacity-bounded and their LensKind coverage is exact, disjoint, and exhaustive. wave_coverage is forbidden when lens_execution_mode=sequential_fallback."
+        validation: "Waves are capacity-bounded by the trusted adapter context and their LensKind coverage is exact, disjoint, and exhaustive. The offline fixture limit proves response consistency only, not live adapter capacity. wave_coverage is forbidden when lens_execution_mode=sequential_fallback."
         object_fields:
           - name: wave_id
             type: string
@@ -843,13 +843,13 @@ artifacts:
 # - {what we couldn't find}
 #
 # Completeness check:
-# 1. findings[] has at least 1 source-backed entry, except source-empty five-lens inference/unresolved completion may use [] with non-empty gaps[]
+# 1. findings[] has at least 1 source-backed entry, except a five-lens completion with every main and material follow-up source-empty inference/unresolved result may use [] with non-empty gaps[]
 # 2. Every finding has confidence assigned; HIGH has valid source_provenance
 # 3. Every URL presented was verified (no unverified URLs)
 # 4. conflicts[] is present (may be empty)
 # 5. gaps[] is present (may be empty)
 # 6. Low-confidence findings are explicitly flagged
 # 7. For five_lens_briefing, perspective_scan, question_trace, contradiction_map, synthesis_briefing, peer_review, and five_lens_process_evidence are present
-# 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, the accepted result's exact sources/verified URLs array (possibly empty only for inference_only or unresolved with a recorded gap), follow_ups[] retaining every material follow-up or one typed none_needed decision with own gaps, and evidence status before synthesis
+# 8. For five_lens_briefing, each required lens has a question, answer or explicit gap, the accepted result's exact sources/verified URLs array (possibly empty only for LOW-confidence inference_only or unresolved with a recorded gap), follow_ups[] retaining every material follow-up or one typed none_needed decision with own gaps, and evidence status before synthesis
 # 9. For high-stakes topics, recommendation is framed as educational due diligence with caveats and defaults to investigate_further unless high_stakes_recommendation_basis binds stronger action to verified evidence, user context, and peer support
 # 10. candidate_mechanisms exists when why/how/cause/improvement mechanisms were requested, and every candidate has evidence, confidence, counterevidence_or_conflicts, gaps, validation_method, and non-proven claim_status

@@ -2600,6 +2600,85 @@ else
     fail "assistant-research typed evidence source-policy parity failed: ${typed_reference_failures[*]}"
 fi
 
+test_start "assistant-research semantic fixtures reject unbound evidence, false revision closure, and response-authored capacity"
+semantic_closeout_failures=()
+while IFS='|' read -r expected fixture_name mutation; do
+    semantic_closeout_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-semantic-closeout.XXXXXX")"
+    semantic_closeout_response="$semantic_closeout_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+    p0p4_register_cleanup "$semantic_closeout_dir"
+    write_research_eval_responses "$semantic_closeout_dir"
+    case "$mutation" in
+      source_empty_high)
+        jq '.five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [] | .five_lens_process_evidence.accepted_lens_results[0].evidence_status = "inference_only" | .five_lens_process_evidence.accepted_lens_results[0].confidence = "high" | .five_lens_process_evidence.accepted_lens_results[0].gaps = ["Source verification is pending."]' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+      unbound_verified_url)
+        jq '.findings[0].verified_urls = ["https://www.iana.org/unrelated"]' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+      material_follow_up)
+        jq '.findings = [] | .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = [] | .five_lens_process_evidence.accepted_lens_results[0].evidence_status = "inference_only" | .five_lens_process_evidence.accepted_lens_results[0].confidence = "low" | .five_lens_process_evidence.accepted_lens_results[0].gaps = ["Main-source coverage is incomplete."] | .five_lens_process_evidence.accepted_lens_results[0].follow_ups = [{decision:"follow_up",question:"What does the accepted source say?",answer_or_gap:"A source-backed follow-up exists.",sources_or_verified_urls:["source:research-corpus:material-follow-up"],evidence_status:"source_backed",gaps:[]}] | .five_lens_process_evidence.accepted_lens_results[1].sources_or_verified_urls = [] | .five_lens_process_evidence.accepted_lens_results[1].evidence_status = "unresolved" | .five_lens_process_evidence.accepted_lens_results[1].confidence = "low" | .five_lens_process_evidence.accepted_lens_results[1].gaps = ["No source was returned."] | .five_lens_process_evidence.accepted_lens_results[1].follow_ups = [{decision:"none_needed",answer_or_gap:"No material follow-up.",sources_or_verified_urls:[],evidence_status:"unresolved",gaps:["No source was returned."]}]' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+      response_capacity)
+        jq '.five_lens_process_evidence.wave_coverage[0].capacity = 999' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+      multi_wave_capacity_two)
+        jq '.five_lens_process_evidence.lens_dispatches[2].wave_id = "wave-2" | .five_lens_process_evidence.lens_dispatches[3].wave_id = "wave-2" | .five_lens_process_evidence.lens_dispatches[4].wave_id = "wave-3" | .five_lens_process_evidence.wave_coverage = [{wave_id:"wave-1",capacity:2,lens_kinds:["practitioner","academic_or_technical_expert"]},{wave_id:"wave-2",capacity:2,lens_kinds:["skeptic","economist_or_incentives_analyst"]},{wave_id:"wave-3",capacity:2,lens_kinds:["historian_or_pattern_matcher"]}] | .five_lens_process_evidence.overall_resource_usage.elapsed_minutes = 30' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+      unchanged_revision)
+        jq '.five_lens_process_evidence.peer_review_input_binding.initial_synthesis = .synthesis_briefing' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+      candidate_ledger_alias)
+        jq '.candidate_mechanisms = [{mechanism:"Alias-count calibration.",claim_status:"candidate",evidence:[{source:"typed-public-label",detail:"A typed public source label.",evidence_status:"source_backed"},{source:"https://www.iana.org/typed-public",detail:"The same typed public source URL.",evidence_status:"source_backed"}],confidence:"medium",counterevidence_or_conflicts:["No conflict recorded."],gaps:["Independent validation remains pending."],validation_method:"Compare a second source."}] | .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [{claim:"Typed public evidence",source:"typed-public-label",verification_method:"public_url",verification_reference:"https://www.iana.org/typed-public",verified_url:"https://www.iana.org/typed-public",verification_detail:"Fixture public evidence."}]' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+      delegated_accepted)
+        jq 'del(.peer_review.revision_disposition_id, .peer_review.revision_disposition, .five_lens_process_evidence.peer_review_revision_disposition_id) | .peer_review.status = "DONE" | .peer_review.verdict = "accepted" | .peer_review.required_revisions = []' "$semantic_closeout_response" >"$semantic_closeout_response.next" && mv "$semantic_closeout_response.next" "$semantic_closeout_response"
+        ;;
+    esac
+    research_refresh_response_derivatives "$semantic_closeout_response"
+    if research_response_oracle_is_valid "$semantic_closeout_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then private_actual=accept; else private_actual=reject; fi
+    if [[ "$fixture_name" == "delegated-peer-accepted" ]]; then
+        if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v3_valid "$semantic_closeout_response" "$research_evals" five-lens-decision-briefing-uses-storm-style-workflow ) >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    elif "$research_eval_runner" --responses "$semantic_closeout_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || semantic_closeout_failures+=("$fixture_name:$private_actual/$official_actual")
+done <<'EOF'
+reject|source-empty-high|source_empty_high
+reject|unbound-verified-url|unbound_verified_url
+reject|material-follow-up-with-empty-findings|material_follow_up
+reject|response-authored-capacity|response_capacity
+accept|three-waves-with-conservative-capacity-two|multi_wave_capacity_two
+reject|unchanged-revision|unchanged_revision
+reject|candidate-typed-label-and-url-alias|candidate_ledger_alias
+accept|delegated-peer-accepted|delegated_accepted
+EOF
+if [[ "${#semantic_closeout_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-research close-out semantic regressions: ${semantic_closeout_failures[*]}"
+fi
+
+test_start "assistant-research semantic fixture adapter context is typed and required"
+adapter_context_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-adapter-context.XXXXXX")"
+p0p4_register_cleanup "$adapter_context_dir"
+missing_adapter_fixture="$adapter_context_dir/missing-adapter-context.json"
+invalid_adapter_fixture="$adapter_context_dir/invalid-adapter-context.json"
+oversized_adapter_fixture="$adapter_context_dir/oversized-adapter-context.json"
+upper_bound_adapter_fixture="$adapter_context_dir/upper-bound-adapter-context.json"
+jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .semantic_context) |= del(.adapter_context)' "$research_evals" >"$missing_adapter_fixture"
+jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .semantic_context.adapter_context.max_concurrent_lens_workers) = 0' "$research_evals" >"$invalid_adapter_fixture"
+jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .semantic_context.adapter_context.max_concurrent_lens_workers) = 9007199254740992' "$research_evals" >"$oversized_adapter_fixture"
+jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .semantic_context.adapter_context.max_concurrent_lens_workers) = 9007199254740991' "$research_evals" >"$upper_bound_adapter_fixture"
+write_research_eval_responses "$adapter_context_dir/responses"
+upper_bound_response="$adapter_context_dir/responses/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
+if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fixture "$research_evals" assistant-research ) >/dev/null 2>&1 \
+    && ! ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fixture "$missing_adapter_fixture" assistant-research ) >/dev/null 2>&1 \
+    && ! ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fixture "$invalid_adapter_fixture" assistant-research ) >/dev/null 2>&1 \
+    && ! ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fixture "$oversized_adapter_fixture" assistant-research ) >/dev/null 2>&1 \
+    && ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fixture "$upper_bound_adapter_fixture" assistant-research ) >/dev/null 2>&1 \
+    && ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v3_valid "$upper_bound_response" "$upper_bound_adapter_fixture" five-lens-decision-briefing-uses-storm-style-workflow ) >/dev/null 2>&1; then
+    pass
+else
+    fail "assistant-research semantic adapter context accepted a missing or non-positive capacity"
+fi
+
 test_start "assistant-research semantic fixtures bind common packet scope and required follow-ups"
 semantic_context_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-semantic-context.XXXXXX")"
 p0p4_register_cleanup "$semantic_context_fixture_root"

@@ -148,7 +148,7 @@ function usageValid(usage, budget, result, label) {
   if (exhausted && (!(dimensions.length > 0 && dimensions.every(dimension => ceiling[dimension][0] === ceiling[dimension][1])) || !nonblank(usage.exhaustion_gap) || usage.confidence_downgraded !== true || result.confidence !== "low" || !Array.isArray(result.gaps) || !result.gaps.includes(usage.exhaustion_gap))) fail(`${label}: ceiling exhaustion truth table`);
   return true;
 }
-function overallUsageValid(overall, budget, records, mode, process) {
+function overallUsageValid(overall, budget, records, mode, process, trustedAdapterCapacity) {
   const keys = ["actual_queries", "actual_sources", "elapsed_minutes", "termination_state", "exhausted_dimensions", "exhaustion_gap", "confidence_downgraded"];
   allowedKeys(overall, keys, "overall usage");
   if (!overall || !["actual_queries", "actual_sources", "elapsed_minutes"].every(key => Number.isInteger(overall[key]) && overall[key] >= 0)) { fail("overall usage: non-negative integer actuals required"); return; }
@@ -168,7 +168,7 @@ function overallUsageValid(overall, budget, records, mode, process) {
       elapsedLowerBound = 0;
       for (const wave of waves) {
         if (!exactKeys(wave, ["wave_id", "capacity", "lens_kinds"], "wave coverage") || !nonblank(wave.wave_id) || !Number.isInteger(wave.capacity) || wave.capacity < 1 || !Array.isArray(wave.lens_kinds) || wave.lens_kinds.length === 0) { fail("delegated schedule: invalid wave"); continue; }
-        if (waveIds.has(wave.wave_id) || new Set(wave.lens_kinds).size !== wave.lens_kinds.length || wave.lens_kinds.length > wave.capacity) fail("delegated schedule: duplicate or over-capacity wave");
+        if (waveIds.has(wave.wave_id) || wave.capacity > trustedAdapterCapacity || new Set(wave.lens_kinds).size !== wave.lens_kinds.length || wave.lens_kinds.length > wave.capacity) fail("delegated schedule: duplicate or over-capacity wave");
         waveIds.add(wave.wave_id); covered.push(...wave.lens_kinds);
         const members = records.filter(record => record.wave_id === wave.wave_id);
         if (members.length !== wave.lens_kinds.length || !equal(members.map(record => record.lens_kind).sort(), [...wave.lens_kinds].sort())) fail("delegated schedule: record coverage");
@@ -236,6 +236,7 @@ function sourceReferenceValid(source, label) {
 function acceptedResultValid(result, label) {
   if (!["core_position", "lens_question", "answer_or_gap", "likely_blind_spot", "unique_insight"].every(key => nonblank(result[key])) || !["high", "medium", "low"].includes(result.confidence)) fail(`${label}: required result fields`);
   sourceReferencesValid(result.sources_or_verified_urls, result.evidence_status, result.gaps, label);
+  if (["inference_only", "unresolved"].includes(result.evidence_status) && Array.isArray(result.sources_or_verified_urls) && result.sources_or_verified_urls.length === 0 && result.confidence !== "low") fail(`${label}: source-empty inference or unresolved result requires low confidence`);
   if (!Array.isArray(result.follow_ups) || result.follow_ups.length === 0) { fail(`${label}: follow-ups required`); return; }
   const noneNeeded = result.follow_ups.filter(followUp => followUp?.decision === "none_needed");
   if ((noneNeeded.length > 0 && (noneNeeded.length !== 1 || result.follow_ups.length !== 1)) || (noneNeeded.length === 0 && !result.follow_ups.every(followUp => followUp?.decision === "follow_up"))) fail(`${label}: follow-up none_needed exclusivity`);
@@ -356,7 +357,7 @@ function substantiveText(values) {
 }
 function semanticContextValid(fixtureCase, retainedPackets, accepted, response, binding) {
   const context = fixtureCase?.semantic_context;
-  if (!exactKeys(context, ["packet_scope", "follow_up_requirements", "required_topic_terms", "high_stakes_context"], "semantic context") || !exactKeys(context?.packet_scope, ["question", "user_role_or_goal", "output_purpose"], "semantic packet scope") || !Object.values(context.packet_scope).every(nonblank) || !Array.isArray(context.follow_up_requirements) || !Array.isArray(context.required_topic_terms) || !context.required_topic_terms.every(nonblank) || new Set(context.required_topic_terms).size !== context.required_topic_terms.length) { fail("semantic context: required shape"); return; }
+  if (!exactKeys(context, ["packet_scope", "follow_up_requirements", "required_topic_terms", "high_stakes_context", "adapter_context"], "semantic context") || !exactKeys(context?.packet_scope, ["question", "user_role_or_goal", "output_purpose"], "semantic packet scope") || !Object.values(context.packet_scope).every(nonblank) || !Array.isArray(context.follow_up_requirements) || !Array.isArray(context.required_topic_terms) || !context.required_topic_terms.every(nonblank) || new Set(context.required_topic_terms).size !== context.required_topic_terms.length || !exactKeys(context.adapter_context, ["max_concurrent_lens_workers"], "semantic adapter context") || !Number.isSafeInteger(context.adapter_context.max_concurrent_lens_workers) || context.adapter_context.max_concurrent_lens_workers < 1) { fail("semantic context: required shape"); return; }
   const trustedHighStakes = context.high_stakes_context;
   const trustedHighStakesValid = exactKeys(trustedHighStakes, ["applicable", "caveat_or_not_applicable_reason", "user_context_status", "user_context_basis"], "semantic high-stakes context")
     && typeof trustedHighStakes.applicable === "boolean"
@@ -435,15 +436,27 @@ function peerReviewValid(peer, peerMode, process, lensIdentities, rootPasses, bi
       if (!exactKeys(disposition, ["required_revision", "outcome", "closure_evidence", "resulting_synthesis_digest"], "peer revision disposition") || !requiredRevisions.includes(disposition.required_revision) || closed.has(disposition.required_revision) || !["applied", "claim_downgraded"].includes(disposition.outcome) || !nonblank(disposition.closure_evidence) || disposition.resulting_synthesis_digest !== finalSynthesisDigest) fail("peer review: invalid revision disposition");
       closed.add(disposition?.required_revision);
     }
-    if (closed.size !== requiredRevisions.length) fail("peer review: incomplete revision closure");
+    if (closed.size !== requiredRevisions.length || digest(binding?.initial_synthesis) === finalSynthesisDigest) fail("peer review: revision closure must change synthesis");
   }
 }
-function candidateMechanismsValid(mechanisms) {
+function verifiedEvidenceAliases(binding) {
+  const rows = (Array.isArray(binding?.verified_source_evidence) ? binding.verified_source_evidence : []).filter(verifiedSourceEvidenceRowValid);
+  return new Map(rows.flatMap(row => {
+    const reference = row.verification_method === "public_url" ? publicUrlIdentity(row.verified_url) : row.verification_reference;
+    const identity = `ledger:${row.verification_method}:${reference}`;
+    return row.verification_method === "public_url" ? [[row.source, identity], [row.verified_url, identity], [reference, identity]] : [[row.source, identity]];
+  }));
+}
+function canonicalEvidenceIdentity(source, aliases) {
+  return aliases.get(source) || aliases.get(publicUrlIdentity(source)) || publicUrlIdentity(source) || source;
+}
+function candidateMechanismsValid(mechanisms, binding) {
   if (!Array.isArray(mechanisms)) { fail("candidate mechanisms: array required"); return; }
+  const evidenceSourceAliases = verifiedEvidenceAliases(binding);
   for (const mechanism of mechanisms) {
     const evidence = mechanism?.evidence;
     const validEvidence = Array.isArray(evidence) && evidence.length > 0 && evidence.every(row => exactKeys(row, ["source", "detail", "evidence_status"], "candidate mechanism evidence") && nonblank(row.source) && sourceReferenceValid(row.source, "candidate mechanism evidence source") && nonblank(row.detail) && ["source_backed", "inference_only", "unresolved"].includes(row.evidence_status));
-    const sourceBackedIdentities = new Set((Array.isArray(evidence) ? evidence : []).filter(row => row?.evidence_status === "source_backed").map(row => publicUrlIdentity(row.source) || row.source));
+    const sourceBackedIdentities = new Set((Array.isArray(evidence) ? evidence : []).filter(row => row?.evidence_status === "source_backed").map(row => canonicalEvidenceIdentity(row.source, evidenceSourceAliases)));
     const unresolvedEvidence = Array.isArray(evidence) && evidence.some(row => row?.evidence_status === "unresolved");
     const confidenceValid = mechanism?.confidence === "low" || (!unresolvedEvidence && sourceBackedIdentities.size >= 2 && (mechanism?.confidence !== "high" || sourceBackedIdentities.size >= 3));
     if (!exactKeys(mechanism, ["mechanism", "claim_status", "evidence", "confidence", "counterevidence_or_conflicts", "gaps", "validation_method"], "candidate mechanism") || !nonblank(mechanism?.mechanism) || !["candidate", "needs_validation", "unsupported", "rejected"].includes(mechanism?.claim_status) || !validEvidence || !["high", "medium", "low"].includes(mechanism?.confidence) || !confidenceValid || !Array.isArray(mechanism?.counterevidence_or_conflicts) || !mechanism.counterevidence_or_conflicts.every(nonblank) || !Array.isArray(mechanism?.gaps) || !mechanism.gaps.every(nonblank) || !nonblank(mechanism?.validation_method)) fail("candidate mechanisms: closed-world shape");
@@ -451,7 +464,8 @@ function candidateMechanismsValid(mechanisms) {
 }
 function finalArtifactsValid(response, accepted, binding) {
   const findings = response.findings;
-  const evidenceEmptyCompletion = Array.isArray(accepted) && accepted.length === lenses.length && accepted.every(result => ["inference_only", "unresolved"].includes(result?.evidence_status) && Array.isArray(result.sources_or_verified_urls) && result.sources_or_verified_urls.length === 0);
+  const evidenceEmpty = item => ["inference_only", "unresolved"].includes(item?.evidence_status) && Array.isArray(item.sources_or_verified_urls) && item.sources_or_verified_urls.length === 0;
+  const evidenceEmptyCompletion = Array.isArray(accepted) && accepted.length === lenses.length && accepted.every(result => evidenceEmpty(result) && Array.isArray(result.follow_ups) && result.follow_ups.every(evidenceEmpty));
   if (!Array.isArray(findings) || (findings.length === 0 && (!evidenceEmptyCompletion || !Array.isArray(response.gaps) || response.gaps.length === 0))) fail("final artifacts: findings required unless evidence-empty completion has gaps");
   const acceptedSources = new Set((Array.isArray(accepted) ? accepted : []).flatMap(result => [
     ...(Array.isArray(result?.sources_or_verified_urls) ? result.sources_or_verified_urls : []),
@@ -459,22 +473,20 @@ function finalArtifactsValid(response, accepted, binding) {
   ]));
   const verifiedEvidenceRows = (Array.isArray(binding?.verified_source_evidence) ? binding.verified_source_evidence : []).filter(verifiedSourceEvidenceRowValid);
   const verifiedSourceIdentities = new Set(verifiedEvidenceRows.flatMap(row => row.verification_method === "public_url" ? [row.source, row.verified_url, publicUrlIdentity(row.verified_url)] : [row.source]));
-  const evidenceSourceAliases = new Map(verifiedEvidenceRows.flatMap(row => {
-    const reference = row.verification_method === "public_url" ? publicUrlIdentity(row.verified_url) : row.verification_reference;
-    const identity = `ledger:${row.verification_method}:${reference}`;
-    return row.verification_method === "public_url" ? [[row.source, identity], [row.verified_url, identity], [reference, identity]] : [[row.source, identity]];
-  }));
+  const acceptedSourceIdentities = new Set([...acceptedSources].flatMap(source => [source, publicUrlIdentity(source)]));
+  const evidenceSourceAliases = verifiedEvidenceAliases(binding);
   for (const finding of Array.isArray(findings) ? findings : []) {
     const provenance = finding?.source_provenance;
     const sourceSet = new Set(Array.isArray(finding?.sources) ? finding.sources : []);
     const provenanceSourceSet = new Set(Array.isArray(provenance) ? provenance.map(row => row?.source) : []);
     const provenanceValid = Array.isArray(provenance) && provenance.length === provenanceSourceSet.size && provenance.every(row => exactKeys(row, ["source", "independence_key", "authority"], "final finding source provenance") && nonblank(row.source) && sourceReferenceValid(row.source, "final finding provenance source") && nonblank(row.independence_key) && ["primary", "official", "secondary"].includes(row.authority)) && sourceSet.size === provenanceSourceSet.size && [...sourceSet].every(source => provenanceSourceSet.has(source));
     const sourceResolved = Array.isArray(finding?.sources) && finding.sources.every(source => acceptedSources.has(source) || verifiedSourceIdentities.has(source) || verifiedSourceIdentities.has(publicUrlIdentity(source)));
-    const canonicalSourceSet = new Set([...sourceSet].map(source => evidenceSourceAliases.get(source) || evidenceSourceAliases.get(publicUrlIdentity(source)) || publicUrlIdentity(source) || source));
+    const canonicalSourceSet = new Set([...sourceSet].map(source => canonicalEvidenceIdentity(source, evidenceSourceAliases)));
     const mediumConfidenceValid = finding?.confidence !== "medium" || canonicalSourceSet.size >= 2 || (provenanceValid && provenance.length === 1 && ["primary", "official"].includes(provenance[0].authority));
-    if (!allowedKeys(finding, ["finding", "confidence", "sources", "verified_urls", "source_provenance"], "final finding") || !nonblank(finding?.finding) || !["high", "medium", "low"].includes(finding?.confidence) || !Array.isArray(finding?.sources) || finding.sources.length === 0 || !finding.sources.every(source => sourceReferenceValid(source, "final finding source")) || !sourceResolved || (Object.hasOwn(finding, "verified_urls") && (!Array.isArray(finding.verified_urls) || !finding.verified_urls.every(publicUrlValid))) || (Object.hasOwn(finding, "source_provenance") && !provenanceValid) || !mediumConfidenceValid || (finding.confidence === "high" && (!provenanceValid || canonicalSourceSet.size < 3 || new Set(provenance.map(row => row.independence_key)).size < 3 || !provenance.some(row => ["primary", "official"].includes(row.authority))))) fail("final artifacts: finding shape");
+    const verifiedUrlsResolved = !Object.hasOwn(finding, "verified_urls") || (Array.isArray(finding.verified_urls) && finding.verified_urls.every(url => publicUrlValid(url) && (acceptedSourceIdentities.has(url) || acceptedSourceIdentities.has(publicUrlIdentity(url)) || verifiedSourceIdentities.has(url) || verifiedSourceIdentities.has(publicUrlIdentity(url)))));
+    if (!allowedKeys(finding, ["finding", "confidence", "sources", "verified_urls", "source_provenance"], "final finding") || !nonblank(finding?.finding) || !["high", "medium", "low"].includes(finding?.confidence) || !Array.isArray(finding?.sources) || finding.sources.length === 0 || !finding.sources.every(source => sourceReferenceValid(source, "final finding source")) || !sourceResolved || !verifiedUrlsResolved || (Object.hasOwn(finding, "source_provenance") && !provenanceValid) || !mediumConfidenceValid || (finding.confidence === "high" && (!provenanceValid || canonicalSourceSet.size < 3 || new Set(provenance.map(row => row.independence_key)).size < 3 || !provenance.some(row => ["primary", "official"].includes(row.authority))))) fail("final artifacts: finding shape");
   }
-  candidateMechanismsValid(response.candidate_mechanisms);
+  candidateMechanismsValid(response.candidate_mechanisms, binding);
   const conflicts = response.conflicts;
   if (!Array.isArray(conflicts)) fail("final artifacts: conflicts array required");
   for (const conflict of Array.isArray(conflicts) ? conflicts : []) if (!exactKeys(conflict, ["claim_a", "source_a", "claim_b", "source_b", "assessment"], "final conflict") || !Object.values(conflict).every(nonblank) || !sourceReferenceValid(conflict.source_a, "final conflict source_a") || !sourceReferenceValid(conflict.source_b, "final conflict source_b")) fail("final artifacts: conflict shape");
@@ -564,7 +576,7 @@ if (response) {
       if (!trace || !equal(trace, {lens: result.lens_kind, assignment_id: result.assignment_id, lens_result_digest: result.lens_result_digest, question: result.lens_question, answer: result.answer_or_gap, sources_or_verified_urls: result.sources_or_verified_urls, follow_ups: result.follow_ups, evidence_status: result.evidence_status})) fail(`${label}: question trace projection`);
     }
     if (!exactLensSet((records || []).map(record => record?.lens_kind))) fail("process: records must cover each lens once");
-    overallUsageValid(process.overall_resource_usage, budget || {}, records || [], lensMode, process);
+    overallUsageValid(process.overall_resource_usage, budget || {}, records || [], lensMode, process, fixtureCase?.semantic_context?.adapter_context?.max_concurrent_lens_workers);
     if (process.root_synthesis_ownership !== "orchestrator_only") fail("process: root synthesis ownership");
     if (process.reduced_independence !== (lensMode === "sequential_fallback" || peerMode === "sequential_fallback")) fail("process: reduced-independence mode binding");
     if (lensMode === "delegated") {
