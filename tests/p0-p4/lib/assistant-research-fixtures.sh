@@ -456,7 +456,7 @@ function validate(response) {
   };
   const findings = response.findings;
   const sourceEmpty = item => Array.isArray(item?.sources_or_verified_urls) && item.sources_or_verified_urls.length === 0 && ["inference_only", "unresolved"].includes(item.evidence_status);
-  const sourceEmptyCompletion = (process.accepted_lens_results || []).every(result => sourceEmpty(result) && Array.isArray(result?.follow_ups) && result.follow_ups.every(sourceEmpty));
+  const sourceEmptyCompletion = (process.accepted_lens_results || []).every(result => sourceEmpty(result) && Array.isArray(result?.follow_ups) && result.follow_ups.filter(followUp => followUp?.decision === "follow_up").every(sourceEmpty));
   const binding = process.peer_review_input_binding;
   const acceptedSources = new Set((process.accepted_lens_results || []).flatMap(result => [...(result?.sources_or_verified_urls || []), ...(Array.isArray(result?.follow_ups) ? result.follow_ups.flatMap(followUp => followUp?.sources_or_verified_urls || []) : [])]));
   const verifiedSourceIdentities = new Set((binding?.verified_source_evidence || []).filter(verifiedEvidenceRowValid).flatMap(row => { const sourceIdentity = publicUrlIdentity(row.source); const sourceIdentities = [row.source, ...(sourceIdentity ? [sourceIdentity] : [])]; return row.verification_method === "public_url" ? [...sourceIdentities, row.verified_url, publicUrlIdentity(row.verified_url)] : sourceIdentities; }));

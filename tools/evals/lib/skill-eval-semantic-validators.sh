@@ -493,7 +493,7 @@ function candidateMechanismsValid(mechanisms, binding) {
 function finalArtifactsValid(response, accepted, binding) {
   const findings = response.findings;
   const evidenceEmpty = item => ["inference_only", "unresolved"].includes(item?.evidence_status) && Array.isArray(item.sources_or_verified_urls) && item.sources_or_verified_urls.length === 0;
-  const evidenceEmptyCompletion = Array.isArray(accepted) && accepted.length === lenses.length && accepted.every(result => evidenceEmpty(result) && Array.isArray(result.follow_ups) && result.follow_ups.every(evidenceEmpty));
+  const evidenceEmptyCompletion = Array.isArray(accepted) && accepted.length === lenses.length && accepted.every(result => evidenceEmpty(result) && Array.isArray(result.follow_ups) && result.follow_ups.filter(followUp => followUp?.decision === "follow_up").every(evidenceEmpty));
   if (!Array.isArray(findings) || (findings.length === 0 && (!evidenceEmptyCompletion || !Array.isArray(response.gaps) || response.gaps.length === 0))) fail("final artifacts: findings required unless evidence-empty completion has gaps");
   const acceptedSources = new Set((Array.isArray(accepted) ? accepted : []).flatMap(result => [
     ...(Array.isArray(result?.sources_or_verified_urls) ? result.sources_or_verified_urls : []),

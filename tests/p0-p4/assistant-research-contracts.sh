@@ -1132,13 +1132,61 @@ if (group === "findings") {
   const caseId = modes[1][1];
   const base = build("sequential_fallback", caseId);
   evaluate("sequential_fallback", "evidence-empty-with-gaps", true, clone(base), caseId);
+  const findingsReasons = [["artifacts:findings"], ["five-lens semantic validation: final artifacts: findings required unless evidence-empty completion has gaps"]];
+  const firstResult = response => response.five_lens_process_evidence.accepted_lens_results[0];
+  const check = (name, expected, mutate, reasons = [[], []]) => {
+    const response = clone(base);
+    mutate(response, firstResult(response));
+    evaluate("sequential_fallback", name, expected, response, caseId, ...reasons);
+  };
+  const noneNeeded = {decision: "none_needed", answer_or_gap: "The retained research index supports no additional material follow-up.", sources_or_verified_urls: ["source:research-index"], evidence_status: "source_backed", gaps: []};
+  const optionalFinding = {finding: "The research index documents collection coverage.", confidence: "low", sources: noneNeeded.sources_or_verified_urls};
+  check("sourced-none-needed-without-finding", true, (response, result) => { result.follow_ups = [clone(noneNeeded)]; });
+  check("sourced-none-needed-with-optional-finding", true, (response, result) => {
+    result.follow_ups = [clone(noneNeeded)];
+    response.findings = [clone(optionalFinding)];
+  });
+  for (const evidenceStatus of ["inference_only", "unresolved"]) {
+    check(`source-empty-none-needed/${evidenceStatus}`, true, (response, result) => { result.follow_ups[0].evidence_status = evidenceStatus; });
+    check(`source-empty-material-follow-up/${evidenceStatus}`, true, (response, result) => {
+      Object.assign(result.follow_ups[0], {decision: "follow_up", question: "Which source remains unconfirmed?", evidence_status: evidenceStatus});
+    });
+  }
+  check("empty-findings-without-top-level-gaps", false, response => { response.gaps = []; }, findingsReasons);
+  check("sourced-main-result-without-finding", false, (response, result) => {
+    result.sources_or_verified_urls = ["source:main-result"];
+    result.evidence_status = "source_backed";
+  }, findingsReasons);
+  const followUpReasons = (privateReason, officialReason) => [[privateReason], [`five-lens semantic validation: accepted result practitioner${officialReason}`]];
+  const exclusiveReasons = followUpReasons("follow-ups:exclusive-none-needed", ": follow-up none_needed exclusivity");
+  check("none-needed-mixed-with-material-follow-up", false, (response, result) => {
+    result.follow_ups.push({...clone(result.follow_ups[0]), decision: "follow_up", question: "Which source remains unconfirmed?"});
+  }, exclusiveReasons);
+  check("duplicate-none-needed", false, (response, result) => { result.follow_ups.push(clone(result.follow_ups[0])); }, exclusiveReasons);
+  check("none-needed-malformed-own-gap", false, (response, result) => { result.follow_ups[0].gaps = [""]; },
+    followUpReasons("follow-up:own-gaps", " follow-up: nonblank gaps array required"));
+  for (const decision of ["none_needed", "follow_up"]) {
+    const setDecision = result => {
+      result.follow_ups[0].decision = decision;
+      if (decision === "follow_up") result.follow_ups[0].question = "Which source remains unconfirmed?";
+    };
+    check(`${decision}/empty-sources-without-own-gap`, false, (response, result) => {
+      setDecision(result);
+      result.follow_ups[0].gaps = [];
+    }, followUpReasons("sources:follow-up", " follow-up: empty non-source evidence requires a gap"));
+    check(`${decision}/source-backed-without-source`, false, (response, result) => {
+      setDecision(result);
+      result.follow_ups[0].evidence_status = "source_backed";
+      response.findings = [{finding: "The retained fixture documents decision evidence.", confidence: "low", sources: ["source:research-corpus:summary"]}];
+    }, followUpReasons("sources:follow-up", " follow-up: source-backed result requires a source"));
+  }
   const followUp = {decision: "follow_up", question: "What independent source changes this decision?", answer_or_gap: "Independent evidence supports further investigation.", sources_or_verified_urls: ["source:material-follow-up"], evidence_status: "source_backed", gaps: []};
   base.five_lens_process_evidence.accepted_lens_results[0].follow_ups = [followUp];
   base.findings = [{finding: "The material follow-up supports further investigation.", confidence: "low", sources: followUp.sources_or_verified_urls}];
   evaluate("sequential_fallback", "material-follow-up-with-finding", true, clone(base), caseId);
   base.findings = [];
   evaluate("sequential_fallback", "material-follow-up-without-finding", false, base, caseId,
-    ["artifacts:findings"], ["five-lens semantic validation: final artifacts: findings required unless evidence-empty completion has gaps"]);
+    ...findingsReasons);
 }
 console.log(JSON.stringify({group, checks, validatorChecks: checks * 2, failures}));
 process.exitCode = failures.length ? 1 : 0;
