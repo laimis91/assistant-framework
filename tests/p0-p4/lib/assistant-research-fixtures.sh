@@ -406,9 +406,44 @@ function validate(response) {
     return row.verification_method === "offline_authoritative_source" && /^(?:citation|isbn|doi):[^\s]+$/i.test(row.verification_reference) && !/:\/\//.test(row.verification_reference) && !/^(?:citation|isbn|doi):(?:\/(?:Users|home|private|var)(?:\/|$)|[A-Za-z]:[\\/]|\\\\)/i.test(row.verification_reference);
   };
   const verifiedEvidenceValid = rows => Array.isArray(rows) && rows.every(verifiedEvidenceRowValid);
+  const evidenceAliases = () => {
+    const parents = new Map();
+    const referenceNodes = new Map();
+    const referenceNode = (method, reference) => {
+      const key = JSON.stringify([method, reference]);
+      if (!referenceNodes.has(key)) referenceNodes.set(key, {});
+      return referenceNodes.get(key);
+    };
+    const root = alias => {
+      if (parents.get(alias) !== alias) parents.set(alias, root(parents.get(alias)));
+      return parents.get(alias);
+    };
+    const connect = aliases => {
+      for (const alias of aliases) if (!parents.has(alias)) parents.set(alias, alias);
+      for (const alias of aliases.slice(1)) {
+        const firstRoot = root(aliases[0]);
+        const aliasRoot = root(alias);
+        if (firstRoot !== aliasRoot) parents.set(aliasRoot, firstRoot);
+      }
+    };
+    for (const row of (process.peer_review_input_binding?.verified_source_evidence || []).filter(verifiedEvidenceRowValid)) {
+      const reference = row.verification_method === "public_url" ? publicUrlIdentity(row.verified_url) : row.verification_reference;
+      const sourceIdentity = publicUrlIdentity(row.source);
+      const aliases = [row.source, ...(sourceIdentity ? [sourceIdentity] : [])];
+      if (row.verification_method === "public_url") aliases.push(row.verified_url, reference);
+      else aliases.push(referenceNode(row.verification_method, reference));
+      connect(aliases);
+    }
+    const groups = new Map();
+    return new Map([...parents.keys()].filter(alias => typeof alias === "string").map(alias => {
+      const groupRoot = root(alias);
+      if (!groups.has(groupRoot)) groups.set(groupRoot, {});
+      return [alias, groups.get(groupRoot)];
+    }));
+  };
   const provenanceValid = finding => {
     const rows = finding?.source_provenance;
-    const evidenceSourceAliases = new Map((process.peer_review_input_binding?.verified_source_evidence || []).filter(verifiedEvidenceRowValid).flatMap(row => { const reference = row.verification_method === "public_url" ? publicUrlIdentity(row.verified_url) : row.verification_reference; const identity = `ledger:${row.verification_method}:${reference}`; const sourceIdentity = publicUrlIdentity(row.source); const sourceAliases = [[row.source, identity], ...(sourceIdentity ? [[sourceIdentity, identity]] : [])]; return row.verification_method === "public_url" ? [...sourceAliases, [row.verified_url, identity], [reference, identity]] : sourceAliases; }));
+    const evidenceSourceAliases = evidenceAliases();
     const canonicalSourceSet = new Set((finding?.sources || []).map(source => evidenceSourceAliases.get(source) || evidenceSourceAliases.get(publicUrlIdentity(source)) || publicUrlIdentity(source) || source));
     if (!Array.isArray(rows)) return finding?.confidence !== "high" && (finding?.confidence !== "medium" || canonicalSourceSet.size >= 2);
     const shape = rows.every(row => row && typeof row === "object" && Object.keys(row).length === 3 && nonblank(row.source) && safeReference(row.source) && nonblank(row.independence_key) && ["primary", "official", "secondary"].includes(row.authority));
@@ -431,7 +466,7 @@ function validate(response) {
   expect(findingsValid, "artifacts:findings");
   const candidateMechanismsValid = Array.isArray(response.candidate_mechanisms) && response.candidate_mechanisms.every(mechanism => {
     const evidence = mechanism?.evidence;
-    const evidenceSourceAliases = new Map((process.peer_review_input_binding?.verified_source_evidence || []).filter(verifiedEvidenceRowValid).flatMap(row => { const reference = row.verification_method === "public_url" ? publicUrlIdentity(row.verified_url) : row.verification_reference; const identity = `ledger:${row.verification_method}:${reference}`; const sourceIdentity = publicUrlIdentity(row.source); const sourceAliases = [[row.source, identity], ...(sourceIdentity ? [[sourceIdentity, identity]] : [])]; return row.verification_method === "public_url" ? [...sourceAliases, [row.verified_url, identity], [reference, identity]] : sourceAliases; }));
+    const evidenceSourceAliases = evidenceAliases();
     const sourceBackedIdentities = new Set((Array.isArray(evidence) ? evidence : []).filter(row => row?.evidence_status === "source_backed").map(row => evidenceSourceAliases.get(row.source) || evidenceSourceAliases.get(publicUrlIdentity(row.source)) || publicUrlIdentity(row.source) || row.source));
     const unresolvedEvidence = Array.isArray(evidence) && evidence.some(row => row?.evidence_status === "unresolved");
     const confidenceValid = mechanism?.confidence === "low" || (!unresolvedEvidence && sourceBackedIdentities.size >= 2 && (mechanism?.confidence !== "high" || sourceBackedIdentities.size >= 3));

@@ -441,12 +441,38 @@ function peerReviewValid(peer, peerMode, process, lensIdentities, rootPasses, bi
 }
 function verifiedEvidenceAliases(binding) {
   const rows = (Array.isArray(binding?.verified_source_evidence) ? binding.verified_source_evidence : []).filter(verifiedSourceEvidenceRowValid);
-  return new Map(rows.flatMap(row => {
+  const parents = new Map();
+  const referenceNodes = new Map();
+  const referenceNode = (method, reference) => {
+    const key = JSON.stringify([method, reference]);
+    if (!referenceNodes.has(key)) referenceNodes.set(key, {});
+    return referenceNodes.get(key);
+  };
+  const root = alias => {
+    if (parents.get(alias) !== alias) parents.set(alias, root(parents.get(alias)));
+    return parents.get(alias);
+  };
+  const connect = aliases => {
+    for (const alias of aliases) if (!parents.has(alias)) parents.set(alias, alias);
+    for (const alias of aliases.slice(1)) {
+      const firstRoot = root(aliases[0]);
+      const aliasRoot = root(alias);
+      if (firstRoot !== aliasRoot) parents.set(aliasRoot, firstRoot);
+    }
+  };
+  for (const row of rows) {
     const reference = row.verification_method === "public_url" ? publicUrlIdentity(row.verified_url) : row.verification_reference;
-    const identity = `ledger:${row.verification_method}:${reference}`;
     const sourceIdentity = publicUrlIdentity(row.source);
-    const sourceAliases = [[row.source, identity], ...(sourceIdentity ? [[sourceIdentity, identity]] : [])];
-    return row.verification_method === "public_url" ? [...sourceAliases, [row.verified_url, identity], [reference, identity]] : sourceAliases;
+    const aliases = [row.source, ...(sourceIdentity ? [sourceIdentity] : [])];
+    if (row.verification_method === "public_url") aliases.push(row.verified_url, reference);
+    else aliases.push(referenceNode(row.verification_method, reference));
+    connect(aliases);
+  }
+  const groups = new Map();
+  return new Map([...parents.keys()].filter(alias => typeof alias === "string").map(alias => {
+    const groupRoot = root(alias);
+    if (!groups.has(groupRoot)) groups.set(groupRoot, {});
+    return [alias, groups.get(groupRoot)];
   }));
 }
 function canonicalEvidenceIdentity(source, aliases) {
