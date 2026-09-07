@@ -34,6 +34,13 @@ For each major claim, seek at least 2 credible sources or mark the claim LOW con
 ## Five-Lens Briefing
 Use `five-lens-briefing.md` when the question is not just "what is true?" but "how should I understand this and what should I do?" The method requires a perspective scan, contradiction map, synthesis, and peer review. It is compatible with standard, extensive, or deep tiers depending on risk and evidence needs.
 
+If the user explicitly requests `quick` with `five_lens_briefing`, normalize the
+tier to `standard`, preserve the selected five-lens method, and disclose the
+tier normalization. Record the requested tier, effective tier, and disclosure
+in `five_lens_process_evidence.tier_resolution`; use literal
+`not_applicable` as the disclosure when the requested tier was not `quick`.
+`quick` remains valid for ordinary `source_research`.
+
 ## Deep Investigation
 Iterative progressive research:
 1. Broad landscape scan across differentiated source classes
@@ -41,9 +48,81 @@ Iterative progressive research:
 3. Deep-dive the highest-value findings
 4. Repeat until coverage is sufficient
 
-## Adapter-Aware Delegation
+## Delegation by method
 
-Research angles are required; subagent dispatch is optional. If the active adapter and user/tool policy permit parallel agents, each angle can be delegated independently. If not, run the angles sequentially in the main session and record that delegation was unavailable. Never reduce source diversity just because delegation is unavailable.
+`source_research` is direct-capable: research angles are required, while
+`subagent_policy_state=not_required` and
+`subagent_execution_mode=not_applicable`. Never reduce source diversity because
+delegation is unavailable.
+
+`five_lens_briefing` is a Process method. Freeze one sibling-blind assignment
+packet for each required LensKind before the first dispatch, then send one
+independent LensResearcher per lens through the selected handoff. Capacity may
+require waves, but later waves cannot consume earlier results. The root
+Orchestrator alone synthesizes validated results; a separate
+ResearchPeerReviewer critiques that initial synthesis.
+
+Freeze an ordered five-entry packet manifest and retain the exact five frozen
+packet bodies in final process evidence: each entry has `packet_id`, its exact
+LensKind, and a `content_digest`. A ContentDigest is `sha256:` plus 64
+lowercase hex SHA-256 over the exact UTF-8 bytes produced by RFC 8785 JSON
+Canonicalization Scheme (JCS), with no trailing newline. Packet preimages include every
+packet field except `content_digest`; packet-set preimage is its ordered
+`packet_id`, `lens_kind`, `content_digest` manifest. Every delegated
+dispatch or fallback root pass repeats the matching packet content digest;
+recompute every retained packet digest from its canonical preimage before use.
+All five bodies have equal `question`, `tier`, `user_role_or_goal`,
+`output_purpose`, `known_context`, `evidence_budget`, `search_resource_budget`,
+`source_policy`, and `isolation_policy`; only identity, LensKind, digest, and
+freeze time may vary.
+Any mismatch invalidates the complete lens stage.
+
+After validating a usable return, recompute `lens_result_digest` over the RFC
+8785 JCS bytes of `lens_result` only. Carry its LensKind, assignment ID, and digest unchanged into
+an authoritative five-entry `accepted_lens_results` ledger that exactly equals
+the peer-review input. Carry the same identity into the process record,
+perspective scan, and question trace;
+the presented fields must be exact projections of that accepted result. Preserve
+valid empty source arrays for inference-only or unresolved results rather than
+inventing a source marker. Every follow-up carries its own `gaps` array; an
+empty-source inference-only or unresolved follow-up names its own non-empty gap
+instead of borrowing a parent-lens gap.
+
+Peer input binds the assignment; final-equal `findings`, `conflicts`, and
+`contradiction_map`; normalized `candidate_mechanisms` (`[]` if absent);
+initial synthesis; validated lenses; lens provenance; verified evidence;
+`verification_gaps` equal to top-level `gaps`; and high-stakes context. Changing
+the four bound artifacts requires fresh peer review; disposition closes only
+synthesis revisions.
+
+This skill instruction sets `subagent_policy_state=delegation_triggered` and
+`subagent_execution_mode=delegated` without a separate permission question.
+Record a non-empty trigger scope. An opt-out, actual spawn failure or supported
+configuration proof sets sequential fallback evidence; an exact policy block
+also records its blocking source and no-exception basis.
+Global opt-out or policy-disallowed state forces peer `sequential_fallback`
+with matching admissible evidence and forbids peer subagent dispatch.
+
+Use sequential fallback only for explicit opt-out, real dispatch failure or
+unavailability, supported configuration proof, or an exact policy block. Run
+five frozen-packet root passes, record reduced independence, and retain peer
+critique as a separate fresh pass. After one same-assignment schema-correction
+retry, rerun the complete lens stage through evidenced fallback or block; do
+not mix partial delegated and root-authored lenses while claiming independence.
+
+For five-lens work, carry a numeric bounded search resource budget through the
+root process and every frozen packet. Standard allows at most 3 queries, 4
+sources, and 10 minutes per lens (15/20/50 overall); extensive allows 5/6/15
+(25/30/75 overall); deep allows 8/10/25 (40/50/125 overall). Deep stops at
+saturation or its hard ceiling. When a limit is exhausted, record gaps and
+downgrade confidence instead of extending the search. These five-lens ceilings
+do not change proportional direct `source_research` behavior.
+Record SearchResourceUsage for every lens and the root: actual queries/sources,
+elapsed minutes, termination state, exhausted dimensions, and downgrade
+evidence. Summed query/source uses must match root totals, while root elapsed is
+observed wall-clock. It is at least the sum of sequential fallback pass times,
+or the sum of each delegated wave's maximum member time. Usable output cannot exceed a ceiling; reaching one records
+an explicit gap and LOW lens confidence, while an over-ceiling run blocks.
 
 ## Candidate mechanisms
 
@@ -56,17 +135,30 @@ validation method.
 ## Mandatory: URL Verification
 **Every URL presented to the user MUST be verified.** See `url-verify.md`.
 AI agents hallucinate plausible-looking URLs routinely. Never present an unverified URL.
+Evidence that is verifiable only through a repository, authenticated source, or
+offline authoritative source remains valid without a URL. Record its method and
+a stable repository-relative locator, opaque connector/record identifier, or
+bibliographic citation. A public URL must be globally routable and successfully
+checked; reserved domains and private, loopback, link-local, or alternate-encoded
+addresses are not public evidence. Never expose credentials, tokens, PII,
+parent traversal, or absolute host paths in that reference.
+Apply the same safe reference and public-URL rules to both sides of every
+conflict record.
 
 ## Mandatory: Confidence Scoring
 Every research finding gets a confidence level:
 
 | Level | Criteria |
 |---|---|
-| **HIGH** | 3+ independent sources agree, primary/official source found |
+| **HIGH** | `source_provenance` proves both 3+ unique independence keys and at least one primary/official source |
 | **MEDIUM** | 2 sources agree, or 1 authoritative source |
 | **LOW** | Single source, or sources conflict |
 
-Always show confidence level with findings. Flag LOW-confidence findings explicitly.
+Keep public `sources` as strings. Optional `source_provenance` has exact
+`source`, `independence_key`, and `authority` (`primary`, `official`, or
+`secondary`) rows whose unique source set equals `sources`; HIGH requires it,
+3+ independent agreeing sources, and primary/official evidence.
+Always show confidence and flag LOW explicitly.
 
 ## Output format
 
@@ -78,6 +170,7 @@ Evidence budget: [source/angle target and whether it was met]
 FINDINGS
 1. [finding] — confidence: HIGH
    Sources: [source 1], [source 2]
+   Source provenance: [{source, independence_key, authority}, ...]
 2. [finding] — confidence: MEDIUM
    Source: [source]
 3. [finding] — confidence: LOW (single source, unverified)

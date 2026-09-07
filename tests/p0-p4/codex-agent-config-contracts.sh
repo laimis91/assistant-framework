@@ -15,7 +15,9 @@ code-mapper
 code-reviewer
 code-writer
 explorer
+lens-researcher
 qa-evaluator
+research-peer-reviewer
 reviewer"
 
 toml_quoted_value() {
@@ -32,7 +34,7 @@ actual_agents="$(
 )"
 agent_baseline_failures=()
 if [[ "$actual_agents" != "$expected_agents" ]]; then
-    agent_baseline_failures+=("expected exactly eight agent files")
+    agent_baseline_failures+=("expected exactly ten agent files")
 fi
 while IFS='|' read -r agent expected_sandbox; do
     file="$agent_dir/$agent.toml"
@@ -53,7 +55,9 @@ code-mapper|read-only
 code-reviewer|read-only
 code-writer|workspace-write
 explorer|read-only
+lens-researcher|read-only
 qa-evaluator|read-only
+research-peer-reviewer|read-only
 reviewer|read-only
 EOF
 if [[ "${#agent_baseline_failures[@]}" -eq 0 ]]; then
@@ -97,7 +101,9 @@ code-mapper|gpt-5.6-luna|low
 code-reviewer|gpt-5.6-sol|xhigh
 code-writer|gpt-5.6-terra|high
 explorer|gpt-5.6-terra|medium
+lens-researcher|gpt-5.6-terra|medium
 qa-evaluator|gpt-5.6-sol|high
+research-peer-reviewer|gpt-5.6-sol|high
 reviewer|gpt-5.6-sol|xhigh
 EOF
 if [[ "${#matrix_failures[@]}" -eq 0 ]]; then
@@ -140,7 +146,9 @@ code-mapper|paths
 code-reviewer|correctness
 code-writer|smallest
 explorer|evidence
+lens-researcher|independent
 qa-evaluator|acceptance
+research-peer-reviewer|independent
 reviewer|compatibility
 EOF
 if [[ "${#stance_failures[@]}" -eq 0 ]]; then
@@ -319,7 +327,7 @@ else
         "$smoke_helper"; then
         smoke_failures+=("live smoke must compare child parent_thread_id with the selected parent payload.id before accepting metadata")
     fi
-    for representative_role in code-mapper explorer code-writer architect qa-evaluator; do
+    for representative_role in code-mapper explorer code-writer architect qa-evaluator lens-researcher research-peer-reviewer; do
         prompt_case="$(awk -v role="$representative_role" '
             $0 ~ "^[[:space:]]*" role "\\)" { in_role = 1 }
             in_role { print }
@@ -346,7 +354,7 @@ else
         verification_line="$(tr -d '"' <"$smoke_helper" \
             | tr -d "'" \
             | grep -nE \
-                "(\\$\\{?${probe_counter}\\}?|${probe_counter})[[:space:]]*(-eq|==|-ne|!=)[[:space:]]*5" \
+                "(\\$\\{?${probe_counter}\\}?|${probe_counter})[[:space:]]*(-eq|==|-ne|!=)[[:space:]]*7" \
             | sed -n '1s/:.*//p')"
 
         if [[ -z "$run_probe_line" || -z "$increment_line" ]] \
@@ -355,13 +363,13 @@ else
         fi
         if [[ -z "$verification_line" || -z "$success_line_number" ]] \
             || (( verification_line >= success_line_number )); then
-            smoke_failures+=("live smoke must verify the actual successful probe count equals five before success")
+            smoke_failures+=("live smoke must verify the actual successful probe count equals seven before success")
         fi
         if [[ "$success_text" != *'representatives='* ]] \
-            || [[ "$success_text" == *'representatives=5'* ]] \
+            || [[ "$success_text" == *'representatives=7'* ]] \
             || { [[ "$success_text" != *"\$$probe_counter"* ]] \
                 && [[ "$success_text" != *'${'"$probe_counter"'}'* ]]; }; then
-            smoke_failures+=("LIVE_SMOKE_OK must print the actual probe counter, not hard-code representatives=5")
+            smoke_failures+=("LIVE_SMOKE_OK must print the actual probe counter, not hard-code representatives=7")
         fi
     fi
     if grep -Eq '\.payload\.(message|content|text)|raw_prompt|prompt_body' "$smoke_helper"; then
@@ -409,6 +417,8 @@ else
         '    3) role="code-writer"; model="gpt-5.6-terra"; effort="high" ;;' \
         '    4) role="architect"; model="gpt-5.6-sol"; effort="xhigh" ;;' \
         '    5) role="qa-evaluator"; model="gpt-5.6-sol"; effort="high" ;;' \
+        '    6) role="lens-researcher"; model="gpt-5.6-terra"; effort="medium" ;;' \
+        '    7) role="research-peer-reviewer"; model="gpt-5.6-sol"; effort="high" ;;' \
         '    *) exit 91 ;;' \
         'esac' \
         'session_file="$CODEX_HOME/sessions/fake-child-${call_count}.jsonl"' \

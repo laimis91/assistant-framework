@@ -14,3 +14,5 @@ The following roles should be created:
 - code-writer — Focused code implementation (write access)
 - builder-tester — Build and test automation (write access)
 - reviewer — Independent code review (read-only)
+- lens-researcher — Independent frozen five-lens evidence collection (read-only)
+- research-peer-reviewer — Independent five-lens synthesis critique (read-only)

@@ -1316,6 +1316,7 @@ grade_responses() {
     local seeded_defect_failures=0
     local false_positive_marker_failures=0
     local structured_json_assertion_failures=0
+    local semantic_validation_failures=0
     local index
     local skill_name
     local fixture_file
@@ -1331,6 +1332,8 @@ grade_responses() {
     local false_positive_failures
     local structured_failures
     local canonical_envelope_failures
+    local semantic_validator
+    local semantic_failures
     local status
     local reason
     local selected_cases
@@ -1369,6 +1372,11 @@ grade_responses() {
                 structured_failures="$(count_structured_json_assertion_failures "$fixture_file" "$id" "$response_path" "$skill_name")"
                 canonical_envelope_failures="$(count_assistant_review_canonical_envelope_failures "$skill_name" "$id" "$response_path" "$fixture_file")"
                 structured_failures=$((structured_failures + canonical_envelope_failures))
+                semantic_validator="$(semantic_validator_id_for_case "$fixture_file" "$id")"
+                semantic_failures=0
+                if [[ -n "$semantic_validator" ]] && ! run_semantic_validator "$semantic_validator" "$response_path" "$fixture_file" "$id"; then
+                    semantic_failures=1
+                fi
                 if [[ "$fail_signal_hits" -gt 0 ]]; then
                     status="FAIL"
                     reason="$fail_signal_hits exact fail-signal phrase hit(s)"
@@ -1428,6 +1436,15 @@ grade_responses() {
                     fi
                     structured_json_assertion_failures=$((structured_json_assertion_failures + structured_failures))
                 fi
+                if [[ "$semantic_failures" -gt 0 ]]; then
+                    if [[ "$status" == "FAIL" ]]; then
+                        reason="$reason; semantic validator failed"
+                    else
+                        status="FAIL"
+                        reason="semantic validator failed"
+                    fi
+                    semantic_validation_failures=$((semantic_validation_failures + semantic_failures))
+                fi
             fi
 
             if [[ "$status" == "PASS" ]]; then
@@ -1447,8 +1464,8 @@ grade_responses() {
     done
 
     echo ""
-    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s ordered_substring_failures=%s seeded_defect_failures=%s false_positive_marker_failures=%s structured_json_assertion_failures=%s skills=%s\n' \
-        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures" "$ordered_substring_failures" "$seeded_defect_failures" "$false_positive_marker_failures" "$structured_json_assertion_failures" "${#FIXTURE_FILES[@]}"
+    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s ordered_substring_failures=%s seeded_defect_failures=%s false_positive_marker_failures=%s structured_json_assertion_failures=%s semantic_validation_failures=%s skills=%s\n' \
+        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures" "$ordered_substring_failures" "$seeded_defect_failures" "$false_positive_marker_failures" "$structured_json_assertion_failures" "$semantic_validation_failures" "${#FIXTURE_FILES[@]}"
 
     [[ "$failed" -eq 0 ]]
 }

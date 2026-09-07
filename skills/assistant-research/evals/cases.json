@@ -22,19 +22,19 @@
       "id": "technology-comparison-uses-standard-tier",
       "title": "Technology comparison uses standard tier",
       "category": "tier_and_synthesis",
-      "purpose": "Checks that a technology comparison uses the research tool, standard tier, confidence-scored findings, conflicts, and gaps.",
-      "prompt": "Research whether we should use shell scripts or a small .NET CLI for skill fixture validation. Compare options for maintainability.",
+      "purpose": "Checks that an ordinary technology comparison uses direct source_research, standard tier, confidence-scored findings, conflicts, and gaps; it is an evidence-only source comparison, not a decision-grade five-lens request.",
+      "prompt": "Research source-backed maintainability differences between shell scripts and a small .NET CLI for skill fixture validation. Do not recommend an option.",
       "setup_context": [
         "The assistant-research skill instructions are active.",
-        "The user asks for a technology comparison and decision support.",
+        "The user asks for an evidence-only source comparison with no recommendation.",
         "No external sources have been gathered yet."
       ],
       "expected_behavior": [
-        "Resolves tool as research and tier as standard or stronger based on the comparison request.",
+        "Resolves tool as research and tier as standard for this evidence-only comparison.",
         "Logs the research tier and question before search activity.",
         "Applies an evidence budget using differentiated angles such as direct evidence, alternatives, and counter-evidence.",
-        "Treats subagent dispatch as optional and adapter-aware rather than mandatory.",
-        "Synthesizes findings with HIGH, MEDIUM, or LOW confidence based on source count and quality.",
+        "Sets research_method=source_research, subagent_policy_state=not_required, and subagent_execution_mode=not_applicable; this ordinary comparison is not a decision-grade five-lens request.",
+        "Uses HIGH only when 3+ independent agreeing sources include primary/official evidence; one authoritative source is MEDIUM.",
         "Reports CONFLICTS even when none are found.",
         "Reports GAPS for unanswered or weakly supported questions."
       ],
@@ -43,12 +43,12 @@
         "The response includes confidence-scored findings.",
         "The response distinguishes sources from verified URLs.",
         "The response includes conflicts and gaps sections.",
-        "The response does not present single-source findings as HIGH confidence."
+        "The response does not present fewer than three independent sources or evidence without primary/official support as HIGH confidence."
       ],
       "fail_signals": [
         "Gives a free-form recommendation with no confidence levels.",
         "Omits conflicts or gaps.",
-        "Treats one source as HIGH confidence without justification.",
+        "Treats one authoritative source, or three secondary-only sources, as HIGH confidence.",
         "Uses duplicate search angles for standard tier.",
         "Claims a fixed number of parallel agents is mandatory in every adapter."
       ],
@@ -56,6 +56,10 @@
         "required_substrings": [
           "RESEARCH:",
           "Tier: standard",
+          "Method: source_research",
+          "subagent_policy_state: not_required",
+          "subagent_execution_mode: not_applicable",
+          "not a decision-grade five-lens request",
           "Evidence budget",
           "FINDINGS",
           "confidence",
@@ -70,7 +74,8 @@
           "single source is HIGH",
           "No conflicts checked",
           "No gaps checked",
-          "3 agents are mandatory"
+          "3 agents are mandatory",
+          "optional dispatch"
         ]
       }
     },
@@ -127,6 +132,25 @@
     },
     {
       "id": "five-lens-decision-briefing-uses-storm-style-workflow",
+      "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Research whether I should invest money in a new AI coding assistant company for my .NET architecture work. I want a decision-grade briefing, not a generic summary.",
+          "user_role_or_goal": "Investor evaluating an AI coding assistant company for .NET architecture work",
+          "output_purpose": "Decision-grade investment due diligence"
+        },
+        "required_topic_terms": ["invest", "AI coding assistant", ".NET architecture"],
+        "follow_up_requirements": [],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
+      },
       "title": "Five-lens decision briefing uses perspective scan and peer review",
       "category": "five_lens_briefing",
       "purpose": "Checks that decision-grade research uses the five-lens method, contradiction map, synthesis, verification, and peer review instead of a one-shot summary.",
@@ -138,11 +162,15 @@
       ],
       "expected_behavior": [
         "Resolves research_method as five_lens_briefing and tier as extensive or deep when decision risk warrants it.",
-        "Runs the five required lenses: practitioner, academic/technical expert, skeptic, economist/incentives analyst, and historian/pattern matcher.",
+        "Freezes five sibling-blind assignment packets before first dispatch, then runs five independent LensResearcher dispatches: practitioner, academic/technical expert, skeptic, economist/incentives analyst, and historian/pattern matcher.",
+        "Records FIVE-LENS PROCESS EVIDENCE with the frozen packet-set ID/digest and ordering, exact five native dispatch identities or exact five fallback root passes, packet/assignment bindings, validated returns, peer assignment/identity or fallback, execution modes, reduced-independence state, and bounded resource budget.",
+        "Allows capacity-bounded waves without leaking earlier lens results into later assignments, and validates each return against its frozen packet.",
         "Builds a STORM-style question trace/evidence ledger: at least one per-lens research question, source-grounded answer or explicit gap, source notes/verified URLs, every material evidence-prompted follow-up or an explicit none_needed decision, and evidence status before synthesis.",
         "Builds a contradiction map before synthesis.",
+        "Binds the case-owned invest, AI coding assistant, and .NET architecture terms to substantive structured content rather than satisfying them only in report or metadata fields.",
         "Produces a recommendation no stronger than the verified evidence supports.",
-        "Runs peer review/self-critique and identifies weakest claim, bias, missing perspective, and falsification test.",
+        "Root alone builds the contradiction map and initial synthesis after all validated lens results, then a distinct ResearchPeerReviewer runs peer review and identifies weakest claim, bias, missing perspective, and falsification test.",
+        "Uses sequential fallback only with concrete opt-out, spawn failure/unavailability, supported configuration proof, or exact policy block evidence; records reduced independence and keeps peer critique as a separate fresh pass without fabricated native dispatch references.",
         "Separates lens inference from source-backed findings and verifies decision-critical URLs before presenting them.",
         "Includes the base FINDINGS and CONFLICTS sections required for all assistant-research outputs, with confidence-scored source-backed findings.",
         "For investment/trading or similarly high-stakes topics, frames the output as educational due diligence with risk/context caveats and defaults to investigate_further unless stronger action is justified."
@@ -158,14 +186,32 @@
       "fail_signals": [
         "Answers from one generic perspective only.",
         "Skips contradiction mapping.",
-        "Skips peer review or self-critique.",
+        "Uses self-critique-only instead of a distinct ResearchPeerReviewer pass.",
+        "Uses one agent covering all lenses while claiming independent lens dispatches.",
+        "Claims partial mixed compliance from delegated and root-authored lens results.",
+        "Uses fabricated fallback dispatch refs or native identities for root fallback passes.",
+        "Treats repeated model identity as noncompliance instead of validating distinct native dispatch identities.",
+        "Accepts peer reviewer identity from worker return instead of orchestrator delegation metadata.",
+        "Blocks peer review because verified sources are required even when verification gaps identify unsupported claims.",
+        "Claims packet binding omitted while accepting lens dispatch or fallback pass evidence.",
         "Presents lens speculation as verified fact.",
         "Makes a strong recommendation without source verification."
       ],
       "machine_expectations": {
         "required_substrings": [
           "Method: five_lens_briefing",
+          "lens_execution_mode: delegated",
+          "peer_review_execution_mode: delegated",
+          "reduced_independence: false",
+          "FIVE-LENS PROCESS EVIDENCE",
+          "frozen_packet_set",
+          "packet_set_id",
+          "packet_set_digest",
+          "first_lens_execution_at",
           "PERSPECTIVE SCAN",
+          "five independent lens dispatches",
+          "five unique native dispatch identities",
+          "LensResearcher",
           "Practitioner",
           "Skeptic",
           "Economist",
@@ -173,6 +219,16 @@
           "CONTRADICTION MAP",
           "SYNTHESIS",
           "PEER REVIEW",
+          "ResearchPeerReviewer",
+          "assignment_id",
+          "packet_id",
+          "return_validated",
+          "peer_review_assignment_id",
+          "peer_reviewer_identity",
+          "lens_execution_mode",
+          "peer_review_execution_mode",
+          "reduced_independence",
+          "search_resource_budget",
           "weakest claim",
           "falsification",
           "GAPS",
@@ -203,22 +259,254 @@
           "No question trace needed",
           "synthesize directly from lenses",
           "source-grounded answers optional",
-          "follow_up_question"
+          "follow_up_question",
+          "self-critique-only",
+          "one agent covering all lenses",
+          "partial mixed compliance",
+          "fabricated fallback dispatch refs",
+          "repeated model identity as noncompliance",
+          "peer reviewer identity from worker return",
+          "verified sources are required even when verification gaps",
+          "packet binding omitted",
+          "BLOCKED with accepted verdict",
+          "finalize NEEDS_CONTEXT peer result",
+          "fallback_lens_passes",
+          "peer_review_fallback_pass_id",
+          "lens_fallback_evidence",
+          "peer_review_fallback_evidence"
+        ],
+        "structured_json_assertions": [{"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"delegated"},{"operator":"equals","path":["five_lens_process_evidence","peer_review_execution_mode"],"expected":"delegated"},{"operator":"equals","path":["five_lens_process_evidence","subagent_policy_state"],"expected":"delegation_triggered"},{"operator":"equals","path":["five_lens_process_evidence","reduced_independence"],"expected":false},{"operator":"path_absent","path":["five_lens_process_evidence","fallback_lens_passes"]},{"operator":"path_absent","path":["five_lens_process_evidence","peer_review_fallback_pass_id"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","lens_dispatches"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","lens_dispatches"],"fields":["assignment_id","lens_result_digest","packet_id","packet_set_id","packet_content_digest"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","accepted_lens_results"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","accepted_lens_results"],"fields":["assignment_id","lens_result_digest","core_position","lens_question","answer_or_gap"]},{"operator":"array_field_values_exact","path":["perspective_scan"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_field_values_exact","path":["question_trace"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","lens_dispatches"],"fields":["dispatch_identity","wave_id"]},{"operator":"equals","path":["peer_review","verdict"],"expected":"revise"},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_assignment_id"],"other_path":["peer_review","peer_review_assignment_id"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_reviewer_identity"],"other_path":["peer_review","peer_reviewer_identity"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_revision_disposition_id"],"other_path":["peer_review","revision_disposition_id"]},{"operator":"nonempty_string","path":["synthesis_briefing","high_stakes_caveat"]}]
+      }
+    },
+    {
+      "id": "five-lens-sequential-fallback-preserves-process-evidence",
+      "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Should we adopt the tool?",
+          "user_role_or_goal": "architecture decision",
+          "output_purpose": "Answer the research question"
+        },
+        "required_topic_terms": [],
+        "follow_up_requirements": [],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
+      },
+      "title": "Five-lens sequential fallback preserves complete non-native process evidence",
+      "category": "five_lens_briefing",
+      "purpose": "Checks that an evidenced sequential fallback records five frozen root passes and a fresh peer fallback without fabricating delegated identities.",
+      "prompt": "Create a five-lens briefing after the dispatch mechanism is unavailable. Use the permitted sequential fallback and keep the peer critique separate.",
+      "setup_context": [
+        "The assistant-research skill instructions are active.",
+        "A real unavailable dispatch mechanism is recorded as sequential_fallback_evidence.",
+        "No native LensResearcher or ResearchPeerReviewer dispatch identity exists for this run."
+      ],
+      "expected_behavior": [
+        "Uses lens_execution_mode: sequential_fallback and peer_review_execution_mode: sequential_fallback.",
+        "Records exactly five frozen root passes in fallback_lens_passes with assignment, packet, packet-set, root-pass, and return-validation bindings.",
+        "Records admissible lens_fallback_evidence, a fresh peer_review_fallback_pass_id with peer_review_fallback_evidence, and reduced_independence: true.",
+        "Does not fabricate five unique native dispatch identities or peer_reviewer_identity."
+      ],
+      "pass_criteria": [
+        "The response retains exact LensKind coverage through five frozen root passes.",
+        "The response preserves separate peer fallback evidence and reduced-independence disclosure.",
+        "The response contains no delegated native identity evidence.",
+        "A non-URL verified source may use local_repository with a stable verification_reference and no verified_url."
+      ],
+      "fail_signals": [
+        "Invents native dispatch identities for root passes.",
+        "Mixes delegated lens evidence with fallback-only evidence.",
+        "Uses one self-critique in place of the fresh peer fallback pass."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Method: five_lens_briefing",
+          "FIVE-LENS PROCESS EVIDENCE",
+          "lens_execution_mode: sequential_fallback",
+          "peer_review_execution_mode: sequential_fallback",
+          "fallback_lens_passes",
+          "exactly five frozen root passes",
+          "assignment_id",
+          "packet_id",
+          "packet_set_id",
+          "root_pass_id",
+          "return_validated",
+          "lens_fallback_evidence",
+          "peer_review_fallback_pass_id",
+          "peer_review_fallback_evidence",
+          "reduced_independence: true",
+          "ResearchPeerReviewer",
+          "GAPS"
+        ],
+        "forbidden_substrings": [
+          "five unique native dispatch identities",
+          "peer_reviewer_identity",
+          "lens_execution_mode: delegated",
+          "peer_review_execution_mode: delegated",
+          "reduced_independence: false",
+          "partial mixed compliance",
+          "fabricated fallback dispatch refs",
+          "dispatch_identity"
+        ],
+        "structured_json_assertions": [{"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"sequential_fallback"},{"operator":"equals","path":["five_lens_process_evidence","peer_review_execution_mode"],"expected":"sequential_fallback"},{"operator":"equals","path":["five_lens_process_evidence","subagent_policy_state"],"expected":"subagents_unavailable"},{"operator":"equals","path":["five_lens_process_evidence","reduced_independence"],"expected":true},{"operator":"path_absent","path":["five_lens_process_evidence","lens_dispatches"]},{"operator":"path_absent","path":["five_lens_process_evidence","peer_reviewer_identity"]},{"operator":"path_absent","path":["peer_review","peer_reviewer_identity"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","fallback_lens_passes"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","fallback_lens_passes"],"fields":["assignment_id","lens_result_digest","packet_id","packet_set_id","packet_content_digest"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","accepted_lens_results"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","accepted_lens_results"],"fields":["assignment_id","lens_result_digest","core_position","lens_question","answer_or_gap"]},{"operator":"array_field_values_exact","path":["perspective_scan"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_field_values_exact","path":["question_trace"],"field":"lens","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","fallback_lens_passes"],"fields":["root_pass_id"]},{"operator":"equals","path":["five_lens_process_evidence","lens_fallback_evidence","basis"],"expected":"spawn_failure_or_unavailable"},{"operator":"nonempty_string","path":["five_lens_process_evidence","lens_fallback_evidence","detail"]},{"operator":"equals","path":["five_lens_process_evidence","peer_review_fallback_evidence","basis"],"expected":"spawn_failure_or_unavailable"},{"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_evidence","evidence_ref"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_fallback_pass_id"],"other_path":["peer_review","peer_review_fallback_pass_id"]}]
+      }
+    },
+    {
+      "id": "five-lens-delegated-lenses-sequential-peer-fallback",
+      "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Should we adopt the tool?",
+          "user_role_or_goal": "architecture decision",
+          "output_purpose": "Answer the research question"
+        },
+        "required_topic_terms": [],
+        "follow_up_requirements": [],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
+      },
+      "title": "Delegated lenses permit an evidenced sequential peer fallback",
+      "category": "five_lens_briefing",
+      "purpose": "Checks that a completed delegated lens stage can use a separate evidenced sequential peer fallback without fabricating a native peer identity or treating the mixed mode as partial compliance.",
+      "prompt": "Create a five-lens briefing where all LensResearcher dispatches completed, but the separate peer reviewer dispatch is unavailable and must use the permitted sequential peer fallback.",
+      "setup_context": [
+        "The assistant-research skill instructions are active.",
+        "Five delegated LensResearcher dispatches completed against frozen sibling-blind packets.",
+        "Only the separate ResearchPeerReviewer dispatch is unavailable; its fallback evidence and fresh root pass are recorded."
+      ],
+      "expected_behavior": [
+        "Uses lens_execution_mode: delegated and peer_review_execution_mode: sequential_fallback.",
+        "Retains exactly five native delegated lens records, packet bindings, wave coverage, and delegation-triggered policy state.",
+        "Records a fresh peer_review_fallback_pass_id and peer_review_fallback_evidence with reduced_independence: true.",
+        "Does not emit fallback_lens_passes, lens_fallback_evidence, a native peer_reviewer_identity, or revision disposition metadata for the accepted fallback peer."
+      ],
+      "pass_criteria": [
+        "The response proves the delegated lens stage and peer fallback stage independently.",
+        "The response discloses reduced independence while keeping a usable peer result.",
+        "The response contains no fabricated native peer identity or fallback lens evidence."
+      ],
+      "fail_signals": [
+        "Treats a reviewer-only fallback as partial mixed compliance.",
+        "Invents a native peer identity or reuses a lens dispatch identity.",
+        "Converts the completed delegated lens stage into fallback_lens_passes."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Method: five_lens_briefing",
+          "FIVE-LENS PROCESS EVIDENCE",
+          "lens_execution_mode: delegated",
+          "peer_review_execution_mode: sequential_fallback",
+          "subagent_policy_state: delegation_triggered",
+          "lens_dispatches",
+          "dispatch_identity",
+          "wave_coverage",
+          "assignment_id",
+          "packet_id",
+          "packet_set_id",
+          "return_validated",
+          "peer_review_fallback_pass_id",
+          "peer_review_fallback_evidence",
+          "reduced_independence: true",
+          "GAPS"
+        ],
+        "forbidden_substrings": [
+          "fallback_lens_passes",
+          "lens_fallback_evidence",
+          "peer_reviewer_identity",
+          "peer_review_revision_disposition_id",
+          "partial mixed compliance",
+          "fabricated fallback dispatch refs"
+        ],
+        "structured_json_assertions": [{"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"delegated"},{"operator":"equals","path":["five_lens_process_evidence","peer_review_execution_mode"],"expected":"sequential_fallback"},{"operator":"equals","path":["five_lens_process_evidence","subagent_policy_state"],"expected":"delegation_triggered"},{"operator":"equals","path":["five_lens_process_evidence","reduced_independence"],"expected":true},{"operator":"path_absent","path":["five_lens_process_evidence","fallback_lens_passes"]},{"operator":"path_absent","path":["five_lens_process_evidence","lens_fallback_evidence"]},{"operator":"path_absent","path":["five_lens_process_evidence","peer_reviewer_identity"]},{"operator":"path_absent","path":["peer_review","peer_reviewer_identity"]},{"operator":"path_absent","path":["five_lens_process_evidence","peer_review_revision_disposition_id"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","lens_dispatches"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"array_items_nonempty_fields","path":["five_lens_process_evidence","lens_dispatches"],"fields":["dispatch_identity","assignment_id","lens_result_digest","packet_id","packet_set_id","packet_content_digest","wave_id"]},{"operator":"array_field_values_exact","path":["five_lens_process_evidence","accepted_lens_results"],"field":"lens_kind","expected_values":["practitioner","academic_or_technical_expert","skeptic","economist_or_incentives_analyst","historian_or_pattern_matcher"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_assignment_id"],"other_path":["peer_review","peer_review_assignment_id"]},{"operator":"equals_path","path":["five_lens_process_evidence","peer_review_fallback_pass_id"],"other_path":["peer_review","peer_review_fallback_pass_id"]},{"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_evidence","evidence_ref"]}]
+      }
+    },
+    {
+      "id": "five-lens-quick-normalizes-to-standard",
+      "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Should we adopt the tool?",
+          "user_role_or_goal": "architecture decision",
+          "output_purpose": "Answer the research question"
+        },
+        "required_topic_terms": [],
+        "follow_up_requirements": [],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
+      },
+      "title": "Quick five-lens requests retain standard normalization evidence",
+      "category": "five_lens_briefing",
+      "purpose": "Checks that an explicit quick five-lens request is retained as a standard-budget briefing with an auditable normalization disclosure.",
+      "prompt": "Quickly create a five-lens briefing for this decision; retain the normalization evidence in the final process record.",
+      "setup_context": ["The assistant-research skill instructions are active.", "The requester explicitly selected quick while requiring five_lens_briefing."],
+      "expected_behavior": ["Preserves five_lens_briefing while normalizing quick to standard.", "Records requested_tier=quick, effective_tier=standard, and a nonblank normalization disclosure.", "Uses the standard frozen search resource budget rather than a quick budget."],
+      "pass_criteria": ["The response contains the complete five-lens process evidence and an auditable quick-to-standard tier resolution."],
+      "fail_signals": ["Retains quick as the effective five-lens tier.", "Omits requested-tier evidence or the normalization disclosure.", "Uses extensive or quick ceilings after a quick request."],
+      "machine_expectations": {
+        "required_substrings": ["Method: five_lens_briefing", "quick", "standard", "tier_resolution", "requested_tier", "effective_tier", "normalization_disclosure", "FIVE-LENS PROCESS EVIDENCE"],
+        "forbidden_substrings": ["effective_tier: quick", "quick budget retained", "tier normalization omitted"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["five_lens_process_evidence","tier_resolution","requested_tier"],"expected":"quick"},
+          {"operator":"equals","path":["five_lens_process_evidence","tier_resolution","effective_tier"],"expected":"standard"},
+          {"operator":"nonempty_string","path":["five_lens_process_evidence","tier_resolution","normalization_disclosure"]}
         ]
       }
     },
     {
       "id": "five-lens-retains-all-material-follow-ups",
+      "semantic_validator": "assistant-research.five_lens_v3",
+      "semantic_context": {
+        "packet_scope": {
+          "question": "Should we adopt the tool?",
+          "user_role_or_goal": "architecture decision",
+          "output_purpose": "Answer the research question"
+        },
+        "required_topic_terms": [],
+        "follow_up_requirements": [
+          {"lens_kind": "practitioner", "decision": "follow_up", "exact_count": 2},
+          {"lens_kind": "skeptic", "decision": "none_needed", "exact_count": 1}
+        ],
+        "adapter_context": {
+          "max_concurrent_lens_workers": 5
+        },
+        "high_stakes_context": {
+          "applicable": true,
+          "caveat_or_not_applicable_reason": "This fixture is educational due diligence, not financial, legal, medical, or professional advice.",
+          "user_context_status": "unresolved",
+          "user_context_basis": "No decision-specific user constraints were supplied."
+        }
+      },
       "title": "Five-lens question traces retain every material follow-up",
       "category": "five_lens_briefing",
       "purpose": "Checks that the evidence ledger retains all material follow-ups rather than collapsing them into one singular field.",
       "prompt": "Create a five-lens briefing where the practitioner answer produces two material follow-up questions and the skeptic answer produces no material follow-up.",
       "setup_context": ["The assistant-research skill instructions are active.", "The question trace must remain source-backed or explicitly gap-marked before synthesis."],
-      "expected_behavior": ["Records follow_ups=[follow_up, follow_up] for every material practitioner follow-up with question, answer_or_gap, sources/verified URLs, and evidence status.", "Records decision=none_needed for the skeptic rather than omitting follow-up state; none_needed cannot coexist with material follow-ups for the same trace."],
+      "expected_behavior": ["Records follow_ups=[follow_up, follow_up] for every material practitioner follow-up with question, answer_or_gap, sources/verified URLs, and evidence status.", "Records decision=none_needed for the skeptic rather than omitting follow-up state; none_needed cannot coexist with material follow-ups for the same trace.", "Includes FIVE-LENS PROCESS EVIDENCE rather than treating headings and follow-up keywords as sufficient process proof."],
       "pass_criteria": ["The response retains every material follow-up and includes a none_needed decision only where none exists."],
       "fail_signals": ["Collapses multiple follow-ups into follow_up_question or omits sources, status, or an answer/gap."],
       "machine_expectations": {
-        "required_substrings": ["follow_ups=[follow_up, follow_up]", "question", "answer_or_gap", "sources_or_verified_urls", "evidence_status", "decision=none_needed", "none_needed cannot coexist with material follow-ups", "every material follow-up"],
+        "required_substrings": ["follow_ups=[follow_up, follow_up]", "question", "answer_or_gap", "sources_or_verified_urls", "evidence_status", "decision=none_needed", "none_needed cannot coexist with material follow-ups", "every material follow-up", "FIVE-LENS PROCESS EVIDENCE"],
         "forbidden_substrings": ["follow_up_question", "follow_up_answer_or_gap", "follow-ups omitted", "accept follow_ups=[follow_up, none_needed] for the same trace"]
       }
     },

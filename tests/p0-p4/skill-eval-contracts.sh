@@ -3,6 +3,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assistant-research-fixtures.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
@@ -54,6 +55,7 @@ workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
 telos_fixture="$FRAMEWORK_DIR/skills/assistant-telos/evals/cases.json"
 workflow_fixture="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
+research_evals="$FRAMEWORK_DIR/skills/assistant-research/evals/cases.json"
 
 p0p4_skill_eval_default_fixtures() {
     find "$FRAMEWORK_DIR/skills" \
@@ -329,6 +331,51 @@ p0p4_write_assistant_review_architecture_pack_response() {
     ' >"$response_path"
 }
 
+p0p4_write_assistant_research_delegated_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    write_schema_valid_five_lens_eval_response delegated "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
+}
+
+p0p4_write_assistant_research_fallback_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    write_schema_valid_five_lens_eval_response sequential_fallback "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
+}
+
+p0p4_write_assistant_research_mixed_peer_fallback_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    write_schema_valid_five_lens_eval_response delegated_peer_fallback "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
+}
+
+p0p4_write_assistant_research_quick_normalized_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    write_schema_valid_five_lens_eval_response quick_normalized "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
+}
+
+p0p4_write_assistant_research_retained_follow_ups_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    write_schema_valid_five_lens_eval_response retained_follow_ups "$response_path"
+    jq --arg summary "$summary" '.summary = $summary' "$response_path" >"${response_path}.summary"
+    mv "${response_path}.summary" "$response_path"
+}
+
 p0p4_write_skill_eval_responses() {
     local output_dir="$1"
     local omit_skill="${2:-}"
@@ -600,6 +647,30 @@ p0p4_write_skill_eval_responses() {
                         ;;
                     *)
                         fail "unhandled structured assistant-review eval case: $id"
+                        ;;
+                esac
+                continue
+            fi
+            if [[ "$skill_name" == "assistant-research" ]] \
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | .semantic_validator == "assistant-research.five_lens_v3"' "$fixture_file" >/dev/null; then
+                case "$skill_name:$id" in
+                    assistant-research:five-lens-decision-briefing-uses-storm-style-workflow)
+                        p0p4_write_assistant_research_delegated_response "$response_path" "$required_summary"
+                        ;;
+                    assistant-research:five-lens-delegated-lenses-sequential-peer-fallback)
+                        p0p4_write_assistant_research_mixed_peer_fallback_response "$response_path" "$required_summary"
+                        ;;
+                    assistant-research:five-lens-sequential-fallback-preserves-process-evidence)
+                        p0p4_write_assistant_research_fallback_response "$response_path" "$required_summary"
+                        ;;
+                    assistant-research:five-lens-quick-normalizes-to-standard)
+                        p0p4_write_assistant_research_quick_normalized_response "$response_path" "$required_summary"
+                        ;;
+                    assistant-research:five-lens-retains-all-material-follow-ups)
+                        p0p4_write_assistant_research_retained_follow_ups_response "$response_path" "$required_summary"
+                        ;;
+                    *)
+                        fail "unhandled semantic assistant-research eval case: $id"
                         ;;
                 esac
                 continue

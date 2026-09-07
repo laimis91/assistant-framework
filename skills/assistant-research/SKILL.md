@@ -7,8 +7,8 @@ description: "Gather and synthesize source-backed information. Use for explicit 
 
 ## Goal
 
-Answer research questions with source-weighted findings, verified URLs,
-explicit conflicts, and honest evidence gaps at proportional depth.
+Answer proportionally with source-weighted findings, verified URLs, explicit
+conflicts, and honest evidence gaps.
 
 ## Success Criteria
 
@@ -22,41 +22,56 @@ explicit conflicts, and honest evidence gaps at proportional depth.
 
 - Ask only when scope changes source selection, jurisdiction/domain, depth, or
   decision criteria and cannot be inferred safely.
-- Do not call a single-source claim HIGH confidence unless a primary/official
-  source directly supports it.
-- Fit evidence budgets and research angles to the active adapter; do not hardcode
-  mandatory subagent counts.
+- HIGH requires 3+ independent agreeing sources plus primary/official evidence;
+  one authoritative source is MEDIUM.
+- Keep `source_research` direct-capable. For `five_lens_briefing`, use the
+  declared five-lens Process handoffs and do not substitute a single-agent
+  perspective scan for independent lens evidence.
 
 ## Progressive Contract Loading
 
-Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`, and
-`contracts/phase-gates.yaml`.
+Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`,
+`contracts/phase-gates.yaml`, and `contracts/handoffs.yaml`.
 
 Read `contracts/index.yaml` first and load only the active boundary:
 
-- `entry` for question, tier, method, role/goal, purpose, and known context;
+- `entry` for question, tier, method, role/goal, purpose, known context, and
+  resolved subagent policy/execution/fallback evidence;
 - `current_phase` for SEARCH, SYNTHESIZE, or VERIFY;
 - `source_research`, `five_lens`, or `investigate` only after method selection; and
+- `selected_handoff` before every LensResearcher or ResearchPeerReviewer dispatch and return validation; and
 - `completion` only for the artifact being returned.
 
 Missing or invalid selectors fall back to the full named canonical contract. Do
 not load every contract or research method at entry.
 
-Migration note: assistant-research contracts are v2.0. For
-`five_lens_briefing`, the required singular `follow_up_question` and
-`follow_up_answer_or_gap` fields are replaced by required typed `follow_ups`.
-Each collection retains every material follow-up, or one typed `none_needed`
-decision when none exists; v1 consumers must adapt before accepting v2 output.
+Migration note: assistant-research contracts are v3.0. Convert v2 follow-up
+fields to typed `follow_ups`, retaining each material follow-up or one
+`none_needed`. v3 requires five frozen, sibling-blind assignment packets,
+root-only synthesis, distinct peer review, canonical packet/peer-input
+preimages, tier resolution, and high-stakes bindings. Reject or re-run
+incomplete v3 artifacts.
 
 ## Ownership
 
-assistant-research owns source selection, evidence synthesis, confidence, and
-URL verification. Generic workflow may coordinate the task, but specialist gates are authoritative.
+assistant-research owns source selection, synthesis, confidence, and URL
+verification. Its specialist gates are authoritative.
+
+For `five_lens_briefing`, the root Orchestrator freezes exactly five
+assignment packets before dispatching one independent LensResearcher per named
+lens. Orchestrator alone builds the contradiction map and initial synthesis
+after validated returns. A distinct ResearchPeerReviewer then critiques that
+synthesis. Sequential fallback is constrained to the documented admissible
+bases and records reduced independence; it never claims delegated independence.
+Resolve `subagent_policy_state` before dispatch: this skill instruction makes
+five-lens delegation `delegation_triggered` without another permission prompt.
+Only documented opt-out, real unavailability, or an exact policy block permits
+`sequential_fallback`; `source_research` remains `not_required/not_applicable`.
 
 ## Method Selection
 
-- **source_research** — factual lookup, comparison, and source collection. Load
-  `source_research`; choose quick, standard, extensive, or deep tier by risk.
+- **source_research** — factual lookup and comparison. Load `source_research`;
+  choose tier by risk.
 - **five_lens_briefing** — decision-grade work needing perspectives,
   contradictions, incentives, synthesis, and peer review. Load `five_lens`.
 - **investigate** — deep entity/domain analysis with ethical boundaries. Load
@@ -75,6 +90,14 @@ counterevidence, gaps, and a validation method—not proven-cause language.
 Return status/confidence, concise answer, source-backed findings, candidate
 mechanisms when applicable, verified sources, conflicts, gaps, and five-lens
 artifacts only when that method ran.
+
+For five_lens_briefing, include FIVE-LENS PROCESS EVIDENCE: tier resolution,
+frozen packet-set ID/digest and retained canonical packet preimages,
+pre-dispatch ordering, exact lens execution records,
+assignment/packet-set bindings, return validation, peer assignment/identity or
+fallback, execution modes, reduced-independence state, and the bounded search
+resource budget. Bind final synthesis to the exact peer-reviewed input or a
+complete revision closure. The root Orchestrator owns this lifecycle record.
 
 ## Stop Rules
 

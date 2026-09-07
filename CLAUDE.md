@@ -46,7 +46,7 @@ Each supported agent discovers installed skills natively from required names and
 
 ### Agent configurations
 
-`agents/` contains agent-specific definitions (reviewer, builder-tester, code-writer, code-mapper, explorer, architect) for multi-agent orchestration. Claude agents are markdown files (`agents/claude/*.md`), Codex agents are TOML files (`agents/codex/*.toml`). These define subagent roles, tool access, and prompts.
+`agents/` contains agent-specific definitions (reviewer, builder-tester, code-writer, code-mapper, explorer, architect, lens-researcher, research-peer-reviewer) for multi-agent orchestration. Claude agents are markdown files (`agents/claude/*.md`), Codex agents are TOML files (`agents/codex/*.toml`). These define subagent roles, tool access, and prompts.
 
 ### Codex execution policy rules
 
@@ -57,7 +57,7 @@ Each supported agent discovers installed skills natively from required names and
 
 When creating or modifying skills, you **must** follow the contract design guide at `docs/skill-contract-design-guide.md`. Read it before starting any skill work. Key rules:
 
-- **Every skill must have contracts.** At minimum: `contracts/input.yaml` and `contracts/output.yaml`. Process skills (workflow, review, tdd, security) also need `phase-gates.yaml` and `handoffs.yaml`. Analysis skills (thinking, research, ideate) also need `phase-gates.yaml`.
+- **Every skill must have contracts.** At minimum: `contracts/input.yaml` and `contracts/output.yaml`. Process skills (workflow, review, tdd, security, assistant-research) also need `phase-gates.yaml` and `handoffs.yaml`. Analysis skills (thinking, ideate) also need `phase-gates.yaml`; assistant-research is a Process skill because it declares five-lens handoffs.
 - **Required fields must have `on_missing` actions** — never leave the agent guessing what to do when data is absent.
 - **Enum types must list all values** — open-ended enums defeat the purpose of typing.
 - **Validation rules are plain English** — no regex, no code, no framework syntax.

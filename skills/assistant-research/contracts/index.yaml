@@ -1,4 +1,4 @@
-schema_version: "2.0"
+schema_version: "3.0"
 contract: index
 skill: assistant-research
 
@@ -9,6 +9,8 @@ authoritative_contracts:
     contract: output
   - path: contracts/phase-gates.yaml
     contract: phase-gates
+  - path: contracts/handoffs.yaml
+    contract: handoffs
 
 load_sets:
   entry:
@@ -17,8 +19,8 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [question, tier, tool, research_method, user_role_or_goal, output_purpose, known_context]
-    budget_words: 1500
+        names: [question, tier, tool, research_method, user_role_or_goal, output_purpose, known_context, search_resource_budget, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, sequential_fallback_evidence]
+    budget_words: 1600
   current_phase:
     selectors:
       - id: research-current-phase
@@ -31,7 +33,7 @@ load_sets:
         path: contracts/phase-gates.yaml
         section: invariants
         key: id
-        names: [INV1, INV2, INV3, INV4, INV5, INV6, INV7]
+        names: [INV1, INV2, INV3, INV4, INV5, INV6, INV7, INV8, INV9]
     budget_words: 5000
   source_research:
     references:
@@ -55,7 +57,38 @@ load_sets:
         section: fields
         key: name
         names: [research_method]
-    budget_words: 3500
+    budget_words: 5000
+  selected_handoff:
+    selectors:
+      - id: research-selected-handoff
+        path: contracts/handoffs.yaml
+        section: handoffs
+        key: name
+        name_from: selected_research_handoff
+        allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
+      - id: research-common-dispatch-protocol
+        path: contracts/handoffs.yaml
+        section: dispatch_protocol
+        key: name
+        names: [common_research_protocol]
+      - id: research-selected-dispatch-protocol
+        path: contracts/handoffs.yaml
+        section: dispatch_protocol
+        key: name
+        name_from: selected_research_handoff
+        allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
+      - id: research-common-return-validation
+        path: contracts/handoffs.yaml
+        section: return_validation
+        key: name
+        names: [common_return_validation]
+      - id: research-selected-return-validation
+        path: contracts/handoffs.yaml
+        section: return_validation
+        key: name
+        name_from: selected_research_handoff
+        allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
+    budget_words: 5500
   investigate:
     references:
       - investigate.md
@@ -74,7 +107,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [findings, candidate_mechanisms, perspective_scan, question_trace, contradiction_map, synthesis_briefing, peer_review, conflicts, gaps, summary]
+        allowed_names: [findings, candidate_mechanisms, perspective_scan, question_trace, contradiction_map, synthesis_briefing, high_stakes_recommendation_basis, peer_review, five_lens_process_evidence, conflicts, gaps, summary]
     budget_words: 6000
 
 fallback:

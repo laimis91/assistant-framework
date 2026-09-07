@@ -2,7 +2,7 @@
 # Research has a search → synthesize → verify pipeline.
 # Gates ensure each stage completes before the next begins.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: phase-gates
 skill: assistant-research
 
@@ -16,8 +16,12 @@ gates:
     checkpoint_end: "--- PHASE: SEARCH COMPLETE ---"
     exit_assertions:
 
+      - id: S0
+        check: "For five_lens_briefing, tier_resolution retains requested_tier, effective_tier, and normalization_disclosure: quick normalizes to effective_tier=standard with non-blank disclosure, non-quick uses literal not_applicable disclosure, and effective_tier equals output tier and frozen search budget. quick remains valid for source_research."
+        on_fail: "Normalize an explicit quick five-lens request to standard and disclose the normalization before freezing packets."
+
       - id: S1
-        check: "Evidence budget matches tier: quick=1 authoritative source or 2 weak sources, standard=3 differentiated research angles, extensive=3+ angles with 2+ credible sources per major claim, deep=iterative until sources stop changing the answer"
+        check: "Evidence budget matches tier: quick=1 authoritative source or 2 weak sources, standard=3 differentiated research angles, extensive=3+ angles with 2+ credible sources per major claim, deep stops at saturation or its hard ceiling"
         on_fail: "Adjust research depth to match the selected tier or downgrade confidence for unsupported claims"
 
       - id: S2
@@ -35,22 +39,42 @@ gates:
         on_fail: "Retain all search results until synthesis is complete"
 
       - id: S5
-        check: "For five_lens_briefing: the five required lenses were covered before synthesis (practitioner, academic/technical expert, skeptic, economist/incentives analyst, historian/pattern matcher)"
-        condition: "research_method == five_lens_briefing"
-        on_fail: "Read five-lens-briefing.md and complete the missing lenses before synthesizing"
+        check: "For five_lens_briefing delegated lens mode: subagent_policy_state=delegation_triggered has non-empty trigger scope and five unique native lens dispatch identities cover the exact LensKind enum before synthesis (practitioner, academic/technical expert, skeptic, economist/incentives analyst, historian/pattern matcher); source_research remains not_required/not_applicable"
+        condition: "research_method == five_lens_briefing and lens_execution_mode == delegated"
+        on_fail: "Read five-lens-briefing.md and dispatch or evidenced-fallback the complete missing lens stage before synthesizing"
 
       - id: S6
-        check: "For five_lens_briefing: lens inferences are separated from source-backed findings and weakly sourced lens claims are marked LOW confidence"
+        check: "For five_lens_briefing: lens inferences are separated from source-backed findings and weakly sourced lens claims are marked LOW confidence; a HIGH final finding retains source_provenance whose source set exactly matches findings[].sources and proves both at least three unique independence keys and at least one primary/official source"
         condition: "research_method == five_lens_briefing"
         on_fail: "Label unsourced lens inferences as LOW confidence or gather sources before upgrading confidence"
 
       - id: S7
-        check: "For five_lens_briefing: each required lens has at least one perspective-guided research question, a source-grounded answer or explicit gap, source notes/verified URLs, typed follow_ups retaining every material follow-up or one none_needed decision, and evidence status before contradiction mapping"
+        check: "For five_lens_briefing: each required lens has at least one perspective-guided research question, a source-grounded answer or explicit gap, the exact accepted sources_or_verified_urls array (possibly empty only for inference_only or unresolved with a recorded gap), typed follow_ups retaining every material follow-up or one none_needed decision, and evidence status before contradiction mapping; every source-empty inference_only or unresolved follow-up has its own non-empty gaps array."
         condition: "research_method == five_lens_briefing"
         on_fail: "Build the question trace/evidence ledger from five-lens-briefing.md before moving to contradiction mapping or synthesis"
 
+      - id: S8
+        check: "For five_lens_briefing: ContentDigest is sha256: plus 64 lowercase hexadecimal SHA-256 characters over the exact UTF-8 bytes produced by RFC 8785 JSON Canonicalization Scheme, with no trailing newline; final process evidence retains exactly five FrozenLensAssignmentPacket preimages whose question, tier, user_role_or_goal, output_purpose, known_context, evidence_budget, search_resource_budget, source_policy, and isolation_policy are exactly equal; every packet_frozen_at is less than or equal to packet_set_frozen_at and strictly before first_lens_execution_at, each manifest content_digest recomputes from its exact declared fields except content_digest, packet_set_digest covers the ordered packet_id/lens_kind/content_digest manifest, and retained bodies are ordered/bound to it; pre_dispatch_record_id and timestamp precede first_lens_execution_at; every dispatch or root pass binds packet_id, packet_set_id, and matching packet digest; delegated waves are capacity-bounded, exact, disjoint, and exhaustive, and later waves cannot consume earlier results"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Freeze all packets, repair wave coverage, and restart the complete lens stage before using any lens result"
+
+      - id: S8A
+        check: "For five_lens_briefing: accepted_lens_results retains exactly five authoritative LensResearchResult bodies and exactly equals the peer validated results; every result has a recomputed lens_result_digest over RFC 8785 JCS bytes of lens_result only, and the same LensKind, assignment_id, and digest appear exactly once in its dispatch or root-pass record, perspective_scan, and question_trace, whose presented fields exactly project that accepted result, including valid empty source arrays for inference_only or unresolved results"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Reject stale or substituted lens content and rebuild every downstream lens artifact from the matching validated result before synthesis"
+
+      - id: S8B
+        check: "For five_lens_briefing: every lens execution records non-negative actual query/source counts, elapsed minutes, termination state, exhausted dimensions, and confidence-downgrade evidence; overall query/source totals equal per-lens sums, and observed overall wall-clock is at least the sequential pass sum or the sum of per-wave maximum elapsed values; usable results never exceed ceilings, and ceiling exhaustion records an explicit gap with LOW lens confidence"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Block over-ceiling output or restore exact usage, exhaustion gaps, and confidence downgrade evidence before synthesis"
+
+      - id: S9
+        check: "For five_lens_briefing sequential fallback lens mode: sequential_fallback_evidence records explicit opt-out, real spawn failure/unavailability, supported configuration proof, or exact policy block; policy_disallowed also records exact policy_blocking_source with no exception; exactly five frozen root passes cover LensKind exactly once, bind the frozen packet set, have no native dispatch identity, carry admissible lens fallback evidence, and record reduced independence"
+        condition: "research_method == five_lens_briefing and lens_execution_mode == sequential_fallback"
+        on_fail: "Obtain an admissible fallback basis or block; do not call ordinary sequential role-play independent delegation"
+
       - id: SY_FIVE_LENS_FOLLOW_UPS
-        check: "For five_lens_briefing: every material follow-up remains in question_trace.follow_ups exactly once with question, answer_or_gap, sources_or_verified_urls, and evidence_status; a none_needed decision is allowed only when no material follow-up exists and cannot coexist with material follow-ups for the same trace"
+        check: "For five_lens_briefing: every material follow-up remains in question_trace.follow_ups exactly once with question, answer_or_gap, sources_or_verified_urls, evidence_status, and its own gaps array; a source-empty inference_only or unresolved follow-up has a non-empty own gap; a none_needed decision is allowed only when no material follow-up exists and cannot coexist with material follow-ups for the same trace"
         condition: "research_method == five_lens_briefing"
         on_fail: "Restore each omitted follow-up or replace the invalid empty collection with one evidence-backed none_needed decision before synthesis."
 
@@ -63,11 +87,11 @@ gates:
     exit_assertions:
 
       - id: SY1
-        check: "Findings are cross-validated — claims appearing in multiple sources get higher confidence"
+        check: "Findings are cross-validated. A source_provenance set, when present, has exactly the same unique sources as findings[].sources; HIGH requires both at least three unique independence_key values and at least one primary/official authority row, while one authoritative source is MEDIUM."
         on_fail: "Compare findings across sources before assigning confidence levels"
 
       - id: SY2
-        check: "Conflicting information is identified and assessed — not silently ignored"
+        check: "Conflicting information is identified and assessed — not silently ignored — and every conflict source_a/source_b obeys the same safe source-reference and globally routable public-URL rules as finding sources"
         on_fail: "Check for contradictions between sources and document in conflicts[]"
 
       - id: SY3
@@ -75,7 +99,7 @@ gates:
         on_fail: "Review what was asked vs. what was found. Document the delta in gaps[]"
 
       - id: SY4
-        check: "Each finding has a confidence level assigned based on source count and quality"
+        check: "Each finding has a confidence level assigned from typed independence and authority provenance: HIGH requires both at least three unique independence keys and at least one primary/official source; one authoritative source is MEDIUM"
         on_fail: "Assign confidence levels per the HIGH/MEDIUM/LOW criteria in output contract"
 
       - id: SY_CANDIDATE_MECHANISMS
@@ -84,7 +108,7 @@ gates:
         on_fail: "Add missing candidate_mechanism fields, downgrade unsupported items to gaps, or relabel causal language as a candidate mechanism before Verify."
 
       - id: SY5
-        check: "For five_lens_briefing: a question trace/evidence ledger exists before the contradiction map and synthesis, and unresolved or inference-only answers are not presented as source-backed findings"
+        check: "For five_lens_briefing: a question trace/evidence ledger exists before the contradiction map and synthesis, and unresolved or inference-only answers are not presented as source-backed findings. findings=[] is allowed only when every accepted main result and material follow-up is source-empty inference_only or unresolved and top-level gaps is non-empty; otherwise source-backed completion retains a source-backed finding."
         condition: "research_method == five_lens_briefing"
         on_fail: "Add or repair the question trace/evidence ledger and downgrade unsupported answers before synthesizing"
 
@@ -94,9 +118,24 @@ gates:
         on_fail: "Create the contradiction map before writing the synthesis"
 
       - id: SY7
-        check: "For five_lens_briefing: the synthesis uses all five lenses, the question trace/evidence ledger, and includes a peer review/self-critique before presentation"
+        check: "For five_lens_briefing: the root-only contradiction map and initial synthesis use all five valid lens results and the question trace/evidence ledger before peer review; a canonical PeerReviewInputBinding retains and digests exactly the peer assignment, final-equal findings, normalized candidate_mechanisms ([] when absent), final-equal conflicts, final-equal contradiction_map, initial synthesis, validated lens results, lens execution provenance, verified source evidence, verification_gaps exactly equal to top-level gaps, and high-stakes context."
         condition: "research_method == five_lens_briefing"
-        on_fail: "Revise the synthesis with all lenses and run the peer review step from five-lens-briefing.md"
+        on_fail: "Revise root synthesis with all five valid lens results before dispatching the separate peer reviewer from five-lens-briefing.md"
+
+      - id: SY8
+        check: "For five_lens_briefing: after one same-assignment schema-correction retry, a failed lens stage reruns completely through evidenced fallback or blocks; partial delegated/root mixtures never claim independence"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Discard the incomplete stage evidence, record fallback or blocker evidence, and do not synthesize from a mixed lens set"
+
+      - id: SY9
+        check: "For five_lens_briefing delegated peer mode: a distinct native ResearchPeerReviewer peer reviewer identity, distinct from every lens identity, validates a usable peer status and verdict before presentation"
+        condition: "research_method == five_lens_briefing and peer_review_execution_mode == delegated"
+        on_fail: "Dispatch a distinct peer reviewer or record a valid fresh reviewer fallback; do not present an unusable peer result."
+
+      - id: SY10
+        check: "For five_lens_briefing reviewer-only fallback sequential peer mode: a fresh peer fallback pass ID, concrete admissible peer fallback evidence, reduced_independence, and no fabricated native identity are recorded; valid delegated lens evidence remains retained"
+        condition: "research_method == five_lens_briefing and peer_review_execution_mode == sequential_fallback"
+        on_fail: "Run a separate fresh peer fallback pass with concrete evidence or block presentation; never erase valid lens evidence or fabricate a native identity."
 
   # ─────────────────────────────────────────────
   # VERIFY → PRESENT
@@ -123,6 +162,21 @@ gates:
         condition: "candidate_mechanisms is non-empty"
         on_fail: "Rewrite candidate mechanisms as hypotheses, add validation_method and gaps, or move validated source-backed claims to findings with evidence."
 
+      - id: VR4
+        check: "For five_lens_briefing: peer_review has a usable DONE or DONE_WITH_CONCERNS status and a compatible accepted, accepted_with_concerns, or revise verdict; peer_review_input_digest is exactly bound across peer context, return, retained peer review, and process binding; findings, normalized candidate_mechanisms, conflicts, contradiction_map, and verification_gaps remain exactly equal to their final top-level artifacts; accepted and accepted_with_concerns have required_revisions=[] and final_synthesis_digest equals the reviewed initial synthesis digest; revise in delegated or sequential fallback mode has one or more required synthesis revisions and an orchestrator-owned revision_disposition covering every required revision exactly once as applied or claim_downgraded, with revision_disposition_id exactly equal to process peer_review_revision_disposition_id and every resulting_synthesis_digest equal to final_synthesis_digest; peer_review.supported_recommendation equals final recommendation. Current revision disposition closes synthesis changes only; any later change to findings, candidate_mechanisms, conflicts, or contradiction_map requires a fresh peer review and digest. Unresolved revision blocks presentation; NEEDS_CONTEXT or BLOCKED cannot reach presentation unless a valid fresh fallback completed"
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Block presentation or complete and validate a fresh peer fallback; do not finalize an unusable peer status."
+
+      - id: VR5
+        check: "For five_lens_briefing: each decision-critical verified_source_evidence row uses a method-specific safe reference; public_url is successfully checked globally routable HTTPS, rejects reserved domains and non-global or alternate-encoded addresses, and equals verified_url, while local_repository, authenticated_source, and offline_authoritative_source omit verified_url and expose no URI userinfo, credentials, tokens, secrets, PII, parent traversal, or absolute host paths. Every URL-shaped conflict source_a/source_b follows the same globally routable public-URL rule, and non-URL conflict references follow the same safe-reference rule."
+        condition: "research_method == five_lens_briefing"
+        on_fail: "Replace the unsafe reference with a repository-relative locator, opaque connector/record identifier, or bibliographic citation; record a verification gap when no safe stable reference exists."
+
+      - id: VR6
+        check: "For five_lens_briefing high-stakes topics, high_stakes_context uses user_context_status explicit, unresolved, or not_applicable: applicable=false requires not_applicable/basis=not_applicable, applicable=true requires explicit or unresolved, and investigate_further may retain unresolved. high_stakes_recommendation_basis is absent for investigate_further and required for do, wait, or avoid; it requires status=explicit and binds the final recommendation to non-empty verified decision-critical URLs, explicit user_context_basis present in every retained frozen assignment packet known_context, the exact peer_review_input_digest, and equal peer-supported recommendation."
+        condition: "research_method == five_lens_briefing and high_stakes_context.applicable == true"
+        on_fail: "Downgrade to investigate_further or restart the complete lens stage with explicit user context frozen into every packet, then restore the exact verified evidence and peer support bindings before presentation."
+
 # ─────────────────────────────────────────────
 # Research invariants
 # ─────────────────────────────────────────────
@@ -133,7 +187,7 @@ invariants:
     on_fail: "Verify or remove the URL. Dead links erode trust."
 
   - id: INV2
-    check: "Confidence levels are evidence-based, not assumed — single source cannot be HIGH"
+    check: "Confidence levels are evidence-based: HIGH requires source_provenance with both at least three unique independence_key values and at least one primary/official authority row; one authoritative source is MEDIUM"
     scope: all_phases
     on_fail: "Downgrade confidence to match actual source count and quality"
 
@@ -143,9 +197,9 @@ invariants:
     on_fail: "Reformat output to match the required FINDINGS/CONFLICTS/GAPS structure"
 
   - id: INV4
-    check: "Subagent dispatch is optional and adapter-aware; research angles and evidence diversity remain required when delegation is unavailable"
+    check: "source_research is direct-capable with policy=not_required and execution=not_applicable; five_lens_briefing is delegation_triggered by skill instruction and may use sequential fallback only with an evidenced admissible basis; delegation_opted_out or policy_disallowed forces peer review into matching sequential fallback and forbids peer subagent dispatch"
     scope: all_phases
-    on_fail: "Run the missing research angles sequentially and record that delegation was unavailable"
+    on_fail: "Use the selected method's required process mode and record admissible fallback evidence before continuing"
 
   - id: INV5
     check: "For five_lens_briefing, the final recommendation is not stronger than the verified evidence and peer review support"
@@ -153,11 +207,21 @@ invariants:
     on_fail: "Downgrade the recommendation, mark investigate_further, or verify the decision-critical claims before finalizing"
 
   - id: INV6
-    check: "For finance/trading, legal, medical, safety-critical, or similarly high-impact topics, the output is framed as educational due diligence with risk/context caveats and defaults to investigate_further unless verified evidence, explicit user context, and peer review support a stronger recommendation"
+    check: "For finance/trading, legal, medical, safety-critical, or similarly high-impact topics, the output is framed as educational due diligence with risk/context caveats and defaults to investigate_further unless typed high_stakes_recommendation_basis binds verified decision-critical evidence, explicit user context, exact peer input, and equal peer support to a stronger recommendation"
     scope: all_phases
-    on_fail: "Add high-stakes caveats and downgrade the recommendation to investigate_further unless the stronger recommendation is explicitly justified"
+    on_fail: "Add high-stakes caveats and downgrade the recommendation to investigate_further unless the stronger recommendation is explicitly bound."
 
   - id: INV7
     check: "Candidate mechanisms are never presented as proven causes; executed validation evidence is recorded separately in findings"
     scope: all_phases
     on_fail: "Relabel the mechanism as candidate or needs_validation, record counterevidence/conflicts and gaps, and add a validation_method before presenting it"
+
+  - id: INV8
+    check: "For five_lens_briefing, LensResearcher packets and returns remain sibling-blind; only the root Orchestrator owns cross-lens contradiction mapping and initial synthesis"
+    scope: all_phases
+    on_fail: "Remove sibling or synthesis context from lens assignments and rerun the invalid lens stage"
+
+  - id: INV9
+    check: "For five_lens_briefing, peer critique is a separate fresh ResearchPeerReviewer pass; reviewer-only fallback is separately recorded and does not erase valid lens dispatch evidence"
+    scope: all_phases
+    on_fail: "Run or record a separate peer-review pass before final presentation"
