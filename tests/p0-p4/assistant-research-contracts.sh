@@ -1026,6 +1026,175 @@ process.exitCode = failures.length ? 1 : 0;
 NODE
 }
 
+research_completion_validator_controls() {
+    node - "$FRAMEWORK_DIR" "$research_evals" "$1" <<'NODE'
+const fs = require("fs");
+const vm = require("vm");
+const root = process.argv[2];
+const fixture = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+const group = process.argv[4];
+const clone = value => JSON.parse(JSON.stringify(value));
+const extract = path => fs.readFileSync(path, "utf8").split("<<'NODE'\n")[1].split("\nNODE\n")[0];
+const privateProgram = extract(`${root}/tests/p0-p4/lib/assistant-research-fixtures.sh`).split('if (operation === "canonical")')[0];
+const officialProgram = new vm.Script(extract(`${root}/tools/evals/lib/skill-eval-semantic-validators.sh`));
+const modes = [
+  ["delegated", "five-lens-decision-briefing-uses-storm-style-workflow"],
+  ["sequential_fallback_revise", "five-lens-sequential-fallback-preserves-process-evidence"],
+  ["delegated_peer_fallback", "five-lens-delegated-lenses-sequential-peer-fallback"],
+  ["quick_normalized", "five-lens-quick-normalizes-to-standard"],
+  ["retained_follow_ups", "five-lens-retains-all-material-follow-ups"]
+];
+const failures = [];
+let checks = 0;
+function contextFor(argv, errors, response) {
+  return vm.createContext({
+    require: name => name === "fs" ? {readFileSync: path => {
+      if (path === "fixture") return JSON.stringify(fixture);
+      if (path === "response") return JSON.stringify(response);
+      throw new Error(`Unexpected validator read: ${path}`);
+    }} : require(name),
+    URL, process: {argv, exitCode: 0}, console: {error: message => errors.push(...message.split("\n"))}
+  });
+}
+function evaluate(mode, name, expected, response, caseId, privateReasons = [], officialReasons = []) {
+  const privateErrors = [];
+  const context = contextFor(["node", "completion-control", "unused", "response", "fixture", caseId], privateErrors);
+  vm.runInContext(`${privateProgram}\nglobalThis.api = {refreshDerived, validate};`, context, {timeout: 10000});
+  context.api.refreshDerived(response);
+  const privateAccepted = context.api.validate(response);
+  const officialErrors = [];
+  const officialContext = contextFor(["node", "completion-control", "response", "fixture", caseId], officialErrors, response);
+  officialProgram.runInContext(officialContext, {timeout: 10000});
+  const officialAccepted = officialContext.process.exitCode === 0;
+  const passed = privateAccepted === expected && officialAccepted === expected
+    && JSON.stringify(privateErrors) === JSON.stringify(privateReasons)
+    && JSON.stringify(officialErrors) === JSON.stringify(officialReasons);
+  console.log(JSON.stringify({group, mode, control: name, expected, privateAccepted, officialAccepted, privateErrors, officialErrors, passed}));
+  if (!passed) failures.push(`${mode}/${name}`);
+  checks += 1;
+}
+function build(mode, caseId) {
+  const row = fixture.cases.find(item => item.id === caseId);
+  const context = contextFor(["node", "completion-control", "unused"], []);
+  vm.runInContext(`${privateProgram}\nglobalThis.buildResponse = build;`, context, {timeout: 10000});
+  return clone(context.buildResponse(mode, row.machine_expectations.required_substrings.join("\n"), JSON.stringify(row.semantic_context)));
+}
+function setVerdict(response, verdict) {
+  const peer = response.peer_review, evidence = response.five_lens_process_evidence;
+  peer.verdict = verdict;
+  peer.status = verdict === "accepted" ? "DONE" : "DONE_WITH_CONCERNS";
+  evidence.peer_review_input_binding.initial_synthesis = clone(response.synthesis_briefing);
+  peer.required_revisions = [];
+  delete peer.revision_disposition_id;
+  delete peer.revision_disposition;
+  delete evidence.peer_review_revision_disposition_id;
+  if (verdict !== "revise") return;
+  evidence.peer_review_input_binding.initial_synthesis.executive_summary += " Initial draft pending review.";
+  peer.required_revisions = ["Calibrate the initial claim"];
+  peer.revision_disposition_id = evidence.peer_review_revision_disposition_id = "revision-control";
+  peer.revision_disposition = [{required_revision: peer.required_revisions[0], outcome: "claim_downgraded", closure_evidence: "Final claim calibrated.", resulting_synthesis_digest: evidence.final_synthesis_digest}];
+}
+function peerControls(mode, caseId) {
+  const base = build(mode, caseId);
+  for (const verdict of ["accepted", "accepted_with_concerns", "revise"]) {
+    const valid = clone(base);
+    setVerdict(valid, verdict);
+    evaluate(mode, verdict, true, valid, caseId);
+    if (verdict === "revise") continue;
+    for (const [owner, field, value] of [
+      ["peer_review", "revision_disposition_id", "unexpected-closure"], ["peer_review", "revision_disposition", []],
+      ["five_lens_process_evidence", "peer_review_revision_disposition_id", "unexpected-closure"],
+      ["peer_review", "revision_disposition_id", null], ["peer_review", "revision_disposition", null],
+      ["five_lens_process_evidence", "peer_review_revision_disposition_id", null]
+    ]) {
+      const response = clone(valid);
+      response[owner][field] = value;
+      const officialReasons = owner === "peer_review" ? ["peer review: accepted revision closure"] : [];
+      officialReasons.push("peer review: non-revise revision closure leakage");
+      evaluate(mode, `${verdict}/${field}/${value === null ? "null" : "present"}`, false, response, caseId,
+        ["peer:status-and-revision-truth-table"], [`five-lens semantic validation: ${officialReasons.join("; ")}`]);
+    }
+  }
+}
+if (group === "peer") modes.forEach(([mode, caseId]) => peerControls(mode, caseId));
+if (group === "capacity") {
+  const caseId = modes[1][1];
+  const response = build("sequential_fallback", caseId);
+  for (const [name, value, expected] of [["one", 1, true], ["two", 2, true], ["max-safe", 9007199254740991, true],
+    ["fraction-one-half", 1.5, false], ["fraction-half", 0.5, false], ["string", "2", false],
+    ["zero", 0, false], ["overflow", 9007199254740992, false]]) {
+    fixture.cases.find(row => row.id === caseId).semantic_context.adapter_context.max_concurrent_lens_workers = value;
+    evaluate("sequential_fallback", name, expected, clone(response), caseId,
+      expected ? [] : ["semantic-context:fixture-shape"], expected ? [] : ["five-lens semantic validation: semantic context: required shape"]);
+  }
+}
+if (group === "findings") {
+  const caseId = modes[1][1];
+  const base = build("sequential_fallback", caseId);
+  evaluate("sequential_fallback", "evidence-empty-with-gaps", true, clone(base), caseId);
+  const followUp = {decision: "follow_up", question: "What independent source changes this decision?", answer_or_gap: "Independent evidence supports further investigation.", sources_or_verified_urls: ["source:material-follow-up"], evidence_status: "source_backed", gaps: []};
+  base.five_lens_process_evidence.accepted_lens_results[0].follow_ups = [followUp];
+  base.findings = [{finding: "The material follow-up supports further investigation.", confidence: "low", sources: followUp.sources_or_verified_urls}];
+  evaluate("sequential_fallback", "material-follow-up-with-finding", true, clone(base), caseId);
+  base.findings = [];
+  evaluate("sequential_fallback", "material-follow-up-without-finding", false, base, caseId,
+    ["artifacts:findings"], ["five-lens semantic validation: final artifacts: findings required unless evidence-empty completion has gaps"]);
+}
+console.log(JSON.stringify({group, checks, validatorChecks: checks * 2, failures}));
+process.exitCode = failures.length ? 1 : 0;
+NODE
+}
+
+research_fixture_capacity_controls() {
+    local control_dir expected name capacity fixture_path actual output expected_error
+    local failures=()
+    control_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-fixture-capacity.XXXXXX")"
+    p0p4_register_cleanup "$control_dir"
+    mkdir -p "$control_dir/evals"
+    ln -s "$FRAMEWORK_DIR/skills/assistant-research/contracts" "$control_dir/contracts"
+    while IFS='|' read -r expected name capacity; do
+        fixture_path="$control_dir/evals/$name.json"
+        jq --argjson capacity "$capacity" '(.cases[] | select(.semantic_context) | .semantic_context.adapter_context.max_concurrent_lens_workers) = $capacity' "$research_evals" >"$fixture_path"
+        if output="$(source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-common.sh"; source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; REPO_ROOT="$FRAMEWORK_DIR"; validate_fixture "$fixture_path" assistant-research 2>&1)"; then actual=accept; else actual=reject; fi
+        printf 'fixture capacity %s: expected=%s actual=%s\n%s\n' "$name" "$expected" "$actual" "$output"
+        [[ "$actual" == "$expected" ]] || failures+=("$name:$actual")
+        expected_error="$(jq -r '.cases | to_entries[] | select(.value.semantic_context) | "case[\(.key)].semantic_context.adapter_context must contain a positive integer max_concurrent_lens_workers"' "$fixture_path")"
+        if [[ "$actual" == reject && "$output" != "$fixture_path: $expected_error" ]]; then failures+=("$name:wrong-reason"); fi
+    done <<'EOF'
+accept|one|1
+accept|two|2
+accept|max-safe|9007199254740991
+reject|fraction-one-half|1.5
+reject|fraction-half|0.5
+reject|string|"2"
+reject|zero|0
+reject|overflow|9007199254740992
+EOF
+    research_completion_validator_controls capacity || failures+=("semantic-consumer-compatibility")
+    [[ "${#failures[@]}" -eq 0 ]] && return 0
+    printf 'fixture capacity controls failed: %s\n' "${failures[*]}" >&2
+    return 1
+}
+
+research_empty_findings_producer_controls() {
+    local validators_status=0 producer_status=0
+    research_completion_validator_controls findings || validators_status=$?
+    ruby -ryaml - "$five_lens_reference" "$research_phase_gates" "$research_output" <<'RUBY' || producer_status=$?
+guide = File.read(ARGV[0])
+template = guide.split("\nFINDINGS\n", 2).fetch(1).split("\nCONFLICTS\n", 2).first
+gate = YAML.load_file(ARGV[1]).fetch("gates").flat_map { |g| g.fetch("exit_assertions", []) }.find { |g| g["id"] == "SY5" }.fetch("check")
+consumer = YAML.load_file(ARGV[2]).fetch("artifacts").find { |a| a["name"] == "findings" }.fetch("validation")
+failures = []
+{"FINDINGS template" => template, "SY5 gate" => gate, "output findings consumer" => consumer}.each do |name, text|
+  failures << name unless text.match?(/every accepted main result and material follow-up/) && text.include?("source-empty") && text.include?("top-level gaps")
+end
+failures << "guide must remain below the 5000-word load budget" if guide.split.size >= 5000
+puts "empty-findings producer alignment: #{failures.empty? ? 'PASS' : failures.join(', ')}"
+exit(failures.empty? ? 0 : 1)
+RUBY
+    [[ "$validators_status" -eq 0 && "$producer_status" -eq 0 ]]
+}
+
 test_start "assistant-research candidate mechanisms stay evidence-backed and unproven"
 missing_candidate_mechanism_terms=()
 for term in \
@@ -3026,6 +3195,27 @@ if research_optional_verified_urls_controls; then
     pass
 else
     fail "assistant-research optional verified URL controls failed"
+fi
+
+test_start "assistant-research accepted peers exclude all revision closure metadata"
+if research_completion_validator_controls peer; then
+    pass
+else
+    fail "assistant-research peer revision metadata controls failed"
+fi
+
+test_start "assistant-research fixture capacity admits only positive safe integers"
+if research_fixture_capacity_controls; then
+    pass
+else
+    fail "assistant-research fixture capacity controls failed"
+fi
+
+test_start "assistant-research empty findings account for material follow-ups in producers and consumers"
+if research_empty_findings_producer_controls; then
+    pass
+else
+    fail "assistant-research empty-findings producer controls failed"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

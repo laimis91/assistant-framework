@@ -314,9 +314,9 @@ FINDINGS
    Source provenance, required for HIGH: [{source, independence_key, authority}, ...]
    Verified URLs: [verified URLs, if any]
 2. ...
-   If every accepted lens result is source-empty inference-only or unresolved,
-   emit no findings and retain the concrete top-level gaps rather than inventing
-   a source-backed summary.
+   If every accepted main result and material follow-up is source-empty
+   inference-only or unresolved, emit no findings and retain non-empty
+   top-level gaps rather than inventing a source-backed summary.
 
 CONFLICTS
 - [source or lens A] says X; [source or lens B] says Y — [assessment]

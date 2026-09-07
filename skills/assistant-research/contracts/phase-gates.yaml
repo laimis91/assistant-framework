@@ -108,7 +108,7 @@ gates:
         on_fail: "Add missing candidate_mechanism fields, downgrade unsupported items to gaps, or relabel causal language as a candidate mechanism before Verify."
 
       - id: SY5
-        check: "For five_lens_briefing: a question trace/evidence ledger exists before the contradiction map and synthesis, and unresolved or inference-only answers are not presented as source-backed findings. findings=[] is allowed only when every accepted lens result is source-empty inference_only or unresolved and top-level gaps is non-empty; otherwise source-backed completion retains a source-backed finding."
+        check: "For five_lens_briefing: a question trace/evidence ledger exists before the contradiction map and synthesis, and unresolved or inference-only answers are not presented as source-backed findings. findings=[] is allowed only when every accepted main result and material follow-up is source-empty inference_only or unresolved and top-level gaps is non-empty; otherwise source-backed completion retains a source-backed finding."
         condition: "research_method == five_lens_briefing"
         on_fail: "Add or repair the question trace/evidence ledger and downgrade unsupported answers before synthesizing"
 

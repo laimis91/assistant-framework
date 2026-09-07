@@ -945,7 +945,7 @@ validate_fixture() {
                 "case[\($index)].semantic_context.follow_up_requirements rows must be exact typed requirements"
               elif ($context.follow_up_requirements | map(.lens_kind) | unique | length) != ($context.follow_up_requirements | length) then
                 "case[\($index)].semantic_context.follow_up_requirements lens_kind values must be unique"
-              elif ($context.adapter_context? | type) != "object" or ($context.adapter_context | keys | sort) != ["max_concurrent_lens_workers"] or ($context.adapter_context.max_concurrent_lens_workers | type != "number" or . <= 0 or . > 9007199254740991 or (. % 1) != 0) then
+              elif ($context.adapter_context? | type) != "object" or ($context.adapter_context | keys | sort) != ["max_concurrent_lens_workers"] or ($context.adapter_context.max_concurrent_lens_workers | type != "number" or . <= 0 or . > 9007199254740991 or floor != .) then
                 "case[\($index)].semantic_context.adapter_context must contain a positive integer max_concurrent_lens_workers"
               elif ($context.high_stakes_context? | type) != "object" or ($context.high_stakes_context | keys | sort) != ["applicable", "caveat_or_not_applicable_reason", "user_context_basis", "user_context_status"] then
                 "case[\($index)].semantic_context.high_stakes_context must contain exactly applicable, caveat_or_not_applicable_reason, user_context_status, and user_context_basis"
