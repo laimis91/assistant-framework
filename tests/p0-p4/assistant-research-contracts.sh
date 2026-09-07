@@ -768,6 +768,115 @@ research_fallback_revise_official_runner_is_accepted() {
     "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1
 }
 
+research_typed_url_label_validators_match() {
+    local expected="$1"
+    local response_path="$2"
+    local case_id="$3"
+    local private_actual official_actual
+
+    if research_response_oracle_is_valid "$response_path" "$case_id" >/dev/null 2>&1; then private_actual=accept; else private_actual=reject; fi
+    if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v3_valid "$response_path" "$research_evals" "$case_id" ) >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]]
+}
+
+research_typed_url_label_source_resolution_controls() {
+    local case_id="five-lens-decision-briefing-uses-storm-style-workflow"
+    local control_dir response_path evidence expected control_name method reference verified_url source finding_source finding_verified_url
+    local failures=()
+
+    control_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-typed-label-resolution.XXXXXX")"
+    p0p4_register_cleanup "$control_dir"
+    while IFS='|' read -r expected control_name method reference verified_url source finding_source finding_verified_url; do
+        response_path="$control_dir/$control_name.json"
+        write_schema_valid_five_lens_eval_response delegated "$response_path"
+        evidence="$(jq -cn --arg method "$method" --arg reference "$reference" --arg verified_url "$verified_url" --arg source "$source" '
+            {claim:"Typed URL-label evidence.",source:$source,verification_method:$method,verification_reference:$reference,verification_detail:"Typed URL-label control."}
+            + (if $method == "public_url" then {verified_url:$verified_url} else {} end)
+        ')"
+        jq --argjson evidence "$evidence" --arg source "$finding_source" --arg verified_url "$finding_verified_url" '
+            .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = [$evidence]
+            | .findings[0].sources = [$source]
+            | .findings[0].confidence = "low"
+            | del(.findings[0].source_provenance)
+            | if $verified_url == "-" then del(.findings[0].verified_urls) else .findings[0].verified_urls = [$verified_url] end
+        ' "$response_path" >"$response_path.next" && mv "$response_path.next" "$response_path"
+        research_refresh_response_derivatives "$response_path"
+        research_typed_url_label_validators_match "$expected" "$response_path" "$case_id" || failures+=("$control_name")
+    done <<'EOF'
+accept|public-url-raw-label|public_url|https://www.iana.org/typed-public|https://www.iana.org/typed-public|https://WWW.IANA.ORG/%6ctyped-public-label|https://WWW.IANA.ORG/%6ctyped-public-label|-
+accept|public-url-canonical-label|public_url|https://www.iana.org/typed-public|https://www.iana.org/typed-public|https://WWW.IANA.ORG/%6ctyped-public-label|https://www.iana.org/ltyped-public-label|-
+accept|local-repository-raw-label|local_repository|skills/assistant-research/contracts/output.yaml|-|https://WWW.IANA.ORG/%6clocal-repository-label|https://WWW.IANA.ORG/%6clocal-repository-label|-
+accept|local-repository-canonical-label|local_repository|skills/assistant-research/contracts/output.yaml|-|https://WWW.IANA.ORG/%6clocal-repository-label|https://www.iana.org/llocal-repository-label|-
+accept|authenticated-source-raw-label|authenticated_source|connector:research/record:typed-label|-|https://WWW.IANA.ORG/%6cauthenticated-source-label|https://WWW.IANA.ORG/%6cauthenticated-source-label|-
+accept|authenticated-source-canonical-label|authenticated_source|connector:research/record:typed-label|-|https://WWW.IANA.ORG/%6cauthenticated-source-label|https://www.iana.org/lauthenticated-source-label|-
+accept|offline-authoritative-source-raw-label|offline_authoritative_source|doi:10.1000/typed-label|-|https://WWW.IANA.ORG/%6coffline-authoritative-source-label|https://WWW.IANA.ORG/%6coffline-authoritative-source-label|-
+accept|offline-authoritative-source-canonical-label|offline_authoritative_source|doi:10.1000/typed-label|-|https://WWW.IANA.ORG/%6coffline-authoritative-source-label|https://www.iana.org/loffline-authoritative-source-label|-
+reject|public-url-label-is-not-verified-url|public_url|https://www.iana.org/typed-public|https://www.iana.org/typed-public|https://WWW.IANA.ORG/%6ctyped-public-label|https://www.iana.org/ltyped-public-label|https://www.iana.org/ltyped-public-label
+reject|wrong-method-label-is-not-verified-url|local_repository|skills/assistant-research/contracts/output.yaml|-|https://WWW.IANA.ORG/%6clocal-repository-label|https://www.iana.org/llocal-repository-label|https://www.iana.org/llocal-repository-label
+reject|authenticated-source-label-is-not-verified-url|authenticated_source|connector:research/record:typed-label|-|https://WWW.IANA.ORG/%6cauthenticated-source-label|https://www.iana.org/lauthenticated-source-label|https://www.iana.org/lauthenticated-source-label
+reject|offline-authoritative-source-label-is-not-verified-url|offline_authoritative_source|doi:10.1000/typed-label|-|https://WWW.IANA.ORG/%6coffline-authoritative-source-label|https://www.iana.org/loffline-authoritative-source-label|https://www.iana.org/loffline-authoritative-source-label
+reject|unbound-opaque-finding-source|public_url|https://www.iana.org/typed-public|https://www.iana.org/typed-public|https://WWW.IANA.ORG/%6ctyped-public-label|source:unbound-final-finding|-
+EOF
+    if [[ "${#failures[@]}" -eq 0 ]]; then
+        return 0
+    fi
+    printf 'typed URL-label source-resolution controls failed: %s\n' "${failures[*]}" >&2
+    return 1
+}
+
+research_typed_url_label_identity_counting_controls() {
+    local case_id="five-lens-decision-briefing-uses-storm-style-workflow"
+    local control_dir response_path evidence expected control_name confidence sources
+    local failures=()
+
+    control_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-typed-label-counting.XXXXXX")"
+    p0p4_register_cleanup "$control_dir"
+    evidence='[{"claim":"Typed URL-label evidence.","source":"https://WWW.IANA.ORG/%6cabel","verification_method":"public_url","verification_reference":"https://www.iana.org/typed-public","verified_url":"https://www.iana.org/typed-public","verification_detail":"Typed URL-label control."}]'
+    while IFS='|' read -r expected control_name confidence sources; do
+        response_path="$control_dir/$control_name.json"
+        write_schema_valid_five_lens_eval_response delegated "$response_path"
+        jq --argjson evidence "$evidence" --arg confidence "$confidence" --argjson sources "$sources" '
+            .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = $evidence
+            | .candidate_mechanisms = [{
+                mechanism:"Typed URL-label identity counting.",claim_status:"candidate",
+                evidence:($sources | map({source:.,detail:"Typed URL-label evidence.",evidence_status:"source_backed"})),
+                confidence:$confidence,counterevidence_or_conflicts:["No conflict recorded."],
+                gaps:["Independent validation remains pending."],validation_method:"Compare independent evidence."
+              }]
+        ' "$response_path" >"$response_path.next" && mv "$response_path.next" "$response_path"
+        research_refresh_response_derivatives "$response_path"
+        research_typed_url_label_validators_match "$expected" "$response_path" "$case_id" || failures+=("$control_name")
+    done <<'EOF'
+reject|canonical-label-plus-verified-url-medium|medium|["https://www.iana.org/label","https://www.iana.org/typed-public"]
+accept|canonical-label-plus-verified-url-low|low|["https://www.iana.org/label","https://www.iana.org/typed-public"]
+reject|raw-and-canonical-label-medium|medium|["https://WWW.IANA.ORG/%6cabel","https://www.iana.org/label"]
+accept|canonical-label-plus-independent-url-medium|medium|["https://www.iana.org/label","https://www.iana.org/independent"]
+accept|reserved-delimiter-remains-distinct|medium|["https://WWW.IANA.ORG/label%2Fpart","https://www.iana.org/label/part"]
+EOF
+    while IFS='|' read -r expected control_name confidence sources collected_sources; do
+        response_path="$control_dir/$control_name.json"
+        write_schema_valid_five_lens_eval_response delegated "$response_path"
+        jq --argjson evidence "$evidence" --arg confidence "$confidence" --argjson sources "$sources" --argjson collected_sources "$collected_sources" '
+            .five_lens_process_evidence.peer_review_input_binding.verified_source_evidence = $evidence
+            | .five_lens_process_evidence.accepted_lens_results[0].sources_or_verified_urls = $collected_sources
+            | .findings[0].sources = $sources
+            | .findings[0].confidence = $confidence
+            | del(.findings[0].source_provenance, .findings[0].verified_urls)
+        ' "$response_path" >"$response_path.next" && mv "$response_path.next" "$response_path"
+        research_refresh_response_derivatives "$response_path"
+        research_typed_url_label_validators_match "$expected" "$response_path" "$case_id" || failures+=("$control_name")
+    done <<'EOF'
+accept|canonical-label-finding-low|low|["https://www.iana.org/label"]|["source:research-corpus:typed-label-control"]
+reject|canonical-label-and-verified-url-finding-medium|medium|["https://www.iana.org/label","https://www.iana.org/typed-public"]|["https://www.iana.org/label"]
+accept|canonical-label-and-independent-finding-medium|medium|["https://www.iana.org/label","https://www.iana.org/independent"]|["https://www.iana.org/label","https://www.iana.org/independent"]
+EOF
+    if [[ "${#failures[@]}" -eq 0 ]]; then
+        return 0
+    fi
+    printf 'typed URL-label identity-counting controls failed: %s\n' "${failures[*]}" >&2
+    return 1
+}
+
 test_start "assistant-research candidate mechanisms stay evidence-backed and unproven"
 missing_candidate_mechanism_terms=()
 for term in \
@@ -2740,6 +2849,20 @@ if [[ "$(jq '[.cases[] | select(.semantic_validator == "assistant-research.five_
     pass
 else
     fail "assistant-research semantic fixture context or follow-up binding invalid: ${semantic_context_failures[*]-}"
+fi
+
+test_start "assistant-research resolves canonical URL typed-source labels without verified-URL authority"
+if research_typed_url_label_source_resolution_controls; then
+    pass
+else
+    fail "assistant-research canonical typed-source label resolution controls failed"
+fi
+
+test_start "assistant-research counts canonical URL typed-source aliases once"
+if research_typed_url_label_identity_counting_controls; then
+    pass
+else
+    fail "assistant-research canonical typed-source label identity-counting controls failed"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

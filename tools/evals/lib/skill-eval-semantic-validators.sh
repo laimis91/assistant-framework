@@ -444,7 +444,9 @@ function verifiedEvidenceAliases(binding) {
   return new Map(rows.flatMap(row => {
     const reference = row.verification_method === "public_url" ? publicUrlIdentity(row.verified_url) : row.verification_reference;
     const identity = `ledger:${row.verification_method}:${reference}`;
-    return row.verification_method === "public_url" ? [[row.source, identity], [row.verified_url, identity], [reference, identity]] : [[row.source, identity]];
+    const sourceIdentity = publicUrlIdentity(row.source);
+    const sourceAliases = [[row.source, identity], ...(sourceIdentity ? [[sourceIdentity, identity]] : [])];
+    return row.verification_method === "public_url" ? [...sourceAliases, [row.verified_url, identity], [reference, identity]] : sourceAliases;
   }));
 }
 function canonicalEvidenceIdentity(source, aliases) {
@@ -472,7 +474,11 @@ function finalArtifactsValid(response, accepted, binding) {
     ...(Array.isArray(result?.follow_ups) ? result.follow_ups.flatMap(followUp => Array.isArray(followUp?.sources_or_verified_urls) ? followUp.sources_or_verified_urls : []) : [])
   ]));
   const verifiedEvidenceRows = (Array.isArray(binding?.verified_source_evidence) ? binding.verified_source_evidence : []).filter(verifiedSourceEvidenceRowValid);
-  const verifiedSourceIdentities = new Set(verifiedEvidenceRows.flatMap(row => row.verification_method === "public_url" ? [row.source, row.verified_url, publicUrlIdentity(row.verified_url)] : [row.source]));
+  const verifiedSourceIdentities = new Set(verifiedEvidenceRows.flatMap(row => {
+    const sourceIdentity = publicUrlIdentity(row.source);
+    const sourceIdentities = [row.source, ...(sourceIdentity ? [sourceIdentity] : [])];
+    return row.verification_method === "public_url" ? [...sourceIdentities, row.verified_url, publicUrlIdentity(row.verified_url)] : sourceIdentities;
+  }));
   const verifiedUrlIdentities = new Set(verifiedEvidenceRows.filter(row => row.verification_method === "public_url").flatMap(row => [row.verified_url, publicUrlIdentity(row.verified_url)]));
   const acceptedSourceIdentities = new Set([...acceptedSources].flatMap(source => [source, publicUrlIdentity(source)].filter(Boolean)));
   const evidenceSourceAliases = verifiedEvidenceAliases(binding);
