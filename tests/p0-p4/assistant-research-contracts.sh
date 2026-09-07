@@ -951,6 +951,81 @@ EOF
     return 1
 }
 
+research_optional_verified_urls_controls() {
+    node - "$FRAMEWORK_DIR" "$research_evals" <<'NODE'
+const fs = require("fs");
+const vm = require("vm");
+const root = process.argv[2];
+const fixture = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+const clone = value => JSON.parse(JSON.stringify(value));
+const extract = path => fs.readFileSync(path, "utf8").split("<<'NODE'\n")[1].split("\nNODE\n")[0];
+const privateProgram = extract(`${root}/tests/p0-p4/lib/assistant-research-fixtures.sh`).split('if (operation === "canonical")')[0];
+const officialProgram = new vm.Script(extract(`${root}/tools/evals/lib/skill-eval-semantic-validators.sh`));
+const boundUrl = "https://www.iana.org/optional-verified-url";
+const modes = [
+  ["delegated", "five-lens-decision-briefing-uses-storm-style-workflow"],
+  ["sequential_fallback", "five-lens-sequential-fallback-preserves-process-evidence"],
+  ["delegated_peer_fallback", "five-lens-delegated-lenses-sequential-peer-fallback"],
+  ["quick_normalized", "five-lens-quick-normalizes-to-standard"],
+  ["retained_follow_ups", "five-lens-retains-all-material-follow-ups"]
+];
+const controls = [
+  ["omitted", true], ["empty", true, []], ["bound-public-url", true, [boundUrl]],
+  ["unbound-public-url", false, ["https://www.iana.org/unbound-optional-url"]],
+  ["null", false, null], ["string", false, boundUrl], ["object", false, {}],
+  ["non-string-entry", false, [42]], ["mixed-non-string-entry", false, [boundUrl, null]]
+];
+function contextFor(argv, errors, response) {
+  return vm.createContext({
+    require: name => name === "fs" ? {readFileSync: path => {
+      if (path === "fixture") return JSON.stringify(fixture);
+      if (path === "response") return JSON.stringify(response);
+      throw new Error(`Unexpected validator read: ${path}`);
+    }} : require(name),
+    URL, process: {argv, exitCode: 0}, console: {error: message => errors.push(message)}
+  });
+}
+function evaluate(response, caseId, api, privateErrors) {
+  privateErrors.length = 0;
+  api.refreshDerived(response);
+  const privateAccepted = api.validate(response);
+  const officialErrors = [];
+  const context = contextFor(["node", "optional-url-control", "response", "fixture", caseId], officialErrors, response);
+  officialProgram.runInContext(context, {timeout: 10000});
+  return {privateAccepted, officialAccepted: context.process.exitCode === 0, privateErrors: [...privateErrors], officialErrors};
+}
+const failures = [];
+let checks = 0;
+for (const [mode, caseId] of modes) {
+  const fixtureCase = fixture.cases.find(row => row.id === caseId);
+  const privateErrors = [];
+  const context = contextFor(["node", "optional-url-control", "unused", "response", "fixture", caseId], privateErrors);
+  vm.runInContext(`${privateProgram}\nglobalThis.api = {build, refreshDerived, validate};`, context, {timeout: 10000});
+  const api = context.api;
+  const base = clone(api.build(mode, fixtureCase.machine_expectations.required_substrings.join("\n"), JSON.stringify(fixtureCase.semantic_context)));
+  // The source-empty fallback also needs a real finding so the optional field is exercised.
+  base.findings = [{finding: `${fixtureCase.semantic_context.required_topic_terms.join("; ")}: Optional verified URL control.`, confidence: "low", sources: ["source:optional-verified-url"]}];
+  base.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence.push({
+    claim: "Bound optional URL evidence.", source: "source:optional-verified-url", verification_method: "public_url",
+    verification_reference: boundUrl, verified_url: boundUrl, verification_detail: "Retained static URL-binding control."
+  });
+  for (const [name, expected, value] of controls) {
+    const response = clone(base);
+    if (name !== "omitted") response.findings[0].verified_urls = clone(value);
+    const actual = evaluate(response, caseId, api, privateErrors);
+    const reasonsMatch = expected || (actual.privateErrors.length === 1 && actual.privateErrors[0] === "artifacts:findings"
+      && actual.officialErrors.length === 1 && actual.officialErrors[0] === "five-lens semantic validation: final artifacts: finding shape");
+    const passed = actual.privateAccepted === expected && actual.officialAccepted === expected && reasonsMatch;
+    console.log(JSON.stringify({mode, control: name, expected, ...actual, passed}));
+    if (!passed) failures.push(`${mode}/${name}`);
+    checks += 1;
+  }
+}
+console.log(JSON.stringify({checks, validatorChecks: checks * 2, failures}));
+process.exitCode = failures.length ? 1 : 0;
+NODE
+}
+
 test_start "assistant-research candidate mechanisms stay evidence-backed and unproven"
 missing_candidate_mechanism_terms=()
 for term in \
@@ -2944,6 +3019,13 @@ if research_overlapping_evidence_alias_controls; then
     pass
 else
     fail "assistant-research overlapping typed evidence alias controls failed"
+fi
+
+test_start "assistant-research accepts optional verified URL arrays without weakening entry validation"
+if research_optional_verified_urls_controls; then
+    pass
+else
+    fail "assistant-research optional verified URL controls failed"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
