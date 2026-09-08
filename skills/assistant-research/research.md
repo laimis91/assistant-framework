@@ -34,11 +34,6 @@ For each major claim, seek at least 2 credible sources or mark the claim LOW con
 ## Five-Lens Briefing
 Use `five-lens-briefing.md` when the question is not just "what is true?" but "how should I understand this and what should I do?" The method requires a perspective scan, contradiction map, synthesis, and peer review. It is compatible with standard, extensive, or deep tiers depending on risk and evidence needs.
 
-If the user explicitly requests `quick` with `five_lens_briefing`, normalize the
-tier to `standard`, preserve the selected five-lens method, and disclose the
-tier normalization. Record the requested tier, effective tier, and disclosure
-in `five_lens_process_evidence.tier_resolution`; use literal
-`not_applicable` as the disclosure when the requested tier was not `quick`.
 `quick` remains valid for ordinary `source_research`.
 
 ## Deep Investigation
@@ -54,75 +49,6 @@ Iterative progressive research:
 `subagent_policy_state=not_required` and
 `subagent_execution_mode=not_applicable`. Never reduce source diversity because
 delegation is unavailable.
-
-`five_lens_briefing` is a Process method. Freeze one sibling-blind assignment
-packet for each required LensKind before the first dispatch, then send one
-independent LensResearcher per lens through the selected handoff. Capacity may
-require waves, but later waves cannot consume earlier results. The root
-Orchestrator alone synthesizes validated results; a separate
-ResearchPeerReviewer critiques that initial synthesis.
-
-Freeze an ordered five-entry packet manifest and retain the exact five frozen
-packet bodies in final process evidence: each entry has `packet_id`, its exact
-LensKind, and a `content_digest`. A ContentDigest is `sha256:` plus 64
-lowercase hex SHA-256 over the exact UTF-8 bytes produced by RFC 8785 JSON
-Canonicalization Scheme (JCS), with no trailing newline. Packet preimages include every
-packet field except `content_digest`; packet-set preimage is its ordered
-`packet_id`, `lens_kind`, `content_digest` manifest. Every delegated
-dispatch or fallback root pass repeats the matching packet content digest;
-recompute every retained packet digest from its canonical preimage before use.
-All five bodies have equal `question`, `tier`, `user_role_or_goal`,
-`output_purpose`, `known_context`, `evidence_budget`, `search_resource_budget`,
-`source_policy`, and `isolation_policy`; only identity, LensKind, digest, and
-freeze time may vary.
-Any mismatch invalidates the complete lens stage.
-
-After validating a usable return, recompute `lens_result_digest` over the RFC
-8785 JCS bytes of `lens_result` only. Carry its LensKind, assignment ID, and digest unchanged into
-an authoritative five-entry `accepted_lens_results` ledger that exactly equals
-the peer-review input. Carry the same identity into the process record,
-perspective scan, and question trace;
-the presented fields must be exact projections of that accepted result. Preserve
-valid empty source arrays for inference-only or unresolved results rather than
-inventing a source marker. Every follow-up carries its own `gaps` array; an
-empty-source inference-only or unresolved follow-up names its own non-empty gap
-instead of borrowing a parent-lens gap.
-
-Peer input binds the assignment; final-equal `findings`, `conflicts`, and
-`contradiction_map`; normalized `candidate_mechanisms` (`[]` if absent);
-initial synthesis; validated lenses; lens provenance; verified evidence;
-`verification_gaps` equal to top-level `gaps`; and high-stakes context. Changing
-the four bound artifacts requires fresh peer review; disposition closes only
-synthesis revisions.
-
-This skill instruction sets `subagent_policy_state=delegation_triggered` and
-`subagent_execution_mode=delegated` without a separate permission question.
-Record a non-empty trigger scope. An opt-out, actual spawn failure or supported
-configuration proof sets sequential fallback evidence; an exact policy block
-also records its blocking source and no-exception basis.
-Global opt-out or policy-disallowed state forces peer `sequential_fallback`
-with matching admissible evidence and forbids peer subagent dispatch.
-
-Use sequential fallback only for explicit opt-out, real dispatch failure or
-unavailability, supported configuration proof, or an exact policy block. Run
-five frozen-packet root passes, record reduced independence, and retain peer
-critique as a separate fresh pass. After one same-assignment schema-correction
-retry, rerun the complete lens stage through evidenced fallback or block; do
-not mix partial delegated and root-authored lenses while claiming independence.
-
-For five-lens work, carry a numeric bounded search resource budget through the
-root process and every frozen packet. Standard allows at most 3 queries, 4
-sources, and 10 minutes per lens (15/20/50 overall); extensive allows 5/6/15
-(25/30/75 overall); deep allows 8/10/25 (40/50/125 overall). Deep stops at
-saturation or its hard ceiling. When a limit is exhausted, record gaps and
-downgrade confidence instead of extending the search. These five-lens ceilings
-do not change proportional direct `source_research` behavior.
-Record SearchResourceUsage for every lens and the root: actual queries/sources,
-elapsed minutes, termination state, exhausted dimensions, and downgrade
-evidence. Summed query/source uses must match root totals, while root elapsed is
-observed wall-clock. It is at least the sum of sequential fallback pass times,
-or the sum of each delegated wave's maximum member time. Usable output cannot exceed a ceiling; reaching one records
-an explicit gap and LOW lens confidence, while an over-ceiling run blocks.
 
 ## Candidate mechanisms
 

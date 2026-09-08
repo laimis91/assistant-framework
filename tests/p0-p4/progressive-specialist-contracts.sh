@@ -284,4 +284,56 @@ else
     fail "on-demand specialist methods failed: ${method_failures[*]}"
 fi
 
+test_start "ordinary research excludes five-lens process bookkeeping while five-lens retains it"
+research_loading_failures=()
+research_reference="$FRAMEWORK_DIR/skills/assistant-research/research.md"
+five_lens_reference="$FRAMEWORK_DIR/skills/assistant-research/five-lens-briefing.md"
+source_research_references="$(awk '
+    $0 == "  source_research:" { in_set = 1; next }
+    in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
+    in_set && /^    references:/ { in_references = 1; next }
+    in_references && /^    selectors:/ { exit }
+    in_references && /^      - / { sub(/^      - /, ""); print }
+' "$research_index")"
+five_lens_references="$(awk '
+    $0 == "  five_lens:" { in_set = 1; next }
+    in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
+    in_set && /^    references:/ { in_references = 1; next }
+    in_references && /^    selectors:/ { exit }
+    in_references && /^      - / { sub(/^      - /, ""); print }
+' "$research_index")"
+
+if [[ "$source_research_references" != $'research.md\nurl-verify.md' ]]; then
+    research_loading_failures+=("source_research references must resolve only research.md and url-verify.md")
+fi
+if ! printf '%s\n' "$five_lens_references" | grep -Fxq "five-lens-briefing.md"; then
+    research_loading_failures+=("five_lens does not resolve five-lens-briefing.md")
+fi
+for leaked_term in \
+    "Freeze one sibling-blind assignment packet" \
+    "accepted_lens_results" \
+    "ResearchPeerReviewer" \
+    "SearchResourceUsage" \
+    "five_lens_process_evidence.tier_resolution"; do
+    if grep -Fq -- "$leaked_term" "$research_reference"; then
+        research_loading_failures+=("ordinary research still contains $leaked_term")
+    fi
+done
+for preserved_term in \
+    "sibling-blind assignment packets" \
+    "accepted_lens_results" \
+    "ResearchPeerReviewer" \
+    "search resource budget" \
+    "tier_resolution.requested_tier" \
+    "normalization_disclosure"; do
+    if ! grep -Fq -- "$preserved_term" "$five_lens_reference"; then
+        research_loading_failures+=("five-lens reference missing $preserved_term")
+    fi
+done
+if [[ "${#research_loading_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "research method loading leaked or lost five-lens obligations: ${research_loading_failures[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"
