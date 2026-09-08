@@ -32,11 +32,11 @@ overlay="$fixture_root/overlay"
 legacy="$fixture_root/legacy"
 mkdir -p "$overlay/references" "$overlay/contracts" "$legacy"
 cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$overlay/SKILL.md"
-printf '\nExact root marker.\n' >>"$overlay/SKILL.md"
+printf '\nExact root marker: {agent_state_dir}.\n' >>"$overlay/SKILL.md"
 cp "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" "$overlay/references/phases.md"
-printf '\n<!-- exact reference marker -->\n' >>"$overlay/references/phases.md"
+printf '\n<!-- exact reference marker: {agent_state_dir} -->\n' >>"$overlay/references/phases.md"
 cp "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/index.yaml" "$overlay/contracts/index.yaml"
-printf '\n# exact contract marker\n' >>"$overlay/contracts/index.yaml"
+printf '\n# exact contract marker: {agent_state_dir}\n' >>"$overlay/contracts/index.yaml"
 make_manifest "$overlay" "$base_hash"
 cp "$overlay/SKILL.md" "$legacy/SKILL.md"
 fake_codex="$fixture_root/fake-codex"
@@ -124,6 +124,22 @@ if "$runner" --baseline-variant "$legacy" --candidate-variant "$legacy" \
     pass
 else
     fail "root or exact run-plan materialization metadata is incomplete"
+fi
+
+test_start "exact adapter plans bind unmodified manifest bytes while legacy overlays render placeholders"
+expected_tree_hash="$(python3 "$helper" source-hash --base-skill-tree "$materialized" | jq -r .base_source_sha256)"
+sed 's|{agent_state_dir}|.codex|g' "$legacy/SKILL.md" >"$fixture_root/legacy-rendered.md"
+if jq -e --arg tree "$expected_tree_hash" --arg skill "$(sha256_file "$overlay/SKILL.md")" '
+      .baseline_variant.instruction_sha256 == $tree
+      and .candidate_variant.instruction_sha256 == $tree
+      and .candidate_variant.materialized_skill_sha256 == $skill
+    ' "$exact_plan/run-plan.json" >/dev/null \
+    && jq -e --arg skill "$(sha256_file "$fixture_root/legacy-rendered.md")" '
+      .candidate_variant.materialized_skill_sha256 == $skill
+    ' "$root_plan/run-plan.json" >/dev/null; then
+    pass
+else
+    fail "adapter rewrote exact manifest bytes or stopped rendering legacy placeholders"
 fi
 
 test_start "legacy root overlays retain plan-only operation without Python or Ruby"

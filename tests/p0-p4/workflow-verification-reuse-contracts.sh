@@ -2,6 +2,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
+source "$FRAMEWORK_DIR/tests/p0-p4/lib/verification-reuse-response-fixtures.sh"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 fixture="$workflow_dir/evals/cases.json"
@@ -96,4 +97,15 @@ if grade_case "$matrix_case" "$matrix_ids_json" "$matrix_actions_json" 2 reuse c
 if grade_case "$matrix_case" "$matrix_ids_json" "$matrix_actions_json" 0 reuse missing-original matrix-missing-basis; then failures+=("missing matrix basis accepted"); fi
 if ! grade_case "$review_case" "$review_ids_json" "$review_actions" 0 reuse complete review-positive; then failures+=("review positive"); fi
 if [[ ${#failures[@]} -eq 0 ]]; then pass; else fail "external decision oracle failures: ${failures[*]}"; fi
+
+test_start "shared response builders satisfy both canonical verification reuse cases"
+mkdir -p "$responses/assistant-workflow"
+failures=()
+for case_id in "$matrix_case" "$review_case"; do
+    write_verification_reuse_response "$case_id" "$responses/assistant-workflow/$case_id.txt" ""
+    if ! "$runner" --responses "$responses" --skill assistant-workflow --case "$case_id" >"$root/$case_id.out" 2>&1; then
+        failures+=("$case_id")
+    fi
+done
+if [[ ${#failures[@]} -eq 0 ]]; then pass; else fail "shared response builder failed canonical grading: ${failures[*]}"; fi
 p0p4_finish_suite "${BASH_SOURCE[0]}"

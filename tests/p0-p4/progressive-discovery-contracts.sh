@@ -5,6 +5,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/verification-reuse-response-fixtures.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
@@ -368,6 +369,9 @@ write_workflow_eval_responses() {
         required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$fixture" | paste -sd ' ' -)"
         if jq -e --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture" >/dev/null; then
             case "$case_id" in
+                verification-reuse-current-scenario-matrix|verification-reuse-preserves-independent-review)
+                    write_verification_reuse_response "$case_id" "$response_path" "$required_summary"
+                    ;;
                 architecture-pack-resists-premature-abstraction)
                     jq -n --arg summary "$required_summary" '{summary: $summary, architecture_design_mode: "review_intensive", architecture_decision_pack: {mode: "review_intensive", independent_challenge_evidence: {challenge_ref: "challenge", dissent_or_validation: "validated direct ownership", resolution: "retain explicit ownership", selected_design_impact: "verify disposal"}}}' >"$response_path"
                     ;;

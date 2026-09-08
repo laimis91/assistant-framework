@@ -882,12 +882,8 @@ materialize_variant() {
             --manifest "$source" \
             --base-skill-tree "$REPO_ROOT/skills/assistant-workflow" \
             --destination "$destination" || return 1
-        while IFS= read -r instruction_file; do
-            sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file" || return 1
-            rm -f "${instruction_file}.bak" || return 1
-        done < <(find "$destination" -type f \( \
-            -name '*.md' -o -name '*.yaml' -o -name '*.yml' -o -name '*.json' \
-            -o -name '*.conf' -o -name '*.toml' \))
+        # The manifest and base hashes bind source bytes; exact overlays must
+        # reach the evaluated tree without installer placeholder substitutions.
         return 0
     fi
     mkdir -p "$destination" || return 1

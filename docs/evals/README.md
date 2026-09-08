@@ -192,6 +192,11 @@ only `SKILL.md`, `references/**`, or `contracts/**`. The helper rejects stale,
 unlisted, unsafe, symlinked, special, or oversized payloads before a plan is
 written. Exact variants record only mode, manifest hash, base hash, and file
 count; they are deliberately ineligible for workflow-kernel promotion.
+The evaluated tree preserves the canonical base and listed overlay bytes without
+placeholder substitution, including literal `{agent_state_dir}` text. If a trial
+needs `.codex` paths, put those rendered bytes in the listed payload files before
+hashing the manifest. Legacy directory overlays continue to render this token.
+The run plan's instruction hash binds the complete materialized tree in both modes.
 Exact-manifest planning requires Python 3 for bounded admission and Ruby for
 the materialized-tree context measurement. Existing directory root overlays
 retain their root-only reporter path and do not add either prerequisite.
