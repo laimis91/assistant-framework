@@ -195,7 +195,10 @@ Non-trivial Process or Analysis skills MAY add `contracts/index.yaml` as a progr
 - route entry inputs, the current phase or round gate, the selected handoff, and completion outputs to their enforcement points; and
 - use `load_full_authoritative_file` for both missing and invalid selectors so the full named canonical file is validated instead of silently skipping rules.
 
-The root `SKILL.md` must tell the agent to read the index first, load only the selector applicable to the current boundary, and preserve the canonical files as the source of truth. Adding an index does not change the required contract tier or relax any validation rule.
+Root `SKILL.md` routes applicable selectors; canonical files remain authoritative.
+Static reports may separately measure a named set's declared closure and recursive
+worker return-field projection; they exclude runtime context and fail on invalid
+pointers. Indexes never relax tiers or validation.
 
 ### Field schema
 

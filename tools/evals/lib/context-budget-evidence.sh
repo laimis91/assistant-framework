@@ -2,18 +2,24 @@
 # Canonical, content-free context-budget evidence shared by the eval runner and finalizer.
 
 context_budget_build_evidence() {
-    local reporter="$1" baseline_overlay="$2" candidate_overlay="$3"
-    local baseline_instruction_hash="$4" candidate_instruction_hash="$5" destination="$6"
+    local reporter="$1" measurement_mode="$2" baseline_input="$3" candidate_input="$4"
+    local baseline_instruction_hash="$5" candidate_instruction_hash="$6" destination="$7"
     local temporary baseline_report candidate_report
     CONTEXT_BUDGET_STANDING_COMPONENT_DIAGNOSTIC=""
     [[ -x "$reporter" ]] || return 1
     temporary="$(mktemp -d "${TMPDIR:-/tmp}/framework-context-evidence.XXXXXX")" || return 1
     baseline_report="$temporary/baseline.json"
     candidate_report="$temporary/candidate.json"
+    local measurement_option
+    case "$measurement_mode" in
+        root_skill_overlay) measurement_option="--skill-overlay" ;;
+        hashed_instruction_overlay) measurement_option="--skill-tree" ;;
+        *) rm -rf "$temporary"; return 1 ;;
+    esac
     if ! LC_ALL=C "$reporter" --agent codex --skill assistant-workflow \
-        --skill-overlay "$baseline_overlay" --format json >"$baseline_report" \
+        "$measurement_option" "$baseline_input" --format json >"$baseline_report" \
         || ! LC_ALL=C "$reporter" --agent codex --skill assistant-workflow \
-        --skill-overlay "$candidate_overlay" --format json >"$candidate_report"; then
+        "$measurement_option" "$candidate_input" --format json >"$candidate_report"; then
         rm -rf "$temporary"
         return 1
     fi

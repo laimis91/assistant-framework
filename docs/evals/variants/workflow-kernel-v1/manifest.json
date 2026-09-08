@@ -22,14 +22,14 @@
     "raw_response_retained": false
   },
   "static_measurement": {
-    "baseline_selected_initial_words": 2154,
+    "baseline_selected_initial_words": 2183,
     "candidate_selected_initial_words": 455,
-    "selected_initial_word_delta": -1699,
-    "baseline_total_initial_words": 2743,
+    "selected_initial_word_delta": -1728,
+    "baseline_total_initial_words": 2772,
     "candidate_total_initial_words": 1044,
-    "baseline_selected_entry_words": 3759,
+    "baseline_selected_entry_words": 3788,
     "candidate_selected_entry_words": 2060,
-    "selected_entry_word_delta": -1699,
+    "selected_entry_word_delta": -1728,
     "standing_context_growth": 0,
     "measured_with": "tools/context-budget-report.sh --skill-overlay"
   },

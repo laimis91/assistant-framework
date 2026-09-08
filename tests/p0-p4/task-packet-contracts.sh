@@ -192,7 +192,8 @@ if ! ruby -ryaml -e '
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
     fail "slice verification_command schema is not a required direct argv vector"
-elif ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "executes the slice verification argv directly, with item 0 as the executable and each remaining item as one literal argument; never reconstruct a shell command"; then
+elif ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "either executes the slice verification argv directly or reuses a completed passing verification" \
+    || ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "When executing argv, item 0 is the executable and each remaining item is one literal argument; never reconstruct a shell command"; then
     fail "Build protocol does not execute the slice verification argv using the schema contract"
 elif rg -n -i 'run-agents\.sh|check-integration\.sh|worktree' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" >/tmp/p0p4-native-verification-runner.out; then
     fail "native verification contract still depends on retired runner mechanics; see /tmp/p0p4-native-verification-runner.out"

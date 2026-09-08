@@ -1647,7 +1647,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_OFFICIAL_JSONL=true "$runner" --execut
         and .provenance.model_selection_evidence == "explicit_model_argument_only"
         and .provenance.requested_model_catalog_entry_sha256 == null
         and (.provenance | has("resolved_model") | not)
-        and .provenance.adapter_version == "codex-framework-eval-v6")
+        and .provenance.adapter_version == "codex-framework-eval-v7")
     ' "$official_jsonl_output/traces/"*.json >/dev/null \
     && jq -e '.complete_pairs == 1 and .excluded_incomplete_pairs == 0' \
         "$official_jsonl_output/comparison.json" >/dev/null; then
@@ -2966,7 +2966,7 @@ else
     fail "persisted traces lack provenance/verifier fields, violate the schema, or retain raw content"
 fi
 
-test_start "grader provenance binds the canonical contract and full v6 runner bytes"
+test_start "grader provenance binds the canonical contract and full v7 runner bytes"
 small_contract_hash="$(jq -cS --arg id small-fix-stays-lightweight '
   .cases[] | select(.id == $id) | {fail_signals,machine_expectations,semantic_review}
 ' "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json" | test_sha256_stream)"
@@ -2976,12 +2976,12 @@ expected_grader_hash="$(printf 'contract_sha256=%s\nrunner_sha256=%s\n' \
 changed_grader_hash="$(printf 'contract_sha256=%s\nrunner_sha256=%064d\n' \
     "$small_contract_hash" 0 | test_sha256_stream)"
 if jq -s -e --arg expected "$expected_grader_hash" 'all(.[].provenance;
-      .grader_sha256 == $expected and .adapter_version == "codex-framework-eval-v6")
+      .grader_sha256 == $expected and .adapter_version == "codex-framework-eval-v7")
     ' "$execute_output/traces/"*.json >/dev/null \
     && [[ "$changed_grader_hash" != "$expected_grader_hash" ]]; then
     pass
 else
-    fail "grader hash is not bound to the exact case contract and full v6 runner implementation"
+    fail "grader hash is not bound to the exact case contract and full v7 runner implementation"
 fi
 
 test_start "active adapter-version docs and diagnostics match the canonical runner"
@@ -5467,7 +5467,7 @@ else
     fail "raw adapter error message rejection was not actionable"
 fi
 
-test_start "v4 resolved-model traces cannot mix with the v6 attestation contract"
+test_start "v4 resolved-model traces cannot mix with the v7 attestation contract"
 legacy_v4_trace_dir="$fixture_root/legacy-v4-trace"
 legacy_v4_error="$fixture_root/legacy-v4-error.txt"
 mkdir -p "$legacy_v4_trace_dir"
@@ -5484,7 +5484,7 @@ if ! "$legacy_runner" --validate-traces "$legacy_v4_trace_dir" >/dev/null 2>"$le
     && grep -Eq 'runtime_model_attestation|resolved_model' "$legacy_v4_error"; then
     pass
 else
-    fail "legacy resolved-model evidence remained valid under the v6 schema"
+    fail "legacy resolved-model evidence remained valid under the v7 schema"
 fi
 
 test_start "trace identity rejects requested-model alias contradictions"

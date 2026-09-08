@@ -28,6 +28,14 @@ under common operating conditions:
 - pivot/restart decisions for stagnation and Code Writer blockers
 - terminal max 10 review/QA round behavior
 
+## Generated workflow references
+
+`assistant-workflow` phase and plan views are generated from their authoritative
+Markdown sources. Run `tools/skills/sync-workflow-references.py --apply` after
+changing those sources and `--check` in validation. The views provide static
+selected-word measurements only; they do not establish token, latency, or model
+quality effects.
+
 ## Framework Instruction Fixtures
 
 ### Files
@@ -152,12 +160,48 @@ tools/evals/run-codex-framework-evals.sh \
   --output /tmp/codex-framework-plan
 ```
 
-Each variant supplies a root `SKILL.md` overlay. The adapter copies the current
-canonical `assistant-workflow` contracts and references into both disposable
-workspaces, then replaces only the root file. This holds behavior contracts
-constant while measuring the smaller kernel intervention.
+Each directory variant supplies a root `SKILL.md` overlay. The adapter copies
+the current canonical `assistant-workflow` contracts and references into both
+disposable workspaces, then replaces only the root file. This holds behavior
+contracts constant while measuring the smaller kernel intervention.
 
-Before any model call, adapter v6 runs only the reporter from the evaluator's
+For an exact instruction-only variant, pass a regular JSON manifest as either
+variant argument. It has the closed shape below and its payload files live next
+to the manifest. The base hash is SHA-256 of the sorted lines
+`relative-path SHA-256(file-bytes)` for the trusted canonical tree, excluding
+the top-level `evals/` directory. Use the helper to print that value and to
+validate a manifest before planning:
+
+```bash
+tools/evals/lib/instruction-overlay.py source-hash \
+  --base-skill-tree skills/assistant-workflow
+tools/evals/lib/instruction-overlay.py inspect \
+  --base-skill-tree skills/assistant-workflow \
+  --manifest /path/to/overlay.json
+```
+
+Compute each payload entry with `shasum -a 256 /path/to/payload-file | awk '{print $1}'`,
+then place the manifest and only its listed payload files in one directory.
+
+```json
+{"schema_version":"1.0","mode":"hashed_instruction_overlay","base_skill":"assistant-workflow","base_source_sha256":"<64 lowercase hex>","files":[{"path":"SKILL.md","sha256":"<64 lowercase hex>"}]}
+```
+
+`files` must be unique and strictly sorted, include `SKILL.md`, and may contain
+only `SKILL.md`, `references/**`, or `contracts/**`. The helper rejects stale,
+unlisted, unsafe, symlinked, special, or oversized payloads before a plan is
+written. Exact variants record only mode, manifest hash, base hash, and file
+count; they are deliberately ineligible for workflow-kernel promotion.
+The evaluated tree preserves the canonical base and listed overlay bytes without
+placeholder substitution, including literal `{agent_state_dir}` text. If a trial
+needs `.codex` paths, put those rendered bytes in the listed payload files before
+hashing the manifest. Legacy directory overlays continue to render this token.
+The run plan's instruction hash binds the complete materialized tree in both modes.
+Exact-manifest planning requires Python 3 for bounded admission and Ruby for
+the materialized-tree context measurement. Existing directory root overlays
+retain their root-only reporter path and do not add either prerequisite.
+
+Before any model call, adapter v7 runs only the reporter from the evaluator's
 trusted repository; variant inputs can never supply executable tooling. It uses
 `LC_ALL=C` over the already materialized snapshot root files. The run plan embeds one canonical,
 count-only `context_budget_evidence` object plus its SHA-256. It binds the
@@ -406,7 +450,7 @@ two-artifact decision is rejected.
 
 `grader_sha256` binds both the canonical case grading contract and the complete
 Codex eval-runner implementation. Current promotion evidence requires adapter
-`codex-framework-eval-v6`; changing the contract or runner invalidates existing
+`codex-framework-eval-v7`; changing the contract or runner invalidates existing
 traces instead of retroactively re-grading deleted response or workspace data.
 
 Metrics without native Codex event timestamps are explicitly labeled as
@@ -524,6 +568,14 @@ Pass a prior JSON report with `--baseline FILE` to add current-minus-baseline
 absolute and percentage deltas. A zero baseline produces a `null` percentage.
 The report never includes prompt bodies, instruction bodies, responses,
 credentials, or environment values.
+
+For a static named `contracts/index.yaml` load set, add `--load-set NAME`. The
+optional `selected_load_set_context` separates the declared boundary closure
+from recursively projected worker return-schema additions. It measures the
+static selected skill instruction surface only; it does not represent model
+wrappers, dynamic dispatch, user conversation, or total runtime context.
+`--skill-tree DIR` measures an already materialized, safe skill tree and cannot
+be combined with the root-only `--skill-overlay FILE` mode.
 
 The cases are intended for prompt/instruction behavior comparisons. They should
 be useful whether the evaluated assistant is backed by GPT 5.4, GPT 5.5, Claude,
