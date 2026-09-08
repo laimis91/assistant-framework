@@ -275,6 +275,58 @@
       }
     },
     {
+      "id": "verification-reuse-current-scenario-matrix",
+      "title": "Current verification scenario matrix",
+      "category": "current_verification_reuse",
+      "purpose": "Checks each independently stated current-verification cause without treating prose wording as the decision oracle.",
+      "prompt": "Return one JSON object with a top-level decisions array. Each decision has exactly id, action, original_run_ref, current_comparison_ref, and independent_review_status; action is reuse or rerun, and independent_review_status is required. Use these closed-world scenarios: unchanged-complete (original_run_ref=run/unchanged-complete, current_comparison_ref=comparison/unchanged-complete); unrelated-doc-input-boundary (run/unrelated-doc-input-boundary, comparison/unrelated-doc-input-boundary); changed-production; changed-tests; changed-config; changed-dependency; changed-argv; changed-cwd; changed-toolchain; changed-environment; prior-failed; prior-partial; prior-skipped; unknown-basis; explicit-fresh-run; mutable-external-state; new-integration-coverage; post-fix-source. For every remaining id, use original_run_ref=run/<id> and current_comparison_ref=comparison/<id>.",
+      "setup_context": [
+        "Each scenario has a distinct original_run_ref and current_comparison_ref supplied by the task packet.",
+        "unchanged-complete has a complete passed original run and every recorded input and obligation unchanged.",
+        "unrelated-doc-input-boundary changes only supported documentation and has evidence that it is outside the recorded verification input boundary.",
+        "Every remaining named scenario changes or lacks exactly the named verification condition; no other cause needs to be inferred."
+      ],
+      "expected_behavior": [
+        "Returns one decision record per supplied scenario.",
+        "Reuses only unchanged-complete and the evidenced unrelated-doc boundary case.",
+        "Reruns every independently named invalidation case."
+      ],
+      "pass_criteria": [
+        "Every scenario id has the action selected from its supplied current-verification condition.",
+        "Each record carries nonempty evidence for the original and current basis."
+      ],
+      "fail_signals": [
+        "Reuses an invalidation scenario.",
+        "Reruns the complete unchanged or evidenced unrelated-doc scenario.",
+        "Omits original or current comparison basis evidence."
+      ],
+      "machine_expectations": {"required_substrings":["decisions","original_run_ref","current_comparison_ref"],"forbidden_substrings":["newly executed verification"],"structured_json_assertions":[{"operator":"array_object_values_exact","path":["decisions"],"fields":["id","action"],"expected_objects":[{"id":"unchanged-complete","action":"reuse"},{"id":"unrelated-doc-input-boundary","action":"reuse"},{"id":"changed-production","action":"rerun"},{"id":"changed-tests","action":"rerun"},{"id":"changed-config","action":"rerun"},{"id":"changed-dependency","action":"rerun"},{"id":"changed-argv","action":"rerun"},{"id":"changed-cwd","action":"rerun"},{"id":"changed-toolchain","action":"rerun"},{"id":"changed-environment","action":"rerun"},{"id":"prior-failed","action":"rerun"},{"id":"prior-partial","action":"rerun"},{"id":"prior-skipped","action":"rerun"},{"id":"unknown-basis","action":"rerun"},{"id":"explicit-fresh-run","action":"rerun"},{"id":"mutable-external-state","action":"rerun"},{"id":"new-integration-coverage","action":"rerun"},{"id":"post-fix-source","action":"rerun"}]},{"operator":"array_field_values_exact","path":["decisions"],"field":"independent_review_status","expected_values":["required","required","required","required","required","required","required","required","required","required","required","required","required","required","required","required","required","required"]},{"operator":"array_items_nonempty_fields","path":["decisions"],"fields":["id","action","original_run_ref","current_comparison_ref","independent_review_status"]}]}
+    },
+    {
+      "id": "verification-reuse-preserves-independent-review",
+      "title": "Validation reuse preserves independent review",
+      "category": "current_verification_reuse",
+      "purpose": "Checks that validation reuse does not replace current Spec Review, independent code review, or final review snapshot freshness.",
+      "prompt": "Return one JSON object with a top-level decisions array. Each decision has exactly id, action, original_run_ref, current_comparison_ref, and independent_review_status. Use these closed-world ids: spec-review-required (original_run_ref=run/spec-review-required, current_comparison_ref=comparison/spec-review-required); independent-code-review-required (run/independent-code-review-required, comparison/independent-code-review-required); final-review-snapshot-current (run/final-review-snapshot-current, comparison/final-review-snapshot-current).",
+      "setup_context": [
+        "The original validation evidence and current comparison support reuse only for validation.",
+        "The task is standard intensity and still requires Spec Review, independent code review, and a current final review snapshot."
+      ],
+      "expected_behavior": [
+        "Keeps validation reuse separate from all required review gates.",
+        "Returns a current validation decision record for each required review record."
+      ],
+      "pass_criteria": [
+        "Spec Review, independent code review, and final review snapshot each remain current requirements.",
+        "Each record has original and current comparison basis evidence."
+      ],
+      "fail_signals": [
+        "Uses reused validation as review evidence.",
+        "Omits independent code review or final snapshot freshness."
+      ],
+      "machine_expectations": {"required_substrings":["decisions","original_run_ref","current_comparison_ref"],"forbidden_substrings":["review is satisfied by reused validation"],"structured_json_assertions":[{"operator":"array_object_values_exact","path":["decisions"],"fields":["id","action"],"expected_objects":[{"id":"spec-review-required","action":"reuse"},{"id":"independent-code-review-required","action":"reuse"},{"id":"final-review-snapshot-current","action":"reuse"}]},{"operator":"array_field_values_exact","path":["decisions"],"field":"independent_review_status","expected_values":["required","required","required"]},{"operator":"array_items_nonempty_fields","path":["decisions"],"fields":["id","action","original_run_ref","current_comparison_ref","independent_review_status"]}]}
+    },
+    {
       "id": "native-slice-execution-uses-dependencies-not-runner-topology",
       "title": "Native slices use dependency-aware subagents",
       "category": "native_slice_execution",

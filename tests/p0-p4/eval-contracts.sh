@@ -1039,7 +1039,7 @@ for variant in baseline candidate; do
          instruction_sha256:$instruction_hash,seed_workspace_sha256:("4"*64),requested_model:"test-model",
          runtime_model_attestation:"not_exposed_by_codex_jsonl",model_selection_evidence:"explicit_model_argument_only",
          requested_model_catalog_entry_sha256:null,codex_executable_sha256:null,
-         cli_version:"codex-cli test",adapter_version:"codex-framework-eval-v6"}}' \
+         cli_version:"codex-cli test",adapter_version:"codex-framework-eval-v7"}}' \
       >"$binding_traces/identity-pair-$variant.json"
 done
 jq -n '{planned_runs:2,fixture_sha256:("1"*64),requested_model:"test-model",cli_version:"codex-cli test",

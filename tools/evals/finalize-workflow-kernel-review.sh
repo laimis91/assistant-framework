@@ -18,7 +18,7 @@ TEMPLATE_FILE=""
 TRACE_VALIDATOR="$REPO_ROOT/tools/evals/run-framework-instruction-evals.sh"
 COMPARISON_PROGRAM="$SCRIPT_DIR/lib/framework-comparison.jq"
 CODEX_EVAL_RUNNER="$SCRIPT_DIR/run-codex-framework-evals.sh"
-EXPECTED_ADAPTER_VERSION="codex-framework-eval-v6"
+EXPECTED_ADAPTER_VERSION="codex-framework-eval-v7"
 CURRENT_BASELINE_INSTRUCTION_HASH=""
 CURRENT_CANDIDATE_INSTRUCTION_HASH=""
 CURRENT_CONTEXT_BUDGET_EVIDENCE_HASH=""
@@ -295,7 +295,7 @@ validate_current_context_evidence() {
     fresh_file="$(mktemp "${TMPDIR:-/tmp}/workflow-kernel-context-evidence.XXXXXX")"
     context_budget_build_evidence \
         "$REPO_ROOT/tools/context-budget-report.sh" \
-        "$baseline_dir/SKILL.md" "$candidate_dir/SKILL.md" \
+        root_skill_overlay "$baseline_dir/SKILL.md" "$candidate_dir/SKILL.md" \
         "$CURRENT_BASELINE_INSTRUCTION_HASH" "$CURRENT_CANDIDATE_INSTRUCTION_HASH" \
         "$fresh_file" \
         || { rm -rf "$materialized_root"; rm -f "$fresh_file"; die "Could not recompute fresh context-budget evidence."; }
@@ -639,7 +639,7 @@ trusted_execution_profile_passes() {
             and (.provenance.requested_model_catalog_entry_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
             and (.provenance.codex_executable_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
             and (.provenance | has("resolved_model") | not)
-            and .provenance.adapter_version == "codex-framework-eval-v6")
+            and .provenance.adapter_version == "codex-framework-eval-v7")
         ' "$traces_dir"/*.json >/dev/null \
         && current_model_selection_evidence_matches "$plan"
 }
@@ -797,6 +797,11 @@ command -v jq >/dev/null 2>&1 || die "jq is required."
 [[ -n "$BASELINE_VARIANT" ]] || BASELINE_VARIANT="$REPO_ROOT/skills/assistant-workflow"
 [[ -n "$CANDIDATE_VARIANT" ]] || CANDIDATE_VARIANT="$REPO_ROOT/docs/evals/variants/workflow-kernel-v1"
 packet="$RESULTS_DIR/semantic-review-packet.json"
+if [[ -f "$RESULTS_DIR/run-plan.json" ]] \
+    && jq -e '(.baseline_variant.materialization.mode? == "hashed_instruction_overlay") or (.candidate_variant.materialization.mode? == "hashed_instruction_overlay")' \
+        "$RESULTS_DIR/run-plan.json" >/dev/null; then
+    die "Exact instruction overlays are ineligible for workflow-kernel review or promotion."
+fi
 if [[ -n "$TEMPLATE_FILE" ]]; then
     [[ -z "$VERDICT_FILE" ]] || die "Template mode does not accept --verdict."
     write_template "$packet" "$TEMPLATE_FILE"

@@ -39,6 +39,8 @@ if ! p0p4_suite_is_excluded "skill-eval-contracts.sh"; then
     source "$P0P4_SUITE_DIR/skill-eval-contracts.sh"
 fi
 source "$P0P4_SUITE_DIR/workflow-basics-contracts.sh"
+source "$P0P4_SUITE_DIR/workflow-reference-loading-contracts.sh"
+source "$P0P4_SUITE_DIR/workflow-verification-reuse-contracts.sh"
 if ! p0p4_suite_is_excluded "progressive-discovery-contracts.sh"; then
     source "$P0P4_SUITE_DIR/progressive-discovery-contracts.sh"
 fi
@@ -57,6 +59,7 @@ source "$P0P4_SUITE_DIR/worker-prompt-contracts.sh"
 source "$P0P4_SUITE_DIR/docs-drift-contracts.sh"
 source "$P0P4_SUITE_DIR/harness-docs-evals-contracts.sh"
 source "$P0P4_SUITE_DIR/eval-contracts.sh"
+source "$P0P4_SUITE_DIR/codex-instruction-overlay-contracts.sh"
 if ! p0p4_suite_is_excluded "codex-behavioral-eval-contracts.sh"; then
     source "$P0P4_SUITE_DIR/codex-behavioral-eval-contracts.sh"
 fi

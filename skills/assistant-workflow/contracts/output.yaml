@@ -373,7 +373,7 @@ artifacts:
     type: object[]
     required: true
     condition: "always"
-    validation: "At least one test, build, lint, typecheck, inspection, dry-run, or manual validation entry with result=passed must be recorded for completed implementation workflows. Docs-only/no-op/discovery tasks may complete without passed validation only when the reason is explicitly recorded. Skipped/not_applicable entries do not satisfy completion evidence."
+    validation: "At least one test, build, lint, typecheck, inspection, dry-run, or manual validation entry with result=passed must be recorded for completed implementation workflows. Docs-only/no-op/discovery tasks may complete without passed validation only when the reason is explicitly recorded. Skipped/not_applicable entries do not satisfy completion evidence. When reusing a passed entry, evidence records the original run and current comparison of exact argv/cwd, relevant inputs, environment/toolchain, and covered obligations; it does not claim a newly executed verification. Existing evidence remains a string or resolvable ref; no new mandatory fields are introduced."
     on_fail: "Run an appropriate verification and record passed evidence, or record an explicit docs-only/no-op/discovery exception reason"
     object_fields:
       - name: command_or_check

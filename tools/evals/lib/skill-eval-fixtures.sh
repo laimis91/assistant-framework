@@ -164,6 +164,16 @@ inline_eval_only_roots = {
         { "name" => "evidence_or_gap", "type" => "string", "required" => true }
       ]
     },
+    {
+      "name" => "decisions", "type" => "object[]", "required" => false,
+      "object_fields" => [
+        { "name" => "id", "type" => "string", "required" => true },
+        { "name" => "action", "type" => "enum", "required" => true, "enum_values" => %w[reuse rerun] },
+        { "name" => "original_run_ref", "type" => "string", "required" => true },
+        { "name" => "current_comparison_ref", "type" => "string", "required" => true },
+        { "name" => "independent_review_status", "type" => "enum", "required" => true, "enum_values" => ["required"] }
+      ]
+    },
     { "name" => "workflow_complete", "type" => "enum", "required" => false, "enum_values" => ["--- WORKFLOW COMPLETE ---"] }
   ]
 }

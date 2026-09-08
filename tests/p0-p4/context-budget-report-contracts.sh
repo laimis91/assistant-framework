@@ -60,6 +60,8 @@ if printf '%s\n' "$context_help" | grep -Fq -- "--agent AGENT" \
     && printf '%s\n' "$context_help" | grep -Fq -- "--format json" \
     && printf '%s\n' "$context_help" | grep -Fq -- "--baseline FILE" \
     && printf '%s\n' "$context_help" | grep -Fq -- "--skill-overlay FILE" \
+    && printf '%s\n' "$context_help" | grep -Fq -- "--load-set NAME" \
+    && printf '%s\n' "$context_help" | grep -Fq -- "--skill-tree DIR" \
     && ! printf '%s\n' "$context_help" | grep -Fq -- "hook-profile"; then
     pass
 else
@@ -401,6 +403,198 @@ else
     fail "skill overlay did not replace only the selected root measurement"
 fi
 
+test_start "context-declared: static load sets distinguish declared and worker schema closures"
+reviewer_load_set_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-reviewer-load-set.XXXXXX")"
+workflow_load_set_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-workflow-load-set.XXXXXX")"
+reviewer_default_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-reviewer-default.XXXXXX")"
+reviewer_tree_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-reviewer-tree.XXXXXX")"
+p0p4_register_cleanup "$reviewer_load_set_report" "$workflow_load_set_report" "$reviewer_default_report" "$reviewer_tree_report"
+if HOME="$report_home" \
+    "$context_report" --agent codex --skill assistant-review \
+        --load-set reviewer_context --format json >"$reviewer_load_set_report" 2>"$report_error" \
+    && HOME="$report_home" \
+    "$context_report" --agent codex --skill assistant-review \
+        --format json >"$reviewer_default_report" 2>"$report_error" \
+    && HOME="$report_home" \
+    "$context_report" --agent codex --skill assistant-review \
+        --skill-tree "$FRAMEWORK_DIR/skills/assistant-review" --format json >"$reviewer_tree_report" 2>"$report_error" \
+    && HOME="$report_home" \
+    "$context_report" --agent codex --skill assistant-workflow \
+        --load-set entry --format json >"$workflow_load_set_report" 2>"$report_error" \
+    && jq -e '
+        .selected_load_set_context.name == "reviewer_context"
+        and .selected_load_set_context.measurement_scope == "static_selected_skill_instruction_surface"
+        and .selected_load_set_context.declared_budget_words == 5653
+        and .selected_load_set_context.declared_boundary_closure == {words: 5649, bytes: 45519}
+        and (.selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.selectors_resolved == 1)
+        and (.selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.words > 0)
+        and (.selected_load_set_context.worker_instruction_closure.words ==
+          (.selected_load_set_context.declared_boundary_closure.words
+           + .selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.words))
+      ' "$reviewer_load_set_report" >/dev/null \
+    && jq -e '
+        .selected_load_set_context.name == "entry"
+        and .selected_load_set_context.transitive_worker_additions.worker_return_schema_projection == {selectors_resolved: 0, words: 0, bytes: 0}
+        and .selected_load_set_context.worker_instruction_closure == .selected_load_set_context.declared_boundary_closure
+      ' "$workflow_load_set_report" >/dev/null; then
+    if jq -e --slurpfile canonical "$reviewer_default_report" '
+        .components.selected_skill_initial == $canonical[0].components.selected_skill_initial
+        and .components.selected_skill_entry_boundary == $canonical[0].components.selected_skill_entry_boundary
+        and .totals == $canonical[0].totals
+      ' "$reviewer_tree_report" >/dev/null; then
+        pass
+    else
+        fail "canonical materialized skill tree did not preserve default initial and entry measurements"
+    fi
+else
+    fail "static load-set context did not preserve declared closure or report worker schema additions separately"
+fi
+
+test_start "context-growth: nested required enum shapes increase only the transitive worker projection"
+static_review_tree="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-review-tree.XXXXXX")"
+static_growth_tree="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-growth-tree.XXXXXX")"
+static_tree_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-static-tree.XXXXXX")"
+static_growth_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-growth-report.XXXXXX")"
+p0p4_register_cleanup "$static_review_tree" "$static_growth_tree" "$static_tree_report" "$static_growth_report"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review/." "$static_review_tree"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review/." "$static_growth_tree"
+if ruby - "$static_growth_tree/contracts/handoffs.yaml" <<'RUBY'
+path = ARGV.fetch(0)
+content = File.read(path)
+handoff_start = content.index("  - name: orchestrator_to_reviewer\n")
+return_fields = content.index("    return_fields:\n", handoff_start)
+abort "reviewer return_fields fixture anchor is missing" unless handoff_start && return_fields
+addition = <<'YAML'
+      - name: nested_shape_fixture
+        type: object
+        required: true
+        object_fields:
+          - name: mode
+            type: enum
+            required: true
+            enum_values: [small, large]
+
+YAML
+content.insert(return_fields + "    return_fields:\n".length, addition)
+File.write(path, content)
+RUBY
+then
+    if HOME="$report_home" \
+        "$context_report" --agent codex --skill assistant-review \
+            --skill-tree "$static_review_tree" --load-set reviewer_context --format json >"$static_tree_report" 2>"$report_error" \
+        && HOME="$report_home" \
+        "$context_report" --agent codex --skill assistant-review \
+            --skill-tree "$static_growth_tree" --load-set reviewer_context --format json >"$static_growth_report" 2>"$report_error" \
+        && jq -e --slurpfile baseline "$static_tree_report" '
+            .selected_load_set_context.declared_boundary_closure == $baseline[0].selected_load_set_context.declared_boundary_closure
+            and .selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.words
+              > $baseline[0].selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.words
+            and .selected_load_set_context.worker_instruction_closure.words
+              > $baseline[0].selected_load_set_context.worker_instruction_closure.words
+          ' "$static_growth_report" >/dev/null; then
+        pass
+    else
+        fail "nested worker return shape did not increase only the transitive static metric"
+    fi
+else
+    fail "context growth fixture could not add a nested required enum shape"
+fi
+
+test_start "context-failure: invalid named sets, pointers, and materialized trees fail closed"
+invalid_pointer_tree="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-invalid-pointer.XXXXXX")"
+ambiguous_pointer_tree="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-ambiguous-pointer.XXXXXX")"
+invalid_entry_tree="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-invalid-entry.XXXXXX")"
+missing_enum_tree="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-missing-enum.XXXXXX")"
+empty_enum_tree="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-empty-enum.XXXXXX")"
+missing_enum_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-missing-enum-error.XXXXXX")"
+empty_enum_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-empty-enum-error.XXXXXX")"
+unsafe_tree_link="$(mktemp "${TMPDIR:-/tmp}/context-budget-tree-link.XXXXXX")"
+rm -f "$unsafe_tree_link"
+p0p4_register_cleanup "$invalid_pointer_tree" "$ambiguous_pointer_tree" "$invalid_entry_tree" "$missing_enum_tree" "$empty_enum_tree" "$missing_enum_error" "$empty_enum_error" "$unsafe_tree_link"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review/." "$invalid_pointer_tree"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review/." "$ambiguous_pointer_tree"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review/." "$invalid_entry_tree"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review/." "$missing_enum_tree"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review/." "$empty_enum_tree"
+ln -s "$static_review_tree" "$unsafe_tree_link"
+invalid_pointer_ready=false
+ambiguous_pointer_ready=false
+if ruby - "$invalid_pointer_tree/contracts/handoffs.yaml" <<'RUBY'
+require "yaml"
+
+path = ARGV.fetch(0)
+document = YAML.safe_load(File.read(path), aliases: false)
+bundle = document.fetch("dispatch_context_bundles").find { |entry| entry["name"] == "fresh_reviewer_context" }
+bundle.fetch("worker_return_schema_selector")["return_schema_ref"] = "handoffs.missing.return_fields"
+File.write(path, YAML.dump(document))
+RUBY
+then
+    invalid_pointer_ready=true
+fi
+if ruby - "$ambiguous_pointer_tree/contracts/handoffs.yaml" <<'RUBY'
+require "yaml"
+
+path = ARGV.fetch(0)
+document = YAML.safe_load(File.read(path), aliases: false)
+handoff = document.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
+document.fetch("handoffs") << handoff.dup
+File.write(path, YAML.dump(document))
+RUBY
+then
+    ambiguous_pointer_ready=true
+fi
+invalid_entry_ready=false
+if ruby - "$invalid_entry_tree/contracts/index.yaml" <<'RUBY'
+require "yaml"
+
+path = ARGV.fetch(0)
+document = YAML.safe_load(File.read(path), aliases: false)
+document.fetch("load_sets").fetch("entry").fetch("selectors").first["names"] = ["missing_entry_field"]
+File.write(path, YAML.dump(document))
+RUBY
+then
+    invalid_entry_ready=true
+fi
+enum_fixture_ready=false
+if ruby - "$missing_enum_tree/contracts/handoffs.yaml" "$empty_enum_tree/contracts/handoffs.yaml" <<'RUBY'
+missing_path, empty_path = ARGV
+def mutate_selected_status(path, replacement)
+  content = File.read(path)
+  start = content.index("  - name: orchestrator_to_reviewer\n")
+  finish = content.index(/^  - name: /, start + 1) || content.length
+  abort "reviewer handoff fixture anchor is missing" unless start
+  segment = content[start...finish]
+  return_start = segment.index("    return_fields:\n")
+  abort "reviewer return-fields fixture anchor is missing" unless return_start
+  prefix = segment[0...return_start]
+  return_segment = segment[return_start..]
+  pattern = /(?<=^      - name: status\n        type: enum\n        required: true\n)        enum_values: \[[^\n]*\]\n/m
+  abort "selected status enum fixture anchor is missing or ambiguous" unless return_segment.scan(pattern).length == 1
+  content[start...finish] = prefix + return_segment.sub(pattern, replacement)
+  File.write(path, content)
+end
+mutate_selected_status(missing_path, "")
+mutate_selected_status(empty_path, "        enum_values: []\n")
+RUBY
+then
+    enum_fixture_ready=true
+fi
+if [[ "$invalid_pointer_ready" == true && "$ambiguous_pointer_ready" == true && "$invalid_entry_ready" == true && "$enum_fixture_ready" == true ]] \
+    && ! HOME="$report_home" "$context_report" --agent codex --skill assistant-review --load-set missing --format json >"$failure_output" 2>"$failure_error" \
+    && ! HOME="$report_home" "$context_report" --agent codex --skill assistant-review --skill-tree "$invalid_pointer_tree" --load-set reviewer_context --format json >"$failure_output" 2>"$failure_error" \
+    && ! HOME="$report_home" "$context_report" --agent codex --skill assistant-review --skill-tree "$ambiguous_pointer_tree" --load-set reviewer_context --format json >"$failure_output" 2>"$failure_error" \
+    && ! HOME="$report_home" "$context_report" --agent codex --skill assistant-review --skill-tree "$unsafe_tree_link" --load-set reviewer_context --format json >"$failure_output" 2>"$failure_error" \
+    && ! HOME="$report_home" "$context_report" --agent codex --skill assistant-review --skill-tree "$invalid_entry_tree" --format json >"$failure_output" 2>"$failure_error" \
+    && ! HOME="$report_home" "$context_report" --agent codex --skill assistant-review --skill-tree "$missing_enum_tree" --load-set reviewer_context --format json >"$failure_output" 2>"$missing_enum_error" \
+    && ! HOME="$report_home" "$context_report" --agent codex --skill assistant-review --skill-tree "$empty_enum_tree" --load-set reviewer_context --format json >"$failure_output" 2>"$empty_enum_error" \
+    && grep -Fq 'worker return field status enum_values is malformed' "$missing_enum_error" \
+    && grep -Fq 'worker return field status enum_values is malformed' "$empty_enum_error" \
+    && ! HOME="$report_home" "$context_report" --agent codex --skill assistant-review --skill-tree "$static_review_tree" --skill-overlay "$overlay_skill" --format json >"$failure_output" 2>"$failure_error"; then
+    pass
+else
+    fail "unsafe, missing, ambiguous, or incompatible static context inputs emitted a partial report"
+fi
+
 test_start "workflow kernel candidate meets the static promotion budget"
 kernel_skill="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/SKILL.md"
 kernel_manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
@@ -548,7 +742,7 @@ expected_components='{"baseline":{"project_agents":{"words":254,"bytes":2186},"g
 if (source "$context_evidence_lib"; \
     hash_file() { printf '%064d\n' 0; }; \
     context_budget_build_evidence \
-        "$component_reporter" "$component_baseline_overlay" "$component_candidate_overlay" \
+        "$component_reporter" root_skill_overlay "$component_baseline_overlay" "$component_candidate_overlay" \
         "$(printf '%064d' 1)" "$(printf '%064d' 2)" "$component_evidence" \
     && context_budget_validate_manifest "$kernel_manifest" "$component_evidence" \
         2>"$component_error"); then

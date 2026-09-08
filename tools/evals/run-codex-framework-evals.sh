@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/lib/context-budget-evidence.sh"
 FIXTURE="$REPO_ROOT/docs/evals/framework-instruction-cases.json"
 SYNTHETIC_FIXTURE_REF="docs/evals/fixtures/seeded-code-review-regressions"
 SYNTHETIC_FIXTURE_DIR="$REPO_ROOT/$SYNTHETIC_FIXTURE_REF"
-ADAPTER_VERSION="codex-framework-eval-v6"
+ADAPTER_VERSION="codex-framework-eval-v7"
 MODE="plan"
 RESUME=false
 MODEL="gpt-5.6-sol"
@@ -18,6 +18,12 @@ BASELINE_VARIANT=""
 CANDIDATE_VARIANT=""
 CANDIDATE_MANIFEST=""
 CANDIDATE_MANIFEST_HASH=""
+BASELINE_VARIANT_MODE=""
+CANDIDATE_VARIANT_MODE=""
+BASELINE_VARIANT_SOURCE=""
+CANDIDATE_VARIANT_SOURCE=""
+BASELINE_MATERIALIZATION='{}'
+CANDIDATE_MATERIALIZATION='{}'
 CASES="all"
 REPEATS=1
 RUN_TIMEOUT_SECONDS=600
@@ -232,7 +238,7 @@ materialized_candidate_skill_sha256() {
         return 0
     fi
     temporary="$(mktemp -d "${TMPDIR:-/tmp}/workflow-kernel-activation.XXXXXX")" || return 1
-    materialize_variant "$candidate_overlay" "$temporary" || { rm -rf "$temporary"; return 1; }
+    materialize_variant "$CANDIDATE_VARIANT_MODE" "$CANDIDATE_VARIANT_SOURCE" "$temporary" || { rm -rf "$temporary"; return 1; }
     result="$(hash_file "$temporary/SKILL.md")"
     rm -rf "$temporary"
     printf '%s\n' "$result"
@@ -847,21 +853,55 @@ resolve_overlay_file() {
     printf '%s\n' "$overlay"
 }
 
+resolve_variant_input() {
+    local supplied="$1" resolved overlay
+    if [[ -f "$supplied" && ! -L "$supplied" ]]; then
+        resolved="$(cd "$(dirname "$supplied")" && pwd -P)/$(basename "$supplied")"
+        printf 'hashed_instruction_overlay\t%s\n' "$resolved"
+        return 0
+    fi
+    overlay="$(resolve_overlay_file "$supplied")"
+    printf 'root_skill_overlay\t%s\n' "$overlay"
+}
+
+canonical_base_source_sha256() {
+    local directory="$REPO_ROOT/skills/assistant-workflow" inventory="" file relative digest
+    while IFS= read -r file; do
+        relative="${file#"$directory"/}"
+        digest="$(hash_file "$file")"
+        inventory+="$relative $digest"$'\n'
+    done < <(find "$directory" -path "$directory/evals" -prune -o -type f -print | LC_ALL=C sort)
+    hash_text "$inventory"
+}
+
 materialize_variant() {
-    local overlay_file="$1"
-    local destination="$2"
+    local mode="$1" source="$2" destination="$3"
     local entry
-    mkdir -p "$destination"
+    if [[ "$mode" == "hashed_instruction_overlay" ]]; then
+        python3 "$SCRIPT_DIR/lib/instruction-overlay.py" materialize \
+            --manifest "$source" \
+            --base-skill-tree "$REPO_ROOT/skills/assistant-workflow" \
+            --destination "$destination" || return 1
+        while IFS= read -r instruction_file; do
+            sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file" || return 1
+            rm -f "${instruction_file}.bak" || return 1
+        done < <(find "$destination" -type f \( \
+            -name '*.md' -o -name '*.yaml' -o -name '*.yml' -o -name '*.json' \
+            -o -name '*.conf' -o -name '*.toml' \))
+        return 0
+    fi
+    mkdir -p "$destination" || return 1
     while IFS= read -r entry; do
-        cp -R "$entry" "$destination/"
+        cp -R "$entry" "$destination/" || return 1
     done < <(find "$REPO_ROOT/skills/assistant-workflow" -mindepth 1 -maxdepth 1 ! -name evals -print | LC_ALL=C sort)
-    cp "$overlay_file" "$destination/SKILL.md"
+    cp "$source" "$destination/SKILL.md" || return 1
     while IFS= read -r instruction_file; do
-        sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file"
-        rm -f "${instruction_file}.bak"
+        sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file" || return 1
+        rm -f "${instruction_file}.bak" || return 1
     done < <(find "$destination" -type f \( \
         -name '*.md' -o -name '*.yaml' -o -name '*.yml' -o -name '*.json' \
         -o -name '*.conf' -o -name '*.toml' \))
+    return 0
 }
 
 hash_directory() {
@@ -1284,6 +1324,8 @@ write_plan() {
         --arg candidate_sha256 "$candidate_hash" \
         --arg candidate_materialized_skill_sha256 "$CANDIDATE_MATERIALIZED_SKILL_SHA256" \
         --arg candidate_manifest_sha256 "$CANDIDATE_MANIFEST_HASH" \
+        --argjson baseline_materialization "$BASELINE_MATERIALIZATION" \
+        --argjson candidate_materialization "$CANDIDATE_MATERIALIZATION" \
         --arg context_budget_evidence_sha256 "$CONTEXT_BUDGET_EVIDENCE_HASH" \
         --arg activation_observations_sha256 "$ACTIVATION_OBSERVATIONS_SHA256" \
         --argjson activation_observation "$ACTIVATION_OBSERVATION_SUMMARY" \
@@ -1317,8 +1359,8 @@ write_plan() {
         model_catalog_timeout_seconds: $model_catalog_timeout_seconds,
         max_incomplete_pairs: 1,
         fixture_sha256: $fixture_sha256,
-        baseline_variant: {instruction_sha256: $baseline_sha256},
-        candidate_variant: {instruction_sha256: $candidate_sha256,materialized_skill_sha256:$candidate_materialized_skill_sha256},
+        baseline_variant: {instruction_sha256: $baseline_sha256,materialization:$baseline_materialization},
+        candidate_variant: {instruction_sha256: $candidate_sha256,materialized_skill_sha256:$candidate_materialized_skill_sha256,materialization:$candidate_materialization},
         candidate_manifest_sha256: (if $candidate_manifest_sha256 == "" then null else $candidate_manifest_sha256 end),
         context_budget_evidence_sha256: $context_budget_evidence_sha256,
         context_budget_evidence: $context_budget_evidence[0],
@@ -3535,11 +3577,15 @@ trap cleanup_all EXIT
 trap 'handle_signal 130' INT
 trap 'handle_signal 143' TERM
 
-baseline_overlay="$(resolve_overlay_file "$BASELINE_VARIANT")"
-candidate_overlay="$(resolve_overlay_file "$CANDIDATE_VARIANT")"
-if [[ -f "$(dirname "$candidate_overlay")/manifest.json" ]]; then
-    CANDIDATE_MANIFEST="$(dirname "$candidate_overlay")/manifest.json"
+IFS=$'\t' read -r BASELINE_VARIANT_MODE BASELINE_VARIANT_SOURCE < <(resolve_variant_input "$BASELINE_VARIANT")
+IFS=$'\t' read -r CANDIDATE_VARIANT_MODE CANDIDATE_VARIANT_SOURCE < <(resolve_variant_input "$CANDIDATE_VARIANT")
+if [[ "$CANDIDATE_VARIANT_MODE" == "root_skill_overlay" && -f "$(dirname "$CANDIDATE_VARIANT_SOURCE")/manifest.json" ]]; then
+    CANDIDATE_MANIFEST="$(dirname "$CANDIDATE_VARIANT_SOURCE")/manifest.json"
     CANDIDATE_MANIFEST_HASH="$(hash_file "$CANDIDATE_MANIFEST")"
+fi
+if [[ "$BASELINE_VARIANT_MODE" == "hashed_instruction_overlay" || "$CANDIDATE_VARIANT_MODE" == "hashed_instruction_overlay" ]]; then
+    command -v python3 >/dev/null 2>&1 || die "python3 is required for hashed instruction overlay variants."
+    command -v ruby >/dev/null 2>&1 || die "ruby is required for hashed instruction overlay context measurement."
 fi
 validate_candidate_manifest
 validate_synthetic_fixture
@@ -3554,16 +3600,39 @@ chmod 700 "$WORK_ROOT"
 snapshot_activation_observations
 baseline_dir="$WORK_ROOT/baseline"
 candidate_dir="$WORK_ROOT/candidate"
-materialize_variant "$baseline_overlay" "$baseline_dir"
-materialize_variant "$candidate_overlay" "$candidate_dir"
+if [[ "$BASELINE_VARIANT_MODE" == "hashed_instruction_overlay" ]]; then
+    BASELINE_MATERIALIZATION="$(materialize_variant "$BASELINE_VARIANT_MODE" "$BASELINE_VARIANT_SOURCE" "$baseline_dir")" \
+        || die "Could not safely materialize the baseline instruction overlay."
+else
+    materialize_variant "$BASELINE_VARIANT_MODE" "$BASELINE_VARIANT_SOURCE" "$baseline_dir" \
+        || die "Could not materialize the baseline root skill overlay."
+    BASELINE_MATERIALIZATION="$(jq -cn --arg base_source_sha256 "$(canonical_base_source_sha256)" '{mode:"root_skill_overlay",source_manifest_sha256:null,base_source_sha256:$base_source_sha256,overlay_file_count:1}')"
+fi
+if [[ "$CANDIDATE_VARIANT_MODE" == "hashed_instruction_overlay" ]]; then
+    CANDIDATE_MATERIALIZATION="$(materialize_variant "$CANDIDATE_VARIANT_MODE" "$CANDIDATE_VARIANT_SOURCE" "$candidate_dir")" \
+        || die "Could not safely materialize the candidate instruction overlay."
+else
+    materialize_variant "$CANDIDATE_VARIANT_MODE" "$CANDIDATE_VARIANT_SOURCE" "$candidate_dir" \
+        || die "Could not materialize the candidate root skill overlay."
+    CANDIDATE_MATERIALIZATION="$(jq -cn --arg base_source_sha256 "$(canonical_base_source_sha256)" '{mode:"root_skill_overlay",source_manifest_sha256:null,base_source_sha256:$base_source_sha256,overlay_file_count:1}')"
+fi
 baseline_hash="$(hash_directory "$baseline_dir")"
 candidate_hash="$(hash_directory "$candidate_dir")"
 CANDIDATE_MATERIALIZED_SKILL_SHA256="$(hash_file "$candidate_dir/SKILL.md")"
 fixture_hash="$(hash_file "$FIXTURE")"
 CONTEXT_BUDGET_EVIDENCE_FILE="$WORK_ROOT/context-budget-evidence.json"
+if [[ "$BASELINE_VARIANT_MODE" == "hashed_instruction_overlay" || "$CANDIDATE_VARIANT_MODE" == "hashed_instruction_overlay" ]]; then
+    context_measurement_mode="hashed_instruction_overlay"
+    context_baseline_input="$baseline_dir"
+    context_candidate_input="$candidate_dir"
+else
+    context_measurement_mode="root_skill_overlay"
+    context_baseline_input="$baseline_dir/SKILL.md"
+    context_candidate_input="$candidate_dir/SKILL.md"
+fi
 context_budget_build_evidence \
     "$REPO_ROOT/tools/context-budget-report.sh" \
-    "$baseline_dir/SKILL.md" "$candidate_dir/SKILL.md" "$baseline_hash" "$candidate_hash" \
+    "$context_measurement_mode" "$context_baseline_input" "$context_candidate_input" "$baseline_hash" "$candidate_hash" \
     "$CONTEXT_BUDGET_EVIDENCE_FILE" \
     || die "Could not generate fresh context-budget evidence from the exact baseline and candidate snapshots."
 context_budget_validate_evidence_structure "$CONTEXT_BUDGET_EVIDENCE_FILE" \

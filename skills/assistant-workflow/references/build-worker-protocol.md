@@ -219,12 +219,17 @@ Review phase after Build completes.
 After implementation for a slice is done, verify the slice against its
 Decompose criteria before moving on:
 
-1. In `bounded_executor`, the executor executes the slice verification argv
-   directly, with item 0 as the executable and each remaining item as one
-   literal argument; never reconstruct a shell command. Then run
-   relevant focused checks. Dispatch Builder/Tester only when
-   `build_execution_lane=separated_workers`; direct fallback performs the same
-   selected-lane verification responsibility.
+1. In `bounded_executor`, the executor either executes the slice verification
+   argv directly or reuses a completed passing verification only after comparing
+   exact argv and cwd, complete passing result/log, relevant
+   source/test/config/dependency state, toolchain and relevant non-secret
+   environment, and covered acceptance obligations. When executing argv, item 0
+   is the executable and each remaining item is one literal argument; never
+   reconstruct a shell command. Then run relevant focused checks. Record the
+   original run and current comparison in the existing validation evidence, with
+   the decision to reuse; do not claim a newly executed verification. Dispatch
+   Builder/Tester only when `build_execution_lane=separated_workers`; direct
+   fallback performs the same selected-lane verification responsibility.
 2. Check each acceptance criterion from the slice manifest independently; mark
    pass/fail with command, result, or inspection evidence.
 3. Record verification evidence in the task journal slice verification ledger,
@@ -243,9 +248,17 @@ Decompose criteria before moving on:
 7. Mark the slice `VERIFIED` only after all criteria pass and evidence is
    recorded.
 
-Only proceed to the next slice after the current one is fully verified.
+Unknown identity, freshness, or coverage requires rerun. Rerun when argv or cwd
+changes; relevant production, test, config, dependency, toolchain, or
+environment input changes; the prior run failed, was partial, or was skipped;
+the user explicitly requests a fresh run; mutable external state is involved;
+new integration coverage is required; or source changes after a fix. A supported
+unrelated-doc change may reuse evidence only with recorded input-boundary
+evidence showing that the change is outside the verification inputs. Only
+proceed to the next slice after the current one is fully verified.
 
 After all slices are verified, run integration tests across slice boundaries.
+Per-slice evidence does not satisfy new integration coverage.
 If implementation reveals a plan problem, print `>> PLAN DEVIATION DETECTED`,
 record `pivot_restart_decision.reapproval_required=true` when scope/files/
 behavior/risk/verification/acceptance changes, and wait for approval before
