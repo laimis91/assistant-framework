@@ -952,245 +952,11 @@ EOF
 }
 
 research_optional_verified_urls_controls() {
-    node - "$FRAMEWORK_DIR" "$research_evals" <<'NODE'
-const fs = require("fs");
-const vm = require("vm");
-const root = process.argv[2];
-const fixture = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
-const clone = value => JSON.parse(JSON.stringify(value));
-const extract = path => fs.readFileSync(path, "utf8").split("<<'NODE'\n")[1].split("\nNODE\n")[0];
-const privateProgram = extract(`${root}/tests/p0-p4/lib/assistant-research-fixtures.sh`).split('if (operation === "canonical")')[0];
-const officialProgram = new vm.Script(extract(`${root}/tools/evals/lib/skill-eval-semantic-validators.sh`));
-const boundUrl = "https://www.iana.org/optional-verified-url";
-const modes = [
-  ["delegated", "five-lens-decision-briefing-uses-storm-style-workflow"],
-  ["sequential_fallback", "five-lens-sequential-fallback-preserves-process-evidence"],
-  ["delegated_peer_fallback", "five-lens-delegated-lenses-sequential-peer-fallback"],
-  ["quick_normalized", "five-lens-quick-normalizes-to-standard"],
-  ["retained_follow_ups", "five-lens-retains-all-material-follow-ups"]
-];
-const controls = [
-  ["omitted", true], ["empty", true, []], ["bound-public-url", true, [boundUrl]],
-  ["unbound-public-url", false, ["https://www.iana.org/unbound-optional-url"]],
-  ["null", false, null], ["string", false, boundUrl], ["object", false, {}],
-  ["non-string-entry", false, [42]], ["mixed-non-string-entry", false, [boundUrl, null]]
-];
-function contextFor(argv, errors, response) {
-  return vm.createContext({
-    require: name => name === "fs" ? {readFileSync: path => {
-      if (path === "fixture") return JSON.stringify(fixture);
-      if (path === "response") return JSON.stringify(response);
-      throw new Error(`Unexpected validator read: ${path}`);
-    }} : require(name),
-    URL, process: {argv, exitCode: 0}, console: {error: message => errors.push(message)}
-  });
-}
-function evaluate(response, caseId, api, privateErrors) {
-  privateErrors.length = 0;
-  api.refreshDerived(response);
-  const privateAccepted = api.validate(response);
-  const officialErrors = [];
-  const context = contextFor(["node", "optional-url-control", "response", "fixture", caseId], officialErrors, response);
-  officialProgram.runInContext(context, {timeout: 10000});
-  return {privateAccepted, officialAccepted: context.process.exitCode === 0, privateErrors: [...privateErrors], officialErrors};
-}
-const failures = [];
-let checks = 0;
-for (const [mode, caseId] of modes) {
-  const fixtureCase = fixture.cases.find(row => row.id === caseId);
-  const privateErrors = [];
-  const context = contextFor(["node", "optional-url-control", "unused", "response", "fixture", caseId], privateErrors);
-  vm.runInContext(`${privateProgram}\nglobalThis.api = {build, refreshDerived, validate};`, context, {timeout: 10000});
-  const api = context.api;
-  const base = clone(api.build(mode, fixtureCase.machine_expectations.required_substrings.join("\n"), JSON.stringify(fixtureCase.semantic_context)));
-  // The source-empty fallback also needs a real finding so the optional field is exercised.
-  base.findings = [{finding: `${fixtureCase.semantic_context.required_topic_terms.join("; ")}: Optional verified URL control.`, confidence: "low", sources: ["source:optional-verified-url"]}];
-  base.five_lens_process_evidence.peer_review_input_binding.verified_source_evidence.push({
-    claim: "Bound optional URL evidence.", source: "source:optional-verified-url", verification_method: "public_url",
-    verification_reference: boundUrl, verified_url: boundUrl, verification_detail: "Retained static URL-binding control."
-  });
-  for (const [name, expected, value] of controls) {
-    const response = clone(base);
-    if (name !== "omitted") response.findings[0].verified_urls = clone(value);
-    const actual = evaluate(response, caseId, api, privateErrors);
-    const reasonsMatch = expected || (actual.privateErrors.length === 1 && actual.privateErrors[0] === "artifacts:findings"
-      && actual.officialErrors.length === 1 && actual.officialErrors[0] === "five-lens semantic validation: final artifacts: finding shape");
-    const passed = actual.privateAccepted === expected && actual.officialAccepted === expected && reasonsMatch;
-    console.log(JSON.stringify({mode, control: name, expected, ...actual, passed}));
-    if (!passed) failures.push(`${mode}/${name}`);
-    checks += 1;
-  }
-}
-console.log(JSON.stringify({checks, validatorChecks: checks * 2, failures}));
-process.exitCode = failures.length ? 1 : 0;
-NODE
+    node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs" --optional-urls "$FRAMEWORK_DIR" "$research_evals"
 }
 
 research_completion_validator_controls() {
-    node - "$FRAMEWORK_DIR" "$research_evals" "$1" <<'NODE'
-const fs = require("fs");
-const vm = require("vm");
-const root = process.argv[2];
-const fixture = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
-const group = process.argv[4];
-const clone = value => JSON.parse(JSON.stringify(value));
-const extract = path => fs.readFileSync(path, "utf8").split("<<'NODE'\n")[1].split("\nNODE\n")[0];
-const privateProgram = extract(`${root}/tests/p0-p4/lib/assistant-research-fixtures.sh`).split('if (operation === "canonical")')[0];
-const officialProgram = new vm.Script(extract(`${root}/tools/evals/lib/skill-eval-semantic-validators.sh`));
-const modes = [
-  ["delegated", "five-lens-decision-briefing-uses-storm-style-workflow"],
-  ["sequential_fallback_revise", "five-lens-sequential-fallback-preserves-process-evidence"],
-  ["delegated_peer_fallback", "five-lens-delegated-lenses-sequential-peer-fallback"],
-  ["quick_normalized", "five-lens-quick-normalizes-to-standard"],
-  ["retained_follow_ups", "five-lens-retains-all-material-follow-ups"]
-];
-const failures = [];
-let checks = 0;
-function contextFor(argv, errors, response) {
-  return vm.createContext({
-    require: name => name === "fs" ? {readFileSync: path => {
-      if (path === "fixture") return JSON.stringify(fixture);
-      if (path === "response") return JSON.stringify(response);
-      throw new Error(`Unexpected validator read: ${path}`);
-    }} : require(name),
-    URL, process: {argv, exitCode: 0}, console: {error: message => errors.push(...message.split("\n"))}
-  });
-}
-function evaluate(mode, name, expected, response, caseId, privateReasons = [], officialReasons = []) {
-  const privateErrors = [];
-  const context = contextFor(["node", "completion-control", "unused", "response", "fixture", caseId], privateErrors);
-  vm.runInContext(`${privateProgram}\nglobalThis.api = {refreshDerived, validate};`, context, {timeout: 10000});
-  context.api.refreshDerived(response);
-  const privateAccepted = context.api.validate(response);
-  const officialErrors = [];
-  const officialContext = contextFor(["node", "completion-control", "response", "fixture", caseId], officialErrors, response);
-  officialProgram.runInContext(officialContext, {timeout: 10000});
-  const officialAccepted = officialContext.process.exitCode === 0;
-  const passed = privateAccepted === expected && officialAccepted === expected
-    && JSON.stringify(privateErrors) === JSON.stringify(privateReasons)
-    && JSON.stringify(officialErrors) === JSON.stringify(officialReasons);
-  console.log(JSON.stringify({group, mode, control: name, expected, privateAccepted, officialAccepted, privateErrors, officialErrors, passed}));
-  if (!passed) failures.push(`${mode}/${name}`);
-  checks += 1;
-}
-function build(mode, caseId) {
-  const row = fixture.cases.find(item => item.id === caseId);
-  const context = contextFor(["node", "completion-control", "unused"], []);
-  vm.runInContext(`${privateProgram}\nglobalThis.buildResponse = build;`, context, {timeout: 10000});
-  return clone(context.buildResponse(mode, row.machine_expectations.required_substrings.join("\n"), JSON.stringify(row.semantic_context)));
-}
-function setVerdict(response, verdict) {
-  const peer = response.peer_review, evidence = response.five_lens_process_evidence;
-  peer.verdict = verdict;
-  peer.status = verdict === "accepted" ? "DONE" : "DONE_WITH_CONCERNS";
-  evidence.peer_review_input_binding.initial_synthesis = clone(response.synthesis_briefing);
-  peer.required_revisions = [];
-  delete peer.revision_disposition_id;
-  delete peer.revision_disposition;
-  delete evidence.peer_review_revision_disposition_id;
-  if (verdict !== "revise") return;
-  evidence.peer_review_input_binding.initial_synthesis.executive_summary += " Initial draft pending review.";
-  peer.required_revisions = ["Calibrate the initial claim"];
-  peer.revision_disposition_id = evidence.peer_review_revision_disposition_id = "revision-control";
-  peer.revision_disposition = [{required_revision: peer.required_revisions[0], outcome: "claim_downgraded", closure_evidence: "Final claim calibrated.", resulting_synthesis_digest: evidence.final_synthesis_digest}];
-}
-function peerControls(mode, caseId) {
-  const base = build(mode, caseId);
-  for (const verdict of ["accepted", "accepted_with_concerns", "revise"]) {
-    const valid = clone(base);
-    setVerdict(valid, verdict);
-    evaluate(mode, verdict, true, valid, caseId);
-    if (verdict === "revise") continue;
-    for (const [owner, field, value] of [
-      ["peer_review", "revision_disposition_id", "unexpected-closure"], ["peer_review", "revision_disposition", []],
-      ["five_lens_process_evidence", "peer_review_revision_disposition_id", "unexpected-closure"],
-      ["peer_review", "revision_disposition_id", null], ["peer_review", "revision_disposition", null],
-      ["five_lens_process_evidence", "peer_review_revision_disposition_id", null]
-    ]) {
-      const response = clone(valid);
-      response[owner][field] = value;
-      const officialReasons = owner === "peer_review" ? ["peer review: accepted revision closure"] : [];
-      officialReasons.push("peer review: non-revise revision closure leakage");
-      evaluate(mode, `${verdict}/${field}/${value === null ? "null" : "present"}`, false, response, caseId,
-        ["peer:status-and-revision-truth-table"], [`five-lens semantic validation: ${officialReasons.join("; ")}`]);
-    }
-  }
-}
-if (group === "peer") modes.forEach(([mode, caseId]) => peerControls(mode, caseId));
-if (group === "capacity") {
-  const caseId = modes[1][1];
-  const response = build("sequential_fallback", caseId);
-  for (const [name, value, expected] of [["one", 1, true], ["two", 2, true], ["max-safe", 9007199254740991, true],
-    ["fraction-one-half", 1.5, false], ["fraction-half", 0.5, false], ["string", "2", false],
-    ["zero", 0, false], ["overflow", 9007199254740992, false]]) {
-    fixture.cases.find(row => row.id === caseId).semantic_context.adapter_context.max_concurrent_lens_workers = value;
-    evaluate("sequential_fallback", name, expected, clone(response), caseId,
-      expected ? [] : ["semantic-context:fixture-shape"], expected ? [] : ["five-lens semantic validation: semantic context: required shape"]);
-  }
-}
-if (group === "findings") {
-  const caseId = modes[1][1];
-  const base = build("sequential_fallback", caseId);
-  evaluate("sequential_fallback", "evidence-empty-with-gaps", true, clone(base), caseId);
-  const findingsReasons = [["artifacts:findings"], ["five-lens semantic validation: final artifacts: findings required unless evidence-empty completion has gaps"]];
-  const firstResult = response => response.five_lens_process_evidence.accepted_lens_results[0];
-  const check = (name, expected, mutate, reasons = [[], []]) => {
-    const response = clone(base);
-    mutate(response, firstResult(response));
-    evaluate("sequential_fallback", name, expected, response, caseId, ...reasons);
-  };
-  const noneNeeded = {decision: "none_needed", answer_or_gap: "The retained research index supports no additional material follow-up.", sources_or_verified_urls: ["source:research-index"], evidence_status: "source_backed", gaps: []};
-  const optionalFinding = {finding: "The research index documents collection coverage.", confidence: "low", sources: noneNeeded.sources_or_verified_urls};
-  check("sourced-none-needed-without-finding", true, (response, result) => { result.follow_ups = [clone(noneNeeded)]; });
-  check("sourced-none-needed-with-optional-finding", true, (response, result) => {
-    result.follow_ups = [clone(noneNeeded)];
-    response.findings = [clone(optionalFinding)];
-  });
-  for (const evidenceStatus of ["inference_only", "unresolved"]) {
-    check(`source-empty-none-needed/${evidenceStatus}`, true, (response, result) => { result.follow_ups[0].evidence_status = evidenceStatus; });
-    check(`source-empty-material-follow-up/${evidenceStatus}`, true, (response, result) => {
-      Object.assign(result.follow_ups[0], {decision: "follow_up", question: "Which source remains unconfirmed?", evidence_status: evidenceStatus});
-    });
-  }
-  check("empty-findings-without-top-level-gaps", false, response => { response.gaps = []; }, findingsReasons);
-  check("sourced-main-result-without-finding", false, (response, result) => {
-    result.sources_or_verified_urls = ["source:main-result"];
-    result.evidence_status = "source_backed";
-  }, findingsReasons);
-  const followUpReasons = (privateReason, officialReason) => [[privateReason], [`five-lens semantic validation: accepted result practitioner${officialReason}`]];
-  const exclusiveReasons = followUpReasons("follow-ups:exclusive-none-needed", ": follow-up none_needed exclusivity");
-  check("none-needed-mixed-with-material-follow-up", false, (response, result) => {
-    result.follow_ups.push({...clone(result.follow_ups[0]), decision: "follow_up", question: "Which source remains unconfirmed?"});
-  }, exclusiveReasons);
-  check("duplicate-none-needed", false, (response, result) => { result.follow_ups.push(clone(result.follow_ups[0])); }, exclusiveReasons);
-  check("none-needed-malformed-own-gap", false, (response, result) => { result.follow_ups[0].gaps = [""]; },
-    followUpReasons("follow-up:own-gaps", " follow-up: nonblank gaps array required"));
-  for (const decision of ["none_needed", "follow_up"]) {
-    const setDecision = result => {
-      result.follow_ups[0].decision = decision;
-      if (decision === "follow_up") result.follow_ups[0].question = "Which source remains unconfirmed?";
-    };
-    check(`${decision}/empty-sources-without-own-gap`, false, (response, result) => {
-      setDecision(result);
-      result.follow_ups[0].gaps = [];
-    }, followUpReasons("sources:follow-up", " follow-up: empty non-source evidence requires a gap"));
-    check(`${decision}/source-backed-without-source`, false, (response, result) => {
-      setDecision(result);
-      result.follow_ups[0].evidence_status = "source_backed";
-      response.findings = [{finding: "The retained fixture documents decision evidence.", confidence: "low", sources: ["source:research-corpus:summary"]}];
-    }, followUpReasons("sources:follow-up", " follow-up: source-backed result requires a source"));
-  }
-  const followUp = {decision: "follow_up", question: "What independent source changes this decision?", answer_or_gap: "Independent evidence supports further investigation.", sources_or_verified_urls: ["source:material-follow-up"], evidence_status: "source_backed", gaps: []};
-  base.five_lens_process_evidence.accepted_lens_results[0].follow_ups = [followUp];
-  base.findings = [{finding: "The material follow-up supports further investigation.", confidence: "low", sources: followUp.sources_or_verified_urls}];
-  evaluate("sequential_fallback", "material-follow-up-with-finding", true, clone(base), caseId);
-  base.findings = [];
-  evaluate("sequential_fallback", "material-follow-up-without-finding", false, base, caseId,
-    ...findingsReasons);
-}
-console.log(JSON.stringify({group, checks, validatorChecks: checks * 2, failures}));
-process.exitCode = failures.length ? 1 : 0;
-NODE
+    node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs" --completion "$FRAMEWORK_DIR" "$research_evals" "$1"
 }
 
 research_fixture_capacity_controls() {
@@ -3243,6 +3009,27 @@ if research_optional_verified_urls_controls; then
     pass
 else
     fail "assistant-research optional verified URL controls failed"
+fi
+
+test_start "assistant-research import validation keeps caller state isolated"
+if node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs" --isolation "$FRAMEWORK_DIR" "$research_evals"; then
+    pass
+else
+    fail "assistant-research import isolation controls failed"
+fi
+
+test_start "assistant-research CLI preserves fixture and response failure diagnostics"
+if node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs" --cli-compat "$FRAMEWORK_DIR" "$research_evals"; then
+    pass
+else
+    fail "assistant-research CLI compatibility controls failed"
+fi
+
+test_start "assistant-research direct controls account for production misclassifications"
+if node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs" --counter-accounting "$FRAMEWORK_DIR" "$research_evals" capacity; then
+    pass
+else
+    fail "assistant-research direct-control classification accounting failed"
 fi
 
 test_start "assistant-research accepted peers exclude all revision closure metadata"
