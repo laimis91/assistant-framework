@@ -74,6 +74,20 @@ Node.js 22 and npm:
 The suite fails clearly when Node, npm, or this locked dependency is absent; it
 never installs packages during validation.
 
+For a quick response-builder completeness check, run:
+
+```bash
+bash tests/p0-p4/skill-eval-contracts.sh --fixtures-only
+bash tests/p0-p4/progressive-discovery-contracts.sh --fixtures-only
+```
+
+Both suites also run this preflight automatically before semantic grading. It
+uses the actual builders in fresh temporary directories and rejects builder
+failures, missing/blank responses, and structured responses containing invalid
+JSON or multiple JSON values. It checks completeness and JSON syntax; the full
+suites still verify semantics and mutation rejection. `--fixtures-only` is for
+direct suite invocation and does not skip checks in the aggregate runner.
+
 Validate the fixture before using it:
 
 ```bash

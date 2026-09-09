@@ -35,6 +35,7 @@ source "$P0P4_SUITE_DIR/domain-rubrics-contracts.sh"
 source "$P0P4_SUITE_DIR/qa-evaluator-contracts.sh"
 source "$P0P4_SUITE_DIR/review-loop-cap-contracts.sh"
 source "$P0P4_SUITE_DIR/skill-validator-contracts.sh"
+source "$P0P4_SUITE_DIR/response-fixture-preflight-contracts.sh"
 if ! p0p4_suite_is_excluded "skill-eval-contracts.sh"; then
     source "$P0P4_SUITE_DIR/skill-eval-contracts.sh"
 fi
