@@ -84,7 +84,8 @@ bash tests/p0-p4/progressive-discovery-contracts.sh --fixtures-only
 Both suites also run this preflight automatically before semantic grading. It
 uses the actual builders in fresh temporary directories and rejects builder
 failures, missing/blank responses, and structured responses containing invalid
-JSON or multiple JSON values. It checks completeness and JSON syntax; the full
+JSON or multiple JSON values. JSON is required for cases with structured
+assertions or a semantic validator. It checks completeness and JSON syntax; the full
 suites still verify semantics and mutation rejection. `--fixtures-only` is for
 direct suite invocation and does not skip checks in the aggregate runner.
 

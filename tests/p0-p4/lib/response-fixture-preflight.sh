@@ -21,7 +21,8 @@ p0p4_preflight_response_fixtures() {
             return 1
         fi
         jq -r '.skill as $skill | .cases[] |
-          [$skill,.id,((.machine_expectations.structured_json_assertions // [] | length) > 0)] | @tsv
+          [$skill,.id,((.machine_expectations.structured_json_assertions // [] | length) > 0
+            or .semantic_validator != null)] | @tsv
         ' "$fixture" >>"$root/cases.tsv" || return 1
     done
     if ! (
