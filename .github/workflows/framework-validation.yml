@@ -101,5 +101,9 @@ jobs:
           command -v ruby
           ruby -rjson -ryaml -rbigdecimal -e 'abort "Ruby JSON, Psych/YAML, or BigDecimal unavailable" unless defined?(JSON) && defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file) && defined?(BigDecimal)'
 
+      - name: Check response fixture entrypoint
+        if: matrix.suite == 'skill-eval-contracts.sh' || matrix.suite == 'progressive-discovery-contracts.sh'
+        run: python3 tests/p0-p4/lib/response-fixture-entrypoint-probe.py "${{ matrix.suite }}"
+
       - name: Run long contract shard
         run: bash "tests/p0-p4/${{ matrix.suite }}"

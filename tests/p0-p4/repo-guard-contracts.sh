@@ -83,6 +83,19 @@ if shard_job.is_a?(Hash)
   unless long_shard_step.is_a?(Hash) && long_shard_step["run"] == 'bash "tests/p0-p4/${{ matrix.suite }}"'
     errors << "long shard must run exactly bash tests/p0-p4 matrix suite"
   end
+  steps = shard_job.fetch("steps", [])
+  probes = steps.select { |step| step.is_a?(Hash) && step["name"] == "Check response fixture entrypoint" }
+  probe_condition = "matrix.suite == 'skill-eval-contracts.sh' || matrix.suite == 'progressive-discovery-contracts.sh'"
+  probe_command = 'python3 tests/p0-p4/lib/response-fixture-entrypoint-probe.py "${{ matrix.suite }}"'
+  if probes.length != 1 || probes[0]["if"] != probe_condition || probes[0]["run"] != probe_command
+    errors << "response entrypoint probes must run only in their two owning shards"
+  elsif long_shard_step && steps.index(probes[0]) >= steps.index(long_shard_step)
+    errors << "response entrypoint probe must precede long shard grading"
+  end
+end
+
+if fast_job.is_a?(Hash) && fast_job.fetch("steps", []).any? { |step| step.is_a?(Hash) && step["run"].to_s.include?("response-fixture-entrypoint-probe.py") }
+  errors << "aggregate job must not run response entrypoint probes"
 end
 
 unless all_aggregate_sources.uniq.length == all_aggregate_sources.length
@@ -130,11 +143,11 @@ else
     fail "P0-P4 CI schedule violations: $(cat "$ci_schedule_output")"
 fi
 
-test_start "P0-P4 CI schedule oracle rejects missing, orphaned, bypassed, and misplaced prerequisites"
+test_start "P0-P4 CI schedule oracle rejects missing, orphaned, bypassed, misplaced, and wrongly owned checks"
 ci_schedule_mutation_dir="$(mktemp -d)"
 p0p4_register_cleanup "$ci_schedule_mutation_dir"
 ci_schedule_mutation_failures=()
-for ci_schedule_mutation in missing_aggregate_suite orphaned_shard_suite unguarded_shard_suite mismatched_shard_guard misplaced_shard_ruby_prerequisite; do
+for ci_schedule_mutation in missing_aggregate_suite orphaned_shard_suite unguarded_shard_suite mismatched_shard_guard misplaced_shard_ruby_prerequisite missing_response_probe unguarded_response_probe misplaced_response_probe aggregate_response_probe duplicate_response_probe wrong_response_probe_command; do
     ci_schedule_mutation_aggregate="$ci_schedule_mutation_dir/$ci_schedule_mutation-aggregate.sh"
     ci_schedule_mutation_workflow="$ci_schedule_mutation_dir/$ci_schedule_mutation-workflow.yml"
     cp "$FRAMEWORK_DIR/tests/test-p0-p4-contracts.sh" "$ci_schedule_mutation_aggregate"
@@ -199,6 +212,24 @@ marker = "      - name: Run aggregate framework contracts\n"
 abort "missing aggregate step mutation target" unless contents.include?(marker)
 File.write(path, contents.sub(marker, block + marker))
 ' "$ci_schedule_mutation_workflow"
+            ;;
+        *_response_probe|wrong_response_probe_command)
+            ruby -ryaml -e '
+path, mutation = ARGV
+workflow = YAML.load_file(path)
+steps = workflow.fetch("jobs").fetch("contract-shards").fetch("steps")
+probe = steps.find { |step| step["name"] == "Check response fixture entrypoint" }
+abort "missing response probe mutation target" unless probe
+case mutation
+when "missing_response_probe" then steps.delete(probe)
+when "unguarded_response_probe" then probe.delete("if")
+when "misplaced_response_probe" then steps.delete(probe); steps << probe
+when "aggregate_response_probe" then workflow["jobs"]["framework-contracts"]["steps"] << probe.dup
+when "duplicate_response_probe" then steps << probe.dup
+when "wrong_response_probe_command" then probe["run"] = "echo skipped"
+end
+File.write(path, YAML.dump(workflow))
+' "$ci_schedule_mutation_workflow" "$ci_schedule_mutation"
             ;;
     esac
     if validate_p0p4_ci_schedule "$ci_schedule_mutation_aggregate" "$ci_schedule_mutation_workflow" "$FRAMEWORK_DIR/tests/p0-p4" >/dev/null 2>&1; then
