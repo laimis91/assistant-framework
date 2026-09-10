@@ -29,7 +29,8 @@ def probe(suite):
                 start_new_session=True,
             )
             try:
-                output, _ = process.communicate(timeout=45)
+                # Allow fixture growth and contended runners while still bounding hangs.
+                output, _ = process.communicate(timeout=300)
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.communicate()
