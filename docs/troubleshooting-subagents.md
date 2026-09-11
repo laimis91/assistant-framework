@@ -31,7 +31,7 @@ bash tools/smoke-test-codex-agents.sh --check-only
 # Refresh Codex skills and agent definitions
 ./install.sh --agent codex
 
-# Verify the eight installed definitions exactly match the repository sources
+# Verify the ten installed definitions exactly match the repository sources
 for file in agents/codex/*.toml; do
   cmp "$file" "${CODEX_HOME:-$HOME/.codex}/agents/${file##*/}"
 done
