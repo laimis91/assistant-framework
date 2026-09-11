@@ -5,6 +5,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-re
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assistant-research-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/verification-reuse-response-fixtures.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/response-fixture-preflight.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
@@ -764,6 +765,20 @@ p0p4_write_skill_eval_flat_responses() {
         } >"$output_dir/$id.txt"
     done < <(jq -r '.cases[].id' "$fixture_file")
 }
+
+test_start "all skill response fixtures are complete before semantic grading"
+skill_response_preflight_fixtures=()
+while IFS= read -r fixture_file; do skill_response_preflight_fixtures+=("$fixture_file"); done < <(p0p4_skill_eval_default_fixtures)
+if p0p4_preflight_response_fixtures p0p4_write_skill_eval_responses "${skill_response_preflight_fixtures[@]}"; then
+    pass
+else
+    fail "response fixture preflight failed; semantic grading was not started"
+    exit 1
+fi
+if [[ "${BASH_SOURCE[0]}" == "$0" && "${1:-}" == --fixtures-only ]]; then
+    finish
+    exit 0
+fi
 
 test_start "skill eval runner exists and is executable"
 if [[ -x "$skill_eval_runner" ]]; then

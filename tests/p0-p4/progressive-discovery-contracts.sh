@@ -6,24 +6,10 @@ fi
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/verification-reuse-response-fixtures.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/response-fixture-preflight.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-test_start "progressive-discovery filtered workflow eval removes unmatched review authority"
-progressive_filter_root="$(mktemp -d "${TMPDIR:-/tmp}/progressive-discovery-eval-filter.XXXXXX")"
-p0p4_register_cleanup "$progressive_filter_root"
-mkdir -p "$progressive_filter_root/assistant-workflow/evals"
-cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$progressive_filter_root/assistant-workflow/SKILL.md"
-p0p4_filter_workflow_eval_cases \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" \
-    "$progressive_filter_root/assistant-workflow/evals/cases.json" \
-    "progressive-collaborative-contributor-evidence"
-if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$progressive_filter_root/assistant-workflow" >/dev/null \
-    && jq -e '(.canonical_review_batch_expectations | not) and (.cases | map(.id) == ["progressive-collaborative-contributor-evidence"])' "$progressive_filter_root/assistant-workflow/evals/cases.json" >/dev/null; then
-    pass
-else
-    fail "progressive-discovery filtered workflow eval retained unmatched canonical review authority"
-fi
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 progressive_ref="$workflow_dir/references/progressive-discovery.md"
@@ -510,6 +496,38 @@ workflow_forbidden_terms_are_rejected() {
         && grep -Fq "missing_required_substrings=0" "$eval_output" \
         && grep -Fq "forbidden_substring_hits=$expected_forbidden_hits" "$eval_output"
 }
+
+preflight_workflow_response_builder() {
+    write_workflow_eval_responses "$1" "$workflow_dir/evals/cases.json"
+}
+
+test_start "workflow response fixtures are complete before semantic grading"
+if p0p4_preflight_response_fixtures preflight_workflow_response_builder "$workflow_dir/evals/cases.json"; then
+    pass
+else
+    fail "response fixture preflight failed; semantic grading was not started"
+    exit 1
+fi
+if [[ "${BASH_SOURCE[0]}" == "$0" && "${1:-}" == --fixtures-only ]]; then
+    finish
+    exit 0
+fi
+
+test_start "progressive-discovery filtered workflow eval removes unmatched review authority"
+progressive_filter_root="$(mktemp -d "${TMPDIR:-/tmp}/progressive-discovery-eval-filter.XXXXXX")"
+p0p4_register_cleanup "$progressive_filter_root"
+mkdir -p "$progressive_filter_root/assistant-workflow/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$progressive_filter_root/assistant-workflow/SKILL.md"
+p0p4_filter_workflow_eval_cases \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" \
+    "$progressive_filter_root/assistant-workflow/evals/cases.json" \
+    "progressive-collaborative-contributor-evidence"
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$progressive_filter_root/assistant-workflow" >/dev/null \
+    && jq -e '(.canonical_review_batch_expectations | not) and (.cases | map(.id) == ["progressive-collaborative-contributor-evidence"])' "$progressive_filter_root/assistant-workflow/evals/cases.json" >/dev/null; then
+    pass
+else
+    fail "progressive-discovery filtered workflow eval retained unmatched canonical review authority"
+fi
 
 test_start "workflow inspected evidence requires a declared search-ref array"
 search_ref_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-search-ref.XXXXXX")"
