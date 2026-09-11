@@ -113,6 +113,17 @@ function Test-IsWindowsHost {
     return [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 }
 
+function Assert-CodexStopped {
+    if (-not (Test-IsWindowsHost)) { return }
+    # Enumerate without -Name so an absent process is a normal empty result,
+    # while enumeration failures still stop installation. CLI sessions share
+    # this process name and must also be closed before updating their skills.
+    $running = @(Get-Process -ErrorAction Stop | Where-Object { $_.ProcessName -ieq 'codex' })
+    if ($running.Count -gt 0) {
+        throw 'Codex is running. Close Codex App and any Codex CLI sessions, then rerun the installer. No installation files have been changed.'
+    }
+}
+
 function New-OrdinalDictionary {
     return [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
 }
@@ -2190,6 +2201,7 @@ function Invoke-AssistantFrameworkInstall {
     if (@('claude', 'codex', 'gemini') -notcontains $agentName) {
         throw "Unknown agent '$Agent'. Supported: claude, codex, gemini."
     }
+    if ($agentName -eq 'codex') { Assert-CodexStopped }
     if ($NoHooks) { Write-Info 'WARNING: -NoHooks is deprecated; all Assistant Framework installs are hookless.' }
 
     $skillsSource = Join-Path $script:FrameworkDir 'skills'

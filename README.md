@@ -55,7 +55,7 @@ For one compatibility release, a normal install retires only older Assistant Fra
 
 Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7.
 
-Close Codex App before installing or updating Codex so it releases `AGENTS.md` and managed framework files. The installer leaves `config.toml` untouched and does not invoke the Codex CLI. If a managed file is locked, close Codex App and rerun the same command. If a file becomes unavailable after preflight, the installer reports a partial installation; resolve the cause and rerun because reinstall is safe.
+Close Codex App and any Codex CLI sessions before installing or updating Codex so they release `AGENTS.md` and managed framework files. On Windows, the installer rejects Codex installs (including `-DryRun`) before any writes when a `Codex` process is running; it does not terminate processes. Keep Codex closed until installation finishes. The installer leaves `config.toml` untouched and does not invoke the Codex CLI. If a managed file is locked, close Codex App and rerun the same command. If a file becomes unavailable after preflight, the installer reports a partial installation; resolve the cause and rerun because reinstall is safe.
 
 Install the complete release inventory for one agent:
 
