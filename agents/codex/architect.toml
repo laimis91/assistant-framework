@@ -1,7 +1,7 @@
 name = "architect"
 description = "Software architect for conditional, evidence-backed implementation blueprints. Use when a workflow Architecture Decision Pack has real boundary, public-contract, quality-driver, or viable-alternative uncertainty to resolve."
 sandbox_mode = "read-only"
-model = "gpt-6-astra"
+model = "gpt-5.6-sol"
 model_reasoning_effort = "xhigh"
 
 developer_instructions = """
