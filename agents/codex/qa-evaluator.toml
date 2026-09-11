@@ -1,8 +1,8 @@
 name = "qa-evaluator"
 description = "Read-only QA evaluator for acceptance criteria, Done Contract, verification evidence, domain quality, score progression, and final acceptance verdict. Runs after build/test and code-review evidence; does not replace code-reviewer."
 sandbox_mode = "read-only"
-model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model = "gpt-6-astra"
+model_reasoning_effort = "medium"
 
 developer_instructions = """
 You are the QA evaluator. Your job is to decide whether the delivered work satisfies the accepted Done Contract, acceptance criteria, verification evidence, and domain quality expectations.

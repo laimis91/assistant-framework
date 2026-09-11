@@ -95,16 +95,16 @@ while IFS='|' read -r agent expected_model expected_effort; do
         matrix_failures+=("$agent: model fields must precede developer_instructions")
     fi
 done <<'EOF'
-architect|gpt-5.6-sol|xhigh
+architect|gpt-6-astra|xhigh
 builder-tester|gpt-5.6-terra|medium
 code-mapper|gpt-5.6-luna|low
-code-reviewer|gpt-5.6-sol|xhigh
+code-reviewer|gpt-6-astra|xhigh
 code-writer|gpt-5.6-terra|high
 explorer|gpt-5.6-terra|medium
 lens-researcher|gpt-5.6-terra|medium
-qa-evaluator|gpt-5.6-sol|high
-research-peer-reviewer|gpt-5.6-sol|high
-reviewer|gpt-5.6-sol|xhigh
+qa-evaluator|gpt-6-astra|medium
+research-peer-reviewer|gpt-6-astra|high
+reviewer|gpt-6-astra|xhigh
 EOF
 if [[ "${#matrix_failures[@]}" -eq 0 ]]; then
     pass
@@ -415,10 +415,10 @@ else
         '    1) role="code-mapper"; model="gpt-5.6-luna"; effort="low" ;;' \
         '    2) role="explorer"; model="gpt-5.6-terra"; effort="medium" ;;' \
         '    3) role="code-writer"; model="gpt-5.6-terra"; effort="high" ;;' \
-        '    4) role="architect"; model="gpt-5.6-sol"; effort="xhigh" ;;' \
-        '    5) role="qa-evaluator"; model="gpt-5.6-sol"; effort="high" ;;' \
+        '    4) role="architect"; model="gpt-6-astra"; effort="xhigh" ;;' \
+        '    5) role="qa-evaluator"; model="gpt-6-astra"; effort="medium" ;;' \
         '    6) role="lens-researcher"; model="gpt-5.6-terra"; effort="medium" ;;' \
-        '    7) role="research-peer-reviewer"; model="gpt-5.6-sol"; effort="high" ;;' \
+        '    7) role="research-peer-reviewer"; model="gpt-6-astra"; effort="high" ;;' \
         '    *) exit 91 ;;' \
         'esac' \
         'session_file="$CODEX_HOME/sessions/fake-child-${call_count}.jsonl"' \

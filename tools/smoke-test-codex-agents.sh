@@ -12,24 +12,24 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 framework_dir="$(cd "$script_dir/.." && pwd)"
 source_agent_dir="$framework_dir/agents/codex"
 
-agent_specs='architect|gpt-5.6-sol|xhigh|trade-off
+agent_specs='architect|gpt-6-astra|xhigh|trade-off
 builder-tester|gpt-5.6-terra|medium|repeatable
 code-mapper|gpt-5.6-luna|low|paths
-code-reviewer|gpt-5.6-sol|xhigh|correctness
+code-reviewer|gpt-6-astra|xhigh|correctness
 code-writer|gpt-5.6-terra|high|smallest
 explorer|gpt-5.6-terra|medium|evidence
 lens-researcher|gpt-5.6-terra|medium|independent
-qa-evaluator|gpt-5.6-sol|high|acceptance
-research-peer-reviewer|gpt-5.6-sol|high|independent
-reviewer|gpt-5.6-sol|xhigh|compatibility'
+qa-evaluator|gpt-6-astra|medium|acceptance
+research-peer-reviewer|gpt-6-astra|high|independent
+reviewer|gpt-6-astra|xhigh|compatibility'
 
 representative_specs='code-mapper|gpt-5.6-luna|low
 explorer|gpt-5.6-terra|medium
 code-writer|gpt-5.6-terra|high
-architect|gpt-5.6-sol|xhigh
-qa-evaluator|gpt-5.6-sol|high
+architect|gpt-6-astra|xhigh
+qa-evaluator|gpt-6-astra|medium
 lens-researcher|gpt-5.6-terra|medium
-research-peer-reviewer|gpt-5.6-sol|high'
+research-peer-reviewer|gpt-6-astra|high'
 
 config_failure() {
     printf 'CONFIG_MISMATCH %s\n' "$1" >&2
