@@ -375,6 +375,61 @@ function Assert-ScriptsParse {
 try {
     [void][System.IO.Directory]::CreateDirectory($script:SuiteRoot)
 
+    Invoke-Contract 'Codex process preflight blocks before installation and handles closed, unrelated, and unavailable process states' {
+        # Run the real installer entry function with a controlled process table.
+        # Function scope keeps these mocks out of the remaining native contracts.
+        & {
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:InstallerPath, [ref]$tokens, [ref]$errors)
+            $functions = @($ast.FindAll({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -in @('Assert-CodexStopped', 'Invoke-AssistantFrameworkInstall')
+            }, $true))
+            Assert-Equal 2 $functions.Count 'Missing installer preflight or entry function'
+            foreach ($definition in $functions) { . ([scriptblock]::Create($definition.Extent.Text)) }
+            function Test-IsWindowsHost { return $windowsHost }
+            function Get-Process {
+                param($ErrorAction)
+                if ($enumerationFails) { throw 'Process enumeration failed' }
+                return $processTable
+            }
+            $windowsHost = $true
+            $enumerationFails = $false
+            $Agent = 'CoDeX'
+            $NoHooks = $false
+            $processTable = @([pscustomobject]@{ ProcessName = 'CoDeX' })
+            foreach ($preview in @($false, $true)) {
+                $DryRun = $preview
+                $caught = ''
+                try { Invoke-AssistantFrameworkInstall } catch { $caught = $_.Exception.Message }
+                Assert-Contains $caught 'Close Codex App' 'Running Codex must block normal and dry-run installs before source/target access'
+                Assert-Contains $caught 'No installation files have been changed' 'Preflight must explain the non-mutating failure'
+            }
+            $processTable = @()
+            Assert-CodexStopped
+            $processTable = @([pscustomobject]@{ ProcessName = 'Code' }, [pscustomobject]@{ ProcessName = 'codex-helper-unrelated' })
+            Assert-CodexStopped
+            $enumerationFails = $true
+            $caught = ''
+            try { Assert-CodexStopped } catch { $caught = $_.Exception.Message }
+            Assert-Equal 'Process enumeration failed' $caught 'Process enumeration errors must not allow installation'
+            $windowsHost = $false
+            Assert-CodexStopped
+
+            # Other agents must pass process preflight without querying Codex.
+            function Write-Info { throw 'Passed process preflight' }
+            $NoHooks = $true
+            $windowsHost = $true
+            foreach ($Agent in @('claude', 'gemini')) {
+                $caught = ''
+                try { Invoke-AssistantFrameworkInstall } catch { $caught = $_.Exception.Message }
+                Assert-Equal 'Passed process preflight' $caught 'Codex process preflight must not block another agent'
+            }
+        }
+    }
+
     Invoke-Contract 'PowerShell sources parse and avoid forbidden execution surfaces' {
         Assert-True (Test-Path -LiteralPath $script:InstallerPath -PathType Leaf) 'install.ps1 is missing'
         Assert-ScriptsParse
