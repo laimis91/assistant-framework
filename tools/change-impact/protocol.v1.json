@@ -4,7 +4,7 @@
   "runtime": "Node.js 22 or newer, standard library only",
   "phases": {
     "discovery": ["capture", "expected context"],
-    "pre-build": ["capture", "expected context", "assessment with planned verification"],
+    "pre_build": ["capture", "expected context", "assessment with planned verification"],
     "completion": ["capture", "expected context", "assessment with actual verification", "review bindings"]
   },
   "review_context": "null is allowed during discovery and pre-build; completion requires the current assistant-review scope-manifest, coverage-ledger, snapshot, and requirement mappings.",

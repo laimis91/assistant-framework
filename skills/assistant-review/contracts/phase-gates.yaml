@@ -67,6 +67,11 @@ gates:
         condition: "review_preparation_mode == workflow_composed"
         on_fail: "Block dispatch and request the carried Spec Review PASS and current build/test evidence refs from the composing workflow."
 
+      - id: E10
+        check: "A persisted 6.0, 7.0, or 7.1 review packet carries its matching invalidation/migration record and cannot contribute CLEAN or ISSUES_FIXED until a fresh 7.2 batch is rebuilt. Complete historic closure tuples, including existing 7.1-or-later provenance, remain unchanged; partial v6/7.0 tuples are normalized before closure dispatch."
+        condition: "a persisted review packet is supplied"
+        on_fail: "Invalidate the persisted result/delegation/snapshot/Pack/QA/plan/coverage refs, preserve raw history and complete closure tuples, normalize only missing v6/7.0 closure identity fields before dispatch, and rebuild from a fresh 7.2 snapshot."
+
   # ─────────────────────────────────────────────
   # REVIEW step — per round
   # ─────────────────────────────────────────────

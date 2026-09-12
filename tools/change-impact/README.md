@@ -22,7 +22,7 @@ new ID; the checker then rejects the capture and assessment.
 ```sh
 node tools/change-impact/validate-change-impact.cjs --phase discovery \
   --capture capture.json --expected expected-context.json
-node tools/change-impact/validate-change-impact.cjs --phase pre-build \
+node tools/change-impact/validate-change-impact.cjs --phase pre_build \
   --capture capture.json --expected expected-context.json --assessment assessment.json
 node tools/change-impact/validate-change-impact.cjs --phase completion \
   --capture capture.json --expected expected-context.json --assessment assessment.json \

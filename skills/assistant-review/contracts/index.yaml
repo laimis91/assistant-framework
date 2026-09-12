@@ -19,7 +19,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, harness_capable, qa_evaluation_mode, feature_preparation_scope, approved_feature_preparation_qa_acceptance_obligation, previously_fixed, persisted_v6_packet_migration, persisted_v7_0_packet_invalidation]
+        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, harness_capable, qa_evaluation_mode, feature_preparation_scope, approved_feature_preparation_qa_acceptance_obligation, previously_fixed, persisted_v6_packet_migration, persisted_v7_0_packet_invalidation, persisted_v7_1_packet_invalidation]
     budget_words: 5000
   architecture_pack_input:
     selectors:

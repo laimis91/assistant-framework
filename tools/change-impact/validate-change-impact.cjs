@@ -11,7 +11,7 @@ const MAX_BYTES = 256 * 1024;
 const MAX_DEPTH = 16;
 const MAX_ARRAY = 200;
 const MAX_OBJECT_KEYS = 60;
-const PHASES = new Set(["discovery", "pre-build", "completion"]);
+const PHASES = new Set(["discovery", "pre_build", "completion"]);
 const DEPENDENCY_KINDS = new Set(["call", "wrapper", "config", "registration", "event", "state", "public"]);
 const PRESENCES = new Set(["base", "candidate", "both"]);
 const DISPOSITIONS = new Set(["preserve", "change", "unaffected", "waived", "blocked"]);
@@ -123,6 +123,8 @@ function validateCapture(capture, expected, reasons) {
   if (reasons.length) return;
   if (capture.roots.length === 0 && (expected.required_impact_scope === "shared" ||
       capture.unknown_boundaries.some((boundary) => boundary.material))) reasons.push(issue("CAPTURE_DISCOVERY_ROOTS_MISSING"));
+  if (expected.required_impact_scope === "shared" && capture.edges.length === 0) reasons.push(issue("CAPTURE_SHARED_CONSUMERS_EMPTY"));
+  if (expected.required_impact_scope === "shared" && capture.requirements.length === 0) reasons.push(issue("CAPTURE_SHARED_REQUIREMENTS_EMPTY"));
   if (capture.edges.some((edge) => !capture.requirements.some((requirement) => requirement.edge_id === edge.id))) reasons.push(issue("CAPTURE_EDGE_REQUIREMENT_MISSING"));
   if (capture.capture_id !== expected.capture_id || !sameSnapshot(capture.snapshot, expected.snapshot)) reasons.push(issue("CAPTURE_CONTEXT_MISMATCH"));
   const captured = indexBy(capture.edges);
@@ -240,9 +242,9 @@ function validateAssessment(assessment, capture, expected, phase, reasons) {
     exactKeys(actual, ["verification_id", "outcome", "executed_source_identity", "evidence_ref"]) &&
     nonBlank(actual.verification_id) && actual.outcome === "passed" && nonBlank(actual.executed_source_identity) && nonBlank(actual.evidence_ref));
   if (!actualsValid) { reasons.push(issue("ACTUAL_VERIFICATIONS_INVALID")); return; }
-  if (phase === "pre-build" && assessment.actual_verifications.length > 0) reasons.push(issue("PREBUILD_EXECUTION_NOT_ALLOWED"));
+  if (phase === "pre_build" && assessment.actual_verifications.length > 0) reasons.push(issue("PREBUILD_EXECUTION_NOT_ALLOWED"));
   if (phase !== "discovery" && (capture.unknown_boundaries.some((boundary) => boundary.material) || assessment.impact_scope === "unresolved")) reasons.push(issue("MATERIAL_IMPACT_UNRESOLVED"));
-  if (phase === "pre-build" && assessment.obligations.some((obligation) => obligation.disposition === "blocked")) reasons.push(issue("BLOCKED_IMPACT_UNRESOLVED"));
+  if (phase === "pre_build" && assessment.obligations.some((obligation) => obligation.disposition === "blocked")) reasons.push(issue("BLOCKED_IMPACT_UNRESOLVED"));
   if (phase === "completion") {
     if (assessment.obligations.some((obligation) => ["waived", "blocked"].includes(obligation.disposition))) reasons.push(issue("UNVERIFIED_RESIDUAL_RISK"));
     const actuals = indexBy(assessment.actual_verifications, "verification_id");

@@ -42,6 +42,60 @@ else
     fail "affected skill contracts failed validation; see /tmp/p0p4-change-impact-skills.err"
 fi
 
+test_start "change-impact uses canonical pre_build through protocol, runtime, and phase carriers"
+if ruby -ryaml -rjson - "$FRAMEWORK_DIR" <<'RUBY'
+framework = ARGV.fetch(0)
+field = ->(fields, name) { Array(fields).find { |item| item["name"] == name } }
+protocol = JSON.parse(File.read(File.join(framework, "tools/change-impact/protocol.v1.json")))
+abort "protocol phase enum is not canonical" unless protocol.fetch("phases").keys == %w[discovery pre_build completion]
+abort "protocol retains legacy phase spelling" if protocol.fetch("phases").key?("pre-build")
+
+%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
+  input = YAML.load_file(File.join(framework, "skills", skill, "contracts/input.yaml"))
+  context = field.call(input.fetch("fields"), "change_impact_context")
+  phase = field.call(context.fetch("object_fields"), "phase")
+  abort "#{skill} input phase enum drifted" unless phase.fetch("enum_values") == %w[discovery pre_build completion]
+end
+
+%w[assistant-workflow assistant-debugging].each do |skill|
+  output = YAML.load_file(File.join(framework, "skills", skill, "contracts/output.yaml"))
+  evidence = field.call(output.fetch("artifacts"), "change_impact_evidence")
+  phase = field.call(evidence.fetch("object_fields"), "phase")
+  abort "#{skill} output phase enum drifted" unless phase.fetch("enum_values") == %w[discovery pre_build completion]
+end
+
+carrier_count = 0
+%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
+  handoffs = YAML.load_file(File.join(framework, "skills", skill, "contracts/handoffs.yaml"))
+  walk = lambda do |value|
+    case value
+    when Hash
+      if value["name"] == "change_impact_evidence"
+        phase = field.call(value.fetch("object_fields"), "phase")
+        abort "#{skill} handoff phase enum drifted" unless phase.fetch("enum_values") == %w[discovery pre_build completion]
+        carrier_count += 1
+      end
+      value.each_value { |child| walk.call(child) }
+    when Array
+      value.each { |child| walk.call(child) }
+    end
+  end
+  walk.call(handoffs.fetch("handoffs"))
+end
+abort "missing concrete phase-aware handoff carriers" unless carrier_count >= 5
+
+readme = File.read(File.join(framework, "tools/change-impact/README.md"))
+abort "README command retains legacy phase spelling" if readme.include?("--phase pre-build")
+abort "README command omits canonical phase" unless readme.include?("--phase pre_build")
+validator = File.read(File.join(framework, "tools/change-impact/validate-change-impact.cjs"))
+abort "runtime phase enum drifted" unless validator.include?('new Set(["discovery", "pre_build", "completion"])')
+RUBY
+then
+    pass
+else
+    fail "change-impact canonical pre_build protocol, CLI, or contract carrier drifted"
+fi
+
 test_start "evidenced local behavior remains compact when Node is unavailable, while shared and unresolved paths expand"
 local_proportionality_failures=()
 for local_contract in \

@@ -127,14 +127,37 @@ test("shared and material captures record a discovery root, while compact cosmet
   assert.equal(validate({ phase: "discovery", capture: cosmetic.capture, expected: cosmetic.expected }).valid, true);
 });
 
+test("shared inventory requires captured consumers and contract/state-transition requirements", () => {
+  const emptyShared = clone(commonExample);
+  emptyShared.capture.edges = []; emptyShared.capture.requirements = [];
+  emptyShared.expected.required_edges = []; emptyShared.expected.required_requirements = [];
+  emptyShared.expected.review_context.required_bindings = [];
+  emptyShared.assessment.obligations = []; emptyShared.assessment.verification_plans = [];
+  emptyShared.assessment.equivalence_groups = []; emptyShared.assessment.actual_verifications = [];
+  emptyShared.review.bindings = [];
+  const apiResult = validate({ phase: "pre_build", ...emptyShared });
+  assert.equal(apiResult.phase, "pre_build");
+  assert.deepEqual(codes(apiResult), ["CAPTURE_SHARED_CONSUMERS_EMPTY", "CAPTURE_SHARED_REQUIREMENTS_EMPTY"]);
+
+  const cliResult = runCli(emptyShared, "pre_build");
+  assert.equal(cliResult.status, 1);
+  assert.deepEqual(cliResult.result, apiResult);
+
+  const completionApiResult = validate({ phase: "completion", ...emptyShared });
+  const completionCliResult = runCli(emptyShared, "completion");
+  assert.equal(completionApiResult.phase, "completion");
+  assert.equal(completionCliResult.status, 1);
+  assert.deepEqual(completionCliResult.result, completionApiResult);
+});
+
 test("discovery and pre-build permit planned work without fabricated actual execution", () => {
   const documents = validDocuments();
   assert.equal(validate({ phase: "discovery", capture: documents.capture, expected: documents.expected }).valid, true);
   documents.assessment.actual_verifications = [];
-  assert.equal(validate({ phase: "pre-build", ...documents }).valid, true);
+  assert.equal(validate({ phase: "pre_build", ...documents }).valid, true);
   documents.expected.review_context = null;
   assert.equal(validate({ phase: "discovery", capture: documents.capture, expected: documents.expected }).valid, true);
-  assert.equal(validate({ phase: "pre-build", ...documents }).valid, true);
+  assert.equal(validate({ phase: "pre_build", ...documents }).valid, true);
   assert.ok(codes(validate({ phase: "completion", ...documents })).includes("EXPECTED_REVIEW_CONTEXT_INVALID"));
 });
 
@@ -151,6 +174,16 @@ test("invalid phase diagnostics retain PHASE_INVALID without echoing untrusted p
   assert.equal(child.stdout.includes(sentinel), false);
 });
 
+test("canonical pre_build passes through the API and CLI with the same result", () => {
+  const documents = validDocuments();
+  documents.assessment.actual_verifications = [];
+  const apiResult = validate({ phase: "pre_build", ...documents });
+  const cliResult = runCli(documents, "pre_build");
+  assert.equal(apiResult.valid, true);
+  assert.equal(cliResult.status, 0);
+  assert.deepEqual(cliResult.result, apiResult);
+});
+
 test("known omitted consumer edge and omitted dirty-state transition fail against independent authority", () => {
   const documents = validDocuments();
   documents.capture.edges.pop();
@@ -158,7 +191,7 @@ test("known omitted consumer edge and omitted dirty-state transition fail agains
   assert.ok(codes(validate({ phase: "discovery", ...documents })).includes("CAPTURE_EXPECTED_EDGES_MISMATCH"));
   const transition = validDocuments();
   transition.assessment.obligations = transition.assessment.obligations.filter((item) => item.requirement_id !== "req-nav-dirty");
-  assert.ok(codes(validate({ phase: "pre-build", ...transition })).includes("CAPTURE_REQUIREMENT_OBLIGATION_MISSING"));
+  assert.ok(codes(validate({ phase: "pre_build", ...transition })).includes("CAPTURE_REQUIREMENT_OBLIGATION_MISSING"));
 });
 
 test("base deletion, candidate addition, all supported dependency kinds, and equivalent navigation verification are covered", () => {
@@ -168,12 +201,12 @@ test("base deletion, candidate addition, all supported dependency kinds, and equ
   assert.ok(documents.capture.edges.some((edge) => edge.presence === "candidate"));
   assert.equal(validate({ phase: "completion", ...documents }).valid, true);
   documents.assessment.equivalence_groups[0].justification_ref = "";
-  assert.ok(codes(validate({ phase: "pre-build", ...documents })).includes("EQUIVALENCE_GROUPS_INVALID"));
+  assert.ok(codes(validate({ phase: "pre_build", ...documents })).includes("EQUIVALENCE_GROUPS_INVALID"));
 });
 
 test("unsupported local claim, stale universe, stale verification source, and wrong review projection reject", () => {
   const local = validDocuments(); local.assessment.impact_scope = "local";
-  assert.ok(codes(validate({ phase: "pre-build", ...local })).includes("IMPACT_SCOPE_CONTEXT_MISMATCH"));
+  assert.ok(codes(validate({ phase: "pre_build", ...local })).includes("IMPACT_SCOPE_CONTEXT_MISMATCH"));
   const stale = validDocuments(); stale.expected.snapshot.universe_id = "universe-after-new-registration";
   assert.ok(codes(validate({ phase: "completion", ...stale })).includes("CAPTURE_CONTEXT_MISMATCH"));
   const source = validDocuments(); source.assessment.verification_plans[1].source_identity = "old-test-source";
@@ -184,13 +217,13 @@ test("unsupported local claim, stale universe, stale verification source, and wr
 
 test("waived, blocked, unresolved, and planned-as-actual completion states remain incomplete", () => {
   const waived = validDocuments(); waived.assessment.obligations[6].disposition = "waived"; waived.assessment.obligations[6].authorization_ref = "existing-policy-approval"; waived.assessment.actual_verifications = [];
-  assert.equal(validate({ phase: "pre-build", ...waived }).valid, true);
+  assert.equal(validate({ phase: "pre_build", ...waived }).valid, true);
   assert.ok(codes(validate({ phase: "completion", ...waived })).includes("UNVERIFIED_RESIDUAL_RISK"));
   const blocked = validDocuments(); blocked.assessment.obligations[6].disposition = "blocked"; blocked.assessment.actual_verifications = [];
-  assert.ok(codes(validate({ phase: "pre-build", ...blocked })).includes("BLOCKED_IMPACT_UNRESOLVED"));
+  assert.ok(codes(validate({ phase: "pre_build", ...blocked })).includes("BLOCKED_IMPACT_UNRESOLVED"));
   assert.ok(codes(validate({ phase: "completion", ...blocked })).includes("UNVERIFIED_RESIDUAL_RISK"));
   const unresolved = validDocuments(); unresolved.capture.unknown_boundaries.push({ id: "unknown-public-client", material: true, source_id: "boundary-current" });
-  assert.ok(codes(validate({ phase: "pre-build", ...unresolved })).includes("MATERIAL_IMPACT_UNRESOLVED"));
+  assert.ok(codes(validate({ phase: "pre_build", ...unresolved })).includes("MATERIAL_IMPACT_UNRESOLVED"));
   assert.ok(codes(validate({ phase: "completion", ...unresolved })).includes("MATERIAL_IMPACT_UNRESOLVED"));
   const planned = validDocuments(); planned.assessment.actual_verifications = [];
   assert.ok(codes(validate({ phase: "completion", ...planned })).includes("EXECUTED_VERIFICATION_MISSING_OR_STALE"));
@@ -205,11 +238,11 @@ test("capture requirements, reciprocal equivalence, and exact plan and actual co
   const directReuse = validDocuments(); directReuse.assessment.equivalence_groups = [];
   directReuse.assessment.obligations[0].verification_id = "plan-nav"; directReuse.assessment.obligations[0].equivalence_group_id = null;
   directReuse.assessment.obligations[2].verification_id = "plan-nav"; directReuse.assessment.obligations[2].equivalence_group_id = null;
-  assert.ok(codes(validate({ phase: "pre-build", ...directReuse })).includes("DIRECT_VERIFICATION_REUSE_REQUIRES_EQUIVALENCE"));
+  assert.ok(codes(validate({ phase: "pre_build", ...directReuse })).includes("DIRECT_VERIFICATION_REUSE_REQUIRES_EQUIVALENCE"));
   const reciprocal = validDocuments(); reciprocal.assessment.obligations[2].equivalence_group_id = null;
-  assert.ok(codes(validate({ phase: "pre-build", ...reciprocal })).includes("EQUIVALENCE_GROUP_BINDING_INVALID"));
+  assert.ok(codes(validate({ phase: "pre_build", ...reciprocal })).includes("EQUIVALENCE_GROUP_BINDING_INVALID"));
   const orphan = validDocuments(); orphan.assessment.verification_plans.push({ id: "unused-plan", contract_id: "cache", state_transition: "fresh-miss", oracle: "unused", steps_ref: "unused", source_identity: "test-cache-current" }); orphan.assessment.actual_verifications = [];
-  assert.ok(codes(validate({ phase: "pre-build", ...orphan })).includes("VERIFICATION_PLAN_ORPHANED"));
+  assert.ok(codes(validate({ phase: "pre_build", ...orphan })).includes("VERIFICATION_PLAN_ORPHANED"));
   const actual = validDocuments(); actual.assessment.actual_verifications.push({ verification_id: "unconsumed", outcome: "passed", executed_source_identity: "anything", evidence_ref: "anything" });
   assert.ok(codes(validate({ phase: "completion", ...actual })).includes("ACTUAL_VERIFICATION_ORPHANED"));
 });
@@ -230,9 +263,9 @@ test("scalar and null array members never throw and return structural reasons", 
 test("duplicate and dangling identities fail with closure reasons", () => {
   const duplicate = validDocuments();
   duplicate.assessment.obligations.push({ ...duplicate.assessment.obligations[0], id: "obligation-duplicate" });
-  assert.ok(codes(validate({ phase: "pre-build", ...duplicate })).includes("OBLIGATION_REQUIREMENT_DUPLICATE"));
+  assert.ok(codes(validate({ phase: "pre_build", ...duplicate })).includes("OBLIGATION_REQUIREMENT_DUPLICATE"));
   const dangling = validDocuments(); dangling.assessment.obligations[3].verification_id = "not-a-plan";
-  assert.ok(codes(validate({ phase: "pre-build", ...dangling })).includes("VERIFICATION_PLAN_DANGLING"));
+  assert.ok(codes(validate({ phase: "pre_build", ...dangling })).includes("VERIFICATION_PLAN_DANGLING"));
 });
 
 test("cosmetic local control remains proportionate", () => {
@@ -250,7 +283,7 @@ test("CLI rejects malformed, oversized, nested, and command-looking input withou
   assert.equal(clean.status, 0, JSON.stringify({ stdout: clean.stdout, stderr: clean.stderr, result: clean.result })); assert.equal(clean.result.complete, true);
   const marker = path.join(os.tmpdir(), `change-impact-marker-${process.pid}`);
   const malicious = validDocuments(); malicious.assessment.verification_plans[0].steps_ref = `$(touch ${marker})`; malicious.assessment.actual_verifications = [];
-  const noExecution = runCli(malicious, "pre-build");
+  const noExecution = runCli(malicious, "pre_build");
   assert.equal(noExecution.status, 0); assert.equal(fs.existsSync(marker), false); assert.equal(noExecution.stdout.includes(marker), false);
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "change-impact-bounds-"));
   fs.writeFileSync(path.join(directory, "capture.json"), "{".repeat(MAX_BYTES + 1));

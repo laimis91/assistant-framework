@@ -591,7 +591,7 @@ fields:
     required: conditional
     condition: "persisted review packet was created under v6"
     description: "v6 to producer 7.2 migration."
-    validation: "Invalidate v6 and rebuild from a freshly rehashed 7.2 snapshot; block CLEAN/ISSUES_FIXED. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance."
+    validation: "Invalidate v6 and rebuild from a freshly rehashed 7.2 snapshot; block CLEAN/ISSUES_FIXED. Retain raw history and preserve each complete identity tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance only when each field is missing."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -629,13 +629,51 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet schema_version == 7.0"
-    validation: "Invalidate all 7.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 7.2. Rebuild required review/QA from a fresh 7.2 snapshot before CLEAN/ISSUES_FIXED."
+    validation: "Invalidate all 7.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 7.2. Retain every raw 7.0 previously_fixed record unchanged as historical evidence. Before closure dispatch, preserve each complete aggregate_finding_id/source_finding_ids/source_provenance tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. When aggregate_finding_id is absent, normalize UTF-8 NFC(description) into UTF-8 bytes, SHA-256 hash it, and use legacy-v7-0:<fixed_in_round>:<first-24-hex>; non-colliding records use the base and every colliding record appends :<ordinal> in original packet order, then fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. Rebuild required review/QA from a fresh 7.2 snapshot before CLEAN/ISSUES_FIXED."
     on_missing: fail
     object_fields:
       - name: source_schema_version
         type: enum
         required: true
         enum_values: ["7.0"]
+      - name: batch_disposition
+        type: enum
+        required: true
+        enum_values: [invalidated_rebuild_required]
+      - name: rebuilt_review_snapshot_id
+        type: string
+        required: true
+      - name: rebuilt_snapshot_identity
+        type: object
+        required: true
+        description: "Fresh 7.2 identity after rehash."
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
+
+  - name: persisted_v7_1_packet_invalidation
+    type: object
+    required: conditional
+    condition: "persisted review packet schema_version == 7.1"
+    validation: "Invalidate all 7.1 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 7.2. Preserve existing 7.1-or-later previously_fixed provenance as historical evidence, then rebuild required review/QA from a fresh 7.2 snapshot before CLEAN/ISSUES_FIXED."
+    on_missing: fail
+    object_fields:
+      - name: source_schema_version
+        type: enum
+        required: true
+        enum_values: ["7.1"]
       - name: batch_disposition
         type: enum
         required: true

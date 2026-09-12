@@ -172,7 +172,7 @@ test("independent fixture authority adapts known consumers and transitions witho
     assert.ok(codes(validate({ phase: "completion", ...missingConsumer })).includes("CAPTURE_EXPECTED_EDGES_MISMATCH"), `${value.id} consumer omission`);
     const missingTransition = clone(documents);
     missingTransition.assessment.obligations.pop();
-    assert.ok(codes(validate({ phase: "pre-build", ...missingTransition })).includes("CAPTURE_REQUIREMENT_OBLIGATION_MISSING"), `${value.id} transition omission`);
+    assert.ok(codes(validate({ phase: "pre_build", ...missingTransition })).includes("CAPTURE_REQUIREMENT_OBLIGATION_MISSING"), `${value.id} transition omission`);
   }
 });
 
