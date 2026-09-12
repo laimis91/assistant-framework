@@ -2,7 +2,7 @@
 
 Audit/read-only: frozen batches.
 
-1. Capture identity; mutation invalidates. Rebuild persisted 6.0 or incompatible 7.0 under 7.1 from a fresh snapshot before `CLEAN`/`ISSUES_FIXED`.
+1. Capture identity; mutation invalidates. Rebuild persisted 6.0 or incompatible 7.0 under 7.2 from a fresh snapshot before `CLEAN`/`ISSUES_FIXED`.
 2. Plan a minimum of two independent narrow passes; medium adds integration, large architecture; max six. Security uses Code Reviewer `assistant-security`; Reviewer schema authoritative.
 3. Unique IDs/scopes/obligations/concerns; exact tuples; sibling-blind; aggregate ledger.
 4. Returns carry tuple/status/evidence; only `inspected_no_risk`/`finding` completes. Source IDs: `review_pass_id`; closure: `aggregate_finding_id`.

@@ -17,6 +17,10 @@ evidence that explains the symptom, cause, fix, and verification.
 - Competing hypotheses are tested and disconfirming evidence is retained.
 - Root cause is supported by code, config, or runtime evidence.
 - Verification covers the original failure path and a relevant regression check.
+- When a repair can affect another consumer, record compact change-impact
+  applicability evidence. Only shared, materially unresolved, or explicitly
+  carried expanded repairs use the bounded artifact through verification;
+  source fixes do not relabel a symptom-only assessment as completion evidence.
 
 ## Constraints
 
@@ -35,6 +39,8 @@ load only the boundary currently being enforced:
 
 - `entry` for symptom, scope, reproduction target, safety, and edit permission;
 - `current_phase` for SCOPE, REPRODUCE, HYPOTHESIZE, ISOLATE, FIX, or VERIFY;
+- `change_impact` when a diagnosis, repair, or locality claim affects consumer
+  verification; and
 - `selected_handoff` only when investigation or fix delegation is selected; and
 - `completion` only for the artifact being returned.
 
@@ -61,6 +67,10 @@ delegation, and review, but specialist gates are authoritative.
    that addresses the cause. Label uncertain emergency changes as mitigations.
 6. **VERIFY** — rerun the reproduction, focused test, relevant regressions, and
    normal project checks. Skipped checks remain residual risk.
+
+When change impact is triggered, load `references/change-impact.md`. The
+common checker is resolved from the active installation, so standalone
+debugging does not depend on assistant-workflow being installed.
 
 Use `assistant-debugging` before `assistant-tdd` when a meaningful RED test
 cannot yet be written. Once the mechanism is understood, hand the regression

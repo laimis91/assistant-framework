@@ -115,6 +115,21 @@
           "destructive diagnostics"
         ]
       }
+    },
+    {
+      "id": "shared-checkout-repair-rejects-symptom-only-locality",
+      "title": "Debugging carries shared consumer impact before a checkout fix",
+      "category": "impact_accounting",
+      "purpose": "Rejects a checkout-only fix claim when invoice, retry, and configuration consumers are supplied.",
+      "prompt": "Diagnose a checkout discount bug. The helper is also used by invoice export, retry recovery, and configuration-driven validation. A caller proposes calling it local because checkout is the reported symptom. Return the phase-correct debugging result.",
+      "setup_context": ["The change-impact checker is available but no pre-build assessment has been supplied.", "The reported checkout symptom is only one known consumer."],
+      "expected_behavior": ["Rejects symptom-only locality.", "Records bounded shared impact or an explicit evidence gap before a repair.", "Does not claim completed verification or clean review from diagnosis."],
+      "pass_criteria": ["The response names the omitted consumer categories and does not patch first.", "Completion remains unavailable without current verification and review."],
+      "fail_signals": ["Classifies the helper local solely because checkout reported the bug.", "Claims completion without current verification and review projection."],
+      "machine_expectations": {
+        "required_substrings": ["shared", "invoice", "retry", "configuration", "pre-build", "residual"],
+        "forbidden_substrings": ["local because checkout", "clean review is complete"]
+      }
     }
   ]
 }

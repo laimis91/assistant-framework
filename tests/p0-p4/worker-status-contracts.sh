@@ -90,7 +90,7 @@ missing_typed_artifact_terms=()
 for term in \
     "artifact_reference_protocol:" \
     "required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]" \
-    "artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]" \
+    "artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]" \
     "location_ref is the typed location/ref pointer" \
     "Producer responsibility: create or update the artifact" \
     "Consumer responsibility: validate schema_or_contract and validation_status before relying on location_ref" \
@@ -114,7 +114,7 @@ for term in \
     "schema_or_contract" \
     "validation_status" \
     "ledger covers Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
-    "enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]" \
+    "enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]" \
     "- name: pivot_restart_decision"; do
     if ! grep -Fq -- "$term" "$output_contract"; then
         missing_typed_artifact_terms+=("output.yaml: $term")

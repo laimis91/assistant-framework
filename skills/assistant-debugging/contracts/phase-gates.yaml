@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "1.1"
 contract: phase-gates
 skill: assistant-debugging
 
@@ -64,6 +64,10 @@ gates:
     checkpoint_end: "--- PHASE: FIX COMPLETE ---"
     condition: "when can_modify_code is true and a fix or mitigation is attempted"
     exit_assertions:
+      - id: FX_CHANGE_IMPACT_PREBUILD
+        check: "Every behavior repair records compact applicability evidence. When the diagnosis/proposed repair has shared or unresolved material impact, or explicitly carries an expanded artifact, a current common-checker pre-build assessment covers the bounded base/candidate consumer union and planned obligations before source mutation. Evidenced local repairs keep ordinary regression verification and self-review."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Do not patch; load references/change-impact.md and repair the assessment or report its explicit blocker."
       - id: FX1
         check: "Each changed file maps to the confirmed cause, mitigation, or regression test"
         on_fail: "Remove unrelated changes or document approved scope expansion"
@@ -78,6 +82,10 @@ gates:
     checkpoint_start: "--- PHASE: VERIFY ---"
     checkpoint_end: "--- PHASE: VERIFY COMPLETE ---"
     exit_assertions:
+      - id: VF_CHANGE_IMPACT_COMPLETION
+        check: "A triggered completed repair retains the same artifact identity, actual current verification, and assistant-review projection of the canonical review scope/ledger/snapshot bindings; its impact result does not replace assistant-review terminal coverage or result."
+        condition: "a source fix occurred and (impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried)"
+        on_fail: "Report verification incomplete or blocked; refresh and rerun the common completion gate and canonical review as applicable."
       - id: VF1
         check: "Original reproduction path passes or status is not_reproduced/blocked/inconclusive with explanation"
         on_fail: "Run original reproduction path again or downgrade the status"
@@ -89,6 +97,11 @@ gates:
         on_fail: "Move skipped/blocked checks into residual_risks and adjust confidence"
 
 invariants:
+  - id: INV_CHANGE_IMPACT
+    check: "Every behavior diagnosis retains compact applicability evidence. An expanded diagnosis carries the same common artifact identity across investigation, repair, and verification; absent or stale expanded evidence remains a gap, not a local or clean claim."
+    condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+    scope: all_phases
+    on_fail: "Refresh the bounded evidence or report the residual blocker."
   - id: INV1
     check: "No random patching: every edit traces to a confirmed or strongly supported hypothesis"
     scope: all_phases

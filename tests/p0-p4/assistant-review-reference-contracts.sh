@@ -277,7 +277,7 @@ if ! ruby -ryaml -e '
     reviewer_challenge = reviewer_checks.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
     output_pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack_review" }
     output_challenge = output_pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
-    valid = input["schema_version"] == "7.1" && handoffs["schema_version"] == "7.1" && output["schema_version"] == "7.1" && index["schema_version"] == "7.1" &&
+    valid = input["schema_version"] == "7.2" && handoffs["schema_version"] == "7.2" && output["schema_version"] == "7.2" && index["schema_version"] == "7.2" &&
       canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
       canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
       canonical_mode["on_missing"] == "infer" &&
@@ -588,7 +588,7 @@ if ! ruby -ryaml -e '
     pressure = fields.fetch("design_pressure_checks")
     required_concerns = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
     ref = fields.fetch("ref")
-    valid = contracts.all? { |contract| contract.fetch("schema_version") == "7.1" } &&
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == "7.2" } &&
       boundaries["required"] == true && boundaries["min_items"] == 1 &&
       pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
       ref["required"] == true && ref.fetch("validation").include?("selected design") && ref.fetch("validation").include?("rationale") && ref.fetch("validation").include?("viable alternatives") &&
@@ -1093,8 +1093,8 @@ else
 fi
 
 test_start "assistant-review v7 migration wording preserves source and target direction"
-if grep -Fq 'Rebuild persisted 6.0 or incompatible 7.0 under 7.1 from a fresh snapshot' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md" \
-  && ! grep -Fq 'Rebuild 7.1 from' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"; then
+if grep -Fq 'Rebuild persisted 6.0 or incompatible 7.0 under 7.2 from a fresh snapshot' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md" \
+  && ! grep -Fq 'Rebuild 7.2 from' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"; then
     pass
 else
     fail "assistant-review review-batch migration wording reverses the v6-to-v7 rebuild direction"
@@ -1203,7 +1203,7 @@ if ruby -ryaml -e '
   current_schema_version = input.fetch("schema_version")
   migration = {"source_schema_version" => legacy_packet.fetch("schema_version"), "batch_disposition" => "invalidated_rebuild_required", "rebuilt_review_snapshot_id" => "fresh-v#{current_schema_version}-snapshot"}
   legacy_v7_packet = {"schema_version" => "7.0", "final_summary" => {"result" => "CLEAN"}}
-  can_claim_clean = ->(packet, migration_state) { packet.fetch("schema_version") == "7.1" && migration_state.fetch("batch_disposition") != "invalidated_rebuild_required" }
+  can_claim_clean = ->(packet, migration_state) { packet.fetch("schema_version") == "7.2" && migration_state.fetch("batch_disposition") != "invalidated_rebuild_required" }
   previously_fixed = input.fetch("fields").find { |field| field["name"] == "previously_fixed" }.fetch("object_fields").to_h { |field| [field["name"], field] }
   migration_contract = input.fetch("fields").find { |field| field["name"] == "persisted_v6_packet_migration" }
   v7_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v7_0_packet_invalidation" }
@@ -1216,7 +1216,7 @@ if ruby -ryaml -e '
     migration_contract.fetch("description").include?(current_schema_version) && migration_contract.fetch("validation").include?("freshly rehashed #{current_schema_version} snapshot") && migration_contract.fetch("object_fields").find { |field| field["name"] == "rebuilt_snapshot_identity" }.fetch("description").include?(current_schema_version) &&
     migration_contract.fetch("validation").include?("UTF-8 NFC") && migration_contract.fetch("validation").include?("SHA-256") && migration_contract.fetch("validation").downcase.include?("invalidate") &&
     migration_contract.fetch("validation").downcase.include?("non-colliding records use") && migration_contract.fetch("validation").include?("every colliding record appends") &&
-    v7_invalidation.fetch("condition").include?("7.0") && v7_invalidation.fetch("validation").include?("do not reinterpret") && v7_invalidation.fetch("validation").include?("7.1") &&
+    v7_invalidation.fetch("condition").include?("7.0") && v7_invalidation.fetch("validation").include?("do not reinterpret") && v7_invalidation.fetch("validation").include?("7.2") &&
     bundle.fetch("context_fields_from_dispatch").include?("review_focus") && pass_fields.include?("review_focus") &&
     bundle.fetch("review_evidence_pointer").fetch("required_refs").include?("review_material_snapshot") &&
     !bundle.fetch("review_evidence_pointer").fetch("required_refs").include?("review_material_snapshot_ref") &&
@@ -1321,7 +1321,7 @@ if ruby -ryaml -e '
   response_terminal = ->(events) { events.count { |event| event["disposition"] == "active_terminal" } == 1 }
   synthetic_failure = ->(events, kind, evidence) { events.none? { |event| event["disposition"] == "active_terminal" } && %w[timeout transport schema_invalid source_mutation].include?(kind) && !evidence.empty? }
   truth = returns.fetch("status").fetch("validation")
-  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "7.1" } &&
+  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "7.2" } &&
     identity == final_identity && final_identity.find { |field| field["name"] == "basis" }.fetch("type") == "enum" &&
     final.fetch("final_review_snapshot_id").fetch("validation").downcase.include?("exactly equals current review_snapshot_id") &&
     manifest.fetch("scope_item_id").fetch("validation").downcase.include?("unique") && manifest.fetch("applicable_concerns").fetch("validation").downcase.include?("unique") &&
@@ -1526,7 +1526,7 @@ if ruby -ryaml -e '
     "coordinated_invalid_terminal" => ->(trial) { trial["review_batch"]["pass_attempt_ledger"][0]["attempts"][0]["terminal_state"] = "blocked"; trial["reviewer_returns"][0]["status"] = "BLOCKED"; trial["reviewer_returns"][0]["pass_completion_state"] = "blocked"; trial["reviewer_returns"][0]["verdict"] = "not_assessed"; trial["reviewer_returns"][0]["coverage_entries"] = []; trial["reviewer_returns"][0]["open_questions"] = ["blocked"] }
   }
   mutation_valid = mutations.all? { |_name, mutate| trial = duplicate.call(packet); mutate.call(trial); !packet_valid.call(trial) }
-  valid = input.fetch("schema_version") == "7.1" && handoffs.fetch("schema_version") == "7.1" && output.fetch("schema_version") == "7.1" && packet_valid.call(packet) && truth_valid && mutation_valid
+  valid = input.fetch("schema_version") == "7.2" && handoffs.fetch("schema_version") == "7.2" && output.fetch("schema_version") == "7.2" && packet_valid.call(packet) && truth_valid && mutation_valid
   exit valid ? 0 : 1
 ' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
     pass
@@ -1704,7 +1704,7 @@ if ruby -ryaml -rjson -e '
     actual = template.fetch("required_coverage_tuples").map { |tuple| [tuple["review_pass_id"], tuple["scope_item_id"], tuple["applicable_concern"], tuple["review_perspective"], tuple["coverage_obligation"]] }
     actual.uniq.length == actual.length && actual.sort == expected.sort
   end
-  valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "7.1" } &&
+  valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "7.2" } &&
     entry_names.include?("previously_fixed") && entry_names.include?("persisted_v6_packet_migration") && entry_names.include?("persisted_v7_0_packet_invalidation") &&
     previous.key?("aggregate_finding_id") && previous.fetch("source_finding_ids").fetch("condition").include?("producer schema 7.1") && previous.fetch("source_provenance").fetch("condition").include?("producer schema 7.1") && !previous.key?("finding_id") &&
     migration_identity == canonical_identity && invalidation_identity == canonical_identity &&

@@ -1,8 +1,26 @@
-schema_version: "1.0"
+schema_version: "1.1"
 contract: output
 skill: assistant-debugging
 
 artifacts:
+  - name: change_impact_evidence
+    type: object
+    required: conditional
+    condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+    validation: "Records unchanged artifact_identity, phase, impact_scope, capture/expected/assessment refs, and checker result for expanded impact. Local diagnosis records causal evidence with ordinary regression verification and self-review without checker refs. Before a source fix, shared or unresolved diagnosis has valid pre-build evidence; after a fix, completion requires actual verification and assistant-review's canonical review projection. Audit-only diagnosis may report gaps without claiming a future repair or clean review."
+    on_fail: "Preserve the incomplete diagnosis and report the blocked/unverified gate; do not narrow consumers to the reported symptom or substitute manual validation."
+    object_fields:
+      - {name: artifact_identity, type: string, required: true}
+      - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
+      - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+      - {name: validator_result_ref, type: string, required: true}
+      - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
+      - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+      - {name: review_projection_ref, type: string, required: conditional, condition: "status == valid and phase == completion"}
+      - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
+
   - name: status
     type: enum
     required: true

@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "7.1"
+schema_version: "7.2"
 contract: phase-gates
 skill: assistant-review
 
@@ -33,6 +33,11 @@ gates:
       - id: E4
         check: "mode is resolved (review-fix or audit)"
         on_fail: "Ask exactly: 'Should I only report findings, or also implement and verify fixes?' Stop before Reviewer dispatch or source mutation until the user answers. Do not use authorship, branch/PR ownership, platform, or connector as modification authorization."
+
+      - id: E_CHANGE_IMPACT
+        check: "Every behavior review records compact applicability evidence. When impact is shared or materially unresolved, or an expanded artifact is explicitly carried, discovery requires identity/capture/expected refs; assessment is required only for pre-build or completion. The batch scope/coverage obligations include an independent locality, captured-consumer, material-transition, and canonical-mapping challenge. Evidenced local work retains ordinary review obligations without a common-checker gate."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Keep the audit/fix result incomplete, load references/change-impact.md, and repair or report the missing evidence before dispatch."
 
       - id: E5
         check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required with canonical architecture_design_mode are resolved before review starts"
@@ -223,6 +228,11 @@ gates:
     checkpoint_end: null
     exit_assertions:
 
+      - id: F_CHANGE_IMPACT_PREBUILD
+        check: "Before a review-fix edits a triggered shared or unresolved impact scope, a current common-checker pre-build assessment has valid planned obligations for the bounded consumer union and material transitions."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Do not edit source; repair the pre-build assessment or return the review-fix as blocked/remaining."
+
       - id: F1
         check: "ALL must-fix items were addressed (not just some)"
         on_fail: "Fix remaining must-fix items before proceeding"
@@ -234,6 +244,11 @@ gates:
       - id: F3
         check: "Each newly fixed item was added to previously_fixed with its original aggregate_finding_id, source_finding_ids, source_provenance, description, round number, and pending_verification closure status; only legacy pre-ID records may receive deterministic normalized IDs."
         on_fail: "Update previously_fixed closure ledger before proceeding to VALIDATE"
+
+      - id: F_CHANGE_IMPACT
+        check: "When a review-fix mutates a triggered impact scope, refresh the bounded capture/expected/assessment before the next batch; prior locality or snapshot evidence is stale."
+        condition: "(impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried) and source changed"
+        on_fail: "Do not reuse the prior impact projection; recapture and revalidate before re-review."
 
   # ─────────────────────────────────────────────
   # VALIDATE step — per round (review-fix mode only)
@@ -331,10 +346,20 @@ gates:
         check: "A no-material-finding final result has complete coverage, uses the evidence-bounded claim 'No material findings within the reviewed scope and available evidence', and does not present CLEAN as proof of correctness"
         on_fail: "Keep the compatible machine enum, replace the user-facing certainty claim with the required evidence-bounded wording, and state residual risk."
 
+      - id: X_CHANGE_IMPACT
+        check: "When change-impact accounting is triggered, a current review projection maps the same artifact identity to the original canonical scope_manifest, coverage_ledger, current snapshot, and concern bindings. Common completion validation, final_summary coverage_complete, and CLEAN/ISSUES_FIXED remain independently required; a read-only audit reports gaps rather than manufacturing a clean claim."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Retain HAS_REMAINING_ITEMS/BLOCKED or audit gaps, refresh the canonical review batch, and rebuild the projection."
+
 # ─────────────────────────────────────────────
 # Loop invariants
 # ─────────────────────────────────────────────
 invariants:
+  - id: INV_CHANGE_IMPACT
+    check: "Impact projection preserves the supplied artifact identity and uses canonical review authority only; it never creates a parallel ledger or permits a clean result without current terminal coverage."
+    condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+    scope: all_rounds
+    on_fail: "Use the existing manifest/ledger/final summary and report the unresolved gap."
   - id: INV0
     check: "Only ONE summary is presented to the user — no intermediate results are shown during the loop"
     scope: all_rounds

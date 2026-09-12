@@ -19,7 +19,7 @@ while round <= 10:
   A score below the rubric threshold alone is insufficient to start round 3 or later.
 
   1. REVIEW
-     - Freeze snapshot/manifest/identity; mutation invalidates. Rebuild persisted 6.0/7.0 under 7.1 before clean. Load `references/review-batch.md` before batch planning.
+     - Freeze snapshot/manifest/identity; mutation invalidates. Rebuild persisted 6.0/7.0 under 7.2 before clean. Load `references/review-batch.md` before batch planning.
      - Derive canonical discovery passes. Without trigger, trivial/small uses two purpose-specific isolated direct-fallback passes; trigger delegates scope. Security/post-fix closure are additive, max six.
      - First resolve `reviewer_context` from `contracts/index.yaml` strictly below 5653 words; carry bounded selector before response; siblings are blind; only closure gets ledger.
      - Load principles/rubric/triggered checklist sections. Medium+ returns Design Coherence evidence or `no concrete risk found`. Run a bounded independent capability search; carried Mapper evidence cannot satisfy review.

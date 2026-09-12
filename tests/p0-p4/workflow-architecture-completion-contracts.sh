@@ -309,7 +309,7 @@ if ! ruby -ryaml -e '
     verification = pack_fields.fetch("verification")
     verification_fields = verification.fetch("object_fields").to_h { |field| [field["name"], field] }
     maps = contracts.map { |contract| (contract["fields"] || []).find { |field| field["name"] == "requirement_acceptance_map" } || (contract["artifacts"] || []).find { |artifact| artifact["name"] == "requirement_acceptance_map" } }.compact
-    valid = contracts.all? { |contract| contract.fetch("schema_version") == "11.0" } &&
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == output.fetch("schema_version") } &&
       pack_fields.fetch("selected_alternative_id")["required"] == "conditional" &&
       pack_fields.fetch("selected_alternative_id")["condition"].include?("alternatives") &&
       alternative_fields.fetch("alternative_id")["required"] == true &&
@@ -672,7 +672,8 @@ elif ! grep -Fq 'semantic_type_inspection' <<<"$migration_note" \
     || ! grep -Fq 'contributor_evidence' <<<"$migration_note"; then
     fail "v9 migration note does not preserve CodeMapper semantic inspection and collaborative contributor evidence migrations"
 elif ! ruby -ryaml -e '
-    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "11.0" }
+    expected = YAML.load_file(ARGV.first).fetch("schema_version")
+    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == expected }
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
     fail "v11 migration does not bump every assistant-workflow canonical contract header"
 elif ! grep -Fq 'verification_command' <<<"$migration_note"; then
@@ -1597,7 +1598,8 @@ if ! jq -e '
     standard_pack_review_failures+=("standard Pack review retention eval lacks structured canonical reference assertions")
 fi
 if ! ruby -ryaml -e '
-    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == "11.0" }
+    expected = YAML.load_file(ARGV.first).fetch("schema_version")
+    ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == expected }
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
     standard_pack_review_failures+=("workflow v11 does not cover every canonical contract header")
 fi
@@ -2014,7 +2016,7 @@ for case_id in \
         fi
     done
 done
-if [[ "$canonical_review_schema_version" == "7.1" && ${#terminal_shape_failures[@]} -eq 0 ]]; then
+if [[ "$canonical_review_schema_version" == "$(ruby -ryaml -e 'puts YAML.load_file(ARGV.fetch(0)).fetch("schema_version")' "$assistant_review_output")" && ${#terminal_shape_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "terminal review consumer endpoint gaps: canonical=$canonical_review_schema_version ${terminal_shape_failures[*]}"

@@ -512,3 +512,7 @@ encode arbitrary structures.
     Recipe, typed refs, separate code-review/QA handoffs, pivot/restart
     decisions, and the max 10 terminal cap when the Process skill has
     long-running review, QA, or fix-verify loops
+15. **Shared-impact evidence** — phase-aware evidence preserves
+    identity. Discovery may report gaps; completion needs verification and
+    review. Loaded-path tools missing runtime block. Fanout alone
+    does not escalate architecture, QA, or lane.

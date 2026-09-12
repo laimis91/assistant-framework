@@ -2027,6 +2027,21 @@
           {"operator":"equals","path":["qa_evaluation_result","score_progression",0,"weighted_score"],"expected":1.8}
         ]
       }
+    },
+    {
+      "id": "shared-impact-audit-rejects-checkout-only-projection",
+      "title": "Review keeps canonical coverage authoritative for shared impact",
+      "category": "impact_accounting",
+      "purpose": "Rejects a review that covers checkout alone while carried impact evidence names invoice, retry, and configuration consumers.",
+      "prompt": "Run a read-only audit of a checkout helper change. The carried change-impact capture includes checkout, invoice export, retry recovery, and configuration validation, but the proposed review manifest covers checkout only. Return the audit result.",
+      "setup_context": ["The supplied impact identity is current.", "The canonical review manifest omits three captured consumers."],
+      "expected_behavior": ["Reports the missing consumer mappings as review/impact gaps.", "Does not create a replacement coverage ledger.", "Does not claim CLEAN from an impact projection."],
+      "pass_criteria": ["The audit returns remaining coverage work.", "The canonical ledger remains the terminal review authority."],
+      "fail_signals": ["Accepts checkout-only coverage.", "Reports CLEAN while canonical coverage is incomplete."],
+      "machine_expectations": {
+        "required_substrings": ["invoice", "retry", "configuration", "coverage", "gap", "HAS_REMAINING_ITEMS"],
+        "forbidden_substrings": ["checkout-only coverage is sufficient", "impact projection makes this CLEAN"]
+      }
     }
   ]
 }

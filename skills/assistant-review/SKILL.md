@@ -10,6 +10,7 @@ description: "Review code, fix actionable findings, and run one fresh re-review.
 Canonical input, output, phase-gate, and handoff schemas remain authoritative at their enforcement points. Read `contracts/index.yaml` first; do not load every contract at entry.
 
 - `entry`: load `contracts/input.yaml` review-entry fields selected by `review-entry-fields` in `contracts/index.yaml`.
+- `change_impact`: load its reference only when triggered; keep it out of reviewer bundles.
 - `architecture_pack_input`: when Pack review triggers, load `architecture_decision_pack` through `review-architecture-pack-input` before planning or dispatch.
 - `current_round`: load the active round step from `contracts/phase-gates.yaml` at each transition.
 - `selected_handoff`: select the compact dispatch pointer from `contracts/handoffs.yaml` before Reviewer or QAEvaluator dispatch.
@@ -19,7 +20,7 @@ Canonical input, output, phase-gate, and handoff schemas remain authoritative at
 
 Migration note: assistant-review contracts are v7. Persisted v6 batch packets are invalidated and rebuilt; they never reach CLEAN. Triggered Pack review loads `architecture_pack_input` and validates recoverable selected design, rationale, and viable alternatives/dispositions plus `architecture_decision_pack_checks`. Applicable instructions trigger Reviewer/QA roles with `subagent_trigger_scope`; opt-out, unavailability, or policy blocks use direct fallback. Reviewer returns and final summaries use non-empty `reviewed_scope` so workflow consumers can use the producer packet.
 
-Selectors use unique id, canonical path, exact section/key, and explicit or allowed runtime names. Entry declares no immediate principles, checklist, or rubric references.
+Selectors resolve canonical fields. Entry loads no review guidance.
 
 If a selector is missing or invalid, apply `load_full_authoritative_file`: load the full named canonical file, validate the applicable rules, and record any recovery before proceeding.
 
@@ -104,13 +105,15 @@ Review a Pack only when workflow metadata or review material says one applies. I
 
 ## Principle and Readability Lens
 
-The fresh Reviewer bundle includes `references/review-principles.md` for clean-code checks. For medium+ scope, run its Design Coherence Pass and return `principle_checks.design_coherence`: evidence-backed risk or `no concrete risk found`, never a structural heuristic. Report findings only with concrete risk.
-
-For each principle/readability finding, include the violated lens, affected surface, concrete evidence, risk category, and smallest durable fix. Do not report acronym-only findings such as "violates SOLID" without naming the observed behavior and the user-facing or maintainer risk.
+For medium+ reviews, run the **Design Coherence Pass** and return evidence-bound
+`principle_checks.design_coherence`; findings name surface, risk, and smallest fix.
 
 ## Review Loop Routing
 
 After entry, load `references/review-loop.md` before the first REVIEW step. It owns the batch protocol, loop, barriers, pivots, and max 10. Principles, triggered checklists, and rubric guidance belong to fresh pass bundles. Before dispatch, include `worker_return_schema_selector`: recursively required/triggered shapes, types, enums, and cardinality only; never sibling/batch state.
+
+Impact projection preserves canonical review closure; it never makes audit or
+review-fix results clean by itself.
 
 Run QA only when `qa_evaluation_mode=required`. The loop routes to `references/qa-evaluation-loop.md` after build/test and code-review evidence exist; QA evaluates acceptance and scoped quality, and does not replace code review.
 
