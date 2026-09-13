@@ -65,11 +65,11 @@ fields:
   - name: change_impact_applicability
     type: object
     required: conditional
-    condition: "a diagnosis or proposed repair has a behavior-bearing or locality/shared/unresolved impact decision"
+    condition: "a diagnosis or proposed repair has a behavior-bearing, cosmetic, or locality/shared/unresolved impact decision"
     description: "Compact impact applicability evidence before selecting local or expanded repair verification."
-    validation: "Records impact_scope and applicability_reason. local requires causal_evidence_ref and ordinary regression verification/self-review; shared or unresolved requires expanded_artifact_carried=true."
+    validation: "Records impact_scope and applicability_reason. not_applicable is cosmetic; local requires causal_evidence_ref; shared/unresolved or explicit expansion requires expanded_artifact_carried=true."
     object_fields:
-      - {name: impact_scope, type: enum, required: true, enum_values: [local, shared, unresolved]}
+      - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
       - {name: applicability_reason, type: string, required: true}
       - {name: causal_evidence_ref, type: string, required: conditional, condition: "impact_scope == local"}
       - {name: expanded_artifact_carried, type: boolean, required: true}

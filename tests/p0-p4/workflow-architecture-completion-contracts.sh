@@ -58,19 +58,28 @@ fresh_review_field_has_property() {
     ' "$file"
 }
 
-fresh_review_pack_refs_are_declared() {
+fresh_review_common_refs_are_declared() {
     local file="$1"
     local field
-    for field in canonical_result_ref final_snapshot_identity_ref delegation_path_ref architecture_decision_pack_review_ref; do
+    local common_condition='architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried'
+    for field in canonical_result_ref canonical_contract producer_schema_version final_review_snapshot_id final_snapshot_identity_ref delegation_path_ref delegation_contract; do
         fresh_review_field_has_property "$file" "$field" 'type: string' \
-            && fresh_review_field_has_property "$file" "$field" 'required: conditional' \
+            || return 1
+    done
+    fresh_review_field_has_property "$file" final_snapshot_identity 'type: object' \
+        && fresh_review_field_has_property "$file" validation_status 'type: enum' \
+        || return 1
+    for field in canonical_result_ref canonical_contract producer_schema_version final_review_snapshot_id final_snapshot_identity_ref final_snapshot_identity delegation_path_ref delegation_contract validation_status; do
+        fresh_review_field_has_property "$file" "$field" 'required: conditional' \
+            && fresh_review_field_has_property "$file" "$field" "condition: \"$common_condition\"" \
+            || return 1
+    done
+    for field in architecture_decision_pack_review_ref architecture_decision_pack_review_contract; do
+        fresh_review_field_has_property "$file" "$field" 'required: conditional' \
             && fresh_review_field_has_property "$file" "$field" 'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
             || return 1
     done
-    fresh_review_field_has_property "$file" delegation_contract 'type: string' \
-        && fresh_review_field_has_property "$file" delegation_contract 'required: conditional' \
-        && fresh_review_field_has_property "$file" delegation_contract 'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
-        && fresh_review_field_has_property "$file" delegation_contract 'validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"'
+    fresh_review_field_has_property "$file" delegation_contract 'validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"'
 }
 
 without_fresh_review_pack_refs() {
@@ -753,15 +762,16 @@ if ruby -ryaml -e '
     end
 
     producer_basis = final_identity.fetch("object_fields").find { |field| field["name"] == "basis" }
+    common_condition = "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
     valid = final_identity["required"] == true && producer_shape == expected_shape &&
       producer_basis.fetch("enum_values") == %w[git_revision diff_digest content_digest task_or_pr_revision] &&
       review_ref["required"] == true && exact_binding.call(review_ref) &&
       review_identity["required"] == true && exact_identity.call(review_identity) &&
       fresh_ref["required"] == "conditional" &&
-      fresh_ref["condition"] == "architecture_design_mode in [lightweight, required, review_intensive]" &&
+      fresh_ref["condition"] == common_condition &&
       exact_binding.call(fresh_ref) &&
       fresh_identity["required"] == "conditional" &&
-      fresh_identity["condition"] == "architecture_design_mode in [lightweight, required, review_intensive]" &&
+      fresh_identity["condition"] == common_condition &&
       exact_identity.call(fresh_identity)
     exit valid ? 0 : 1
 ' "$assistant_review_output" "$output_contract" \
@@ -835,17 +845,29 @@ elif ! grep -Fq 'assistant-review/contracts/output.yaml#final_summary' <<<"$fres
     fail "light Pack fresh_review_result does not retain validated canonical assistant-review output refs"
 elif ! grep -Fq 'architecture_decision_pack_review' <<<"$(phase_block REVIEW)" \
     || ! grep -Fq 'assistant-review/contracts/output.yaml#final_summary' "$review_router" \
-    || ! p0p4_contains_text "$review_router" 'review_delegation_path'; then
+    || ! p0p4_contains_text "$review_router" 'review_delegation_path' \
+    || ! p0p4_contains_text "$review_router" 'expanded impact' \
+    || ! p0p4_contains_text "$review_router" 'resolve its own policy' \
+    || ! p0p4_contains_text "$review_router" 'do not copy light Build policy'; then
     fail "light Pack review routing does not preserve the canonical delegation-path requirement"
 else
     pass
 fi
 
-test_start "light Pack fresh_review_result declares every conditional canonical reference"
+test_start "light Pack and expanded-impact fresh_review_result declarations keep common and Pack-only refs distinct"
 fresh_review_ref_missing=()
-for field in canonical_result_ref final_snapshot_identity_ref delegation_path_ref architecture_decision_pack_review_ref; do
+common_condition='condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"'
+for field in canonical_result_ref canonical_contract producer_schema_version final_review_snapshot_id final_snapshot_identity_ref final_snapshot_identity delegation_path_ref delegation_contract validation_status; do
     for property in \
-        'type: string' \
+        'required: conditional' \
+        "$common_condition"; do
+        if ! fresh_review_field_has_property "$output_contract" "$field" "$property"; then
+            fresh_review_ref_missing+=("$field $property")
+        fi
+    done
+done
+for field in architecture_decision_pack_review_ref architecture_decision_pack_review_contract; do
+    for property in \
         'required: conditional' \
         'condition: "architecture_design_mode in [lightweight, required, review_intensive]"'; do
         if ! fresh_review_field_has_property "$output_contract" "$field" "$property"; then
@@ -853,36 +875,27 @@ for field in canonical_result_ref final_snapshot_identity_ref delegation_path_re
         fi
     done
 done
-for property in \
-    'type: string' \
-    'required: conditional' \
-    'condition: "architecture_design_mode in [lightweight, required, review_intensive]"' \
-    'validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"'; do
-    if ! fresh_review_field_has_property "$output_contract" delegation_contract "$property"; then
-        fresh_review_ref_missing+=("delegation_contract $property")
-    fi
-done
 if [[ ${#fresh_review_ref_missing[@]} -eq 0 ]]; then
     pass
 else
-    fail "light Pack fresh_review_result reference declarations are incomplete: ${fresh_review_ref_missing[*]}"
+    fail "light Pack or expanded-impact fresh_review_result declarations are incomplete: ${fresh_review_ref_missing[*]}"
 fi
 
-test_start "light Pack fresh_review_result rejects independent canonical-reference omissions"
+test_start "light Pack and expanded-impact fresh_review_result rejects common and Pack-only reference omissions"
 fresh_review_mutation_dir="$(mktemp -d "${TMPDIR:-/tmp}/workflow-light-pack-ref.XXXXXX")"
 p0p4_register_cleanup "$fresh_review_mutation_dir"
 fresh_review_mutation_failures=()
-for omitted in canonical_result_ref final_snapshot_identity_ref delegation_path_ref delegation_contract architecture_decision_pack_review_ref canonical_result_ref,final_snapshot_identity_ref,delegation_path_ref,delegation_contract,architecture_decision_pack_review_ref; do
+for omitted in canonical_result_ref canonical_contract producer_schema_version final_review_snapshot_id final_snapshot_identity_ref final_snapshot_identity delegation_path_ref delegation_contract validation_status architecture_decision_pack_review_ref architecture_decision_pack_review_contract canonical_result_ref,final_snapshot_identity_ref,delegation_path_ref,delegation_contract,architecture_decision_pack_review_ref; do
     mutated_output="$fresh_review_mutation_dir/${omitted//,/-}.yaml"
     without_fresh_review_pack_refs "$output_contract" "$mutated_output" "$omitted"
-    if fresh_review_pack_refs_are_declared "$mutated_output"; then
+    if fresh_review_common_refs_are_declared "$mutated_output"; then
         fresh_review_mutation_failures+=("$omitted omission accepted")
     fi
 done
 if [[ ${#fresh_review_mutation_failures[@]} -eq 0 ]]; then
     pass
 else
-    fail "light Pack fresh_review_result reference declaration guard false-passes: ${fresh_review_mutation_failures[*]}"
+    fail "light Pack or expanded-impact fresh_review_result reference declaration guard false-passes: ${fresh_review_mutation_failures[*]}"
 fi
 
 test_start "assistant-review and every Reviewer prompt produce workflow-consumable reviewed_scope"

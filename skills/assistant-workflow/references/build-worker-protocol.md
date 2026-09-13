@@ -18,10 +18,13 @@ no public behavior, data, security, harness, or QA acceptance risk:
 - direct implementation with relevant automated validation/tests
 - a fresh self-review after validation
 
-The light lane does not require Code Writer, Builder/Tester, Code Reviewer, or
+Shared fanout alone does not promote this Build lane. The light lane does not require Code Writer, Builder/Tester, Code Reviewer, or
 Reviewer dispatch/direct-fallback evidence. Any security-sensitive, high-risk,
 harness-capable, required-QA, non-localized, or otherwise promoted work uses the
 standard/strict lane and its existing gates.
+
+Expanded impact keeps this Build lane; Review records canonical
+`assistant-review` final-summary and delegation-path refs.
 
 Select `build_execution_lane` before dispatch:
 

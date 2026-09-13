@@ -4,6 +4,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
+source "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
 
 validator="$FRAMEWORK_DIR/tools/change-impact/validate-change-impact.cjs"
 protocol="$FRAMEWORK_DIR/tools/change-impact/protocol.v1.json"
@@ -120,6 +121,67 @@ if [[ "${#local_proportionality_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "$(IFS='; '; printf '%s' "${local_proportionality_failures[*]}")"
+fi
+
+test_start "impact applicability admits cosmetic not_applicable without relaxing local or explicit-expanded obligations"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+framework = ARGV.fetch(0)
+field = ->(fields, name) { Array(fields).find { |item| item["name"] == name } }
+canonical_scopes = %w[not_applicable local shared unresolved]
+%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
+  input = YAML.load_file(File.join(framework, "skills", skill, "contracts/input.yaml"))
+  applicability = field.call(input.fetch("fields"), "change_impact_applicability")
+  scope = field.call(applicability.fetch("object_fields"), "impact_scope")
+  causal = field.call(applicability.fetch("object_fields"), "causal_evidence_ref")
+  abort "#{skill} omits canonical cosmetic scope" unless scope.fetch("enum_values") == canonical_scopes
+  abort "#{skill} applicability condition excludes cosmetic decisions" unless applicability.fetch("condition").include?("cosmetic")
+  abort "#{skill} relaxed local causal evidence" unless causal.fetch("required") == "conditional" && causal.fetch("condition") == "impact_scope == local"
+  abort "#{skill} does not retain explicit expanded-artifact control" unless applicability.fetch("validation").include?("expanded_artifact_carried")
+end
+output = YAML.load_file(File.join(framework, "skills/assistant-workflow/contracts/output.yaml"))
+tiers = output.fetch("completion_tiers")
+%w[preparation_only small small_elevated medium large_critical].each do |name|
+  abort "#{name} omits conditional change-impact evidence" unless tiers.fetch(name).fetch("conditional_artifacts").include?("change_impact_evidence")
+end
+RUBY
+then
+    pass
+else
+    fail "cosmetic applicability, local causality, explicit expansion, or tiered evidence declaration regressed"
+fi
+
+test_start "impact selectors record cosmetic applicability and shared fanout keeps the light Build lane"
+if ruby - "$FRAMEWORK_DIR" <<'RUBY'
+framework = ARGV.fetch(0)
+section = lambda do |path, start_marker, end_marker|
+  content = File.read(File.join(framework, path))
+  start = content.index(start_marker) or abort "missing #{start_marker} in #{path}"
+  tail = content[start..]
+  tail.split(end_marker, 2).first
+end
+
+workflow_root = section.call("skills/assistant-workflow/SKILL.md", "## Contracts", "Selectors resolve")
+workflow_phases = section.call("skills/assistant-workflow/references/phases.md", "## Shared Controller Decisions", "## Progress Updates")
+debugging_root = section.call("skills/assistant-debugging/SKILL.md", "## Progressive Contract Loading", "## Ownership")
+debugging_ref = section.call("skills/assistant-debugging/references/change-impact.md", "# Change-impact during debugging", "##")
+review_ref = section.call("skills/assistant-review/references/change-impact.md", "# Change-impact review projection", "##")
+abort "workflow root selector omits cosmetic" unless workflow_root.include?("when behavior, cosmetic, or local/shared/unresolved impact")
+abort "workflow phase trigger omits cosmetic" unless workflow_phases.include?("behavior-bearing, cosmetic, or locality/shared-impact claim")
+abort "debugging root selector omits cosmetic" unless debugging_root.include?("repair, cosmetic, or locality claim")
+abort "debugging reference trigger omits cosmetic" unless debugging_ref.include?("fix, or cosmetic decision")
+abort "review reference trigger omits cosmetic" unless review_ref.include?("behavior or cosmetic change")
+
+controller = section.call("skills/assistant-workflow/references/workflow-controller.md", "- `light`:", "- `standard`:")
+build = section.call("skills/assistant-workflow/references/build-worker-protocol.md", "## Adaptive Source-Changing Role Ownership", "## Expanded-impact mutation authorization")
+triage = section.call("skills/assistant-workflow/references/triage-rubric.md", "| Intensity | Use when |", "## Candidate Scope Scan")
+abort "light controller promotes shared fanout" unless controller.include?("Shared fanout alone keeps this Build policy")
+abort "Build protocol promotes shared fanout" unless build.include?("Shared fanout alone does not promote this Build lane")
+abort "triage light selection promotes shared fanout" unless triage.include?("shared fanout alone does not promote Build")
+RUBY
+then
+    pass
+else
+    fail "cosmetic impact activation or light shared-fanout Build selection regressed"
 fi
 
 test_start "read-only impact carriers retain discovery while mutation handoffs require current pre_build evidence"
@@ -253,6 +315,128 @@ then
     pass
 else
     fail "expanded impact authorization must remain a pre-mutation entry gate"
+fi
+
+test_start "light expanded impact requires a canonical review projection without Pack refs or copied Build policy"
+expanded_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-light-expanded-impact.XXXXXX")"
+p0p4_register_cleanup "$expanded_fixture_root"
+expanded_fixture="$expanded_fixture_root/cases.json"
+expanded_completion="$expanded_fixture_root/completion.json"
+expanded_capture="$expanded_fixture_root/capture.json"
+expanded_expected="$expanded_fixture_root/expected.json"
+expanded_assessment="$expanded_fixture_root/assessment.json"
+expanded_review="$expanded_fixture_root/review.json"
+expanded_skill="$expanded_fixture_root/assistant-workflow"
+expanded_responses="$expanded_fixture_root/responses"
+mkdir -p "$expanded_skill/evals" "$expanded_responses/assistant-workflow"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$expanded_skill/SKILL.md"
+p0p4_filter_workflow_eval_cases "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$expanded_fixture" light-pack-review-result-retains-current-snapshot
+jq '
+  .expected.review_context.scope_manifest_id = "current-scope-digest"
+  | .expected.review_context.coverage_ledger_id = "journal#final-summary/coverage_ledger"
+  | .expected.review_context.review_snapshot_id = "review-current"
+  | .expected.review_context.snapshot_id = "current-review-snapshot"
+  | .review.review_source.scope_manifest_id = "current-scope-digest"
+  | .review.review_source.coverage_ledger_id = "journal#final-summary/coverage_ledger"
+  | .review.review_source.review_snapshot_id = "review-current"
+  | .review.review_source.snapshot_id = "current-review-snapshot"
+  | .expected.review_context.required_bindings[0].scope_item_id = "workflow-terminal-evidence"
+  | .expected.review_context.required_bindings[0].coverage_concern_id = "canonical producer consumption"
+  | .review.bindings[0].scope_item_id = "workflow-terminal-evidence"
+  | .review.bindings[0].coverage_concern_id = "canonical producer consumption"
+' "$FRAMEWORK_DIR/tools/change-impact/example.completion.v1.json" >"$expanded_completion"
+jq '.capture' "$expanded_completion" >"$expanded_capture"
+jq '.expected' "$expanded_completion" >"$expanded_expected"
+jq '.assessment' "$expanded_completion" >"$expanded_assessment"
+jq '.review' "$expanded_completion" >"$expanded_review"
+node "$FRAMEWORK_DIR/tools/change-impact/validate-change-impact.cjs" --phase completion --capture "$expanded_capture" --expected "$expanded_expected" --assessment "$expanded_assessment" --review "$expanded_review" >"$expanded_fixture_root/completion-checker.log"
+jq '
+  .cases[0].title = "Light expanded impact retains canonical review evidence"
+  | .cases[0].setup_context = ["controller_intensity=light; risk_tier=low.", "architecture_design_mode=not_applicable.", "impact_scope=shared and expanded_artifact_carried=true; shared fanout alone does not promote Build."]
+  | .cases[0].machine_expectations.required_substrings = ["fresh_review_result", "change_impact_evidence", "canonical_final_summary", "current_review_delegation_path"]
+  | .cases[0].machine_expectations.structured_json_assertions |= map(select((((.path // []) | join(".")) | contains("architecture_decision_pack_review")) | not) | select(. != {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_execution_mode"],"expected":"delegated"})) + [
+      {"operator":"equals","path":["impact_scope"],"expected":"shared"},
+      {"operator":"equals","path":["controller_intensity"],"expected":"light"},
+      {"operator":"equals","path":["risk_tier"],"expected":"low"},
+      {"operator":"equals","path":["expanded_artifact_carried"],"expected":true},
+      {"operator":"equals","path":["architecture_design_mode"],"expected":"not_applicable"},
+      {"operator":"equals","path":["change_impact_evidence","phase"],"expected":"completion"},
+      {"operator":"equals","path":["change_impact_evidence","artifact_identity"],"expected":"capture-example-current"},
+      {"operator":"equals","path":["change_impact_evidence","validator_result_ref"],"expected":"fixture#completion-checker"},
+      {"operator":"equals","path":["change_impact_evidence","capture_ref"],"expected":"fixture#capture"},
+      {"operator":"equals","path":["change_impact_evidence","expected_context_ref"],"expected":"fixture#expected"},
+      {"operator":"equals","path":["change_impact_evidence","assessment_ref"],"expected":"fixture#assessment"},
+      {"operator":"equals","path":["change_impact_evidence","review_projection_ref"],"expected":"fixture#review"},
+      {"operator":"equals","path":["change_impact_review","schema_version"],"expected":"change-impact-review/v1"},
+      {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_policy_state"],"expected":"not_required"},
+      {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_execution_mode"],"expected":"direct_fallback"},
+      {"operator":"path_absent","path":["fresh_review_result","architecture_decision_pack_review_ref"]},
+      {"operator":"path_absent","path":["fresh_review_result","architecture_decision_pack_review_contract"]}
+    ]
+' "$expanded_fixture" >"$expanded_fixture.rewritten" && mv "$expanded_fixture.rewritten" "$expanded_fixture"
+cp "$expanded_fixture" "$expanded_skill/evals/cases.json"
+expanded_summary="$(jq -r '.cases[0].machine_expectations.required_substrings[]' "$expanded_fixture" | paste -sd ' ' -)"
+expanded_response="$expanded_responses/assistant-workflow/light-pack-review-result-retains-current-snapshot.txt"
+build_workflow_review_lifecycle_eval_response light-pack-review-result-retains-current-snapshot "$expanded_response" "$expanded_summary"
+jq --slurpfile completion "$expanded_completion" '
+  .impact_scope = "shared"
+  | .controller_intensity = "light"
+  | .risk_tier = "low"
+  | .expanded_artifact_carried = true
+  | .architecture_design_mode = "not_applicable"
+  | .change_impact_evidence = {artifact_identity:"capture-example-current",phase:"completion",impact_scope:"shared",validator_result_ref:"fixture#completion-checker",status:"valid",capture_ref:"fixture#capture",expected_context_ref:"fixture#expected",assessment_ref:"fixture#assessment",review_projection_ref:"fixture#review"}
+  | .change_impact_review = $completion[0].review
+  | .current_review_delegation_path.artifact.subagent_policy_state = "not_required"
+  | .current_review_delegation_path.artifact.subagent_execution_mode = "direct_fallback"
+  | .current_review_delegation_path.artifact.subagent_trigger_scope = []
+  | del(.fresh_review_result.architecture_decision_pack_review_ref, .fresh_review_result.architecture_decision_pack_review_contract)
+' "$expanded_response" >"$expanded_response.rewritten" && mv "$expanded_response.rewritten" "$expanded_response"
+run_light_expanded_fixture() {
+    local expected="$2"
+    jq '.change_impact_review' "$expanded_response" >"$expanded_fixture_root/candidate-review.json"
+    if ! node "$FRAMEWORK_DIR/tools/change-impact/validate-change-impact.cjs" --phase completion --capture "$expanded_capture" --expected "$expanded_expected" --assessment "$expanded_assessment" --review "$expanded_fixture_root/candidate-review.json" >"$expanded_fixture_root/candidate-checker.log"; then
+        [[ "$expected" == FAIL ]] && return 0
+        cat "$expanded_fixture_root/candidate-checker.log" >&2
+        return 1
+    fi
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$expanded_responses" --skill "$expanded_skill" >"$expanded_fixture_root/runner.out" 2>&1; then
+        [[ "$expected" == PASS ]]
+    else
+        [[ "$expected" == FAIL ]] || cat "$expanded_fixture_root/runner.out" >&2
+        [[ "$expected" == FAIL ]]
+    fi
+}
+expanded_failures=()
+if ! run_light_expanded_fixture "$expanded_response" PASS; then
+    expanded_failures+=("valid non-Pack expanded review rejected")
+fi
+for mutation in \
+    'del(.canonical_final_summary)' \
+    'del(.change_impact_evidence.review_projection_ref)' \
+    'del(.change_impact_evidence.capture_ref)' \
+    '.current_final_batch.final_snapshot_identity.value = "foreign-current-snapshot"' \
+    '.current_review_delegation_path.artifact.subagent_execution_mode = "not_applicable"' \
+    '.change_impact_review.bindings[0].scope_item_id = "foreign-scope"'; do
+    jq "$mutation" "$expanded_response" >"$expanded_response.mutated"
+    mv "$expanded_response.mutated" "$expanded_response"
+    if ! run_light_expanded_fixture "$expanded_response" FAIL; then
+        expanded_failures+=("accepted $mutation")
+    fi
+    build_workflow_review_lifecycle_eval_response light-pack-review-result-retains-current-snapshot "$expanded_response" "$expanded_summary"
+    jq --slurpfile completion "$expanded_completion" '
+      .impact_scope = "shared" | .controller_intensity = "light" | .risk_tier = "low" | .expanded_artifact_carried = true | .architecture_design_mode = "not_applicable"
+      | .change_impact_evidence = {artifact_identity:"capture-example-current",phase:"completion",impact_scope:"shared",validator_result_ref:"fixture#completion-checker",status:"valid",capture_ref:"fixture#capture",expected_context_ref:"fixture#expected",assessment_ref:"fixture#assessment",review_projection_ref:"fixture#review"}
+      | .change_impact_review = $completion[0].review
+      | .current_review_delegation_path.artifact.subagent_policy_state = "not_required"
+      | .current_review_delegation_path.artifact.subagent_execution_mode = "direct_fallback"
+      | .current_review_delegation_path.artifact.subagent_trigger_scope = []
+      | del(.fresh_review_result.architecture_decision_pack_review_ref, .fresh_review_result.architecture_decision_pack_review_contract)
+    ' "$expanded_response" >"$expanded_response.rewritten" && mv "$expanded_response.rewritten" "$expanded_response"
+done
+if [[ ${#expanded_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "light expanded-impact canonical review fixture gaps: ${expanded_failures[*]}"
 fi
 
 test_start "standalone review repairs enter FIX_STEP before mutation"

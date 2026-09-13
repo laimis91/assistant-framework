@@ -39,7 +39,7 @@ load only the boundary currently being enforced:
 
 - `entry` for symptom, scope, reproduction target, safety, and edit permission;
 - `current_phase` for SCOPE, REPRODUCE, HYPOTHESIZE, ISOLATE, FIX, or VERIFY;
-- `change_impact` when a diagnosis, repair, or locality claim affects consumer
+- `change_impact` when a diagnosis, repair, cosmetic, or locality claim affects consumer
   verification; and
 - `selected_handoff` only when investigation or fix delegation is selected; and
 - `completion` only for the artifact being returned.

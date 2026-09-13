@@ -14,7 +14,7 @@ Canonical schemas are authoritative at enforcement points. Read
 - `current_round`: load the active `contracts/phase-gates.yaml` round at each transition; `selected_handoff`: resolve the compact `contracts/handoffs.yaml` dispatch pointer before Reviewer or QAEvaluator dispatch.
 - `reviewer_context`: resolve at pass start; `return_validation`: resolve after its result; `completion`: load `contracts/output.yaml` before final exit.
 
-Migration note: assistant-review contracts are v7. Persisted v6 batch packets are invalidated and rebuilt; they never reach CLEAN. A triggered Pack validates recoverable selected design, rationale, and viable alternatives/dispositions plus `architecture_decision_pack_checks`.
+Migration note: assistant-review contracts are v7.2. Persisted 6.0/7.0/7.1 batch packets are invalidated and rebuilt; they never reach CLEAN. A triggered Pack validates recoverable selected design, rationale, and viable alternatives/dispositions plus `architecture_decision_pack_checks`.
 Applicable instructions set `subagent_trigger_scope`; opt-out, unavailability,
 or policy blocks use direct fallback. Reviewer returns and final summaries have
 non-empty `reviewed_scope` so workflow consumers can use the producer packet.

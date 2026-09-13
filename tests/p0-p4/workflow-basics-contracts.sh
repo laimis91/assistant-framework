@@ -49,7 +49,7 @@ fi
 test_start "review delegation dispatches from applicable instruction triggers"
 review_trigger_failures=()
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::assistant-review contracts are v7" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::assistant-review contracts are v7.2" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md::assistant-review owns Reviewer/QAEvaluator handoffs" \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::load \`contracts/input.yaml\` review-entry fields selected by \`review-entry-fields\` in \`contracts/index.yaml\`" \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::consumers can use the producer packet" \

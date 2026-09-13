@@ -1,6 +1,6 @@
 # Change-impact during debugging
 
-Load when the reported symptom, diagnosis, or proposed fix can affect another
+Load when the reported symptom, diagnosis, proposed fix, or cosmetic decision can affect another
 consumer. Keep an audit-only diagnosis honest: discovery can identify missing
 or material unknown boundaries, but it cannot claim future execution, review,
 or a clean result.

@@ -51,7 +51,7 @@ Canonical contracts are authoritative. Read `contracts/index.yaml` first, valida
 - `entry`: load entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is the only declared entry reference.
 - `architecture_design`: load `references/architecture-decision-pack.md` when `architecture_design_mode != not_applicable`; use its typed artifact before Decompose or Plan and retain its reference through Review.
 - `feature_preparation`: for repository-grounded preparation, existing behavior, any `implement_only` workflow, or any carried `approved_feature_preparation_harness_obligation` or `approved_feature_preparation_qa_acceptance_obligation` (including `feature_preparation_scope=not_applicable`), load `references/feature-preparation-evidence.md`; resolve and retain `approved_feature_preparation_result` unchanged plus the applicable evidence ref or typed `not_applicable` source binding before Decompose, Plan, or Build. A carried QA obligation uses only the existing post-Build, post-Code-Reviewer QA Evaluator lane.
-- `change_impact`: load `references/change-impact.md` when behavior changes or a local/shared/unresolved impact decision affects verification scope. Every behavior change records applicability; only shared, materially unresolved, or explicitly carried expanded work requires the common pre-Build/completion path.
+- `change_impact`: load `references/change-impact.md` when behavior, cosmetic, or local/shared/unresolved impact affects verification. Record compact applicability; only shared, unresolved, or explicitly carried expanded work requires common pre-Build/completion.
 - `progressive_discovery`: load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, either durable marker is pending/consumed or active/closed, or `progressive_artifact_retention_state=terminally_archived`; durable markers route even when the retention state is missing or invalid. `terminally_archived` releases the durable artifacts only with the typed `progressive_terminal_archival` tombstone and explicit final archival/termination evidence, never merely `Task state: completed`, and cannot revert.
 - `delegation`: load role and trigger fields when roles may be required and before any subagent dispatch.
 - `current_phase`: active `contracts/phase-gates.yaml` at transition.
@@ -145,7 +145,7 @@ Load the generated `references/phases/<current-phase>.md` view for the active ph
 | Plan | `plan_mode != none`; optional prepare_only readiness | Inline/approval routing. |
 | Design | UI only; `execution_intent != prepare_only` | Direction, checklist, approval. |
 | Build | `execution_intent != prepare_only` | Light direct; ordinary medium one edit/test executor; separation only for high-risk or broad/noisy/environment-heavy verification. Tests/validation travel with code. |
-| Review | `execution_intent != prepare_only` | Light fresh self-review; standard/strict Spec Review then independent `assistant-review`; QA only when required. |
+| Review | `execution_intent != prepare_only` | Light self-review; expanded impact uses canonical `assistant-review`; standard/strict use independent `assistant-review`; QA when required. |
 | Document | `execution_intent != prepare_only` | Apply state/manual-verification modes; metrics optional and non-blocking. |
 | Preparation Completion | `prepare_only` | Return readiness; approval is next. |
 

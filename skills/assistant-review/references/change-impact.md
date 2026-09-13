@@ -1,6 +1,6 @@
 # Change-impact review projection
 
-Load for a review that covers a behavior change, carries a change-impact
+Load for a review that covers a behavior or cosmetic change, carries a change-impact
 artifact, or has a locality/shared/unresolved decision. Record compact
 applicability evidence for every behavior change. Keep this outside the fresh
 reviewer context bundle: the existing 5653-word reviewer-context budget remains

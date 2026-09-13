@@ -12,13 +12,13 @@ the task needs shared routing/default, movement, harness, review, QA, or
 subagent separation decisions. This file owns phase execution mechanics; the
 controller reference owns decision boundaries and ordinary workflow defaults.
 
-For a behavior-bearing change or locality/shared-impact claim, load
+For a behavior-bearing, cosmetic, or locality/shared-impact claim, load
 `references/change-impact.md` before deciding the verification surface and record
 compact applicability evidence. Only shared, materially unresolved, or
 explicitly carried expanded work requires the common pre-build result and its
 completion projection; evidenced local work keeps ordinary relevant verification
 and self-review without a Node gate. Shared fanout alone does not activate an
-Architecture Decision Pack, strict controller, QA, or a different delegation lane.
+Architecture Decision Pack, strict controller, QA, or a different Build/delegation lane.
 
 ## Progress Updates
 

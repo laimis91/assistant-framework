@@ -1,6 +1,6 @@
 # Change-impact gates
 
-Use only when behavior or a locality claim affects verification scope. Cosmetic
+Use when behavior, cosmetic, or a locality claim affects verification scope. Cosmetic
 work records applicability without an impact ledger.
 
 Resolve the installed common checker as
@@ -22,10 +22,9 @@ current same inputs. The expanded path covers relevant configuration,
 registration, event, state, public, wrapper, added, and removed consumers and
 transitions.
 
-Completion refreshes the bounded universe and independent expected context,
-then binds actual verification identity and assistant-review's projection of its
-original `scope_manifest`, `coverage_ledger`, review snapshot, and concern
-bindings. The projection adds no ledger and never replaces assistant-review's
-own current terminal coverage and CLEAN/ISSUES_FIXED checks. Shared fanout alone
-does not require an Architecture Decision Pack, strict controller, QA, or a
-different delegation lane; use their existing evidence-based triggers.
+Completion refreshes universe/context then binds verification identity and
+assistant-review's projection of original `scope_manifest`, `coverage_ledger`,
+review snapshot, and concern bindings. It preserves original ledgers and terminal
+coverage/CLEAN/ISSUES_FIXED checks. Shared fanout alone does not require Pack, strict,
+QA, or a different Build lane; existing triggers apply. Light expanded work records
+assistant-review final-summary and delegation-path refs.

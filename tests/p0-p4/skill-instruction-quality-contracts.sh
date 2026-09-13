@@ -609,8 +609,8 @@ for reviewer_agent in \
     done
 done
 for review_term in \
-    "assistant-review contracts are v7" \
-    "Persisted v6 batch packets are invalidated and rebuilt" \
+    "assistant-review contracts are v7.2" \
+    "Persisted 6.0/7.0/7.1 batch packets are invalidated and rebuilt" \
     "risk_selected_specialist" \
     "assistant-security checklist/perspective"; do
     if ! grep -Fq "$review_term" "$review_skill"; then

@@ -355,7 +355,7 @@ elif ! grep -Fq $'FAIL\tassistant-review\tstandalone-high-risk-record-without-ch
     architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response did not fail structured assertions")
 fi
 for file_and_term in \
-    "$review_skill::Migration note: assistant-review contracts are v7" \
+    "$review_skill::Migration note: assistant-review contracts are v7.2" \
     "$review_phase_gates::architecture_design_mode" \
     "$review_handoffs::architecture_decision_pack.mode must equal canonical architecture_design_mode"; do
     file="${file_and_term%%::*}"
@@ -597,7 +597,7 @@ if ! ruby -ryaml -e '
 ' "$review_input" "$review_output" "$review_phase_gates" "$review_handoffs" "$review_index"; then
     pack_projection_cardinality_failures+=("v7 input does not preserve recoverable selected design, rationale, viable alternative dispositions, non-empty boundaries, and exact five-concern pressure coverage")
 fi
-if ! grep -Fq 'Migration note: assistant-review contracts are v7' "$review_skill" \
+if ! grep -Fq 'Migration note: assistant-review contracts are v7.2' "$review_skill" \
     || ! grep -Fq 'recoverable selected design, rationale, and viable alternatives/dispositions' "$review_skill"; then
     pack_projection_cardinality_failures+=("v7 migration note does not describe recoverable selected design evidence")
 fi

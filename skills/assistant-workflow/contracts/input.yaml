@@ -124,11 +124,11 @@ fields:
   - name: change_impact_applicability
     type: object
     required: conditional
-    condition: "a behavior or locality/shared/unresolved impact decision affects verification"
+    condition: "a behavior, cosmetic, or locality/shared/unresolved impact decision affects verification"
     description: "Applicability decision."
-    validation: "local needs causal evidence; shared/unresolved needs expanded artifact."
+    validation: "not_applicable is cosmetic; local needs causal evidence; shared/unresolved or expanded_artifact_carried needs artifact."
     object_fields:
-      - {name: impact_scope, type: enum, required: true, enum_values: [local, shared, unresolved]}
+      - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
       - {name: applicability_reason, type: string, required: true}
       - {name: causal_evidence_ref, type: string, required: conditional, condition: "impact_scope == local"}
       - {name: expanded_artifact_carried, type: boolean, required: true}
