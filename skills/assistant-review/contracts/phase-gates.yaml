@@ -58,9 +58,9 @@ gates:
         on_fail: "Load references/qa-evaluation-loop.md, gather acceptance material and verification evidence, select domain rubric scope only when acceptance criteria, Done Contract, domain_context, or rubric_refs require it, or mark QA blocked with open_questions before dispatching QAEvaluator."
 
       - id: E8
-        check: "Standalone Spec Review uses user request/scope. On FAIL, mode=review-fix repairs an authorized in-scope mismatch and repeats to spec_review_pass_ref; mode=audit exits repair/Build/source-mutation dispatch, retains the mismatch as a pre-batch aggregate finding, continues the frozen read-only multi-pass batch, and dispatches every planned read-only Reviewer pass through the response barrier."
+        check: "Standalone Spec Review uses user request/scope. On FAIL, mode=review-fix validates FIX_STEP entry_assertions before repair or mutation dispatch, then repairs an authorized in-scope mismatch and repeats to spec_review_pass_ref; mode=audit exits repair/Build/source-mutation dispatch, retains the mismatch as a pre-batch aggregate finding, continues the frozen read-only multi-pass batch, and dispatches every planned read-only Reviewer pass through the response barrier."
         condition: "review_preparation_mode == standalone"
-        on_fail: "In mode=review-fix, repair only an authorized in-scope mismatch and repeat to PASS. In mode=audit, record the mismatch, freeze the read-only batch, dispatch every required pass, wait for the response barrier, and never mutate source."
+        on_fail: "In mode=review-fix, validate FIX_STEP entry_assertions before repair or mutation dispatch, then repair only an authorized in-scope mismatch and repeat to PASS. In mode=audit, record the mismatch, freeze the read-only batch, dispatch every required pass, wait for the response barrier, and never mutate source."
 
       - id: E9
         check: "Workflow-composed review consumes carried spec_review_pass_ref and carried current build/test evidence before Reviewer dispatch"
@@ -231,12 +231,13 @@ gates:
     condition: "mode == review-fix"
     checkpoint_start: null
     checkpoint_end: null
-    exit_assertions:
+    entry_assertions:
 
       - id: F_CHANGE_IMPACT_PREBUILD
-        check: "Before a review-fix edits a triggered shared or unresolved impact scope, a current common-checker pre-build assessment has valid planned obligations for the bounded consumer union and material transitions."
+        check: "Before any source/test mutation or mutation dispatch, a review-fix with triggered shared, unresolved, or expanded impact runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs for bounded planned obligations, consumer union, and material transitions."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-        on_fail: "Do not edit source; repair the pre-build assessment or return the review-fix as blocked/remaining."
+        on_fail: "Do not edit source, write a regression test, or dispatch a fixer; repair the pre-build assessment or return the review-fix as blocked/remaining."
+    exit_assertions:
 
       - id: F1
         check: "ALL must-fix items were addressed (not just some)"

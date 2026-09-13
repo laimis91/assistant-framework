@@ -12,7 +12,7 @@ PREPARE
   - Infer review mode before review or mutation. Report-only selects audit;
     in-scope authority selects review-fix. If unresolved, ask
     exactly: "Should I only report findings, or also implement and verify fixes?"
-  - Standalone Spec Review on scope. On mismatch, run only in review-fix mode to repair evidence-backed must-fix and should-fix items. In audit, retain and stay read-only. Dispatch every planned read-only Reviewer pass with sanitized criteria; never expose the mismatch details to discovery siblings. Return it to the composing workflow for planning or approval when it changes scope, risk, or acceptance.
+  - Standalone Spec Review on scope. Validate FIX_STEP entry_assertions before repair or mutation dispatch. On mismatch, run only in review-fix mode to repair evidence-backed must-fix and should-fix items. In audit, retain and stay read-only. Dispatch every planned read-only Reviewer pass with sanitized criteria; never expose the mismatch details to discovery siblings. Return it to the composing workflow for planning or approval when it changes scope, risk, or acceptance.
   - Workflow consumes Spec PASS/current build evidence; after a fix, `not_applicable` is invalid.
 
 while round <= 10:
@@ -32,7 +32,7 @@ while round <= 10:
      - PIVOT/STAGNATION/DRIFT/REGRESSION: orchestrator records pivot_restart_decision.
 
   3. FIX / VALIDATE
-     - Only review-fix repairs authorized evidence; record closure.
+     - Validate FIX_STEP entry_assertions before source/test mutation or dispatch. Only review-fix repairs authorized evidence; record closure.
      - Run build/tests; mutation invalidates the batch and requires new evidence.
 
   4. NEXT ROUND

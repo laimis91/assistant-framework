@@ -455,6 +455,12 @@ gates:
     checkpoint_start: "--- PHASE: BUILD ---"
     checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
     condition: "execution_intent != prepare_only"
+    entry_assertions:
+
+      - id: B_CHANGE_IMPACT_PREBUILD
+        check: "Before any source/test mutation or mutation dispatch, behavior changes record applicability and shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Local uses ordinary verification/self-review; no Node gate."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Stop before behavior edits, regression-test writes, or mutation dispatch; load references/change-impact.md, resolve the active installed checker, and repair the assessment or report the explicit blocker."
     exit_assertions:
 
       - id: B1
@@ -487,11 +493,6 @@ gates:
       - id: B3
         check: "At least one relevant verification exists and passed: runnable tests for code changes, or documented validation_results for docs/no-op/discovery/non-runnable workflows"
         on_fail: "Add or run an appropriate verification and record a passing result before proceeding"
-
-      - id: B_CHANGE_IMPACT_PREBUILD
-        check: "Behavior changes record applicability. Shared/unresolved/expanded work passes common pre-build with capture/expected. Local uses ordinary verification/self-review; no Node gate."
-        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-        on_fail: "Stop before behavior edits, load references/change-impact.md, resolve the active installed checker, and repair the assessment or report the explicit blocker."
 
       - id: B3A
         check: "Unknown-cause bugfixes completed assistant-debugging or recorded a concrete debugging blocker before implementation; no random patching occurred before reproduction/root-cause evidence"

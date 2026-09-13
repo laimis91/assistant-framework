@@ -63,11 +63,12 @@ gates:
     checkpoint_start: "--- PHASE: FIX ---"
     checkpoint_end: "--- PHASE: FIX COMPLETE ---"
     condition: "when can_modify_code is true and a fix or mitigation is attempted"
-    exit_assertions:
+    entry_assertions:
       - id: FX_CHANGE_IMPACT_PREBUILD
-        check: "Every behavior repair records compact applicability evidence. When the diagnosis/proposed repair has shared or unresolved material impact, or explicitly carries an expanded artifact, a current common-checker pre-build assessment covers the bounded base/candidate consumer union and planned obligations before source mutation. Evidenced local repairs keep ordinary regression verification and self-review."
+        check: "Before any source/test mutation or mutation dispatch, every behavior repair records compact applicability evidence. Shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Evidenced local repairs keep ordinary regression verification and self-review."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-        on_fail: "Do not patch; load references/change-impact.md and repair the assessment or report its explicit blocker."
+        on_fail: "Do not patch, write a regression test, or dispatch Fixer; load references/change-impact.md and repair the assessment or report its explicit blocker."
+    exit_assertions:
       - id: FX1
         check: "Each changed file maps to the confirmed cause, mitigation, or regression test"
         on_fail: "Remove unrelated changes or document approved scope expansion"

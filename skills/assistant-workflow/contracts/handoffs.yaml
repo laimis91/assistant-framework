@@ -1627,14 +1627,14 @@ handoffs:
         type: object
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-        description: "Same compact v1 artifact reference envelope supplied to planning, Build, and Review."
-        validation: "artifact_identity, phase, capture_ref, expected_context_ref, validator_result_ref, impact_scope, and status exactly equal the current task packet; assessment_ref is present only for pre-build or completion. The CodeWriter may not relabel a pre-build plan as executed completion evidence."
+        description: "Current resolved pre-build artifact envelope that authorizes this CodeWriter mutation dispatch."
+        validation: "The common checker was run or revalidated against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity and validator_result_ref against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, and reuse requires demonstrably current same-input evidence. The CodeWriter may not use discovery or completion evidence as mutation authorization."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
-          - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
+          - {name: phase, type: enum, required: true, enum_values: [pre_build]}
           - {name: capture_ref, type: string, required: true}
           - {name: expected_context_ref, type: string, required: true}
-          - {name: assessment_ref, type: string, required: conditional, condition: "phase in [pre_build, completion]"}
+          - {name: assessment_ref, type: string, required: true}
           - {name: validator_result_ref, type: string, required: true}
           - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
           - {name: status, type: enum, required: true, enum_values: [valid]}
@@ -2279,16 +2279,16 @@ handoffs:
         type: object
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-        description: "Expanded common impact artifact BuilderTester validates without relabelling discovery as later-phase evidence."
-        validation: "Preserves artifact_identity, phase, impact_scope, status, capture_ref, expected_context_ref, and validator_result_ref; assessment_ref is carried only for pre-build or completion."
+        description: "Current resolved pre-build artifact envelope that authorizes this BuilderTester mutation dispatch."
+        validation: "The common checker was run or revalidated against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity and validator_result_ref against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, reuse requires demonstrably current same-input evidence, and BuilderTester must not reuse CodeWriter's pre-build result after earlier mutations."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
-          - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
+          - {name: phase, type: enum, required: true, enum_values: [pre_build]}
           - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
           - {name: status, type: enum, required: true, enum_values: [valid]}
           - {name: capture_ref, type: string, required: true}
           - {name: expected_context_ref, type: string, required: true}
-          - {name: assessment_ref, type: string, required: conditional, condition: "phase in [pre_build, completion]"}
+          - {name: assessment_ref, type: string, required: true}
           - {name: validator_result_ref, type: string, required: true}
       - name: build_command
         type: string

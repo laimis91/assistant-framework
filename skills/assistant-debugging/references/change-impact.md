@@ -14,10 +14,13 @@ expanded deterministic gate; an evidenced local repair remains on its ordinary
 regression-verification and self-review path.
 
 Every proposed behavior repair records impact scope, an applicability reason,
-and causal evidence for a local decision. Before a source fix, shared or
-unresolved impact needs the common pre-build assessment, including bounded
-base/candidate consumers and distinct material transitions. Preserve the same
-artifact identity through expanded verification. An expanded fix completion
+and causal evidence for a local decision. Before any source/test mutation,
+including a regression-test write, or Fixer dispatch, shared, unresolved, or
+explicitly expanded impact must run or revalidate the common checker against the referenced capture,
+independent expected context, and assessment. The current valid `pre_build`
+result must resolve against the fix packet; a status or result ref alone is
+insufficient. Reuse is allowed only for demonstrably current same-input
+evidence. Preserve the same artifact identity through expanded verification. An expanded fix completion
 needs actual current verification and assistant-review's projection of its
 existing canonical manifest, ledger, snapshot, and concern bindings; that
 projection never replaces assistant-review's own terminal coverage/result.

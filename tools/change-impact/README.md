@@ -37,8 +37,9 @@ not replace it with a manual pass.
 
 Discovery can record material unknown boundaries. Pre-build and completion
 reject them until their impact is resolved. A waiver records residual risk only
-when an existing policy or authorization is cited by its `rationale_ref`; it
-does not create authorization and cannot pass completion.
+when its `rationale_ref` explains the waiver and its `authorization_ref` cites
+existing policy or authorization; it does not create authorization and cannot
+pass completion.
 
 ## Document model
 

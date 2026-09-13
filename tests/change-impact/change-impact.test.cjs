@@ -215,10 +215,15 @@ test("unsupported local claim, stale universe, stale verification source, and wr
   assert.ok(codes(validate({ phase: "completion", ...review })).includes("REVIEW_OBLIGATION_BINDING_INCOMPLETE"));
 });
 
-test("waived, blocked, unresolved, and planned-as-actual completion states remain incomplete", () => {
+test("waived obligations require authorization at pre-build and remain residual risk at completion", () => {
+  const missingAuthority = validDocuments(); missingAuthority.assessment.obligations[6].disposition = "waived"; missingAuthority.assessment.actual_verifications = [];
+  assert.deepEqual(codes(validate({ phase: "pre_build", ...missingAuthority })), ["AUTHORIZATION_REFERENCE_MISSING"]);
   const waived = validDocuments(); waived.assessment.obligations[6].disposition = "waived"; waived.assessment.obligations[6].authorization_ref = "existing-policy-approval"; waived.assessment.actual_verifications = [];
   assert.equal(validate({ phase: "pre_build", ...waived }).valid, true);
   assert.ok(codes(validate({ phase: "completion", ...waived })).includes("UNVERIFIED_RESIDUAL_RISK"));
+});
+
+test("blocked, unresolved, and planned-as-actual completion states remain incomplete", () => {
   const blocked = validDocuments(); blocked.assessment.obligations[6].disposition = "blocked"; blocked.assessment.actual_verifications = [];
   assert.ok(codes(validate({ phase: "pre_build", ...blocked })).includes("BLOCKED_IMPACT_UNRESOLVED"));
   assert.ok(codes(validate({ phase: "completion", ...blocked })).includes("UNVERIFIED_RESIDUAL_RISK"));

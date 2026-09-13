@@ -58,15 +58,16 @@ handoffs:
         type: object
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-        validation: "artifact_identity, phase, impact_scope, and applicable capture/expected/assessment/checker refs are passed unchanged; discovery carries no assessment ref; a symptom-only consumer list is not impact evidence."
+        validation: "The common checker was run or revalidated against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity and validator_result_ref before Fixer dispatch; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, reuse requires demonstrably current same-input evidence, and discovery or completion evidence does not authorize a fix mutation."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
-          - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
+          - {name: phase, type: enum, required: true, enum_values: [pre_build]}
           - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
           - {name: capture_ref, type: string, required: true}
           - {name: expected_context_ref, type: string, required: true}
-          - {name: assessment_ref, type: string, required: conditional, condition: "phase in [pre_build, completion]"}
+          - {name: assessment_ref, type: string, required: true}
           - {name: validator_result_ref, type: string, required: true}
+          - {name: status, type: enum, required: true, enum_values: [valid]}
       - name: root_cause
         type: string
         required: true

@@ -64,25 +64,20 @@ end
   abort "#{skill} output phase enum drifted" unless phase.fetch("enum_values") == %w[discovery pre_build completion]
 end
 
-carrier_count = 0
-%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
-  handoffs = YAML.load_file(File.join(framework, "skills", skill, "contracts/handoffs.yaml"))
-  walk = lambda do |value|
-    case value
-    when Hash
-      if value["name"] == "change_impact_evidence"
-        phase = field.call(value.fetch("object_fields"), "phase")
-        abort "#{skill} handoff phase enum drifted" unless phase.fetch("enum_values") == %w[discovery pre_build completion]
-        carrier_count += 1
-      end
-      value.each_value { |child| walk.call(child) }
-    when Array
-      value.each { |child| walk.call(child) }
-    end
-  end
-  walk.call(handoffs.fetch("handoffs"))
+handoff_specs = [
+  ["assistant-workflow", "orchestrator_to_architect", %w[discovery pre_build completion]],
+  ["assistant-workflow", "orchestrator_to_code_writer", %w[pre_build]],
+  ["assistant-workflow", "orchestrator_to_builder_tester", %w[pre_build]],
+  ["assistant-debugging", "debugging_fix", %w[pre_build]],
+  ["assistant-review", "orchestrator_to_reviewer", %w[discovery pre_build completion]]
+]
+handoff_specs.each do |skill, handoff_name, expected_phases|
+  contract = YAML.load_file(File.join(framework, "skills", skill, "contracts/handoffs.yaml"))
+  handoff = contract.fetch("handoffs").find { |item| item["name"] == handoff_name }
+  evidence = field.call(handoff.fetch("context_fields"), "change_impact_evidence")
+  phase = field.call(evidence.fetch("object_fields"), "phase")
+  abort "#{skill}/#{handoff_name} handoff phase enum drifted" unless phase.fetch("enum_values") == expected_phases
 end
-abort "missing concrete phase-aware handoff carriers" unless carrier_count >= 5
 
 readme = File.read(File.join(framework, "tools/change-impact/README.md"))
 abort "README command retains legacy phase spelling" if readme.include?("--phase pre-build")
@@ -127,7 +122,7 @@ else
     fail "$(IFS='; '; printf '%s' "${local_proportionality_failures[*]}")"
 fi
 
-test_start "local debugging output and discovery handoffs require only applicable change-impact fields"
+test_start "read-only impact carriers retain discovery while mutation handoffs require current pre_build evidence"
 if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
 framework = ARGV.fetch(0)
 load = ->(path) { YAML.load_file(path) }
@@ -162,28 +157,55 @@ abort "Architect does not receive expanded impact evidence" unless architect_imp
 canonical_scopes = ["not_applicable", "local", "shared", "unresolved"]
 architect_scope = field.call(architect_impact.fetch("object_fields"), "impact_scope")
 abort "Architect rejects a carried local impact artifact" unless architect_scope && architect_scope["enum_values"] == canonical_scopes
-carrier_fields = []
-%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
-  source = load.call(File.join(framework, "skills", skill, "contracts/handoffs.yaml"))
-  collect = lambda do |value|
-    case value
-    when Hash
-      carrier_fields << value if value["name"] == "change_impact_evidence"
-      value.each_value { |child| collect.call(child) }
-    when Array
-      value.each { |child| collect.call(child) }
-    end
-  end
-  collect.call(source.fetch("handoffs"))
-end
-abort "missing phase-aware impact carriers" if carrier_fields.length < 5
-carrier_fields.each do |carrier|
+review_handoffs = load.call(File.join(framework, "skills/assistant-review/contracts/handoffs.yaml"))
+reviewer = review_handoffs.fetch("handoffs").find { |item| item["name"] == "orchestrator_to_reviewer" }
+reviewer_impact = field.call(reviewer.fetch("context_fields"), "change_impact_evidence")
+[architect_impact, reviewer_impact].each do |carrier|
   phase = field.call(carrier.fetch("object_fields"), "phase")
   assessment = field.call(carrier.fetch("object_fields"), "assessment_ref")
   scope = field.call(carrier.fetch("object_fields"), "impact_scope")
-  abort "carrier lacks discovery phase" unless phase && phase["enum_values"] == ["discovery", "pre_build", "completion"]
-  abort "carrier requires assessment during discovery" unless assessment && assessment["condition"].include?("phase in [pre_build, completion]")
-  abort "carrier rejects a carried local impact artifact" unless scope && scope["enum_values"] == canonical_scopes
+  abort "read-only carrier loses discovery/completion evidence" unless phase && phase["enum_values"] == ["discovery", "pre_build", "completion"]
+  abort "read-only carrier requires discovery assessment" unless assessment && assessment["condition"].include?("phase in [pre_build, completion]")
+  abort "read-only carrier rejects a carried local impact artifact" unless scope && scope["enum_values"] == canonical_scopes
+end
+
+mutation_handoffs = {
+  "CodeWriter" => [handoffs, "orchestrator_to_code_writer"],
+  "BuilderTester" => [handoffs, "orchestrator_to_builder_tester"],
+  "Fixer" => [load.call(File.join(framework, "skills/assistant-debugging/contracts/handoffs.yaml")), "debugging_fix"]
+}
+mutation_handoffs.each do |role, (contract, handoff_name)|
+  handoff = contract.fetch("handoffs").find { |item| item["name"] == handoff_name }
+  carrier = field.call(handoff.fetch("context_fields"), "change_impact_evidence")
+  fields = carrier.fetch("object_fields")
+  phase = field.call(fields, "phase")
+  assessment = field.call(fields, "assessment_ref")
+  status = field.call(fields, "status")
+  abort "#{role} accepts discovery/completion mutation authorization" unless phase && phase["enum_values"] == ["pre_build"]
+  abort "#{role} permits optional pre-build assessment" unless assessment && assessment["required"] == true
+  abort "#{role} permits non-valid mutation evidence" unless status && status["enum_values"] == ["valid"]
+  abort "#{role} does not require current resolved pre-build bindings" unless carrier["validation"].to_s.include?("current valid pre_build") && carrier["validation"].to_s.include?("resolve")
+  abort "#{role} permits stale pre-build evidence reuse" unless carrier.fetch("validation").include?("reuse requires demonstrably current same-input evidence")
+  abort "BuilderTester permits evidence reuse after CodeWriter mutation" if role == "BuilderTester" && !carrier.fetch("validation").include?("BuilderTester must not reuse CodeWriter's pre-build result after earlier mutations")
+
+  valid_payload = {"phase" => "pre_build", "status" => "valid", "assessment_ref" => "assessment.json", "artifact_identity" => "impact-1", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "validator_result_ref" => "result.json", "impact_scope" => "shared"}
+  invalid_payloads = [
+    valid_payload.merge("phase" => "discovery"),
+    valid_payload.merge("phase" => "completion"),
+    valid_payload.reject { |key, _| key == "assessment_ref" },
+    valid_payload.merge("impact_scope" => "invalid")
+  ]
+  accepts = lambda do |payload|
+    fields.all? do |schema|
+      value = payload[schema["name"]]
+      required = schema["required"] == true
+      present = payload.key?(schema["name"]) && !value.to_s.empty?
+      enum_valid = schema["type"] != "enum" || !payload.key?(schema["name"]) || Array(schema["enum_values"]).include?(value)
+      (!required || present) && enum_valid
+    end
+  end
+  abort "#{role} rejects a valid pre-build authorization payload" unless accepts.call(valid_payload)
+  abort "#{role} accepts discovery, completion, or assessment-free mutation payload" if invalid_payloads.any? { |payload| accepts.call(payload) }
 end
 artifact_type_fields = []
 walk = lambda do |value|
@@ -202,7 +224,57 @@ RUBY
 then
     pass
 else
-    fail "local output, discovery, or Architect/CodeWriter/BuilderTester change-impact field applicability regressed"
+    fail "local output, read-only carriers, or mutation-handoff change-impact applicability regressed"
+fi
+
+test_start "expanded impact authorization is enforced at mutation entry, not Build or Fix exit"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+framework = ARGV.fetch(0)
+checks = [
+  ["skills/assistant-workflow/contracts/phase-gates.yaml", "BUILD", "B_CHANGE_IMPACT_PREBUILD"],
+  ["skills/assistant-debugging/contracts/phase-gates.yaml", "FIX", "FX_CHANGE_IMPACT_PREBUILD"],
+  ["skills/assistant-review/contracts/phase-gates.yaml", "FIX_STEP", "F_CHANGE_IMPACT_PREBUILD"]
+]
+checks.each do |path, phase_name, assertion_id|
+  contract = YAML.load_file(File.join(framework, path))
+  gate = contract.fetch("gates").find { |item| item["phase"] == phase_name }
+  entry = gate.fetch("entry_assertions").find { |item| item["id"] == assertion_id }
+  exit = Array(gate["exit_assertions"]).find { |item| item["id"] == assertion_id }
+  abort "#{phase_name} lacks an expanded-impact mutation entry assertion" unless entry
+  abort "#{phase_name} keeps expanded-impact authorization at exit" if exit
+  abort "#{phase_name} entry assertion does not precede every source/test mutation or dispatch" unless entry.fetch("check").downcase.include?("before any source/test mutation or mutation dispatch")
+  abort "#{phase_name} entry assertion lost shared/unresolved scope" unless entry["condition"] == "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+end
+
+guide = File.read(File.join(framework, "docs/skill-contract-design-guide.md"))
+abort "guide does not define mutation entry assertions" unless guide.include?("entry_assertions") && guide.include?("before any mutation or mutation dispatch")
+RUBY
+then
+    pass
+else
+    fail "expanded impact authorization must remain a pre-mutation entry gate"
+fi
+
+test_start "standalone review repairs enter FIX_STEP before mutation"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+framework = ARGV.fetch(0)
+gates = YAML.load_file(File.join(framework, "skills/assistant-review/contracts/phase-gates.yaml"))
+entry = gates.fetch("gates").find { |gate| gate["phase"] == "ENTRY" }
+e8 = entry.fetch("exit_assertions").find { |assertion| assertion["id"] == "E8" }
+fix_step = gates.fetch("gates").find { |gate| gate["phase"] == "FIX_STEP" }
+impact_entry = fix_step.fetch("entry_assertions").find { |assertion| assertion["id"] == "F_CHANGE_IMPACT_PREBUILD" }
+abort "E8 bypasses FIX_STEP entry assertions on repair" unless e8.fetch("check").include?("FIX_STEP entry_assertions before repair or mutation dispatch")
+abort "E8 recovery bypasses FIX_STEP entry assertions on repair" unless e8.fetch("on_fail").include?("FIX_STEP entry_assertions before repair or mutation dispatch")
+abort "FIX_STEP lost the pre-mutation impact entry gate" unless impact_entry
+
+loop = File.read(File.join(framework, "skills/assistant-review/references/review-loop.md"))
+prepare = loop.split(/^while round <= 10:/, 2).first
+abort "PREPARE standalone repair bypasses FIX_STEP" unless prepare.include?("FIX_STEP entry_assertions before repair or mutation dispatch")
+RUBY
+then
+    pass
+else
+    fail "standalone Spec Review repair must use FIX_STEP entry assertions before mutation"
 fi
 
 test_start "assistant-review routes triggered change-impact before planning and excludes it from Reviewer bundles"
