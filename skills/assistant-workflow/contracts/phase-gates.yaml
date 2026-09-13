@@ -16,7 +16,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "11.0"
+schema_version: "11.1"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -455,6 +455,12 @@ gates:
     checkpoint_start: "--- PHASE: BUILD ---"
     checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
     condition: "execution_intent != prepare_only"
+    entry_assertions:
+
+      - id: B_CHANGE_IMPACT_PREBUILD
+        check: "Before any source/test mutation or mutation dispatch, behavior changes record applicability and shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Local uses ordinary verification/self-review; no Node gate."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Stop before behavior edits, regression-test writes, or mutation dispatch; load references/change-impact.md, resolve the active installed checker, and repair the assessment or report the explicit blocker."
     exit_assertions:
 
       - id: B1
@@ -811,6 +817,12 @@ invariants:
     condition: "architecture_design_mode in [lightweight, required, review_intensive]"
     scope: all_phases
     on_fail: "Repair the Type Ledger and affected interface/task packet before implementation; do not hide domain meaning in unexplained generic primitives or introduce wrapper-only types without an owned semantic boundary."
+
+  - id: INV_CHANGE_IMPACT
+    check: "Behavior changes retain applicability evidence. Expanded artifacts preserve identity through discovery, pre-build, Build, and review; completion needs common validation and assistant-review terminal coverage."
+    condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+    scope: all_phases
+    on_fail: "Refresh the bounded capture and expected authority, rerun affected verification/review, or retain the result as blocked/remaining rather than complete."
 
   - id: INV_PROGRESSIVE_DISCOVERY_BOUNDARY
     check: "Progressive mapping, resolving, route_clear, or blocked state remains in Discover and is a no-execution boundary: no Decompose, Plan, Build, project/source mutation, external writes, branch creation, or credential-location recording occurs. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."

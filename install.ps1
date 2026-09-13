@@ -2251,7 +2251,9 @@ function Invoke-AssistantFrameworkInstall {
     if ($agentName -eq 'codex') {
         $agentsRoot = Get-FullPath -LiteralPath (Join-Path $script:UserHome '.agents')
         $skillsTarget = Join-Path $agentsRoot 'skills'
+        $codexCommonToolsTarget = Join-Path $agentsRoot 'tools'
         [void](Assert-SafeManagedChild -LiteralPath $skillsTarget -ManagedRoot $agentsRoot -Purpose 'Codex skills root')
+        [void](Assert-SafeManagedChild -LiteralPath $codexCommonToolsTarget -ManagedRoot $agentsRoot -Purpose 'Codex common tools root')
         Assert-NoSourceTargetOverlap -Source $agentHome -Target $skillsTarget -Purpose 'Codex agent home and shared skills root'
     }
     else {
@@ -2282,6 +2284,7 @@ function Invoke-AssistantFrameworkInstall {
     Write-Info "Skills target: $skillsTarget"
 
     $toolsSource = Join-Path $script:FrameworkDir 'tools'
+    $changeImpactToolsSource = Join-Path $toolsSource 'change-impact'
     $toolExclusions = @('.DS_Store', '.publish', 'bin', 'obj')
     $evalDocsSource = Join-Path (Join-Path $script:FrameworkDir 'docs') 'evals'
     $sourceOnlyFiles = @(
@@ -2314,6 +2317,9 @@ function Invoke-AssistantFrameworkInstall {
     if (Test-Path -LiteralPath $toolsSource -PathType Container) {
         Assert-ManagedTopLevelEntriesSafe -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $sourceOnly -Label 'Tools'
     }
+    if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
+        [void](Assert-ManagedDirectoryCopySafe -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -Label 'Codex common change-impact checker')
+    }
     if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
         Assert-ManagedTopLevelEntriesSafe -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'
     }
@@ -2340,6 +2346,9 @@ function Invoke-AssistantFrameworkInstall {
 
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
             Sync-ManagedTopLevelEntries -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $sourceOnly -Label 'Tools'
+        }
+        if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
+            Sync-ManagedDirectory -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -Label 'Codex common change-impact checker'
         }
         if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
             Sync-ManagedTopLevelEntries -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'

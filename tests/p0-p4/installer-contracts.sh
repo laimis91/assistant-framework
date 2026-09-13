@@ -591,4 +591,62 @@ else
     fail "Codex --no-hooks install failed; see /tmp/p0p4-install-codex-no-hooks.err"
 fi
 
+test_start "selective debugging and review installs ship an executable common change-impact checker"
+CHANGE_IMPACT_INSTALL_ROOT="$(mktemp -d)"
+p0p4_register_cleanup "$CHANGE_IMPACT_INSTALL_ROOT"
+change_impact_install_failure=""
+for change_impact_skill in assistant-debugging assistant-review; do
+    change_impact_home="$CHANGE_IMPACT_INSTALL_ROOT/$change_impact_skill home [isolated]"
+    change_impact_case="$change_impact_home/change impact fixture"
+    change_impact_skill_file="$change_impact_home/.codex/skills/$change_impact_skill/SKILL.md"
+    change_impact_tool="$(dirname "$change_impact_skill_file")/../../tools/change-impact/validate-change-impact.cjs"
+    change_impact_protocol="$(dirname "$change_impact_skill_file")/../../tools/change-impact/protocol.v1.json"
+    change_impact_example="$(dirname "$change_impact_skill_file")/../../tools/change-impact/example.completion.v1.json"
+    change_impact_reference="$change_impact_home/.codex/skills/$change_impact_skill/references/change-impact.md"
+    mkdir -p "$change_impact_case"
+    if ! HOME="$change_impact_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill "$change_impact_skill" --no-hooks >/tmp/p0p4-change-impact-${change_impact_skill}.out 2>/tmp/p0p4-change-impact-${change_impact_skill}.err; then
+        change_impact_install_failure="$change_impact_skill selective install failed"
+        break
+    elif [[ ! -f "$change_impact_skill_file" || ! -f "$change_impact_tool" || ! -f "$change_impact_protocol" || ! -f "$change_impact_example" ]]; then
+        change_impact_install_failure="$change_impact_skill selective install omitted common validator resources at the path resolved from its loaded SKILL.md"
+        break
+    elif [[ -d "$change_impact_home/.codex/skills/assistant-workflow" || ! -f "$change_impact_reference" ]] \
+        || ! grep -Fq '../../tools/change-impact/validate-change-impact.cjs' "$change_impact_reference"; then
+        change_impact_install_failure="$change_impact_skill did not resolve the installed common checker without workflow"
+        break
+    elif ! node -e 'const fs=require("node:fs"); const source=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const target=process.argv[2]; for (const [name, value] of Object.entries(source)) fs.writeFileSync(`${target}/${name}.json`, JSON.stringify(value));' "$FRAMEWORK_DIR/tools/change-impact/example.completion.v1.json" "$change_impact_case"; then
+        change_impact_install_failure="$change_impact_skill could not materialize the valid checker fixture"
+        break
+    elif ! node "$change_impact_tool" --phase completion --capture "$change_impact_case/capture.json" --expected "$change_impact_case/expected.json" --assessment "$change_impact_case/assessment.json" --review "$change_impact_case/review.json" >/tmp/p0p4-change-impact-${change_impact_skill}-valid.out; then
+        change_impact_install_failure="$change_impact_skill installed checker rejected its valid protocol example"
+        break
+    elif ! node -e 'const fs=require("node:fs"); const p=process.argv[1]; const value=JSON.parse(fs.readFileSync(p,"utf8")); const edge=value.edges.pop(); value.requirements=value.requirements.filter((requirement) => requirement.edge_id !== edge.id); fs.writeFileSync(p,JSON.stringify(value));' "$change_impact_case/capture.json"; then
+        change_impact_install_failure="$change_impact_skill could not materialize the consumer-omission fixture"
+        break
+    elif node "$change_impact_tool" --phase completion --capture "$change_impact_case/capture.json" --expected "$change_impact_case/expected.json" --assessment "$change_impact_case/assessment.json" --review "$change_impact_case/review.json" >/tmp/p0p4-change-impact-${change_impact_skill}-consumer-omission.out; then
+        change_impact_install_failure="$change_impact_skill installed checker accepted a capture missing a known consumer"
+        break
+    elif ! grep -Fq 'CAPTURE_EXPECTED_EDGES_MISMATCH' /tmp/p0p4-change-impact-${change_impact_skill}-consumer-omission.out; then
+        change_impact_install_failure="$change_impact_skill consumer omission did not fail against independent expected truth"
+        break
+    elif ! node -e 'const fs=require("node:fs"); const source=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); fs.writeFileSync(process.argv[2],JSON.stringify(source.capture));' "$FRAMEWORK_DIR/tools/change-impact/example.completion.v1.json" "$change_impact_case/capture.json"; then
+        change_impact_install_failure="$change_impact_skill could not restore the root-omission fixture"
+        break
+    elif ! node -e 'const fs=require("node:fs"); const p=process.argv[1]; const value=JSON.parse(fs.readFileSync(p,"utf8")); value.roots=[]; fs.writeFileSync(p,JSON.stringify(value));' "$change_impact_case/capture.json"; then
+        change_impact_install_failure="$change_impact_skill could not materialize the omission fixture"
+        break
+    elif node "$change_impact_tool" --phase completion --capture "$change_impact_case/capture.json" --expected "$change_impact_case/expected.json" --assessment "$change_impact_case/assessment.json" --review "$change_impact_case/review.json" >/tmp/p0p4-change-impact-${change_impact_skill}-omission.out; then
+        change_impact_install_failure="$change_impact_skill installed checker accepted an empty shared discovery-root capture"
+        break
+    elif ! grep -Fq 'CAPTURE_DISCOVERY_ROOTS_MISSING' /tmp/p0p4-change-impact-${change_impact_skill}-omission.out; then
+        change_impact_install_failure="$change_impact_skill omission did not fail for the missing discovery-root reason"
+        break
+    fi
+done
+if [[ -z "$change_impact_install_failure" ]]; then
+    pass
+else
+    fail "$change_impact_install_failure"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

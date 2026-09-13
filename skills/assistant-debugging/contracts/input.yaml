@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "1.1"
 contract: input
 skill: assistant-debugging
 
@@ -61,3 +61,32 @@ fields:
     default: true
     on_missing: skip
     validation: "False when user asked only for investigation, explanation, or audit"
+
+  - name: change_impact_applicability
+    type: object
+    required: conditional
+    condition: "a diagnosis or proposed repair has a behavior-bearing or locality/shared/unresolved impact decision"
+    description: "Compact impact applicability evidence before selecting local or expanded repair verification."
+    validation: "Records impact_scope and applicability_reason. local requires causal_evidence_ref and ordinary regression verification/self-review; shared or unresolved requires expanded_artifact_carried=true."
+    object_fields:
+      - {name: impact_scope, type: enum, required: true, enum_values: [local, shared, unresolved]}
+      - {name: applicability_reason, type: string, required: true}
+      - {name: causal_evidence_ref, type: string, required: conditional, condition: "impact_scope == local"}
+      - {name: expanded_artifact_carried, type: boolean, required: true}
+    on_missing: fail
+
+  - name: change_impact_context
+    type: object
+    required: false
+    description: "Current common change-impact artifact references for a shared, unresolved, or explicitly carried expanded repair."
+    validation: "Preserves artifact_identity and capture/expected-context refs. Discovery may report gaps; an expanded repair may not claim pre-build or completion evidence without the common checker."
+    object_fields:
+      - {name: artifact_identity, type: string, required: true}
+      - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
+      - {name: phase, type: enum, required: conditional, condition: "status == valid", enum_values: [discovery, pre_build, completion]}
+      - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+      - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
+    default: null
+    on_missing: infer

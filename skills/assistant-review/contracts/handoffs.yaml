@@ -4,13 +4,16 @@
 # including triggered trivial/small scope. Direct fallback uses the same review
 # fields as local evidence without spawning a subagent.
 
-schema_version: "7.1"
+schema_version: "7.2"
 contract: handoffs
 skill: assistant-review
-# v7.1 migration: persisted 6.0 and incompatible 7.0 packets are invalidated and
-# rebuilt from a freshly rehashed 7.1 snapshot before CLEAN or ISSUES_FIXED. Preserve a
-# legacy closure ledger by normalizing UTF-8 NFC(description) as UTF-8 bytes,
-# SHA-256 hashing it, and using legacy-v6:<fixed_in_round>:<first-24-hex>;
+# v7.2 migration: persisted 6.0 and incompatible 7.0/7.1 packets are invalidated and
+# rebuilt from a freshly rehashed 7.2 snapshot before CLEAN or ISSUES_FIXED. Preserve a
+# legacy closure ledger by preserving complete identity tuples. For a partial
+# v6/v7.0 tuple, preserve a supplied aggregate_finding_id and fill only missing
+# source IDs/provenance. When that ID is absent, normalize UTF-8
+# NFC(description) as UTF-8 bytes, SHA-256 hash it, and use
+# legacy-v6:<fixed_in_round>:<first-24-hex> or legacy-v7-0:<fixed_in_round>:<first-24-hex>;
 # non-colliding records use that base ID; every colliding record appends
 # :<ordinal>, starting at 1 in original packet position within its group.
 
@@ -32,7 +35,7 @@ worker_status_protocol:
     - "Every expected review pass reaches a terminal state before aggregation; the first response never establishes batch coverage."
     - "evidence is required to support the verdict and any findings."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
-    - "Persisted 6.0 and incompatible 7.0 packets are invalidated and rebuilt under 7.1; 6.0 UTF-8 NFC legacy IDs use SHA-256 base IDs, un-suffixed when non-colliding and :<ordinal>-suffixed for every colliding record in original packet order."
+    - "Persisted 6.0 and incompatible 7.0/7.1 packets are invalidated and rebuilt under 7.2. Preserve complete closure identity tuples and raw history; for partial v6/v7.0 tuples preserve a supplied aggregate_finding_id, fill only missing source IDs/provenance, and use the versioned UTF-8 NFC/SHA-256 legacy ID only when that ID is absent. Non-colliding IDs use the base; every colliding record appends :<ordinal> in original packet order."
     - "status is required on every QAEvaluator return."
     - "QAEvaluator returns acceptance_findings, qa_scorecard, final_verdict, result, evidence, and every-round score_entry; score_progression is optional history. Selected_domain_rubrics and domain_quality_scores are required only when scoped. QA does not replace Reviewer/code-reviewer findings."
     - "Reviewer and QAEvaluator may return pivot_restart_signal for PIVOT, STAGNATION, repeated DRIFT, or repeated REGRESSION; the orchestrator owns the final pivot_restart_decision."
@@ -44,7 +47,7 @@ dispatch_context_bundles:
     selected_dispatch_context_ref: "handoffs.orchestrator_to_reviewer.reviewer_pass_context_fields"
     review_evidence_pointer:
       required_refs: [pre_batch_criteria_ref, review_material_snapshot, build_test_verification_ref]
-    context_fields_from_dispatch: [review_preparation_mode, pre_batch_criteria_ref, build_test_verification_ref, review_material_snapshot, batch_id, review_pass_id, review_attempt_id, review_perspective, assigned_scope, coverage_obligations, review_focus, scope_size, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, rubric_required]
+    context_fields_from_dispatch: [review_preparation_mode, pre_batch_criteria_ref, build_test_verification_ref, review_material_snapshot, change_impact_applicability, change_impact_evidence, batch_id, review_pass_id, review_attempt_id, review_perspective, assigned_scope, coverage_obligations, review_focus, scope_size, round, additional_round_reason, previously_fixed, finding_filter_policy, project_type, quality_principles_required, reuse_search_instruction, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, architecture_decision_pack, rubric_required]
     worker_references:
       - path: references/review-principles.md
         sections: [all]
@@ -509,6 +512,29 @@ handoffs:
         description: "Only this pass's scope_manifest ids; never sibling assignments or outputs."
         validation: "Exactly matches this review_pass_id assignment in review_batch.expected_passes and every id belongs to review_material_snapshot.scope_manifest."
 
+      - name: change_impact_applicability
+        type: object
+        required: conditional
+        condition: "this pass covers a behavior-bearing change or locality/shared/unresolved impact decision"
+        validation: "impact_scope and applicability_reason are preserved. local carries causal evidence and ordinary review without mandatory expanded refs; shared/unresolved or explicit expansion carries the matching artifact."
+
+      - name: change_impact_evidence
+        type: object
+        required: conditional
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        description: "Pass-local pointer for independently challenging locality, captured consumers, transitions, and mapping gaps."
+        validation: "Preserves artifact_identity, impact_scope, status, and phase. valid carries current capture/expected/checker refs and assessment only for pre-build or completion; gaps_reported, blocked, or invalid carries a gap_or_blocker_ref and remains independently challengeable. It provides no sibling output or alternate ledger."
+        object_fields:
+          - {name: artifact_identity, type: string, required: true}
+          - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
+          - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+          - {name: phase, type: enum, required: conditional, condition: "status == valid", enum_values: [discovery, pre_build, completion]}
+          - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
+          - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
+          - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+          - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
+          - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
+
       - name: coverage_obligations
         type: string[]
         required: true
@@ -566,17 +592,17 @@ handoffs:
           - name: aggregate_finding_id
             type: string
             required: true
-            validation: "New entries require aggregate_finding_id; legacy missing IDs are normalized deterministically before closure dispatch."
+            validation: "New entries require aggregate_finding_id. Complete historic tuples are unchanged; partial v6/v7.0 tuples preserve a supplied ID, while missing IDs are normalized deterministically before closure dispatch."
           - name: source_finding_ids
             type: string[]
             required: true
             min_items: 1
-            validation: "Exact pre-fix source IDs; v6 uses its migrated ID."
+            validation: "Exact pre-fix source IDs. Partial v6/v7.0 tuples fill only missing source IDs with their preserved or migrated aggregate ID; an id-less v7.0 record uses legacy-v7-0 with persisted-v7-0-migration provenance."
           - name: source_provenance
             type: object[]
             required: true
             min_items: 1
-            validation: "Exact pre-fix provenance; v6 records persisted-v6-migration."
+            validation: "Exact pre-fix provenance. Partial v6/v7.0 tuples fill only missing provenance with review_pass:persisted-v6-migration or review_pass:persisted-v7-0-migration."
             object_fields:
               - name: source_kind
                 type: enum

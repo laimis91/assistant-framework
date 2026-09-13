@@ -1,0 +1,45 @@
+{
+  "capture": {
+    "schema_version": "change-impact-capture/v1",
+    "capture_id": "capture-example-current",
+    "snapshot": { "base_id": "base-example", "candidate_id": "candidate-example", "universe_id": "universe-example-current" },
+    "roots": [{ "id": "root-1", "method": "bounded repository and configuration inventory", "source_id": "inventory-current" }],
+    "edges": [{ "id": "edge-editor", "consumer_id": "editor", "contract_id": "navigation", "dependency_kind": "call", "presence": "both", "source_id": "editor-current" }],
+    "requirements": [{ "id": "req-dirty-cancel", "edge_id": "edge-editor", "contract_id": "navigation", "state_transition": "dirty-cancel", "source_id": "editor-current" }],
+    "unknown_boundaries": []
+  },
+  "expected": {
+    "schema_version": "change-impact-expected-context/v1",
+    "authority_id": "independent-context-example",
+    "capture_id": "capture-example-current",
+    "snapshot": { "base_id": "base-example", "candidate_id": "candidate-example", "universe_id": "universe-example-current" },
+    "required_impact_scope": "shared",
+    "required_edges": [{ "id": "edge-editor", "consumer_id": "editor", "contract_id": "navigation", "dependency_kind": "call", "presence": "both", "source_id": "editor-current" }],
+    "required_requirements": [{ "id": "req-dirty-cancel", "edge_id": "edge-editor", "contract_id": "navigation", "state_transition": "dirty-cancel", "source_id": "editor-current", "verification_source_id": "navigation-test-current" }],
+    "review_context": {
+      "scope_manifest_id": "assistant-review-scope-manifest-example",
+      "coverage_ledger_id": "assistant-review-coverage-ledger-example",
+      "review_snapshot_id": "assistant-review-snapshot-example",
+      "snapshot_id": "review-source-example-current",
+      "required_bindings": [{ "requirement_id": "req-dirty-cancel", "scope_item_id": "scope-navigation", "coverage_concern_id": "concern-dirty-cancel" }]
+    }
+  },
+  "assessment": {
+    "schema_version": "change-impact-assessment/v1",
+    "capture_id": "capture-example-current",
+    "snapshot": { "base_id": "base-example", "candidate_id": "candidate-example", "universe_id": "universe-example-current" },
+    "impact_scope": "shared",
+    "assessment_kind": "behavior",
+    "obligations": [{ "id": "obligation-dirty-cancel", "requirement_id": "req-dirty-cancel", "disposition": "preserve", "rationale_ref": "decision-preserve-dirty-cancel", "authorization_ref": null, "verification_id": "verify-dirty-cancel", "equivalence_group_id": null }],
+    "verification_plans": [{ "id": "verify-dirty-cancel", "contract_id": "navigation", "state_transition": "dirty-cancel", "oracle": "cancel keeps the current editor route", "steps_ref": "tests/navigation-dirty-cancel", "source_identity": "navigation-test-current" }],
+    "equivalence_groups": [],
+    "actual_verifications": [{ "verification_id": "verify-dirty-cancel", "outcome": "passed", "executed_source_identity": "navigation-test-current", "evidence_ref": "test-result-navigation-current" }]
+  },
+  "review": {
+    "schema_version": "change-impact-review/v1",
+    "capture_id": "capture-example-current",
+    "snapshot": { "base_id": "base-example", "candidate_id": "candidate-example", "universe_id": "universe-example-current" },
+    "review_source": { "scope_manifest_id": "assistant-review-scope-manifest-example", "coverage_ledger_id": "assistant-review-coverage-ledger-example", "review_snapshot_id": "assistant-review-snapshot-example", "snapshot_id": "review-source-example-current" },
+    "bindings": [{ "obligation_id": "obligation-dirty-cancel", "requirement_id": "req-dirty-cancel", "scope_item_id": "scope-navigation", "coverage_concern_id": "concern-dirty-cancel" }]
+  }
+}

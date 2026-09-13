@@ -3,7 +3,7 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "11.0"
+schema_version: "11.1"
 contract: input
 skill: assistant-workflow
 
@@ -120,6 +120,35 @@ fields:
     validation: "Plain-language constraints only accumulate unless the user explicitly changes them"
     default: []
     on_missing: skip
+
+  - name: change_impact_applicability
+    type: object
+    required: conditional
+    condition: "a behavior or locality/shared/unresolved impact decision affects verification"
+    description: "Applicability decision."
+    validation: "local needs causal evidence; shared/unresolved needs expanded artifact."
+    object_fields:
+      - {name: impact_scope, type: enum, required: true, enum_values: [local, shared, unresolved]}
+      - {name: applicability_reason, type: string, required: true}
+      - {name: causal_evidence_ref, type: string, required: conditional, condition: "impact_scope == local"}
+      - {name: expanded_artifact_carried, type: boolean, required: true}
+    on_missing: fail
+
+  - name: change_impact_context
+    type: object
+    required: false
+    description: "Expanded assessment refs."
+    validation: "Includes identity, phase, capture, expected context, and an assessment only for pre-build or completion."
+    object_fields:
+      - {name: artifact_identity, type: string, required: true}
+      - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
+      - {name: phase, type: enum, required: conditional, condition: "status == valid", enum_values: [discovery, pre_build, completion]}
+      - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+      - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
+    default: null
+    on_missing: infer
 
   - name: tdd_mode
     type: boolean

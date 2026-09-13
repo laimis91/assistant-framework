@@ -1,0 +1,15 @@
+{
+  "schema_version": "change-impact-protocol/v1",
+  "purpose": "Validate closure against separately supplied capture authority; it is not a universal dependency analyzer.",
+  "runtime": "Node.js 22 or newer, standard library only",
+  "phases": {
+    "discovery": ["capture", "expected context"],
+    "pre_build": ["capture", "expected context", "assessment with planned verification"],
+    "completion": ["capture", "expected context", "assessment with actual verification", "review bindings"]
+  },
+  "review_context": "null is allowed during discovery and pre-build; completion requires the current assistant-review scope-manifest, coverage-ledger, snapshot, and requirement mappings.",
+  "dependency_kinds": ["call", "wrapper", "config", "registration", "event", "state", "public"],
+  "dispositions": ["preserve", "change", "unaffected", "waived", "blocked"],
+  "identity_rules": ["Capture records base/candidate union edges and required contract/state transitions.", "Expected context independently supplies current snapshot, required scope, edges, transitions, verification source identities, and review source mappings.", "Completion requires actual verification and exact review projections; discovery completeness remains a caller-reviewed limit."],
+  "limits": { "max_document_bytes": 262144, "max_depth": 16, "max_array_items": 200, "max_object_keys": 60 }
+}

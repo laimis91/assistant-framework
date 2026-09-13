@@ -1,0 +1,70 @@
+{
+  "capture": {
+    "schema_version": "change-impact-capture/v1",
+    "capture_id": "capture-20260911",
+    "snapshot": { "base_id": "base-a", "candidate_id": "candidate-b", "universe_id": "universe-current" },
+    "roots": [
+      { "id": "root-navigation", "method": "repository search", "source_id": "src-index-current" },
+      { "id": "root-registration", "method": "configuration inventory", "source_id": "config-current" }
+    ],
+    "edges": [
+      { "id": "edge-nav-editor", "consumer_id": "editor", "contract_id": "navigation", "dependency_kind": "call", "presence": "both", "source_id": "editor-current" },
+      { "id": "edge-nav-modal", "consumer_id": "modal", "contract_id": "navigation", "dependency_kind": "wrapper", "presence": "both", "source_id": "modal-current" },
+      { "id": "edge-config-old", "consumer_id": "legacy-config", "contract_id": "configuration", "dependency_kind": "config", "presence": "base", "source_id": "config-base" },
+      { "id": "edge-event-new", "consumer_id": "event-worker", "contract_id": "async-work", "dependency_kind": "event", "presence": "candidate", "source_id": "event-current" },
+      { "id": "edge-state", "consumer_id": "draft-store", "contract_id": "state", "dependency_kind": "state", "presence": "both", "source_id": "state-current" },
+      { "id": "edge-public", "consumer_id": "external-client", "contract_id": "public-api", "dependency_kind": "public", "presence": "both", "source_id": "api-current" },
+      { "id": "edge-cache", "consumer_id": "cache-layer", "contract_id": "cache", "dependency_kind": "registration", "presence": "both", "source_id": "registration-current" }
+    ],
+    "requirements": [
+      { "id": "req-nav-success", "edge_id": "edge-nav-editor", "contract_id": "navigation", "state_transition": "route-success", "source_id": "editor-current" },
+      { "id": "req-nav-dirty", "edge_id": "edge-nav-editor", "contract_id": "navigation", "state_transition": "dirty-cancel", "source_id": "editor-current" },
+      { "id": "req-nav-modal", "edge_id": "edge-nav-modal", "contract_id": "navigation", "state_transition": "route-success", "source_id": "modal-current" },
+      { "id": "req-config", "edge_id": "edge-config-old", "contract_id": "configuration", "state_transition": "loads-default", "source_id": "config-base" },
+      { "id": "req-event", "edge_id": "edge-event-new", "contract_id": "async-work", "state_transition": "stale-completion", "source_id": "event-current" },
+      { "id": "req-state", "edge_id": "edge-state", "contract_id": "state", "state_transition": "restore-draft", "source_id": "state-current" },
+      { "id": "req-public", "edge_id": "edge-public", "contract_id": "public-api", "state_transition": "compatibility", "source_id": "api-current" },
+      { "id": "req-cache", "edge_id": "edge-cache", "contract_id": "cache", "state_transition": "fresh-miss", "source_id": "registration-current" }
+    ],
+    "unknown_boundaries": []
+  },
+  "expected": {
+    "schema_version": "change-impact-expected-context/v1",
+    "authority_id": "independent-current-context-1",
+    "capture_id": "capture-20260911",
+    "snapshot": { "base_id": "base-a", "candidate_id": "candidate-b", "universe_id": "universe-current" },
+    "required_impact_scope": "shared",
+    "required_edges": [],
+    "required_requirements": [],
+    "review_context": {
+      "scope_manifest_id": "assistant-review-scope-manifest-7",
+      "coverage_ledger_id": "assistant-review-coverage-ledger-7",
+      "review_snapshot_id": "assistant-review-snapshot-7",
+      "snapshot_id": "review-source-current",
+      "required_bindings": []
+    }
+  },
+  "assessment": {
+    "schema_version": "change-impact-assessment/v1",
+    "capture_id": "capture-20260911",
+    "snapshot": { "base_id": "base-a", "candidate_id": "candidate-b", "universe_id": "universe-current" },
+    "impact_scope": "shared",
+    "assessment_kind": "behavior",
+    "obligations": [],
+    "verification_plans": [],
+    "equivalence_groups": [],
+    "actual_verifications": []
+  },
+  "review": {
+    "schema_version": "change-impact-review/v1",
+    "capture_id": "capture-20260911",
+    "snapshot": { "base_id": "base-a", "candidate_id": "candidate-b", "universe_id": "universe-current" },
+    "review_source": {
+      "scope_manifest_id": "assistant-review-scope-manifest-7",
+      "coverage_ledger_id": "assistant-review-coverage-ledger-7",
+      "review_snapshot_id": "assistant-review-snapshot-7",
+      "snapshot_id": "review-source-current"
+    },
+    "bindings": []
+  }
+}

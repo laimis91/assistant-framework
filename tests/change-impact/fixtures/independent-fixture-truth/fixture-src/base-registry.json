@@ -1,0 +1,1 @@
+{ "registrations": [{ "id": "legacy-json", "consumer": "public-legacy-json-client", "format": "json", "public": true }] }

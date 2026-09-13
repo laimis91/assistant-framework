@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "7.1"
+schema_version: "7.2"
 contract: phase-gates
 skill: assistant-review
 
@@ -34,6 +34,11 @@ gates:
         check: "mode is resolved (review-fix or audit)"
         on_fail: "Ask exactly: 'Should I only report findings, or also implement and verify fixes?' Stop before Reviewer dispatch or source mutation until the user answers. Do not use authorship, branch/PR ownership, platform, or connector as modification authorization."
 
+      - id: E_CHANGE_IMPACT
+        check: "Every behavior review records compact applicability evidence. When impact is shared or materially unresolved, or an expanded artifact is explicitly carried, discovery requires identity/capture/expected refs; assessment is required only for pre-build or completion. The batch scope/coverage obligations include an independent locality, captured-consumer, material-transition, and canonical-mapping challenge. Evidenced local work retains ordinary review obligations without a common-checker gate."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Keep the audit/fix result incomplete, load references/change-impact.md, and repair or report the missing evidence before dispatch."
+
       - id: E5
         check: "change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required with canonical architecture_design_mode are resolved before review starts"
         on_fail: "Infer change_kind from touched paths/material; set semantic_contract_review_required=true for skill/workflow/framework changes, behavioral_contract_review_required=true for behavior-bearing code changes, agentic_loop_safety_review_required=true for autonomous/repeated loop changes, and architecture_decision_pack_review_required=true only when a carried Pack or relevant architecture decision record applies; require its top-level canonical architecture_design_mode."
@@ -53,14 +58,19 @@ gates:
         on_fail: "Load references/qa-evaluation-loop.md, gather acceptance material and verification evidence, select domain rubric scope only when acceptance criteria, Done Contract, domain_context, or rubric_refs require it, or mark QA blocked with open_questions before dispatching QAEvaluator."
 
       - id: E8
-        check: "Standalone Spec Review uses user request/scope. On FAIL, mode=review-fix repairs an authorized in-scope mismatch and repeats to spec_review_pass_ref; mode=audit exits repair/Build/source-mutation dispatch, retains the mismatch as a pre-batch aggregate finding, continues the frozen read-only multi-pass batch, and dispatches every planned read-only Reviewer pass through the response barrier."
+        check: "Standalone Spec Review uses user request/scope. On FAIL, mode=review-fix validates FIX_STEP entry_assertions before repair or mutation dispatch, then repairs an authorized in-scope mismatch and repeats to spec_review_pass_ref; mode=audit exits repair/Build/source-mutation dispatch, retains the mismatch as a pre-batch aggregate finding, continues the frozen read-only multi-pass batch, and dispatches every planned read-only Reviewer pass through the response barrier."
         condition: "review_preparation_mode == standalone"
-        on_fail: "In mode=review-fix, repair only an authorized in-scope mismatch and repeat to PASS. In mode=audit, record the mismatch, freeze the read-only batch, dispatch every required pass, wait for the response barrier, and never mutate source."
+        on_fail: "In mode=review-fix, validate FIX_STEP entry_assertions before repair or mutation dispatch, then repair only an authorized in-scope mismatch and repeat to PASS. In mode=audit, record the mismatch, freeze the read-only batch, dispatch every required pass, wait for the response barrier, and never mutate source."
 
       - id: E9
         check: "Workflow-composed review consumes carried spec_review_pass_ref and carried current build/test evidence before Reviewer dispatch"
         condition: "review_preparation_mode == workflow_composed"
         on_fail: "Block dispatch and request the carried Spec Review PASS and current build/test evidence refs from the composing workflow."
+
+      - id: E10
+        check: "A persisted 6.0, 7.0, or 7.1 review packet carries its matching invalidation/migration record and cannot contribute CLEAN or ISSUES_FIXED until a fresh 7.2 batch is rebuilt. Complete historic closure tuples, including existing 7.1-or-later provenance, remain unchanged; partial v6/7.0 tuples are normalized before closure dispatch."
+        condition: "a persisted review packet is supplied"
+        on_fail: "Invalidate the persisted result/delegation/snapshot/Pack/QA/plan/coverage refs, preserve raw history and complete closure tuples, normalize only missing v6/7.0 closure identity fields before dispatch, and rebuild from a fresh 7.2 snapshot."
 
   # ─────────────────────────────────────────────
   # REVIEW step — per round
@@ -221,6 +231,12 @@ gates:
     condition: "mode == review-fix"
     checkpoint_start: null
     checkpoint_end: null
+    entry_assertions:
+
+      - id: F_CHANGE_IMPACT_PREBUILD
+        check: "Before any source/test mutation or mutation dispatch, a review-fix with triggered shared, unresolved, or expanded impact runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs for bounded planned obligations, consumer union, and material transitions."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Do not edit source, write a regression test, or dispatch a fixer; repair the pre-build assessment or return the review-fix as blocked/remaining."
     exit_assertions:
 
       - id: F1
@@ -234,6 +250,11 @@ gates:
       - id: F3
         check: "Each newly fixed item was added to previously_fixed with its original aggregate_finding_id, source_finding_ids, source_provenance, description, round number, and pending_verification closure status; only legacy pre-ID records may receive deterministic normalized IDs."
         on_fail: "Update previously_fixed closure ledger before proceeding to VALIDATE"
+
+      - id: F_CHANGE_IMPACT
+        check: "When a review-fix mutates a triggered impact scope, refresh the bounded capture/expected/assessment before the next batch; prior locality or snapshot evidence is stale."
+        condition: "(impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried) and source changed"
+        on_fail: "Do not reuse the prior impact projection; recapture and revalidate before re-review."
 
   # ─────────────────────────────────────────────
   # VALIDATE step — per round (review-fix mode only)
@@ -331,10 +352,20 @@ gates:
         check: "A no-material-finding final result has complete coverage, uses the evidence-bounded claim 'No material findings within the reviewed scope and available evidence', and does not present CLEAN as proof of correctness"
         on_fail: "Keep the compatible machine enum, replace the user-facing certainty claim with the required evidence-bounded wording, and state residual risk."
 
+      - id: X_CHANGE_IMPACT
+        check: "When change-impact accounting is triggered, a current review projection maps the same artifact identity to the original canonical scope_manifest, coverage_ledger, current snapshot, and concern bindings. Common completion validation, final_summary coverage_complete, and CLEAN/ISSUES_FIXED remain independently required; a read-only audit reports gaps rather than manufacturing a clean claim."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Retain HAS_REMAINING_ITEMS/BLOCKED or audit gaps, refresh the canonical review batch, and rebuild the projection."
+
 # ─────────────────────────────────────────────
 # Loop invariants
 # ─────────────────────────────────────────────
 invariants:
+  - id: INV_CHANGE_IMPACT
+    check: "Impact projection preserves the supplied artifact identity and uses canonical review authority only; it never creates a parallel ledger or permits a clean result without current terminal coverage."
+    condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+    scope: all_rounds
+    on_fail: "Use the existing manifest/ledger/final summary and report the unresolved gap."
   - id: INV0
     check: "Only ONE summary is presented to the user — no intermediate results are shown during the loop"
     scope: all_rounds

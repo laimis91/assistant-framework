@@ -425,7 +425,7 @@ if HOME="$report_home" \
         .selected_load_set_context.name == "reviewer_context"
         and .selected_load_set_context.measurement_scope == "static_selected_skill_instruction_surface"
         and .selected_load_set_context.declared_budget_words == 5653
-        and .selected_load_set_context.declared_boundary_closure == {words: 5649, bytes: 45519}
+        and .selected_load_set_context.declared_boundary_closure == {words: 5232, bytes: 42787}
         and (.selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.selectors_resolved == 1)
         and (.selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.words > 0)
         and (.selected_load_set_context.worker_instruction_closure.words ==

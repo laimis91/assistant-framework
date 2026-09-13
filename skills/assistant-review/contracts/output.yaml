@@ -1,11 +1,32 @@
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "7.1"
+schema_version: "7.2"
 contract: output
 skill: assistant-review
 
 artifacts:
+  - name: change_impact_review_projection
+    type: object
+    required: conditional
+    condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+    description: "Exact projection to the common completion document of existing review authority; it is not a second coverage ledger."
+    validation: "Preserves artifact_identity and maps every captured requirement obligation once to the original current scope_manifest item and coverage_ledger concern. review_source identities equal the canonical final review batch. A valid projection does not substitute for final_summary coverage_complete or CLEAN/ISSUES_FIXED; incomplete/blocked/read-only audit results remain explicit gaps."
+    on_fail: "Do not present a clean completion. Rebuild the current manifest/ledger/snapshot projection, or report the missing/blocked impact evidence."
+    object_fields:
+      - {name: artifact_identity, type: string, required: true}
+      - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
+      - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: assessment_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: review_projection_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: scope_manifest_id, type: string, required: conditional, condition: "status == valid"}
+      - {name: coverage_ledger_id, type: string, required: conditional, condition: "status == valid"}
+      - {name: review_snapshot_id, type: string, required: conditional, condition: "status == valid"}
+      - {name: snapshot_id, type: string, required: conditional, condition: "status == valid"}
+      - {name: canonical_final_summary_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
+
   - name: review_delegation_path
     type: object
     required: conditional
@@ -916,7 +937,7 @@ artifacts:
         type: object[]
         required: true
         description: "Weighted aggregate score and aggregated union finding count per round — used for drift detection and capped at the 10-round review limit"
-        validation: "v7.1 score tracking uses aggregated_finding_count. Persisted 6.0/7.0 packets are invalidated and rebuilt before score tracking; legacy finding_count is retained only as historical evidence."
+        validation: "v7.2 score tracking uses aggregated_finding_count. Persisted 6.0/7.0/7.1 packets are invalidated and rebuilt before score tracking; legacy finding_count is retained only as historical evidence."
         object_fields:
           - name: round
             type: int

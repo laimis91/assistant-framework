@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "11.0"
+schema_version: "11.1"
 contract: output
 skill: assistant-workflow
 
@@ -49,6 +49,25 @@ completion_tiers:
     checkpoint_policy: "explicit phase checkpoints are required"
 
 artifacts:
+  - name: change_impact_evidence
+    type: object
+    required: conditional
+    condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+    description: "Cross-phase reference envelope for explicitly expanded common change-impact v1 documents; it does not duplicate their obligation ledger."
+    validation: "artifact_identity is retained unchanged from discovery through Build and Review. discovery may report gaps or unavailable checker without claiming planned/executed verification or review. pre_build requires a valid common-checker assessment with no material unknown boundary. completion additionally requires actual verification and a review projection from assistant-review that binds the original canonical scope_manifest, coverage_ledger, and current review snapshot; that projection never substitutes for assistant-review terminal coverage/result checks. Evidenced local work records compact applicability plus ordinary verification/self-review instead."
+    on_fail: "For an expanded gate, resolve the checker from the active skill installation and run its explicit discovery, pre-build, or completion phase. Missing Node 22 or checker is blocked/unverified; do not replace it with manual-pass prose."
+    object_fields:
+      - {name: artifact_identity, type: string, required: true}
+      - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
+      - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+      - {name: validator_result_ref, type: string, required: true}
+      - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
+      - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+      - {name: review_projection_ref, type: string, required: conditional, condition: "status == valid and phase == completion"}
+      - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
+
   - name: triage_result
     type: object
     required: conditional
@@ -1862,7 +1881,7 @@ artifacts:
       - name: artifact_type
         type: enum
         required: true
-        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
+        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
         validation: "Classifies the artifact without requiring prose parsing"
         on_missing: fail
       - name: producer

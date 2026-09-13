@@ -1,4 +1,4 @@
-schema_version: "7.1"
+schema_version: "7.2"
 contract: index
 skill: assistant-review
 
@@ -19,7 +19,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, harness_capable, qa_evaluation_mode, feature_preparation_scope, approved_feature_preparation_qa_acceptance_obligation, previously_fixed, persisted_v6_packet_migration, persisted_v7_0_packet_invalidation]
+        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, harness_capable, qa_evaluation_mode, feature_preparation_scope, approved_feature_preparation_qa_acceptance_obligation, previously_fixed, persisted_v6_packet_migration, persisted_v7_0_packet_invalidation, persisted_v7_1_packet_invalidation]
     budget_words: 5000
   architecture_pack_input:
     selectors:
@@ -29,6 +29,20 @@ load_sets:
         key: name
         names: [architecture_decision_pack]
     budget_words: 3000
+  change_impact:
+    references: [references/change-impact.md]
+    selectors:
+      - id: review-change-impact-input
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [change_impact_applicability, change_impact_context]
+      - id: review-change-impact-output
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [change_impact_review_projection]
+    budget_words: 2550
   current_round:
     selectors:
       - id: review-current-round-gate
@@ -41,7 +55,7 @@ load_sets:
         path: contracts/phase-gates.yaml
         section: invariants
         key: id
-        names: [INV0, INV1, INV2, INV3, INV4, INV_BATCH, INV5, INV6, INV7, INV8, INV9, INV10, INV11, INV_QA1, INV_QA2, INV_QA3, INV_QA4]
+        names: [INV0, INV1, INV2, INV3, INV4, INV_BATCH, INV5, INV6, INV7, INV8, INV9, INV10, INV11, INV_CHANGE_IMPACT, INV_QA1, INV_QA2, INV_QA3, INV_QA4]
     budget_words: 12000
   selected_handoff:
     selectors:
@@ -80,7 +94,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [review_delegation_path, qa_evaluation_delegation_path, pivot_restart_decision, review_finding_rule_distillation, final_summary, qa_evaluation_result, rubric_summary, agentic_loop_safety_review, behavioral_contract_review, semantic_contract_review, architecture_decision_pack_review, bugfix_evidence_review, build_verification, task_journal_entry, audit_report]
+        allowed_names: [review_delegation_path, qa_evaluation_delegation_path, pivot_restart_decision, review_finding_rule_distillation, final_summary, qa_evaluation_result, rubric_summary, agentic_loop_safety_review, behavioral_contract_review, semantic_contract_review, architecture_decision_pack_review, bugfix_evidence_review, build_verification, task_journal_entry, audit_report, change_impact_review_projection]
     budget_words: 10000
 
 fallback:

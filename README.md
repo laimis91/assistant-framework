@@ -138,6 +138,17 @@ makes quality claims falsifiable with workload/budget/measurement, and travels
 through the plan, task handoff, and independent review. It does not
 add a permanent architect agent or force architecture ceremony onto local work.
 
+### Shared-change impact
+
+Behavior-bearing work records a compact local/shared/unresolved assessment before
+choosing verification scope. Triggered shared-impact work uses one installed
+Node 22 common checker and carries the same artifact identity through workflow,
+debugging, and review. Discovery may report gaps; completion also needs actual
+current verification and the existing assistant-review manifest/coverage result.
+The checker validates closure against supplied bounded evidence, not a universal
+runtime dependency graph. Shared fanout alone does not add Architecture Decision
+Pack, strict-lane, or QA requirements.
+
 For multi-slice work, Assistant Workflow uses descriptive outcome-oriented
 slice identifiers rather than ordinal-only labels, explicit dependencies, and
 native subagents only for independent packets.

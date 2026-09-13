@@ -277,7 +277,7 @@ if ! ruby -ryaml -e '
     reviewer_challenge = reviewer_checks.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
     output_pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack_review" }
     output_challenge = output_pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
-    valid = input["schema_version"] == "7.1" && handoffs["schema_version"] == "7.1" && output["schema_version"] == "7.1" && index["schema_version"] == "7.1" &&
+    valid = input["schema_version"] == "7.2" && handoffs["schema_version"] == "7.2" && output["schema_version"] == "7.2" && index["schema_version"] == "7.2" &&
       canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
       canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
       canonical_mode["on_missing"] == "infer" &&
@@ -588,7 +588,7 @@ if ! ruby -ryaml -e '
     pressure = fields.fetch("design_pressure_checks")
     required_concerns = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
     ref = fields.fetch("ref")
-    valid = contracts.all? { |contract| contract.fetch("schema_version") == "7.1" } &&
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == "7.2" } &&
       boundaries["required"] == true && boundaries["min_items"] == 1 &&
       pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
       ref["required"] == true && ref.fetch("validation").include?("selected design") && ref.fetch("validation").include?("rationale") && ref.fetch("validation").include?("viable alternatives") &&
@@ -1093,8 +1093,8 @@ else
 fi
 
 test_start "assistant-review v7 migration wording preserves source and target direction"
-if grep -Fq 'Rebuild persisted 6.0 or incompatible 7.0 under 7.1 from a fresh snapshot' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md" \
-  && ! grep -Fq 'Rebuild 7.1 from' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"; then
+if grep -Fq 'Rebuild persisted 6.0 or incompatible 7.0/7.1 under 7.2 from a fresh snapshot' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md" \
+  && ! grep -Fq 'Rebuild 7.2 from' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"; then
     pass
 else
     fail "assistant-review review-batch migration wording reverses the v6-to-v7 rebuild direction"
@@ -1176,9 +1176,9 @@ else
     fail "assistant-review lacks active-attempt, typed-QA, provenance, or incomplete-audit safeguards"
 fi
 
-test_start "assistant-review v7 invalidates real v6 packets with Unicode-safe collision IDs"
+test_start "assistant-review invalidates real legacy and immediate-prior-minor packets with Unicode-safe v6 IDs"
 if ruby -ryaml -e '
-  input, handoffs, output = ARGV.map { |path| YAML.load_file(path) }
+  input, handoffs, output = ARGV.take(3).map { |path| YAML.load_file(path) }
   reviewer = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
   bundle = handoffs.fetch("dispatch_context_bundles").find { |entry| entry["name"] == "fresh_reviewer_context" }
   require "digest"
@@ -1203,29 +1203,38 @@ if ruby -ryaml -e '
   current_schema_version = input.fetch("schema_version")
   migration = {"source_schema_version" => legacy_packet.fetch("schema_version"), "batch_disposition" => "invalidated_rebuild_required", "rebuilt_review_snapshot_id" => "fresh-v#{current_schema_version}-snapshot"}
   legacy_v7_packet = {"schema_version" => "7.0", "final_summary" => {"result" => "CLEAN"}}
-  can_claim_clean = ->(packet, migration_state) { packet.fetch("schema_version") == "7.1" && migration_state.fetch("batch_disposition") != "invalidated_rebuild_required" }
+  major, minor = current_schema_version.split(".").map(&:to_i)
+  immediate_prior_schema_version = "#{major}.#{minor - 1}"
+  immediate_prior_history = [{"description" => "retained closure", "fixed_in_round" => 1, "aggregate_finding_id" => "aggregate-v7-1", "source_finding_ids" => ["review-pass-v7-1"], "source_provenance" => [{"source_kind" => "review_pass", "source_id" => "review-pass-v7-1"}]}]
+  immediate_prior_packet = {"schema_version" => immediate_prior_schema_version, "final_summary" => {"result" => "CLEAN"}, "previously_fixed" => immediate_prior_history, "canonical_result_ref" => "legacy-result", "delegation_path_ref" => "legacy-delegation", "final_snapshot_identity_ref" => "legacy-snapshot", "architecture_decision_pack_review_ref" => "legacy-pack", "qa_evaluation_result_ref" => "legacy-qa", "final_batch_plan_ref" => "legacy-plan", "coverage_ledger_ref" => "legacy-coverage"}
+  can_claim_clean = ->(packet, migration_state) { packet.fetch("schema_version") == "7.2" && migration_state.fetch("batch_disposition") != "invalidated_rebuild_required" }
   previously_fixed = input.fetch("fields").find { |field| field["name"] == "previously_fixed" }.fetch("object_fields").to_h { |field| [field["name"], field] }
   migration_contract = input.fetch("fields").find { |field| field["name"] == "persisted_v6_packet_migration" }
   v7_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v7_0_packet_invalidation" }
+  immediate_prior_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v#{immediate_prior_schema_version.tr(".", "_")}_packet_invalidation" }
+  review_loop = File.read(ARGV.fetch(3))
   pass_fields = reviewer.fetch("context_fields").map { |field| field.fetch("name") }
   final = output.fetch("artifacts").find { |item| item["name"] == "final_summary" }.fetch("object_fields").to_h { |field| [field["name"], field] }
   valid = legacy_packet.fetch("schema_version") == "6.0" && legacy_packet.dig("final_summary", "result") == "CLEAN" &&
     migrated_ids[0] == base.call(legacy_packet.fetch("previously_fixed")[0]) && migrated_ids[1].end_with?(":1") && migrated_ids[2].end_with?(":2") && migrated_ids[1] != migrated_ids[2] &&
-    migration.fetch("source_schema_version") == "6.0" && migration.fetch("batch_disposition") == "invalidated_rebuild_required" && !can_claim_clean.call(legacy_packet, migration) && !can_claim_clean.call(legacy_v7_packet, {"batch_disposition" => "current"}) &&
+    migration.fetch("source_schema_version") == "6.0" && migration.fetch("batch_disposition") == "invalidated_rebuild_required" && !can_claim_clean.call(legacy_packet, migration) && !can_claim_clean.call(legacy_v7_packet, {"batch_disposition" => "current"}) && !can_claim_clean.call(immediate_prior_packet, {"batch_disposition" => "current"}) &&
     previously_fixed.fetch("aggregate_finding_id").fetch("condition") == "entry was created under producer schema 7.1 or later" &&
     migration_contract.fetch("description").include?(current_schema_version) && migration_contract.fetch("validation").include?("freshly rehashed #{current_schema_version} snapshot") && migration_contract.fetch("object_fields").find { |field| field["name"] == "rebuilt_snapshot_identity" }.fetch("description").include?(current_schema_version) &&
     migration_contract.fetch("validation").include?("UTF-8 NFC") && migration_contract.fetch("validation").include?("SHA-256") && migration_contract.fetch("validation").downcase.include?("invalidate") &&
     migration_contract.fetch("validation").downcase.include?("non-colliding records use") && migration_contract.fetch("validation").include?("every colliding record appends") &&
-    v7_invalidation.fetch("condition").include?("7.0") && v7_invalidation.fetch("validation").include?("do not reinterpret") && v7_invalidation.fetch("validation").include?("7.1") &&
+    v7_invalidation.fetch("condition").include?("7.0") && v7_invalidation.fetch("validation").include?("do not reinterpret") && v7_invalidation.fetch("validation").include?("7.2") &&
+    immediate_prior_invalidation.fetch("condition").include?(immediate_prior_schema_version) && immediate_prior_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == [immediate_prior_schema_version] && immediate_prior_invalidation.fetch("validation").include?("do not reinterpret") && immediate_prior_invalidation.fetch("validation").include?("7.1-or-later") &&
+    immediate_prior_packet.fetch("previously_fixed") == immediate_prior_history && immediate_prior_history.all? { |entry| entry.fetch("aggregate_finding_id").start_with?("aggregate-") && entry.fetch("source_finding_ids").length == 1 && entry.fetch("source_provenance").length == 1 } &&
+    %w[canonical_result_ref delegation_path_ref final_snapshot_identity_ref architecture_decision_pack_review_ref qa_evaluation_result_ref final_batch_plan_ref coverage_ledger_ref].all? { |ref| immediate_prior_packet.key?(ref) } && review_loop.include?("previously_fixed = validated_entry.previously_fixed || []") && review_loop.include?("invalidating current result/delegation/snapshot/Pack/QA/plan/coverage refs") && review_loop.include?("retain every aggregate_finding_id, source_finding_ids, and source_provenance entry") &&
     bundle.fetch("context_fields_from_dispatch").include?("review_focus") && pass_fields.include?("review_focus") &&
     bundle.fetch("review_evidence_pointer").fetch("required_refs").include?("review_material_snapshot") &&
     !bundle.fetch("review_evidence_pointer").fetch("required_refs").include?("review_material_snapshot_ref") &&
     final.fetch("final_review_snapshot_id").fetch("validation").downcase.include?("exactly equals current review_snapshot_id")
   exit valid ? 0 : 1
-' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
+' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_loop"; then
     pass
 else
-    fail "assistant-review lacks v7 invalidate/rebuild migration, Unicode-safe legacy IDs, pass-only focus, or final identity binding"
+    fail "assistant-review lacks immediate-prior invalidate/rebuild migration, Unicode-safe legacy IDs, pass-only focus, or final identity binding"
 fi
 
 test_start "assistant-review enforces orchestrator terminals, response events, and exact batch closure"
@@ -1321,7 +1330,7 @@ if ruby -ryaml -e '
   response_terminal = ->(events) { events.count { |event| event["disposition"] == "active_terminal" } == 1 }
   synthetic_failure = ->(events, kind, evidence) { events.none? { |event| event["disposition"] == "active_terminal" } && %w[timeout transport schema_invalid source_mutation].include?(kind) && !evidence.empty? }
   truth = returns.fetch("status").fetch("validation")
-  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "7.1" } &&
+  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "7.2" } &&
     identity == final_identity && final_identity.find { |field| field["name"] == "basis" }.fetch("type") == "enum" &&
     final.fetch("final_review_snapshot_id").fetch("validation").downcase.include?("exactly equals current review_snapshot_id") &&
     manifest.fetch("scope_item_id").fetch("validation").downcase.include?("unique") && manifest.fetch("applicable_concerns").fetch("validation").downcase.include?("unique") &&
@@ -1339,7 +1348,7 @@ if ruby -ryaml -e '
     qa_return.fetch("approved_feature_preparation_qa_acceptance_obligation_result").fetch("validation").include?("accepted_with_concerns") &&
     qa_gates.fetch("QA5").fetch("check").include?("accepted_with_concerns/ISSUES_FIXED") &&
     qa_gates.fetch("QA5").fetch("check").include?("requested_scope_status=fulfilled") &&
-    handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("6.0") && handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("7.0") &&
+    handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("6.0") && handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("7.0") && handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("7.1") &&
     handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("UTF-8 NFC") && handoffs.fetch("worker_status_protocol").fetch("packet_rules").join(" ").include?("SHA-256") &&
     batch.fetch("expected_passes").fetch("validation").include?("assistant-security checklist/perspective") &&
     review_gates.fetch("RS2").fetch("check").include?("assistant-security checklist/perspective")
@@ -1526,7 +1535,7 @@ if ruby -ryaml -e '
     "coordinated_invalid_terminal" => ->(trial) { trial["review_batch"]["pass_attempt_ledger"][0]["attempts"][0]["terminal_state"] = "blocked"; trial["reviewer_returns"][0]["status"] = "BLOCKED"; trial["reviewer_returns"][0]["pass_completion_state"] = "blocked"; trial["reviewer_returns"][0]["verdict"] = "not_assessed"; trial["reviewer_returns"][0]["coverage_entries"] = []; trial["reviewer_returns"][0]["open_questions"] = ["blocked"] }
   }
   mutation_valid = mutations.all? { |_name, mutate| trial = duplicate.call(packet); mutate.call(trial); !packet_valid.call(trial) }
-  valid = input.fetch("schema_version") == "7.1" && handoffs.fetch("schema_version") == "7.1" && output.fetch("schema_version") == "7.1" && packet_valid.call(packet) && truth_valid && mutation_valid
+  valid = input.fetch("schema_version") == "7.2" && handoffs.fetch("schema_version") == "7.2" && output.fetch("schema_version") == "7.2" && packet_valid.call(packet) && truth_valid && mutation_valid
   exit valid ? 0 : 1
 ' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
     pass
@@ -1653,13 +1662,21 @@ fi
 
 test_start "assistant-review preserves discovery outcomes, closure identities, and final planned topology"
 if ruby -ryaml -rjson -e '
-  input, output, handoffs, index, cases, gates = ARGV.then { |paths| [YAML.load_file(paths[0]), YAML.load_file(paths[1]), YAML.load_file(paths[2]), YAML.load_file(paths[3]), JSON.parse(File.read(paths[4])), YAML.load_file(paths[5])] }
+  input, output, handoffs, index, cases, gates, review_loop = ARGV.then { |paths| [YAML.load_file(paths[0]), YAML.load_file(paths[1]), YAML.load_file(paths[2]), YAML.load_file(paths[3]), JSON.parse(File.read(paths[4])), YAML.load_file(paths[5]), File.read(paths[6])] }
   input_fields = input.fetch("fields").to_h { |field| [field.fetch("name"), field] }
   previous = input_fields.fetch("previously_fixed").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   canonical_identity = input_fields.fetch("review_material_snapshot").fetch("object_fields").find { |field| field.fetch("name") == "snapshot_identity" }.fetch("object_fields")
   migration_identity = input_fields.fetch("persisted_v6_packet_migration").fetch("object_fields").find { |field| field.fetch("name") == "rebuilt_snapshot_identity" }.fetch("object_fields")
+  v6_migration = input_fields.fetch("persisted_v6_packet_migration")
+  v7_0_invalidation = input_fields.fetch("persisted_v7_0_packet_invalidation")
   invalidation_identity = input_fields.fetch("persisted_v7_0_packet_invalidation").fetch("object_fields").find { |field| field.fetch("name") == "rebuilt_snapshot_identity" }.fetch("object_fields")
+  major, minor = input.fetch("schema_version").split(".").map(&:to_i)
+  immediate_prior = "#{major}.#{minor - 1}"
+  immediate_prior_name = "persisted_v#{immediate_prior.tr(".", "_")}_packet_invalidation"
+  immediate_prior_invalidation = input_fields.fetch(immediate_prior_name)
+  immediate_prior_invalidation_identity = input_fields.fetch(immediate_prior_name).fetch("object_fields").find { |field| field.fetch("name") == "rebuilt_snapshot_identity" }.fetch("object_fields")
   f3 = gates.fetch("gates").flat_map { |phase| phase.fetch("exit_assertions", []) }.find { |gate| gate.fetch("id") == "F3" }
+  e10 = gates.fetch("gates").flat_map { |phase| phase.fetch("exit_assertions", []) }.find { |gate| gate.fetch("id") == "E10" }
   reviewer = handoffs.fetch("handoffs").find { |entry| entry.fetch("name") == "orchestrator_to_reviewer" }
   reviewer_context = reviewer.fetch("context_fields").to_h { |field| [field.fetch("name"), field] }
   handoff_previous = reviewer_context.fetch("previously_fixed").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
@@ -1688,6 +1705,71 @@ if ruby -ryaml -rjson -e '
   expected_names = %w[review_pass_id perspective assigned_scope coverage_obligations prior_finding_visibility]
   fixed_fields = final.fetch("fixed_items").fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   closure_results = final.fetch("closure_results")
+  rubric = output.fetch("artifacts").find { |artifact| artifact.fetch("name") == "rubric_summary" }
+  score_progression = rubric.fetch("object_fields").find { |field| field.fetch("name") == "score_progression" }
+  source_text = {
+    input_default: input_fields.fetch("previously_fixed").fetch("default").inspect,
+    v6_input: v6_migration.fetch("validation"),
+    v7_input: v7_0_invalidation.fetch("validation"),
+    loop: review_loop,
+    handoff_aggregate: handoff_previous.fetch("aggregate_finding_id").fetch("validation"),
+    handoff_source_ids: handoff_previous.fetch("source_finding_ids").fetch("validation"),
+    handoff_provenance: handoff_previous.fetch("source_provenance").fetch("validation")
+  }
+  policy_assertions = {
+    history_seed: [[:input_default, "[]"], [:loop, "previously_fixed = validated_entry.previously_fixed || []"]],
+    history_retention: [[:loop, "Retain raw persisted history"]],
+    complete_v6: [[:v6_input, "preserve each complete identity tuple unchanged"], [:loop, "preserve complete v6, 7.0, 7.1, and current tuples unchanged"], [:handoff_aggregate, "Complete historic tuples are unchanged"]],
+    complete_v7_0: [[:v7_input, "preserve each complete aggregate_finding_id/source_finding_ids/source_provenance tuple unchanged"], [:loop, "preserve complete v6, 7.0, 7.1, and current tuples unchanged"], [:handoff_aggregate, "Complete historic tuples are unchanged"]],
+    preserve_aggregate_v6: [[:v6_input, "preserve a supplied aggregate_finding_id"], [:loop, "preserve a supplied aggregate_finding_id"], [:handoff_aggregate, "partial v6/v7.0 tuples preserve a supplied ID"]],
+    preserve_aggregate_v7_0: [[:v7_input, "preserve a supplied aggregate_finding_id"], [:loop, "preserve a supplied aggregate_finding_id"], [:handoff_aggregate, "partial v6/v7.0 tuples preserve a supplied ID"]],
+    derive_id_v6: [[:v6_input, "Missing aggregate_finding_id"], [:v6_input, "legacy-v6:<fixed_in_round>:<first-24-hex>"], [:loop, "legacy-v6:<fixed_in_round>:<first-24-hex>"]],
+    derive_id_v7_0: [[:v7_input, "When aggregate_finding_id is absent"], [:v7_input, "legacy-v7-0:<fixed_in_round>:<first-24-hex>"], [:loop, "legacy-v7-0:<fixed_in_round>:<first-24-hex>"]],
+    fill_source_ids_v6: [[:v6_input, "fill only missing source_finding_ids"], [:loop, "fill only missing source_finding_ids"], [:handoff_source_ids, "fill only missing source IDs"]],
+    fill_source_ids_v7_0: [[:v7_input, "fill only missing source_finding_ids"], [:loop, "fill only missing source_finding_ids"], [:handoff_source_ids, "fill only missing source IDs"]],
+    fill_provenance_v6: [[:v6_input, "missing source_provenance"], [:loop, "missing source_provenance"], [:handoff_provenance, "fill only missing provenance"]],
+    fill_provenance_v7_0: [[:v7_input, "missing source_provenance"], [:loop, "missing source_provenance"], [:handoff_provenance, "fill only missing provenance"]]
+  }
+  policy_checker = ->(policies, texts) { policies.all? { |policy| policy_assertions.fetch(policy).all? { |source, term| texts.fetch(source).include?(term) } } }
+  history_lifecycle_cases = [
+    {"name" => "absent", "policies" => [:history_seed]},
+    {"name" => "empty", "policies" => [:history_seed, :history_retention]},
+    {"name" => "nonempty", "policies" => [:history_seed, :history_retention]}
+  ]
+  complete_history_cases = [
+    {"schema_version" => "6.0", "policies" => [:complete_v6]},
+    {"schema_version" => "7.0", "policies" => [:complete_v7_0]},
+    {"schema_version" => immediate_prior, "policies" => [:history_retention]},
+    {"schema_version" => input.fetch("schema_version"), "policies" => [:history_retention]}
+  ]
+  partial_presence_cases = [
+    {"name" => "none", "present" => []},
+    {"name" => "aggregate only", "present" => ["aggregate_finding_id"]},
+    {"name" => "source IDs only", "present" => ["source_finding_ids"]},
+    {"name" => "provenance only", "present" => ["source_provenance"]},
+    {"name" => "aggregate and source IDs", "present" => ["aggregate_finding_id", "source_finding_ids"]},
+    {"name" => "aggregate and provenance", "present" => ["aggregate_finding_id", "source_provenance"]},
+    {"name" => "source IDs and provenance", "present" => ["source_finding_ids", "source_provenance"]}
+  ]
+  partial_history_cases = %w[6.0 7.0].flat_map do |schema_version|
+    partial_presence_cases.map do |presence|
+      version_key = schema_version == "6.0" ? "v6" : "v7_0"
+      aggregate_policy = presence.fetch("present").include?("aggregate_finding_id") ? "preserve_aggregate_#{version_key}".to_sym : "derive_id_#{version_key}".to_sym
+      {"schema_version" => schema_version, "name" => presence.fetch("name"), "policies" => [:history_retention, aggregate_policy, "fill_source_ids_#{version_key}".to_sym, "fill_provenance_#{version_key}".to_sym]}
+    end
+  end
+  policy_cases_valid = history_lifecycle_cases.map { |fixture| fixture.fetch("name") } == %w[absent empty nonempty] &&
+    complete_history_cases.map { |fixture| fixture.fetch("schema_version") }.sort == ["6.0", "7.0", immediate_prior, input.fetch("schema_version")].sort &&
+    partial_history_cases.length == 14 &&
+    (history_lifecycle_cases + complete_history_cases + partial_history_cases).all? { |fixture| policy_checker.call(fixture.fetch("policies"), source_text) }
+  mutation_controls_rejected = [
+    [:complete_v6, :v6_input, "preserve each complete identity tuple unchanged"],
+    [:fill_source_ids_v7_0, :v7_input, "fill only missing source_finding_ids"],
+    [:history_seed, :loop, "previously_fixed = validated_entry.previously_fixed || []"]
+  ].all? do |policy, source, term|
+    mutated = source_text.merge(source => source_text.fetch(source).gsub(term, ""))
+    !policy_checker.call([policy], mutated)
+  end
   template_scope_authority_valid = batch_expectations.fetch("templates").all? do |template_ref, template|
     manifest = scope_manifests[template_ref]
     next false unless manifest.is_a?(Array) && !manifest.empty?
@@ -1704,12 +1786,17 @@ if ruby -ryaml -rjson -e '
     actual = template.fetch("required_coverage_tuples").map { |tuple| [tuple["review_pass_id"], tuple["scope_item_id"], tuple["applicable_concern"], tuple["review_perspective"], tuple["coverage_obligation"]] }
     actual.uniq.length == actual.length && actual.sort == expected.sort
   end
-  valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "7.1" } &&
-    entry_names.include?("previously_fixed") && entry_names.include?("persisted_v6_packet_migration") && entry_names.include?("persisted_v7_0_packet_invalidation") &&
+  valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "7.2" } &&
+    entry_names.include?("previously_fixed") && entry_names.include?("persisted_v6_packet_migration") && entry_names.include?("persisted_v7_0_packet_invalidation") && entry_names.include?(immediate_prior_name) &&
     previous.key?("aggregate_finding_id") && previous.fetch("source_finding_ids").fetch("condition").include?("producer schema 7.1") && previous.fetch("source_provenance").fetch("condition").include?("producer schema 7.1") && !previous.key?("finding_id") &&
-    migration_identity == canonical_identity && invalidation_identity == canonical_identity &&
-    f3.fetch("check").include?("source_finding_ids") && f3.fetch("check").include?("source_provenance") &&
-    handoff_previous.key?("aggregate_finding_id") && handoff_previous.fetch("source_finding_ids").fetch("required") == true && handoff_previous.fetch("source_provenance").fetch("required") == true && !handoff_previous.key?("finding_id") &&
+    migration_identity == canonical_identity && invalidation_identity == canonical_identity && immediate_prior_invalidation_identity == canonical_identity &&
+    v6_migration.fetch("validation").include?("legacy-v6:<fixed_in_round>:<first-24-hex>") &&
+    v7_0_invalidation.fetch("validation").include?("Retain every raw 7.0 previously_fixed record") && v7_0_invalidation.fetch("validation").include?("legacy-v7-0:<fixed_in_round>:<first-24-hex>") && v7_0_invalidation.fetch("validation").include?("persisted-v7-0-migration") &&
+    immediate_prior_invalidation.fetch("validation").include?("Preserve existing 7.1-or-later") &&
+    f3.fetch("check").include?("source_finding_ids") && f3.fetch("check").include?("source_provenance") && e10.fetch("check").include?(immediate_prior) && e10.fetch("check").include?("7.1-or-later") &&
+    handoff_previous.key?("aggregate_finding_id") && handoff_previous.fetch("aggregate_finding_id").fetch("validation").include?("v7.0") && handoff_previous.fetch("source_finding_ids").fetch("required") == true && handoff_previous.fetch("source_finding_ids").fetch("validation").include?("persisted-v7-0-migration") && handoff_previous.fetch("source_provenance").fetch("required") == true && handoff_previous.fetch("source_provenance").fetch("validation").include?("persisted-v7-0-migration") && !handoff_previous.key?("finding_id") &&
+    policy_cases_valid && mutation_controls_rejected &&
+    score_progression.fetch("validation").include?("Persisted 6.0/7.0/7.1 packets are invalidated and rebuilt before score tracking") &&
     batch.fetch("scope_size").fetch("enum_values") == %w[trivial small medium large] &&
     coverage.fetch("coverage_disposition").fetch("enum_values") == %w[inspected_no_risk finding incomplete] &&
     coverage.fetch("finding_ids").fetch("condition") == "coverage_disposition == finding" && coverage.fetch("finding_ids").fetch("min_items") == 1 &&
@@ -1736,7 +1823,7 @@ if ruby -ryaml -rjson -e '
     final_artifact.fetch("validation").include?("final_batch_plan") &&
     post_fix_paths.include?(["final_summary", "coverage_ledger", 0, "coverage_gap_id"]) && post_fix_paths.include?(["final_summary", "coverage_ledger", 1, "coverage_gap_id"])
   exit valid ? 0 : 1
-' "$review_input" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_handoffs" "$review_index" "$review_evals" "$review_phase_gates" \
+' "$review_input" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_handoffs" "$review_index" "$review_evals" "$review_phase_gates" "$review_loop" \
   && ! grep -Fq -- "medium+ scope only" "$review_handoffs" \
   && grep -Fq -- "including triggered trivial/small scope" "$review_handoffs"; then
     pass

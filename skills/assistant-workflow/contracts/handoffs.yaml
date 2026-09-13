@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "11.0"
+schema_version: "11.1"
 contract: handoffs
 skill: assistant-workflow
 
@@ -48,7 +48,7 @@ worker_status_protocol:
 artifact_reference_protocol:
   description: "Typed Artifact Reference entries are the compact producer/consumer ledger for harness task packets and worker returns; use them instead of ad hoc string refs when passing artifacts between agents."
   required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]
-  artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
+  artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
   validation_statuses: [pending, valid, invalid, stale, not_applicable]
   packet_rules:
     - "Artifact Reference entries must include artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, and summary."
@@ -925,6 +925,22 @@ handoffs:
         type: string
         required: true
         description: "Restated requirements from Discover phase"
+      - name: change_impact_evidence
+        type: object
+        required: conditional
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        description: "Current expanded common impact artifact for Architect planning."
+        validation: "Preserves artifact_identity, phase, capture_ref, expected_context_ref, validator_result_ref, impact_scope, and status unchanged through task-packet planning; assessment_ref is carried only for pre-build or completion."
+        on_missing: re-dispatch
+        object_fields:
+          - {name: artifact_identity, type: string, required: true}
+          - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
+          - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+          - {name: status, type: enum, required: true, enum_values: [valid]}
+          - {name: capture_ref, type: string, required: true}
+          - {name: expected_context_ref, type: string, required: true}
+          - {name: assessment_ref, type: string, required: conditional, condition: "phase in [pre_build, completion]"}
+          - {name: validator_result_ref, type: string, required: true}
       - name: requirement_acceptance_map
         type: string
         required: true
@@ -1478,7 +1494,7 @@ handoffs:
               - name: artifact_type
                 type: enum
                 required: true
-                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
               - name: producer
                 type: string
                 required: true
@@ -1602,6 +1618,26 @@ handoffs:
     to: CodeWriter
     phase: BUILD
     context_fields:
+      - name: change_impact_applicability
+        type: object
+        required: conditional
+        condition: "the current slice has a behavior-bearing change or locality/shared/unresolved impact decision"
+        validation: "impact_scope and applicability_reason are carried unchanged. local carries causal evidence and does not require expanded checker refs; shared/unresolved or explicit expansion carries the matching expanded artifact envelope."
+      - name: change_impact_evidence
+        type: object
+        required: conditional
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        description: "Current resolved pre-build artifact envelope that authorizes this CodeWriter mutation dispatch."
+        validation: "The common checker was run or revalidated against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity and validator_result_ref against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, and reuse requires demonstrably current same-input evidence. The CodeWriter may not use discovery or completion evidence as mutation authorization."
+        object_fields:
+          - {name: artifact_identity, type: string, required: true}
+          - {name: phase, type: enum, required: true, enum_values: [pre_build]}
+          - {name: capture_ref, type: string, required: true}
+          - {name: expected_context_ref, type: string, required: true}
+          - {name: assessment_ref, type: string, required: true}
+          - {name: validator_result_ref, type: string, required: true}
+          - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+          - {name: status, type: enum, required: true, enum_values: [valid]}
       - name: build_execution_lane
         type: enum
         required: true
@@ -1908,7 +1944,7 @@ handoffs:
               - name: artifact_type
                 type: enum
                 required: true
-                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
               - name: producer
                 type: string
                 required: true
@@ -2174,7 +2210,7 @@ handoffs:
           - name: artifact_type
             type: enum
             required: true
-            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
+            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
           - name: producer
             type: string
             required: true
@@ -2239,6 +2275,21 @@ handoffs:
         type: string[]
         required: false
         description: "Legacy alias for changed_files"
+      - name: change_impact_evidence
+        type: object
+        required: conditional
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        description: "Current resolved pre-build artifact envelope that authorizes this BuilderTester mutation dispatch."
+        validation: "The common checker was run or revalidated against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity and validator_result_ref against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, reuse requires demonstrably current same-input evidence, and BuilderTester must not reuse CodeWriter's pre-build result after earlier mutations."
+        object_fields:
+          - {name: artifact_identity, type: string, required: true}
+          - {name: phase, type: enum, required: true, enum_values: [pre_build]}
+          - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+          - {name: status, type: enum, required: true, enum_values: [valid]}
+          - {name: capture_ref, type: string, required: true}
+          - {name: expected_context_ref, type: string, required: true}
+          - {name: assessment_ref, type: string, required: true}
+          - {name: validator_result_ref, type: string, required: true}
       - name: build_command
         type: string
         required: false
@@ -2536,7 +2587,7 @@ handoffs:
               - name: artifact_type
                 type: enum
                 required: true
-                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
               - name: producer
                 type: string
                 required: true
@@ -2675,7 +2726,7 @@ handoffs:
           - name: artifact_type
             type: enum
             required: true
-            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
+            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
           - name: producer
             type: string
             required: true
