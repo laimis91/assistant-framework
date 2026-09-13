@@ -205,4 +205,22 @@ else
     fail "local output, discovery, or Architect/CodeWriter/BuilderTester change-impact field applicability regressed"
 fi
 
+test_start "assistant-review routes triggered change-impact before planning and excludes it from Reviewer bundles"
+if ruby - "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" <<'RUBY'
+source = File.read(ARGV.fetch(0))
+routing = source.split(/^Migration note:/, 2).first
+bullets = routing.scan(/^- .*?(?=^- |\z)/m).map { |bullet| bullet.gsub(/\s+/, " ").strip }
+positive_routing = bullets.any? do |bullet|
+  bullet.match?(/\bTriggered\b/) && bullet.match?(/`change_impact`/) && bullet.match?(/\b(?:load|resolve)\b/) && bullet.match?(/before planning or dispatch/)
+end
+abort "missing triggered change-impact routing" unless positive_routing
+normalized_routing = routing.gsub(/\s+/, " ")
+abort "missing Reviewer-bundle change-impact exclusion" unless normalized_routing.match?(/keep change-impact guidance out of Reviewer bundles/)
+RUBY
+then
+    pass
+else
+    fail "assistant-review must route triggered change-impact before planning and exclude it from Reviewer bundles"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"
