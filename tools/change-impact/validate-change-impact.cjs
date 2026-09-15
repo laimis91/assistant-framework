@@ -239,8 +239,9 @@ function validateAssessment(assessment, capture, expected, phase, reasons) {
   if (assessment.equivalence_groups.some((group) => directPlanUse.has(group.verification_id))) reasons.push(issue("VERIFICATION_REUSE_BINDING_INVALID"));
 
   const actualsValid = uniqueIds(assessment.actual_verifications, "verification_id") && assessment.actual_verifications.every((actual) =>
-    exactKeys(actual, ["verification_id", "outcome", "executed_source_identity", "evidence_ref"]) &&
-    nonBlank(actual.verification_id) && actual.outcome === "passed" && nonBlank(actual.executed_source_identity) && nonBlank(actual.evidence_ref));
+    exactKeys(actual, ["verification_id", "outcome", "executed_snapshot", "executed_source_identity", "evidence_ref"]) &&
+    nonBlank(actual.verification_id) && actual.outcome === "passed" && validSnapshot(actual.executed_snapshot) &&
+    nonBlank(actual.executed_source_identity) && nonBlank(actual.evidence_ref));
   if (!actualsValid) { reasons.push(issue("ACTUAL_VERIFICATIONS_INVALID")); return; }
   if (phase === "pre_build" && assessment.actual_verifications.length > 0) reasons.push(issue("PREBUILD_EXECUTION_NOT_ALLOWED"));
   if (phase !== "discovery" && (capture.unknown_boundaries.some((boundary) => boundary.material) || assessment.impact_scope === "unresolved")) reasons.push(issue("MATERIAL_IMPACT_UNRESOLVED"));
@@ -249,7 +250,10 @@ function validateAssessment(assessment, capture, expected, phase, reasons) {
     if (assessment.obligations.some((obligation) => ["waived", "blocked"].includes(obligation.disposition))) reasons.push(issue("UNVERIFIED_RESIDUAL_RISK"));
     const actuals = indexBy(assessment.actual_verifications, "verification_id");
     const needed = new Map(assessment.obligations.flatMap((obligation) => obligation.verification_id ? [[obligation.verification_id, obligation.requirement_id]] : obligation.equivalence_group_id ? [[groups.get(obligation.equivalence_group_id)?.verification_id, obligation.requirement_id]] : []));
-    for (const [verificationId, requirementId] of needed) if (!actuals.has(verificationId) || actuals.get(verificationId).executed_source_identity !== plans.get(verificationId)?.source_identity || actuals.get(verificationId).executed_source_identity !== expectedRequirements.get(requirementId)?.verification_source_id) reasons.push(issue("EXECUTED_VERIFICATION_MISSING_OR_STALE"));
+    for (const [verificationId, requirementId] of needed) if (!actuals.has(verificationId) ||
+      !sameSnapshot(actuals.get(verificationId).executed_snapshot, expected.snapshot) ||
+      actuals.get(verificationId).executed_source_identity !== plans.get(verificationId)?.source_identity ||
+      actuals.get(verificationId).executed_source_identity !== expectedRequirements.get(requirementId)?.verification_source_id) reasons.push(issue("EXECUTED_VERIFICATION_MISSING_OR_STALE"));
     if (actuals.size !== consumedPlans.size || [...actuals.keys()].some((id) => !consumedPlans.has(id))) reasons.push(issue("ACTUAL_VERIFICATION_ORPHANED"));
   }
 }

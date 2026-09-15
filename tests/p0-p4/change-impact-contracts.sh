@@ -198,6 +198,32 @@ abort "old broad debugging condition survived" if expanded["condition"] == "a di
 local_output = {"status" => "root_cause_found", "symptom_summary" => "local", "reproduction" => {}, "hypotheses" => [], "confidence" => "medium", "verification" => [], "residual_risks" => []}
 abort "local output fabricated expanded refs" if local_output.keys.any? { |key| key.end_with?("_ref") || key == "change_impact_evidence" }
 
+[load.call(File.join(framework, "skills/assistant-workflow/contracts/output.yaml")), debug_output].each do |contract|
+  envelope = field.call(contract.fetch("artifacts"), "change_impact_evidence")
+  fields = envelope.fetch("object_fields")
+  result_ref = field.call(fields, "validator_result_ref")
+  blocker_ref = field.call(fields, "gap_or_blocker_ref")
+  abort "valid result ref is not conditional" unless result_ref && result_ref["required"] == "conditional" && result_ref["condition"] == "status == valid"
+  abort "non-valid blocker ref is not conditional" unless blocker_ref && blocker_ref["required"] == "conditional" && blocker_ref["condition"] == "status in [gaps_reported, blocked, invalid]"
+
+  accepts = lambda do |payload|
+    fields.all? do |schema|
+      value = payload[schema["name"]]
+      present = payload.key?(schema["name"]) && !value.to_s.empty?
+      required = schema["required"] == true ||
+        (schema["condition"] == "status == valid" && payload["status"] == "valid") ||
+        (schema["condition"] == "status in [gaps_reported, blocked, invalid]" && ["gaps_reported", "blocked", "invalid"].include?(payload["status"]))
+      enum_valid = schema["type"] != "enum" || !payload.key?(schema["name"]) || Array(schema["enum_values"]).include?(value)
+      (!required || present) && enum_valid
+    end
+  end
+  blocked = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => "blocked", "gap_or_blocker_ref" => "node-runtime-unavailable"}
+  valid = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => "valid", "validator_result_ref" => "result.json", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json"}
+  abort "blocked output requires unavailable checker result" unless accepts.call(blocked)
+  abort "blocked output accepts no blocker" if accepts.call(blocked.reject { |key, _| key == "gap_or_blocker_ref" })
+  abort "valid output accepts no checker result" if accepts.call(valid.reject { |key, _| key == "validator_result_ref" })
+end
+
 %w[assistant-workflow assistant-debugging assistant-review].each do |skill|
   input = load.call(File.join(framework, "skills", skill, "contracts/input.yaml"))
   context = field.call(input.fetch("fields"), "change_impact_context")

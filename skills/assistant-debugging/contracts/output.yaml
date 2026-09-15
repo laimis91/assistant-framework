@@ -13,7 +13,7 @@ artifacts:
       - {name: artifact_identity, type: string, required: true}
       - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
       - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
-      - {name: validator_result_ref, type: string, required: true}
+      - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
       - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}

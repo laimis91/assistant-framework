@@ -33,7 +33,7 @@
     "obligations": [{ "id": "obligation-dirty-cancel", "requirement_id": "req-dirty-cancel", "disposition": "preserve", "rationale_ref": "decision-preserve-dirty-cancel", "authorization_ref": null, "verification_id": "verify-dirty-cancel", "equivalence_group_id": null }],
     "verification_plans": [{ "id": "verify-dirty-cancel", "contract_id": "navigation", "state_transition": "dirty-cancel", "oracle": "cancel keeps the current editor route", "steps_ref": "tests/navigation-dirty-cancel", "source_identity": "navigation-test-current" }],
     "equivalence_groups": [],
-    "actual_verifications": [{ "verification_id": "verify-dirty-cancel", "outcome": "passed", "executed_source_identity": "navigation-test-current", "evidence_ref": "test-result-navigation-current" }]
+    "actual_verifications": [{ "verification_id": "verify-dirty-cancel", "outcome": "passed", "executed_snapshot": { "base_id": "base-example", "candidate_id": "candidate-example", "universe_id": "universe-example-current" }, "executed_source_identity": "navigation-test-current", "evidence_ref": "test-result-navigation-current" }]
   },
   "review": {
     "schema_version": "change-impact-review/v1",

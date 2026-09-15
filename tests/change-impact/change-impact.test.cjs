@@ -36,7 +36,7 @@ function validDocuments() {
     equivalence_group_id: requirement.id === "req-nav-success" || requirement.id === "req-nav-modal" ? "group-navigation-success" : null,
   }));
   documents.assessment.equivalence_groups = [{ id: "group-navigation-success", member_obligation_ids: ["obligation-1", "obligation-3"], justification_ref: "same-route-contract", verification_id: "plan-nav" }];
-  documents.assessment.actual_verifications = documents.assessment.verification_plans.map((plan) => ({ verification_id: plan.id, outcome: "passed", executed_source_identity: plan.source_identity, evidence_ref: `result-${plan.id}` }));
+  documents.assessment.actual_verifications = documents.assessment.verification_plans.map((plan) => ({ verification_id: plan.id, outcome: "passed", executed_snapshot: clone(documents.assessment.snapshot), executed_source_identity: plan.source_identity, evidence_ref: `result-${plan.id}` }));
   documents.expected.review_context.required_bindings = documents.capture.requirements.map((requirement, index) => ({ requirement_id: requirement.id, scope_item_id: `scope-${index + 1}`, coverage_concern_id: `concern-${index + 1}` }));
   documents.review.bindings = documents.assessment.obligations.map((obligation, index) => ({ obligation_id: obligation.id, requirement_id: obligation.requirement_id, scope_item_id: `scope-${index + 1}`, coverage_concern_id: `concern-${index + 1}` }));
   return documents;
@@ -184,6 +184,52 @@ test("canonical pre_build passes through the API and CLI with the same result", 
   assert.deepEqual(cliResult.result, apiResult);
 });
 
+test("completion binds direct and equivalence verification records to the executed snapshot", () => {
+  const current = validDocuments();
+  assert.equal(validate({ phase: "completion", ...current }).complete, true);
+
+  const stale = validDocuments();
+  const refreshedSnapshot = { base_id: "base-refreshed", candidate_id: "candidate-refreshed", universe_id: "universe-refreshed" };
+  stale.capture.capture_id = "capture-refreshed";
+  stale.expected.capture_id = "capture-refreshed";
+  stale.assessment.capture_id = "capture-refreshed";
+  stale.review.capture_id = "capture-refreshed";
+  stale.capture.snapshot = clone(refreshedSnapshot);
+  stale.expected.snapshot = clone(refreshedSnapshot);
+  stale.assessment.snapshot = clone(refreshedSnapshot);
+  stale.review.snapshot = clone(refreshedSnapshot);
+  const apiResult = validate({ phase: "completion", ...stale });
+  assert.ok(codes(apiResult).includes("EXECUTED_VERIFICATION_MISSING_OR_STALE"));
+  const cliResult = runCli(stale, "completion");
+  assert.equal(cliResult.status, 1);
+  assert.deepEqual(cliResult.result, apiResult);
+
+  for (const mutate of [
+    (documents) => { delete documents.assessment.actual_verifications[0].executed_snapshot; },
+    (documents) => { documents.assessment.actual_verifications[0].executed_snapshot = { candidate_id: "candidate-only" }; },
+    (documents) => { documents.assessment.actual_verifications[0].executed_snapshot.base_id = "base-stale"; },
+    (documents) => { documents.assessment.actual_verifications[0].executed_snapshot.candidate_id = "candidate-stale"; },
+    (documents) => { documents.assessment.actual_verifications[0].executed_snapshot.universe_id = "universe-stale"; },
+  ]) {
+    const documents = validDocuments();
+    mutate(documents);
+    const result = validate({ phase: "completion", ...documents });
+    assert.equal(result.valid, false);
+    assert.ok(codes(result).some((code) => ["ACTUAL_VERIFICATIONS_INVALID", "EXECUTED_VERIFICATION_MISSING_OR_STALE"].includes(code)));
+  }
+});
+
+test("completion rejects each stale component on the direct and equivalence execution records", () => {
+  for (const verificationId of ["plan-nav", "plan-dirty"]) {
+    for (const component of ["base_id", "candidate_id", "universe_id"]) {
+      const documents = validDocuments();
+      const actual = documents.assessment.actual_verifications.find((item) => item.verification_id === verificationId);
+      actual.executed_snapshot[component] = `${actual.executed_snapshot[component]}-stale`;
+      assert.ok(codes(validate({ phase: "completion", ...documents })).includes("EXECUTED_VERIFICATION_MISSING_OR_STALE"), `${verificationId} ${component}`);
+    }
+  }
+});
+
 test("known omitted consumer edge and omitted dirty-state transition fail against independent authority", () => {
   const documents = validDocuments();
   documents.capture.edges.pop();
@@ -248,7 +294,7 @@ test("capture requirements, reciprocal equivalence, and exact plan and actual co
   assert.ok(codes(validate({ phase: "pre_build", ...reciprocal })).includes("EQUIVALENCE_GROUP_BINDING_INVALID"));
   const orphan = validDocuments(); orphan.assessment.verification_plans.push({ id: "unused-plan", contract_id: "cache", state_transition: "fresh-miss", oracle: "unused", steps_ref: "unused", source_identity: "test-cache-current" }); orphan.assessment.actual_verifications = [];
   assert.ok(codes(validate({ phase: "pre_build", ...orphan })).includes("VERIFICATION_PLAN_ORPHANED"));
-  const actual = validDocuments(); actual.assessment.actual_verifications.push({ verification_id: "unconsumed", outcome: "passed", executed_source_identity: "anything", evidence_ref: "anything" });
+  const actual = validDocuments(); actual.assessment.actual_verifications.push({ verification_id: "unconsumed", outcome: "passed", executed_snapshot: clone(actual.assessment.snapshot), executed_source_identity: "anything", evidence_ref: "anything" });
   assert.ok(codes(validate({ phase: "completion", ...actual })).includes("ACTUAL_VERIFICATION_ORPHANED"));
 });
 

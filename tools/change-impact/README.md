@@ -31,7 +31,8 @@ node tools/change-impact/validate-change-impact.cjs --phase completion \
 
 The command writes one JSON result with stable reason codes and exits zero only
 when the requested phase is valid. Completion also requires actual verification
-and one exact review binding per captured requirement obligation. Missing Node 22 or a
+run against the current expected `base_id`/`candidate_id`/`universe_id` snapshot,
+plus one exact review binding per captured requirement obligation. Missing Node 22 or a
 missing installed checker is a blocker for a triggered deterministic gate; do
 not replace it with a manual pass.
 
@@ -68,7 +69,10 @@ valid examples.
   `change` and `waived` also require an opaque `authorization_ref` to existing
   authority; the checker does not interpret it or create new authorization.
   Verification plans bind contract, state transition, oracle, manual/command
-  steps reference, and source identity. Equivalent obligations may reuse a plan
+  steps reference, and source identity. Each actual verification also records
+  its exact executed snapshot, which must match the independent current expected
+  snapshot at completion; old records without that snapshot must be rerun.
+  Equivalent obligations may reuse a plan
   only through a named group with two or more same-contract members and a
   justification.
 * Review: `change-impact-review/v1` is a projection of the existing

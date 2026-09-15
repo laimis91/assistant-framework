@@ -112,7 +112,7 @@ function documentsFromTruth(value) {
     obligations,
     verification_plans: verificationPlans,
     equivalence_groups: groupVerificationId ? [{ id: `equivalence:${value.id}`, member_obligation_ids: obligations.filter((obligation) => obligation.equivalence_group_id).map((obligation) => obligation.id), justification_ref: `fixture-equivalence:${value.id}`, verification_id: groupVerificationId }] : [],
-    actual_verifications: verificationPlans.map((plan) => ({ verification_id: plan.id, outcome: "passed", executed_source_identity: plan.source_identity, evidence_ref: `fixture-evidence:${plan.id}` })),
+    actual_verifications: verificationPlans.map((plan) => ({ verification_id: plan.id, outcome: "passed", executed_snapshot: clone(snapshot), executed_source_identity: plan.source_identity, evidence_ref: `fixture-evidence:${plan.id}` })),
   };
   const review = {
     schema_version: "change-impact-review/v1",
