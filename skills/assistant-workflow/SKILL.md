@@ -1,6 +1,8 @@
 ---
 name: assistant-workflow
 description: "Prepare, plan, build, or resume persisted task state. Use for repository-grounded feature/epic/story technical preparation, implementation, fixes, migrations, refactors, and project artifacts."
+requires:
+  - assistant-review
 ---
 
 # Development Workflow

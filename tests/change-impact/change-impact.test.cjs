@@ -150,6 +150,70 @@ test("shared inventory requires captured consumers and contract/state-transition
   assert.deepEqual(completionCliResult.result, completionApiResult);
 });
 
+test("behavior assessments require roots, consumers, and requirements at pre-build and completion, including local", () => {
+  for (const phase of ["pre_build", "completion"]) {
+    const missingRoots = validDocuments();
+    missingRoots.expected.required_impact_scope = "local";
+    missingRoots.assessment.impact_scope = "local";
+    missingRoots.capture.roots = [];
+    if (phase === "pre_build") missingRoots.assessment.actual_verifications = [];
+    assert.ok(codes(validate({ phase, ...missingRoots })).includes("CAPTURE_BEHAVIOR_ROOTS_EMPTY"), phase);
+
+    const missingConsumers = validDocuments();
+    missingConsumers.expected.required_impact_scope = "local";
+    missingConsumers.assessment.impact_scope = "local";
+    missingConsumers.capture.edges = [];
+    missingConsumers.capture.requirements = [];
+    missingConsumers.expected.required_edges = [];
+    missingConsumers.expected.required_requirements = [];
+    missingConsumers.expected.review_context.required_bindings = [];
+    missingConsumers.assessment.obligations = [];
+    missingConsumers.assessment.verification_plans = [];
+    missingConsumers.assessment.equivalence_groups = [];
+    missingConsumers.assessment.actual_verifications = [];
+    missingConsumers.review.bindings = [];
+    assert.ok(codes(validate({ phase, ...missingConsumers })).includes("CAPTURE_BEHAVIOR_CONSUMERS_EMPTY"), phase);
+
+    const missingRequirements = validDocuments();
+    missingRequirements.expected.required_impact_scope = "local";
+    missingRequirements.assessment.impact_scope = "local";
+    missingRequirements.capture.requirements = [];
+    missingRequirements.expected.required_requirements = [];
+    missingRequirements.expected.review_context.required_bindings = [];
+    missingRequirements.assessment.obligations = [];
+    missingRequirements.assessment.verification_plans = [];
+    missingRequirements.assessment.equivalence_groups = [];
+    missingRequirements.assessment.actual_verifications = [];
+    missingRequirements.review.bindings = [];
+    assert.ok(codes(validate({ phase, ...missingRequirements })).includes("CAPTURE_EDGE_REQUIREMENT_MISSING"), phase);
+  }
+
+  const emptyLocal = clone(commonExample);
+  emptyLocal.expected.required_impact_scope = "local";
+  emptyLocal.assessment.impact_scope = "local";
+  emptyLocal.capture.roots = [];
+  emptyLocal.capture.edges = [];
+  emptyLocal.capture.requirements = [];
+  emptyLocal.expected.required_edges = [];
+  emptyLocal.expected.required_requirements = [];
+  emptyLocal.expected.review_context.required_bindings = [];
+  emptyLocal.assessment.obligations = [];
+  emptyLocal.assessment.verification_plans = [];
+  emptyLocal.assessment.equivalence_groups = [];
+  emptyLocal.assessment.actual_verifications = [];
+  emptyLocal.review.bindings = [];
+  const apiResult = validate({ phase: "completion", ...emptyLocal });
+  const cliResult = runCli(emptyLocal, "completion");
+  assert.equal(apiResult.valid, false);
+  assert.equal(cliResult.status, 1);
+  assert.deepEqual(cliResult.result, apiResult);
+
+  const populatedLocal = validDocuments();
+  populatedLocal.expected.required_impact_scope = "local";
+  populatedLocal.assessment.impact_scope = "local";
+  assert.equal(validate({ phase: "completion", ...populatedLocal }).complete, true);
+});
+
 test("discovery and pre-build permit planned work without fabricated actual execution", () => {
   const documents = validDocuments();
   assert.equal(validate({ phase: "discovery", capture: documents.capture, expected: documents.expected }).valid, true);
@@ -296,6 +360,35 @@ test("capture requirements, reciprocal equivalence, and exact plan and actual co
   assert.ok(codes(validate({ phase: "pre_build", ...orphan })).includes("VERIFICATION_PLAN_ORPHANED"));
   const actual = validDocuments(); actual.assessment.actual_verifications.push({ verification_id: "unconsumed", outcome: "passed", executed_snapshot: clone(actual.assessment.snapshot), executed_source_identity: "anything", evidence_ref: "anything" });
   assert.ok(codes(validate({ phase: "completion", ...actual })).includes("ACTUAL_VERIFICATION_ORPHANED"));
+});
+
+test("a verification plan cannot be reused by two disjoint equivalence groups", () => {
+  const documents = validDocuments();
+  for (const [suffix, consumer] of [["a", "viewer"], ["b", "dialog"]]) {
+    const edge = { id: `edge-nav-${suffix}`, consumer_id: consumer, contract_id: "navigation", dependency_kind: "call", presence: "both", source_id: `${consumer}-current` };
+    const requirement = { id: `req-nav-${suffix}`, edge_id: edge.id, contract_id: "navigation", state_transition: "route-success", source_id: edge.source_id, verification_source_id: "test-navigation-current" };
+    documents.capture.edges.push(edge);
+    const { verification_source_id, ...capturedRequirement } = requirement;
+    documents.capture.requirements.push(capturedRequirement);
+    documents.expected.required_edges.push(clone(edge));
+    documents.expected.required_requirements.push(requirement);
+  }
+  const next = documents.assessment.obligations.length + 1;
+  documents.assessment.obligations.push(
+    { id: `obligation-${next}`, requirement_id: "req-nav-a", disposition: "preserve", rationale_ref: "rationale-req-nav-a", authorization_ref: null, verification_id: null, equivalence_group_id: "group-navigation-second" },
+    { id: `obligation-${next + 1}`, requirement_id: "req-nav-b", disposition: "preserve", rationale_ref: "rationale-req-nav-b", authorization_ref: null, verification_id: null, equivalence_group_id: "group-navigation-second" },
+  );
+  documents.assessment.equivalence_groups.push({ id: "group-navigation-second", member_obligation_ids: [`obligation-${next}`, `obligation-${next + 1}`], justification_ref: "same-route-contract-second", verification_id: "plan-nav" });
+  documents.expected.review_context.required_bindings.push(
+    { requirement_id: "req-nav-a", scope_item_id: `scope-${next}`, coverage_concern_id: `concern-${next}` },
+    { requirement_id: "req-nav-b", scope_item_id: `scope-${next + 1}`, coverage_concern_id: `concern-${next + 1}` },
+  );
+  documents.review.bindings.push(
+    { obligation_id: `obligation-${next}`, requirement_id: "req-nav-a", scope_item_id: `scope-${next}`, coverage_concern_id: `concern-${next}` },
+    { obligation_id: `obligation-${next + 1}`, requirement_id: "req-nav-b", scope_item_id: `scope-${next + 1}`, coverage_concern_id: `concern-${next + 1}` },
+  );
+  assert.ok(codes(validate({ phase: "pre_build", ...{ ...documents, assessment: { ...documents.assessment, actual_verifications: [] } } })).includes("EQUIVALENCE_VERIFICATION_REUSE_REQUIRES_SEPARATE_PLANS"));
+  assert.ok(codes(validate({ phase: "completion", ...documents })).includes("EQUIVALENCE_VERIFICATION_REUSE_REQUIRES_SEPARATE_PLANS"));
 });
 
 test("scalar and null array members never throw and return structural reasons", () => {

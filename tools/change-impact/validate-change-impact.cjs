@@ -99,7 +99,7 @@ function readDocument(path) {
   }
 }
 
-function validateCapture(capture, expected, reasons) {
+function validateCapture(capture, expected, phase, assessment, reasons) {
   if (!exactKeys(capture, ["schema_version", "capture_id", "snapshot", "roots", "edges", "requirements", "unknown_boundaries"]) ||
       capture.schema_version !== "change-impact-capture/v1" || !nonBlank(capture.capture_id) || !validSnapshot(capture.snapshot) ||
       !Array.isArray(capture.roots) || !Array.isArray(capture.edges) || !Array.isArray(capture.requirements) || !Array.isArray(capture.unknown_boundaries)) {
@@ -121,6 +121,11 @@ function validateCapture(capture, expected, reasons) {
   if (!requirementsValid) reasons.push(issue("CAPTURE_REQUIREMENTS_INVALID"));
   if (!boundariesValid) reasons.push(issue("CAPTURE_BOUNDARIES_INVALID"));
   if (reasons.length) return;
+  const behaviorAssessment = phase !== "discovery" && assessment?.assessment_kind === "behavior";
+  if (behaviorAssessment && expected.required_impact_scope !== "shared") {
+    if (capture.roots.length === 0) reasons.push(issue("CAPTURE_BEHAVIOR_ROOTS_EMPTY"));
+    if (capture.edges.length === 0) reasons.push(issue("CAPTURE_BEHAVIOR_CONSUMERS_EMPTY"));
+  }
   if (capture.roots.length === 0 && (expected.required_impact_scope === "shared" ||
       capture.unknown_boundaries.some((boundary) => boundary.material))) reasons.push(issue("CAPTURE_DISCOVERY_ROOTS_MISSING"));
   if (expected.required_impact_scope === "shared" && capture.edges.length === 0) reasons.push(issue("CAPTURE_SHARED_CONSUMERS_EMPTY"));
@@ -234,6 +239,9 @@ function validateAssessment(assessment, capture, expected, phase, reasons) {
   const directPlanUse = new Map();
   for (const obligation of assessment.obligations) if (obligation.verification_id) directPlanUse.set(obligation.verification_id, (directPlanUse.get(obligation.verification_id) || 0) + 1);
   if ([...directPlanUse.values()].some((count) => count > 1)) reasons.push(issue("DIRECT_VERIFICATION_REUSE_REQUIRES_EQUIVALENCE"));
+  const equivalencePlanUse = new Map();
+  for (const group of assessment.equivalence_groups) equivalencePlanUse.set(group.verification_id, (equivalencePlanUse.get(group.verification_id) || 0) + 1);
+  if ([...equivalencePlanUse.values()].some((count) => count > 1)) reasons.push(issue("EQUIVALENCE_VERIFICATION_REUSE_REQUIRES_SEPARATE_PLANS"));
   const consumedPlans = new Set([...directPlanUse.keys(), ...assessment.equivalence_groups.map((group) => group.verification_id)]);
   if (assessment.verification_plans.some((plan) => !consumedPlans.has(plan.id))) reasons.push(issue("VERIFICATION_PLAN_ORPHANED"));
   if (assessment.equivalence_groups.some((group) => directPlanUse.has(group.verification_id))) reasons.push(issue("VERIFICATION_REUSE_BINDING_INVALID"));
@@ -286,7 +294,7 @@ function validate({ phase, capture, expected, assessment, review }) {
   const reasons = [];
   if (!PHASES.has(phase)) return { valid: false, complete: false, phase: null, reasons: [issue("PHASE_INVALID")] };
   validateExpected(expected, phase, reasons);
-  if (reasons.length === 0) validateCapture(capture, expected, reasons);
+  if (reasons.length === 0) validateCapture(capture, expected, phase, assessment, reasons);
   if (phase !== "discovery" && reasons.length === 0) validateAssessment(assessment, capture, expected, phase, reasons);
   if (phase === "completion" && reasons.length === 0) validateReview(review, assessment, expected, reasons);
   return { valid: reasons.length === 0, complete: phase === "completion" && reasons.length === 0, phase, reasons };

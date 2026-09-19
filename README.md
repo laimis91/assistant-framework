@@ -31,7 +31,7 @@ Install all skills for any supported agent:
 
 The release inventory is the tracked `skills/assistant-*` set. `skills/unity-*` directories are local-only and ignored by git; they are not installed or validated as framework release skills.
 
-Install a single skill:
+Install one root skill with its bundled hard dependencies:
 ```bash
 ./install.sh --agent claude --skill assistant-thinking
 ```
@@ -65,7 +65,7 @@ Install the complete release inventory for one agent:
 .\install.ps1 -Agent gemini
 ```
 
-The same entry point supports a single skill and a non-mutating preview:
+The same entry point supports one root skill with its bundled hard dependencies and a non-mutating preview:
 
 ```powershell
 .\install.ps1 -Agent claude -Skill assistant-thinking

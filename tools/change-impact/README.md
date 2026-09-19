@@ -50,8 +50,11 @@ valid examples.
 
 * Capture: `change-impact-capture/v1` records roots, the union of base and
   candidate edges, `base_id`/`candidate_id`/`universe_id`, and material unknown
-  boundaries. A shared assessment or material unknown boundary requires at least
-  one recorded discovery root; compact cosmetic/local controls may have none. An edge has a stable ID, consumer ID, contract ID, dependency kind
+  boundaries. Pre-build and completion behavior assessments require at least one
+  root, edge, and contract/state-transition requirement, including local scope.
+  Discovery without an assessment and compact cosmetic controls may have none.
+  A shared assessment or material unknown boundary also requires at least one
+  recorded discovery root. An edge has a stable ID, consumer ID, contract ID, dependency kind
   (`call`, `wrapper`, `config`, `registration`, `event`, `state`, or `public`),
   presence (`base`, `candidate`, or `both`), and source identity. Its required
   contract/state-transition records are distinct from edges: one consumer edge
@@ -72,9 +75,9 @@ valid examples.
   steps reference, and source identity. Each actual verification also records
   its exact executed snapshot, which must match the independent current expected
   snapshot at completion; old records without that snapshot must be rerun.
-  Equivalent obligations may reuse a plan
-  only through a named group with two or more same-contract members and a
-  justification.
+  Equivalent obligations may reuse a plan only through one named group with two
+  or more same-contract members and a justification. A plan cannot serve two
+  equivalence groups or both an equivalence group and a direct obligation.
 * Review: `change-impact-review/v1` is a projection of the existing
   assistant-review scope manifest and coverage ledger. It carries their source
   IDs and review snapshot identity, then maps each assessment obligation and

@@ -1353,6 +1353,52 @@ requires:
         }
     }
 
+    Invoke-Contract 'selected bundled requirements close transitively without duplicate cycle copies' {
+        $fixtureFrameworkRoot = Join-Path $script:SuiteRoot ('closure-framework-' + [Guid]::NewGuid().ToString('N'))
+        $fixtureInstaller = Join-Path $fixtureFrameworkRoot 'install.ps1'
+        try {
+            [System.IO.Directory]::CreateDirectory((Join-Path $fixtureFrameworkRoot 'skills')) | Out-Null
+            [System.IO.File]::Copy($script:InstallerPath, $fixtureInstaller)
+            $fixtureSkills = @{
+                'assistant-closure-a' = @('Closure root fixture.', @('assistant-closure-b', 'assistant-closure-c'))
+                'assistant-closure-b' = @('Closure transitive fixture.', @('assistant-closure-c'))
+                'assistant-closure-c' = @('Closure cycle fixture.', @('assistant-closure-a'))
+            }
+            foreach ($entry in $fixtureSkills.GetEnumerator()) {
+                $fixtureSkillRoot = Join-Path (Join-Path $fixtureFrameworkRoot 'skills') $entry.Key
+                [System.IO.Directory]::CreateDirectory($fixtureSkillRoot) | Out-Null
+                $requires = ($entry.Value[1] | ForEach-Object { '  - ' + $_ }) -join [Environment]::NewLine
+                [System.IO.File]::WriteAllText((Join-Path $fixtureSkillRoot 'SKILL.md'), "---`nname: $($entry.Key)`ndescription: $($entry.Value[0])`nrequires:`n$requires`n---`n", (New-Object System.Text.UTF8Encoding($false)))
+            }
+            Use-IsolatedEnvironment 'selected bundled closure' {
+                param($root, $isolatedUserProfile)
+                $warmup = Invoke-PowerShellFile -LiteralPath $fixtureInstaller -Arguments @('-Help')
+                Assert-Equal 0 $warmup.ExitCode 'Bundled closure PowerShell warm-up failed'
+                $beforeDryRun = Get-TreeFingerprint -LiteralPath $root
+                $dryRun = Invoke-PowerShellFile -LiteralPath $fixtureInstaller -Arguments @('-Agent', 'codex', '-Skill', 'ASSISTANT-CLOSURE-A', '-DryRun')
+                Assert-Equal 0 $dryRun.ExitCode "Bundled closure dry-run failed: $($dryRun.Output)"
+                Assert-Contains $dryRun.Output (Join-Path $isolatedUserProfile '.agents\skills\assistant-closure-a') 'Bundled closure dry-run omitted the canonical-cased root skill'
+                Assert-Contains $dryRun.Output 'assistant-closure-b' 'Bundled closure dry-run omitted transitive dependency'
+                Assert-Contains $dryRun.Output 'assistant-closure-c' 'Bundled closure dry-run omitted cycle dependency'
+                Assert-Equal $beforeDryRun (Get-TreeFingerprint -LiteralPath $root) 'Bundled closure dry-run mutated the isolated filesystem'
+                Assert-Equal 0 @(Get-InstalledSkillNames -SkillsRoot (Join-Path $isolatedUserProfile '.agents\skills')).Count 'Bundled closure dry-run wrote managed skills'
+
+                $result = Invoke-PowerShellFile -LiteralPath $fixtureInstaller -Arguments @('-Agent', 'codex', '-Skill', 'ASSISTANT-CLOSURE-A')
+                Assert-Equal 0 $result.ExitCode "Bundled closure install failed: $($result.Output)"
+                Assert-Equal @('assistant-closure-a', 'assistant-closure-b', 'assistant-closure-c') (Get-InstalledSkillNames -SkillsRoot (Join-Path $isolatedUserProfile '.agents\skills')) 'Bundled closure did not install each cycle member exactly once'
+                foreach ($skill in @('assistant-closure-a', 'assistant-closure-b', 'assistant-closure-c')) {
+                    $copy = $skill + ' -> ' + (Join-Path $isolatedUserProfile ('.agents\skills\' + $skill))
+                    Assert-Equal 1 (Get-LiteralCount -Text $result.Output -Needle $copy) "Bundled closure copied $skill more than once"
+                }
+            }
+        }
+        finally {
+            if (Test-Path -LiteralPath $fixtureFrameworkRoot) {
+                Remove-Item -LiteralPath $fixtureFrameworkRoot -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
     Invoke-Contract 'Codex installation preserves existing legacy Memory Graph state without a CLI' {
         Use-IsolatedEnvironment 'codex legacy state preservation' {
             param($root, $isolatedUserProfile)
@@ -1378,7 +1424,7 @@ requires:
         }
     }
 
-    Invoke-Contract 'full inventory and single-skill selection remain bounded' {
+    Invoke-Contract 'full inventory and selected bundled requirements remain bounded' {
         Use-IsolatedEnvironment 'inventory selection' {
             param($root, $isolatedUserProfile)
             $full = Invoke-Installer -Arguments @('-Agent', 'gemini')
@@ -1399,7 +1445,7 @@ requires:
             [Environment]::SetEnvironmentVariable('HOME', $singleHome, 'Process')
             $single = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow')
             Assert-Equal 0 $single.ExitCode "Single-skill install failed: $($single.Output)"
-            Assert-Equal @('assistant-workflow') (Get-InstalledSkillNames -SkillsRoot (Join-Path $singleHome '.claude\skills')) 'Single-skill install copied additional skills'
+            Assert-Equal @('assistant-review', 'assistant-workflow') (Get-InstalledSkillNames -SkillsRoot (Join-Path $singleHome '.claude\skills')) 'Selected workflow install omitted or copied outside its canonical review producer'
         }
     }
 
@@ -2140,21 +2186,31 @@ requires:
             param($root, $isolatedUserProfile)
             $node = Get-Command node -ErrorAction SilentlyContinue
             Assert-True ($null -ne $node) 'Node runtime is unavailable: installed change-impact validation remains an explicit blocker'
-            $codexHome = Join-Path $root 'Codex Change Impact Home [isolated]'
             $fixtureRoot = Join-Path $root 'Change Impact Fixture [isolated]'
-            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
             foreach ($skill in @('assistant-debugging', 'assistant-review')) {
+                $skillProfile = Join-Path $root ('Change Impact Profile ' + $skill)
+                $codexHome = Join-Path $root ('Codex Change Impact Home ' + $skill)
+                [void][System.IO.Directory]::CreateDirectory($skillProfile)
+                [Environment]::SetEnvironmentVariable('USERPROFILE', $skillProfile, 'Process')
+                [Environment]::SetEnvironmentVariable('HOME', $skillProfile, 'Process')
+                [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
                 $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', $skill)
                 Assert-Equal 0 $result.ExitCode "Selective $skill installation failed: $($result.Output)"
-                $reference = Join-Path $isolatedUserProfile (".agents\skills\$skill\references\change-impact.md")
-                $installedSkill = Join-Path $isolatedUserProfile (".agents\skills\$skill\SKILL.md")
+                $reference = Join-Path $skillProfile (".agents\skills\$skill\references\change-impact.md")
+                $installedSkill = Join-Path $skillProfile (".agents\skills\$skill\SKILL.md")
                 $tool = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\validate-change-impact.cjs'))
                 $protocol = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\protocol.v1.json'))
                 $example = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\example.completion.v1.json'))
                 Assert-True ([System.IO.File]::Exists($installedSkill)) "$skill selective installation omitted its installed SKILL.md"
+                if ($skill -eq 'assistant-debugging') {
+                    Assert-True ([System.IO.File]::Exists((Join-Path $skillProfile '.agents\skills\assistant-review\SKILL.md'))) 'assistant-debugging selective installation omitted its canonical assistant-review producer'
+                }
+                else {
+                    Assert-False ([System.IO.Directory]::Exists((Join-Path $skillProfile '.agents\skills\assistant-debugging'))) 'assistant-review selective installation copied an unrelated consumer'
+                }
                 Assert-True ([System.IO.File]::Exists($tool)) "$skill selective installation omitted the common checker at the path resolved from its loaded SKILL.md"
                 Assert-True ([System.IO.File]::Exists($protocol) -and [System.IO.File]::Exists($example)) "$skill selective installation omitted common protocol resources"
-                Assert-False ([System.IO.Directory]::Exists((Join-Path $isolatedUserProfile '.agents\skills\assistant-workflow'))) "$skill selective installation unexpectedly installed workflow"
+                Assert-False ([System.IO.Directory]::Exists((Join-Path $skillProfile '.agents\skills\assistant-workflow'))) "$skill selective installation unexpectedly installed workflow"
                 Assert-True ([System.IO.File]::Exists($reference)) "$skill selective installation omitted its installed change-impact reference"
                 Assert-Contains ([System.IO.File]::ReadAllText($reference)) '../../tools/change-impact/validate-change-impact.cjs' "$skill reference does not resolve the installed common checker"
 

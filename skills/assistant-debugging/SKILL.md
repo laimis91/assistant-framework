@@ -1,6 +1,8 @@
 ---
 name: assistant-debugging
 description: "Diagnose an unknown failure by reproducing and isolating before fixing. Use for debugging, root causes, flaky tests, or unexplained breakage."
+requires:
+  - assistant-review
 ---
 
 # Evidence-First Debugging
