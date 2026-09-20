@@ -130,6 +130,45 @@
         "required_substrings": ["shared", "invoice", "retry", "configuration", "pre-build", "residual"],
         "forbidden_substrings": ["local because checkout", "clean review is complete"]
       }
+    },
+    {
+      "id": "local-debugging-retains-compact-causal-impact",
+      "title": "Local debugging retains compact causal impact",
+      "category": "impact_accounting",
+      "purpose": "Requires a locally bounded debugging result to retain causal evidence without carrying an expanded change-impact checker envelope.",
+      "prompt": "Diagnose a local draft-navigation bug. The trace proves that only this route reaches the guard. Return one valid JSON debugging result.",
+      "setup_context": ["The causal trace confines the defect to one route.", "No expanded change-impact artifact is carried into debugging."],
+      "expected_behavior": ["Records local applicability with a causal evidence reference.", "Keeps expanded_artifact_carried false.", "Does not fabricate expanded change-impact checker evidence for the local diagnosis."],
+      "pass_criteria": ["The compact applicability object has local scope, a reason, and a causal evidence reference.", "No expanded artifact or checker-envelope fields are present."],
+      "fail_signals": ["Omits local causal evidence.", "Carries an expanded change-impact artifact for the local diagnosis.", "Claims validator, capture, or expected-context checker references."],
+      "machine_expectations": {
+        "required_substrings": ["local", "change_impact_applicability", "causal_evidence_ref"],
+        "forbidden_substrings": ["change_impact_evidence", "validator_result_ref"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["status"],"expected":"root_cause_found"},
+          {"operator":"nonempty_string","path":["symptom_summary"]},
+          {"operator":"nonempty_string","path":["reproduction","target"]},
+          {"operator":"nonempty_string","path":["reproduction","command_or_steps"]},
+          {"operator":"nonempty_string","path":["reproduction","observed_result"]},
+          {"operator":"nonempty_string","path":["reproduction","reproduced"]},
+          {"operator":"array_items_nonempty_fields","path":["hypotheses"],"fields":["cause","supporting_evidence","disconfirming_evidence","diagnostic_check"]},
+          {"operator":"equals","path":["hypotheses",0,"rank"],"expected":1},
+          {"operator":"equals","path":["hypotheses",1,"rank"],"expected":2},
+          {"operator":"equals","path":["hypotheses",2,"rank"],"expected":3},
+          {"operator":"equals","path":["hypotheses",0,"result"],"expected":"confirmed"},
+          {"operator":"equals","path":["hypotheses",1,"result"],"expected":"refuted"},
+          {"operator":"equals","path":["hypotheses",2,"result"],"expected":"refuted"},
+          {"operator":"nonempty_string","path":["root_cause"]},
+          {"operator":"equals","path":["confidence"],"expected":"medium"},
+          {"operator":"array_items_nonempty_fields","path":["verification"],"fields":["command_or_check","result","evidence"]},
+          {"operator":"array_nonblank_strings","path":["residual_risks"],"allow_empty":false},
+          {"operator":"equals","path":["change_impact_applicability","impact_scope"],"expected":"local"},
+          {"operator":"nonempty_string","path":["change_impact_applicability","applicability_reason"]},
+          {"operator":"nonempty_string","path":["change_impact_applicability","causal_evidence_ref"]},
+          {"operator":"equals","path":["change_impact_applicability","expanded_artifact_carried"],"expected":false},
+          {"operator":"path_absent","path":["change_impact_evidence"]}
+        ]
+      }
     }
   ]
 }

@@ -65,6 +65,28 @@ test("portable completion example is an executable protocol document", () => {
   assert.equal(validate({ phase: "completion", ...commonExample }).complete, true);
 });
 
+test("behavior completion rejects an all-unaffected assessment without a bound current verification", () => {
+  const documents = clone(commonExample);
+  documents.assessment.obligations = documents.assessment.obligations.map((obligation) => ({
+    ...obligation,
+    disposition: "unaffected",
+    verification_id: null,
+    equivalence_group_id: null,
+  }));
+  documents.assessment.verification_plans = [];
+  documents.assessment.equivalence_groups = [];
+  documents.assessment.actual_verifications = [];
+
+  assert.equal(validate({ phase: "pre_build", ...documents }).valid, true);
+  const apiResult = validate({ phase: "completion", ...documents });
+  assert.equal(apiResult.complete, false);
+  assert.ok(codes(apiResult).includes("BEHAVIOR_COMPLETION_VERIFICATION_MISSING"));
+
+  const cliResult = runCli(documents, "completion");
+  assert.equal(cliResult.status, 1);
+  assert.deepEqual(cliResult.result, apiResult);
+});
+
 test("document admission reads a single descriptor with a byte bound before parsing", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "change-impact-descriptor-"));
   const document = path.join(directory, "document.json");

@@ -33,7 +33,7 @@ load_sets:
         path: contracts/output.yaml
         section: artifacts
         key: name
-        names: [change_impact_evidence]
+        names: [change_impact_applicability, change_impact_evidence]
     budget_words: 1800
   current_phase:
     selectors:
@@ -65,7 +65,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [status, symptom_summary, reproduction, hypotheses, fewer_hypotheses_reason, root_cause, confidence, fix_summary, verification, residual_risks, change_impact_evidence]
+        allowed_names: [status, symptom_summary, reproduction, hypotheses, fewer_hypotheses_reason, root_cause, confidence, fix_summary, verification, residual_risks, change_impact_applicability, change_impact_evidence]
     budget_words: 5000
 
 fallback:

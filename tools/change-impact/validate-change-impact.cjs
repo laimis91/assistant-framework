@@ -258,6 +258,7 @@ function validateAssessment(assessment, capture, expected, phase, reasons) {
     if (assessment.obligations.some((obligation) => ["waived", "blocked"].includes(obligation.disposition))) reasons.push(issue("UNVERIFIED_RESIDUAL_RISK"));
     const actuals = indexBy(assessment.actual_verifications, "verification_id");
     const needed = new Map(assessment.obligations.flatMap((obligation) => obligation.verification_id ? [[obligation.verification_id, obligation.requirement_id]] : obligation.equivalence_group_id ? [[groups.get(obligation.equivalence_group_id)?.verification_id, obligation.requirement_id]] : []));
+    if (assessment.assessment_kind === "behavior" && needed.size === 0) reasons.push(issue("BEHAVIOR_COMPLETION_VERIFICATION_MISSING"));
     for (const [verificationId, requirementId] of needed) if (!actuals.has(verificationId) ||
       !sameSnapshot(actuals.get(verificationId).executed_snapshot, expected.snapshot) ||
       actuals.get(verificationId).executed_source_identity !== plans.get(verificationId)?.source_identity ||

@@ -6124,6 +6124,55 @@
         "required_substrings": ["shared", "invoice", "retry", "configuration", "pre-build", "not automatically"],
         "forbidden_substrings": ["checkout-only verification is enough", "local because checkout", "must create an Architecture Decision Pack"]
       }
+    },
+    {
+      "id": "prepare-only-shared-impact-retains-discovery-evidence",
+      "title": "Prepare-only shared impact retains discovery evidence",
+      "category": "change_impact_prepare_only",
+      "purpose": "Requires a shared prepare-only workflow to retain discovery artifact identity without claiming implementation, verification, or review completion.",
+      "prompt": "Prepare a medium existing-system navigation change that affects a shared helper. Do not implement it. Return one valid JSON workflow result.",
+      "setup_context": ["Current discovery change-impact evidence has artifact identity capture-prepare-only-current, validator_result_ref change-impact#discovery, capture_ref change-impact#capture, and expected_context_ref change-impact#expected.", "No implementation approval, pre-build assessment, executed verification, or review projection is available."],
+      "expected_behavior": ["Carries the current shared discovery evidence identity.", "Keeps execution intent prepare_only and execution status not_started.", "Does not claim a pre-build assessment, implementation verification, or terminal review."],
+      "pass_criteria": ["The discovery artifact has its canonical identity and evidence bindings.", "Implementation and review artifacts are absent."],
+      "fail_signals": ["Promotes discovery evidence to pre_build.", "Adds assessment or review projection claims.", "Starts Build or returns a terminal review result."],
+      "machine_expectations": {
+        "required_substrings": ["prepare_only", "change_impact_evidence", "discovery", "capture-prepare-only-current"],
+        "forbidden_substrings": ["Build started", "review complete"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["execution_intent"],"expected":"prepare_only"},
+          {"operator":"equals","path":["size"],"expected":"medium"},
+          {"operator":"nonempty_string","path":["completion_policy","selection_reason"]},
+          {"operator":"equals","path":["completion_policy","build_execution_lane"],"expected":"none"},
+          {"operator":"equals","path":["completion_policy","plan_mode"],"expected":"none"},
+          {"operator":"equals","path":["triage_result","execution_intent"],"expected":"prepare_only"},
+          {"operator":"equals","path":["triage_result","build_execution_lane"],"expected":"none"},
+          {"operator":"equals","path":["triage_result","plan_mode"],"expected":"none"},
+          {"operator":"nonempty_array","path":["validation_results"]},
+          {"operator":"nonempty_array","path":["context_budget_note","exact_pinned"]},
+          {"operator":"nonempty_array","path":["requirement_acceptance_map","entries"]},
+          {"operator":"nonempty_string","path":["feature_preparation_evidence","ref"]},
+          {"operator":"equals","path":["feature_preparation_result","execution_status"],"expected":"not_started"},
+          {"operator":"nonempty_array","path":["feature_preparation_result","open_decisions"]},
+          {"operator":"nonempty_string","path":["feature_preparation_result","recommended_next_step"]},
+          {"operator":"equals","path":["change_impact_evidence","artifact_identity"],"expected":"capture-prepare-only-current"},
+          {"operator":"equals","path":["change_impact_evidence","phase"],"expected":"discovery"},
+          {"operator":"equals","path":["change_impact_evidence","impact_scope"],"expected":"shared"},
+          {"operator":"equals","path":["change_impact_evidence","status"],"expected":"valid"},
+          {"operator":"equals","path":["change_impact_evidence","validator_result_ref"],"expected":"change-impact#discovery"},
+          {"operator":"equals","path":["change_impact_evidence","capture_ref"],"expected":"change-impact#capture"},
+          {"operator":"equals","path":["change_impact_evidence","expected_context_ref"],"expected":"change-impact#expected"},
+          {"operator":"path_absent","path":["change_impact_evidence","assessment_ref"]},
+          {"operator":"path_absent","path":["change_impact_evidence","review_projection_ref"]},
+          {"operator":"path_absent","path":["feature_preparation_result","future_qa_acceptance_obligation"]},
+          {"operator":"path_absent","path":["feature_preparation_result","future_harness_obligation"]},
+          {"operator":"path_absent","path":["changed_files"]},
+          {"operator":"path_absent","path":["test_results"]},
+          {"operator":"path_absent","path":["fresh_review_result"]},
+          {"operator":"path_absent","path":["review_result"]},
+          {"operator":"path_absent","path":["final_handoff"]},
+          {"operator":"path_absent","path":["artifact_reference_ledger"]}
+        ]
+      }
     }
   ],
   "canonical_feature_preparation_result_expectations": {

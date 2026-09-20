@@ -67,7 +67,7 @@ valid examples.
   internally consistent.
 * Assessment: `change-impact-assessment/v1` creates exactly one canonical
   obligation per captured contract/state-transition requirement. `preserve` and `change` require planned verification;
-  `unaffected` needs a rationale and cannot carry verification; `waived` and
+  a behavior completion must retain at least one such bound verification and its current execution record. `unaffected` needs a rationale and cannot carry verification; `waived` and
   `blocked` remain unverified residual risk and cannot pass completion.
   `change` and `waived` also require an opaque `authorization_ref` to existing
   authority; the checker does not interpret it or create new authorization.

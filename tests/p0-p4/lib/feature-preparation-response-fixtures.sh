@@ -32,6 +32,7 @@ readonly FEATURE_PREP_CASE_MANIFEST=(
     'viewing-route-preserves-active-behavior|light|none'
     'feature-preparation-counterclassifies-unknown-conflict-and-gap|light|none'
     'medium-prepare-only-terminal-route|medium|none'
+    'prepare-only-shared-impact-retains-discovery-evidence|medium|none'
     'large-prepare-only-terminal-route|large|none'
     'medium-prepare-only-readiness-plan|medium|inline'
     'medium-prepare-only-not-applicable-readiness-plan|medium|inline'
@@ -406,6 +407,63 @@ build_medium_prepare_only_terminal_response() {
     local summary="$2"
 
     build_medium_prepare_only_response "$response_path" "$summary" none
+}
+
+build_medium_prepare_only_shared_impact_response() {
+    local response_path="$1"
+    local summary="$2"
+    local temporary_response="${response_path}.tmp"
+
+    build_medium_prepare_only_response "$response_path" "$summary" none
+    jq '
+        .change_impact_evidence = {
+            artifact_identity: "capture-prepare-only-current",
+            phase: "discovery",
+            impact_scope: "shared",
+            status: "valid",
+            validator_result_ref: "change-impact#discovery",
+            capture_ref: "change-impact#capture",
+            expected_context_ref: "change-impact#expected"
+        }
+    ' "$response_path" >"$temporary_response"
+    mv "$temporary_response" "$response_path"
+}
+
+build_local_debugging_compact_causal_response() {
+    local response_path="$1"
+    local summary="$2"
+
+    jq -n --arg summary "$summary" '
+        {
+          summary: $summary,
+          status: "root_cause_found",
+          symptom_summary: "The local draft-navigation route loses its draft when the guard runs; the draft should remain available.",
+          reproduction: {
+            target: "local draft-navigation guard",
+            command_or_steps: "Inspect the supplied route trace for draft preservation through the guard.",
+            observed_result: "The supplied trace reaches the guard only on this route and shows the local draft is not preserved.",
+            reproduced: "yes"
+          },
+          hypotheses: [
+            {rank: 1, cause: "The route guard omits the local draft check.", supporting_evidence: "The supplied trace reaches this guard before the draft is lost.", disconfirming_evidence: "A trace showing draft preservation through the same guard would refute this cause.", diagnostic_check: "Inspect the supplied route trace at the guard boundary.", result: "confirmed"},
+            {rank: 2, cause: "A different route clears the draft before the guard.", supporting_evidence: "A route transition could clear draft state.", disconfirming_evidence: "The supplied trace confines the loss to the inspected guard path.", diagnostic_check: "Compare the supplied trace before and after the guard.", result: "refuted"},
+            {rank: 3, cause: "Draft storage fails independently of navigation.", supporting_evidence: "Draft storage is a possible local dependency.", disconfirming_evidence: "The supplied trace identifies the guard as the first loss point.", diagnostic_check: "Inspect the supplied trace for storage writes before the guard.", result: "refuted"}
+          ],
+          root_cause: "The route guard omits the local draft check.",
+          confidence: "medium",
+          verification: [
+            {command_or_check: "Inspect the supplied causal trace", result: "passed", evidence: "The trace proves only this route reaches the guard and identifies the guard as the draft-loss point."},
+            {command_or_check: "Run the local draft-navigation regression after a repair", result: "skipped", evidence: "No repair was performed during this diagnosis-only result."}
+          ],
+          residual_risks: ["No repair or draft-navigation regression has run; execute the focused regression before claiming the bug is fixed."],
+          change_impact_applicability: {
+            impact_scope: "local",
+            applicability_reason: "Only the inspected route reaches this guard.",
+            causal_evidence_ref: "tests/local-route-draft",
+            expanded_artifact_carried: false
+          }
+        }
+    ' >"$response_path"
 }
 
 build_medium_prepare_only_readiness_plan_response() {

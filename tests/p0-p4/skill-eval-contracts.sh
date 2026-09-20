@@ -420,6 +420,9 @@ p0p4_write_skill_eval_responses() {
                     medium-prepare-only-terminal-route)
                         build_medium_prepare_only_terminal_response "$response_path" "$required_summary"
                         ;;
+                    prepare-only-shared-impact-retains-discovery-evidence)
+                        build_medium_prepare_only_shared_impact_response "$response_path" "$required_summary"
+                        ;;
                     medium-prepare-only-readiness-plan)
                         build_medium_prepare_only_readiness_plan_response "$response_path" "$required_summary"
                         ;;
@@ -494,6 +497,18 @@ p0p4_write_skill_eval_responses() {
                         ;;
                     *)
                         fail "unhandled structured assistant-workflow eval case: $id"
+                        ;;
+                esac
+                continue
+            fi
+            if [[ "$skill_name" == "assistant-debugging" ]] \
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+                case "$id" in
+                    local-debugging-retains-compact-causal-impact)
+                        build_local_debugging_compact_causal_response "$response_path" "$required_summary"
+                        ;;
+                    *)
+                        fail "unhandled structured assistant-debugging eval case: $id"
                         ;;
                 esac
                 continue
@@ -2584,7 +2599,7 @@ run_prepare_only_representative_path_probe \
 run_prepare_only_representative_path_probe \
     medium-prepare-only-not-applicable-readiness-plan '["feature_preparation_result", "readiness_plan", "evidence_ref"]'
 if [[ ${#workflow_core_failures[@]} -eq 0 \
-    && "$prepare_only_direct_structured_probe_count" -eq 375 \
+    && "$prepare_only_direct_structured_probe_count" -eq 409 \
     && "$prepare_only_representative_cli_probe_count" -eq 3 ]]; then
     pass
 else

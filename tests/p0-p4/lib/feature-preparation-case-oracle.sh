@@ -14,6 +14,7 @@ readonly FEATURE_PREP_EXPECTED_CASE_RECORDS=(
     'viewing-route-preserves-active-behavior|light|none'
     'feature-preparation-counterclassifies-unknown-conflict-and-gap|light|none'
     'medium-prepare-only-terminal-route|medium|none'
+    'prepare-only-shared-impact-retains-discovery-evidence|medium|none'
     'large-prepare-only-terminal-route|large|none'
     'medium-prepare-only-readiness-plan|medium|inline'
     'medium-prepare-only-not-applicable-readiness-plan|medium|inline'

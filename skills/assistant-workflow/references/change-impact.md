@@ -22,9 +22,10 @@ current same inputs. The expanded path covers relevant configuration,
 registration, event, state, public, wrapper, added, and removed consumers and
 transitions.
 
-Completion refreshes universe/context then binds verification identity and
-assistant-review's projection of original `scope_manifest`, `coverage_ledger`,
-review snapshot, and concern bindings. It preserves original ledgers and terminal
-coverage/CLEAN/ISSUES_FIXED checks. Shared fanout alone does not require Pack, strict,
-QA, or a different Build lane; existing triggers apply. Light expanded work records
-assistant-review final-summary and delegation-path refs.
+`prepare_only` keeps applicability and artifact identity without completion/review
+claims. Otherwise completion refreshes universe/context,
+binds verification identity and assistant-review's original `scope_manifest`,
+`coverage_ledger`, review snapshot, and concern bindings, and preserves original
+ledgers and terminal coverage/CLEAN/ISSUES_FIXED checks. Shared fanout alone does
+not require Pack, strict, QA, or a different Build lane; existing triggers apply.
+Light expanded work records assistant-review final-summary and delegation-path refs.

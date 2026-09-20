@@ -819,7 +819,7 @@ invariants:
     on_fail: "Repair the Type Ledger and affected interface/task packet before implementation; do not hide domain meaning in unexplained generic primitives or introduce wrapper-only types without an owned semantic boundary."
 
   - id: INV_CHANGE_IMPACT
-    check: "Behavior changes retain applicability evidence. Expanded artifacts preserve identity through discovery, pre-build, Build, and review; completion needs common validation and assistant-review terminal coverage."
+    check: "Behavior changes retain applicability. Expanded artifacts preserve identity through every phase. execution_intent == prepare_only retains discovery applicability and artifact identity without completion/review claims. execution_intent != prepare_only requires common completion validation and assistant-review terminal coverage."
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
     scope: all_phases
     on_fail: "Refresh the bounded capture and expected authority, rerun affected verification/review, or retain the result as blocked/remaining rather than complete."

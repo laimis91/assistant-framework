@@ -376,6 +376,9 @@ write_workflow_eval_responses() {
                 medium-prepare-only-terminal-route)
                     build_medium_prepare_only_terminal_response "$response_path" "$required_summary"
                     ;;
+                prepare-only-shared-impact-retains-discovery-evidence)
+                    build_medium_prepare_only_shared_impact_response "$response_path" "$required_summary"
+                    ;;
                 medium-prepare-only-readiness-plan)
                     build_medium_prepare_only_readiness_plan_response "$response_path" "$required_summary"
                     ;;
@@ -3555,15 +3558,15 @@ fi
 test_start "workflow keeps full-corpus baselines and case-targeted mutation grading proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
 if [[ "$workflow_eval_invocation_count" -eq 26 \
-    && "$prepare_only_direct_structured_probe_count" -eq 375 \
-    && "$prepare_only_plan_mode_mutation_count" -eq 12 \
+    && "$prepare_only_direct_structured_probe_count" -eq 409 \
+    && "$prepare_only_plan_mode_mutation_count" -eq 14 \
     && "$prepare_only_representative_cli_probe_count" -eq 3 \
-    && "$prepare_only_mutation_invocation_count" -eq 15 \
+    && "$prepare_only_mutation_invocation_count" -eq 17 \
     && "$actual_grader_invocation_count" -eq $((workflow_eval_invocation_count + prepare_only_mutation_invocation_count + non_workflow_skill_eval_count)) \
     && "$full_corpus_eval_call_sites" -eq 2 ]]; then
     pass
 else
-    fail "expected 26 bounded workflow evals, 375 independent direct production structured-grader probes, 12 plan-mode case CLI mutations, 3 representative branch CLI probes, and one full-corpus plus one case-targeted runner call site; found $workflow_eval_invocation_count workflow evals, $prepare_only_direct_structured_probe_count direct probes, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_representative_cli_probe_count representative, $prepare_only_mutation_invocation_count mutation CLI calls, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total CLI invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 26 bounded workflow evals, 409 independent direct production structured-grader probes, 14 plan-mode case CLI mutations, 3 representative branch CLI probes, and one full-corpus plus one case-targeted runner call site; found $workflow_eval_invocation_count workflow evals, $prepare_only_direct_structured_probe_count direct probes, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_representative_cli_probe_count representative, $prepare_only_mutation_invocation_count mutation CLI calls, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total CLI invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

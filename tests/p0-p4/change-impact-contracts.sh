@@ -150,6 +150,125 @@ else
     fail "cosmetic applicability, local causality, explicit expansion, or tiered evidence declaration regressed"
 fi
 
+test_start "prepare-only impact discovery preserves applicability without implementation completion claims"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+framework = ARGV.fetch(0)
+gates = YAML.load_file(File.join(framework, "skills/assistant-workflow/contracts/phase-gates.yaml"))
+invariant = gates.fetch("invariants").find { |item| item["id"] == "INV_CHANGE_IMPACT" }
+abort "missing workflow change-impact invariant" unless invariant
+check = invariant.fetch("check")
+abort "prepare-only does not preserve change-impact discovery identity" unless check.include?("prepare_only") && check.include?("discovery") && check.include?("artifact identity")
+abort "prepare-only still inherits implementation completion coverage" unless check.include?("execution_intent != prepare_only") && check.include?("common completion validation and assistant-review terminal coverage")
+RUBY
+then
+    pass
+else
+    fail "prepare-only change-impact discovery still inherits implementation terminal review"
+fi
+
+test_start "change-impact semantic evals retain prepare-only discovery and compact local causality"
+semantic_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/change-impact-semantic-evals.XXXXXX")"
+p0p4_register_cleanup "$semantic_eval_root"
+semantic_eval_responses="$semantic_eval_root/responses"
+semantic_eval_output="$semantic_eval_root/output"
+mkdir -p "$semantic_eval_responses/assistant-workflow" "$semantic_eval_responses/assistant-debugging"
+workflow_semantic_case="prepare-only-shared-impact-retains-discovery-evidence"
+debugging_semantic_case="local-debugging-retains-compact-causal-impact"
+workflow_semantic_response="$semantic_eval_responses/assistant-workflow/$workflow_semantic_case.txt"
+debugging_semantic_response="$semantic_eval_responses/assistant-debugging/$debugging_semantic_case.txt"
+build_medium_prepare_only_shared_impact_response "$workflow_semantic_response" "prepare_only change_impact_evidence discovery capture-prepare-only-current"
+build_local_debugging_compact_causal_response "$debugging_semantic_response" "local change_impact_applicability causal_evidence_ref"
+semantic_eval_failures=()
+run_semantic_eval() {
+    local skill="$1"
+    local case_id="$2"
+    local response="$3"
+    local expected="$4"
+
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$semantic_eval_responses" --skill "$skill" --case "$case_id" >"$semantic_eval_output" 2>&1; then
+        [[ "$expected" == "PASS" ]] || return 1
+    else
+        [[ "$expected" == "FAIL" ]] || return 1
+    fi
+}
+if ! run_semantic_eval assistant-workflow "$workflow_semantic_case" "$workflow_semantic_response" PASS; then
+    semantic_eval_failures+=("workflow baseline")
+fi
+for mutation in \
+    'del(.change_impact_evidence)' \
+    '.change_impact_evidence.phase = "pre_build"' \
+    '.change_impact_evidence.assessment_ref = "assessment.json"' \
+    '.fresh_review_result = {status:"CLEAN"}'; do
+    jq "$mutation" "$workflow_semantic_response" >"$semantic_eval_root/mutated.json"
+    mv "$semantic_eval_root/mutated.json" "$workflow_semantic_response"
+    if ! run_semantic_eval assistant-workflow "$workflow_semantic_case" "$workflow_semantic_response" FAIL; then
+        semantic_eval_failures+=("workflow:$mutation")
+    fi
+    build_medium_prepare_only_shared_impact_response "$workflow_semantic_response" "prepare_only change_impact_evidence discovery capture-prepare-only-current"
+done
+if ! run_semantic_eval assistant-debugging "$debugging_semantic_case" "$debugging_semantic_response" PASS; then
+    semantic_eval_failures+=("debugging baseline")
+fi
+for mutation in \
+    'del(.symptom_summary)' \
+    'del(.reproduction)' \
+    'del(.hypotheses)' \
+    'del(.root_cause)' \
+    'del(.confidence)' \
+    'del(.verification)' \
+    'del(.residual_risks)' \
+    'del(.change_impact_applicability.causal_evidence_ref)' \
+    '.change_impact_applicability.expanded_artifact_carried = true' \
+    '.change_impact_evidence = {artifact_identity:"unexpected"}'; do
+    jq "$mutation" "$debugging_semantic_response" >"$semantic_eval_root/mutated.json"
+    mv "$semantic_eval_root/mutated.json" "$debugging_semantic_response"
+    if ! run_semantic_eval assistant-debugging "$debugging_semantic_case" "$debugging_semantic_response" FAIL; then
+        semantic_eval_failures+=("debugging:$mutation")
+    fi
+    build_local_debugging_compact_causal_response "$debugging_semantic_response" "local change_impact_applicability causal_evidence_ref"
+done
+if [[ "${#semantic_eval_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "semantic change-impact eval gaps: ${semantic_eval_failures[*]}"
+fi
+
+test_start "debugging returns compact local applicability and harness templates match the canonical artifact enum"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+framework = ARGV.fetch(0)
+field = ->(fields, name) { Array(fields).find { |item| item["name"] == name } }
+debug_input = YAML.load_file(File.join(framework, "skills/assistant-debugging/contracts/input.yaml"))
+debug_output = YAML.load_file(File.join(framework, "skills/assistant-debugging/contracts/output.yaml"))
+input_applicability = field.call(debug_input.fetch("fields"), "change_impact_applicability")
+output_applicability = field.call(debug_output.fetch("artifacts"), "change_impact_applicability")
+abort "debugging output omits compact applicability" unless output_applicability
+abort "debugging output applicability does not cover behavior decisions" unless output_applicability.fetch("condition").include?("behavior")
+abort "debugging output applicability does not retain local causal evidence" unless field.call(output_applicability.fetch("object_fields"), "causal_evidence_ref").fetch("condition") == "impact_scope == local"
+abort "debugging applicability output drifted from input shape" unless output_applicability.fetch("object_fields") == input_applicability.fetch("object_fields")
+index = YAML.load_file(File.join(framework, "skills/assistant-debugging/contracts/index.yaml"))
+output_selector = index.fetch("load_sets").fetch("change_impact").fetch("selectors").find { |item| item["id"] == "debugging-change-impact-output" }
+completion_selector = index.fetch("load_sets").fetch("completion").fetch("selectors").find { |item| item["id"] == "debugging-completion-artifact" }
+abort "debugging output selector omits compact applicability" unless output_selector.fetch("names").include?("change_impact_applicability")
+abort "debugging completion selector omits compact applicability" unless completion_selector.fetch("allowed_names").include?("change_impact_applicability")
+
+workflow_output = YAML.load_file(File.join(framework, "skills/assistant-workflow/contracts/output.yaml"))
+ledger = field.call(workflow_output.fetch("artifacts"), "artifact_reference_ledger")
+canonical = field.call(ledger.fetch("object_fields"), "artifact_type").fetch("enum_values")
+extract = ->(text) { text.scan(/\[([^\]]*done_contract[^\]]*)\]/).map { |match| match.fetch(0).split(/[|\/]/).map(&:strip) } }
+plan = File.read(File.join(framework, "skills/assistant-workflow/references/plan-harness-appendix.md"))
+journal = File.read(File.join(framework, "skills/assistant-workflow/references/task-journal-harness-appendix.md"))
+plan_lists = extract.call(plan)
+journal_lists = extract.call(journal)
+abort "plan harness appendix lacks typed artifact and ledger lists" unless plan_lists.length == 2
+abort "journal harness appendix lacks ledger list" unless journal_lists.length == 1
+(plan_lists + journal_lists).each { |list| abort "harness artifact enum drifted: #{list.inspect}" unless list == canonical }
+RUBY
+then
+    pass
+else
+    fail "debugging local applicability or harness artifact enum parity regressed"
+fi
+
 test_start "impact selectors record cosmetic applicability and shared fanout keeps the light Build lane"
 if ruby - "$FRAMEWORK_DIR" <<'RUBY'
 framework = ARGV.fetch(0)
@@ -195,8 +314,21 @@ expanded = field.call(debug_output.fetch("artifacts"), "change_impact_evidence")
 abort "missing debugging change-impact output" unless expanded
 abort "local debugging still requires expanded evidence" unless expanded["condition"] == "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
 abort "old broad debugging condition survived" if expanded["condition"] == "a diagnosis or proposed fix triggers change-impact accounting"
-local_output = {"status" => "root_cause_found", "symptom_summary" => "local", "reproduction" => {}, "hypotheses" => [], "confidence" => "medium", "verification" => [], "residual_risks" => []}
+local_output = {"status" => "root_cause_found", "symptom_summary" => "local", "reproduction" => {}, "hypotheses" => [], "confidence" => "medium", "verification" => [], "residual_risks" => [], "change_impact_applicability" => {"impact_scope" => "local", "applicability_reason" => "causal evidence bounds the diagnosis to this route", "causal_evidence_ref" => "tests/local-route", "expanded_artifact_carried" => false}}
 abort "local output fabricated expanded refs" if local_output.keys.any? { |key| key.end_with?("_ref") || key == "change_impact_evidence" }
+local_applicability = field.call(debug_output.fetch("artifacts"), "change_impact_applicability")
+local_fields = local_applicability.fetch("object_fields")
+accepts_local = lambda do |payload|
+  local_fields.all? do |schema|
+    value = payload[schema["name"]]
+    present = payload.key?(schema["name"]) && !value.to_s.empty?
+    required = schema["required"] == true || (schema["condition"] == "impact_scope == local" && payload["impact_scope"] == "local")
+    enum_valid = schema["type"] != "enum" || !payload.key?(schema["name"]) || Array(schema["enum_values"]).include?(value)
+    (!required || present) && enum_valid
+  end
+end
+abort "local output omits valid compact applicability" unless accepts_local.call(local_output.fetch("change_impact_applicability"))
+abort "local output accepts missing causal evidence" if accepts_local.call(local_output.fetch("change_impact_applicability").reject { |key, _| key == "causal_evidence_ref" })
 
 [load.call(File.join(framework, "skills/assistant-workflow/contracts/output.yaml")), debug_output].each do |contract|
   envelope = field.call(contract.fetch("artifacts"), "change_impact_evidence")
