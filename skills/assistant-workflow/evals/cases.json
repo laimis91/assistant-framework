@@ -6136,7 +6136,7 @@
       "pass_criteria": ["The discovery artifact has its canonical identity and evidence bindings.", "Implementation and review artifacts are absent."],
       "fail_signals": ["Promotes discovery evidence to pre_build.", "Adds assessment or review projection claims.", "Starts Build or returns a terminal review result."],
       "machine_expectations": {
-        "required_substrings": ["prepare_only", "change_impact_evidence", "discovery", "capture-prepare-only-current"],
+        "required_substrings": ["prepare_only", "change_impact_applicability", "change_impact_evidence", "discovery", "capture-prepare-only-current"],
         "forbidden_substrings": ["Build started", "review complete"],
         "structured_json_assertions": [
           {"operator":"equals","path":["execution_intent"],"expected":"prepare_only"},
@@ -6154,6 +6154,10 @@
           {"operator":"equals","path":["feature_preparation_result","execution_status"],"expected":"not_started"},
           {"operator":"nonempty_array","path":["feature_preparation_result","open_decisions"]},
           {"operator":"nonempty_string","path":["feature_preparation_result","recommended_next_step"]},
+          {"operator":"equals","path":["change_impact_applicability","impact_scope"],"expected":"shared"},
+          {"operator":"nonempty_string","path":["change_impact_applicability","applicability_reason"]},
+          {"operator":"equals","path":["change_impact_applicability","expanded_artifact_carried"],"expected":true},
+          {"operator":"path_absent","path":["change_impact_applicability","causal_evidence_ref"]},
           {"operator":"equals","path":["change_impact_evidence","artifact_identity"],"expected":"capture-prepare-only-current"},
           {"operator":"equals","path":["change_impact_evidence","phase"],"expected":"discovery"},
           {"operator":"equals","path":["change_impact_evidence","impact_scope"],"expected":"shared"},

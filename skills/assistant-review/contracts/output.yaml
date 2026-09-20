@@ -6,6 +6,19 @@ contract: output
 skill: assistant-review
 
 artifacts:
+  - name: change_impact_applicability
+    type: object
+    required: conditional
+    condition: "the review covers a behavior-bearing, cosmetic, or locality/shared/unresolved impact decision"
+    description: "Applicability."
+    validation: "not_applicable=cosmetic; compact local needs causal_evidence_ref, no checker; shared/unresolved/expanded needs expanded_artifact_carried=true."
+    on_fail: "Add scope/reason and local causal evidence; shared/unresolved/expanded need change_impact_review_projection or report blocked."
+    object_fields:
+      - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+      - {name: applicability_reason, type: string, required: true}
+      - {name: causal_evidence_ref, type: string, required: conditional, condition: "impact_scope == local"}
+      - {name: expanded_artifact_carried, type: boolean, required: true}
+
   - name: change_impact_review_projection
     type: object
     required: conditional

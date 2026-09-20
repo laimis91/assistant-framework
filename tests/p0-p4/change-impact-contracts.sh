@@ -123,31 +123,74 @@ else
     fail "$(IFS='; '; printf '%s' "${local_proportionality_failures[*]}")"
 fi
 
-test_start "impact applicability admits cosmetic not_applicable without relaxing local or explicit-expanded obligations"
+test_start "all change-impact outputs preserve compact local and cosmetic applicability without relaxing expanded obligations"
 if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
 framework = ARGV.fetch(0)
 field = ->(fields, name) { Array(fields).find { |item| item["name"] == name } }
 canonical_scopes = %w[not_applicable local shared unresolved]
-%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
-  input = YAML.load_file(File.join(framework, "skills", skill, "contracts/input.yaml"))
-  applicability = field.call(input.fetch("fields"), "change_impact_applicability")
-  scope = field.call(applicability.fetch("object_fields"), "impact_scope")
-  causal = field.call(applicability.fetch("object_fields"), "causal_evidence_ref")
-  abort "#{skill} omits canonical cosmetic scope" unless scope.fetch("enum_values") == canonical_scopes
-  abort "#{skill} applicability condition excludes cosmetic decisions" unless applicability.fetch("condition").include?("cosmetic")
-  abort "#{skill} relaxed local causal evidence" unless causal.fetch("required") == "conditional" && causal.fetch("condition") == "impact_scope == local"
-  abort "#{skill} does not retain explicit expanded-artifact control" unless applicability.fetch("validation").include?("expanded_artifact_carried")
+selector_specs = {
+  "assistant-workflow" => ["workflow-change-impact-output", "workflow-completion-artifact"],
+  "assistant-debugging" => ["debugging-change-impact-output", "debugging-completion-artifact"],
+  "assistant-review" => ["review-change-impact-output", "review-completion-artifact"]
+}
+accepts = lambda do |fields, payload|
+  fields.all? do |schema|
+    value = payload[schema["name"]]
+    present = payload.key?(schema["name"]) && !value.to_s.empty?
+    required = schema["required"] == true || (schema["condition"] == "impact_scope == local" && payload["impact_scope"] == "local")
+    enum_valid = schema["type"] != "enum" || !payload.key?(schema["name"]) || Array(schema["enum_values"]).include?(value)
+    (!required || present) && enum_valid
+  end
 end
-output = YAML.load_file(File.join(framework, "skills/assistant-workflow/contracts/output.yaml"))
-tiers = output.fetch("completion_tiers")
+selector_specs.each do |skill, (output_selector_id, completion_selector_id)|
+  input = YAML.load_file(File.join(framework, "skills", skill, "contracts/input.yaml"))
+  input_applicability = field.call(input.fetch("fields"), "change_impact_applicability")
+  output = YAML.load_file(File.join(framework, "skills", skill, "contracts/output.yaml"))
+  output_applicability = field.call(output.fetch("artifacts"), "change_impact_applicability")
+  abort "#{skill} output omits compact applicability" unless output_applicability
+  abort "#{skill} output applicability is not conditional" unless output_applicability.fetch("required") == "conditional"
+  abort "#{skill} output applicability shape drifted from input" unless output_applicability.fetch("object_fields") == input_applicability.fetch("object_fields")
+  abort "#{skill} output applicability trigger drifted from input" unless output_applicability.fetch("condition") == input_applicability.fetch("condition")
+  scope = field.call(output_applicability.fetch("object_fields"), "impact_scope")
+  causal = field.call(output_applicability.fetch("object_fields"), "causal_evidence_ref")
+  abort "#{skill} omits canonical cosmetic scope" unless scope.fetch("enum_values") == canonical_scopes
+  abort "#{skill} output applicability condition excludes cosmetic decisions" unless output_applicability.fetch("condition").include?("cosmetic")
+  abort "#{skill} relaxed local causal evidence" unless causal.fetch("required") == "conditional" && causal.fetch("condition") == "impact_scope == local"
+  abort "#{skill} input loses explicit expansion control" unless input_applicability.fetch("validation").include?("expanded_artifact_carried")
+  abort "#{skill} output loses shared/unresolved explicit expansion control" unless output_applicability.fetch("condition").include?("shared") && output_applicability.fetch("validation").include?("expanded_artifact_carried=true")
+  compact_no_checker = output_applicability.fetch("validation")
+  abort "#{skill} does not retain compact no-checker local output" unless compact_no_checker.include?("no checker") || compact_no_checker.include?("without an expanded artifact or checker refs")
+  if %w[assistant-workflow assistant-review].include?(skill)
+    recovery = output_applicability.fetch("on_fail")
+    recovery_artifact = skill == "assistant-review" ? "change_impact_review_projection" : "change_impact_evidence"
+    %w[scope/reason local causal shared/unresolved/expanded blocked].append(recovery_artifact).each do |term|
+      abort "#{skill} compact applicability recovery omits #{term}" unless recovery.include?(term)
+    end
+  end
+  local = {"impact_scope" => "local", "applicability_reason" => "causal trace limits the affected route", "causal_evidence_ref" => "tests/local-route", "expanded_artifact_carried" => false}
+  cosmetic = {"impact_scope" => "not_applicable", "applicability_reason" => "copy-only correction", "expanded_artifact_carried" => false}
+  abort "#{skill} rejects compact local applicability" unless accepts.call(output_applicability.fetch("object_fields"), local)
+  abort "#{skill} accepts local applicability without causal evidence" if accepts.call(output_applicability.fetch("object_fields"), local.reject { |key, _| key == "causal_evidence_ref" })
+  abort "#{skill} rejects compact cosmetic applicability" unless accepts.call(output_applicability.fetch("object_fields"), cosmetic)
+  abort "#{skill} accepts cosmetic applicability without a reason" if accepts.call(output_applicability.fetch("object_fields"), cosmetic.reject { |key, _| key == "applicability_reason" })
+
+  index = YAML.load_file(File.join(framework, "skills", skill, "contracts/index.yaml"))
+  output_selector = index.fetch("load_sets").fetch("change_impact").fetch("selectors").find { |item| item["id"] == output_selector_id }
+  completion_selector = index.fetch("load_sets").fetch("completion").fetch("selectors").find { |item| item["id"] == completion_selector_id }
+  abort "#{skill} output selector omits compact applicability" unless output_selector.fetch("names").include?("change_impact_applicability")
+  abort "#{skill} completion selector omits compact applicability" unless completion_selector.fetch("allowed_names").include?("change_impact_applicability")
+end
+workflow_output = YAML.load_file(File.join(framework, "skills/assistant-workflow/contracts/output.yaml"))
+tiers = workflow_output.fetch("completion_tiers")
 %w[preparation_only small small_elevated medium large_critical].each do |name|
   abort "#{name} omits conditional change-impact evidence" unless tiers.fetch(name).fetch("conditional_artifacts").include?("change_impact_evidence")
+  abort "#{name} omits conditional compact applicability" unless tiers.fetch(name).fetch("conditional_artifacts").include?("change_impact_applicability")
 end
 RUBY
 then
     pass
 else
-    fail "cosmetic applicability, local causality, explicit expansion, or tiered evidence declaration regressed"
+    fail "compact applicability output shape, selectors, bounded field-shape omission guards, or workflow tiers regressed"
 fi
 
 test_start "prepare-only impact discovery preserves applicability without implementation completion claims"
@@ -195,6 +238,10 @@ if ! run_semantic_eval assistant-workflow "$workflow_semantic_case" "$workflow_s
     semantic_eval_failures+=("workflow baseline")
 fi
 for mutation in \
+    'del(.change_impact_applicability)' \
+    'del(.change_impact_applicability.applicability_reason)' \
+    '.change_impact_applicability.impact_scope = "local"' \
+    '.change_impact_applicability.expanded_artifact_carried = false' \
     'del(.change_impact_evidence)' \
     '.change_impact_evidence.phase = "pre_build"' \
     '.change_impact_evidence.assessment_ref = "assessment.json"' \
@@ -354,6 +401,10 @@ abort "local output accepts missing causal evidence" if accepts_local.call(local
   abort "blocked output requires unavailable checker result" unless accepts.call(blocked)
   abort "blocked output accepts no blocker" if accepts.call(blocked.reject { |key, _| key == "gap_or_blocker_ref" })
   abort "valid output accepts no checker result" if accepts.call(valid.reject { |key, _| key == "validator_result_ref" })
+  if contract["skill"] == "assistant-workflow"
+    validation = envelope.fetch("validation")
+    abort "workflow completion loses original review bindings" unless validation.include?("original scope_manifest") && validation.include?("coverage_ledger") && validation.include?("current snapshot")
+  end
 end
 
 %w[assistant-workflow assistant-debugging assistant-review].each do |skill|

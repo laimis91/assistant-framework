@@ -154,7 +154,9 @@
       "post-fix-review-regression-remains-open": "small_post_fix_closure",
       "audit-spec-review-fail-continues-complete-batch": "small_base",
       "in-flight-mutation-invalidates-review-batch": "medium_inflight_invalidation",
-      "trivial-audit-uses-two-isolated-passes": "trivial_base"
+      "trivial-audit-uses-two-isolated-passes": "trivial_base",
+      "compact-local-review-retains-causal-applicability": "small_base",
+      "compact-cosmetic-review-retains-applicability": "small_base"
     },
     "case_requirements": {
       "audit-batch-waits-for-all-pass-results": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"},
@@ -164,7 +166,9 @@
       "post-fix-review-regression-remains-open": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
       "audit-spec-review-fail-continues-complete-batch": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"},
       "in-flight-mutation-invalidates-review-batch": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
-      "trivial-audit-uses-two-isolated-passes": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"}
+      "trivial-audit-uses-two-isolated-passes": {"mode":"audit","required_artifacts":["final_summary","audit_report","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "compact-local-review-retains-causal-applicability": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"},
+      "compact-cosmetic-review-retains-applicability": {"mode":"review","required_artifacts":["final_summary","review_delegation_path"],"required_envelope_alias":"final_summary"}
     }
   },
   "canonical_qa_case_requirements": {
@@ -191,7 +195,9 @@
     "post-fix-review-regression-remains-open": {"active_must_fix_aggregate_finding_ids":["aggregate-fixed-1"],"fixed_must_fix_aggregate_finding_ids":["aggregate-fixed-1"]},
     "audit-spec-review-fail-continues-complete-batch": {"active_must_fix_aggregate_finding_ids":["aggregate-1","aggregate-spec-1"],"fixed_must_fix_aggregate_finding_ids":[]},
     "in-flight-mutation-invalidates-review-batch": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]},
-    "trivial-audit-uses-two-isolated-passes": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]}
+    "trivial-audit-uses-two-isolated-passes": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]},
+    "compact-local-review-retains-causal-applicability": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]},
+    "compact-cosmetic-review-retains-applicability": {"active_must_fix_aggregate_finding_ids":[],"fixed_must_fix_aggregate_finding_ids":[]}
   },
   "canonical_review_snapshot_expectations": {
     "audit-batch-waits-for-all-pass-results": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
@@ -201,7 +207,9 @@
     "post-fix-review-regression-remains-open": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-0","review_snapshot_id":"snapshot-0","snapshot_identity":{"basis":"diff_digest","value":"digest-0","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-0"}},{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
     "audit-spec-review-fail-continues-complete-batch": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
     "in-flight-mutation-invalidates-review-batch": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
-    "trivial-audit-uses-two-isolated-passes": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]}
+    "trivial-audit-uses-two-isolated-passes": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "compact-local-review-retains-causal-applicability": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]},
+    "compact-cosmetic-review-retains-applicability": {"final_review_snapshot_id":"snapshot-1","final_snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"},"batch_projections":[{"batch_id":"batch-1","review_snapshot_id":"snapshot-1","snapshot_identity":{"basis":"diff_digest","value":"digest-1","captured_at":"2026-08-28T00:00:00Z","scope_manifest_digest":"manifest-1"}}]}
   },
   "cases": [
     {
@@ -2025,6 +2033,52 @@
           {"operator":"nonempty_array","path":["qa_evaluation_result","open_questions"]},
           {"operator":"equals","path":["qa_evaluation_result","qa_scorecard","weighted_score"],"expected":1.8},
           {"operator":"equals","path":["qa_evaluation_result","score_progression",0,"weighted_score"],"expected":1.8}
+        ]
+      }
+    },
+    {
+      "id": "compact-local-review-retains-causal-applicability",
+      "title": "Review retains compact local causal applicability",
+      "category": "multi_pass_review_batch",
+      "purpose": "Requires a complete canonical small review result to retain local causal applicability without an expanded projection.",
+      "prompt": "Review a local navigation guard fix with supplied causal evidence. Return the review result.",
+      "setup_context": ["Only the traced route reaches the guard.", "No shared consumer or expanded impact artifact is carried."],
+      "expected_behavior": ["Returns the complete canonical small review envelope.", "Carries compact local applicability with its causal evidence.", "Does not invent an expanded impact projection."],
+      "pass_criteria": ["The local scope, reason, and causal evidence are present.", "The canonical final summary and delegation path remain present."],
+      "fail_signals": ["Drops causal evidence.", "Replaces the canonical review envelope with applicability alone.", "Adds a shared projection for the local route."],
+      "machine_expectations": {
+        "required_substrings": ["change_impact_applicability", "local", "causal evidence"],
+        "forbidden_substrings": ["shared projection"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","result"],"expected":"CLEAN"},
+          {"operator":"equals","path":["change_impact_applicability","impact_scope"],"expected":"local"},
+          {"operator":"nonempty_string","path":["change_impact_applicability","applicability_reason"]},
+          {"operator":"nonempty_string","path":["change_impact_applicability","causal_evidence_ref"]},
+          {"operator":"equals","path":["change_impact_applicability","expanded_artifact_carried"],"expected":false},
+          {"operator":"path_absent","path":["change_impact_review_projection"]}
+        ]
+      }
+    },
+    {
+      "id": "compact-cosmetic-review-retains-applicability",
+      "title": "Review retains compact cosmetic applicability",
+      "category": "multi_pass_review_batch",
+      "purpose": "Requires a complete canonical small review result to retain a cosmetic applicability decision without causal or expanded evidence.",
+      "prompt": "Review a copy-only navigation label correction. Return the review result.",
+      "setup_context": ["The change is cosmetic and does not alter navigation behavior.", "No local causal trace or expanded impact artifact is carried."],
+      "expected_behavior": ["Returns the complete canonical small review envelope.", "Carries not_applicable applicability with a reason.", "Does not invent causal or expanded impact evidence."],
+      "pass_criteria": ["The cosmetic scope and reason are present.", "The canonical final summary and delegation path remain present."],
+      "fail_signals": ["Drops the applicability decision.", "Adds causal evidence for a cosmetic correction.", "Replaces the canonical review envelope with applicability alone."],
+      "machine_expectations": {
+        "required_substrings": ["change_impact_applicability", "not_applicable", "cosmetic"],
+        "forbidden_substrings": ["causal evidence required"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["final_summary","result"],"expected":"CLEAN"},
+          {"operator":"equals","path":["change_impact_applicability","impact_scope"],"expected":"not_applicable"},
+          {"operator":"nonempty_string","path":["change_impact_applicability","applicability_reason"]},
+          {"operator":"equals","path":["change_impact_applicability","expanded_artifact_carried"],"expected":false},
+          {"operator":"path_absent","path":["change_impact_applicability","causal_evidence_ref"]},
+          {"operator":"path_absent","path":["change_impact_review_projection"]}
         ]
       }
     },

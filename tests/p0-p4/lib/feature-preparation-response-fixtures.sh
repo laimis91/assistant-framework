@@ -416,7 +416,12 @@ build_medium_prepare_only_shared_impact_response() {
 
     build_medium_prepare_only_response "$response_path" "$summary" none
     jq '
-        .change_impact_evidence = {
+        .change_impact_applicability = {
+            impact_scope: "shared",
+            applicability_reason: "The navigation helper is shared by the captured consumers.",
+            expanded_artifact_carried: true
+        }
+        | .change_impact_evidence = {
             artifact_identity: "capture-prepare-only-current",
             phase: "discovery",
             impact_scope: "shared",

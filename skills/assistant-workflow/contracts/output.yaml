@@ -17,20 +17,20 @@ completion_tiers:
   preparation_only:
     execution_intent: prepare_only
     required_artifacts: [completion_policy, validation_results, feature_preparation_result]
-    conditional_artifacts: [triage_result, phase_checkpoints, task_journal, feature_preparation_evidence, plan_document, requirement_acceptance_map, architecture_decision_pack, context_map, context_budget_note, context_handoff_packet, change_impact_evidence]
+    conditional_artifacts: [triage_result, phase_checkpoints, task_journal, feature_preparation_evidence, plan_document, requirement_acceptance_map, architecture_decision_pack, context_map, context_budget_note, context_handoff_packet, change_impact_applicability, change_impact_evidence]
     review_gate: "Preparation-evidence admissibility audit only; no Build, changed-files, implementation test, code-review, or final-handoff claim is permitted."
     checkpoint_policy: "Returns validation_results plus the typed readiness artifact with Execution not started, exact scope, applicable evidence ref, gaps, open decisions, implications, and next step."
   small:
     controller_intensity: light
     required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_evidence]
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_applicability, change_impact_evidence]
     review_gate: "fresh review after validation; Pack/expanded impact uses canonical assistant-review; full independent review only when risk promotes work"
     checkpoint_policy: "an inline scope/check summary is enough; include an inline plan only when plan_mode=inline. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
   small_elevated:
     condition: "execution_intent != prepare_only and size == small and (controller_intensity == strict or qa_evaluation_mode == required)"
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, validation_results, spec_review_result, review_result, final_handoff]
-    conditional_artifacts: [test_results, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, manual_test_steps, manual_verification_result, change_impact_evidence]
+    conditional_artifacts: [test_results, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, manual_test_steps, manual_verification_result, change_impact_applicability, change_impact_evidence]
     prohibited_artifacts: [fresh_review_result, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary]
     review_gate: "typed canonical review and required QA terminal state; no medium+ slice evidence"
     checkpoint_policy: "strict phase checkpoints without decomposition artifacts"
@@ -38,24 +38,37 @@ completion_tiers:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
     required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
-    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, change_impact_evidence]
+    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, change_impact_applicability, change_impact_evidence]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
-    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, feature_preparation_evidence, architecture_decision_pack, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation, change_impact_evidence]
+    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, feature_preparation_evidence, architecture_decision_pack, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation, change_impact_applicability, change_impact_evidence]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
 artifacts:
+  - name: change_impact_applicability
+    type: object
+    required: conditional
+    condition: "a behavior, cosmetic, or locality/shared/unresolved impact decision affects verification"
+    description: "Applicability."
+    validation: "not_applicable=cosmetic; compact local needs causal_evidence_ref, no checker; shared/unresolved/expanded needs expanded_artifact_carried=true."
+    on_fail: "Add scope/reason; local needs causal evidence; shared/unresolved/expanded need change_impact_evidence or report blocked."
+    object_fields:
+      - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+      - {name: applicability_reason, type: string, required: true}
+      - {name: causal_evidence_ref, type: string, required: conditional, condition: "impact_scope == local"}
+      - {name: expanded_artifact_carried, type: boolean, required: true}
+
   - name: change_impact_evidence
     type: object
     required: conditional
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-    description: "Cross-phase reference envelope for explicitly expanded common change-impact v1 documents; it does not duplicate their obligation ledger."
-    validation: "artifact_identity is retained unchanged from discovery through Build and Review. discovery may report gaps or unavailable checker without claiming planned/executed verification or review. pre_build requires a valid common-checker assessment with no material unknown boundary. completion additionally requires actual verification and a review projection from assistant-review that binds the original canonical scope_manifest, coverage_ledger, and current review snapshot; that projection never substitutes for assistant-review terminal coverage/result checks. Evidenced local work records compact applicability plus ordinary verification/self-review instead."
-    on_fail: "For an expanded gate, resolve the checker from the active skill installation and run its explicit discovery, pre-build, or completion phase. Missing Node 22 or checker is blocked/unverified; do not replace it with manual-pass prose."
+    description: "Expanded evidence."
+    validation: "Keep artifact_identity across phases. Discovery gaps/checker blocks cannot claim verification/review. pre_build requires valid assessment, no material unknown. completion requires verification plus assistant-review projection binding original scope_manifest, coverage_ledger, current snapshot; it cannot replace terminal checks."
+    on_fail: "Run checker or report blocked; no manual pass."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
