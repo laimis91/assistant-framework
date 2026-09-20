@@ -24,8 +24,8 @@ artifacts:
     required: conditional
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
     description: "Exact projection to the common completion document of existing review authority; it is not a second coverage ledger."
-    validation: "Preserves artifact_identity and maps every captured requirement obligation once to the original current scope_manifest item and coverage_ledger concern. review_source identities equal the canonical final review batch. A valid projection does not substitute for final_summary coverage_complete or CLEAN/ISSUES_FIXED; incomplete/blocked/read-only audit results remain explicit gaps."
-    on_fail: "Do not present a clean completion. Rebuild the current manifest/ledger/snapshot projection, or report the missing/blocked impact evidence."
+    validation: "Preserves artifact_identity and maps every captured requirement obligation once to the original current scope_manifest item and coverage_ledger concern. review_source identities equal the canonical final review batch. When status is valid, validator_result_ref resolves to the current valid completion validator result, including its receipt bound to the current parsed inputs. A valid projection does not substitute for final_summary coverage_complete or CLEAN/ISSUES_FIXED; incomplete/blocked/read-only audit results remain explicit gaps."
+    on_fail: "Do not present a clean completion. Rebuild the current manifest/ledger/snapshot projection and rerun the completion checker for a missing or stale result, or report the missing/blocked impact evidence."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
@@ -33,6 +33,7 @@ artifacts:
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: assessment_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: review_projection_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: scope_manifest_id, type: string, required: conditional, condition: "status == valid"}
       - {name: coverage_ledger_id, type: string, required: conditional, condition: "status == valid"}
       - {name: review_snapshot_id, type: string, required: conditional, condition: "status == valid"}

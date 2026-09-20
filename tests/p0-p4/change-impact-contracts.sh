@@ -389,8 +389,10 @@ end
 abort "local output omits valid compact applicability" unless accepts_local.call(local_output.fetch("change_impact_applicability"))
 abort "local output accepts missing causal evidence" if accepts_local.call(local_output.fetch("change_impact_applicability").reject { |key, _| key == "causal_evidence_ref" })
 
-[load.call(File.join(framework, "skills/assistant-workflow/contracts/output.yaml")), debug_output].each do |contract|
-  envelope = field.call(contract.fetch("artifacts"), "change_impact_evidence")
+review_output = load.call(File.join(framework, "skills/assistant-review/contracts/output.yaml"))
+[load.call(File.join(framework, "skills/assistant-workflow/contracts/output.yaml")), debug_output, review_output].each do |contract|
+  artifact_name = contract["skill"] == "assistant-review" ? "change_impact_review_projection" : "change_impact_evidence"
+  envelope = field.call(contract.fetch("artifacts"), artifact_name)
   fields = envelope.fetch("object_fields")
   result_ref = field.call(fields, "validator_result_ref")
   blocker_ref = field.call(fields, "gap_or_blocker_ref")
@@ -410,9 +412,24 @@ abort "local output accepts missing causal evidence" if accepts_local.call(local
   end
   blocked = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => "blocked", "gap_or_blocker_ref" => "node-runtime-unavailable"}
   valid = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => "valid", "validator_result_ref" => "result.json", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json"}
+  if contract["skill"] == "assistant-review"
+    valid = {"artifact_identity" => "impact-1", "status" => "valid", "validator_result_ref" => "completion-result.json", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "assessment_ref" => "assessment.json", "review_projection_ref" => "review.json", "scope_manifest_id" => "manifest-1", "coverage_ledger_id" => "ledger-1", "review_snapshot_id" => "review-1", "snapshot_id" => "source-1", "canonical_final_summary_ref" => "final-summary.json"}
+  end
+  abort "valid output rejects complete checker evidence" unless accepts.call(valid)
+  %w[gaps_reported blocked invalid].each do |status|
+    payload = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => status, "gap_or_blocker_ref" => "gap.json"}
+    abort "non-valid output requires unavailable checker result" unless accepts.call(payload)
+  end
   abort "blocked output requires unavailable checker result" unless accepts.call(blocked)
   abort "blocked output accepts no blocker" if accepts.call(blocked.reject { |key, _| key == "gap_or_blocker_ref" })
   abort "valid output accepts no checker result" if accepts.call(valid.reject { |key, _| key == "validator_result_ref" })
+  abort "valid output accepts empty checker result" if accepts.call(valid.merge("validator_result_ref" => ""))
+  if contract["skill"] == "assistant-review"
+    validation = envelope.fetch("validation")
+    abort "review output loses completion receipt semantics" unless validation.include?("validator_result_ref") && validation.include?("current valid completion validator result") && validation.include?("receipt") && validation.include?("current parsed inputs")
+    abort "review output loses final-summary authority" unless validation.include?("final_summary coverage_complete") && validation.include?("CLEAN/ISSUES_FIXED")
+    abort "review output lacks completion result recovery" unless envelope.fetch("on_fail").include?("completion checker")
+  end
   if contract["skill"] == "assistant-workflow"
     validation = envelope.fetch("validation")
     abort "workflow completion loses original review bindings" unless validation.include?("original scope_manifest") && validation.include?("coverage_ledger") && validation.include?("current snapshot")
