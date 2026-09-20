@@ -16,9 +16,9 @@ artifact. Discovery records the bounded base/candidate universe, unknown
 material boundaries, and the same `artifact_identity` only for shared,
 materially unresolved, or explicitly carried expanded work. Before any
 source/test mutation or dispatch, run/revalidate the checker using capture,
-expected context, and assessment. Current valid `pre_build` resolves to the
-task packet; status/ref alone is insufficient. Reuse only with demonstrably
-current same inputs. The expanded path covers relevant configuration,
+expected context, and assessment. `pre_build` validates task packet. Reuse runs
+`--receipt validator_result_ref`; receipt matches parsed inputs.
+The expanded path covers relevant configuration,
 registration, event, state, public, wrapper, added, and removed consumers and
 transitions.
 

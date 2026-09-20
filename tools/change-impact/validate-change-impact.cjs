@@ -6,11 +6,14 @@
 // whether the supplied authority contains every possible runtime consumer.
 
 const fs = require("node:fs");
+const crypto = require("node:crypto");
+const { types } = require("node:util");
 
 const MAX_BYTES = 256 * 1024;
 const MAX_DEPTH = 16;
 const MAX_ARRAY = 200;
 const MAX_OBJECT_KEYS = 60;
+const INVALID_SNAPSHOT = Symbol("invalid snapshot");
 const PHASES = new Set(["discovery", "pre_build", "completion"]);
 const DEPENDENCY_KINDS = new Set(["call", "wrapper", "config", "registration", "event", "state", "public"]);
 const PRESENCES = new Set(["base", "candidate", "both"]);
@@ -20,6 +23,110 @@ const SAFE_ERROR_CODES = new Set(["INPUT_UNREADABLE", "INPUT_TOO_LARGE", "INPUT_
 
 function issue(code) {
   return { code };
+}
+
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+}
+
+function digest(value) {
+  return `sha256:${crypto.createHash("sha256").update(canonicalJson(value), "utf8").digest("hex")}`;
+}
+
+function snapshotJson(value, state, depth = 0, ancestors = new WeakSet()) {
+  if (depth > MAX_DEPTH) return INVALID_SNAPSHOT;
+  if (typeof value === "string" && value.length > MAX_BYTES) return INVALID_SNAPSHOT;
+  if (value === null || typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))) {
+    state.bytes += Buffer.byteLength(JSON.stringify(value), "utf8");
+    return state.bytes <= MAX_BYTES ? value : INVALID_SNAPSHOT;
+  }
+  if (typeof value !== "object" || types.isProxy(value) || ancestors.has(value)) return INVALID_SNAPSHOT;
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      const keys = Reflect.ownKeys(value);
+      const length = value.length;
+      if (length > MAX_ARRAY || keys.length !== length + 1 || !keys.includes("length")) return INVALID_SNAPSHOT;
+      const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+      if (!lengthDescriptor || !Object.hasOwn(lengthDescriptor, "value") || lengthDescriptor.value !== length) return INVALID_SNAPSHOT;
+      const snapshot = [];
+      state.bytes += 2;
+      for (let index = 0; index < length; index += 1) {
+        const key = String(index);
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, "value")) return INVALID_SNAPSHOT;
+        if (index > 0) state.bytes += 1;
+        const child = snapshotJson(descriptor.value, state, depth + 1, ancestors);
+        if (child === INVALID_SNAPSHOT || state.bytes > MAX_BYTES) return INVALID_SNAPSHOT;
+        snapshot.push(child);
+      }
+      return snapshot;
+    }
+    if (Object.getPrototypeOf(value) !== Object.prototype) return INVALID_SNAPSHOT;
+    const keys = Reflect.ownKeys(value);
+    if (keys.length > MAX_OBJECT_KEYS || keys.some((key) => typeof key !== "string")) return INVALID_SNAPSHOT;
+    const snapshot = Object.create(null);
+    state.bytes += 2;
+    for (const [index, key] of keys.sort().entries()) {
+      if (key.length > MAX_BYTES) return INVALID_SNAPSHOT;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, "value")) return INVALID_SNAPSHOT;
+      if (index > 0) state.bytes += 1;
+      state.bytes += Buffer.byteLength(JSON.stringify(key), "utf8") + 1;
+      const child = snapshotJson(descriptor.value, state, depth + 1, ancestors);
+      if (child === INVALID_SNAPSHOT || state.bytes > MAX_BYTES) return INVALID_SNAPSHOT;
+      Object.defineProperty(snapshot, key, { value: child, enumerable: true, writable: true, configurable: true });
+    }
+    return snapshot;
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+function snapshotPhaseInputs(phase, capture, expected, assessment, review) {
+  const snapshot = (value) => snapshotJson(value, { bytes: 0 });
+  const captured = snapshot(capture);
+  const expectedSnapshot = snapshot(expected);
+  if (captured === INVALID_SNAPSHOT || expectedSnapshot === INVALID_SNAPSHOT) return null;
+  const assessmentSnapshot = phase === "discovery" ? undefined : snapshot(assessment);
+  const reviewSnapshot = phase === "completion" ? snapshot(review) : undefined;
+  return assessmentSnapshot === INVALID_SNAPSHOT || reviewSnapshot === INVALID_SNAPSHOT ? null : { capture: captured, expected: expectedSnapshot, assessment: assessmentSnapshot, review: reviewSnapshot };
+}
+
+function receiptFor(phase, capture, expected, assessment, review) {
+  return {
+    schema_version: "change-impact-validation-receipt/v1",
+    validation_contract: "change-impact-validator/v1",
+    canonicalization: "change-impact-canonical-json/v1",
+    digest_algorithm: "sha256",
+    phase,
+    input_digests: {
+      capture: digest(capture),
+      expected: digest(expected),
+      assessment: phase === "discovery" ? null : digest(assessment),
+      review: phase === "completion" ? digest(review) : null,
+    },
+  };
+}
+
+function validReceipt(receipt) {
+  return exactKeys(receipt, ["schema_version", "validation_contract", "canonicalization", "digest_algorithm", "phase", "input_digests"]) &&
+    receipt.schema_version === "change-impact-validation-receipt/v1" && receipt.validation_contract === "change-impact-validator/v1" &&
+    receipt.canonicalization === "change-impact-canonical-json/v1" && receipt.digest_algorithm === "sha256" && PHASES.has(receipt.phase) &&
+    exactKeys(receipt.input_digests, ["capture", "expected", "assessment", "review"]) &&
+    [receipt.input_digests.capture, receipt.input_digests.expected].every((value) => typeof value === "string" && /^sha256:[0-9a-f]{64}$/.test(value)) &&
+    (receipt.phase === "discovery" ? receipt.input_digests.assessment === null && receipt.input_digests.review === null :
+      typeof receipt.input_digests.assessment === "string" && /^sha256:[0-9a-f]{64}$/.test(receipt.input_digests.assessment) &&
+      (receipt.phase === "completion" ? typeof receipt.input_digests.review === "string" && /^sha256:[0-9a-f]{64}$/.test(receipt.input_digests.review) : receipt.input_digests.review === null));
+}
+
+function validPriorResult(result) {
+  return isObject(result) && exactKeys(result, ["schema_version", "valid", "complete", "phase", "reasons", "receipt"]) &&
+    result.schema_version === "change-impact-validation-result/v1" && result.valid === true && typeof result.complete === "boolean" &&
+    PHASES.has(result.phase) && result.complete === (result.phase === "completion") && Array.isArray(result.reasons) && result.reasons.length === 0 &&
+    validReceipt(result.receipt) && result.phase === result.receipt.phase;
 }
 
 function isObject(value) {
@@ -252,6 +359,7 @@ function validateAssessment(assessment, capture, expected, phase, reasons) {
     nonBlank(actual.executed_source_identity) && nonBlank(actual.evidence_ref));
   if (!actualsValid) { reasons.push(issue("ACTUAL_VERIFICATIONS_INVALID")); return; }
   if (phase === "pre_build" && assessment.actual_verifications.length > 0) reasons.push(issue("PREBUILD_EXECUTION_NOT_ALLOWED"));
+  if (phase === "pre_build" && assessment.assessment_kind === "behavior" && consumedPlans.size === 0) reasons.push(issue("BEHAVIOR_PREBUILD_VERIFICATION_MISSING"));
   if (phase !== "discovery" && (capture.unknown_boundaries.some((boundary) => boundary.material) || assessment.impact_scope === "unresolved")) reasons.push(issue("MATERIAL_IMPACT_UNRESOLVED"));
   if (phase === "pre_build" && assessment.obligations.some((obligation) => obligation.disposition === "blocked")) reasons.push(issue("BLOCKED_IMPACT_UNRESOLVED"));
   if (phase === "completion") {
@@ -291,21 +399,31 @@ function validateReview(review, assessment, expected, reasons) {
     expectedBindings.get(binding.requirement_id).coverage_concern_id !== binding.coverage_concern_id)) reasons.push(issue("REVIEW_OBLIGATION_BINDING_INCOMPLETE"));
 }
 
-function validate({ phase, capture, expected, assessment, review }) {
+function validate({ phase, capture, expected, assessment, review, priorResult }) {
   const reasons = [];
-  if (!PHASES.has(phase)) return { valid: false, complete: false, phase: null, reasons: [issue("PHASE_INVALID")] };
+  if (!PHASES.has(phase)) return { schema_version: "change-impact-validation-result/v1", valid: false, complete: false, phase: null, reasons: [issue("PHASE_INVALID")], receipt: null };
+  const inputs = snapshotPhaseInputs(phase, capture, expected, assessment, review);
+  if (!inputs) return { schema_version: "change-impact-validation-result/v1", valid: false, complete: false, phase, reasons: [issue("INPUT_UNSAFE_SHAPE")], receipt: null };
+  ({ capture, expected, assessment, review } = inputs);
   validateExpected(expected, phase, reasons);
   if (reasons.length === 0) validateCapture(capture, expected, phase, assessment, reasons);
   if (phase !== "discovery" && reasons.length === 0) validateAssessment(assessment, capture, expected, phase, reasons);
   if (phase === "completion" && reasons.length === 0) validateReview(review, assessment, expected, reasons);
-  return { valid: reasons.length === 0, complete: phase === "completion" && reasons.length === 0, phase, reasons };
+  if (reasons.length > 0) return { schema_version: "change-impact-validation-result/v1", valid: false, complete: false, phase, reasons, receipt: null };
+  const receipt = receiptFor(phase, capture, expected, assessment, review);
+  if (priorResult !== undefined) {
+    const priorSnapshot = snapshotJson(priorResult, { bytes: 0 });
+    if (priorSnapshot === INVALID_SNAPSHOT || !validPriorResult(priorSnapshot)) reasons.push(issue("RECEIPT_SCHEMA_INVALID"));
+    else if (canonicalJson(priorSnapshot.receipt) !== canonicalJson(receipt)) reasons.push(issue("RECEIPT_MISMATCH"));
+  }
+  return { schema_version: "change-impact-validation-result/v1", valid: reasons.length === 0, complete: phase === "completion" && reasons.length === 0, phase, reasons, receipt: reasons.length === 0 ? receipt : null };
 }
 
 function parseArgs(argv) {
   const options = {};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]; const value = argv[index + 1];
-    if (!key || !["--phase", "--capture", "--expected", "--assessment", "--review"].includes(key) || value === undefined || options[key]) throw new Error("CLI_USAGE_INVALID");
+    if (!key || !["--phase", "--capture", "--expected", "--assessment", "--review", "--receipt"].includes(key) || value === undefined || options[key]) throw new Error("CLI_USAGE_INVALID");
     options[key] = value;
   }
   if (!options["--phase"] || !options["--capture"] || !options["--expected"] ||
@@ -324,12 +442,13 @@ function main() {
       expected: readDocument(options["--expected"]),
       assessment: options["--assessment"] ? readDocument(options["--assessment"]) : undefined,
       review: options["--review"] ? readDocument(options["--review"]) : undefined,
+      priorResult: options["--receipt"] ? readDocument(options["--receipt"]) : undefined,
     });
     process.stdout.write(`${JSON.stringify(result)}\n`);
     process.exitCode = result.valid ? 0 : 1;
   } catch (error) {
     const code = SAFE_ERROR_CODES.has(error?.message) ? error.message : "VALIDATOR_INPUT_ERROR";
-    process.stdout.write(`${JSON.stringify({ valid: false, complete: false, phase: null, reasons: [issue(code)] })}\n`);
+    process.stdout.write(`${JSON.stringify({ schema_version: "change-impact-validation-result/v1", valid: false, complete: false, phase: null, reasons: [issue(code)], receipt: null })}\n`);
     process.exitCode = 2;
   }
 }

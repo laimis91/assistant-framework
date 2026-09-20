@@ -13,6 +13,12 @@ const commonExample = JSON.parse(fs.readFileSync(path.join(__dirname, "..", ".."
 
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
+function reverseObjectKeys(value) {
+  if (Array.isArray(value)) return value.map(reverseObjectKeys);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).reverse().map(([key, child]) => [key, reverseObjectKeys(child)]));
+  return value;
+}
+
 function validDocuments() {
   const documents = clone(fixture);
   documents.expected.required_edges = clone(documents.capture.edges);
@@ -44,13 +50,17 @@ function validDocuments() {
 
 function codes(result) { return result.reasons.map((reason) => reason.code); }
 
-function runCli(documents, phase, mutate) {
+function runCli(documents, phase, mutate, priorResult, indentation) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "change-impact-"));
   if (mutate) mutate(documents, directory);
-  for (const [name, value] of Object.entries(documents)) fs.writeFileSync(path.join(directory, `${name}.json`), JSON.stringify(value));
+  for (const [name, value] of Object.entries(documents)) fs.writeFileSync(path.join(directory, `${name}.json`), JSON.stringify(value, null, indentation));
   const args = [path.join(process.cwd(), "tools/change-impact/validate-change-impact.cjs"), "--phase", phase, "--capture", path.join(directory, "capture.json"), "--expected", path.join(directory, "expected.json")];
   if (phase !== "discovery") args.push("--assessment", path.join(directory, "assessment.json"));
   if (phase === "completion") args.push("--review", path.join(directory, "review.json"));
+  if (priorResult !== undefined) {
+    fs.writeFileSync(path.join(directory, "receipt.json"), JSON.stringify(priorResult));
+    args.push("--receipt", path.join(directory, "receipt.json"));
+  }
   const child = spawnSync(process.execPath, args, { encoding: "utf8" });
   return { ...child, result: JSON.parse(child.stdout) };
 }
@@ -65,7 +75,7 @@ test("portable completion example is an executable protocol document", () => {
   assert.equal(validate({ phase: "completion", ...commonExample }).complete, true);
 });
 
-test("behavior completion rejects an all-unaffected assessment without a bound current verification", () => {
+test("behavior pre-build and completion reject an all-unaffected assessment without a bound current verification", () => {
   const documents = clone(commonExample);
   documents.assessment.obligations = documents.assessment.obligations.map((obligation) => ({
     ...obligation,
@@ -77,7 +87,12 @@ test("behavior completion rejects an all-unaffected assessment without a bound c
   documents.assessment.equivalence_groups = [];
   documents.assessment.actual_verifications = [];
 
-  assert.equal(validate({ phase: "pre_build", ...documents }).valid, true);
+  assert.equal(validate({ phase: "discovery", capture: documents.capture, expected: documents.expected }).valid, true);
+  const preBuildResult = validate({ phase: "pre_build", ...documents });
+  assert.equal(preBuildResult.valid, false);
+  const preBuildCliResult = runCli(documents, "pre_build");
+  assert.equal(preBuildCliResult.status, 1);
+  assert.deepEqual(preBuildCliResult.result, preBuildResult);
   const apiResult = validate({ phase: "completion", ...documents });
   assert.equal(apiResult.complete, false);
   assert.ok(codes(apiResult).includes("BEHAVIOR_COMPLETION_VERIFICATION_MISSING"));
@@ -146,7 +161,17 @@ test("shared and material captures record a discovery root, while compact cosmet
   cosmetic.assessment.impact_scope = "not_applicable";
   cosmetic.assessment.assessment_kind = "cosmetic";
   cosmetic.capture.roots = [];
+  cosmetic.assessment.obligations = cosmetic.assessment.obligations.map((obligation) => ({
+    ...obligation,
+    disposition: "unaffected",
+    verification_id: null,
+    equivalence_group_id: null,
+  }));
+  cosmetic.assessment.verification_plans = [];
+  cosmetic.assessment.equivalence_groups = [];
+  cosmetic.assessment.actual_verifications = [];
   assert.equal(validate({ phase: "discovery", capture: cosmetic.capture, expected: cosmetic.expected }).valid, true);
+  assert.equal(validate({ phase: "pre_build", ...cosmetic }).valid, true);
 });
 
 test("shared inventory requires captured consumers and contract/state-transition requirements", () => {
@@ -260,7 +285,7 @@ test("invalid phase diagnostics retain PHASE_INVALID without echoing untrusted p
   assert.equal(child.stdout.includes(sentinel), false);
 });
 
-test("canonical pre_build passes through the API and CLI with the same result", () => {
+test("canonical planned pre_build retains unaffected plus bound direct and equivalence plans through the API and CLI", () => {
   const documents = validDocuments();
   documents.assessment.actual_verifications = [];
   const apiResult = validate({ phase: "pre_build", ...documents });
@@ -268,6 +293,174 @@ test("canonical pre_build passes through the API and CLI with the same result", 
   assert.equal(apiResult.valid, true);
   assert.equal(cliResult.status, 0);
   assert.deepEqual(cliResult.result, apiResult);
+});
+
+test("validation receipts bind current relevant parsed inputs for API and CLI reuse", () => {
+  const documents = validDocuments();
+  documents.assessment.actual_verifications = [];
+  const fresh = validate({ phase: "pre_build", ...documents });
+  assert.deepEqual(fresh.receipt, {
+    schema_version: "change-impact-validation-receipt/v1",
+    validation_contract: "change-impact-validator/v1",
+    canonicalization: "change-impact-canonical-json/v1",
+    digest_algorithm: "sha256",
+    phase: "pre_build",
+    input_digests: fresh.receipt.input_digests,
+  });
+  assert.ok(Object.values(fresh.receipt.input_digests).every((value) => value === null || /^sha256:[0-9a-f]{64}$/.test(value)));
+  assert.equal(fresh.receipt.input_digests.review, null);
+
+  const apiReuse = validate({ phase: "pre_build", ...documents, priorResult: fresh });
+  const cliReuse = runCli(documents, "pre_build", null, fresh);
+  assert.deepEqual(apiReuse, fresh);
+  assert.equal(cliReuse.status, 0);
+  assert.deepEqual(cliReuse.result, fresh);
+
+  const reordered = clone(documents);
+  reordered.capture = Object.fromEntries(Object.entries(reordered.capture).reverse());
+  assert.deepEqual(validate({ phase: "pre_build", ...reordered }).receipt, fresh.receipt);
+  const reorderedArrays = clone(documents);
+  reorderedArrays.capture.roots.reverse();
+  assert.notEqual(validate({ phase: "pre_build", ...reorderedArrays }).receipt.input_digests.capture, fresh.receipt.input_digests.capture);
+
+  const changedAssessment = clone(documents);
+  changedAssessment.assessment.verification_plans[0].oracle = "changed-current-oracle";
+  const mismatch = validate({ phase: "pre_build", ...changedAssessment, priorResult: fresh });
+  assert.equal(mismatch.valid, false);
+  assert.equal(mismatch.receipt, null);
+  assert.ok(codes(mismatch).includes("RECEIPT_MISMATCH"));
+
+  const malformed = validate({ phase: "pre_build", ...documents, priorResult: { valid: true } });
+  assert.equal(malformed.receipt, null);
+  assert.ok(codes(malformed).includes("RECEIPT_SCHEMA_INVALID"));
+  const outerPhaseMismatch = clone(fresh);
+  outerPhaseMismatch.phase = "completion";
+  assert.ok(codes(validate({ phase: "pre_build", ...documents, priorResult: outerPhaseMismatch })).includes("RECEIPT_SCHEMA_INVALID"));
+  const outerCompletionMismatch = clone(fresh);
+  outerCompletionMismatch.complete = true;
+  assert.ok(codes(validate({ phase: "pre_build", ...documents, priorResult: outerCompletionMismatch })).includes("RECEIPT_SCHEMA_INVALID"));
+  const phaseSlotMismatch = clone(fresh);
+  phaseSlotMismatch.receipt.input_digests.review = phaseSlotMismatch.receipt.input_digests.capture;
+  assert.ok(codes(validate({ phase: "pre_build", ...documents, priorResult: phaseSlotMismatch })).includes("RECEIPT_SCHEMA_INVALID"));
+  const invalidCurrent = clone(documents);
+  invalidCurrent.assessment.obligations.pop();
+  const invalidResult = validate({ phase: "pre_build", ...invalidCurrent, priorResult: fresh });
+  assert.equal(invalidResult.receipt, null);
+  assert.ok(codes(invalidResult).includes("CAPTURE_REQUIREMENT_OBLIGATION_MISSING"));
+
+  const completion = validDocuments();
+  const phaseMismatch = validate({ phase: "completion", ...completion, priorResult: fresh });
+  assert.ok(codes(phaseMismatch).includes("RECEIPT_MISMATCH"));
+  const discovery = validate({ phase: "discovery", capture: documents.capture, expected: documents.expected, assessment: { ignored: true } });
+  assert.equal(discovery.receipt.input_digests.assessment, null);
+  assert.equal(discovery.receipt.input_digests.review, null);
+});
+
+test("receipts reuse every phase and reject valid current capture, expected, and review changes", () => {
+  for (const phase of ["discovery", "pre_build", "completion"]) {
+    const documents = validDocuments();
+    if (phase === "pre_build") documents.assessment.actual_verifications = [];
+    const fresh = validate({ phase, ...documents });
+    assert.equal(fresh.valid, true, phase);
+    assert.deepEqual(validate({ phase, ...documents, priorResult: fresh }), fresh, `${phase} API`);
+    const cli = runCli(documents, phase, null, fresh);
+    assert.equal(cli.status, 0, `${phase} CLI`);
+    assert.deepEqual(cli.result, fresh, `${phase} CLI result`);
+  }
+
+  const preBuild = validDocuments();
+  preBuild.assessment.actual_verifications = [];
+  const priorPreBuild = validate({ phase: "pre_build", ...preBuild });
+  const changedCapture = clone(preBuild);
+  changedCapture.capture.roots[0].source_id = "current-capture-changed";
+  assert.ok(codes(validate({ phase: "pre_build", ...changedCapture, priorResult: priorPreBuild })).includes("RECEIPT_MISMATCH"));
+  const changedExpected = clone(preBuild);
+  changedExpected.expected.authority_id = "current-expected-changed";
+  assert.ok(codes(validate({ phase: "pre_build", ...changedExpected, priorResult: priorPreBuild })).includes("RECEIPT_MISMATCH"));
+
+  const completion = validDocuments();
+  const priorCompletion = validate({ phase: "completion", ...completion });
+  const reorderedReview = clone(completion);
+  reorderedReview.review.bindings.reverse();
+  assert.equal(validate({ phase: "completion", ...reorderedReview }).valid, true);
+  assert.ok(codes(validate({ phase: "completion", ...reorderedReview, priorResult: priorCompletion })).includes("RECEIPT_MISMATCH"));
+});
+
+test("receipt canonicalization ignores recursive object order and CLI whitespace, while API admission fails safely", () => {
+  const documents = validDocuments();
+  documents.assessment.actual_verifications = [];
+  const fresh = validate({ phase: "pre_build", ...documents });
+  const reordered = reverseObjectKeys(documents);
+  assert.deepEqual(validate({ phase: "pre_build", ...reordered }).receipt, fresh.receipt);
+  const compactCli = runCli(documents, "pre_build");
+  const spacedCli = runCli(documents, "pre_build", null, undefined, 2);
+  assert.deepEqual(spacedCli.result.receipt, compactCli.result.receipt);
+
+  const aliased = validDocuments();
+  for (const actual of aliased.assessment.actual_verifications) actual.executed_snapshot = aliased.assessment.snapshot;
+  const aliasedResult = validate({ phase: "completion", ...aliased });
+  const jsonClonedResult = validate({ phase: "completion", ...clone(aliased) });
+  assert.equal(aliasedResult.valid, true);
+  assert.deepEqual(aliasedResult, jsonClonedResult);
+
+  const cyclic = validDocuments();
+  cyclic.assessment.actual_verifications = [];
+  cyclic.capture.snapshot.loop = cyclic.capture.snapshot;
+  const cyclicResult = validate({ phase: "pre_build", ...cyclic });
+  assert.equal(cyclicResult.valid, false);
+  assert.equal(cyclicResult.receipt, null);
+  const oversized = validDocuments();
+  oversized.assessment.actual_verifications = [];
+  oversized.capture.roots[0].source_id = "x".repeat(MAX_BYTES + 1);
+  const oversizedResult = validate({ phase: "pre_build", ...oversized });
+  assert.equal(oversizedResult.valid, false);
+  assert.equal(oversizedResult.receipt, null);
+
+  const dense = validDocuments();
+  dense.assessment.actual_verifications = [];
+  const densePrior = validate({ phase: "pre_build", ...dense });
+  const sparse = clone(dense);
+  sparse.capture.unknown_boundaries = Array(1);
+  for (const priorResult of [undefined, densePrior]) {
+    const sparseResult = validate({ phase: "pre_build", ...sparse, priorResult });
+    assert.equal(sparseResult.receipt, null);
+    assert.ok(codes(sparseResult).includes("INPUT_UNSAFE_SHAPE"));
+  }
+
+  const accessor = clone(dense);
+  let accessorReads = 0;
+  Object.defineProperty(accessor.capture, "capture_id", { enumerable: true, get() { accessorReads += 1; return "capture-example-current"; } });
+  for (const priorResult of [undefined, densePrior]) {
+    const accessorResult = validate({ phase: "pre_build", ...accessor, priorResult });
+    assert.equal(accessorResult.receipt, null);
+    assert.ok(codes(accessorResult).includes("INPUT_UNSAFE_SHAPE"));
+  }
+  assert.equal(accessorReads, 0);
+  const proxy = clone(dense);
+  proxy.capture = new Proxy(proxy.capture, {});
+  assert.ok(codes(validate({ phase: "pre_build", ...proxy })).includes("INPUT_UNSAFE_SHAPE"));
+  const symbol = clone(dense);
+  symbol.capture[Symbol("unexpected")] = "value";
+  assert.ok(codes(validate({ phase: "pre_build", ...symbol })).includes("INPUT_UNSAFE_SHAPE"));
+  const nonEnumerable = clone(dense);
+  Object.defineProperty(nonEnumerable.capture, "hidden", { value: "value", enumerable: false });
+  assert.ok(codes(validate({ phase: "pre_build", ...nonEnumerable })).includes("INPUT_UNSAFE_SHAPE"));
+  const extraArrayKey = clone(dense);
+  extraArrayKey.capture.unknown_boundaries.extra = "value";
+  for (const priorResult of [undefined, densePrior]) assert.ok(codes(validate({ phase: "pre_build", ...extraArrayKey, priorResult })).includes("INPUT_UNSAFE_SHAPE"));
+  const frozen = clone(dense);
+  Object.freeze(frozen.capture);
+  const frozenResult = validate({ phase: "pre_build", ...frozen });
+  assert.equal(frozenResult.valid, true);
+  assert.deepEqual(validate({ phase: "pre_build", ...frozen, priorResult: frozenResult }), frozenResult);
+
+  const prior = fresh;
+  assert.equal(runCli(documents, "pre_build", null, { valid: true }).status, 1);
+  assert.equal(runCli(documents, "pre_build", null, "x".repeat(MAX_BYTES + 1)).status, 2);
+  let deep = {};
+  for (let index = 0; index <= 17; index += 1) deep = { nested: deep };
+  assert.equal(runCli(documents, "pre_build", null, deep).status, 2);
+  assert.equal(runCli(documents, "pre_build", null, prior).status, 0);
 });
 
 test("completion binds direct and equivalence verification records to the executed snapshot", () => {

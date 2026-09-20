@@ -85,6 +85,18 @@ abort "README command retains legacy phase spelling" if readme.include?("--phase
 abort "README command omits canonical phase" unless readme.include?("--phase pre_build")
 validator = File.read(File.join(framework, "tools/change-impact/validate-change-impact.cjs"))
 abort "runtime phase enum drifted" unless validator.include?('new Set(["discovery", "pre_build", "completion"])')
+abort "runtime result schema or receipt reuse drifted" unless validator.include?("change-impact-validation-result/v1") && validator.include?("change-impact-validation-receipt/v1") && validator.include?("RECEIPT_SCHEMA_INVALID") && validator.include?("RECEIPT_MISMATCH")
+abort "behavior pre-build still permits no planned verification" unless validator.include?("BEHAVIOR_PREBUILD_VERIFICATION_MISSING")
+protocol_rules = protocol.fetch("identity_rules")
+abort "protocol omits receipt reuse semantics" unless protocol_rules.any? { |rule| rule.include?("--receipt") && rule.include?("canonical parsed JSON") }
+[
+  ["skills/assistant-workflow/references/change-impact.md", "--receipt validator_result_ref"],
+  ["skills/assistant-debugging/references/change-impact.md", "reuse reruns the checker with"],
+  ["skills/assistant-review/references/change-impact.md", "reuse reruns the checker with `--receipt`"]
+].each do |path, expectation|
+  content = File.read(File.join(framework, path))
+  abort "#{path} omits receipt-bound reuse" unless content.include?(expectation) && content.include?("--receipt") && content.include?("parsed inputs")
+end
 RUBY
 then
     pass
@@ -412,8 +424,23 @@ end
   context = field.call(input.fetch("fields"), "change_impact_context")
   phase = field.call(context.fetch("object_fields"), "phase")
   assessment = field.call(context.fetch("object_fields"), "assessment_ref")
+  result_ref = field.call(context.fetch("object_fields"), "validator_result_ref")
   abort "#{skill} discovery phase is absent" unless phase && phase["required"] == "conditional" && phase["condition"] == "status == valid" && phase["enum_values"] == ["discovery", "pre_build", "completion"]
   abort "#{skill} discovery still fabricates assessment" unless assessment && assessment["condition"] == "status == valid and phase in [pre_build, completion]"
+  abort "#{skill} valid context omits validator result ref" unless result_ref && result_ref["required"] == "conditional" && result_ref["condition"] == "status == valid" && context.fetch("validation").include?("validator result")
+  accepts_context = lambda do |payload|
+    context.fetch("object_fields").all? do |schema|
+      required = schema["required"] == true || (schema["condition"] == "status == valid" && payload["status"] == "valid") || (schema["condition"] == "status == valid and phase in [pre_build, completion]" && payload["status"] == "valid" && ["pre_build", "completion"].include?(payload["phase"])) || (schema["condition"] == "status in [gaps_reported, blocked, invalid]" && ["gaps_reported", "blocked", "invalid"].include?(payload["status"]))
+      !required || (payload.key?(schema["name"]) && !payload[schema["name"]].to_s.empty?)
+    end
+  end
+  valid_context = {"artifact_identity" => "impact-1", "status" => "valid", "phase" => "pre_build", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "assessment_ref" => "assessment.json", "validator_result_ref" => "result.json"}
+  abort "#{skill} accepts valid context without result ref" if accepts_context.call(valid_context.reject { |key, _| key == "validator_result_ref" })
+  abort "#{skill} rejects valid context with result ref" unless accepts_context.call(valid_context)
+  %w[gaps_reported blocked invalid].each do |status|
+    payload = {"artifact_identity" => "impact-1", "status" => status, "gap_or_blocker_ref" => "gap.json"}
+    abort "#{skill} non-valid context requires result ref" unless accepts_context.call(payload)
+  end
 end
 
 review_gates = load.call(File.join(framework, "skills/assistant-review/contracts/phase-gates.yaml"))
@@ -456,7 +483,7 @@ mutation_handoffs.each do |role, (contract, handoff_name)|
   abort "#{role} permits optional pre-build assessment" unless assessment && assessment["required"] == true
   abort "#{role} permits non-valid mutation evidence" unless status && status["enum_values"] == ["valid"]
   abort "#{role} does not require current resolved pre-build bindings" unless carrier["validation"].to_s.include?("current valid pre_build") && carrier["validation"].to_s.include?("resolve")
-  abort "#{role} permits stale pre-build evidence reuse" unless carrier.fetch("validation").include?("reuse requires demonstrably current same-input evidence")
+  abort "#{role} permits stale pre-build evidence reuse" unless carrier.fetch("validation").include?("--receipt validator_result_ref") && carrier.fetch("validation").include?("current valid pre_build")
   abort "BuilderTester permits evidence reuse after CodeWriter mutation" if role == "BuilderTester" && !carrier.fetch("validation").include?("BuilderTester must not reuse CodeWriter's pre-build result after earlier mutations")
 
   valid_payload = {"phase" => "pre_build", "status" => "valid", "assessment_ref" => "assessment.json", "artifact_identity" => "impact-1", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "validator_result_ref" => "result.json", "impact_scope" => "shared"}

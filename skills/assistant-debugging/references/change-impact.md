@@ -19,8 +19,8 @@ including a regression-test write, or Fixer dispatch, shared, unresolved, or
 explicitly expanded impact must run or revalidate the common checker against the referenced capture,
 independent expected context, and assessment. The current valid `pre_build`
 result must resolve against the fix packet; a status or result ref alone is
-insufficient. Reuse is allowed only for demonstrably current same-input
-evidence. Preserve the same artifact identity through expanded verification. An expanded fix completion
+insufficient. Fresh runs omit `--receipt`; reuse reruns the checker with
+`--receipt` pointing to `validator_result_ref`, which must match the current parsed inputs. Preserve the same artifact identity through expanded verification. An expanded fix completion
 needs actual current verification and assistant-review's projection of its
 existing canonical manifest, ledger, snapshot, and concern bindings; that
 projection never replaces assistant-review's own terminal coverage/result.

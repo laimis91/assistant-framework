@@ -27,6 +27,9 @@ node tools/change-impact/validate-change-impact.cjs --phase pre_build \
 node tools/change-impact/validate-change-impact.cjs --phase completion \
   --capture capture.json --expected expected-context.json --assessment assessment.json \
   --review review.json
+node tools/change-impact/validate-change-impact.cjs --phase pre_build \
+  --capture capture.json --expected expected-context.json --assessment assessment.json \
+  --receipt prior-result.json
 ```
 
 The command writes one JSON result with stable reason codes and exits zero only
@@ -35,6 +38,25 @@ run against the current expected `base_id`/`candidate_id`/`universe_id` snapshot
 plus one exact review binding per captured requirement obligation. Missing Node 22 or a
 missing installed checker is a blocker for a triggered deterministic gate; do
 not replace it with a manual pass.
+
+A valid result is `change-impact-validation-result/v1` and includes a
+`change-impact-validation-receipt/v1`. The receipt carries only phase-relevant
+canonical JSON SHA-256 input digests: capture and expected for discovery, plus
+assessment for pre-build, and plus review for completion. To reuse a prior
+result, pass that complete prior result with `--receipt`; fresh runs omit
+`--receipt`. Fresh validation omits the prior result. The validator reruns
+current validation first and then requires an exact receipt match. A missing,
+legacy, malformed, or mismatched receipt is rejected.
+
+The object API snapshots phase-relevant plain JSON by own data descriptors
+before validation and hashing. It rejects accessors, proxies, symbols,
+non-enumerable or extra array properties, holes, non-JSON values, and cycles.
+
+Canonical identity recursively sorts object keys by JavaScript UTF-16 code
+units, retains array order, encodes JSON as UTF-8, and hashes with SHA-256.
+Whitespace and object-key order do not affect reuse; array order does. A change
+to `validation_contract` or a receipt version invalidates reuse. Receipts are
+identity checksums, not signatures or proof of exhaustive dependency discovery.
 
 Discovery can record material unknown boundaries. Pre-build and completion
 reject them until their impact is resolved. A waiver records residual risk only
@@ -67,7 +89,7 @@ valid examples.
   internally consistent.
 * Assessment: `change-impact-assessment/v1` creates exactly one canonical
   obligation per captured contract/state-transition requirement. `preserve` and `change` require planned verification;
-  a behavior completion must retain at least one such bound verification and its current execution record. `unaffected` needs a rationale and cannot carry verification; `waived` and
+  a behavior pre-build and completion must retain at least one such bound verification; completion also requires its current execution record. `unaffected` needs a rationale and cannot carry verification; `waived` and
   `blocked` remain unverified residual risk and cannot pass completion.
   `change` and `waived` also require an opaque `authorization_ref` to existing
   authority; the checker does not interpret it or create new authorization.

@@ -1628,7 +1628,7 @@ handoffs:
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Current resolved pre-build artifact envelope that authorizes this CodeWriter mutation dispatch."
-        validation: "The common checker was run or revalidated against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity and validator_result_ref against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, and reuse requires demonstrably current same-input evidence. The CodeWriter may not use discovery or completion evidence as mutation authorization."
+        validation: "The common checker was freshly run, or was rerun with --receipt validator_result_ref against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient. The CodeWriter may not use discovery or completion evidence as mutation authorization."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
           - {name: phase, type: enum, required: true, enum_values: [pre_build]}
@@ -2280,7 +2280,7 @@ handoffs:
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Current resolved pre-build artifact envelope that authorizes this BuilderTester mutation dispatch."
-        validation: "The common checker was run or revalidated against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity and validator_result_ref against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, reuse requires demonstrably current same-input evidence, and BuilderTester must not reuse CodeWriter's pre-build result after earlier mutations."
+        validation: "The common checker was freshly run, or was rerun with --receipt validator_result_ref against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, and BuilderTester must not reuse CodeWriter's pre-build result after earlier mutations."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
           - {name: phase, type: enum, required: true, enum_values: [pre_build]}

@@ -17,6 +17,8 @@ Use the existing canonical `scope_manifest`, `coverage_ledger`, current review
 snapshot, and concern IDs to create the v1 completion projection. Map each
 captured requirement once; do not create an impact-specific coverage ledger.
 Read-only audit can identify absent/stale mappings and report the gap. Review
-fix must refresh its frozen snapshot after mutation. A valid impact projection
+fix must refresh its frozen snapshot after mutation. Fresh runs omit
+`--receipt`; reuse reruns the checker with `--receipt` pointing to
+`validator_result_ref`, which must match the current parsed inputs. A valid impact projection
 never replaces `final_summary.coverage_complete`, required terminal passes, or
 the CLEAN/ISSUES_FIXED decision.

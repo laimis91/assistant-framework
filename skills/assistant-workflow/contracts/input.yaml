@@ -137,8 +137,8 @@ fields:
   - name: change_impact_context
     type: object
     required: false
-    description: "Expanded assessment refs."
-    validation: "Includes identity, phase, capture, expected context, and an assessment only for pre-build or completion."
+    description: "Expanded refs."
+    validation: "Valid includes identity, phase, refs, validator result; assessment pre-build/completion."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
@@ -146,6 +146,7 @@ fields:
       - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+      - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
     default: null
     on_missing: infer

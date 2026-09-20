@@ -34,7 +34,7 @@ fields:
     type: object
     required: false
     description: "Common change-impact artifact and independent expected authority for a review with shared, unresolved, or explicitly carried expanded impact."
-    validation: "Uses the supplied artifact_identity, capture/expected/assessment refs, and current review scope. Read-only audit may report a missing projection or material gap but cannot claim CLEAN from expanded impact evidence."
+    validation: "Uses artifact identity, refs, validator result when valid, and review scope. Read-only audit may report gaps but cannot claim CLEAN from expanded impact evidence."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
@@ -42,6 +42,7 @@ fields:
       - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+      - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
     default: null
     on_missing: infer
