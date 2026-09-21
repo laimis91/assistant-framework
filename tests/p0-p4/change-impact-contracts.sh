@@ -463,6 +463,28 @@ end
 review_gates = load.call(File.join(framework, "skills/assistant-review/contracts/phase-gates.yaml"))
 entry = review_gates.fetch("gates").find { |gate| gate["phase"] == "ENTRY" }
 entry_impact = entry.fetch("exit_assertions").find { |assertion| assertion["id"] == "E_CHANGE_IMPACT" }
+entry_applicability = entry.fetch("exit_assertions").find { |assertion| assertion["id"] == "E_CHANGE_IMPACT_APPLICABILITY" }
+abort "review ENTRY can skip missing/local/cosmetic applicability" unless entry_applicability && !entry_applicability.key?("condition")
+abort "review ENTRY selects expanded scope before applicability" unless entry.fetch("exit_assertions").index(entry_applicability) < entry.fetch("exit_assertions").index(entry_impact)
+%w[change_impact_applicability impact_scope applicability_reason causal_evidence_ref expanded_artifact_carried not_applicable].each do |term|
+  abort "review ENTRY applicability omits #{term}" unless entry_applicability.fetch("check").include?(term)
+end
+abort "review ENTRY applicability has no pre-dispatch recovery" unless entry_applicability.fetch("on_fail").include?("before dispatch")
+abort "review ENTRY expands compact applicability" unless entry_impact["condition"] == "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+review_input = load.call(File.join(framework, "skills/assistant-review/contracts/input.yaml"))
+applicability = field.call(review_input.fetch("fields"), "change_impact_applicability")
+accepts_applicability = lambda do |payload|
+  payload.is_a?(Hash) && applicability.fetch("object_fields").all? do |schema|
+    required = schema["required"] == true || (schema["condition"] == "impact_scope == local" && payload["impact_scope"] == "local")
+    (!required || (payload.key?(schema["name"]) && !payload[schema["name"]].to_s.empty?)) &&
+      (schema["type"] != "enum" || !payload.key?(schema["name"]) || schema.fetch("enum_values").include?(payload[schema["name"]]))
+  end
+end
+local = {"impact_scope" => "local", "applicability_reason" => "bounded causal path", "causal_evidence_ref" => "tests/local-route", "expanded_artifact_carried" => false}
+abort "review accepts missing applicability" if accepts_applicability.call(nil) || accepts_applicability.call({})
+abort "review accepts local without causal evidence" if accepts_applicability.call(local.reject { |key, _| key == "causal_evidence_ref" })
+abort "review rejects compact local applicability" unless accepts_applicability.call(local)
+abort "review rejects compact cosmetic applicability" unless accepts_applicability.call({"impact_scope" => "not_applicable", "applicability_reason" => "cosmetic only", "expanded_artifact_carried" => false})
 abort "review ENTRY requires discovery assessment" unless entry_impact["check"].include?("discovery requires identity/capture/expected refs") && entry_impact["check"].include?("assessment is required only for pre-build or completion")
 
 handoffs = load.call(File.join(framework, "skills/assistant-workflow/contracts/handoffs.yaml"))

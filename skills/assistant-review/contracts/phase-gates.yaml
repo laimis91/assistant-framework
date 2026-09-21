@@ -34,8 +34,12 @@ gates:
         check: "mode is resolved (review-fix or audit)"
         on_fail: "Ask exactly: 'Should I only report findings, or also implement and verify fixes?' Stop before Reviewer dispatch or source mutation until the user answers. Do not use authorship, branch/PR ownership, platform, or connector as modification authorization."
 
+      - id: E_CHANGE_IMPACT_APPLICABILITY
+        check: "Before dispatch, every behavior, cosmetic, or locality review records change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
+        on_fail: "Keep the audit/fix result incomplete; load references/change-impact.md and record valid applicability before dispatch or expanded-scope selection."
+
       - id: E_CHANGE_IMPACT
-        check: "Every behavior review records compact applicability evidence. When impact is shared or materially unresolved, or an expanded artifact is explicitly carried, discovery requires identity/capture/expected refs; assessment is required only for pre-build or completion. The batch scope/coverage obligations include an independent locality, captured-consumer, material-transition, and canonical-mapping challenge. Evidenced local work retains ordinary review obligations without a common-checker gate."
+        check: "When impact is shared or materially unresolved, or an expanded artifact is explicitly carried, discovery requires identity/capture/expected refs; assessment is required only for pre-build or completion. The batch scope/coverage obligations include an independent locality, captured-consumer, material-transition, and canonical-mapping challenge. Evidenced local work retains ordinary review obligations without a common-checker gate."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         on_fail: "Keep the audit/fix result incomplete, load references/change-impact.md, and repair or report the missing evidence before dispatch."
 

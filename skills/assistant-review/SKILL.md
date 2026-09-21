@@ -21,9 +21,7 @@ non-empty `reviewed_scope` so workflow consumers can use the producer packet.
 
 Selectors resolve canonical fields. Entry loads no review guidance. A missing or
 invalid selector uses `load_full_authoritative_file`: validate that full
-canonical file and record recovery. Run the bounded review policy, keep interim
-results inside its loop, and present one evidence-calibrated result. Required QA
-follows build/test and code-review evidence.
+canonical file and record recovery.
 
 ## Goal
 
