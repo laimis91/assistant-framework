@@ -19,6 +19,7 @@ p0p4_suite_is_excluded() {
 source "$P0P4_SUITE_DIR/repo-guard-contracts.sh"
 source "$P0P4_SUITE_DIR/harness-controller-contracts.sh"
 source "$P0P4_SUITE_DIR/installer-contracts.sh"
+source "$P0P4_SUITE_DIR/change-impact-contracts.sh"
 source "$P0P4_SUITE_DIR/windows-installer-contracts.sh"
 source "$P0P4_SUITE_DIR/hook-retirement-contracts.sh"
 source "$P0P4_SUITE_DIR/sol-native-overhead-contracts.sh"

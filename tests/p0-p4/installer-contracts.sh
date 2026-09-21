@@ -84,7 +84,7 @@ else
     fail "first install failed; see /tmp/p0p4-install-1.err"
 fi
 
-test_start "Codex single-skill install keeps routing metadata in the installed skill"
+test_start "Codex selected workflow install keeps routing metadata and its canonical review producer"
 INSTALL_HOME_SKILL_TABLE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_SKILL_TABLE"
 if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-single-skill-table.out 2>/tmp/p0p4-install-single-skill-table.err; then
@@ -92,10 +92,10 @@ if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent cod
     installed_skills_dir="$INSTALL_HOME_SKILL_TABLE/.codex/skills"
     assistant_skill_rows="$(count_occurrences "^| assistant-" "$agents_file")"
 
-    if [[ ! -d "$installed_skills_dir/assistant-workflow" ]]; then
-        fail "expected assistant-workflow to be installed"
-    elif [[ -d "$installed_skills_dir/assistant-review" || -d "$installed_skills_dir/assistant-docs" ]]; then
-        fail "expected single-skill install to avoid installing assistant-review and assistant-docs"
+    if [[ ! -d "$installed_skills_dir/assistant-workflow" || ! -d "$installed_skills_dir/assistant-review" ]]; then
+        fail "expected assistant-workflow and its canonical assistant-review producer to be installed"
+    elif [[ -d "$installed_skills_dir/assistant-docs" ]]; then
+        fail "expected selected workflow install to avoid unrelated assistant-docs"
     elif [[ "$assistant_skill_rows" != "0" ]]; then
         fail "expected lean Codex AGENTS.md to avoid duplicating installed skill routing tables; found $assistant_skill_rows rows"
     elif ! grep -Fq "Codex uses installed skills through native skill routing." "$agents_file"; then
@@ -105,6 +105,177 @@ if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent cod
     fi
 else
     fail "single-skill Codex install failed; see /tmp/p0p4-install-single-skill-table.err"
+fi
+
+test_start "selected bundled requirements close transitively without duplicate cycle copies"
+INSTALL_HOME_REQUIRES_CLOSURE="$(mktemp -d)"
+REQUIRES_CLOSURE_FRAMEWORK_ROOT="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_REQUIRES_CLOSURE" "$REQUIRES_CLOSURE_FRAMEWORK_ROOT"
+cp "$FRAMEWORK_DIR/install.sh" "$REQUIRES_CLOSURE_FRAMEWORK_ROOT/install.sh"
+for closure_skill in assistant-closure-a assistant-closure-b assistant-closure-c; do
+    mkdir -p "$REQUIRES_CLOSURE_FRAMEWORK_ROOT/skills/$closure_skill"
+done
+cat >"$REQUIRES_CLOSURE_FRAMEWORK_ROOT/skills/assistant-closure-a/SKILL.md" <<'EOF'
+---
+name: assistant-closure-a
+description: Closure root fixture.
+requires:
+  - assistant-closure-b
+  - assistant-closure-c
+---
+EOF
+cat >"$REQUIRES_CLOSURE_FRAMEWORK_ROOT/skills/assistant-closure-b/SKILL.md" <<'EOF'
+---
+name: assistant-closure-b
+description: Closure transitive fixture.
+requires:
+  - assistant-closure-c
+---
+EOF
+cat >"$REQUIRES_CLOSURE_FRAMEWORK_ROOT/skills/assistant-closure-c/SKILL.md" <<'EOF'
+---
+name: assistant-closure-c
+description: Closure cycle fixture.
+requires:
+  - assistant-closure-a
+---
+EOF
+if HOME="$INSTALL_HOME_REQUIRES_CLOSURE" bash "$REQUIRES_CLOSURE_FRAMEWORK_ROOT/install.sh" --agent codex --skill assistant-closure-a --dry-run >/tmp/p0p4-install-requires-closure-dry.out 2>/tmp/p0p4-install-requires-closure-dry.err \
+    && grep -Fq -- "-> $INSTALL_HOME_REQUIRES_CLOSURE/.codex/skills/assistant-closure-a/" /tmp/p0p4-install-requires-closure-dry.out \
+    && grep -Fq -- "-> $INSTALL_HOME_REQUIRES_CLOSURE/.codex/skills/assistant-closure-b/" /tmp/p0p4-install-requires-closure-dry.out \
+    && grep -Fq -- "-> $INSTALL_HOME_REQUIRES_CLOSURE/.codex/skills/assistant-closure-c/" /tmp/p0p4-install-requires-closure-dry.out \
+    && [[ ! -e "$INSTALL_HOME_REQUIRES_CLOSURE/.codex" && ! -e "$INSTALL_HOME_REQUIRES_CLOSURE/.agents" ]] \
+    && HOME="$INSTALL_HOME_REQUIRES_CLOSURE" bash "$REQUIRES_CLOSURE_FRAMEWORK_ROOT/install.sh" --agent codex --skill assistant-closure-a >/tmp/p0p4-install-requires-closure.out 2>/tmp/p0p4-install-requires-closure.err; then
+    installed_closure_skills="$(find "$INSTALL_HOME_REQUIRES_CLOSURE/.codex/skills" -mindepth 1 -maxdepth 1 -type d -name 'assistant-closure-*' -exec basename {} \; | sort | tr '\n' ' ')"
+    if [[ "$installed_closure_skills" == "assistant-closure-a assistant-closure-b assistant-closure-c " ]] \
+        && [[ "$(count_occurrences 'assistant-closure-a ->' /tmp/p0p4-install-requires-closure.out)" == "1" ]] \
+        && [[ "$(count_occurrences 'assistant-closure-b ->' /tmp/p0p4-install-requires-closure.out)" == "1" ]] \
+        && [[ "$(count_occurrences 'assistant-closure-c ->' /tmp/p0p4-install-requires-closure.out)" == "1" ]]; then
+        pass
+    else
+        fail "selected bundled requirement closure did not install each cycle member exactly once"
+    fi
+else
+    fail "selected bundled requirement closure or dry-run failed"
+fi
+
+test_start "selected custom root supports an empty assistant inventory and advisory external requires"
+INSTALL_HOME_EMPTY_INVENTORY="$(mktemp -d)"
+EMPTY_INVENTORY_FRAMEWORK_ROOT="$(mktemp -d)"
+EMPTY_INVENTORY_SKILL_NAME="custom-root-$(basename "$EMPTY_INVENTORY_FRAMEWORK_ROOT")"
+EMPTY_INVENTORY_SKILL="$EMPTY_INVENTORY_FRAMEWORK_ROOT/skills/$EMPTY_INVENTORY_SKILL_NAME"
+p0p4_register_cleanup "$INSTALL_HOME_EMPTY_INVENTORY" "$EMPTY_INVENTORY_FRAMEWORK_ROOT"
+mkdir -p "$EMPTY_INVENTORY_SKILL"
+cp "$FRAMEWORK_DIR/install.sh" "$EMPTY_INVENTORY_FRAMEWORK_ROOT/install.sh"
+cat >"$EMPTY_INVENTORY_SKILL/SKILL.md" <<EOF
+---
+name: $EMPTY_INVENTORY_SKILL_NAME
+description: Explicit custom-root installer fixture.
+requires:
+  - external-skill
+---
+EOF
+if HOME="$INSTALL_HOME_EMPTY_INVENTORY" bash "$EMPTY_INVENTORY_FRAMEWORK_ROOT/install.sh" --agent codex --skill "$EMPTY_INVENTORY_SKILL_NAME" --no-hooks >/tmp/p0p4-install-empty-inventory.out 2>/tmp/p0p4-install-empty-inventory.err; then
+    if [[ -f "$INSTALL_HOME_EMPTY_INVENTORY/.codex/skills/$EMPTY_INVENTORY_SKILL_NAME/SKILL.md" ]] \
+        && grep -Fq "NOTE: $EMPTY_INVENTORY_SKILL_NAME requires 'external-skill'" /tmp/p0p4-install-empty-inventory.out; then
+        pass
+    else
+        fail "selected custom root did not install or report its missing external requirement"
+    fi
+else
+    fail "selected custom root with an empty assistant inventory failed; see /tmp/p0p4-install-empty-inventory.err"
+fi
+
+test_start "selected skill names reject path traversal before dry-run or install writes"
+INSTALL_HOME_PATHFUL_SKILL="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_PATHFUL_SKILL"
+pathful_skill='../../V1/skills/assistant-review'
+if HOME="$INSTALL_HOME_PATHFUL_SKILL" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill "$pathful_skill" --dry-run >/tmp/p0p4-install-pathful-skill-dry.out 2>/tmp/p0p4-install-pathful-skill-dry.err; then
+    fail "pathful selected skill was accepted during dry-run"
+elif HOME="$INSTALL_HOME_PATHFUL_SKILL" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill "$pathful_skill" >/tmp/p0p4-install-pathful-skill.out 2>/tmp/p0p4-install-pathful-skill.err; then
+    fail "pathful selected skill was accepted during install"
+elif [[ -e "$INSTALL_HOME_PATHFUL_SKILL/.codex" || -e "$INSTALL_HOME_PATHFUL_SKILL/.agents" || -e "$INSTALL_HOME_PATHFUL_SKILL/V1" ]]; then
+    fail "pathful selected skill rejection wrote outside the managed skills root"
+else
+    pass
+fi
+
+test_start "selected closures reject unsafe implicit dependency targets before any write"
+INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET="$(mktemp -d)"
+UNSAFE_DEPENDENCY_EXTERNAL="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET" "$UNSAFE_DEPENDENCY_EXTERNAL"
+unsafe_dependency_workflow="$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET/.codex/skills/assistant-workflow"
+unsafe_dependency_review="$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET/.codex/skills/assistant-review"
+mkdir -p "$unsafe_dependency_workflow" "$UNSAFE_DEPENDENCY_EXTERNAL"
+printf 'preserve selected root\n' >"$unsafe_dependency_workflow/SKILL.md"
+printf 'preserve external sentinel\n' >"$UNSAFE_DEPENDENCY_EXTERNAL/sentinel.txt"
+cp "$unsafe_dependency_workflow/SKILL.md" "$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET/workflow.before"
+cp "$UNSAFE_DEPENDENCY_EXTERNAL/sentinel.txt" "$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET/sentinel.before"
+ln -s "$UNSAFE_DEPENDENCY_EXTERNAL" "$unsafe_dependency_review"
+if HOME="$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-unsafe-dependency-target.out 2>/tmp/p0p4-install-unsafe-dependency-target.err; then
+    fail "selected closure accepted an implicit dependency target symlink"
+elif ! cmp -s "$unsafe_dependency_workflow/SKILL.md" "$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET/workflow.before"; then
+    fail "implicit dependency target rejection mutated the selected root"
+elif ! cmp -s "$UNSAFE_DEPENDENCY_EXTERNAL/sentinel.txt" "$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET/sentinel.before"; then
+    fail "implicit dependency target rejection mutated the external sentinel"
+elif HOME="$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --dry-run >/tmp/p0p4-install-unsafe-dependency-target-dry.out 2>/tmp/p0p4-install-unsafe-dependency-target-dry.err; then
+    fail "selected closure accepted an implicit dependency target symlink during dry-run"
+elif ! cmp -s "$unsafe_dependency_workflow/SKILL.md" "$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET/workflow.before" \
+    || ! cmp -s "$UNSAFE_DEPENDENCY_EXTERNAL/sentinel.txt" "$INSTALL_HOME_UNSAFE_DEPENDENCY_TARGET/sentinel.before"; then
+    fail "dry-run implicit dependency target rejection mutated a protected path"
+else
+    pass
+fi
+
+test_start "selected closures reject wrong-type managed targets before any write"
+INSTALL_HOME_WRONG_TYPE_SKILL_TARGET="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_WRONG_TYPE_SKILL_TARGET"
+wrong_type_dependency_target="$INSTALL_HOME_WRONG_TYPE_SKILL_TARGET/.codex/skills/assistant-review"
+mkdir -p "$(dirname "$wrong_type_dependency_target")"
+printf 'preserve wrong-type target\n' >"$wrong_type_dependency_target"
+cp "$wrong_type_dependency_target" "$INSTALL_HOME_WRONG_TYPE_SKILL_TARGET/wrong-type.before"
+if HOME="$INSTALL_HOME_WRONG_TYPE_SKILL_TARGET" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-wrong-type-skill-target.out 2>/tmp/p0p4-install-wrong-type-skill-target.err; then
+    fail "selected closure accepted a wrong-type managed target"
+elif [[ -e "$INSTALL_HOME_WRONG_TYPE_SKILL_TARGET/.codex/skills/assistant-workflow" ]]; then
+    fail "wrong-type managed target rejection copied the selected root"
+elif ! cmp -s "$wrong_type_dependency_target" "$INSTALL_HOME_WRONG_TYPE_SKILL_TARGET/wrong-type.before"; then
+    fail "wrong-type managed target rejection changed the target"
+elif HOME="$INSTALL_HOME_WRONG_TYPE_SKILL_TARGET" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --dry-run >/tmp/p0p4-install-wrong-type-skill-target-dry.out 2>/tmp/p0p4-install-wrong-type-skill-target-dry.err; then
+    fail "selected closure accepted a wrong-type managed target during dry-run"
+else
+    pass
+fi
+
+test_start "selected custom roots reject source and metadata symlinks before reads or writes"
+INSTALL_HOME_UNSAFE_SOURCE="$(mktemp -d)"
+UNSAFE_SOURCE_FRAMEWORK_ROOT="$(mktemp -d)"
+UNSAFE_SOURCE_EXTERNAL="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_UNSAFE_SOURCE" "$UNSAFE_SOURCE_FRAMEWORK_ROOT" "$UNSAFE_SOURCE_EXTERNAL"
+cp "$FRAMEWORK_DIR/install.sh" "$UNSAFE_SOURCE_FRAMEWORK_ROOT/install.sh"
+mkdir -p "$UNSAFE_SOURCE_FRAMEWORK_ROOT/skills"
+for unsafe_source_kind in source metadata; do
+    unsafe_source_skill="assistant-unsafe-$unsafe_source_kind"
+    unsafe_source_home="$INSTALL_HOME_UNSAFE_SOURCE/$unsafe_source_kind"
+    mkdir -p "$unsafe_source_home" "$UNSAFE_SOURCE_EXTERNAL/$unsafe_source_kind"
+    printf '%s\n' '---' "name: $unsafe_source_skill" 'description: Unsafe source fixture.' '---' >"$UNSAFE_SOURCE_EXTERNAL/$unsafe_source_kind/SKILL.md"
+    if [[ "$unsafe_source_kind" == "source" ]]; then
+        ln -s "$UNSAFE_SOURCE_EXTERNAL/$unsafe_source_kind" "$UNSAFE_SOURCE_FRAMEWORK_ROOT/skills/$unsafe_source_skill"
+    else
+        mkdir -p "$UNSAFE_SOURCE_FRAMEWORK_ROOT/skills/$unsafe_source_skill"
+        ln -s "$UNSAFE_SOURCE_EXTERNAL/$unsafe_source_kind/SKILL.md" "$UNSAFE_SOURCE_FRAMEWORK_ROOT/skills/$unsafe_source_skill/SKILL.md"
+    fi
+
+    if HOME="$unsafe_source_home" bash "$UNSAFE_SOURCE_FRAMEWORK_ROOT/install.sh" --agent codex --skill "$unsafe_source_skill" --dry-run >/tmp/p0p4-install-unsafe-${unsafe_source_kind}-dry.out 2>/tmp/p0p4-install-unsafe-${unsafe_source_kind}-dry.err \
+        || HOME="$unsafe_source_home" bash "$UNSAFE_SOURCE_FRAMEWORK_ROOT/install.sh" --agent codex --skill "$unsafe_source_skill" >/tmp/p0p4-install-unsafe-${unsafe_source_kind}.out 2>/tmp/p0p4-install-unsafe-${unsafe_source_kind}.err \
+        || [[ -e "$unsafe_source_home/.codex" || -e "$unsafe_source_home/.agents" ]]; then
+        unsafe_source_failure="$unsafe_source_kind symlink was accepted or wrote to the managed home"
+        break
+    fi
+done
+if [[ -z "${unsafe_source_failure:-}" ]]; then
+    pass
+else
+    fail "$unsafe_source_failure"
 fi
 
 test_start "requires fixtures stay outside the canonical skills inventory"
@@ -589,6 +760,70 @@ if HOME="$CODEX_NO_HOOKS_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --
     fi
 else
     fail "Codex --no-hooks install failed; see /tmp/p0p4-install-codex-no-hooks.err"
+fi
+
+test_start "selective debugging and review installs ship an executable common change-impact checker"
+CHANGE_IMPACT_INSTALL_ROOT="$(mktemp -d)"
+p0p4_register_cleanup "$CHANGE_IMPACT_INSTALL_ROOT"
+change_impact_install_failure=""
+for change_impact_skill in assistant-debugging assistant-review; do
+    change_impact_home="$CHANGE_IMPACT_INSTALL_ROOT/$change_impact_skill home [isolated]"
+    change_impact_case="$change_impact_home/change impact fixture"
+    change_impact_skill_file="$change_impact_home/.codex/skills/$change_impact_skill/SKILL.md"
+    change_impact_tool="$(dirname "$change_impact_skill_file")/../../tools/change-impact/validate-change-impact.cjs"
+    change_impact_protocol="$(dirname "$change_impact_skill_file")/../../tools/change-impact/protocol.v1.json"
+    change_impact_example="$(dirname "$change_impact_skill_file")/../../tools/change-impact/example.completion.v1.json"
+    change_impact_reference="$change_impact_home/.codex/skills/$change_impact_skill/references/change-impact.md"
+    mkdir -p "$change_impact_case"
+    if ! HOME="$change_impact_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill "$change_impact_skill" --no-hooks >/tmp/p0p4-change-impact-${change_impact_skill}.out 2>/tmp/p0p4-change-impact-${change_impact_skill}.err; then
+        change_impact_install_failure="$change_impact_skill selective install failed"
+        break
+    elif [[ ! -f "$change_impact_skill_file" || ! -f "$change_impact_tool" || ! -f "$change_impact_protocol" || ! -f "$change_impact_example" ]]; then
+        change_impact_install_failure="$change_impact_skill selective install omitted common validator resources at the path resolved from its loaded SKILL.md"
+        break
+    elif [[ -d "$change_impact_home/.codex/skills/assistant-workflow" || ! -f "$change_impact_reference" ]] \
+        || ! grep -Fq '../../tools/change-impact/validate-change-impact.cjs' "$change_impact_reference"; then
+        change_impact_install_failure="$change_impact_skill did not resolve the installed common checker without workflow"
+        break
+    elif [[ "$change_impact_skill" == "assistant-debugging" && ! -f "$change_impact_home/.codex/skills/assistant-review/SKILL.md" ]]; then
+        change_impact_install_failure="assistant-debugging selective installation omitted its canonical assistant-review producer"
+        break
+    elif [[ "$change_impact_skill" == "assistant-review" ]] && { [[ -d "$change_impact_home/.codex/skills/assistant-debugging" ]] || [[ -d "$change_impact_home/.codex/skills/assistant-workflow" ]]; }; then
+        change_impact_install_failure="assistant-review selective installation copied an unrelated consumer"
+        break
+    elif ! node -e 'const fs=require("node:fs"); const source=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const target=process.argv[2]; for (const [name, value] of Object.entries(source)) fs.writeFileSync(`${target}/${name}.json`, JSON.stringify(value));' "$FRAMEWORK_DIR/tools/change-impact/example.completion.v1.json" "$change_impact_case"; then
+        change_impact_install_failure="$change_impact_skill could not materialize the valid checker fixture"
+        break
+    elif ! node "$change_impact_tool" --phase completion --capture "$change_impact_case/capture.json" --expected "$change_impact_case/expected.json" --assessment "$change_impact_case/assessment.json" --review "$change_impact_case/review.json" >/tmp/p0p4-change-impact-${change_impact_skill}-valid.out; then
+        change_impact_install_failure="$change_impact_skill installed checker rejected its valid protocol example"
+        break
+    elif ! node -e 'const fs=require("node:fs"); const p=process.argv[1]; const value=JSON.parse(fs.readFileSync(p,"utf8")); const edge=value.edges.pop(); value.requirements=value.requirements.filter((requirement) => requirement.edge_id !== edge.id); fs.writeFileSync(p,JSON.stringify(value));' "$change_impact_case/capture.json"; then
+        change_impact_install_failure="$change_impact_skill could not materialize the consumer-omission fixture"
+        break
+    elif node "$change_impact_tool" --phase completion --capture "$change_impact_case/capture.json" --expected "$change_impact_case/expected.json" --assessment "$change_impact_case/assessment.json" --review "$change_impact_case/review.json" >/tmp/p0p4-change-impact-${change_impact_skill}-consumer-omission.out; then
+        change_impact_install_failure="$change_impact_skill installed checker accepted a capture missing a known consumer"
+        break
+    elif ! grep -Fq 'CAPTURE_EXPECTED_EDGES_MISMATCH' /tmp/p0p4-change-impact-${change_impact_skill}-consumer-omission.out; then
+        change_impact_install_failure="$change_impact_skill consumer omission did not fail against independent expected truth"
+        break
+    elif ! node -e 'const fs=require("node:fs"); const source=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); fs.writeFileSync(process.argv[2],JSON.stringify(source.capture));' "$FRAMEWORK_DIR/tools/change-impact/example.completion.v1.json" "$change_impact_case/capture.json"; then
+        change_impact_install_failure="$change_impact_skill could not restore the root-omission fixture"
+        break
+    elif ! node -e 'const fs=require("node:fs"); const p=process.argv[1]; const value=JSON.parse(fs.readFileSync(p,"utf8")); value.roots=[]; fs.writeFileSync(p,JSON.stringify(value));' "$change_impact_case/capture.json"; then
+        change_impact_install_failure="$change_impact_skill could not materialize the omission fixture"
+        break
+    elif node "$change_impact_tool" --phase completion --capture "$change_impact_case/capture.json" --expected "$change_impact_case/expected.json" --assessment "$change_impact_case/assessment.json" --review "$change_impact_case/review.json" >/tmp/p0p4-change-impact-${change_impact_skill}-omission.out; then
+        change_impact_install_failure="$change_impact_skill installed checker accepted an empty shared discovery-root capture"
+        break
+    elif ! grep -Fq 'CAPTURE_DISCOVERY_ROOTS_MISSING' /tmp/p0p4-change-impact-${change_impact_skill}-omission.out; then
+        change_impact_install_failure="$change_impact_skill omission did not fail for the missing discovery-root reason"
+        break
+    fi
+done
+if [[ -z "$change_impact_install_failure" ]]; then
+    pass
+else
+    fail "$change_impact_install_failure"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

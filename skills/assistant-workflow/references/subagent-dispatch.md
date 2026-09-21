@@ -18,7 +18,7 @@ Before spawning any subagent, resolve:
 Light small low-risk localized work uses `subagent_policy_state=not_required`
 and `subagent_execution_mode=not_applicable`; it does not ask for delegation and
 instead records direct implementation, relevant automated validation/tests, and
-a fresh self-review. For standard/strict development/code-work roles, Assistant
+a fresh self-review. Expanded impact keeps this Build policy; Review records canonical `assistant-review` final-summary and delegation-path refs. For standard/strict development/code-work roles, Assistant
 Framework policy treats a direct user request or applicable `AGENTS.md` or
 active-skill instruction as a delegation trigger. Infer `subagent_trigger_scope`
 with its provenance and covered roles/phases/actions, set
@@ -95,7 +95,7 @@ its compact validation plus fresh-review evidence instead.
 
 | Size | Agents used | Flow |
 |---|---|---|
-| **Small light** | None | Direct implementation, relevant automated validation/tests, and fresh self-review; promote out of light when risk/harness/QA criteria apply |
+| **Small light** | None | Direct implementation, relevant automated validation/tests, and fresh self-review; expanded impact records canonical review refs; promote for risk/harness/QA |
 | **Small standard/strict** | Bounded executor → Code Reviewer, or separated workers when triggered | Sequential, minimal (no Decompose); QA only when required |
 | **Medium** | Bounded executor → Code Reviewer, plus mapping/design roles only when their concrete trigger applies | Ordinary default; add Builder/Tester only when separated_workers triggers |
 | **Large** | Current-boundary mapping/analysis/design roles as needed → Code Writer/Builder-Tester when selected → Code Reviewer → QA Evaluator when required | Full evidence path is selected by risk and uncertainty, not by role count |
@@ -105,7 +105,7 @@ its compact validation plus fresh-review evidence instead.
 
 - **Light lane**: small low-risk localized work may keep `required_agents`
   empty and use direct implementation, relevant automated validation/tests, and
-  fresh self-review evidence. `subagent_execution_mode=not_applicable` is valid
+  fresh self-review evidence. Expanded impact keeps Build direct but records canonical review refs. `subagent_execution_mode=not_applicable` is valid
   for this lane. Security, high-risk, harness-capable, required-QA, or otherwise
   promoted work cannot use this exception.
 - **Standard ordinary-medium minimum**: bounded executor → Code Reviewer.

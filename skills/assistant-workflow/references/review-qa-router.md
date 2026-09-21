@@ -43,11 +43,11 @@ only evidence-backed findings within authorized scope before completion. Light
 work does not load the full rubric/QA loop unless risk or an
 independent trigger promotes it. This is a fresh self-review and does not
 require Code Reviewer, Reviewer, Code Writer, or Builder/Tester dispatch/direct
-fallback evidence. When an Architecture Decision Pack applies, persist
-validated refs to `assistant-review/contracts/output.yaml#final_summary`, its
-exact current final-batch `final_snapshot_identity`, and
-`assistant-review/contracts/output.yaml#architecture_decision_pack_review` in
-`fresh_review_result`, including the canonical `review_delegation_path`.
+fallback evidence. For an Architecture Decision Pack or expanded impact, invoke
+`assistant-review`, resolve its own policy, and persist validated refs to its
+final summary, exact current final-batch `final_snapshot_identity`, and
+`review_delegation_path` in `fresh_review_result`; do not copy light Build policy. Persist
+`assistant-review/contracts/output.yaml#architecture_decision_pack_review` only for a Pack.
 
 ## Stage 1 - Spec Review
 
@@ -175,11 +175,12 @@ Enforce the review cycle before presenting results:
   Pack-backed `review_result` must also record validated refs to
   `assistant-review/contracts/output.yaml#architecture_decision_pack_review`;
   canonical review fields remain owned by assistant-review.
-- Light Pack-backed `fresh_review_result` must record validated refs to
-  `assistant-review/contracts/output.yaml#final_summary`, its exact current
-  final-batch `final_snapshot_identity`,
-  `assistant-review/contracts/output.yaml#review_delegation_path`, and
-  `assistant-review/contracts/output.yaml#architecture_decision_pack_review`.
+- Light Pack-backed or expanded-impact `fresh_review_result` must record
+  validated refs to `assistant-review/contracts/output.yaml#final_summary`, its
+  exact current final-batch `final_snapshot_identity`, and
+  `assistant-review/contracts/output.yaml#review_delegation_path`.
+  `assistant-review/contracts/output.yaml#architecture_decision_pack_review`
+  remains required only for a Pack.
 - Independent Code Reviewer dispatch/result evidence, or allowed fresh
   direct-fallback evidence, must be created in Review after Build completes.
 - When `qa_evaluation_mode=required`, workflow must record validated refs to

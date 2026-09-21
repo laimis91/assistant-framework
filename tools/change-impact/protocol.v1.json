@@ -1,0 +1,15 @@
+{
+  "schema_version": "change-impact-protocol/v1",
+  "purpose": "Validate closure against separately supplied capture authority; it is not a universal dependency analyzer.",
+  "runtime": "Node.js 22 or newer, standard library only",
+  "phases": {
+    "discovery": ["capture", "expected context"],
+    "pre_build": ["capture", "expected context", "assessment with planned verification"],
+    "completion": ["capture", "expected context", "assessment with actual verification", "review bindings"]
+  },
+  "review_context": "null is allowed during discovery and pre-build; completion requires the current assistant-review scope-manifest, coverage-ledger, snapshot, and requirement mappings.",
+  "dependency_kinds": ["call", "wrapper", "config", "registration", "event", "state", "public"],
+  "dispositions": ["preserve", "change", "unaffected", "waived", "blocked"],
+  "identity_rules": ["Capture records base/candidate union edges and required contract/state transitions. Pre-build and completion behavior assessments require nonempty discovery roots, edges, and requirements; pre-build requires at least one consumed planned verification. Discovery without an assessment and cosmetic controls may remain empty.", "Expected context independently supplies current snapshot, required scope, edges, transitions, verification source identities, and review source mappings.", "Each actual verification records the exact executed base/candidate/universe snapshot, which completion matches to the current expected snapshot alongside the verification source identity. A behavior completion retains at least one bound preserve/change verification; a verification plan serves one direct obligation or one named equivalence group, never more than one equivalence group.", "Successful validation results use change-impact-validation-result/v1 and carry a change-impact-validation-receipt/v1. Reuse reruns validation and compares the prior result through --receipt against canonical parsed JSON SHA-256 digests of the phase-relevant inputs.", "Completion requires actual verification and exact review projections; discovery completeness remains a caller-reviewed limit."],
+  "limits": { "max_document_bytes": 262144, "max_depth": 16, "max_array_items": 200, "max_object_keys": 60 }
+}

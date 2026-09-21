@@ -420,6 +420,9 @@ p0p4_write_skill_eval_responses() {
                     medium-prepare-only-terminal-route)
                         build_medium_prepare_only_terminal_response "$response_path" "$required_summary"
                         ;;
+                    prepare-only-shared-impact-retains-discovery-evidence)
+                        build_medium_prepare_only_shared_impact_response "$response_path" "$required_summary"
+                        ;;
                     medium-prepare-only-readiness-plan)
                         build_medium_prepare_only_readiness_plan_response "$response_path" "$required_summary"
                         ;;
@@ -494,6 +497,18 @@ p0p4_write_skill_eval_responses() {
                         ;;
                     *)
                         fail "unhandled structured assistant-workflow eval case: $id"
+                        ;;
+                esac
+                continue
+            fi
+            if [[ "$skill_name" == "assistant-debugging" ]] \
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+                case "$id" in
+                    local-debugging-retains-compact-causal-impact)
+                        build_local_debugging_compact_causal_response "$response_path" "$required_summary"
+                        ;;
+                    *)
+                        fail "unhandled structured assistant-debugging eval case: $id"
                         ;;
                 esac
                 continue
@@ -640,6 +655,25 @@ p0p4_write_skill_eval_responses() {
                             | .review_delegation_path = {subagent_policy_state: "not_required", subagent_execution_mode: "direct_fallback", subagent_trigger_scope: [], fresh_context_evidence: "fresh isolated direct-fallback context"}' "$response_path" >"${response_path}.trivial"
                         mv "${response_path}.trivial" "$response_path"
                         p0p4_add_assistant_review_audit_report "$response_path" "${response_path}.audit"
+                        ;;
+                    compact-local-review-retains-causal-applicability)
+                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "CLEAN" true complete false
+                        jq '.change_impact_applicability = {
+                              impact_scope: "local",
+                              applicability_reason: "The supplied route trace confines the change to this navigation guard.",
+                              causal_evidence_ref: "tests/local-navigation-guard",
+                              expanded_artifact_carried: false
+                            }' "$response_path" >"${response_path}.compact-local"
+                        mv "${response_path}.compact-local" "$response_path"
+                        ;;
+                    compact-cosmetic-review-retains-applicability)
+                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "CLEAN" true complete false
+                        jq '.change_impact_applicability = {
+                              impact_scope: "not_applicable",
+                              applicability_reason: "The navigation label correction is cosmetic.",
+                              expanded_artifact_carried: false
+                            }' "$response_path" >"${response_path}.compact-cosmetic"
+                        mv "${response_path}.compact-cosmetic" "$response_path"
                         ;;
                     qa-obligation-echo-fulfills-exact-binding)
                         p0p4_write_assistant_review_qa_response "$response_path" "$required_summary" accepted CLEAN fulfilled met false
@@ -1603,6 +1637,32 @@ if "$skill_eval_runner" --responses "$passing_response_dir" >"$passing_response_
     pass
 else
     fail "skill eval runner --responses did not pass generated all-required response set: $(grep -E '^(FAIL|Summary:)' "$passing_response_output" | paste -sd ' | ' -)"
+fi
+
+test_start "assistant-review compact applicability keeps canonical envelopes and rejects omissions"
+compact_review_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-compact-review.XXXXXX")"
+p0p4_register_cleanup "$compact_review_output"
+compact_review_failures=()
+while IFS='|' read -r compact_review_case compact_review_mutation; do
+    compact_review_response="$passing_response_dir/assistant-review/$compact_review_case.txt"
+    cp "$compact_review_response" "${compact_review_response}.original"
+    jq "$compact_review_mutation" "$compact_review_response" >"$compact_review_output"
+    mv "$compact_review_output" "$compact_review_response"
+    if "$skill_eval_runner" --responses "$passing_response_dir" --skill assistant-review --case "$compact_review_case" >"$passing_response_output" 2>&1; then
+        compact_review_failures+=("$compact_review_case:$compact_review_mutation")
+    fi
+    mv "${compact_review_response}.original" "$compact_review_response"
+done <<'EOF_COMPACT_REVIEW_MUTATIONS'
+compact-local-review-retains-causal-applicability|del(.change_impact_applicability)
+compact-local-review-retains-causal-applicability|del(.change_impact_applicability.causal_evidence_ref)
+compact-local-review-retains-causal-applicability|del(.final_summary)
+compact-cosmetic-review-retains-applicability|del(.change_impact_applicability)
+compact-cosmetic-review-retains-applicability|del(.change_impact_applicability.applicability_reason)
+EOF_COMPACT_REVIEW_MUTATIONS
+if [[ "${#compact_review_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "compact review applicability mutations unexpectedly passed: ${compact_review_failures[*]}"
 fi
 
 test_start "assistant-review runtime grader rejects malformed canonical envelopes and claims"
@@ -2584,7 +2644,7 @@ run_prepare_only_representative_path_probe \
 run_prepare_only_representative_path_probe \
     medium-prepare-only-not-applicable-readiness-plan '["feature_preparation_result", "readiness_plan", "evidence_ref"]'
 if [[ ${#workflow_core_failures[@]} -eq 0 \
-    && "$prepare_only_direct_structured_probe_count" -eq 375 \
+    && "$prepare_only_direct_structured_probe_count" -eq 409 \
     && "$prepare_only_representative_cli_probe_count" -eq 3 ]]; then
     pass
 else

@@ -18,10 +18,13 @@ no public behavior, data, security, harness, or QA acceptance risk:
 - direct implementation with relevant automated validation/tests
 - a fresh self-review after validation
 
-The light lane does not require Code Writer, Builder/Tester, Code Reviewer, or
+Shared fanout alone does not promote this Build lane. The light lane does not require Code Writer, Builder/Tester, Code Reviewer, or
 Reviewer dispatch/direct-fallback evidence. Any security-sensitive, high-risk,
 harness-capable, required-QA, non-localized, or otherwise promoted work uses the
 standard/strict lane and its existing gates.
+
+Expanded impact keeps this Build lane; Review records canonical
+`assistant-review` final-summary and delegation-path refs.
 
 Select `build_execution_lane` before dispatch:
 
@@ -61,6 +64,20 @@ Do not pretend delegation happened. Record `subagent_policy_state`,
 `subagent_execution_mode`, `build_execution_lane`, the explicit direct fallback
 reason, matching bounded/separated evidence, independent Code Reviewer
 evidence during Review, and QA Evaluator evidence when QA is required.
+
+## Expanded-impact mutation authorization
+
+Before any source/test mutation, including a regression-test write, or any
+mutation dispatch, run or revalidate the common checker against the referenced
+capture, independent expected context, and assessment for shared, unresolved,
+or explicitly expanded impact. The current valid `pre_build` result must resolve
+against the task packet; a status or result ref alone is insufficient. Reuse is
+allowed only for demonstrably current same-input evidence.
+
+After an earlier mutation, refresh this evidence before each subsequent
+mutation dispatch. In particular, Builder/Tester must not reuse a Code Writer
+pre-build result. The same rule applies to light work and direct fallback;
+those paths may remain local without the expanded trigger.
 
 ## Standard/Strict Phase Evidence Gates
 

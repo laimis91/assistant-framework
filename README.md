@@ -31,7 +31,7 @@ Install all skills for any supported agent:
 
 The release inventory is the tracked `skills/assistant-*` set. `skills/unity-*` directories are local-only and ignored by git; they are not installed or validated as framework release skills.
 
-Install a single skill:
+Install one root skill with its bundled hard dependencies:
 ```bash
 ./install.sh --agent claude --skill assistant-thinking
 ```
@@ -65,7 +65,7 @@ Install the complete release inventory for one agent:
 .\install.ps1 -Agent gemini
 ```
 
-The same entry point supports a single skill and a non-mutating preview:
+The same entry point supports one root skill with its bundled hard dependencies and a non-mutating preview:
 
 ```powershell
 .\install.ps1 -Agent claude -Skill assistant-thinking
@@ -137,6 +137,17 @@ extension registration, and a representative path before premature abstraction,
 makes quality claims falsifiable with workload/budget/measurement, and travels
 through the plan, task handoff, and independent review. It does not
 add a permanent architect agent or force architecture ceremony onto local work.
+
+### Shared-change impact
+
+Behavior-bearing work records a compact local/shared/unresolved assessment before
+choosing verification scope. Triggered shared-impact work uses one installed
+Node 22 common checker and carries the same artifact identity through workflow,
+debugging, and review. Discovery may report gaps; completion also needs actual
+current verification and the existing assistant-review manifest/coverage result.
+The checker validates closure against supplied bounded evidence, not a universal
+runtime dependency graph. Shared fanout alone does not add Architecture Decision
+Pack, strict-lane, or QA requirements.
 
 For multi-slice work, Assistant Workflow uses descriptive outcome-oriented
 slice identifiers rather than ordinal-only labels, explicit dependencies, and

@@ -12,7 +12,7 @@ configuration is preserved while installer-owned sections are refreshed.
 Target agent: claude, codex, or gemini. Agent names are case-insensitive.
 
 .PARAMETER Skill
-Install one root assistant-* skill instead of the complete inventory.
+Install one root assistant-* skill and its bundled hard dependencies instead of the complete inventory.
 
 .PARAMETER DryRun
 Validate and report the planned work without changing the filesystem.
@@ -84,7 +84,7 @@ function Show-Usage {
 Usage: .\install.ps1 -Agent <claude|codex|gemini> [options]
 
 Options:
-  -Skill <name>             Install one assistant-* skill
+  -Skill <name>             Install one root assistant-* skill plus bundled hard dependencies
   -DryRun                   Validate and show work without changing files
   -NoHooks                  Deprecated no-op; installs are hookless
   -Help                     Show this help
@@ -1839,28 +1839,63 @@ function Install-Skills {
     }
 }
 
+function Get-CanonicalSkillRequirements {
+    param([string]$SkillFile)
+    $inFrontmatter = $false
+    $inRequires = $false
+    foreach ($line in Get-Content -LiteralPath $SkillFile) {
+        if ($line -eq '---') {
+            if ($inFrontmatter) { break }
+            $inFrontmatter = $true
+            continue
+        }
+        if (-not $inFrontmatter) { continue }
+        if ($line -eq 'requires:') { $inRequires = $true; continue }
+        if ($inRequires -and $line -match '^\s*-\s*(.+?)\s*$') {
+            $Matches[1]
+            continue
+        }
+        $inRequires = $false
+    }
+}
+
+function Resolve-BundledSkillClosure {
+    param(
+        [string[]]$RootSkills,
+        [string[]]$Inventory,
+        [string]$SourceRoot,
+        [string]$TargetRoot
+    )
+    $pending = New-Object 'System.Collections.Generic.List[string]'
+    $selected = New-Object 'System.Collections.Generic.List[string]'
+    $preflighted = New-Object 'System.Collections.Generic.List[string]'
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    foreach ($rootSkill in $RootSkills) { $pending.Add($rootSkill) }
+
+    for ($index = 0; $index -lt $pending.Count; $index += 1) {
+        $skillName = $pending[$index]
+        if (-not $seen.Add($skillName)) { continue }
+        $source = Join-Path $SourceRoot $skillName
+        $target = Join-Path $TargetRoot $skillName
+        [void](Assert-ManagedDirectoryCopySafe -Source $source -Target $target -ManagedRoot $TargetRoot -Label $skillName)
+        $preflighted.Add($skillName)
+        $selected.Add($skillName)
+        foreach ($dependency in @(Get-CanonicalSkillRequirements -SkillFile (Join-Path $source 'SKILL.md'))) {
+            if (($Inventory -ccontains $dependency) -and -not $seen.Contains($dependency) -and -not $pending.Contains($dependency)) {
+                $pending.Add($dependency)
+            }
+        }
+    }
+    return (New-Object PSObject -Property @{ SkillNames = @($selected); PreflightedNames = @($preflighted) })
+}
+
 function Write-DependencyNotes {
     param([string[]]$SkillNames, [string]$SourceRoot, [string]$TargetRoot)
     foreach ($skillName in $SkillNames) {
         $skillFile = Join-Path (Join-Path $SourceRoot $skillName) 'SKILL.md'
-        $inFrontmatter = $false
-        $inRequires = $false
-        foreach ($line in Get-Content -LiteralPath $skillFile) {
-            if ($line -eq '---') {
-                if ($inFrontmatter) { break }
-                $inFrontmatter = $true
-                continue
-            }
-            if (-not $inFrontmatter) { continue }
-            if ($line -eq 'requires:') { $inRequires = $true; continue }
-            if ($inRequires -and $line -match '^\s*-\s*(.+?)\s*$') {
-                $dependency = $Matches[1]
-                if (($SkillNames -notcontains $dependency) -and -not (Test-Path -LiteralPath (Join-Path $TargetRoot $dependency) -PathType Container)) {
-                    Write-Info "NOTE: $skillName requires '$dependency', which is not selected or installed."
-                }
-            }
-            elseif ($inRequires) {
-                $inRequires = $false
+        foreach ($dependency in @(Get-CanonicalSkillRequirements -SkillFile $skillFile)) {
+            if (($SkillNames -notcontains $dependency) -and -not (Test-Path -LiteralPath (Join-Path $TargetRoot $dependency) -PathType Container)) {
+                Write-Info "NOTE: $skillName requires '$dependency', which is not selected or installed."
             }
         }
     }
@@ -2223,7 +2258,7 @@ function Invoke-AssistantFrameworkInstall {
     $selectedSkills = @($inventory)
     if (-not [string]::IsNullOrWhiteSpace($Skill)) {
         if ($inventory -notcontains $Skill) { throw "Unknown skill '$Skill'. Available: $($inventory -join ', ')" }
-        $selectedSkills = @($Skill)
+        $selectedSkills = @($inventory | Where-Object { $_ -ieq $Skill })
     }
 
     if ($agentName -eq 'codex' -and -not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
@@ -2251,13 +2286,18 @@ function Invoke-AssistantFrameworkInstall {
     if ($agentName -eq 'codex') {
         $agentsRoot = Get-FullPath -LiteralPath (Join-Path $script:UserHome '.agents')
         $skillsTarget = Join-Path $agentsRoot 'skills'
+        $codexCommonToolsTarget = Join-Path $agentsRoot 'tools'
         [void](Assert-SafeManagedChild -LiteralPath $skillsTarget -ManagedRoot $agentsRoot -Purpose 'Codex skills root')
+        [void](Assert-SafeManagedChild -LiteralPath $codexCommonToolsTarget -ManagedRoot $agentsRoot -Purpose 'Codex common tools root')
         Assert-NoSourceTargetOverlap -Source $agentHome -Target $skillsTarget -Purpose 'Codex agent home and shared skills root'
     }
     else {
         $skillsTarget = Join-Path $agentHome 'skills'
         [void](Assert-SafeManagedChild -LiteralPath $skillsTarget -ManagedRoot $agentHome -Purpose "$agentName skills root")
     }
+    $skillSelection = Resolve-BundledSkillClosure -RootSkills $selectedSkills -Inventory $inventory -SourceRoot $skillsSource -TargetRoot $skillsTarget
+    $selectedSkills = @($skillSelection.SkillNames)
+    $preflightedSkills = @($skillSelection.PreflightedNames)
     $toolsTarget = Join-Path $agentHome 'tools'
     $evalDocsTarget = Join-Path (Join-Path $agentHome 'docs') 'evals'
     $hooksRoot = Join-Path $agentHome 'hooks'
@@ -2282,6 +2322,7 @@ function Invoke-AssistantFrameworkInstall {
     Write-Info "Skills target: $skillsTarget"
 
     $toolsSource = Join-Path $script:FrameworkDir 'tools'
+    $changeImpactToolsSource = Join-Path $toolsSource 'change-impact'
     $toolExclusions = @('.DS_Store', '.publish', 'bin', 'obj')
     $evalDocsSource = Join-Path (Join-Path $script:FrameworkDir 'docs') 'evals'
     $sourceOnlyFiles = @(
@@ -2309,10 +2350,15 @@ function Invoke-AssistantFrameworkInstall {
     Assert-JsonFilePropertyIdentitySafe -LiteralPath $legacySettings
 
     foreach ($skillName in $selectedSkills) {
-        [void](Assert-ManagedDirectoryCopySafe -Source (Join-Path $skillsSource $skillName) -Target (Join-Path $skillsTarget $skillName) -ManagedRoot $skillsTarget -Label $skillName)
+        if ($preflightedSkills -notcontains $skillName) {
+            [void](Assert-ManagedDirectoryCopySafe -Source (Join-Path $skillsSource $skillName) -Target (Join-Path $skillsTarget $skillName) -ManagedRoot $skillsTarget -Label $skillName)
+        }
     }
     if (Test-Path -LiteralPath $toolsSource -PathType Container) {
         Assert-ManagedTopLevelEntriesSafe -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $sourceOnly -Label 'Tools'
+    }
+    if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
+        [void](Assert-ManagedDirectoryCopySafe -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -Label 'Codex common change-impact checker')
     }
     if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
         Assert-ManagedTopLevelEntriesSafe -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'
@@ -2340,6 +2386,9 @@ function Invoke-AssistantFrameworkInstall {
 
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
             Sync-ManagedTopLevelEntries -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $sourceOnly -Label 'Tools'
+        }
+        if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
+            Sync-ManagedDirectory -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -Label 'Codex common change-impact checker'
         }
         if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
             Sync-ManagedTopLevelEntries -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'

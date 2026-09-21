@@ -53,7 +53,7 @@ through the existing post-Build Code Reviewer then QA Evaluator route.
 
 | Intensity | Use when |
 |---|---|
-| `light` | Small low-risk localized work. |
+| `light` | Small low-risk localized work; shared fanout alone does not promote Build. |
 | `standard` | Ordinary medium+ source-changing work when `harness_capable=false` and `qa_evaluation_mode=not_required`. |
 | `strict` | High/critical risk, or—only when `execution_intent != prepare_only`—`harness_capable == true`, `qa_evaluation_mode == required`, explicit harness/QA acceptance, or trace/replay. |
 

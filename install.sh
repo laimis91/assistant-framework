@@ -9,7 +9,7 @@
 #   ./install.sh --agent codex      # → ~/.codex/skills/assistant-*/
 #   ./install.sh --agent gemini     # → ~/.gemini/skills/assistant-*/
 #   ./install.sh --agent claude --dry-run
-#   ./install.sh --agent claude --skill assistant-workflow  # single skill only
+#   ./install.sh --agent claude --skill assistant-workflow  # root skill plus bundled hard dependencies
 #   ./install.sh --agent codex                              # native, hookless behavior
 #   ./install.sh --agent claude --no-hooks                  # deprecated compatibility no-op
 #
@@ -37,7 +37,7 @@ Installs the Assistant Framework skills for an AI agent.
 
 Options:
   --agent NAME       Target agent: claude, codex, gemini (required)
-  --skill NAME       Install only one skill (default: all)
+  --skill NAME       Install one root skill plus bundled hard dependencies (default: all)
   --no-hooks         Deprecated compatibility no-op; all installs are hookless
   --dry-run          Show what would be done without doing it
   -h, --help         Show this help
@@ -74,6 +74,150 @@ fail() { echo "Error: $1" >&2; exit 1; }
 info() { echo "  $1"; }
 ok()   { echo "  OK: $1"; }
 dry()  { echo "  [dry-run] $1"; }
+
+array_contains() {
+    local needle="$1"
+    shift
+    local value
+    for value in "$@"; do
+        [[ "$value" == "$needle" ]] && return 0
+    done
+    return 1
+}
+
+validate_managed_skill_name() {
+    local skill="$1"
+
+    [[ -n "$skill" && "$skill" != "." && "$skill" != ".." && "$skill" != */* && "$skill" != *\\* ]] \
+        || fail "Unsafe skill name: $skill"
+}
+
+assert_existing_directory_or_absent() {
+    local path="$1"
+    local label="$2"
+
+    [[ ! -L "$path" ]] || fail "Refusing $label symlink: $path"
+    [[ ! -e "$path" || -d "$path" ]] || fail "Refusing $label that is not a directory: $path"
+}
+
+assert_directory_tree_safe() {
+    local directory="$1"
+    local label="$2"
+    local unsafe_node=""
+
+    unsafe_node="$(find "$directory" \( -type l -o \( ! -type d -a ! -type f \) \) -print -quit)" \
+        || fail "Could not inspect $label: $directory"
+    [[ -z "$unsafe_node" ]] || fail "Refusing $label containing a symlink or unsupported node: $unsafe_node"
+}
+
+assert_managed_skill_target_root_safe() {
+    assert_existing_directory_or_absent "$AGENT_HOME" "agent home"
+    assert_existing_directory_or_absent "$SKILLS_TARGET" "managed skills root"
+}
+
+assert_managed_skill_copy_safe() {
+    local skill="$1"
+    local source_dir=""
+    local source_skill_md=""
+    local target_dir=""
+
+    validate_managed_skill_name "$skill"
+    assert_managed_skill_target_root_safe
+
+    source_dir="$SKILLS_SOURCE/$skill"
+    source_skill_md="$source_dir/SKILL.md"
+    target_dir="$SKILLS_TARGET/$skill"
+
+    [[ ! -L "$SKILLS_SOURCE" && -d "$SKILLS_SOURCE" ]] \
+        || fail "Refusing managed skills source symlink or non-directory: $SKILLS_SOURCE"
+    [[ ! -L "$source_dir" && -d "$source_dir" ]] \
+        || fail "Refusing $skill source symlink or non-directory: $source_dir"
+    [[ ! -L "$source_skill_md" && -f "$source_skill_md" ]] \
+        || fail "Refusing $skill metadata symlink or non-regular file: $source_skill_md"
+    assert_directory_tree_safe "$source_dir" "$skill source"
+
+    [[ ! -L "$target_dir" ]] || fail "Refusing $skill managed target symlink: $target_dir"
+    [[ ! -e "$target_dir" || -d "$target_dir" ]] \
+        || fail "Refusing $skill managed target that is not a directory: $target_dir"
+    if [[ -d "$target_dir" ]]; then
+        assert_directory_tree_safe "$target_dir" "$skill managed target"
+    fi
+}
+
+preflight_managed_skill_closure() {
+    local skill=""
+
+    for skill in "$@"; do
+        assert_managed_skill_copy_safe "$skill"
+    done
+}
+
+read_canonical_skill_requires() {
+    local skill_md="$1"
+    local line=""
+    local dependency=""
+    local in_frontmatter=false
+    local in_requires=false
+
+    [[ -f "$skill_md" ]] || return 0
+    while IFS= read -r line; do
+        if [[ "$line" == "---" ]]; then
+            if $in_frontmatter; then
+                break
+            fi
+            in_frontmatter=true
+            continue
+        fi
+        $in_frontmatter || continue
+        if [[ "$line" == "requires:" ]]; then
+            in_requires=true
+            continue
+        fi
+        if $in_requires && [[ "$line" =~ ^[[:space:]]*-[[:space:]]*(.*)$ ]]; then
+            dependency="${BASH_REMATCH[1]}"
+            dependency="${dependency#"${dependency%%[![:space:]]*}"}"
+            dependency="${dependency%"${dependency##*[![:space:]]}"}"
+            [[ -n "$dependency" ]] && printf '%s\n' "$dependency"
+        else
+            in_requires=false
+        fi
+    done < "$skill_md"
+}
+
+resolve_bundled_skill_closure() {
+    local -a inventory=()
+    local -a queue=("$@")
+    local -a resolved=()
+    local queue_index=0
+    local skill=""
+    local dependency=""
+
+    if [[ ${#SKILLS[@]} -gt 0 ]]; then
+        inventory=("${SKILLS[@]}")
+    fi
+
+    while [[ $queue_index -lt ${#queue[@]} ]]; do
+        skill="${queue[$queue_index]}"
+        queue_index=$((queue_index + 1))
+        validate_managed_skill_name "$skill"
+        if [[ ${#resolved[@]} -gt 0 ]] && array_contains "$skill" "${resolved[@]}"; then
+            continue
+        fi
+        assert_managed_skill_copy_safe "$skill"
+        resolved+=("$skill")
+        while IFS= read -r dependency; do
+            [[ -n "$dependency" ]] || continue
+            if [[ ${#inventory[@]} -gt 0 ]] &&
+                array_contains "$dependency" "${inventory[@]}" &&
+                ! { [[ ${#resolved[@]} -gt 0 ]] && array_contains "$dependency" "${resolved[@]}"; } &&
+                ! array_contains "$dependency" "${queue[@]}"; then
+                queue+=("$dependency")
+            fi
+        done < <(read_canonical_skill_requires "$SKILLS_SOURCE/$skill/SKILL.md")
+    done
+
+    SKILLS=("${resolved[@]}")
+}
 
 metadata_preserving_temp() {
     local source_file="$1"
@@ -496,9 +640,10 @@ retire_installed_plugin_tool() {
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
 [[ "$AGENT" =~ ^(claude|codex|gemini)$ ]] || fail "Unknown agent: $AGENT. Supported: claude, codex, gemini"
 
-FRAMEWORK_DIR="$(cd "$(dirname "$0")" && pwd)"
+FRAMEWORK_DIR="$(cd -P "$(dirname "$0")" && pwd -P)"
 SKILLS_SOURCE="$FRAMEWORK_DIR/skills"
-[[ -d "$SKILLS_SOURCE" ]] || fail "Skills directory not found at $SKILLS_SOURCE"
+[[ ! -L "$SKILLS_SOURCE" && -d "$SKILLS_SOURCE" ]] \
+    || fail "Skills directory not found or unsafe at $SKILLS_SOURCE"
 
 # Auto-discover first-class release skills: assistant-* directories containing SKILL.md.
 while IFS= read -r skill_md; do
@@ -527,11 +672,18 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
     validate_installed_plugin_tool_cleanup "$TOOLS_TARGET"
 fi
 
-# Filter to single skill if requested
+# Select one root skill and its bundled hard-dependency closure if requested.
 if [[ -n "$SINGLE_SKILL" ]]; then
+    validate_managed_skill_name "$SINGLE_SKILL"
+    assert_managed_skill_copy_safe "$SINGLE_SKILL"
     [[ -f "$SKILLS_SOURCE/$SINGLE_SKILL/SKILL.md" ]] || fail "Unknown skill: $SINGLE_SKILL. Available: ${SKILLS[*]}"
-    SKILLS=("$SINGLE_SKILL")
+    resolve_bundled_skill_closure "$SINGLE_SKILL"
 fi
+
+# Validate the complete selected set before any installer write. The closure
+# resolver preflights each member before it reads that member's metadata; this
+# second pass also covers full installs and catches changes before copying.
+preflight_managed_skill_closure "${SKILLS[@]}"
 
 SETTINGS_FILE="$AGENT_HOME/settings.json"
 HOOKS_TARGET="$AGENT_HOME/hooks/assistant"
@@ -544,13 +696,10 @@ echo ""
 # ── Install skills ────────────────────────────────────────────────────────────
 
 for skill in "${SKILLS[@]}"; do
+    # Recheck immediately before rsync so a changed managed path is never used.
+    assert_managed_skill_copy_safe "$skill"
     source_dir="$SKILLS_SOURCE/$skill"
     target_dir="$SKILLS_TARGET/$skill"
-
-    if [[ ! -d "$source_dir" ]]; then
-        info "SKIP: $skill (source not found)"
-        continue
-    fi
 
     if $DRY_RUN; then
         dry "rsync $source_dir/ -> $target_dir/"
@@ -583,39 +732,11 @@ for skill in "${SKILLS[@]}"; do
     skill_md="$SKILLS_SOURCE/$skill/SKILL.md"
     [[ -f "$skill_md" ]] || continue
 
-    # Parse requires: from YAML frontmatter (simple grep, no YAML parser needed)
-    in_frontmatter=false
-    in_requires=false
-    while IFS= read -r line; do
-        # Track frontmatter boundaries (opening and closing ---)
-        if [[ "$line" == "---" ]]; then
-            if $in_frontmatter; then
-                break  # closing delimiter — done
-            else
-                in_frontmatter=true
-                continue  # opening delimiter — skip
-            fi
+    while IFS= read -r dep; do
+        if ! array_contains "$dep" "${SKILLS[@]}" && [[ ! -d "$SKILLS_TARGET/$dep" ]]; then
+            info "NOTE: $skill requires '$dep' which is not being installed and not found at $SKILLS_TARGET/$dep"
         fi
-        $in_frontmatter || continue
-        if [[ "$line" == "requires:" ]]; then
-            in_requires=true
-            continue
-        fi
-        if $in_requires; then
-            if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*(.+) ]]; then
-                dep="${BASH_REMATCH[1]}"
-                dep_installed=false
-                for s in "${SKILLS[@]}"; do
-                    [[ "$s" == "$dep" ]] && dep_installed=true
-                done
-                if ! $dep_installed && [[ ! -d "$SKILLS_TARGET/$dep" ]]; then
-                    info "NOTE: $skill requires '$dep' which is not being installed and not found at $SKILLS_TARGET/$dep"
-                fi
-            else
-                in_requires=false
-            fi
-        fi
-    done < "$skill_md"
+    done < <(read_canonical_skill_requires "$skill_md")
 done
 
 # ── Create ~/.agents symlink for Codex (agentskills.io standard) ────────────
@@ -889,5 +1010,5 @@ echo ""
 if [[ -n "$SINGLE_SKILL" ]]; then
     echo "To install all skills: ./install.sh --agent $AGENT"
 else
-    echo "To install a single skill: ./install.sh --agent $AGENT --skill <name>"
+    echo "To install one root skill and its bundled hard dependencies: ./install.sh --agent $AGENT --skill <name>"
 fi

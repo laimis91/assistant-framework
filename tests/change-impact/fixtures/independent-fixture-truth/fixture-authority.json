@@ -1,0 +1,13 @@
+{
+  "authority_source": "/private/tmp/change-impact-fixture-truth.zkZv1K",
+  "source_verification": "root rerun 6/6 before S3 adaptation",
+  "sha256": {
+    "truth.expected.json": "f2da653a3a75d4c81c8a24d25ff3dca14c72a0929c0b19f5bcc71beef598512f",
+    "capture.mjs": "676cbc045758aed75d96c83b645d62fb3f08798cc7773e9513209b29a59dc0b1",
+    "fixture-src/validation.mjs": "8fedc2e00186bb316571236f870e9a26228ab6d4ec6de1e572ff95a2a3bfa90f",
+    "fixture-src/cache-retry.mjs": "c54119a18d6c36889c1a6518d5682fa500e2ecbca041363a63c1faa820cdad52",
+    "fixture-src/base-registry.json": "b2eb5ff31ef0d2e86e82fb4e63d294ac2fbba17aa33af3489dbf05a765e8bc03",
+    "fixture-src/candidate-registry.json": "79ae63aa3a392dba4895178595601b5d87caee24c9604695c847e7fbd1908b60",
+    "fixture-src/unrelated-dirty-note.txt": "624283c881130264e94331141947aeca858249c047b778ab2dff6a4db97d461b"
+  }
+}

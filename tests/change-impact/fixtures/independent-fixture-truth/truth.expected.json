@@ -1,0 +1,42 @@
+{
+  "fixture_version": 1,
+  "cases": [
+    {
+      "id": "local-cosmetic-control",
+      "scope": "local",
+      "assessment_kind": "cosmetic",
+      "expected_consumers": [],
+      "expected_transitions": [],
+      "note": "A label-only edit has no behavior obligation."
+    },
+    {
+      "id": "validation-null-empty-contracts",
+      "scope": "shared",
+      "expected_consumers": ["form-submit", "bulk-import"],
+      "expected_contracts": ["null means untouched/default", "empty string is explicit input"],
+      "expected_transitions": ["form:null->untouched", "form:empty->required-error", "import:null->use-default-mapping", "import:empty->no-column-error"]
+    },
+    {
+      "id": "cache-retry-material-state",
+      "scope": "shared",
+      "expected_consumers": ["foreground-screen", "background-refresh"],
+      "expected_contracts": ["foreground exposes stale then retry result", "background schedules stale refresh", "cancellation suppresses retry/error"],
+      "expected_transitions": ["foreground:stale->retrying->fresh", "foreground:stale->cancelled", "background:stale->queued->fresh", "background:stale->cancelled"]
+    },
+    {
+      "id": "serialization-config-public-compatibility",
+      "scope": "shared",
+      "expected_consumers": ["public-legacy-json-client", "candidate-yaml-client"],
+      "expected_contracts": ["base-only legacy registration remains a public compatibility obligation", "candidate-only yaml registration is an added configuration obligation"],
+      "expected_transitions": ["registry:legacy-json->removed-in-candidate", "registry:yaml->added-in-candidate"]
+    },
+    {
+      "id": "high-fanout-equivalent-control",
+      "scope": "shared",
+      "expected_consumers": ["form-submit", "form-draft", "form-accessibility"],
+      "expected_contracts": ["all three preserve null as untouched and empty as required-error"],
+      "expected_transitions": ["each:null->untouched", "each:empty->required-error"],
+      "equivalence_permitted": true
+    }
+  ]
+}

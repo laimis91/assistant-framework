@@ -3,13 +3,13 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "11.0"
+schema_version: "11.1"
 contract: output
 skill: assistant-workflow
 
 # Completion evidence is tiered so small/low-risk work does not inherit the
-# full medium+ harness. Artifact definitions below remain the source of truth;
-# these tiers define which artifacts are required by default for each class.
+# full medium+ harness. Artifact definitions remain source of truth; tiers list
+# each class's default artifacts.
 # controller_intensity maps onto these tiers and gate_tiers: light -> small,
 # standard -> ordinary medium+, strict -> small_elevated for small work and
 # large_critical otherwise.
@@ -17,20 +17,20 @@ completion_tiers:
   preparation_only:
     execution_intent: prepare_only
     required_artifacts: [completion_policy, validation_results, feature_preparation_result]
-    conditional_artifacts: [triage_result, phase_checkpoints, task_journal, feature_preparation_evidence, plan_document, requirement_acceptance_map, architecture_decision_pack, context_map, context_budget_note, context_handoff_packet]
+    conditional_artifacts: [triage_result, phase_checkpoints, task_journal, feature_preparation_evidence, plan_document, requirement_acceptance_map, architecture_decision_pack, context_map, context_budget_note, context_handoff_packet, change_impact_applicability, change_impact_evidence]
     review_gate: "Preparation-evidence admissibility audit only; no Build, changed-files, implementation test, code-review, or final-handoff claim is permitted."
     checkpoint_policy: "Returns validation_results plus the typed readiness artifact with Execution not started, exact scope, applicable evidence ref, gaps, open decisions, implications, and next step."
   small:
     controller_intensity: light
     required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment]
-    review_gate: "fresh review after relevant validation; full independent review only when risk or another trigger promotes the work"
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_applicability, change_impact_evidence]
+    review_gate: "fresh review after validation; Pack/expanded impact uses canonical assistant-review; full independent review only when risk promotes work"
     checkpoint_policy: "an inline scope/check summary is enough; include an inline plan only when plan_mode=inline. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
   small_elevated:
     condition: "execution_intent != prepare_only and size == small and (controller_intensity == strict or qa_evaluation_mode == required)"
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, validation_results, spec_review_result, review_result, final_handoff]
-    conditional_artifacts: [test_results, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, manual_test_steps, manual_verification_result]
+    conditional_artifacts: [test_results, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, manual_test_steps, manual_verification_result, change_impact_applicability, change_impact_evidence]
     prohibited_artifacts: [fresh_review_result, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary]
     review_gate: "typed canonical review and required QA terminal state; no medium+ slice evidence"
     checkpoint_policy: "strict phase checkpoints without decomposition artifacts"
@@ -38,17 +38,49 @@ completion_tiers:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
     required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
-    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result]
+    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, change_impact_applicability, change_impact_evidence]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
-    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, feature_preparation_evidence, architecture_decision_pack, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation]
+    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, feature_preparation_evidence, architecture_decision_pack, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation, change_impact_applicability, change_impact_evidence]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
 artifacts:
+  - name: change_impact_applicability
+    type: object
+    required: conditional
+    condition: "a behavior, cosmetic, or locality/shared/unresolved impact decision affects verification"
+    description: "Applicability."
+    validation: "not_applicable=cosmetic; local causal_evidence_ref/no checker; otherwise expanded_artifact_carried=true."
+    on_fail: "scope/reason; local causal; shared/unresolved/expanded change_impact_evidence or blocked."
+    object_fields:
+      - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+      - {name: applicability_reason, type: string, required: true}
+      - {name: causal_evidence_ref, type: string, required: conditional, condition: "impact_scope == local"}
+      - {name: expanded_artifact_carried, type: boolean, required: true}
+
+  - name: change_impact_evidence
+    type: object
+    required: conditional
+    condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+    description: "Expanded evidence."
+    validation: "Keep artifact_identity across phases. Gaps/blocks cannot claim verification/review. pre_build needs valid assessment, no material unknown. completion needs verification and assistant-review projection binding original scope_manifest, coverage_ledger, current snapshot; terminal checks remain."
+    on_fail: "Run checker or report blocked; no manual pass."
+    object_fields:
+      - {name: artifact_identity, type: string, required: true}
+      - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
+      - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+      - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
+      - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+      - {name: review_projection_ref, type: string, required: conditional, condition: "status == valid and phase == completion"}
+      - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
+
   - name: triage_result
     type: object
     required: conditional
@@ -392,8 +424,8 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only and controller_intensity == light"
     description: "Compact review performed after relevant validation with fresh attention to carried Discover scope/criteria, any applicable inline plan, changed files, and acceptance criteria."
-    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies the diff/validation inspected. When an Architecture Decision Pack applies, canonical_result_ref, producer_schema_version, final_review_snapshot_id, final_snapshot_identity_ref, final_snapshot_identity, delegation_path_ref, and architecture_decision_pack_review_ref resolve to validated canonical assistant-review outputs; the alias and identity bind the same final_summary and exact current final batch."
-    on_fail: "Run a fresh post-validation review, fix findings, rerun relevant validation, and record PASS evidence before completing light work. For an applicable Pack, bind final_snapshot_identity_ref to the validated final_summary's exact current final-batch identity and delegation_path_ref to its validated review_delegation_path before marking validation_status=validated."
+    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies inspected validation. When a Pack or expanded impact applies, canonical refs resolve to one validated assistant-review final_summary and exact current final batch; Pack refs remain Pack-only."
+    on_fail: "Run fresh post-validation review, fix findings, rerun validation, and record PASS evidence. For a Pack or expanded impact, bind final_snapshot_identity_ref and delegation_path_ref to the canonical final_summary before validation_status=validated."
     object_fields:
       - name: result
         type: enum
@@ -412,34 +444,34 @@ artifacts:
       - name: canonical_result_ref
         type: string
         required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
-        description: "Stable ref to the validated assistant-review final_summary for the light Pack review"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        description: "Stable ref to the validated assistant-review final_summary"
         validation: "Resolves to a validated canonical assistant-review final_summary"
       - name: canonical_contract
         type: string
         required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         validation: "Must equal assistant-review/contracts/output.yaml#final_summary"
       - name: producer_schema_version
         type: string
         required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         validation: "Equals skills/assistant-review/contracts/index.yaml#schema_version at validation time."
       - name: final_review_snapshot_id
         type: string
         required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         validation: "Equals canonical_result_ref.final_review_snapshot_id and the current final batch review_material_snapshot.review_snapshot_id, and identifies the batch bound by final_snapshot_identity."
       - name: final_snapshot_identity_ref
         type: string
         required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Stable ref to canonical_result_ref.final_snapshot_identity"
         validation: "Resolves within the same validated assistant-review final_summary to final_snapshot_identity, which equals the current final batch review_material_snapshot.snapshot_identity; final_review_snapshot_id exactly equals the current final batch review_material_snapshot.review_snapshot_id."
       - name: final_snapshot_identity
         type: object
         required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Exact identity projection used to reject stale or foreign light-review bindings"
         validation: "Equals canonical_result_ref.final_snapshot_identity and the current final batch review_material_snapshot.snapshot_identity; final_review_snapshot_id exactly identifies this identity and equals the current final batch review_material_snapshot.review_snapshot_id."
         object_fields:
@@ -459,13 +491,13 @@ artifacts:
       - name: delegation_path_ref
         type: string
         required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
-        description: "Stable ref to the validated assistant-review review_delegation_path for the light Pack review"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        description: "Stable ref to the validated assistant-review review_delegation_path"
         validation: "Resolves to the review_delegation_path produced with the canonical final_summary"
       - name: delegation_contract
         type: string
         required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         validation: "Must equal assistant-review/contracts/output.yaml#review_delegation_path"
       - name: architecture_decision_pack_review_ref
         type: string
@@ -481,7 +513,7 @@ artifacts:
       - name: validation_status
         type: enum
         required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         enum_values: [validated]
 
   - name: review_result
@@ -1862,7 +1894,7 @@ artifacts:
       - name: artifact_type
         type: enum
         required: true
-        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, test_result, review_result, qa_evaluation_result]
+        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
         validation: "Classifies the artifact without requiring prose parsing"
         on_missing: fail
       - name: producer

@@ -68,14 +68,15 @@ file centralizes decision boundaries that cut across phase details while
   scope choices, repository approval policy, or an explicit user request. Wait
   for approval before Build.
 
-- `light`: small, low-risk, local work with no public behavior, data, security,
+- `light`: small, low-risk, localized work with no public behavior, data, security,
   harness, or QA acceptance risk. It may run inline/direct with relevant
   automated validation and a fresh self-review. Use
   `workflow_state_mode=inline`, `subagent_policy_state=not_required`, and
   `subagent_execution_mode=not_applicable`; do not require Code Writer,
   Builder/Tester, or independent Reviewer dispatch evidence. It does not require
   a journal, metrics, or manual verification unless separately
-  triggered.
+  triggered. Shared fanout alone keeps this Build policy; Review records canonical
+  `assistant-review` final-summary and delegation-path refs.
 - `standard`: ordinary medium+ source-changing work defaults to
   `controller_intensity=standard`, `harness_capable=false`, and
   `qa_evaluation_mode=not_required`. It uses

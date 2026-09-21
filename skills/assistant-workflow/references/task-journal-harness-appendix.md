@@ -116,7 +116,7 @@ typed producer/consumer records, not ad hoc strings]
 
 | Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary |
 |-------------|---------------|----------|----------|--------------|--------------------|-------------------|---------|
-| [id] | [done_contract/harness_recipe/harness_run_state/trace_ledger/replay_packet/pivot_restart_decision/changed_files/verification_evidence/plan_deviation/task_packet/context_map/test_result/review_result/qa_evaluation_result] | [role/subagent/automation] | [role/subagent/phase] | [file/section/dispatch/command ref] | [contract/template/fields] | [pending/valid/invalid/stale/not_applicable] | [concise state] |
+| [id] | [done_contract/harness_recipe/harness_run_state/trace_ledger/replay_packet/pivot_restart_decision/changed_files/verification_evidence/plan_deviation/task_packet/context_map/architecture_decision_pack/change_impact_evidence/test_result/review_result/qa_evaluation_result] | [role/subagent/automation] | [role/subagent/phase] | [file/section/dispatch/command ref] | [contract/template/fields] | [pending/valid/invalid/stale/not_applicable] | [concise state] |
 
 ## QA Evaluation Log
 

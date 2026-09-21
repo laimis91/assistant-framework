@@ -322,11 +322,12 @@ gates:
     checkpoint_start: "--- PHASE: NAME ---"
     checkpoint_end: "--- PHASE: NAME COMPLETE ---"
     condition: "when this phase runs"  # optional
+    entry_assertions: []  # Optional; same schema, checked before any mutation or mutation dispatch
     exit_assertions:
-      - id: XX1                        # unique ID for referencing
-        check: "what must be true"     # plain-English assertion
-        condition: "when applicable"   # optional — scopes the assertion
-        on_fail: "corrective action"   # what to do if assertion fails
+      - id: XX1                        # unique
+        check: "what must be true"
+        condition: "when applicable"   # optional
+        on_fail: "corrective action"
 
 invariants:
   - id: INV1
@@ -512,3 +513,7 @@ encode arbitrary structures.
     Recipe, typed refs, separate code-review/QA handoffs, pivot/restart
     decisions, and the max 10 terminal cap when the Process skill has
     long-running review, QA, or fix-verify loops
+15. **Shared-impact evidence** — preserve identity. Discovery reports gaps;
+    mutation requires current valid pre-build entry evidence; completion needs
+    verification/review. Missing loaded-path runtimes block. Fanout alone
+    does not escalate architecture, QA, or lane.
