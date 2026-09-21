@@ -54,8 +54,8 @@ artifacts:
     required: conditional
     condition: "a behavior, cosmetic, or locality/shared/unresolved impact decision affects verification"
     description: "Applicability."
-    validation: "not_applicable=cosmetic; compact local needs causal_evidence_ref, no checker; shared/unresolved/expanded needs expanded_artifact_carried=true."
-    on_fail: "Add scope/reason; local needs causal evidence; shared/unresolved/expanded need change_impact_evidence or report blocked."
+    validation: "not_applicable=cosmetic; local causal_evidence_ref/no checker; otherwise expanded_artifact_carried=true."
+    on_fail: "scope/reason; local causal; shared/unresolved/expanded change_impact_evidence or blocked."
     object_fields:
       - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
       - {name: applicability_reason, type: string, required: true}
@@ -67,7 +67,7 @@ artifacts:
     required: conditional
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
     description: "Expanded evidence."
-    validation: "Keep artifact_identity across phases. Discovery gaps/checker blocks cannot claim verification/review. pre_build requires valid assessment, no material unknown. completion requires verification plus assistant-review projection binding original scope_manifest, coverage_ledger, current snapshot; it cannot replace terminal checks."
+    validation: "Keep artifact_identity across phases. Gaps/blocks cannot claim verification/review. pre_build needs valid assessment, no material unknown. completion needs verification and assistant-review projection binding original scope_manifest, coverage_ledger, current snapshot; terminal checks remain."
     on_fail: "Run checker or report blocked; no manual pass."
     object_fields:
       - {name: artifact_identity, type: string, required: true}

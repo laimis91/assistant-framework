@@ -65,6 +65,30 @@ function runCli(documents, phase, mutate, priorResult, indentation) {
   return { ...child, result: JSON.parse(child.stdout) };
 }
 
+function runApiAtRuntime(version) {
+  const script = [
+    'const fs = require("node:fs");',
+    'Object.defineProperty(process.versions, "node", { value: process.argv[2], configurable: true });',
+    'const { validate } = require(process.argv[1]);',
+    'const documents = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));',
+    'process.stdout.write(JSON.stringify(validate({ phase: "completion", ...documents })));',
+  ].join("");
+  const child = spawnSync(process.execPath, ["-e", script, path.join(process.cwd(), "tools/change-impact/validate-change-impact.cjs"), version, path.join(process.cwd(), "tools/change-impact/example.completion.v1.json")], { encoding: "utf8" });
+  return { ...child, result: JSON.parse(child.stdout) };
+}
+
+function runCliAtRuntime(version) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "change-impact-runtime-"));
+  try {
+    const bootstrap = path.join(directory, "runtime.cjs");
+    fs.writeFileSync(bootstrap, `Object.defineProperty(process.versions, "node", { value: ${JSON.stringify(version)}, configurable: true });`);
+    const child = spawnSync(process.execPath, ["--require", bootstrap, path.join(process.cwd(), "tools/change-impact/validate-change-impact.cjs"), "--phase", "discovery", "--capture", path.join(directory, "missing-capture.json"), "--expected", path.join(directory, "missing-expected.json")], { encoding: "utf8" });
+    return { ...child, result: JSON.parse(child.stdout) };
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 test("multidomain completion closes independent consumer, transition, verification, and review authority", () => {
   const result = validate({ phase: "completion", ...validDocuments() });
   assert.equal(result.valid, true);
@@ -73,6 +97,22 @@ test("multidomain completion closes independent consumer, transition, verificati
 
 test("portable completion example is an executable protocol document", () => {
   assert.equal(validate({ phase: "completion", ...commonExample }).complete, true);
+});
+
+test("API and CLI reject unsupported Node runtimes before validation while Node 22 remains supported", () => {
+  for (const version of ["20.20.0", "21.7.3"]) {
+    const api = runApiAtRuntime(version);
+    assert.equal(api.status, 0, api.stderr);
+    assert.deepEqual(api.result, { schema_version: "change-impact-validation-result/v1", valid: false, complete: false, phase: null, reasons: [{ code: "RUNTIME_NODE22_OR_NEWER_REQUIRED" }], receipt: null });
+
+    const cli = runCliAtRuntime(version);
+    assert.equal(cli.status, 2, cli.stderr);
+    assert.deepEqual(cli.result, api.result);
+  }
+
+  const supported = runApiAtRuntime("22.0.0");
+  assert.equal(supported.status, 0, supported.stderr);
+  assert.equal(supported.result.complete, true);
 });
 
 test("behavior pre-build and completion reject an all-unaffected assessment without a bound current verification", () => {

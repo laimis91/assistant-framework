@@ -523,7 +523,7 @@ handoffs:
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Pass-local pointer for independently challenging locality, captured consumers, transitions, and mapping gaps."
-        validation: "Preserves artifact_identity, impact_scope, status, and phase. valid carries current capture/expected/checker refs and assessment only for pre-build or completion; gaps_reported, blocked, or invalid carries a gap_or_blocker_ref and remains independently challengeable. It provides no sibling output or alternate ledger."
+        validation: "Preserves artifact_identity, impact_scope, status, and phase. valid carries current capture/expected/checker refs and assessment only for pre-build or completion. Completion carries the actual review document pointer for rerun or receipt reuse; gaps_reported, blocked, or invalid carries a gap_or_blocker_ref and remains independently challengeable. It provides no sibling output or alternate ledger."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
           - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
@@ -533,6 +533,11 @@ handoffs:
           - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
           - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
           - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
+          - name: review_projection_ref
+            type: string
+            required: conditional
+            condition: "status == valid and phase == completion"
+            validation: "Completion carries the actual review document pointer for rerun or receipt reuse."
           - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
 
       - name: coverage_obligations

@@ -125,8 +125,8 @@ fields:
     type: object
     required: conditional
     condition: "a behavior, cosmetic, or locality/shared/unresolved impact decision affects verification"
-    description: "Applicability decision."
-    validation: "not_applicable is cosmetic; local needs causal evidence; shared/unresolved or expanded_artifact_carried needs artifact."
+    description: "Applicability."
+    validation: "not_applicable is cosmetic; local needs causal evidence; shared/unresolved/expanded_artifact_carried need artifact."
     object_fields:
       - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
       - {name: applicability_reason, type: string, required: true}
@@ -137,8 +137,8 @@ fields:
   - name: change_impact_context
     type: object
     required: false
-    description: "Expanded refs."
-    validation: "Valid includes identity, phase, refs, validator result; assessment pre-build/completion."
+    description: "Refs."
+    validation: "Valid carries identity, refs, validator result; pre-build/completion assessment; completion resolves review projection."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
@@ -146,6 +146,7 @@ fields:
       - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+      - {name: review_projection_ref, type: string, required: conditional, condition: "status == valid and phase == completion"}
       - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
     default: null

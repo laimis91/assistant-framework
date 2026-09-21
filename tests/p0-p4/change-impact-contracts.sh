@@ -442,18 +442,25 @@ end
   phase = field.call(context.fetch("object_fields"), "phase")
   assessment = field.call(context.fetch("object_fields"), "assessment_ref")
   result_ref = field.call(context.fetch("object_fields"), "validator_result_ref")
+  review_ref = field.call(context.fetch("object_fields"), "review_projection_ref")
   abort "#{skill} discovery phase is absent" unless phase && phase["required"] == "conditional" && phase["condition"] == "status == valid" && phase["enum_values"] == ["discovery", "pre_build", "completion"]
   abort "#{skill} discovery still fabricates assessment" unless assessment && assessment["condition"] == "status == valid and phase in [pre_build, completion]"
   abort "#{skill} valid context omits validator result ref" unless result_ref && result_ref["required"] == "conditional" && result_ref["condition"] == "status == valid" && context.fetch("validation").include?("validator result")
+  abort "#{skill} completion omits review projection ref" unless review_ref && review_ref["required"] == "conditional" && review_ref["condition"] == "status == valid and phase == completion" && context.fetch("validation").include?("review projection")
   accepts_context = lambda do |payload|
     context.fetch("object_fields").all? do |schema|
-      required = schema["required"] == true || (schema["condition"] == "status == valid" && payload["status"] == "valid") || (schema["condition"] == "status == valid and phase in [pre_build, completion]" && payload["status"] == "valid" && ["pre_build", "completion"].include?(payload["phase"])) || (schema["condition"] == "status in [gaps_reported, blocked, invalid]" && ["gaps_reported", "blocked", "invalid"].include?(payload["status"]))
+      required = schema["required"] == true || (schema["condition"] == "status == valid" && payload["status"] == "valid") || (schema["condition"] == "status == valid and phase in [pre_build, completion]" && payload["status"] == "valid" && ["pre_build", "completion"].include?(payload["phase"])) || (schema["condition"] == "status == valid and phase == completion" && payload["status"] == "valid" && payload["phase"] == "completion") || (schema["condition"] == "status in [gaps_reported, blocked, invalid]" && ["gaps_reported", "blocked", "invalid"].include?(payload["status"]))
       !required || (payload.key?(schema["name"]) && !payload[schema["name"]].to_s.empty?)
     end
   end
   valid_context = {"artifact_identity" => "impact-1", "status" => "valid", "phase" => "pre_build", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "assessment_ref" => "assessment.json", "validator_result_ref" => "result.json"}
   abort "#{skill} accepts valid context without result ref" if accepts_context.call(valid_context.reject { |key, _| key == "validator_result_ref" })
   abort "#{skill} rejects valid context with result ref" unless accepts_context.call(valid_context)
+  completion_context = valid_context.merge("phase" => "completion", "review_projection_ref" => "review.json")
+  abort "#{skill} rejects valid completion context with review projection" unless accepts_context.call(completion_context)
+  abort "#{skill} accepts valid completion context without review projection" if accepts_context.call(completion_context.reject { |key, _| key == "review_projection_ref" })
+  abort "#{skill} accepts blank completion review projection" if accepts_context.call(completion_context.merge("review_projection_ref" => ""))
+  abort "#{skill} requires review projection outside valid completion" if !accepts_context.call(valid_context) || !accepts_context.call({"artifact_identity" => "impact-1", "status" => "valid", "phase" => "discovery", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "validator_result_ref" => "result.json"})
   %w[gaps_reported blocked invalid].each do |status|
     payload = {"artifact_identity" => "impact-1", "status" => status, "gap_or_blocker_ref" => "gap.json"}
     abort "#{skill} non-valid context requires result ref" unless accepts_context.call(payload)
@@ -497,13 +504,56 @@ abort "Architect rejects a carried local impact artifact" unless architect_scope
 review_handoffs = load.call(File.join(framework, "skills/assistant-review/contracts/handoffs.yaml"))
 reviewer = review_handoffs.fetch("handoffs").find { |item| item["name"] == "orchestrator_to_reviewer" }
 reviewer_impact = field.call(reviewer.fetch("context_fields"), "change_impact_evidence")
-[architect_impact, reviewer_impact].each do |carrier|
+[
+  ["Architect", architect_impact, true],
+  ["Reviewer", reviewer_impact, false]
+].each do |role, carrier, valid_only|
+  fields = carrier.fetch("object_fields")
   phase = field.call(carrier.fetch("object_fields"), "phase")
   assessment = field.call(carrier.fetch("object_fields"), "assessment_ref")
   scope = field.call(carrier.fetch("object_fields"), "impact_scope")
-  abort "read-only carrier loses discovery/completion evidence" unless phase && phase["enum_values"] == ["discovery", "pre_build", "completion"]
-  abort "read-only carrier requires discovery assessment" unless assessment && assessment["condition"].include?("phase in [pre_build, completion]")
-  abort "read-only carrier rejects a carried local impact artifact" unless scope && scope["enum_values"] == canonical_scopes
+  review_ref = field.call(fields, "review_projection_ref")
+  expected_review_condition = valid_only ? "phase == completion" : "status == valid and phase == completion"
+  abort "#{role} carrier loses discovery/completion evidence" unless phase && phase["enum_values"] == ["discovery", "pre_build", "completion"]
+  abort "#{role} carrier requires discovery assessment" unless assessment && assessment["condition"].include?("phase in [pre_build, completion]")
+  abort "#{role} carrier rejects a carried local impact artifact" unless scope && scope["enum_values"] == canonical_scopes
+  abort "#{role} completion carrier omits review projection ref" unless review_ref && review_ref["type"] == "string" && review_ref["required"] == "conditional" && review_ref["condition"] == expected_review_condition
+  abort "#{role} completion carrier loses review pointer reuse semantics" unless review_ref["validation"].to_s.include?("actual review document pointer for rerun or receipt reuse")
+
+  accepts = lambda do |payload|
+    fields.all? do |schema|
+      value = payload[schema["name"]]
+      present = payload.key?(schema["name"]) && !value.to_s.empty?
+      required = schema["required"] == true ||
+        (schema["condition"] == "status == valid" && payload["status"] == "valid") ||
+        (schema["condition"] == "phase in [pre_build, completion]" && ["pre_build", "completion"].include?(payload["phase"])) ||
+        (schema["condition"] == "status == valid and phase in [pre_build, completion]" && payload["status"] == "valid" && ["pre_build", "completion"].include?(payload["phase"])) ||
+        (schema["condition"] == "phase == completion" && payload["phase"] == "completion") ||
+        (schema["condition"] == "status == valid and phase == completion" && payload["status"] == "valid" && payload["phase"] == "completion") ||
+        (schema["condition"] == "status in [gaps_reported, blocked, invalid]" && ["gaps_reported", "blocked", "invalid"].include?(payload["status"]))
+      enum_valid = schema["type"] != "enum" || !payload.key?(schema["name"]) || Array(schema["enum_values"]).include?(value)
+      (!required || present) && enum_valid
+    end
+  end
+
+  discovery = {"artifact_identity" => "impact-1", "status" => "valid", "impact_scope" => "shared", "phase" => "discovery", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "validator_result_ref" => "result.json"}
+  pre_build = discovery.merge("phase" => "pre_build", "assessment_ref" => "assessment.json")
+  completion = pre_build.merge("phase" => "completion", "review_projection_ref" => "review.json")
+  abort "#{role} rejects valid discovery carrier" unless accepts.call(discovery)
+  abort "#{role} rejects valid pre-build carrier" unless accepts.call(pre_build)
+  abort "#{role} rejects valid completion carrier" unless accepts.call(completion)
+  abort "#{role} accepts completion without review projection" if accepts.call(completion.reject { |key, _| key == "review_projection_ref" })
+  abort "#{role} accepts blank completion review projection" if accepts.call(completion.merge("review_projection_ref" => ""))
+
+  if valid_only
+    gaps = {"artifact_identity" => "impact-1", "status" => "gaps_reported", "impact_scope" => "shared", "gap_or_blocker_ref" => "gaps.json"}
+    abort "Architect carrier permits non-valid gaps evidence" if accepts.call(gaps)
+  else
+    %w[gaps_reported blocked invalid].each do |status|
+      gaps = {"artifact_identity" => "impact-1", "status" => status, "impact_scope" => "shared", "gap_or_blocker_ref" => "gaps.json"}
+      abort "Reviewer rejects #{status} gaps evidence" unless accepts.call(gaps)
+    end
+  end
 end
 
 mutation_handoffs = {
@@ -511,6 +561,12 @@ mutation_handoffs = {
   "BuilderTester" => [handoffs, "orchestrator_to_builder_tester"],
   "Fixer" => [load.call(File.join(framework, "skills/assistant-debugging/contracts/handoffs.yaml")), "debugging_fix"]
 }
+code_writer = handoffs.fetch("handoffs").find { |item| item["name"] == "orchestrator_to_code_writer" }
+builder_tester = handoffs.fetch("handoffs").find { |item| item["name"] == "orchestrator_to_builder_tester" }
+code_writer_applicability = field.call(code_writer.fetch("context_fields"), "change_impact_applicability")
+builder_tester_applicability = field.call(builder_tester.fetch("context_fields"), "change_impact_applicability")
+abort "BuilderTester omits compact impact applicability" unless builder_tester_applicability
+abort "BuilderTester applicability differs from CodeWriter" unless builder_tester_applicability == code_writer_applicability
 mutation_handoffs.each do |role, (contract, handoff_name)|
   handoff = contract.fetch("handoffs").find { |item| item["name"] == handoff_name }
   carrier = field.call(handoff.fetch("context_fields"), "change_impact_evidence")
@@ -518,7 +574,9 @@ mutation_handoffs.each do |role, (contract, handoff_name)|
   phase = field.call(fields, "phase")
   assessment = field.call(fields, "assessment_ref")
   status = field.call(fields, "status")
+  review_ref = field.call(fields, "review_projection_ref")
   abort "#{role} accepts discovery/completion mutation authorization" unless phase && phase["enum_values"] == ["pre_build"]
+  abort "#{role} carries completion review projection into a pre-build-only mutation handoff" if review_ref
   abort "#{role} permits optional pre-build assessment" unless assessment && assessment["required"] == true
   abort "#{role} permits non-valid mutation evidence" unless status && status["enum_values"] == ["valid"]
   abort "#{role} does not require current resolved pre-build bindings" unless carrier["validation"].to_s.include?("current valid pre_build") && carrier["validation"].to_s.include?("resolve")

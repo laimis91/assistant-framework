@@ -25,6 +25,14 @@ function issue(code) {
   return { code };
 }
 
+function nodeRuntimeSupported() {
+  return Number(process.versions.node.split(".")[0]) >= 22;
+}
+
+function runtimeFailure() {
+  return { schema_version: "change-impact-validation-result/v1", valid: false, complete: false, phase: null, reasons: [issue("RUNTIME_NODE22_OR_NEWER_REQUIRED")], receipt: null };
+}
+
 function canonicalJson(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -400,6 +408,7 @@ function validateReview(review, assessment, expected, reasons) {
 }
 
 function validate({ phase, capture, expected, assessment, review, priorResult }) {
+  if (!nodeRuntimeSupported()) return runtimeFailure();
   const reasons = [];
   if (!PHASES.has(phase)) return { schema_version: "change-impact-validation-result/v1", valid: false, complete: false, phase: null, reasons: [issue("PHASE_INVALID")], receipt: null };
   const inputs = snapshotPhaseInputs(phase, capture, expected, assessment, review);
@@ -434,7 +443,7 @@ function parseArgs(argv) {
 
 function main() {
   try {
-    if (Number(process.versions.node.split(".")[0]) < 22) throw new Error("RUNTIME_NODE22_OR_NEWER_REQUIRED");
+    if (!nodeRuntimeSupported()) throw new Error("RUNTIME_NODE22_OR_NEWER_REQUIRED");
     const options = parseArgs(process.argv.slice(2));
     const result = validate({
       phase: options["--phase"],

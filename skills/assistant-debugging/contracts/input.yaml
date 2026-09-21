@@ -79,7 +79,7 @@ fields:
     type: object
     required: false
     description: "Current common change-impact artifact references for a shared, unresolved, or explicitly carried expanded repair."
-    validation: "Preserves identity/refs; valid carries validator result. Discovery may report gaps; expanded repair requires the common checker."
+    validation: "Preserves identity/refs; valid carries validator result and valid completion resolves the review projection to the actual review document. Discovery may report gaps; expanded repair requires the common checker."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
@@ -87,6 +87,7 @@ fields:
       - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
+      - {name: review_projection_ref, type: string, required: conditional, condition: "status == valid and phase == completion"}
       - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
     default: null

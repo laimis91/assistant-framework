@@ -930,7 +930,7 @@ handoffs:
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Current expanded common impact artifact for Architect planning."
-        validation: "Preserves artifact_identity, phase, capture_ref, expected_context_ref, validator_result_ref, impact_scope, and status unchanged through task-packet planning; assessment_ref is carried only for pre-build or completion."
+        validation: "Preserves artifact_identity, phase, capture_ref, expected_context_ref, validator_result_ref, impact_scope, and status unchanged through task-packet planning; assessment_ref is carried only for pre-build or completion. Completion carries the actual review document pointer for rerun or receipt reuse."
         on_missing: re-dispatch
         object_fields:
           - {name: artifact_identity, type: string, required: true}
@@ -941,6 +941,11 @@ handoffs:
           - {name: expected_context_ref, type: string, required: true}
           - {name: assessment_ref, type: string, required: conditional, condition: "phase in [pre_build, completion]"}
           - {name: validator_result_ref, type: string, required: true}
+          - name: review_projection_ref
+            type: string
+            required: conditional
+            condition: "phase == completion"
+            validation: "Completion carries the actual review document pointer for rerun or receipt reuse."
       - name: requirement_acceptance_map
         type: string
         required: true
@@ -2262,6 +2267,11 @@ handoffs:
     to: BuilderTester
     phase: BUILD
     context_fields:
+      - name: change_impact_applicability
+        type: object
+        required: conditional
+        condition: "the current slice has a behavior-bearing change or locality/shared/unresolved impact decision"
+        validation: "impact_scope and applicability_reason are carried unchanged. local carries causal evidence and does not require expanded checker refs; shared/unresolved or explicit expansion carries the matching expanded artifact envelope."
       - name: build_execution_lane
         type: enum
         required: true
