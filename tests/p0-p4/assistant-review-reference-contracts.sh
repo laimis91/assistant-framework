@@ -908,6 +908,13 @@ test_start "assistant-review models batch lifecycle, overlapping manifest covera
 if ruby -ryaml -rjson -e '
   input, handoffs, output, gates = ARGV.take(4).map { |path| YAML.load_file(path) }
   evals = JSON.parse(File.read(ARGV.fetch(4)))
+  root = File.read(ARGV.fetch(5)).split("## Success Criteria", 2).last.split("## Constraints", 2).first.gsub(/\s+/, " ")
+  abort "root requires completed passes before an incomplete audit can exit" if root.include?("at least two COMPLETED passes")
+  %w[failed timed-out blocked].each do |state|
+    abort "root omits terminally incomplete #{state} audit path" unless root.include?(state)
+  end
+  abort "root loses planned pass minimum or terminal barrier" unless root.include?("plans and attempts at least two independent passes") && root.include?("All expected passes reach terminal accounting before aggregation, fix, or exit")
+  abort "root loses clean coverage or bounded audit exit" unless root.include?("`CLEAN`/`ISSUES_FIXED` require complete coverage") && root.include?("Audit exits after one started batch") && root.include?("`HAS_REMAINING_ITEMS`")
   reviewer = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
   context = reviewer.fetch("context_fields").to_h { |field| [field["name"], field] }
   batch = context.fetch("review_batch").fetch("object_fields").to_h { |field| [field["name"], field] }
@@ -960,7 +967,7 @@ if ruby -ryaml -rjson -e '
     gates.fetch("gates").find { |item| item["phase"] == "EVALUATE_STEP" }.fetch("exit_assertions").to_h { |item| [item["id"], item] }.fetch("EV2").fetch("check").include?("needs_context") &&
     audit_eval.fetch("expected_behavior").join(" ").include?("read-only Reviewer pass") && later_eval.fetch("expected_behavior").join(" ").include?("later runtime finding") && mutation_eval.fetch("expected_behavior").join(" ").include?("HAS_REMAINING_ITEMS")
   exit valid ? 0 : 1
-' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_phase_gates" "$review_evals"; then
+' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_phase_gates" "$review_evals" "$review_skill"; then
     pass
 else
     fail "assistant-review lacks lifecycle-safe terminal accounting, overlapping manifest tuple closure, or sibling-blind pre-batch provenance"

@@ -64,8 +64,11 @@ gates:
     checkpoint_end: "--- PHASE: FIX COMPLETE ---"
     condition: "when can_modify_code is true and a fix or mitigation is attempted"
     entry_assertions:
+      - id: FX_CHANGE_IMPACT_APPLICABILITY
+        check: "Before any source/test mutation or mutation dispatch, record change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
+        on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
       - id: FX_CHANGE_IMPACT_PREBUILD
-        check: "Before any source/test mutation or mutation dispatch, every behavior repair records compact applicability evidence. Shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Evidenced local repairs keep ordinary regression verification and self-review."
+        check: "Before any source/test mutation or mutation dispatch, shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Evidenced local repairs keep ordinary regression verification and self-review."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         on_fail: "Do not patch, write a regression test, or dispatch Fixer; load references/change-impact.md and repair the assessment or report its explicit blocker."
     exit_assertions:

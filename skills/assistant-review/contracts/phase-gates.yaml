@@ -233,6 +233,10 @@ gates:
     checkpoint_end: null
     entry_assertions:
 
+      - id: F_CHANGE_IMPACT_APPLICABILITY
+        check: "Before any source/test mutation or mutation dispatch, record change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
+        on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
+
       - id: F_CHANGE_IMPACT_PREBUILD
         check: "Before any source/test mutation or mutation dispatch, a review-fix with triggered shared, unresolved, or expanded impact runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs for bounded planned obligations, consumer union, and material transitions."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"

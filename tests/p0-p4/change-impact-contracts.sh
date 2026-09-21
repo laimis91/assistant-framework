@@ -559,6 +559,16 @@ checks.each do |path, phase_name, assertion_id|
   abort "#{phase_name} keeps expanded-impact authorization at exit" if exit
   abort "#{phase_name} entry assertion does not precede every source/test mutation or dispatch" unless entry.fetch("check").downcase.include?("before any source/test mutation or mutation dispatch")
   abort "#{phase_name} entry assertion lost shared/unresolved scope" unless entry["condition"] == "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+  applicability_id = assertion_id.sub("PREBUILD", "APPLICABILITY")
+  applicability = gate.fetch("entry_assertions").find { |item| item["id"] == applicability_id }
+  abort "#{phase_name} lacks applicability before scope selection" unless applicability
+  abort "#{phase_name} applicability can skip missing/unset scope" if applicability.key?("condition")
+  abort "#{phase_name} checks expanded scope before establishing applicability" unless gate.fetch("entry_assertions").index(applicability) < gate.fetch("entry_assertions").index(entry)
+  %w[change_impact_applicability impact_scope applicability_reason causal_evidence_ref expanded_artifact_carried].each do |field|
+    abort "#{phase_name} applicability omits #{field}" unless applicability.fetch("check").include?(field)
+  end
+  abort "#{phase_name} applicability gate runs too late" unless applicability.fetch("check").downcase.include?("before any source/test mutation or mutation dispatch")
+  abort "#{phase_name} applicability has no pre-mutation recovery" unless applicability.fetch("on_fail").include?("Stop before")
 end
 
 guide = File.read(File.join(framework, "docs/skill-contract-design-guide.md"))

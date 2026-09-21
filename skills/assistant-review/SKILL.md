@@ -35,9 +35,11 @@ independently evaluates acceptance, evidence, quality, progression, and readines
 
 - Resolve scope, mode, and material before the loop; rank findings by severity,
   evidence, and confidence.
-- A frozen-snapshot batch has at least two COMPLETED passes, independently
-  performed before aggregation, fix, or exit. Audit returns terminal coverage after one started batch, complete or
-  `HAS_REMAINING_ITEMS` when incomplete, with non-empty `reviewed_scope`.
+- Each frozen-snapshot batch plans and attempts at least two independent passes.
+  All expected passes reach terminal accounting before aggregation, fix, or exit.
+  `CLEAN`/`ISSUES_FIXED` require complete coverage. Audit exits after one started
+  batch with non-empty `reviewed_scope`; incomplete coverage, including failed,
+  timed-out, or blocked passes, returns `HAS_REMAINING_ITEMS`.
 - Every review applies SOLID, KISS, DRY, YAGNI, and readability from
   `references/review-principles.md`. An applicable Pack checks freshness,
   ownership/dependency, semantic types, falsifiable quality, compatibility or
