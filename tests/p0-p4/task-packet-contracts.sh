@@ -240,6 +240,13 @@ if ! ruby -rjson -e '
         assertion["fields"] == ["a_status", "c_decision"] && assertion["expected_objects"] == expected_decisions
     end
   end
+  exact_keys = lambda do |assertions, path, fields|
+    assertions.any? { |assertion| assertion["operator"] == "object_keys_exact" && assertion["path"] == path && assertion["fields"] == fields }
+  end
+  policy_fields = %w[source_writer_policy read_only_analysis_policy isolation_evidence_ref c_start_decisions per_slice_verification integration_validation integration_checks fresh_review fresh_review_after]
+  decision_key_assertions = lambda do |assertions|
+    (0..2).all? { |index| exact_keys.call(assertions, ["execution_policy", "c_start_decisions", index], %w[a_status c_decision]) }
+  end
   shared_assertions = structured.call(shared)
   isolated_assertions = structured.call(isolated)
   valid = shared_expected.include?("Sequences source-changing A and B because the workspace is shared or isolation is unknown") &&
@@ -256,6 +263,11 @@ if ! ruby -rjson -e '
     equals.call(shared_assertions, ["execution_policy", "isolation_evidence_ref"], "not_available") &&
     equals.call(isolated_assertions, ["execution_policy", "source_writer_policy"], "isolated_A_B_overlap_permitted") &&
     equals.call(isolated_assertions, ["execution_policy", "isolation_evidence_ref"], "fixture-runtime-isolation-A-B-v1") &&
+    exact_keys.call(shared_assertions, [], ["execution_policy"]) &&
+    exact_keys.call(shared_assertions, ["execution_policy"], policy_fields) &&
+    exact_keys.call(isolated_assertions, [], ["execution_policy"]) &&
+    exact_keys.call(isolated_assertions, ["execution_policy"], policy_fields) &&
+    decision_key_assertions.call(shared_assertions) && decision_key_assertions.call(isolated_assertions) &&
     decisions.call(shared_assertions) && decisions.call(isolated_assertions)
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"; then
@@ -337,7 +349,8 @@ workflow_eval_missing_seed_responses="$workflow_eval_root/missing-seed"
 workflow_eval_wrong_writer_responses="$workflow_eval_root/wrong-writer"
 workflow_eval_wrong_integration_responses="$workflow_eval_root/wrong-integration"
 workflow_eval_wrong_review_responses="$workflow_eval_root/wrong-review"
-mkdir -p "$workflow_eval_responses/assistant-workflow" "$workflow_eval_unsafe_responses/assistant-workflow" "$workflow_eval_missing_seed_responses/assistant-workflow" "$workflow_eval_wrong_writer_responses/assistant-workflow" "$workflow_eval_wrong_integration_responses/assistant-workflow" "$workflow_eval_wrong_review_responses/assistant-workflow"
+workflow_eval_extra_responses="$workflow_eval_root/extra-keys"
+mkdir -p "$workflow_eval_responses/assistant-workflow" "$workflow_eval_unsafe_responses/assistant-workflow" "$workflow_eval_missing_seed_responses/assistant-workflow" "$workflow_eval_wrong_writer_responses/assistant-workflow" "$workflow_eval_wrong_integration_responses/assistant-workflow" "$workflow_eval_wrong_review_responses/assistant-workflow" "$workflow_eval_extra_responses/assistant-workflow"
 cat >"$workflow_eval_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" <<'EOF'
 {"execution_policy":{"source_writer_policy":"sequential_shared_or_unknown","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
 EOF
@@ -362,6 +375,7 @@ EOF
 cat >"$workflow_eval_wrong_review_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
 {"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"per_slice_verification"}}
 EOF
+cp "$workflow_eval_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" "$workflow_eval_extra_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt"
 workflow_eval_grading_failures=()
 for workflow_case in native-slice-execution-uses-dependencies-not-runner-topology isolated-independent-slices-integrate-before-review; do
     if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_responses" --skill assistant-workflow --case "$workflow_case" >"$workflow_eval_root/$workflow_case-positive.out"; then
@@ -370,6 +384,18 @@ for workflow_case in native-slice-execution-uses-dependencies-not-runner-topolog
     if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_unsafe_responses" --skill assistant-workflow --case "$workflow_case" >"$workflow_eval_root/$workflow_case-unsafe.out" 2>&1 \
         || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/$workflow_case-unsafe.out"; then
         workflow_eval_grading_failures+=("$workflow_case:unsafe-dependent-start")
+    fi
+done
+for extra_key_mutation in \
+    'setpath(["unsafe_override"]; true)' \
+    'setpath(["execution_policy","unsafe_override"]; true)' \
+    'setpath(["execution_policy","c_start_decisions",0,"unsafe_override"]; true)'; do
+    extra_key_response="$workflow_eval_extra_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt"
+    jq "$extra_key_mutation" "$workflow_eval_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" >"$workflow_eval_root/extra-key-mutated.json"
+    mv "$workflow_eval_root/extra-key-mutated.json" "$extra_key_response"
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_extra_responses" --skill assistant-workflow --case native-slice-execution-uses-dependencies-not-runner-topology >"$workflow_eval_root/extra-key.out" 2>&1 \
+        || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/extra-key.out"; then
+        workflow_eval_grading_failures+=("extra-key:$extra_key_mutation")
     fi
 done
 if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_missing_seed_responses" --skill assistant-workflow --case isolated-independent-slices-integrate-before-review >"$workflow_eval_root/isolated-missing-seed.out" 2>&1 \

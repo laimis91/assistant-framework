@@ -598,8 +598,21 @@ enforce_incomplete_pair_breaker() {
         max_incomplete_pairs="$(jq -r '.max_incomplete_pairs' "$OUTPUT_DIR/run-plan.json")"
     fi
     incomplete_pairs="$(jq -s '
+      def deterministic_pre_dispatch_isolated_parallel_pair:
+        length == 2
+        and ([.[] | .variant] | sort == ["baseline", "candidate"])
+        and ([.[] | .trial_index] | unique | length == 1)
+        and all(.[];
+          .case_id == "isolated-parallel-a-b-then-c-with-integration"
+          and .status == "adapter_unavailable"
+          and .error.code == "unknown_event_shape"
+          and .execution.exit_code == 0
+          and .execution.raw_artifacts_retained == false
+          and (has("metrics") | not));
       group_by(.pair_id)
-      | map(select(length == 2 and any(.[]; .status != "completed")))
+      | map(select(length == 2
+          and any(.[]; .status != "completed")
+          and (deterministic_pre_dispatch_isolated_parallel_pair | not)))
       | length
     ' "$OUTPUT_DIR"/traces/*.json)"
     [[ "$max_incomplete_pairs" =~ ^[0-9]+$ && "$incomplete_pairs" -le "$max_incomplete_pairs" ]] \
@@ -2355,10 +2368,26 @@ small_fix_event_evidence() {
         .type == "item.completed"
         and .item.type == "file_change"
         and changes_containing("docs/usage.md");
+      def is_successful_command:
+        .type == "item.completed"
+        and .item.type == "command_execution"
+        and .item.exit_code == 0
+        and (is_exact_command("rg -n teh docs/usage.md") | not);
+      def has_file_change_event:
+        any(.[];
+          (.type == "item.started" or .type == "item.completed" or .type == "item.updated")
+          and .item.type == "file_change");
 
       . as $events
       | [range(0; length) | select($events[.] | is_discovery)] as $discoveries
       | [range(0; length) | select($events[.] | is_change)] as $changes
+      | [range(0; length)
+          | . as $index
+          | $events[$index]
+          | select(is_successful_command)
+          | {index: $index}
+        ] as $successful_commands
+      | ($events | has_file_change_event) as $has_file_change_event
       | [range(0; length)
           | . as $index
           | $events[$index]
@@ -2391,10 +2420,20 @@ small_fix_event_evidence() {
           and ($events[.].item.type == "mcp_tool_call" or $events[.].item.type == "web_search"))] as $disallowed
       | {
           source_discovery_before_change: (($discoveries | length) > 0 and $discovery_lifecycles_valid and ($workspace_actions | length) > 0 and ($discovery_actions | length) > 0 and ($changes | length) > 0 and $workspace_actions[0] == $discovery_actions[0] and all($workspace_actions[]; . as $action_index | $action_index >= $discoveries[0] or ($discovery_actions | index($action_index)) != null) and $discoveries[0] < $changes[0]),
+          command_only_change_without_file_change: (($discoveries | length) > 0 and $discovery_lifecycles_valid and ($workspace_actions | length) > 0 and ($discovery_actions | length) > 0 and ($successful_commands | length) > 0 and ($changes | length) == 0 and ($has_file_change_event | not) and $workspace_actions[0] == $discovery_actions[0] and all($workspace_actions[]; . as $action_index | $action_index >= $discoveries[0] or ($discovery_actions | index($action_index)) != null) and any($successful_commands[]; .index > $discoveries[0])),
           disallowed_item_count: ($disallowed | length)
         }
 JQ
 )" "$jsonl"
+}
+
+small_fix_command_only_edit_missing_telemetry() {
+    local jsonl="$1" workspace="$2" event_evidence
+    event_evidence="$(small_fix_event_evidence "$jsonl" "$workspace")" || return 1
+    # Without a file_change event, command text cannot prove that the command
+    # edited this file or establish write timing. Keep the result unavailable.
+    jq -e '.command_only_change_without_file_change == true and .disallowed_item_count == 0' \
+        <<<"$event_evidence" >/dev/null
 }
 
 observed_event_shape_supported() {
@@ -3573,7 +3612,6 @@ execute_one_run() {
         rm -rf "$run_raw"
         return
     fi
-
     if [[ "$case_id" == "pivot-restart-on-stagnation-or-code-writer-blocker" ]] \
         && ! stagnation_event_shape_supported "$jsonl"; then
         write_unavailable_trace "$trace_path" "$run_id" "$pair_id" "$case_id" "$trial_index" "$variant" \
@@ -3608,6 +3646,21 @@ execute_one_run() {
     fi
     response_verifier="$(grade_response "$case_id" "$final_output" "$semantic_extract_path")"
     workspace_verifier="$(verify_workspace "$case_id" "$workspace" "$jsonl")"
+    if [[ "$case_id" == "small-fix-stays-lightweight" ]] \
+        && small_fix_requires_unavailable_adapter_policy \
+        && jq -n -e \
+            --argjson response "$response_verifier" \
+            --argjson workspace "$workspace_verifier" \
+            '$response.status == "passed"
+             and $workspace.workspace_failure_ids == ["workspace-003"]
+             and $workspace.scope_deviations == 0' >/dev/null \
+        && small_fix_command_only_edit_missing_telemetry "$jsonl" "$workspace"; then
+        write_unavailable_trace "$trace_path" "$run_id" "$pair_id" "$case_id" "$trial_index" "$variant" \
+            unknown_event_shape 0 "$fixture_hash" "$case_digest" "$instruction_hash" "$grader_digest" "$cli_version"
+        mark_run_attempt_completed "$attempt_path" || die "Could not complete unavailable run-attempt state for $run_id."
+        rm -rf "$run_raw"
+        return
+    fi
     verifier="$(jq -cn \
         --argjson response "$response_verifier" \
         --argjson workspace "$workspace_verifier" \

@@ -366,7 +366,12 @@
           {"operator":"equals","path":["execution_policy","integration_validation"],"expected":"required"},
           {"operator":"equals","path":["execution_policy","integration_checks"],"expected":["cross-slice","full-scope"]},
           {"operator":"equals","path":["execution_policy","fresh_review"],"expected":"required"},
-          {"operator":"equals","path":["execution_policy","fresh_review_after"],"expected":"integration_validation"}
+          {"operator":"equals","path":["execution_policy","fresh_review_after"],"expected":"integration_validation"},
+          {"operator":"object_keys_exact","path":[],"fields":["execution_policy"]},
+          {"operator":"object_keys_exact","path":["execution_policy"],"fields":["source_writer_policy","read_only_analysis_policy","isolation_evidence_ref","c_start_decisions","per_slice_verification","integration_validation","integration_checks","fresh_review","fresh_review_after"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",0],"fields":["a_status","c_decision"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",1],"fields":["a_status","c_decision"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",2],"fields":["a_status","c_decision"]}
         ]
       }
     },
@@ -409,7 +414,12 @@
           {"operator":"equals","path":["execution_policy","integration_validation"],"expected":"required"},
           {"operator":"equals","path":["execution_policy","integration_checks"],"expected":["cross-slice","full-scope"]},
           {"operator":"equals","path":["execution_policy","fresh_review"],"expected":"required"},
-          {"operator":"equals","path":["execution_policy","fresh_review_after"],"expected":"integration_validation"}
+          {"operator":"equals","path":["execution_policy","fresh_review_after"],"expected":"integration_validation"},
+          {"operator":"object_keys_exact","path":[],"fields":["execution_policy"]},
+          {"operator":"object_keys_exact","path":["execution_policy"],"fields":["source_writer_policy","read_only_analysis_policy","isolation_evidence_ref","c_start_decisions","per_slice_verification","integration_validation","integration_checks","fresh_review","fresh_review_after"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",0],"fields":["a_status","c_decision"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",1],"fields":["a_status","c_decision"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",2],"fields":["a_status","c_decision"]}
         ]
       }
     },

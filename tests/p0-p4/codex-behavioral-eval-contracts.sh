@@ -259,8 +259,10 @@ fi
 printf '%s' "$prompt" >"$capture_dir/call-$call_id.prompt"
 if [[ -f "$workspace/docs/usage.md" ]]; then
     printf '%s\n' 'docs-usage-present' >>"$capture_dir/call-$call_id.fixtures"
-    sed -i.bak 's/teh/the/g' "$workspace/docs/usage.md"
-    rm -f "$workspace/docs/usage.md.bak"
+    if [[ "${FAKE_PATTERN_EVENT_MODE:-}" != "small-command-only" && "${FAKE_PATTERN_EVENT_MODE:-}" != "small-command-only-wrong-final" ]]; then
+        sed -i.bak 's/teh/the/g' "$workspace/docs/usage.md"
+        rm -f "$workspace/docs/usage.md.bak"
+    fi
     if [[ "${FAKE_WRONG_SMALL_EDIT:-false}" == "true" ]]; then
         printf '%s\n' 'This fixture contains the wrong change.' >"$workspace/docs/usage.md"
     fi
@@ -696,7 +698,7 @@ printf '%s\n' '{"type":"turn.started"}'
 printf '%s\n' '{"type":"item.completed","item":{"id":"item-1","type":"agent_message","text":"phase small docs/usage.md teh"}}'
 if [[ -f "$workspace/docs/usage.md" ]]; then
     case "${FAKE_PATTERN_EVENT_MODE:-}" in
-        ""|small-positive|small-wrapped-positive|small-disallowed-tool|small-unsupported-shape|small-external-symlink|small-mcp-started-only|small-web-started-only|small-interleaved-shell-action|small-shell-edit-before-discovery|small-shell-edit-started-before-discovery|small-updated-unknown|small-updated-disallowed)
+        ""|small-positive|small-wrapped-positive|small-disallowed-tool|small-unsupported-shape|small-external-symlink|small-mcp-started-only|small-web-started-only|small-interleaved-shell-action|small-shell-edit-before-discovery|small-shell-edit-started-before-discovery|small-updated-unknown|small-updated-disallowed|small-command-only|small-command-only-wrong-final)
             small_discovery_command='"rg -n teh docs/usage.md"'
             if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-wrapped-positive" ]]; then
                 small_discovery_command='["/bin/zsh","-lc","rg -n teh docs/usage.md"]'
@@ -728,7 +730,16 @@ if [[ -f "$workspace/docs/usage.md" ]]; then
             elif [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-updated-disallowed" ]]; then
                 printf '%s\n' '{"type":"item.updated","item":{"id":"small-updated-web","type":"web_search","query":"unrelated external lookup"}}'
             fi
-            printf '%s\n' '{"type":"item.completed","item":{"id":"small-change","type":"file_change","changes":[{"path":"docs/usage.md","kind":"update"}]}}'
+            if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-command-only" ]]; then
+                (cd "$workspace/docs" && sed s/teh/the/ usage.md >usage.md.tmp && mv usage.md.tmp usage.md)
+                printf '%s\n' '{"type":"item.completed","item":{"id":"small-shell-edit","type":"command_execution","command":"cd docs && sed s/teh/the/ usage.md >usage.md.tmp && mv usage.md.tmp usage.md","exit_code":0,"status":"completed","aggregated_output":""}}'
+            elif [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-command-only-wrong-final" ]]; then
+                (cd "$workspace/docs" && sed s/teh/Wrong/ usage.md >usage.md.tmp && mv usage.md.tmp usage.md)
+                printf '%s\n' '{"type":"item.completed","item":{"id":"small-shell-edit","type":"command_execution","command":"cd docs && sed s/teh/Wrong/ usage.md >usage.md.tmp && mv usage.md.tmp usage.md","exit_code":0,"status":"completed","aggregated_output":""}}'
+            fi
+            if [[ "${FAKE_PATTERN_EVENT_MODE:-}" != "small-command-only" && "${FAKE_PATTERN_EVENT_MODE:-}" != "small-command-only-wrong-final" ]]; then
+                printf '%s\n' '{"type":"item.completed","item":{"id":"small-change","type":"file_change","changes":[{"path":"docs/usage.md","kind":"update"}]}}'
+            fi
             if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-external-symlink" ]]; then
                 external_target="$workspace/../external-usage.md"
                 cp "$workspace/docs/usage.md" "$external_target"
@@ -6001,6 +6012,81 @@ else
     fail "small-fix evaluation did not require discovery-before-change or reject artifact-only and explicit external-read fixture evidence"
 fi
 
+test_start "a command-only edit with correct final content is unavailable when file-change telemetry is missing"
+small_command_only_output="$fixture_root/small-command-only-output"
+small_command_only_wrong_output="$fixture_root/small-command-only-wrong-final-output"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_output" --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and .error.code == "unknown_event_shape" and (has("metrics") | not))' "$small_command_only_output/traces/"*.json >/dev/null \
+    && jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1 and .incomplete_pairs[0].case_id == "small-fix-stays-lightweight"' "$small_command_only_output/comparison.json" >/dev/null \
+    && rm -f "$capture"/* \
+    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only-wrong-final "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_wrong_output" --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$small_command_only_wrong_output/traces/"*.json >/dev/null; then
+    pass
+else
+    fail "the evaluator did not separate missing edit telemetry from an incorrect final workspace"
+fi
+
+test_start "missing file-change telemetry does not mask plan, scope, or broad-response failures"
+small_command_only_mixed_failures=()
+for small_command_only_control in plan scope broad; do
+    small_command_only_mixed_output="$fixture_root/small-command-only-$small_command_only_control-output"
+    rm -f "$capture"/*
+    case "$small_command_only_control" in
+        plan)
+            if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only FAKE_SMALL_PLAN_MODE=full "$runner" --execute \
+                --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+                --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_mixed_output" --codex-bin "$fake_codex" >/dev/null \
+                || ! jq -s -e '
+                    length == 2
+                    and all(.[] | select(.variant == "baseline"); .status == "adapter_unavailable" and .error.code == "unknown_event_shape" and (has("metrics") | not))
+                    and all(.[] | select(.variant == "candidate");
+                      .status == "completed" and .metrics.acceptance_passed == false
+                      and .execution.verifier.workspace_failure_ids == ["workspace-002", "workspace-003"]
+                      and .execution.verifier.scope_deviations == 0)
+                ' "$small_command_only_mixed_output/traces/"*.json >/dev/null; then
+                small_command_only_mixed_failures+=("plan")
+            fi
+            ;;
+        scope)
+            if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only FAKE_SCOPE_DEVIATION=true "$runner" --execute \
+                --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+                --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_mixed_output" --codex-bin "$fake_codex" >/dev/null \
+                || ! jq -s -e '
+                    length == 2 and all(.[];
+                      .status == "completed" and .metrics.acceptance_passed == false
+                      and .execution.verifier.workspace_failure_ids == ["workspace-003", "workspace-999"]
+                      and .execution.verifier.scope_deviations == 1)
+                ' "$small_command_only_mixed_output/traces/"*.json >/dev/null; then
+                small_command_only_mixed_failures+=("scope")
+            fi
+            ;;
+        broad)
+            if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only FAKE_SMALL_BROAD=true "$runner" --execute \
+                --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+                --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_mixed_output" --codex-bin "$fake_codex" >/dev/null \
+                || ! jq -s -e '
+                    length == 2 and all(.[];
+                      .status == "completed" and .metrics.acceptance_passed == false
+                      and .execution.verifier.forbidden_hits == 1
+                      and .execution.verifier.workspace_failure_ids == ["workspace-003"]
+                      and .execution.verifier.scope_deviations == 0)
+                ' "$small_command_only_mixed_output/traces/"*.json >/dev/null; then
+                small_command_only_mixed_failures+=("broad")
+            fi
+            ;;
+    esac
+done
+if [[ ${#small_command_only_mixed_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "command-only unavailable classification hid independently observed failures: ${small_command_only_mixed_failures[*]}"
+fi
+
 rm -f "$capture"/*
 if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-external-symlink "$runner" --execute \
     --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
@@ -6244,24 +6330,47 @@ parallel_unavailable_output="$fixture_root/parallel-unavailable-output"
 rm -f "$capture"/*
 if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
     --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases isolated-parallel-a-b-then-c-with-integration --repeats 1 \
+    --cases isolated-parallel-a-b-then-c-with-integration --repeats 3 \
     --output "$parallel_unavailable_output" --codex-bin "$fake_codex" >/dev/null \
-    && jq -s -e 'length == 2 and all(.[];
+    && jq -s -e 'length == 6 and all(.[];
       .case_id == "isolated-parallel-a-b-then-c-with-integration"
       and .status == "adapter_unavailable"
       and (has("metrics") | not)
       and .error.code == "unknown_event_shape")
     ' "$parallel_unavailable_output/traces/"*.json >/dev/null \
+    && [[ "$(find "$parallel_unavailable_output/traces" -maxdepth 1 -type f -name '*.json' | wc -l | tr -d ' ')" -eq 6 ]] \
     && jq -e '
       .complete_pairs == 0
-      and .excluded_incomplete_pairs == 1
-      and .incomplete_pairs[0].case_id == "isolated-parallel-a-b-then-c-with-integration"
+      and .excluded_incomplete_pairs == 3
+      and all(.incomplete_pairs[]; .case_id == "isolated-parallel-a-b-then-c-with-integration")
     ' "$parallel_unavailable_output/comparison.json" >/dev/null \
     && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 0 ]] \
-    && jq -s -e 'length == 2 and all(.[]; .state == "completed" and (.attempt_started_at | type == "array" and length == 0))' "$parallel_unavailable_output/run-attempts/"*.json >/dev/null; then
+    && jq -s -e 'length == 6 and all(.[]; .state == "completed" and (.attempt_started_at | type == "array" and length == 0))' "$parallel_unavailable_output/run-attempts/"*.json >/dev/null; then
     pass
 else
-    fail "isolated parallel evaluation accepted model narrative or promoted unavailable overlap telemetry"
+    fail "repeated isolated parallel unavailable pairs tripped the breaker or promoted unavailable overlap telemetry"
+fi
+
+test_start "isolated unavailable pairs do not hide genuine incomplete-pair breaker failures"
+parallel_mixed_output="$fixture_root/parallel-mixed-incomplete-output"
+parallel_mixed_error="$fixture_root/parallel-mixed-incomplete-error.txt"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_FAILURE_MESSAGE='network unavailable' \
+    "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases isolated-parallel-a-b-then-c-with-integration,small-fix-stays-lightweight,requirements-map-through-completion,medium-final-handoff-is-reconstructable \
+    --repeats 1 --output "$parallel_mixed_output" --codex-bin "$fake_codex" \
+    >/dev/null 2>"$parallel_mixed_error"; then
+    fail "a real incomplete pair stopped tripping the breaker after deterministic pairs were excluded"
+elif grep -Fq 'Stopped after 2 incomplete pairs' "$parallel_mixed_error" \
+    && [[ "$(find "$capture" -maxdepth 1 -name 'call-*.args' | wc -l | tr -d ' ')" -eq 4 ]] \
+    && [[ "$(jq -s '[.[] | select(.case_id == "isolated-parallel-a-b-then-c-with-integration" and .status == "adapter_unavailable" and .error.code == "unknown_event_shape" and .execution.exit_code == 0)] | length' "$parallel_mixed_output/traces/"*.json)" -eq 2 ]] \
+    && [[ "$(jq -s '[.[] | select(.state == "completed")] | length' "$parallel_mixed_output/run-attempts/"*.json)" -eq 6 ]] \
+    && [[ "$(jq -s '[.[] | select(.state == "not_started")] | length' "$parallel_mixed_output/run-attempts/"*.json)" -eq 2 ]] \
+    && [[ ! -e "$parallel_mixed_output/comparison.json" ]]; then
+    pass
+else
+    fail "the breaker did not ignore only known pre-dispatch unavailable pairs while retaining the two-real-pair stop"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

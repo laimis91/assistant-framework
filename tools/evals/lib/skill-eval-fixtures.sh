@@ -266,7 +266,7 @@ path_operands = lambda do |assertion|
   operands << ["other_path", assertion["other_path"]] if assertion.key?("other_path")
   operands << ["when_path", assertion["when_path"]] if assertion.key?("when_path")
   operands << ["field", assertion["path"] + [0, assertion["field"]]] if assertion["field"].is_a?(String) && assertion["path"].is_a?(Array)
-  if assertion["fields"].is_a?(Array) && assertion["path"].is_a?(Array)
+  if assertion["operator"] != "object_keys_exact" && assertion["fields"].is_a?(Array) && assertion["path"].is_a?(Array)
     assertion["fields"].each { |field| operands << ["fields", assertion["path"] + [0, field]] if field.is_a?(String) }
   end
   if assertion["expected_objects"].is_a?(Array) && assertion["path"].is_a?(Array)
@@ -295,9 +295,12 @@ admitted_literal = lambda do |path, value|
   resolve.call(path).any? { |field| literal_valid.call(field, value) }
 end
 
-fixture.fetch("cases", []).each do |test_case|
+  fixture.fetch("cases", []).each do |test_case|
   Array(test_case.dig("machine_expectations", "structured_json_assertions")).each_with_index do |assertion, index|
     path_operands.call(assertion).each do |operand, path|
+      if assertion["operator"] == "object_keys_exact" && operand == "path" && path == []
+        next
+      end
       unless path.is_a?(Array) && path.first.is_a?(String)
         warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] invalid assertion path #{operand}: #{path.to_json}"
         exit 1
@@ -316,6 +319,36 @@ fixture.fetch("cases", []).each do |test_case|
       reason = resolved.empty? ? "undeclared" : "required field used by path_absent"
       warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] #{reason} assertion path #{operand}: #{path.to_json}"
       exit 1
+    end
+
+    if assertion["operator"] == "object_keys_exact"
+      path = assertion["path"]
+      fields = assertion["fields"]
+      if path.empty?
+        unknown_fields = fields.reject { |field| roots.key?(field) }
+        unless unknown_fields.empty?
+          warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] unknown assertion root object key: #{unknown_fields.first.to_json}"
+          exit 1
+        end
+      else
+        target = resolve.call(path)
+        target_field = target.length == 1 ? target.first : nil
+        object_array_item = target_field && target_field["type"] == "object[]" && path.last.is_a?(Numeric)
+        unless target_field && (target_field["type"] == "object" || object_array_item) && target_field["object_fields"].is_a?(Array)
+          warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] object_keys_exact target must be a declared object: #{path.to_json}"
+          exit 1
+        end
+        declared_fields = target_field.fetch("object_fields").map { |field| field["name"] }.sort
+        unless fields.sort == declared_fields
+          undeclared_fields = fields - declared_fields
+          if undeclared_fields.empty?
+            warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] object_keys_exact fields must exactly match the declared object schema: #{path.to_json}"
+          else
+            warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] undeclared assertion path fields: #{undeclared_fields.to_json}"
+          end
+          exit 1
+        end
+      end
     end
 
     literal_error = case assertion["operator"]
@@ -903,6 +936,11 @@ validate_fixture() {
             .fields as $fields |
             if (.path? | json_path | not) or ($fields | distinct_bounded_fields | not) or (.expected_objects? | exact_expected_objects($fields) | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid array_object_values_exact assertion"
+            else empty end
+          elif .operator == "object_keys_exact" then
+            .fields as $fields |
+            if (.path? | type != "array") or ((.path | length) > 0 and (.path | json_path | not)) or ($fields | distinct_bounded_fields | not) or (($fields | unique | length) != ($fields | length)) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid object_keys_exact assertion"
             else empty end
           else
             "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] unsupported operator: \(.operator)"

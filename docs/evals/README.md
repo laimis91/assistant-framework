@@ -37,7 +37,14 @@ Codex adapter actually observed in its JSONL event stream.
   to be the first workspace command or file action; the matching command-start
   event may precede its successful completion. This rule and its no-web/MCP
   check apply only to the disposable local typo fixture, not delegated work.
-  A grading artifact alone cannot pass the case.
+  A grading artifact alone cannot pass the case. If the safe target ends in the
+  expected state after a later successful command but the event stream has no
+  `file_change`, the adapter reports unavailable: command text and final state
+  cannot prove which command edited the target or when. That classification is
+  allowed only when response grading passes, the sole workspace failure is the
+  missing observation, and there are no scope deviations. Observable
+  pre-discovery actions, external calls, and incorrect final content remain
+  completed failures.
 - `pivot-restart-on-stagnation-or-code-writer-blocker` seeds a trusted failing
   check, fixture-owned failure/recovery receipts, recovery action, and fresh
   check. Its recovery artifact retains `terminal_completed=false`: a fresh-check
@@ -378,7 +385,10 @@ model-selection evidence and counts incomplete pairs. A second incomplete pair
 stops the batch before any later call,
 leaves remaining attempt records `not_started`, and withholds comparison and
 semantic-review artifacts. The exact limit is bound into the run plan as
-`max_incomplete_pairs=1`. The runner never retries an uncertain call.
+`max_incomplete_pairs=1`. Only the known pre-dispatch unavailable traces for the
+`isolated-parallel-a-b-then-c-with-integration` fixture are excluded; every other
+incomplete pair counts toward the limit. The runner never retries an uncertain
+call.
 
 An `in_flight` record without a valid trace is quota-uncertain: resume exits
 before every model call, reports only the bounded run ID, and requires separate
@@ -781,8 +791,9 @@ Cases may additionally define `machine_expectations.structured_json_assertions`.
 For these per-skill cases, the response must contain exactly one valid JSON
 value. The local grader applies only the fixed provider-neutral operators:
 `equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`,
-`required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, and
-`array_items_nonempty_fields`, and `array_items_nonempty_array_fields`. Assertion paths are JSON arrays for safe
+`required_when_equals`, `array_field_values_exact`, `array_object_values_exact`,
+`object_keys_exact`, `array_items_nonempty_fields`, and
+`array_items_nonempty_array_fields`. Assertion paths are JSON arrays for safe
 `getpath` access. They are grader-only declarations, never executable fixture
 content: arbitrary jq, code, or expressions are not accepted. `array_items_nonempty_fields`
 requires the target array to contain at least one object, and every listed field
@@ -790,6 +801,10 @@ in every object must be a non-empty string.
 `array_items_nonempty_array_fields` requires the target array to contain at
 least one object, and every listed field in every object must be a non-empty
 array whose every member is a nonblank string.
+`object_keys_exact` requires the target to be an object whose keys exactly match
+the declared `fields`; it rejects missing keys, extra keys, and non-object
+values. Its path may be `[]` to check the JSON response root, or a declared
+object path. It accepts at most 16 unique field names.
 `empty_array` requires the target path to resolve to an empty array.
 `array_type` requires the target path to resolve to an array and permits an empty array. `array_nonblank_strings` requires every member to be a nonblank string and a required boolean `allow_empty` declares whether an empty array is valid.
 In this exhaustive fixed operator list, `path_absent` passes only when its target
