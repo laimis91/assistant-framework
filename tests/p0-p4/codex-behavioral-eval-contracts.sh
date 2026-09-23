@@ -698,7 +698,7 @@ printf '%s\n' '{"type":"turn.started"}'
 printf '%s\n' '{"type":"item.completed","item":{"id":"item-1","type":"agent_message","text":"phase small docs/usage.md teh"}}'
 if [[ -f "$workspace/docs/usage.md" ]]; then
     case "${FAKE_PATTERN_EVENT_MODE:-}" in
-        ""|small-positive|small-wrapped-positive|small-transient-unrelated|small-disallowed-tool|small-unsupported-shape|small-external-symlink|small-mcp-started-only|small-web-started-only|small-interleaved-shell-action|small-shell-edit-before-discovery|small-shell-edit-started-before-discovery|small-updated-unknown|small-updated-disallowed|small-command-only|small-command-only-wrong-final)
+        ""|small-positive|small-wrapped-positive|small-transient-unrelated|small-disallowed-tool|small-unsupported-shape|small-external-symlink|small-mcp-started-only|small-web-started-only|small-interleaved-shell-action|small-shell-edit-before-discovery|small-shell-edit-started-before-discovery|small-updated-unknown|small-updated-disallowed|small-command-only|small-command-only-wrong-final|small-unknown-command|small-missing-exit|small-malformed-exit|small-nonzero-exit|small-malformed-file-change)
             if [[ "${FAKE_SMALL_PASSIVE_REASONING:-false}" == "true" ]]; then
                 jq -cn '{type:"item.completed",item:{id:"small-reasoning-before",type:"reasoning",text:"safe summary"}}'
             fi
@@ -715,7 +715,39 @@ if [[ -f "$workspace/docs/usage.md" ]]; then
             elif [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-shell-edit-started-before-discovery" ]]; then
                 printf '%s\n' '{"type":"item.started","item":{"id":"small-shell-edit","type":"command_execution","command":"sed -i.bak s/teh/the/ docs/usage.md"}}'
             fi
-            jq -cn --argjson command "$small_discovery_command" '{type:"item.completed",item:{id:"small-discovery",type:"command_execution",command:$command,exit_code:0,status:"completed",aggregated_output:"1:This fixture contains teh requested typo."}}'
+            if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-unknown-command" ]] \
+                && [[ "${FAKE_SMALL_UNKNOWN_COMMAND_MODE:-}" == "pre-discovery" ]]; then
+                printf '%s\n' '{"type":"item.completed","item":{"id":"small-unknown-before-discovery","type":"command_execution","command":"python3 transient_write_restore.py","exit_code":0,"status":"completed","aggregated_output":""}}'
+            fi
+            small_discovery_exit=0
+            if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-nonzero-exit" ]]; then
+                small_discovery_exit=2
+            fi
+            if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-missing-exit" ]]; then
+                jq -cn --argjson command "$small_discovery_command" '{type:"item.completed",item:{id:"small-discovery",type:"command_execution",command:$command,status:"completed",aggregated_output:"1:This fixture contains teh requested typo."}}'
+            elif [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-malformed-exit" ]]; then
+                jq -cn --argjson command "$small_discovery_command" '{type:"item.completed",item:{id:"small-discovery",type:"command_execution",command:$command,exit_code:"0",status:"completed",aggregated_output:"1:This fixture contains teh requested typo."}}'
+            else
+                jq -cn --argjson command "$small_discovery_command" --argjson exit_code "$small_discovery_exit" '{type:"item.completed",item:{id:"small-discovery",type:"command_execution",command:$command,exit_code:$exit_code,status:"completed",aggregated_output:"1:This fixture contains teh requested typo."}}'
+            fi
+            if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-unknown-command" ]] \
+                && [[ "${FAKE_SMALL_UNKNOWN_COMMAND_MODE:-before-target}" =~ ^(before-target|started|nonzero|mixed-unrelated|failed-target)$ ]]; then
+                if [[ "${FAKE_SMALL_TRANSIENT_COMMAND_MUTATION:-false}" == "true" ]]; then
+                    transient_path="$workspace/transient-command-write.txt"
+                    printf '%s\n' 'transient command write' >"$transient_path"
+                    transient_created_sha256="$(shasum -a 256 "$transient_path" | awk '{print $1}')"
+                    rm -f "$workspace/transient-command-write.txt"
+                    jq -cn --arg created_sha256 "$transient_created_sha256" \
+                        '{created_sha256:$created_sha256,removed:true}' \
+                        >"$capture_dir/call-$call_id.transient-mutation.json"
+                fi
+                if [[ "${FAKE_SMALL_UNKNOWN_COMMAND_EVENT:-completed}" == "started" ]]; then
+                    printf '%s\n' '{"type":"item.started","item":{"id":"small-unknown-command","type":"command_execution","command":"python3 transient_write_restore.py"}}'
+                else
+                    small_unknown_exit="${FAKE_SMALL_UNKNOWN_COMMAND_EXIT:-0}"
+                    printf '%s\n' "{\"type\":\"item.completed\",\"item\":{\"id\":\"small-unknown-command\",\"type\":\"command_execution\",\"command\":\"python3 transient_write_restore.py\",\"exit_code\":${small_unknown_exit},\"status\":\"completed\",\"aggregated_output\":\"\"}}"
+                fi
+            fi
             if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-transient-unrelated" ]]; then
                 printf '%s\n' 'transient unrelated write' >"$workspace/transient-unrelated.txt"
                 jq -cn '{type:"item.completed",item:{id:"small-transient-unrelated",type:"file_change",path:"transient-unrelated.txt",status:"completed"}}'
@@ -751,6 +783,23 @@ if [[ -f "$workspace/docs/usage.md" ]]; then
             if [[ "${FAKE_PATTERN_EVENT_MODE:-}" != "small-command-only" && "${FAKE_PATTERN_EVENT_MODE:-}" != "small-command-only-wrong-final" ]]; then
                 printf '%s\n' '{"type":"item.completed","item":{"id":"small-change","type":"file_change","changes":[{"path":"docs/usage.md","kind":"update"}]}}'
             fi
+            if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-unknown-command" ]]; then
+                case "${FAKE_SMALL_UNKNOWN_COMMAND_MODE:-before-target}" in
+                    pre-discovery|before-target|started|nonzero) ;;
+                    after-target)
+                        printf '%s\n' '{"type":"item.completed","item":{"id":"small-unknown-command-after-target","type":"command_execution","command":"python3 transient_write_restore.py","exit_code":0,"status":"completed","aggregated_output":""}}'
+                        ;;
+                    mixed-unrelated)
+                        printf '%s\n' '{"type":"item.completed","item":{"id":"small-unrelated-change","type":"file_change","path":"README.md","status":"completed"}}'
+                        ;;
+                    failed-target)
+                        printf '%s\n' '{"type":"item.completed","item":{"id":"small-failed-target","type":"file_change","path":"docs/usage.md","status":"failed"}}'
+                        ;;
+                    *) printf 'unsupported FAKE_SMALL_UNKNOWN_COMMAND_MODE: %s\n' "${FAKE_SMALL_UNKNOWN_COMMAND_MODE}" >&2; exit 2 ;;
+                esac
+            elif [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-malformed-file-change" ]]; then
+                printf '%s\n' '{"type":"item.completed","item":{"id":"small-malformed-change","type":"file_change","changes":{}}}'
+            fi
             if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-external-symlink" ]]; then
                 external_target="$workspace/../external-usage.md"
                 cp "$workspace/docs/usage.md" "$external_target"
@@ -768,7 +817,7 @@ if [[ -f "$workspace/docs/usage.md" ]]; then
 fi
 if [[ -f "$workspace/RECOVERY.md" ]]; then
     pattern_mode="${FAKE_PATTERN_EVENT_MODE:-stagnation-positive}"
-    if [[ "$pattern_mode" != stagnation-positive && "$pattern_mode" != stagnation-paired-start-completion-positive && "$pattern_mode" != stagnation-missing-recovery && "$pattern_mode" != stagnation-retry-after-bound && "$pattern_mode" != stagnation-repeated-trusted-check && "$pattern_mode" != stagnation-duplicate-recovery && "$pattern_mode" != stagnation-duplicate-fresh && "$pattern_mode" != stagnation-failed-recovery-then-retry && "$pattern_mode" != stagnation-failed-fresh-then-retry && "$pattern_mode" != stagnation-transient-source-change && "$pattern_mode" != stagnation-false-completion && "$pattern_mode" != stagnation-unknown-completed-action && "$pattern_mode" != stagnation-post-fresh-shell-mutate-revert && "$pattern_mode" != stagnation-post-fresh-command-started-only && "$pattern_mode" != stagnation-post-fresh-file-change-started-only && "$pattern_mode" != stagnation-updated-unknown && "$pattern_mode" != stagnation-updated-disallowed && "$pattern_mode" != stagnation-pre-fresh-shell-mutate-revert && "$pattern_mode" != stagnation-pre-fresh-command-started-only && "$pattern_mode" != stagnation-pre-fresh-file-change-started-only && "$pattern_mode" != stagnation-recovery-read-positive && "$pattern_mode" != stagnation-early-recovery-start && "$pattern_mode" != stagnation-early-fresh-start && "$pattern_mode" != stagnation-unmatched-recovery-start && "$pattern_mode" != stagnation-duplicate-recovery-start && "$pattern_mode" != stagnation-matched-recovery-id-wrong-command && "$pattern_mode" != stagnation-duplicate-recovery-completed-id ]]; then
+    if [[ "$pattern_mode" != stagnation-positive && "$pattern_mode" != stagnation-paired-start-completion-positive && "$pattern_mode" != stagnation-missing-recovery && "$pattern_mode" != stagnation-retry-after-bound && "$pattern_mode" != stagnation-repeated-trusted-check && "$pattern_mode" != stagnation-duplicate-recovery && "$pattern_mode" != stagnation-duplicate-fresh && "$pattern_mode" != stagnation-failed-recovery-then-retry && "$pattern_mode" != stagnation-failed-fresh-then-retry && "$pattern_mode" != stagnation-transient-source-change && "$pattern_mode" != stagnation-false-completion && "$pattern_mode" != stagnation-unknown-completed-action && "$pattern_mode" != stagnation-post-fresh-shell-mutate-revert && "$pattern_mode" != stagnation-post-fresh-command-started-only && "$pattern_mode" != stagnation-post-fresh-file-change-started-only && "$pattern_mode" != stagnation-updated-unknown && "$pattern_mode" != stagnation-updated-disallowed && "$pattern_mode" != stagnation-pre-fresh-shell-mutate-revert && "$pattern_mode" != stagnation-pre-fresh-command-started-only && "$pattern_mode" != stagnation-pre-fresh-file-change-started-only && "$pattern_mode" != stagnation-recovery-read-positive && "$pattern_mode" != stagnation-early-recovery-start && "$pattern_mode" != stagnation-early-fresh-start && "$pattern_mode" != stagnation-unmatched-recovery-start && "$pattern_mode" != stagnation-duplicate-recovery-start && "$pattern_mode" != stagnation-matched-recovery-id-wrong-command && "$pattern_mode" != stagnation-duplicate-recovery-completed-id && "$pattern_mode" != stagnation-premature-recovery-artifact && "$pattern_mode" != stagnation-malformed-output && "$pattern_mode" != stagnation-wrong-marker && "$pattern_mode" != stagnation-missing-exit ]]; then
         printf 'unsupported stagnation FAKE_PATTERN_EVENT_MODE: %s\n' "$pattern_mode" >&2
         exit 2
     fi
@@ -780,8 +829,21 @@ if [[ -f "$workspace/RECOVERY.md" ]]; then
     elif [[ "$pattern_mode" == stagnation-early-fresh-start ]]; then
         printf '%s\n' '{"type":"item.started","item":{"id":"stagnation-fresh-check","type":"command_execution","command":"bash tests/stagnation-contracts.sh --after-recovery"}}'
     fi
+    if [[ "$pattern_mode" == stagnation-premature-recovery-artifact ]]; then
+        mkdir -p "$workspace/.assistant-eval"
+        printf '%s\n' '{"premature":true}' >"$workspace/.assistant-eval/stagnation-recovery.json"
+        jq -cn '{type:"item.completed",item:{id:"stagnation-premature-artifact",type:"file_change",path:".assistant-eval/stagnation-recovery.json",status:"completed"}}'
+    fi
     if failure_output="$(bash "$workspace/tests/stagnation-contracts.sh")"; then failure_exit=0; else failure_exit=$?; fi
-    printf '%s\n' "{\"type\":\"item.completed\",\"item\":{\"id\":\"stagnation-trusted-failure\",\"type\":\"command_execution\",\"command\":\"bash tests/stagnation-contracts.sh\",\"exit_code\":${failure_exit},\"status\":\"completed\",\"aggregated_output\":\"${failure_output}\"}}"
+    if [[ "$pattern_mode" == stagnation-malformed-output ]]; then
+        jq -cn --arg output "$failure_output" --argjson exit_code "$failure_exit" '{type:"item.completed",item:{id:"stagnation-trusted-failure",type:"command_execution",command:"bash tests/stagnation-contracts.sh",exit_code:$exit_code,status:"completed",aggregated_output:{text:$output}}}'
+    elif [[ "$pattern_mode" == stagnation-wrong-marker ]]; then
+        jq -cn --argjson exit_code "$failure_exit" '{type:"item.completed",item:{id:"stagnation-trusted-failure",type:"command_execution",command:"bash tests/stagnation-contracts.sh",exit_code:$exit_code,status:"completed",aggregated_output:"ordinary command output"}}'
+    elif [[ "$pattern_mode" == stagnation-missing-exit ]]; then
+        jq -cn --arg output "$failure_output" '{type:"item.completed",item:{id:"stagnation-trusted-failure",type:"command_execution",command:"bash tests/stagnation-contracts.sh",status:"completed",aggregated_output:$output}}'
+    else
+        printf '%s\n' "{\"type\":\"item.completed\",\"item\":{\"id\":\"stagnation-trusted-failure\",\"type\":\"command_execution\",\"command\":\"bash tests/stagnation-contracts.sh\",\"exit_code\":${failure_exit},\"status\":\"completed\",\"aggregated_output\":\"${failure_output}\"}}"
+    fi
     if [[ "${FAKE_STAGNATION_PASSIVE_REASONING:-false}" == "true" ]]; then
         jq -cn '{type:"item.completed",item:{id:"stagnation-reasoning-between",type:"reasoning",text:"safe summary"}}'
     fi
@@ -3461,7 +3523,32 @@ awk '
     capture && /^}$/ { exit }
 ' "$runner" >>"$event_bounds_lib"
 awk '
+    /^observed_event_shape_supported\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >>"$event_bounds_lib"
+awk '
+    /^case_event_payload_shape_supported\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >>"$event_bounds_lib"
+awk '
+    /^small_fix_event_shape_supported\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >>"$event_bounds_lib"
+awk '
+    /^stagnation_event_shape_supported\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >>"$event_bounds_lib"
+awk '
     /^small_fix_event_evidence\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >>"$event_bounds_lib"
+awk '
+    /^small_fix_command_scope_missing_telemetry\(\)/ { capture = 1 }
     capture { print }
     capture && /^}$/ { exit }
 ' "$runner" >>"$event_bounds_lib"
@@ -3750,6 +3837,207 @@ else
     fail "small-fix discovery lifecycle accepted malformed or rejected valid evidence: ${small_lifecycle_failures[*]}"
 fi
 
+test_start "small-fix unknown command scope is independent of allowed target file events"
+small_command_scope_workspace="$fixture_root/small-command-scope-workspace"
+mkdir -p "$small_command_scope_workspace/docs"
+write_small_command_scope_control() {
+    local mode="$1" jsonl="$2"
+
+    : >"$jsonl"
+    if [[ "$mode" == pre-discovery ]]; then
+        jq -cn '{type:"item.completed",item:{id:"unknown",type:"command_execution",command:"python3 transient_write_restore.py",exit_code:0}}' >>"$jsonl"
+    fi
+    jq -cn '{type:"item.completed",item:{id:"discovery",type:"command_execution",command:"rg -n teh docs/usage.md",exit_code:0}}' >>"$jsonl"
+    if [[ "$mode" == unknown-started ]]; then
+        jq -cn '{type:"item.started",item:{id:"unknown",type:"command_execution",command:"python3 transient_write_restore.py"}}' >>"$jsonl"
+    elif [[ "$mode" == unknown-nonzero || "$mode" == unknown-before || "$mode" == unknown-unrelated || "$mode" == unknown-failed-target ]]; then
+        jq -cn '{type:"item.completed",item:{id:"unknown",type:"command_execution",command:"python3 transient_write_restore.py",exit_code:7}}' >>"$jsonl"
+    fi
+    jq -cn '{type:"item.completed",item:{id:"target",type:"file_change",path:"docs/usage.md"}}' >>"$jsonl"
+    case "$mode" in
+        unknown-after)
+            jq -cn '{type:"item.completed",item:{id:"unknown-after",type:"command_execution",command:"python3 transient_write_restore.py",exit_code:0}}' >>"$jsonl"
+            ;;
+        unknown-unrelated)
+            jq -cn '{type:"item.completed",item:{id:"unrelated",type:"file_change",path:"README.md"}}' >>"$jsonl"
+            ;;
+        unknown-failed-target)
+            jq -cn '{type:"item.completed",item:{id:"failed-target",type:"file_change",path:"docs/usage.md",status:"failed"}}' >>"$jsonl"
+            ;;
+        known-passive)
+            jq -cn '{type:"item.completed",item:{id:"reasoning",type:"reasoning",text:{summary:"passive"}}}' >>"$jsonl"
+            ;;
+    esac
+}
+small_command_scope_failures=()
+for small_command_scope_mode in unknown-before unknown-after unknown-started unknown-nonzero; do
+    small_command_scope_jsonl="$fixture_root/small-command-scope-$small_command_scope_mode.jsonl"
+    write_small_command_scope_control "$small_command_scope_mode" "$small_command_scope_jsonl"
+    if ! small_fix_event_evidence "$small_command_scope_jsonl" "$small_command_scope_workspace" \
+        | jq -e '.unknown_command_count == 1 and .command_scope_supported == false' >/dev/null \
+        || ! small_fix_command_scope_missing_telemetry "$small_command_scope_jsonl" "$small_command_scope_workspace"; then
+        small_command_scope_failures+=("unavailable:$small_command_scope_mode")
+    fi
+done
+for small_command_scope_mode in pre-discovery unknown-unrelated unknown-failed-target; do
+    small_command_scope_jsonl="$fixture_root/small-command-scope-$small_command_scope_mode.jsonl"
+    write_small_command_scope_control "$small_command_scope_mode" "$small_command_scope_jsonl"
+    if small_fix_command_scope_missing_telemetry "$small_command_scope_jsonl" "$small_command_scope_workspace"; then
+        small_command_scope_failures+=("masked-violation:$small_command_scope_mode")
+    fi
+done
+small_command_scope_jsonl="$fixture_root/small-command-scope-known-passive.jsonl"
+write_small_command_scope_control known-passive "$small_command_scope_jsonl"
+if ! small_fix_event_evidence "$small_command_scope_jsonl" "$small_command_scope_workspace" \
+    | jq -e '.unknown_command_count == 0 and .command_scope_supported == true' >/dev/null \
+    || small_fix_command_scope_missing_telemetry "$small_command_scope_jsonl" "$small_command_scope_workspace"; then
+    small_command_scope_failures+=("known-probe-or-passive-event")
+fi
+if [[ ${#small_command_scope_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "small-fix command telemetry gap was not kept separate from observed failures: ${small_command_scope_failures[*]}"
+fi
+
+test_start "case payload shape checks validate consumed fields without rejecting passive or unconsumed values"
+payload_shape_failures=()
+payload_event_shape_supported() {
+    local jsonl="$1" case_id="$2"
+    case "$case_id" in
+        small-fix-stays-lightweight) small_fix_event_shape_supported "$jsonl" ;;
+        pivot-restart-on-stagnation-or-code-writer-blocker) stagnation_event_shape_supported "$jsonl" ;;
+        *) return 1 ;;
+    esac
+}
+write_command_payload() {
+    local path="$1" case_id="$2" mode="$3"
+    case "$mode" in
+        started)
+            jq -cn --arg case_id "$case_id" '{type:"item.started",item:{id:"command",type:"command_execution",command:(if $case_id == "small-fix-stays-lightweight" then "rg -n teh docs/usage.md" else "bash tests/stagnation-contracts.sh" end)}}' >"$path"
+            ;;
+        missing-exit)
+            jq -cn --arg case_id "$case_id" '{type:"item.completed",item:{id:"command",type:"command_execution",command:(if $case_id == "small-fix-stays-lightweight" then "rg -n teh docs/usage.md" else "bash tests/stagnation-contracts.sh" end),aggregated_output:"STAGNATION_TRUSTED_FAILURE"}}' >"$path"
+            ;;
+        null-exit|string-exit|object-exit|boolean-exit|nonzero)
+            jq -cn --arg case_id "$case_id" --arg mode "$mode" '{type:"item.completed",item:{id:"command",type:"command_execution",command:(if $case_id == "small-fix-stays-lightweight" then "rg -n teh docs/usage.md" else "bash tests/stagnation-contracts.sh" end),exit_code:(if $mode == "null-exit" then null elif $mode == "string-exit" then "0" elif $mode == "object-exit" then {} elif $mode == "boolean-exit" then false else 2 end),aggregated_output:"STAGNATION_TRUSTED_FAILURE"}}' >"$path"
+            ;;
+        output-null|output-number|output-object|output-array|aggregated-object-with-output-string|wrong-marker)
+            jq -cn --arg mode "$mode" '{type:"item.completed",item:{id:"command",type:"command_execution",command:"bash tests/stagnation-contracts.sh",exit_code:1,aggregated_output:(if $mode == "output-null" then null elif $mode == "output-number" then 3 elif $mode == "output-object" or $mode == "aggregated-object-with-output-string" then {text:"STAGNATION_TRUSTED_FAILURE"} elif $mode == "output-array" then ["STAGNATION_TRUSTED_FAILURE"] elif $mode == "wrong-marker" then "ordinary output" else null end),output:(if $mode == "aggregated-object-with-output-string" then "STAGNATION_TRUSTED_FAILURE" else "STAGNATION_TRUSTED_FAILURE" end)}}' >"$path"
+            ;;
+        recovery-read-object)
+            jq -cn '{type:"item.completed",item:{id:"read",type:"command_execution",command:"cat RECOVERY.md",exit_code:0,aggregated_output:{text:"unconsumed"}}}' >"$path"
+            ;;
+    esac
+}
+write_file_payload() {
+    local path="$1" case_id="$2" mode="$3"
+    jq -cn --arg case_id "$case_id" --arg mode "$mode" '
+      {type:"item.completed",item:{id:"file",type:"file_change"}}
+      | if $mode == "missing" then .
+        elif $mode == "nonarray" then .item.changes={bad:true}
+        elif $mode == "empty" then .item.changes=[]
+        elif $mode == "nonobject" then .item.changes=["docs/usage.md"]
+        elif $mode == "nonstring-path" then .item.changes=[{path:17}]
+        elif $mode == "null-item-path" then .item.path=null
+        elif $mode == "outside" then .item.path="/tmp/outside.txt"
+        elif $mode == "status-absent" then .item.path="docs/usage.md"
+        elif $mode == "status-failed" then .item.path="docs/usage.md" | .item.status="failed"
+        elif $mode == "status-null" then .item.path="docs/usage.md" | .item.status=null
+        elif $mode == "status-boolean" then .item.path="docs/usage.md" | .item.status=false
+        elif $mode == "status-unknown" then .item.path="docs/usage.md" | .item.status="pending"
+        else .item.changes=[{path:"docs/usage.md",kind:"update"}] end
+    ' >"$path"
+}
+for payload_case in small-fix-stays-lightweight pivot-restart-on-stagnation-or-code-writer-blocker; do
+    for payload_mode in missing-exit null-exit string-exit object-exit boolean-exit; do
+        payload_path="$fixture_root/payload-$payload_case-$payload_mode.jsonl"
+        write_command_payload "$payload_path" "$payload_case" "$payload_mode"
+        if payload_event_shape_supported "$payload_path" "$payload_case"; then
+            payload_shape_failures+=("accepted-$payload_case-$payload_mode")
+        fi
+    done
+    payload_path="$fixture_root/payload-$payload_case-nonzero.jsonl"
+    write_command_payload "$payload_path" "$payload_case" nonzero
+    if ! payload_event_shape_supported "$payload_path" "$payload_case"; then
+        payload_shape_failures+=("rejected-numeric-nonzero-$payload_case")
+    fi
+    payload_path="$fixture_root/payload-$payload_case-started.jsonl"
+    write_command_payload "$payload_path" "$payload_case" started
+    if ! payload_event_shape_supported "$payload_path" "$payload_case"; then
+        payload_shape_failures+=("rejected-started-without-exit-output-$payload_case")
+    fi
+done
+for payload_mode in missing nonarray empty nonobject nonstring-path null-item-path; do
+    for payload_case in small-fix-stays-lightweight pivot-restart-on-stagnation-or-code-writer-blocker; do
+        payload_path="$fixture_root/payload-file-$payload_case-$payload_mode.jsonl"
+        write_file_payload "$payload_path" "$payload_case" "$payload_mode"
+        if payload_event_shape_supported "$payload_path" "$payload_case"; then
+            payload_shape_failures+=("accepted-malformed-file-$payload_case-$payload_mode")
+        fi
+    done
+done
+for payload_mode in status-absent status-failed; do
+    payload_path="$fixture_root/payload-file-small-$payload_mode.jsonl"
+    write_file_payload "$payload_path" small-fix-stays-lightweight "$payload_mode"
+    if ! payload_event_shape_supported "$payload_path" small-fix-stays-lightweight; then
+        payload_shape_failures+=("rejected-supported-file-status-$payload_mode")
+    fi
+done
+for payload_mode in status-null status-boolean status-unknown; do
+    payload_path="$fixture_root/payload-file-small-$payload_mode.jsonl"
+    write_file_payload "$payload_path" small-fix-stays-lightweight "$payload_mode"
+    if payload_event_shape_supported "$payload_path" small-fix-stays-lightweight; then
+        payload_shape_failures+=("accepted-unsupported-file-status-$payload_mode")
+    fi
+done
+payload_path="$fixture_root/payload-file-small-outside.jsonl"
+write_file_payload "$payload_path" small-fix-stays-lightweight outside
+if ! small_fix_event_shape_supported "$payload_path" \
+    || ! small_fix_event_evidence "$payload_path" "$small_command_scope_workspace" \
+        | jq -e '.file_change_scope_valid == false' >/dev/null; then
+    payload_shape_failures+=("outside-path-was-treated-as-malformed-shape")
+fi
+payload_path="$fixture_root/payload-file-stagnation-unconsumed-status.jsonl"
+write_file_payload "$payload_path" pivot-restart-on-stagnation-or-code-writer-blocker status-boolean
+if ! stagnation_event_shape_supported "$payload_path"; then
+    payload_shape_failures+=("constrained-unconsumed-stagnation-file-status")
+fi
+payload_path="$fixture_root/payload-small-output-object.jsonl"
+write_command_payload "$payload_path" small-fix-stays-lightweight output-object
+if ! small_fix_event_shape_supported "$payload_path"; then
+    payload_shape_failures+=("small-fix-constrained-unconsumed-command-output")
+fi
+payload_path="$fixture_root/payload-stagnation-output.jsonl"
+write_command_payload "$payload_path" pivot-restart-on-stagnation-or-code-writer-blocker output-object
+if payload_event_shape_supported "$payload_path" pivot-restart-on-stagnation-or-code-writer-blocker; then
+    payload_shape_failures+=("accepted-object-trusted-command-output")
+fi
+for payload_mode in output-number output-array aggregated-object-with-output-string; do
+    payload_path="$fixture_root/payload-stagnation-$payload_mode.jsonl"
+    write_command_payload "$payload_path" pivot-restart-on-stagnation-or-code-writer-blocker "$payload_mode"
+    if payload_event_shape_supported "$payload_path" pivot-restart-on-stagnation-or-code-writer-blocker; then
+        payload_shape_failures+=("accepted-malformed-selected-output-$payload_mode")
+    fi
+done
+for payload_mode in output-null wrong-marker recovery-read-object; do
+    payload_path="$fixture_root/payload-stagnation-$payload_mode.jsonl"
+    write_command_payload "$payload_path" pivot-restart-on-stagnation-or-code-writer-blocker "$payload_mode"
+    if ! stagnation_event_shape_supported "$payload_path"; then
+        payload_shape_failures+=("rejected-string-or-unconsumed-output-$payload_mode")
+    fi
+done
+payload_path="$fixture_root/payload-passive-object.jsonl"
+jq -cn '{type:"item.completed",item:{id:"passive",type:"reasoning",text:{summary:"unconsumed"}}}' >"$payload_path"
+if ! small_fix_event_shape_supported "$payload_path" \
+    || ! stagnation_event_shape_supported "$payload_path"; then
+    payload_shape_failures+=("constrained-passive-reasoning-payload")
+fi
+if [[ ${#payload_shape_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "case consumed-payload validation admitted malformed telemetry or rejected compatible values: ${payload_shape_failures[*]}"
+fi
+
 test_start "stagnation event paths accept only normalized recovery-artifact changes"
 stagnation_path_workspace="$fixture_root/stagnation-path-controls-workspace"
 mkdir -p "$stagnation_path_workspace/.assistant-eval"
@@ -3814,6 +4102,105 @@ if [[ ${#stagnation_path_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "stagnation event path normalization accepted or rejected an incorrect workspace boundary: ${stagnation_path_failures[*]}"
+fi
+
+test_start "stagnation recovery-artifact events stay inside the recovery-to-fresh-check interval"
+recovery_window_workspace="$fixture_root/recovery-window-workspace"
+mkdir -p "$recovery_window_workspace/.assistant-eval"
+emit_window_event() {
+    local jsonl="$1" type="$2" id="$3" command="$4" exit_code="$5" output="$6"
+    if [[ "$type" == started ]]; then
+        jq -cn --arg id "$id" --arg command "$command" '{type:"item.started",item:{id:$id,type:"command_execution",command:$command}}' >>"$jsonl"
+    else
+        jq -cn --arg id "$id" --arg command "$command" --argjson exit_code "$exit_code" --arg output "$output" '{type:"item.completed",item:{id:$id,type:"command_execution",command:$command,exit_code:$exit_code,aggregated_output:$output}}' >>"$jsonl"
+    fi
+}
+emit_window_file_change() {
+    local jsonl="$1" event_type="$2"
+    jq -cn --arg type "$event_type" '{type:("item." + $type),item:{id:"recovery-artifact",type:"file_change",path:".assistant-eval/stagnation-recovery.json"}}' >>"$jsonl"
+}
+write_recovery_window_control() {
+    local position="$1" event_type="$2" jsonl="$3"
+    : >"$jsonl"
+    case "$position" in
+        before-failure)
+            emit_window_file_change "$jsonl" "$event_type"
+            emit_window_event "$jsonl" completed failure 'bash tests/stagnation-contracts.sh' 1 STAGNATION_TRUSTED_FAILURE
+            emit_window_event "$jsonl" completed recovery 'bash tests/recovery-contracts.sh' 0 RECOVERY_APPLIED
+            emit_window_event "$jsonl" completed fresh 'bash tests/stagnation-contracts.sh --after-recovery' 0 STAGNATION_FRESH_CHECK_PASS
+            ;;
+        after-failure|before-recovery)
+            emit_window_event "$jsonl" completed failure 'bash tests/stagnation-contracts.sh' 1 STAGNATION_TRUSTED_FAILURE
+            emit_window_file_change "$jsonl" "$event_type"
+            emit_window_event "$jsonl" started recovery 'bash tests/recovery-contracts.sh' '' ''
+            emit_window_event "$jsonl" completed recovery 'bash tests/recovery-contracts.sh' 0 RECOVERY_APPLIED
+            emit_window_event "$jsonl" started fresh 'bash tests/stagnation-contracts.sh --after-recovery' '' ''
+            emit_window_event "$jsonl" completed fresh 'bash tests/stagnation-contracts.sh --after-recovery' 0 STAGNATION_FRESH_CHECK_PASS
+            ;;
+        during-recovery)
+            emit_window_event "$jsonl" completed failure 'bash tests/stagnation-contracts.sh' 1 STAGNATION_TRUSTED_FAILURE
+            emit_window_event "$jsonl" started recovery 'bash tests/recovery-contracts.sh' '' ''
+            emit_window_file_change "$jsonl" "$event_type"
+            emit_window_event "$jsonl" completed recovery 'bash tests/recovery-contracts.sh' 0 RECOVERY_APPLIED
+            emit_window_event "$jsonl" started fresh 'bash tests/stagnation-contracts.sh --after-recovery' '' ''
+            emit_window_event "$jsonl" completed fresh 'bash tests/stagnation-contracts.sh --after-recovery' 0 STAGNATION_FRESH_CHECK_PASS
+            ;;
+        after-recovery)
+            emit_window_event "$jsonl" completed failure 'bash tests/stagnation-contracts.sh' 1 STAGNATION_TRUSTED_FAILURE
+            emit_window_event "$jsonl" completed recovery 'bash tests/recovery-contracts.sh' 0 RECOVERY_APPLIED
+            emit_window_file_change "$jsonl" "$event_type"
+            emit_window_event "$jsonl" completed fresh 'bash tests/stagnation-contracts.sh --after-recovery' 0 STAGNATION_FRESH_CHECK_PASS
+            ;;
+        after-fresh-start)
+            emit_window_event "$jsonl" completed failure 'bash tests/stagnation-contracts.sh' 1 STAGNATION_TRUSTED_FAILURE
+            emit_window_event "$jsonl" completed recovery 'bash tests/recovery-contracts.sh' 0 RECOVERY_APPLIED
+            emit_window_event "$jsonl" started fresh 'bash tests/stagnation-contracts.sh --after-recovery' '' ''
+            emit_window_file_change "$jsonl" "$event_type"
+            emit_window_event "$jsonl" completed fresh 'bash tests/stagnation-contracts.sh --after-recovery' 0 STAGNATION_FRESH_CHECK_PASS
+            ;;
+        after-fresh-completion)
+            emit_window_event "$jsonl" completed failure 'bash tests/stagnation-contracts.sh' 1 STAGNATION_TRUSTED_FAILURE
+            emit_window_event "$jsonl" completed recovery 'bash tests/recovery-contracts.sh' 0 RECOVERY_APPLIED
+            emit_window_event "$jsonl" completed fresh 'bash tests/stagnation-contracts.sh --after-recovery' 0 STAGNATION_FRESH_CHECK_PASS
+            emit_window_file_change "$jsonl" "$event_type"
+            ;;
+        no-change)
+            emit_window_event "$jsonl" completed failure 'bash tests/stagnation-contracts.sh' 1 STAGNATION_TRUSTED_FAILURE
+            emit_window_event "$jsonl" completed recovery 'bash tests/recovery-contracts.sh' 0 RECOVERY_APPLIED
+            emit_window_event "$jsonl" completed fresh 'bash tests/stagnation-contracts.sh --after-recovery' 0 STAGNATION_FRESH_CHECK_PASS
+            ;;
+    esac
+}
+recovery_window_failures=()
+for recovery_window_event_type in started completed; do
+    for recovery_window_position in before-failure after-failure before-recovery after-fresh-start after-fresh-completion; do
+        recovery_window_jsonl="$fixture_root/recovery-window-$recovery_window_event_type-$recovery_window_position.jsonl"
+        write_recovery_window_control "$recovery_window_position" "$recovery_window_event_type" "$recovery_window_jsonl"
+        recovery_window_evidence="$(stagnation_recovery_event_evidence "$recovery_window_jsonl" "$recovery_window_workspace")"
+        if jq -e '.reject_patch_or_retry_after_bound == true' <<<"$recovery_window_evidence" >/dev/null; then
+            recovery_window_failures+=("accepted-$recovery_window_event_type-$recovery_window_position")
+        fi
+    done
+    for recovery_window_position in during-recovery after-recovery; do
+        recovery_window_jsonl="$fixture_root/recovery-window-$recovery_window_event_type-$recovery_window_position.jsonl"
+        write_recovery_window_control "$recovery_window_position" "$recovery_window_event_type" "$recovery_window_jsonl"
+        recovery_window_evidence="$(stagnation_recovery_event_evidence "$recovery_window_jsonl" "$recovery_window_workspace")"
+        if ! stagnation_event_shape_supported "$recovery_window_jsonl" \
+            || ! jq -e '.trusted_failure_before_recovery == true and .recovery_before_fresh_check == true and .reject_patch_or_retry_after_bound == true' <<<"$recovery_window_evidence" >/dev/null; then
+            recovery_window_failures+=("rejected-$recovery_window_event_type-$recovery_window_position")
+        fi
+    done
+done
+recovery_window_jsonl="$fixture_root/recovery-window-no-change.jsonl"
+write_recovery_window_control no-change completed "$recovery_window_jsonl"
+recovery_window_evidence="$(stagnation_recovery_event_evidence "$recovery_window_jsonl" "$recovery_window_workspace")"
+if ! jq -e '.trusted_failure_before_recovery == true and .recovery_before_fresh_check == true and .reject_patch_or_retry_after_bound == true' <<<"$recovery_window_evidence" >/dev/null; then
+    recovery_window_failures+=("rejected-no-file-event")
+fi
+if [[ ${#recovery_window_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "stagnation recovery artifact event crossed a phase boundary: ${recovery_window_failures[*]}"
 fi
 
 test_start "VIEWING evidence mutations are isolated to the candidate verifier"
@@ -6171,6 +6558,146 @@ if [[ ${#small_command_only_mixed_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "command-only unavailable classification hid independently observed failures: ${small_command_only_mixed_failures[*]}"
+fi
+
+test_start "small-fix unknown command scope excludes clean pairs and preserves observed failures"
+small_unknown_command_failures=()
+run_small_unknown_command_case() {
+    local output="$1" mode="$2"
+    shift 2
+    rm -f "$capture"/*
+    env FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-unknown-command "$@" \
+        "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$output" --codex-bin "$fake_codex" >/dev/null
+}
+for small_unknown_mode in before-target after-target started nonzero; do
+    small_unknown_output="$fixture_root/small-unknown-$small_unknown_mode-output"
+    case "$small_unknown_mode" in
+        before-target)
+            if ! run_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
+                FAKE_SMALL_UNKNOWN_COMMAND_MODE=before-target FAKE_SMALL_TRANSIENT_COMMAND_MUTATION=true; then
+                small_unknown_command_failures+=("runner:$small_unknown_mode")
+            elif [[ "$(find "$capture" -maxdepth 1 -name 'call-*.transient-mutation.json' | wc -l | tr -d ' ')" -ne 2 ]] \
+                || ! jq -s -e 'length == 2 and all(.[]; .created_sha256 | type == "string" and length == 64) and all(.[]; .removed == true)' "$capture"/call-*.transient-mutation.json >/dev/null; then
+                small_unknown_command_failures+=("mutation-not-observed:$small_unknown_mode")
+            fi
+            ;;
+        started)
+            if ! run_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
+                FAKE_SMALL_UNKNOWN_COMMAND_MODE=started FAKE_SMALL_UNKNOWN_COMMAND_EVENT=started; then
+                small_unknown_command_failures+=("runner:$small_unknown_mode")
+            fi
+            ;;
+        nonzero)
+            if ! run_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
+                FAKE_SMALL_UNKNOWN_COMMAND_MODE=nonzero FAKE_SMALL_UNKNOWN_COMMAND_EXIT=7; then
+                small_unknown_command_failures+=("runner:$small_unknown_mode")
+            fi
+            ;;
+        after-target)
+            if ! run_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
+                FAKE_SMALL_UNKNOWN_COMMAND_MODE=after-target; then
+                small_unknown_command_failures+=("runner:$small_unknown_mode")
+            fi
+            ;;
+    esac
+    if [[ -d "$small_unknown_output/traces" ]] \
+        && jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$small_unknown_output/traces/"*.json >/dev/null \
+        && jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1 and .incomplete_pairs[0].case_id == "small-fix-stays-lightweight"' "$small_unknown_output/comparison.json" >/dev/null; then
+        :
+    else
+        small_unknown_command_failures+=("not-excluded:$small_unknown_mode")
+    fi
+done
+for small_unknown_mode in pre-discovery mixed-unrelated failed-target; do
+    small_unknown_output="$fixture_root/small-unknown-$small_unknown_mode-output"
+    if ! run_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
+        FAKE_SMALL_UNKNOWN_COMMAND_MODE="$small_unknown_mode"; then
+        small_unknown_command_failures+=("runner:$small_unknown_mode")
+    elif ! jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == false and (.execution.verifier.workspace_failure_ids | index("workspace-003")) != null)' "$small_unknown_output/traces/"*.json >/dev/null; then
+        small_unknown_command_failures+=("masked-observed-failure:$small_unknown_mode")
+    fi
+done
+for small_unknown_guard in plan scope response final; do
+    small_unknown_output="$fixture_root/small-unknown-guard-$small_unknown_guard-output"
+    case "$small_unknown_guard" in
+        plan) small_unknown_env=(FAKE_SMALL_PLAN_MODE=full) ;;
+        scope) small_unknown_env=(FAKE_SCOPE_DEVIATION=true) ;;
+        response) small_unknown_env=(FAKE_SMALL_BROAD=true) ;;
+        final) small_unknown_env=(FAKE_WRONG_SMALL_EDIT=true) ;;
+    esac
+    if ! run_small_unknown_command_case "$small_unknown_output" before-target "${small_unknown_env[@]}"; then
+        small_unknown_command_failures+=("runner:guard-$small_unknown_guard")
+    elif [[ "$small_unknown_guard" == plan ]] \
+        && ! jq -s -e 'length == 2 and all(.[] | select(.variant == "candidate"); .status == "completed" and .metrics.acceptance_passed == false and .execution.verifier.workspace_failure_ids == ["workspace-002", "workspace-003"])' "$small_unknown_output/traces/"*.json >/dev/null; then
+        small_unknown_command_failures+=("masked-guard-$small_unknown_guard")
+    elif [[ "$small_unknown_guard" != plan ]] \
+        && ! jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$small_unknown_output/traces/"*.json >/dev/null; then
+        small_unknown_command_failures+=("masked-guard-$small_unknown_guard")
+    fi
+done
+if [[ ${#small_unknown_command_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "unknown command scope was promoted or concealed an observed small-fix failure: ${small_unknown_command_failures[*]}"
+fi
+
+test_start "small-fix malformed consumed event shapes are unavailable while numeric failures remain behavioral"
+small_payload_runtime_failures=()
+for small_payload_mode in small-missing-exit small-malformed-exit small-malformed-file-change; do
+    small_payload_output="$fixture_root/$small_payload_mode-output"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$small_payload_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$small_payload_output" --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$small_payload_output/traces/"*.json >/dev/null \
+        || ! jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1' "$small_payload_output/comparison.json" >/dev/null; then
+        small_payload_runtime_failures+=("unsupported-shape:$small_payload_mode")
+    fi
+done
+small_nonzero_output="$fixture_root/small-nonzero-exit-output"
+rm -f "$capture"/*
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-nonzero-exit "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$small_nonzero_output" --codex-bin "$fake_codex" >/dev/null \
+    || ! jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$small_nonzero_output/traces/"*.json >/dev/null; then
+    small_payload_runtime_failures+=("numeric-nonzero-was-unavailable-or-passed")
+fi
+if [[ ${#small_payload_runtime_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "small-fix malformed payload or valid nonzero exit classification regressed: ${small_payload_runtime_failures[*]}"
+fi
+
+test_start "stagnation consumed command payloads fail closed while temporal violations remain graded"
+stagnation_payload_runtime_failures=()
+for stagnation_payload_mode in stagnation-malformed-output stagnation-missing-exit; do
+    stagnation_payload_output="$fixture_root/$stagnation_payload_mode-output"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$stagnation_payload_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 \
+        --output "$stagnation_payload_output" --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$stagnation_payload_output/traces/"*.json >/dev/null \
+        || ! jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1' "$stagnation_payload_output/comparison.json" >/dev/null; then
+        stagnation_payload_runtime_failures+=("unsupported-shape:$stagnation_payload_mode")
+    fi
+done
+for stagnation_payload_mode in stagnation-wrong-marker stagnation-premature-recovery-artifact; do
+    stagnation_payload_output="$fixture_root/$stagnation_payload_mode-output"
+    rm -f "$capture"/*
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$stagnation_payload_mode" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 \
+        --output "$stagnation_payload_output" --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == false and (.execution.verifier.workspace_failure_ids | index("workspace-003")) != null)' "$stagnation_payload_output/traces/"*.json >/dev/null; then
+        stagnation_payload_runtime_failures+=("behavioral-failure:$stagnation_payload_mode")
+    fi
+done
+if [[ ${#stagnation_payload_runtime_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "stagnation consumed payload or recovery-event window was misclassified: ${stagnation_payload_runtime_failures[*]}"
 fi
 
 rm -f "$capture"/*

@@ -33,6 +33,7 @@
       "The requested change is isolated to one documentation typo.",
       "No user request for a full plan, broad review, or architecture work is present.",
       "For this disposable local typo fixture, the first workspace command or file action must be target discovery with exactly rg -n teh docs/usage.md; its matching command-start event is permitted before successful completion. This command constraint is case-specific and does not generalize to other tasks.",
+      "The admitted command vocabulary for this disposable case is limited to that exact read-only discovery probe, including its bounded raw, argv, and shell-wrapper forms. Any other started or completed command is unsupported command-scope telemetry; the adapter reports unavailable only when response, final-content, plan, scope, observed-path, discovery-order, and external-tool checks reveal no independent failure.",
       "After the edit, write the disposable grading artifact .assistant-eval/workflow-decision.json with exactly schema_version, task_size, and plan_mode. Use schema_version 1.0, task_size trivial, and plan_mode none."
       ],
       "prompt": "Fix the typo 'teh' to 'the' in docs/usage.md. Keep it simple.",

@@ -37,32 +37,43 @@ Codex adapter actually observed in its JSONL event stream.
   to be the first workspace command or file action; the matching command-start
   event may precede its successful completion. This rule and its no-web/MCP
   check apply only to the disposable local typo fixture, not delegated work.
-  A grading artifact alone cannot pass the case. Every observed file-change
-  event must name only the target or grading artifact; combined or separate
-  out-of-scope paths fail even when the final workspace diff is clean. Malformed
-  or unresolved observed paths also fail closed, and a failed completion cannot
-  prove a successful target edit. If the safe target ends in the
-  expected state after a later successful command but the event stream has no
-  `file_change`, the adapter reports unavailable: command text and final state
-  cannot prove which command edited the target or when. That classification is
-  allowed only when response grading passes, the sole workspace failure is the
-  missing observation, and there are no scope deviations. Observable
-  pre-discovery actions, external calls, and incorrect final content remain
-  completed failures.
+  Its admitted command vocabulary is limited to that exact read-only probe,
+  including bounded raw, argv, and shell-wrapper forms. Any other started or
+  completed command is an unsupported scope observation, regardless of whether
+  a later target-file event is present. The adapter reports unavailable only
+  when response, final-content, plan, scope, observed-path, discovery-order, and
+  external-tool checks reveal no independent failure. A grading artifact alone
+  cannot pass the case. Every observed file-change event must name only the
+  target or grading artifact; combined or separate out-of-scope paths fail even
+  when the final workspace diff is clean. Malformed raw event structure follows
+  the pre-grading unavailable policy, while well-formed unsafe paths and failed
+  target completions remain observed failures. With no `file_change`, command
+  text and final state still cannot prove which command edited the target or
+  when, so the existing unavailable route remains. Observable pre-discovery
+  actions, external calls, and incorrect final content remain completed
+  failures.
 - `pivot-restart-on-stagnation-or-code-writer-blocker` seeds a trusted failing
   check, fixture-owned failure/recovery receipts, recovery action, and fresh
   check. Its recovery artifact retains `terminal_completed=false`: a fresh-check
   pass validates the recovery protocol, not repair of the legacy bug or workflow
   completion. It admits only the three trusted fixture scripts and optional
   read-only `cat RECOVERY.md`; any other started or completed command fails the
-  bounded case. A present command start must have a nonempty id and one later
+  bounded case. Completed commands require numeric exit codes; a started command
+  needs no exit or output. For the three trusted marker commands, the selected
+  `aggregated_output`/`output` value must be a string. A numeric nonzero exit or
+  wrong marker in a string remains behavioral failure evidence; small-fix
+  output, passive message content, and optional recovery-read output are not
+  consumed. A present command start must have a nonempty id and one later
   completion with the same admitted command kind; duplicate, unmatched, or
-  mismatched starts, and duplicate nonempty completion ids fail. The failure
-  completes before recovery starts, and the recovery completes before the fresh
-  check starts; completion-only streams use the corresponding completion index.
-  Once that unique fresh check completes, any later started or completed command
-  or file-change event also fails. This boundary applies only to the disposable
-  recovery fixture.
+  mismatched starts, and duplicate nonempty completion ids fail. Each recovery
+  artifact file-change event must also occur after the recovery start (or the
+  completion when no start exists) and before the fresh-check start (or its
+  completion when no start exists). Events before the trusted failure or
+  recovery, after the fresh-check start, and after fresh-check completion fail;
+  events during a matched recovery and after recovery completion but before the
+  fresh check remain valid. Once that unique fresh check completes, any later
+  started or completed command or file-change event also fails. This boundary
+  applies only to the disposable recovery fixture.
 - `isolated-parallel-a-b-then-c-with-integration` records the required A/B/C
   dependency and integration policy, but current Codex CLI JSONL does not expose
   authoritative worker, workspace, isolation, or overlap telemetry. The adapter

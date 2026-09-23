@@ -2380,7 +2380,7 @@ small_fix_event_evidence() {
       def is_change:
         .type == "item.completed"
         and .item.type == "file_change"
-        and ((.item.status? // "completed") == "completed")
+        and ((.item | has("status") | not) or .item.status == "completed")
         and changes_containing("docs/usage.md");
       def is_observed_file_change:
         (.type == "item.started" or .type == "item.completed" or .type == "item.updated")
@@ -2394,6 +2394,12 @@ small_fix_event_evidence() {
         any(.[];
           (.type == "item.started" or .type == "item.completed" or .type == "item.updated")
           and .item.type == "file_change");
+      def is_completed_file_change:
+        .type == "item.completed" and .item.type == "file_change";
+      def is_unknown_command:
+        (.type == "item.started" or .type == "item.completed")
+        and .item.type == "command_execution"
+        and (is_exact_command("rg -n teh docs/usage.md") | not);
 
       . as $events
       | [range(0; length) | select($events[.] | is_discovery)] as $discoveries
@@ -2407,6 +2413,10 @@ small_fix_event_evidence() {
           | {index: $index}
         ] as $successful_commands
       | ($events | has_file_change_event) as $has_file_change_event
+      | ([range(0; length) | select($events[.] | is_unknown_command)] | length) as $unknown_command_count
+      | ([range(0; length) | $events[.] | select(is_completed_file_change and (.item | has("status")))]) as $status_events
+      | ($status_events | all(.[]; .item.status == "completed")) as $file_change_status_valid
+      | ([range(0; length) | select($events[.] | is_completed_file_change and .item.status == "failed")] | length) as $failed_file_change_count
       | [range(0; length)
           | . as $index
           | $events[$index]
@@ -2434,14 +2444,28 @@ small_fix_event_evidence() {
         )) as $discovery_lifecycles_valid
       | [range(0; length) | select($events[.] | is_workspace_action)] as $workspace_actions
       | [range(0; length) | select($events[.] | is_discovery_action)] as $discovery_actions
+      | (($discoveries | length) > 0
+          and $discovery_lifecycles_valid
+          and ($workspace_actions | length) > 0
+          and ($discovery_actions | length) > 0
+          and $workspace_actions[0] == $discovery_actions[0]
+          and all($workspace_actions[]; . as $action_index
+            | $action_index >= $discoveries[0]
+              or ($discovery_actions | index($action_index)) != null)
+          and (($changes | length) == 0 or $discoveries[0] < $changes[0])) as $discovery_sequence_valid
     | [range(0; length) | select(
           ($events[.].type == "item.completed" or $events[.].type == "item.started" or $events[.].type == "item.updated")
           and ($events[.].item.type == "mcp_tool_call" or $events[.].item.type == "web_search"))] as $disallowed
       | {
-          source_discovery_before_change: (($discoveries | length) > 0 and $discovery_lifecycles_valid and ($workspace_actions | length) > 0 and ($discovery_actions | length) > 0 and ($changes | length) > 0 and $file_change_scope_valid and $workspace_actions[0] == $discovery_actions[0] and all($workspace_actions[]; . as $action_index | $action_index >= $discoveries[0] or ($discovery_actions | index($action_index)) != null) and $discoveries[0] < $changes[0]),
+          source_discovery_before_change: ($discovery_sequence_valid and ($changes | length) > 0 and $file_change_scope_valid and $file_change_status_valid),
           command_only_change_without_file_change: (($discoveries | length) > 0 and $discovery_lifecycles_valid and ($workspace_actions | length) > 0 and ($discovery_actions | length) > 0 and ($successful_commands | length) > 0 and ($changes | length) == 0 and ($has_file_change_event | not) and $workspace_actions[0] == $discovery_actions[0] and all($workspace_actions[]; . as $action_index | $action_index >= $discoveries[0] or ($discovery_actions | index($action_index)) != null) and any($successful_commands[]; .index > $discoveries[0])),
+          unknown_command_count: $unknown_command_count,
+          command_scope_supported: ($unknown_command_count == 0),
           disallowed_item_count: ($disallowed | length),
-          file_change_scope_valid: $file_change_scope_valid
+          file_change_scope_valid: $file_change_scope_valid,
+          file_change_status_valid: $file_change_status_valid,
+          failed_file_change_count: $failed_file_change_count,
+          discovery_sequence_valid: $discovery_sequence_valid
         }
 JQ
 )" "$jsonl"
@@ -2456,6 +2480,18 @@ small_fix_command_only_edit_missing_telemetry() {
         <<<"$event_evidence" >/dev/null
 }
 
+small_fix_command_scope_missing_telemetry() {
+    local jsonl="$1" workspace="$2" event_evidence
+    event_evidence="$(small_fix_event_evidence "$jsonl" "$workspace")" || return 1
+    jq -e '
+      .discovery_sequence_valid == true
+      and .file_change_scope_valid == true
+      and .file_change_status_valid == true
+      and .disallowed_item_count == 0
+      and ((.unknown_command_count > 0) or .command_only_change_without_file_change == true)
+    ' <<<"$event_evidence" >/dev/null
+}
+
 observed_event_shape_supported() {
     local jsonl="$1" allowed_item_types="$2"
     jq -se --argjson allowed_item_types "$allowed_item_types" '
@@ -2468,12 +2504,59 @@ observed_event_shape_supported() {
     ' "$jsonl" >/dev/null
 }
 
+case_event_payload_shape_supported() {
+    local jsonl="$1" case_id="$2" allowed_item_types
+    case "$case_id" in
+        small-fix-stays-lightweight)
+            allowed_item_types='["agent_message","reasoning","command_execution","file_change","mcp_tool_call","web_search"]'
+            ;;
+        pivot-restart-on-stagnation-or-code-writer-blocker)
+            allowed_item_types='["agent_message","reasoning","command_execution","file_change"]'
+            ;;
+        *) return 1 ;;
+    esac
+    observed_event_shape_supported "$jsonl" "$allowed_item_types" || return 1
+    jq -cse --arg case_id "$case_id" "$EVENT_EVIDENCE_NORMALIZATION_JQ$(cat <<'JQ'
+      all(.[];
+        if (.type == "item.started" or .type == "item.completed")
+           and .item.type == "command_execution" then
+          (.item.command // .item.command_line // null) as $command
+          | (($command | type) == "string"
+             or (($command | type) == "array"
+                 and ($command | length) > 0
+                 and all($command[]; type == "string")))
+            and (.type == "item.started" or (.item.exit_code | type) == "number")
+            and (if $case_id == "pivot-restart-on-stagnation-or-code-writer-blocker"
+                    and .type == "item.completed"
+                    and (is_exact_command("bash tests/stagnation-contracts.sh")
+                      or is_exact_command("bash tests/recovery-contracts.sh")
+                      or is_exact_command("bash tests/stagnation-contracts.sh --after-recovery")) then
+                  ((.item.aggregated_output // .item.output // null) | type) == "string"
+                else true end)
+        elif (.type == "item.started" or .type == "item.completed")
+             and .item.type == "file_change" then
+          ((.item | has("path") | not) or (.item.path | type) == "string")
+          and ((.item | has("changes") | not)
+            or ((.item.changes | type) == "array"
+                and (.item.changes | length) > 0
+                and all(.item.changes[]; type == "object" and has("path") and (.path | type) == "string")))
+          and ($case_id != "small-fix-stays-lightweight"
+            or .type != "item.completed"
+            or (.item | has("status") | not)
+            or ((.item.status | type) == "string"
+                and (.item.status == "completed" or .item.status == "failed")))
+          and ((.item | has("path")) or (.item | has("changes")))
+        else true end)
+JQ
+    )" "$jsonl" >/dev/null 2>&1
+}
+
 small_fix_event_shape_supported() {
-    observed_event_shape_supported "$1" '["agent_message","reasoning","command_execution","file_change","mcp_tool_call","web_search"]'
+    case_event_payload_shape_supported "$1" "small-fix-stays-lightweight"
 }
 
 stagnation_event_shape_supported() {
-    observed_event_shape_supported "$1" '["agent_message","reasoning","command_execution","file_change"]'
+    case_event_payload_shape_supported "$1" "pivot-restart-on-stagnation-or-code-writer-blocker"
 }
 
 small_fix_requires_unavailable_adapter_policy() {
@@ -2491,7 +2574,7 @@ stagnation_recovery_event_evidence() {
       def changes_only($expected):
         normalized_file_change_paths as $paths
         | $paths != null and ($paths | length) > 0 and all($paths[]; . == $expected);
-      def command_output: (.item.aggregated_output // .item.output // "" | tostring);
+      def command_output: (.item.aggregated_output // .item.output // null);
       def has_numeric_exit_code:
         (.item.exit_code | type) == "number";
       def is_initial_stagnation_invocation:
@@ -2500,6 +2583,7 @@ stagnation_recovery_event_evidence() {
       def is_failed_stagnation:
         is_initial_stagnation_invocation
         and has_numeric_exit_code and .item.exit_code != 0
+        and (command_output | type) == "string"
         and (command_output | contains("STAGNATION_TRUSTED_FAILURE"));
       def is_recovery_invocation:
         .type == "item.completed" and .item.type == "command_execution"
@@ -2507,6 +2591,7 @@ stagnation_recovery_event_evidence() {
       def is_recovery:
         is_recovery_invocation
         and has_numeric_exit_code and .item.exit_code == 0
+        and (command_output | type) == "string"
         and (command_output | contains("RECOVERY_APPLIED"));
       def is_fresh_check_invocation:
         .type == "item.completed" and .item.type == "command_execution"
@@ -2514,6 +2599,7 @@ stagnation_recovery_event_evidence() {
       def is_fresh_check:
         is_fresh_check_invocation
         and has_numeric_exit_code and .item.exit_code == 0
+        and (command_output | type) == "string"
         and (command_output | contains("STAGNATION_FRESH_CHECK_PASS"));
       def recovery_command_kind:
         if is_exact_command("bash tests/stagnation-contracts.sh") then "trusted_failure"
@@ -2536,6 +2622,10 @@ stagnation_recovery_event_evidence() {
         (.type == "item.started" or .type == "item.completed")
         and .item.type == "file_change"
         and (changes_only(".assistant-eval/stagnation-recovery.json") | not);
+      def is_recovery_artifact_change:
+        (.type == "item.started" or .type == "item.completed")
+        and .item.type == "file_change"
+        and changes_only(".assistant-eval/stagnation-recovery.json");
       def is_workspace_action:
         (.type == "item.started" or .type == "item.completed")
         and (.item.type == "command_execution" or .item.type == "file_change");
@@ -2571,6 +2661,16 @@ stagnation_recovery_event_evidence() {
       | [range(0; length) | select($events[.] | is_forbidden_recovery_command)] as $forbidden_commands
       | [range(0; length) | select($events[.] | is_forbidden_retry_or_patch)] as $forbidden
       | [range(0; length) | select($events[.] | is_forbidden_source_change)] as $forbidden_changes
+      | [range(0; length)
+          | . as $index
+          | select(($events[$index] | is_recovery_artifact_change)
+            and (($recovery_start_or_completion == null)
+              or ($fresh_check_start_or_completion == null)
+              or ($failures | length) != 1
+              or $index <= $failures[0]
+              or $index <= $recovery_start_or_completion
+              or $index >= $fresh_check_start_or_completion))
+        ] as $out_of_window_changes
       | [range(0; length) | select(
           . as $index
           | ($events[$index] | is_workspace_action)
@@ -2580,7 +2680,7 @@ stagnation_recovery_event_evidence() {
       | {
           trusted_failure_before_recovery: (($initial_invocations | length) == 1 and ($failures | length) == 1 and ($recovery_invocations | length) == 1 and ($recoveries | length) == 1 and $command_lifecycles_valid and $failures[0] < $recovery_start_or_completion),
           recovery_before_fresh_check: (($recovery_invocations | length) == 1 and ($fresh_check_invocations | length) == 1 and ($fresh_checks | length) == 1 and $command_lifecycles_valid and $recoveries[0] < $fresh_check_start_or_completion),
-          reject_patch_or_retry_after_bound: (($forbidden_commands | length) == 0 and ($forbidden | length) == 0 and ($forbidden_changes | length) == 0 and $command_lifecycles_valid and ($fresh_checks | length) == 1 and ($post_bound_workspace_actions | length) == 0),
+          reject_patch_or_retry_after_bound: (($forbidden_commands | length) == 0 and ($forbidden | length) == 0 and ($forbidden_changes | length) == 0 and ($out_of_window_changes | length) == 0 and $command_lifecycles_valid and ($fresh_checks | length) == 1 and ($post_bound_workspace_actions | length) == 0),
           terminal_completed: false
         }
 JQ
@@ -2906,7 +3006,7 @@ verify_workspace() {
               and .plan_mode == "none"'
             event_evidence="$(small_fix_event_evidence "$jsonl" "$workspace_identity")" || event_evidence='{}'
             if small_fix_requires_unavailable_adapter_policy \
-                && jq -e '.source_discovery_before_change == true and .disallowed_item_count == 0' <<<"$event_evidence" >/dev/null; then
+                && jq -e '.source_discovery_before_change == true and .command_scope_supported == true and .disallowed_item_count == 0' <<<"$event_evidence" >/dev/null; then
                 workspace_record_check "workspace-003" true
             else
                 workspace_record_check "workspace-003" false
@@ -3674,7 +3774,7 @@ execute_one_run() {
             '$response.status == "passed"
              and $workspace.workspace_failure_ids == ["workspace-003"]
              and $workspace.scope_deviations == 0' >/dev/null \
-        && small_fix_command_only_edit_missing_telemetry "$jsonl" "$workspace"; then
+        && small_fix_command_scope_missing_telemetry "$jsonl" "$workspace"; then
         write_unavailable_trace "$trace_path" "$run_id" "$pair_id" "$case_id" "$trial_index" "$variant" \
             unknown_event_shape 0 "$fixture_hash" "$case_digest" "$instruction_hash" "$grader_digest" "$cli_version"
         mark_run_attempt_completed "$attempt_path" || die "Could not complete unavailable run-attempt state for $run_id."
