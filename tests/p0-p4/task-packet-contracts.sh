@@ -72,7 +72,7 @@ for term in \
     "Record verification evidence in the task journal slice verification ledger" \
     "Run a small self-check/local sanity check" \
     "Mark the slice \`VERIFIED\` only after all criteria pass and evidence is recorded" \
-    "After all slices are integrated, run cross-slice and full-scope validation before entering fresh Review"; do
+    "After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item;"; do
     if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_slice_phase_terms+=("$term")
     fi
@@ -833,11 +833,14 @@ for term in \
     "independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger" \
     "record command/result evidence in the configured task journal or equivalent carried-forward state" \
     "- id: B13" \
-    "After all slices are integrated, cross-slice and full-scope validation are complete before Review" \
+    "Full-scope validation is required before fresh Review" \
+    "Cross-slice validation applies only when slice_manifest contains more than one item" \
+    "record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale" \
+    "Single-slice full-scope validation still covers integration with existing code" \
     "shared or unknown workspace are VERIFIED, including self-check result, before another source-changing slice starts" \
     "runtime evidence proves isolated workspaces" \
     "every depends_on prerequisite has final status VERIFIED before a dependent slice starts" \
-    "cross-slice and full-scope validation are complete before Review"; do
+    "Cross-slice validation applies only when slice_manifest contains more than one item"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_slice_gate_terms+=("$term")
     fi
@@ -846,6 +849,27 @@ if [[ "${#missing_slice_gate_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "phase-gates.yaml missing dependency-aware slice verification gate terms: ${missing_slice_gate_terms[*]}"
+fi
+
+test_start "workflow integration prompts apply cross-slice checks by manifest cardinality and keep full-scope checks"
+slice_integration_rule="After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code."
+slice_integration_failures=()
+for slice_integration_file in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/build.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/mega-and-patterns.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-handoff-templates.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md" \
+    "$FRAMEWORK_DIR/README.md"; do
+    if ! p0p4_contains_text "$slice_integration_file" "$slice_integration_rule"; then
+        slice_integration_failures+=("$slice_integration_file")
+    fi
+done
+if [[ "${#slice_integration_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "integration guidance is missing the single/multiple-slice applicability rule: ${slice_integration_failures[*]}"
 fi
 
 test_start "Decompose guidance permits isolated overlap while rejecting stale next-slice sequencing"

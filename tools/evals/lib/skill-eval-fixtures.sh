@@ -50,6 +50,8 @@ load_contract_roots.call(contracts_dir, skill_name == "assistant-review")
 
 # Explicitly bounded roots that eval fixtures may project outside their output
 # artifacts. This is deliberately not a pool of every input or handoff field.
+# The collaborative progressive fixture also requests singleton projections of
+# these two canonical arrays; derive each item view from the owning schema.
 eval_only_root_registry = {
   "assistant-docs" => [
     { "kind" => "input_field", "name" => "architecture_decision_pack_status" },
@@ -67,7 +69,9 @@ eval_only_root_registry = {
     { "kind" => "input_field", "name" => "feature_preparation_scope" },
     { "kind" => "handoff_field", "name" => "architecture_mapping_evidence" },
     { "kind" => "handoff_field", "name" => "implementation_steps" },
-    { "kind" => "output_child", "artifact" => "triage_result", "name" => "size" }
+    { "kind" => "output_child", "artifact" => "triage_result", "name" => "size" },
+    { "kind" => "output_array_item", "artifact" => "decision_item" },
+    { "kind" => "output_array_item", "artifact" => "decision_resolution" }
   ]
 }
 
@@ -94,6 +98,14 @@ eval_only_root_registry.fetch(skill_name, []).each do |selector|
                output = YAML.load_file(File.join(contracts_dir, "output.yaml"))
                artifact = output.fetch("artifacts", []).find { |field| field["name"] == selector.fetch("artifact") }
                artifact ? artifact.fetch("object_fields", []).select { |field| field["name"] == selector.fetch("name") } : []
+             when "output_array_item"
+               output = YAML.load_file(File.join(contracts_dir, "output.yaml"))
+               artifact = output.fetch("artifacts", []).find { |field| field["name"] == selector.fetch("artifact") }
+               if artifact.is_a?(Hash) && artifact["type"] == "object[]" && artifact["object_fields"].is_a?(Array)
+                 [artifact.dup.merge("type" => "object")]
+               else
+                 []
+               end
              else
                []
              end
@@ -249,9 +261,10 @@ resolve = lambda do |path|
   path.drop(1).each do |segment|
     candidates = candidates.flat_map do |field|
       if segment.is_a?(Numeric)
-        field["type"].is_a?(String) && field["type"].end_with?("[]") ? [field] : []
+        field_type = field["type"]
+        field_type.is_a?(String) && field_type.end_with?("[]") ? [field.dup.merge("type" => field_type.delete_suffix("[]"))] : []
       elsif segment.is_a?(String)
-        field.fetch("object_fields", []).select { |child| child["name"] == segment }
+        field["type"] == "object" ? field.fetch("object_fields", []).select { |child| child["name"] == segment } : []
       else
         []
       end
@@ -333,8 +346,7 @@ end
       else
         target = resolve.call(path)
         target_field = target.length == 1 ? target.first : nil
-        object_array_item = target_field && target_field["type"] == "object[]" && path.last.is_a?(Numeric)
-        unless target_field && (target_field["type"] == "object" || object_array_item) && target_field["object_fields"].is_a?(Array)
+        unless target_field && target_field["type"] == "object" && target_field["object_fields"].is_a?(Array)
           warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] object_keys_exact target must be a declared object: #{path.to_json}"
           exit 1
         end

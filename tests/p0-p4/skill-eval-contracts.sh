@@ -2186,6 +2186,28 @@ else
     fail "fixture validation accepted unknown assertion roots: ${unknown_root_failures[*]}"
 fi
 
+test_start "workflow collaborative contributor fixture resolves its bounded singleton array projections"
+workflow_projection_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-workflow-projections.XXXXXX")"
+workflow_projection_skill="$workflow_projection_root/assistant-workflow"
+workflow_projection_responses="$workflow_projection_root/responses"
+workflow_projection_output="$workflow_projection_root/grading.out"
+p0p4_register_cleanup "$workflow_projection_root"
+mkdir -p "$workflow_projection_skill/evals" "$workflow_projection_responses/assistant-workflow"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$workflow_projection_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$workflow_projection_skill/contracts"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$workflow_projection_skill/evals/cases.json"
+cat >"$workflow_projection_responses/assistant-workflow/progressive-collaborative-contributor-evidence.txt" <<'EOF'
+{"decision_item":{"interaction_mode":"collaborative"},"decision_resolution":{"contributor_evidence":[{"contributor_role":"agent","contribution":"Analyzed retention option B.","evidence_ref":"agent-analysis"},{"contributor_role":"human_or_user","contribution":"Product owner selected option B.","evidence_ref":"owner-choice"}]},"route_clear":"after joint evidence"}
+EOF
+if "$skill_eval_runner" --validate-fixture --skill "$workflow_projection_skill" >/dev/null 2>"$workflow_projection_output" \
+    && "$skill_eval_runner" --responses "$workflow_projection_responses" --skill "$workflow_projection_skill" \
+        --case progressive-collaborative-contributor-evidence >"$workflow_projection_output" 2>&1 \
+    && grep -Fq "structured_json_assertion_failures=0" "$workflow_projection_output"; then
+    pass
+else
+    fail "workflow collaborative contributor fixture did not validate and grade its two registered singleton projections: $(cat "$workflow_projection_output")"
+fi
+
 test_start "fixture validation rejects assertion literals outside resolved enums"
 impossible_literal_failures=()
 while IFS='|' read -r impossible_operator impossible_mutation; do
@@ -4270,7 +4292,9 @@ jq '
         {operator:"object_keys_exact",path:["execution_policy"],fields:["source_writer_policy","read_only_analysis_policy","isolation_evidence_ref","c_start_decisions","per_slice_verification","integration_validation","integration_checks","fresh_review","fresh_review_after"]},
         {operator:"object_keys_exact",path:["execution_policy","c_start_decisions",0],fields:["a_status","c_decision"]},
         {operator:"object_keys_exact",path:["execution_policy","c_start_decisions",1],fields:["a_status","c_decision"]},
-        {operator:"object_keys_exact",path:["execution_policy","c_start_decisions",2],fields:["a_status","c_decision"]}
+        {operator:"object_keys_exact",path:["execution_policy","c_start_decisions",2],fields:["a_status","c_decision"]},
+        {operator:"equals",path:["execution_policy","c_start_decisions",0,"a_status"],expected:"PENDING"},
+        {operator:"equals",path:["execution_policy","integration_checks",0],expected:"cross-slice"}
       ]
     else . end
   )
@@ -4315,7 +4339,11 @@ for object_keys_invalid in \
     '{"operator":"object_keys_exact","path":[],"fields":["execution_policy","execution_policy"]}' \
     '{"operator":"object_keys_exact","path":["execution_policy"],"fields":["unsafe_override"]}' \
     '{"operator":"object_keys_exact","path":["execution_policy","source_writer_policy"],"fields":["value"]}' \
-    '{"operator":"object_keys_exact","path":["execution_policy"],"fields":["source_writer_policy","source_writer_policy"]}'; do
+    '{"operator":"object_keys_exact","path":["execution_policy"],"fields":["source_writer_policy","source_writer_policy"]}' \
+    '{"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",0,0],"fields":["a_status","c_decision"]}' \
+    '{"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",0,0,0],"fields":["a_status","c_decision"]}' \
+    '{"operator":"equals","path":["execution_policy","c_start_decisions","a_status"],"expected":"PENDING"}' \
+    '{"operator":"object_keys_exact","path":["execution_policy","source_writer_policy",0],"fields":["value"]}'; do
     jq --argjson assertion "$object_keys_invalid" '(.cases[] | select(.id == "native-slice-execution-uses-dependencies-not-runner-topology") | .machine_expectations.structured_json_assertions) += [$assertion]' "$object_keys_root/base-cases.json" >"$object_keys_root/invalid.json"
     mv "$object_keys_root/invalid.json" "$object_keys_skill/evals/cases.json"
     if "$skill_eval_runner" --validate-fixture --skill "$object_keys_skill" >/dev/null 2>"$object_keys_err"; then

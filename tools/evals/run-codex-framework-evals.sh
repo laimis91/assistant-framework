@@ -2343,13 +2343,26 @@ PY
 }
 
 small_fix_event_evidence() {
-    local jsonl="$1" workspace="$2" path_mappings
+    local jsonl="$1" workspace="$2" path_mappings allowed_file_change_paths="[]" event_path
     path_mappings="$(workspace_event_path_mappings "$jsonl" "$workspace")" || return 1
-    jq -cse --argjson path_mappings "$path_mappings" "$EVENT_EVIDENCE_NORMALIZATION_JQ$(cat <<'JQ'
+    while IFS= read -r event_path; do
+        [[ -n "$event_path" ]] || continue
+        if path_allowed_for_case "small-fix-stays-lightweight" "$event_path"; then
+            allowed_file_change_paths="$(jq -cn --argjson paths "$allowed_file_change_paths" --arg path "$event_path" '$paths + [$path] | unique')"
+        fi
+    done < <(jq -r 'to_entries[] | select(.value | type == "string") | .value' <<<"$path_mappings")
+    jq -cse \
+        --argjson path_mappings "$path_mappings" \
+        --argjson allowed_file_change_paths "$allowed_file_change_paths" \
+        "$EVENT_EVIDENCE_NORMALIZATION_JQ$(cat <<'JQ'
       def changes_containing($expected):
         normalized_file_change_paths as $paths
         | $paths != null and ($paths | length) > 0
           and all($paths[]; . != null) and any($paths[]; . == $expected);
+      def file_change_paths_are_allowed:
+        normalized_file_change_paths as $paths
+        | $paths != null and ($paths | length) > 0
+          and all($paths[]; . as $path | $path != null and ($allowed_file_change_paths | index($path)) != null);
       def is_discovery:
         .type == "item.completed"
         and .item.type == "command_execution"
@@ -2367,7 +2380,11 @@ small_fix_event_evidence() {
       def is_change:
         .type == "item.completed"
         and .item.type == "file_change"
+        and ((.item.status? // "completed") == "completed")
         and changes_containing("docs/usage.md");
+      def is_observed_file_change:
+        (.type == "item.started" or .type == "item.completed" or .type == "item.updated")
+        and .item.type == "file_change";
       def is_successful_command:
         .type == "item.completed"
         and .item.type == "command_execution"
@@ -2381,6 +2398,8 @@ small_fix_event_evidence() {
       . as $events
       | [range(0; length) | select($events[.] | is_discovery)] as $discoveries
       | [range(0; length) | select($events[.] | is_change)] as $changes
+      | [range(0; length) | . as $index | $events[$index] | select(is_observed_file_change)] as $file_change_events
+      | ($file_change_events | all(.[]; file_change_paths_are_allowed)) as $file_change_scope_valid
       | [range(0; length)
           | . as $index
           | $events[$index]
@@ -2419,9 +2438,10 @@ small_fix_event_evidence() {
           ($events[.].type == "item.completed" or $events[.].type == "item.started" or $events[.].type == "item.updated")
           and ($events[.].item.type == "mcp_tool_call" or $events[.].item.type == "web_search"))] as $disallowed
       | {
-          source_discovery_before_change: (($discoveries | length) > 0 and $discovery_lifecycles_valid and ($workspace_actions | length) > 0 and ($discovery_actions | length) > 0 and ($changes | length) > 0 and $workspace_actions[0] == $discovery_actions[0] and all($workspace_actions[]; . as $action_index | $action_index >= $discoveries[0] or ($discovery_actions | index($action_index)) != null) and $discoveries[0] < $changes[0]),
+          source_discovery_before_change: (($discoveries | length) > 0 and $discovery_lifecycles_valid and ($workspace_actions | length) > 0 and ($discovery_actions | length) > 0 and ($changes | length) > 0 and $file_change_scope_valid and $workspace_actions[0] == $discovery_actions[0] and all($workspace_actions[]; . as $action_index | $action_index >= $discoveries[0] or ($discovery_actions | index($action_index)) != null) and $discoveries[0] < $changes[0]),
           command_only_change_without_file_change: (($discoveries | length) > 0 and $discovery_lifecycles_valid and ($workspace_actions | length) > 0 and ($discovery_actions | length) > 0 and ($successful_commands | length) > 0 and ($changes | length) == 0 and ($has_file_change_event | not) and $workspace_actions[0] == $discovery_actions[0] and all($workspace_actions[]; . as $action_index | $action_index >= $discoveries[0] or ($discovery_actions | index($action_index)) != null) and any($successful_commands[]; .index > $discoveries[0])),
-          disallowed_item_count: ($disallowed | length)
+          disallowed_item_count: ($disallowed | length),
+          file_change_scope_valid: $file_change_scope_valid
         }
 JQ
 )" "$jsonl"

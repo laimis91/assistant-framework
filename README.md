@@ -122,7 +122,7 @@ Core development pipeline: idea-to-action decomposition, discover, proportional 
 |---|---|---|
 | Linear | One focused change with dependent steps; scale planning and review to risk. | Goal-driven checks and fresh review; a low-risk local change may use the direct lightweight path. |
 | Skill-driven | A recurring task has a matching installed skill and contract. | Any other pattern; the skill supplies the method. |
-| Parallel | Independent work can progress together. Source-changing packets remain sequential in a shared or unknown workspace; overlap requires runtime-proven isolated workspaces. | Goal-driven integration: dependents wait for VERIFIED prerequisites, then cross-slice and full-scope validation precede fresh review. |
+| Parallel | Independent work can progress together. Source-changing packets remain sequential in a shared or unknown workspace; overlap requires runtime-proven isolated workspaces. | Goal-driven integration: dependents wait for VERIFIED prerequisites, then full-scope validation precedes fresh review; cross-slice validation applies to multi-slice manifests. |
 | Goal-driven | Acceptance checks must remain the completion condition through repair. | Linear, skill-driven, or parallel execution; bounded repair escalates instead of claiming false completion. |
 
 For dependency-shaped uncertainty, the workflow defaults to
@@ -203,8 +203,7 @@ requirement. Dependent slices wait for verified prerequisites. Read-only analysi
 may run in parallel for independent packets with non-overlapping ownership.
 Source-changing packets in a shared or unknown workspace remain sequential;
 parallel source-changing packets require runtime proof of isolated workspaces.
-After integration, rerun cross-slice and full-scope validation and perform a
-fresh review before completion.
+After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code. After these integration checks, perform a fresh review before completion.
 
 For compression-safe work, the orchestrator keeps concise, root-scoped task and
 session state under `.codex/`. Resume reconciles that journal with the newest

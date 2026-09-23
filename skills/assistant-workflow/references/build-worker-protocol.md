@@ -161,7 +161,7 @@ with reapproval, user input, or environment recovery through
 `pivot_restart_decision` when applicable. A changed plan version starts a new
 path only after required reapproval; it must not disguise a same-scope retry.
 
-After all slices are integrated, run cross-slice and full-scope validation before entering fresh Review. Per-slice verification does not satisfy this integration barrier.
+After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code. Per-slice verification does not satisfy this integration barrier.
 
 After each implementation step, apply the relevant SOLID check from
 `references/prompts/solid-principles.md` and fix material violations before
@@ -278,9 +278,13 @@ or unknown workspace, start another source-changing slice only after the active
 source-changing slice is fully verified; start a dependent slice only after all
 its `depends_on` prerequisites are verified.
 
-After all slices are verified and concurrent outputs are integrated, run
-cross-slice and full-scope validation before entering fresh Review. Per-slice
-evidence does not satisfy new integration coverage.
+After all slices are verified and concurrent outputs are integrated, apply the
+manifest-cardinality integration rule: full-scope validation is required before
+fresh Review; cross-slice validation applies only when slice_manifest contains
+more than one item, and for one item is recorded as not_applicable using the
+one-item manifest and single_slice_rationale. Single-slice full-scope
+validation still covers integration with existing code. Per-slice evidence
+does not satisfy new integration coverage.
 If implementation reveals a plan problem, print `>> PLAN DEVIATION DETECTED`,
 record `pivot_restart_decision.reapproval_required=true` when scope/files/
 behavior/risk/verification/acceptance changes, and wait for approval before

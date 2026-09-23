@@ -168,10 +168,12 @@ keep dependent packets sequenced by `depends_on`.
 All slice packets are verified. Now integrate:
 1. Integrate the completed slice changes and resolve conflicts
 2. Confirm verified prerequisite slice outputs are present and consumed
-3. Run integration checks for DI, routes, configs, data flow, and cross-slice behavior
-4. Run integration tests across slice boundaries
+3. Run integration checks for DI, routes, configs, data flow, and the full integrated scope
+4. Run tests across slice boundaries when the manifest contains multiple items
 5. Run the full relevant suite
 6. Fix integration mismatches and request fresh review
+
+After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code.
 
 Verified slices completed:
 - [name]: [what was built and verified]

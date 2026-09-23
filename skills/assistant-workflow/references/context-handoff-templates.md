@@ -175,9 +175,11 @@ Integrate:
 1. Integrate the completed slice changes
 2. Resolve conflicts
 3. Confirm verified prerequisite slice outputs are present and consumed
-4. Run integration checks for DI, routes, configs, data flow, and cross-slice behavior
+4. Run integration checks for DI, routes, configs, data flow, and the full integrated scope
 5. Run full integration test suite
 6. Fix integration mismatches
+
+After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code.
 
 [Include relevant file paths]
 ```

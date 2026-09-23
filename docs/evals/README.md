@@ -37,7 +37,11 @@ Codex adapter actually observed in its JSONL event stream.
   to be the first workspace command or file action; the matching command-start
   event may precede its successful completion. This rule and its no-web/MCP
   check apply only to the disposable local typo fixture, not delegated work.
-  A grading artifact alone cannot pass the case. If the safe target ends in the
+  A grading artifact alone cannot pass the case. Every observed file-change
+  event must name only the target or grading artifact; combined or separate
+  out-of-scope paths fail even when the final workspace diff is clean. Malformed
+  or unresolved observed paths also fail closed, and a failed completion cannot
+  prove a successful target edit. If the safe target ends in the
   expected state after a later successful command but the event stream has no
   `file_change`, the adapter reports unavailable: command text and final state
   cannot prove which command edited the target or when. That classification is
@@ -804,7 +808,18 @@ array whose every member is a nonblank string.
 `object_keys_exact` requires the target to be an object whose keys exactly match
 the declared `fields`; it rejects missing keys, extra keys, and non-object
 values. Its path may be `[]` to check the JSON response root, or a declared
-object path. It accepts at most 16 unique field names.
+object path. It accepts at most 16 unique field names. Assertion paths follow
+the declared shape one segment at a time: each numeric segment consumes one
+array level, and string segments traverse fields only on an object. This admits
+object-array element fields and primitive-array elements while rejecting
+repeated or skipped indexes; schema descriptors are cloned when resolving an
+array element so the declared root remains unchanged.
+The assistant-workflow eval-only root registry explicitly projects the
+`decision_item` and `decision_resolution` object arrays as single objects for
+the `progressive-collaborative-contributor-evidence` fixture, whose prompt asks
+for those projected roots. Their canonical array descriptors remain available
+for indexed paths; this bounded compatibility does not permit skipped indexes
+on other arrays.
 `empty_array` requires the target path to resolve to an empty array.
 `array_type` requires the target path to resolve to an array and permits an empty array. `array_nonblank_strings` requires every member to be a nonblank string and a required boolean `allow_empty` declares whether an empty array is valid.
 In this exhaustive fixed operator list, `path_absent` passes only when its target

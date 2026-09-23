@@ -87,8 +87,12 @@ a concrete blocked/inconclusive debugging result. Do not patch until
 reproduction/root-cause evidence identifies a fix target or mitigation. Tests
 stay alongside code, not after.
 
-After all slices are verified and concurrent outputs are integrated, run
-cross-slice and full-scope validation before fresh review.
+After all slices are integrated, full-scope validation is required before
+fresh Review. Cross-slice validation applies only
+when slice_manifest contains more than one item; when it contains one item,
+record cross-slice validation as not_applicable using the one-item manifest and
+single_slice_rationale. Single-slice full-scope validation still covers
+integration with existing code.
 Apply the current-verification reuse rules in
 `references/build-worker-protocol.md`: reuse only full matching
 identity/coverage evidence and rerun every invalidated case. Per-slice evidence

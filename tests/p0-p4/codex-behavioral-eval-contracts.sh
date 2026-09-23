@@ -698,7 +698,7 @@ printf '%s\n' '{"type":"turn.started"}'
 printf '%s\n' '{"type":"item.completed","item":{"id":"item-1","type":"agent_message","text":"phase small docs/usage.md teh"}}'
 if [[ -f "$workspace/docs/usage.md" ]]; then
     case "${FAKE_PATTERN_EVENT_MODE:-}" in
-        ""|small-positive|small-wrapped-positive|small-disallowed-tool|small-unsupported-shape|small-external-symlink|small-mcp-started-only|small-web-started-only|small-interleaved-shell-action|small-shell-edit-before-discovery|small-shell-edit-started-before-discovery|small-updated-unknown|small-updated-disallowed|small-command-only|small-command-only-wrong-final)
+        ""|small-positive|small-wrapped-positive|small-transient-unrelated|small-disallowed-tool|small-unsupported-shape|small-external-symlink|small-mcp-started-only|small-web-started-only|small-interleaved-shell-action|small-shell-edit-before-discovery|small-shell-edit-started-before-discovery|small-updated-unknown|small-updated-disallowed|small-command-only|small-command-only-wrong-final)
             if [[ "${FAKE_SMALL_PASSIVE_REASONING:-false}" == "true" ]]; then
                 jq -cn '{type:"item.completed",item:{id:"small-reasoning-before",type:"reasoning",text:"safe summary"}}'
             fi
@@ -716,6 +716,11 @@ if [[ -f "$workspace/docs/usage.md" ]]; then
                 printf '%s\n' '{"type":"item.started","item":{"id":"small-shell-edit","type":"command_execution","command":"sed -i.bak s/teh/the/ docs/usage.md"}}'
             fi
             jq -cn --argjson command "$small_discovery_command" '{type:"item.completed",item:{id:"small-discovery",type:"command_execution",command:$command,exit_code:0,status:"completed",aggregated_output:"1:This fixture contains teh requested typo."}}'
+            if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-transient-unrelated" ]]; then
+                printf '%s\n' 'transient unrelated write' >"$workspace/transient-unrelated.txt"
+                jq -cn '{type:"item.completed",item:{id:"small-transient-unrelated",type:"file_change",path:"transient-unrelated.txt",status:"completed"}}'
+                rm -f "$workspace/transient-unrelated.txt"
+            fi
             if [[ "${FAKE_SMALL_PASSIVE_REASONING:-false}" == "true" ]]; then
                 jq -cn '{type:"item.completed",item:{id:"small-reasoning-between",type:"reasoning",text:"safe summary"}}'
             fi
@@ -3451,6 +3456,11 @@ awk '
     capture && /^}$/ { exit }
 ' "$runner" >>"$event_bounds_lib"
 awk '
+    /^path_allowed_for_case\(\)/ { capture = 1 }
+    capture { print }
+    capture && /^}$/ { exit }
+' "$runner" >>"$event_bounds_lib"
+awk '
     /^small_fix_event_evidence\(\)/ { capture = 1 }
     capture { print }
     capture && /^}$/ { exit }
@@ -3562,6 +3572,38 @@ write_small_path_control() {
         combined)
             jq -cn --arg path "$path" '{type:"item.completed",item:{id:"small-change",type:"file_change",changes:[{path:$path,kind:"update"},{path:".assistant-eval/workflow-decision.json",kind:"add"}]}}' >>"$jsonl"
             ;;
+        combined_unrelated)
+            jq -cn --arg path "$path" '{type:"item.completed",item:{id:"small-change",type:"file_change",changes:[{path:$path,kind:"update"},{path:"README.md",kind:"update"}]}}' >>"$jsonl"
+            ;;
+        separate_before)
+            jq -cn '{type:"item.completed",item:{id:"small-unrelated",type:"file_change",path:"README.md"}}' >>"$jsonl"
+            jq -cn --arg path "$path" '{type:"item.completed",item:{id:"small-change",type:"file_change",path:$path}}' >>"$jsonl"
+            return
+            ;;
+        separate_after)
+            jq -cn --arg path "$path" '{type:"item.completed",item:{id:"small-change",type:"file_change",path:$path}}' >>"$jsonl"
+            jq -cn '{type:"item.completed",item:{id:"small-unrelated",type:"file_change",path:"README.md"}}' >>"$jsonl"
+            return
+            ;;
+        started_unrelated)
+            jq -cn '{type:"item.started",item:{id:"small-unrelated",type:"file_change",path:"README.md"}}' >>"$jsonl"
+            jq -cn --arg path "$path" '{type:"item.completed",item:{id:"small-change",type:"file_change",path:$path}}' >>"$jsonl"
+            return
+            ;;
+        failed_unrelated)
+            jq -cn '{type:"item.completed",item:{id:"small-unrelated",type:"file_change",path:"README.md",status:"failed"}}' >>"$jsonl"
+            jq -cn --arg path "$path" '{type:"item.completed",item:{id:"small-change",type:"file_change",path:$path}}' >>"$jsonl"
+            return
+            ;;
+        failed_target)
+            jq -cn --arg path "$path" '{type:"item.completed",item:{id:"small-change",type:"file_change",path:$path,status:"failed"}}' >>"$jsonl"
+            return
+            ;;
+        malformed_extra)
+            jq -cn --arg path "$path" '{type:"item.completed",item:{id:"small-change",type:"file_change",path:$path}}' >>"$jsonl"
+            jq -cn '{type:"item.completed",item:{id:"small-malformed",type:"file_change",changes:[{}]}}' >>"$jsonl"
+            return
+            ;;
         mixed)
             jq -cn --arg path "$path" '{type:"item.completed",item:{id:"small-change",type:"file_change",changes:[{path:$path,kind:"update"},{path:"/tmp/outside/usage.md",kind:"update"}]}}' >>"$jsonl"
             ;;
@@ -3582,7 +3624,7 @@ for small_path_positive in \
     small_path_jsonl="$fixture_root/small-path-positive-${small_path_mode}-${RANDOM}.jsonl"
     write_small_path_control "$small_path_mode" "$small_path_jsonl" "$small_path_value"
     if ! small_fix_event_evidence "$small_path_jsonl" "$small_path_workspace" \
-        | jq -e '.source_discovery_before_change == true and .disallowed_item_count == 0' >/dev/null; then
+        | jq -e '.source_discovery_before_change == true and .disallowed_item_count == 0 and .file_change_scope_valid == true' >/dev/null; then
         small_path_failures+=("positive:$small_path_positive")
     fi
 done
@@ -3600,6 +3642,20 @@ for small_path_negative in \
         small_path_failures+=("negative:$small_path_negative")
     fi
 done
+for small_path_negative in combined_unrelated separate_before separate_after started_unrelated failed_unrelated malformed_extra; do
+    small_path_jsonl="$fixture_root/small-path-negative-$small_path_negative.jsonl"
+    write_small_path_control "$small_path_negative" "$small_path_jsonl" "docs/usage.md"
+    if ! small_fix_event_evidence "$small_path_jsonl" "$small_path_workspace" \
+        | jq -e '.source_discovery_before_change == false and .file_change_scope_valid == false' >/dev/null; then
+        small_path_failures+=("negative:$small_path_negative")
+    fi
+done
+small_path_jsonl="$fixture_root/small-path-failed-target.jsonl"
+write_small_path_control failed_target "$small_path_jsonl" "docs/usage.md"
+if ! small_fix_event_evidence "$small_path_jsonl" "$small_path_workspace" \
+    | jq -e '.source_discovery_before_change == false and .file_change_scope_valid == true' >/dev/null; then
+    small_path_failures+=("failed target completion established successful edit evidence or invalidated allowed scope")
+fi
 if [[ ${#small_path_failures[@]} -eq 0 ]]; then
     pass
 else
@@ -5990,6 +6046,7 @@ fi
 test_start "small-fix evaluation requires observed low-overhead evidence rather than its grading artifact alone"
 small_positive_output="$fixture_root/small-observed-positive-output"
 small_wrapped_positive_output="$fixture_root/small-observed-wrapped-positive-output"
+small_transient_unrelated_output="$fixture_root/small-observed-transient-unrelated-output"
 small_artifact_only_output="$fixture_root/small-observed-artifact-only-output"
 small_external_read_output="$fixture_root/small-observed-external-read-output"
 small_unsupported_output="$fixture_root/small-observed-unsupported-output"
@@ -6004,6 +6061,11 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-positive "$ru
         --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
         --cases small-fix-stays-lightweight --repeats 1 --output "$small_wrapped_positive_output" --codex-bin "$fake_codex" >/dev/null \
     && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == true)' "$small_wrapped_positive_output/traces/"*.json >/dev/null \
+    && rm -f "$capture"/* \
+    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-transient-unrelated "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases small-fix-stays-lightweight --repeats 1 --output "$small_transient_unrelated_output" --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false and .execution.verifier.workspace_failure_ids == ["workspace-003"] and .execution.verifier.scope_deviations == 0)' "$small_transient_unrelated_output/traces/"*.json >/dev/null \
     && rm -f "$capture"/* \
     && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-artifact-only "$runner" --execute \
         --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \

@@ -8,7 +8,7 @@ Use the strict slice packet fields from `slice_manifest` for every executable br
 - Contract-only/setup-only work is valid only when it is the verified deliverable artifact slice; otherwise include enabling changes in the slice that first uses them
 - Each slice: Plan --> [Design] --> Build
 - Keep slice ownership explicit through task packets. Source-changing packets in a shared or unknown workspace are sequential. Parallel source-changing packets require the runtime explicitly proves isolated workspaces; independent read-only analysis may run in parallel.
-- Verify each completed slice before dependent work starts. After all slices are integrated, run cross-slice and full-scope validation, then a fresh review.
+- Verify each completed slice before dependent work starts. After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code.
 
 ## Agent Portability
 
