@@ -94,10 +94,19 @@ emit_prompts() {
                       + ($authority | tojson)
                       + "\n```\n\n"
                     else "" end;
+                def task_only_packet:
+                  "# Task Packet\n\n"
+                  + "Skill: " + $skill + "\n\n"
+                  + "Skill Path: " + $skill_path + "\n\n"
+                  + "## Setup Context\n\n" + bullets(.setup_context) + "\n\n"
+                  + "## Prompt\n\n" + .prompt + "\n";
                 . as $fixture
                 | .cases[]
                 | select(.id == $id)
-                | "# " + .title + "\n\n"
+                | if .prompt_packet_mode == "task_only" then
+                    task_only_packet
+                  else
+                    "# " + .title + "\n\n"
                   + "Skill: " + $skill + "\n\n"
                   + "Skill Path: " + $skill_path + "\n\n"
                   + "Case ID: " + .id + "\n\n"
@@ -120,6 +129,7 @@ emit_prompts() {
                   + "### Forbidden Substrings\n\n"
                   + bullets(.machine_expectations.forbidden_substrings) + "\n\n"
                   + structured_json_assertions_section
+                  end
             ' "$fixture_file" >"$packet_path"
         done < <(jq -r --argjson selected_cases "$selected_cases" '
             .cases[]

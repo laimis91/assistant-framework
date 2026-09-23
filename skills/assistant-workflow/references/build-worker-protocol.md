@@ -107,8 +107,7 @@ changed scope plus results in the inline packet. Then perform the compact fresh
 self-review. Do not create worker or
 independent-review dispatch evidence solely to satisfy the light lane.
 
-For medium+ tasks with slices, execute one slice at a time. Each slice is the
-unit of implementation and verification.
+For medium+ tasks with slices, execute source-changing slices sequentially in a shared or unknown workspace. Independently executable source-changing slices may overlap only when runtime evidence proves isolated workspaces. Each slice is the unit of implementation and verification.
 
 Before starting a slice:
 
@@ -118,15 +117,16 @@ Before starting a slice:
 2. When harness-capable, confirm the task packet carries `done_contract_ref`,
    `harness_recipe_ref`, `harness_run_state_ref`, `trace_ledger_ref`,
    `replay_packet_ref`, and typed `artifact_refs`.
-3. Confirm prior slice status is `VERIFIED` before advancing; do not start the
-   next slice while the current slice is unverified.
-4. Check constraints from the task journal against the slice files and criteria.
+3. Confirm every `depends_on` prerequisite has final status `VERIFIED` before starting a dependent slice. In a shared or unknown workspace, do not start another source-changing slice while the active source-changing slice is unverified.
+4. For concurrent source-changing slices, confirm runtime evidence proves their
+   workspaces are isolated and their packets are independently executable.
+5. Check constraints from the task journal against the slice files and criteria.
 
-For each step, dispatch the selected lane owner for one task packet at a time.
-The bounded executor edits and runs focused verification in the same context.
-Separated workers dispatch Code Writer, then Builder/Tester. In direct fallback,
-perform the same selected-lane responsibilities and record equivalent evidence.
-Tests stay alongside code, not after it.
+For each step, dispatch the selected lane owner for one task packet at a time
+per worker. The bounded executor edits and runs focused verification in the
+same context. Separated workers dispatch Code Writer, then Builder/Tester. In
+direct fallback, perform the same selected-lane responsibilities and record
+equivalent evidence. Tests stay alongside code, not after it.
 
 If implementation or verification fails and the cause is unclear, return to
 `assistant-debugging` before another patch attempt. If the next fix is clear,
@@ -160,6 +160,8 @@ status to `terminal_pivot` or `blocked`, record `terminal_route`, and route to d
 with reapproval, user input, or environment recovery through
 `pivot_restart_decision` when applicable. A changed plan version starts a new
 path only after required reapproval; it must not disguise a same-scope retry.
+
+After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code. Per-slice verification does not satisfy this integration barrier.
 
 After each implementation step, apply the relevant SOLID check from
 `references/prompts/solid-principles.md` and fix material violations before
@@ -261,7 +263,7 @@ Decompose criteria before moving on:
    against the task packet, constraints, and deviation rule; record the result in
    the ledger.
 6. If any criterion, command, runtime artifact, or self-check fails, fix before
-   moving to the next slice.
+   marking the slice `VERIFIED` or starting a dependent slice.
 7. Mark the slice `VERIFIED` only after all criteria pass and evidence is
    recorded.
 
@@ -271,11 +273,18 @@ environment input changes; the prior run failed, was partial, or was skipped;
 the user explicitly requests a fresh run; mutable external state is involved;
 new integration coverage is required; or source changes after a fix. A supported
 unrelated-doc change may reuse evidence only with recorded input-boundary
-evidence showing that the change is outside the verification inputs. Only
-proceed to the next slice after the current one is fully verified.
+evidence showing that the change is outside the verification inputs. In a shared
+or unknown workspace, start another source-changing slice only after the active
+source-changing slice is fully verified; start a dependent slice only after all
+its `depends_on` prerequisites are verified.
 
-After all slices are verified, run integration tests across slice boundaries.
-Per-slice evidence does not satisfy new integration coverage.
+After all slices are verified and concurrent outputs are integrated, apply the
+manifest-cardinality integration rule: full-scope validation is required before
+fresh Review; cross-slice validation applies only when slice_manifest contains
+more than one item, and for one item is recorded as not_applicable using the
+one-item manifest and single_slice_rationale. Single-slice full-scope
+validation still covers integration with existing code. Per-slice evidence
+does not satisfy new integration coverage.
 If implementation reveals a plan problem, print `>> PLAN DEVIATION DETECTED`,
 record `pivot_restart_decision.reapproval_required=true` when scope/files/
 behavior/risk/verification/acceptance changes, and wait for approval before

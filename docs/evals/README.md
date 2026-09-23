@@ -28,6 +28,63 @@ under common operating conditions:
 - pivot/restart decisions for stagnation and Code Writer blockers
 - terminal max 10 review/QA round behavior
 
+## Observed execution-pattern evidence
+
+The pattern cases distinguish a deterministic policy fixture from evidence the
+Codex adapter actually observed in its JSONL event stream.
+
+- `small-fix-stays-lightweight` requires its exact target-file discovery probe
+  to be the first workspace command or file action; the matching command-start
+  event may precede its successful completion. This rule and its no-web/MCP
+  check apply only to the disposable local typo fixture, not delegated work.
+  Its admitted command vocabulary is limited to that exact read-only probe,
+  including bounded raw, argv, and shell-wrapper forms. Any other started or
+  completed command is an unsupported scope observation, regardless of whether
+  a later target-file event is present. The adapter reports unavailable only
+  when response, final-content, plan, scope, observed-path, discovery-order, and
+  external-tool checks reveal no independent failure. A grading artifact alone
+  cannot pass the case. Every observed file-change event must name only the
+  target or grading artifact; combined or separate out-of-scope paths fail even
+  when the final workspace diff is clean. Malformed raw event structure follows
+  the pre-grading unavailable policy, while well-formed unsafe paths and failed
+  target completions remain observed failures. With no `file_change`, command
+  text and final state still cannot prove which command edited the target or
+  when, so the existing unavailable route remains. Observable pre-discovery
+  actions, external calls, and incorrect final content remain completed
+  failures.
+- `pivot-restart-on-stagnation-or-code-writer-blocker` seeds a trusted failing
+  check, fixture-owned failure/recovery receipts, recovery action, and fresh
+  check. Its recovery artifact retains `terminal_completed=false`: a fresh-check
+  pass validates the recovery protocol, not repair of the legacy bug or workflow
+  completion. It admits only the three trusted fixture scripts and optional
+  read-only `cat RECOVERY.md`; any other started or completed command fails the
+  bounded case. Completed commands require numeric exit codes; a started command
+  needs no exit or output. For the three trusted marker commands, the selected
+  `aggregated_output`/`output` value must be a string. A numeric nonzero exit or
+  wrong marker in a string remains behavioral failure evidence; small-fix
+  output, passive message content, and optional recovery-read output are not
+  consumed. A present command start must have a nonempty id and one later
+  completion with the same admitted command kind; duplicate, unmatched, or
+  mismatched starts, and duplicate nonempty completion ids fail. Each recovery
+  artifact file-change event must also occur after the recovery start (or the
+  completion when no start exists) and before the fresh-check start (or its
+  completion when no start exists). Events before the trusted failure or
+  recovery, after the fresh-check start, and after fresh-check completion fail;
+  events during a matched recovery and after recovery completion but before the
+  fresh check remain valid. Once that unique fresh check completes, any later
+  started or completed command or file-change event also fails. This boundary
+  applies only to the disposable recovery fixture.
+- `isolated-parallel-a-b-then-c-with-integration` records the required A/B/C
+  dependency and integration policy, but current Codex CLI JSONL does not expose
+  authoritative worker, workspace, isolation, or overlap telemetry. The adapter
+  therefore emits `adapter_unavailable` with `unknown_event_shape`, no metrics,
+  and an excluded incomplete pair. Agent-message narrative never upgrades that
+  result to observed native parallel execution.
+
+The workflow policy fixtures still test shared-workspace sequencing,
+runtime-proven isolation, VERIFIED prerequisites, integration validation, and
+fresh review deterministically. They do not supply native execution telemetry.
+
 ## Generated workflow references
 
 `assistant-workflow` phase and plan views are generated from their authoritative
@@ -343,7 +400,10 @@ model-selection evidence and counts incomplete pairs. A second incomplete pair
 stops the batch before any later call,
 leaves remaining attempt records `not_started`, and withholds comparison and
 semantic-review artifacts. The exact limit is bound into the run plan as
-`max_incomplete_pairs=1`. The runner never retries an uncertain call.
+`max_incomplete_pairs=1`. Only the known pre-dispatch unavailable traces for the
+`isolated-parallel-a-b-then-c-with-integration` fixture are excluded; every other
+incomplete pair counts toward the limit. The runner never retries an uncertain
+call.
 
 An `in_flight` record without a valid trace is quota-uncertain: resume exits
 before every model call, reports only the bounded run ID, and requires separate
@@ -713,10 +773,14 @@ tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
 tools/evals/run-skill-evals.sh --emit-prompts /tmp/clarify-eval-prompts --skill assistant-clarify
 ```
 
-Prompt packets are written under `<output>/<skill>/<case-id>.md` and include the
-setup context, prompt, expected behavior, pass criteria, fail signals, optional
-seeded defects / measurable assertions, machine expectations, and an optional
-Structured JSON Assertions section when the case declares one.
+Prompt packets are written under `<output>/<skill>/<case-id>.md`. By default,
+and when a case declares `prompt_packet_mode: annotated`, they include the setup
+context, prompt, expected behavior, pass criteria, fail signals, optional seeded
+defects / measurable assertions, machine expectations, and an optional Structured
+JSON Assertions section when the case declares one. A case may instead declare
+`prompt_packet_mode: task_only`; its target packet contains only a neutral header,
+skill identity and path, setup context, and prompt. The local grader always keeps
+the complete fixture, including its grading-only expectations.
 
 Run each prompt packet with the target assistant and save captured responses as
 `<response-dir>/<skill>/<case-id>.txt` or `<response-dir>/<skill>/<case-id>.md`.
@@ -742,8 +806,9 @@ Cases may additionally define `machine_expectations.structured_json_assertions`.
 For these per-skill cases, the response must contain exactly one valid JSON
 value. The local grader applies only the fixed provider-neutral operators:
 `equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`,
-`required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, and
-`array_items_nonempty_fields`, and `array_items_nonempty_array_fields`. Assertion paths are JSON arrays for safe
+`required_when_equals`, `array_field_values_exact`, `array_object_values_exact`,
+`object_keys_exact`, `array_items_nonempty_fields`, and
+`array_items_nonempty_array_fields`. Assertion paths are JSON arrays for safe
 `getpath` access. They are grader-only declarations, never executable fixture
 content: arbitrary jq, code, or expressions are not accepted. `array_items_nonempty_fields`
 requires the target array to contain at least one object, and every listed field
@@ -751,6 +816,21 @@ in every object must be a non-empty string.
 `array_items_nonempty_array_fields` requires the target array to contain at
 least one object, and every listed field in every object must be a non-empty
 array whose every member is a nonblank string.
+`object_keys_exact` requires the target to be an object whose keys exactly match
+the declared `fields`; it rejects missing keys, extra keys, and non-object
+values. Its path may be `[]` to check the JSON response root, or a declared
+object path. It accepts at most 16 unique field names. Assertion paths follow
+the declared shape one segment at a time: each numeric segment consumes one
+array level, and string segments traverse fields only on an object. This admits
+object-array element fields and primitive-array elements while rejecting
+repeated or skipped indexes; schema descriptors are cloned when resolving an
+array element so the declared root remains unchanged.
+The assistant-workflow eval-only root registry explicitly projects the
+`decision_item` and `decision_resolution` object arrays as single objects for
+the `progressive-collaborative-contributor-evidence` fixture, whose prompt asks
+for those projected roots. Their canonical array descriptors remain available
+for indexed paths; this bounded compatibility does not permit skipped indexes
+on other arrays.
 `empty_array` requires the target path to resolve to an empty array.
 `array_type` requires the target path to resolve to an array and permits an empty array. `array_nonblank_strings` requires every member to be a nonblank string and a required boolean `allow_empty` declares whether an empty array is valid.
 In this exhaustive fixed operator list, `path_absent` passes only when its target

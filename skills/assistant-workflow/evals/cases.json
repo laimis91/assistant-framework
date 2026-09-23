@@ -328,10 +328,11 @@
     },
     {
       "id": "native-slice-execution-uses-dependencies-not-runner-topology",
+      "prompt_packet_mode": "task_only",
       "title": "Native slices use dependency-aware subagents",
       "category": "native_slice_execution",
       "purpose": "Checks that approved implementation work keeps strict packets, sequences source-changing packets in a shared workspace, allows read-only analysis in parallel, and permits parallel writers only with runtime-proven isolated workspaces.",
-      "prompt": "Implement the approved medium change in a shared workspace. Slice A and B own different files; Slice C consumes A. Keep source changes safe and parallelize only read-only analysis unless isolated workspaces are runtime-proven.",
+      "prompt": "Implement the approved medium change in a shared workspace. Slice A and B own different files; Slice C consumes A. Keep source changes safe and parallelize only read-only analysis unless isolated workspaces are runtime-proven. Return exactly one JSON object with one execution_policy object; this structured object is the authoritative evaluation answer. execution_policy has source_writer_policy, read_only_analysis_policy, isolation_evidence_ref, c_start_decisions, per_slice_verification, integration_validation, integration_checks, fresh_review, and fresh_review_after. source_writer_policy chooses sequential_shared_or_unknown or isolated_A_B_overlap_permitted; read_only_analysis_policy chooses parallel_permitted or sequential_only; per_slice_verification chooses required or deferred_to_integration; integration_validation chooses required or per_slice_only; fresh_review chooses required or not_required; fresh_review_after chooses integration_validation or per_slice_verification. isolation_evidence_ref is either the supplied setup reference or not_available. integration_checks selects applicable values from cross-slice, full-scope, and per-slice in that listed canonical order. execution_policy.c_start_decisions contains exactly one object for each a_status PENDING, RUNNING, and VERIFIED; each c_decision must be either blocked or ready. Decide every policy value from the stated setup and dependency facts.",
       "setup_context": [
         "The implementation plan is approved.",
         "Slices A and B have no dependencies or overlapping files, but their workspace isolation is unknown.",
@@ -354,20 +355,71 @@
         "Uses a runner script or branch topology as an execution requirement."
       ],
       "machine_expectations": {
-        "required_substrings": [
-          "shared or unknown workspace",
-          "sequential",
-          "read-only analysis",
-          "isolated workspaces",
-          "depends_on",
-          "verification command",
-          "cross-slice",
-          "fresh review",
-          "native subagents"
-        ],
-        "forbidden_substrings": [
-          "provider review state",
-          "parallel source-changing packets in a shared workspace"
+        "required_substrings": ["execution_policy", "source_writer_policy", "read_only_analysis_policy", "isolation_evidence_ref", "c_start_decisions", "per_slice_verification", "integration_validation", "integration_checks", "fresh_review", "fresh_review_after"],
+        "forbidden_substrings": ["provider review state"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["execution_policy","source_writer_policy"],"expected":"sequential_shared_or_unknown"},
+          {"operator":"equals","path":["execution_policy","read_only_analysis_policy"],"expected":"parallel_permitted"},
+          {"operator":"equals","path":["execution_policy","isolation_evidence_ref"],"expected":"not_available"},
+          {"operator":"array_object_values_exact","path":["execution_policy","c_start_decisions"],"fields":["a_status","c_decision"],"expected_objects":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}]},
+          {"operator":"equals","path":["execution_policy","per_slice_verification"],"expected":"required"},
+          {"operator":"equals","path":["execution_policy","integration_validation"],"expected":"required"},
+          {"operator":"equals","path":["execution_policy","integration_checks"],"expected":["cross-slice","full-scope"]},
+          {"operator":"equals","path":["execution_policy","fresh_review"],"expected":"required"},
+          {"operator":"equals","path":["execution_policy","fresh_review_after"],"expected":"integration_validation"},
+          {"operator":"object_keys_exact","path":[],"fields":["execution_policy"]},
+          {"operator":"object_keys_exact","path":["execution_policy"],"fields":["source_writer_policy","read_only_analysis_policy","isolation_evidence_ref","c_start_decisions","per_slice_verification","integration_validation","integration_checks","fresh_review","fresh_review_after"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",0],"fields":["a_status","c_decision"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",1],"fields":["a_status","c_decision"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",2],"fields":["a_status","c_decision"]}
+        ]
+      }
+    },
+    {
+      "id": "isolated-independent-slices-integrate-before-review",
+      "prompt_packet_mode": "task_only",
+      "title": "Isolated independent slices join at an integration barrier",
+      "category": "native_slice_execution",
+      "purpose": "Checks that runtime-proven isolation permits independent source writers to overlap while dependencies, integration validation, and fresh review remain mandatory.",
+      "prompt": "Build the approved change. Runtime evidence proves A and B each have isolated workspaces and independent packets. C depends_on A. Integrate all outputs before review. Return exactly one JSON object with one execution_policy object; this structured object is the authoritative evaluation answer. execution_policy has source_writer_policy, read_only_analysis_policy, isolation_evidence_ref, c_start_decisions, per_slice_verification, integration_validation, integration_checks, fresh_review, and fresh_review_after. source_writer_policy chooses sequential_shared_or_unknown or isolated_A_B_overlap_permitted; read_only_analysis_policy chooses parallel_permitted or sequential_only; per_slice_verification chooses required or deferred_to_integration; integration_validation chooses required or per_slice_only; fresh_review chooses required or not_required; fresh_review_after chooses integration_validation or per_slice_verification. isolation_evidence_ref is either the supplied setup reference or not_available. integration_checks selects applicable values from cross-slice, full-scope, and per-slice in that listed canonical order. execution_policy.c_start_decisions contains exactly one object for each a_status PENDING, RUNNING, and VERIFIED; each c_decision must be either blocked or ready. Decide every policy value from the stated setup and dependency facts.",
+      "setup_context": [
+        "The implementation plan is approved.",
+        "A and B are independent source-changing packets with non-overlapping ownership and runtime-proven isolated workspaces; deterministic fixture/runtime evidence is isolation_evidence_ref=fixture-runtime-isolation-A-B-v1.",
+        "C has depends_on A; the completed scope needs cross-slice and full-scope validation."
+      ],
+      "expected_behavior": [
+        "A and B may overlap only because runtime-proven isolated workspaces and independent packets are recorded.",
+        "Keeps C blocked until A is VERIFIED.",
+        "Records per-slice verification, integrates the concurrent outputs, then runs cross-slice and full-scope validation before fresh review.",
+        "Keeps one task packet per worker and does not invent a scheduler, runner, or isolation subsystem."
+      ],
+      "pass_criteria": [
+        "The response names the isolation evidence that allows A/B overlap.",
+        "The response waits for A verification before C and for integration validation before review."
+      ],
+      "fail_signals": [
+        "Starts C before A is VERIFIED.",
+        "Allows overlapping source writers without runtime-proven isolated workspaces.",
+        "Treats per-slice verification as sufficient for completion without integration validation and fresh review."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["execution_policy", "source_writer_policy", "read_only_analysis_policy", "isolation_evidence_ref", "c_start_decisions", "per_slice_verification", "integration_validation", "integration_checks", "fresh_review", "fresh_review_after"],
+        "forbidden_substrings": ["scheduler"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["execution_policy","source_writer_policy"],"expected":"isolated_A_B_overlap_permitted"},
+          {"operator":"equals","path":["execution_policy","read_only_analysis_policy"],"expected":"parallel_permitted"},
+          {"operator":"equals","path":["execution_policy","isolation_evidence_ref"],"expected":"fixture-runtime-isolation-A-B-v1"},
+          {"operator":"array_object_values_exact","path":["execution_policy","c_start_decisions"],"fields":["a_status","c_decision"],"expected_objects":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}]},
+          {"operator":"equals","path":["execution_policy","per_slice_verification"],"expected":"required"},
+          {"operator":"equals","path":["execution_policy","integration_validation"],"expected":"required"},
+          {"operator":"equals","path":["execution_policy","integration_checks"],"expected":["cross-slice","full-scope"]},
+          {"operator":"equals","path":["execution_policy","fresh_review"],"expected":"required"},
+          {"operator":"equals","path":["execution_policy","fresh_review_after"],"expected":"integration_validation"},
+          {"operator":"object_keys_exact","path":[],"fields":["execution_policy"]},
+          {"operator":"object_keys_exact","path":["execution_policy"],"fields":["source_writer_policy","read_only_analysis_policy","isolation_evidence_ref","c_start_decisions","per_slice_verification","integration_validation","integration_checks","fresh_review","fresh_review_after"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",0],"fields":["a_status","c_decision"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",1],"fields":["a_status","c_decision"]},
+          {"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",2],"fields":["a_status","c_decision"]}
         ]
       }
     },

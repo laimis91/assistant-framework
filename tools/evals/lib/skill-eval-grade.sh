@@ -1261,6 +1261,10 @@ count_structured_json_assertion_failures() {
               and all(value_at($assertion.path)[]; . as $item | type == "object" and all($assertion.fields[]; . as $field | $item | has($field)))
               and (object_field_tuples(value_at($assertion.path); $assertion.fields) | sort)
                 == (object_field_tuples($assertion.expected_objects; $assertion.fields) | sort)
+            elif $assertion.operator == "object_keys_exact" then
+              path_exists($assertion.path)
+              and (value_at($assertion.path) | type == "object")
+              and (value_at($assertion.path) | keys | sort) == ($assertion.fields | sort)
             else false end
         ' "$response_path" >/dev/null; then
             failures=$((failures + 1))

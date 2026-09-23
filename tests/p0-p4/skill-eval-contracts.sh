@@ -399,6 +399,12 @@ p0p4_write_skill_eval_responses() {
             if [[ "$skill_name" == "assistant-workflow" ]] \
                 && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
                 case "$id" in
+                    native-slice-execution-uses-dependencies-not-runner-topology)
+                        jq -n '{execution_policy:{source_writer_policy:"sequential_shared_or_unknown",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"not_available",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
+                        ;;
+                    isolated-independent-slices-integrate-before-review)
+                        jq -n '{execution_policy:{source_writer_policy:"isolated_A_B_overlap_permitted",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"fixture-runtime-isolation-A-B-v1",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
+                        ;;
                     verification-reuse-current-scenario-matrix|verification-reuse-preserves-independent-review)
                         write_verification_reuse_response "$id" "$response_path" "$required_summary"
                         ;;
@@ -2178,6 +2184,28 @@ if [[ "${#unknown_root_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "fixture validation accepted unknown assertion roots: ${unknown_root_failures[*]}"
+fi
+
+test_start "workflow collaborative contributor fixture resolves its bounded singleton array projections"
+workflow_projection_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-workflow-projections.XXXXXX")"
+workflow_projection_skill="$workflow_projection_root/assistant-workflow"
+workflow_projection_responses="$workflow_projection_root/responses"
+workflow_projection_output="$workflow_projection_root/grading.out"
+p0p4_register_cleanup "$workflow_projection_root"
+mkdir -p "$workflow_projection_skill/evals" "$workflow_projection_responses/assistant-workflow"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$workflow_projection_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$workflow_projection_skill/contracts"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$workflow_projection_skill/evals/cases.json"
+cat >"$workflow_projection_responses/assistant-workflow/progressive-collaborative-contributor-evidence.txt" <<'EOF'
+{"decision_item":{"interaction_mode":"collaborative"},"decision_resolution":{"contributor_evidence":[{"contributor_role":"agent","contribution":"Analyzed retention option B.","evidence_ref":"agent-analysis"},{"contributor_role":"human_or_user","contribution":"Product owner selected option B.","evidence_ref":"owner-choice"}]},"route_clear":"after joint evidence"}
+EOF
+if "$skill_eval_runner" --validate-fixture --skill "$workflow_projection_skill" >/dev/null 2>"$workflow_projection_output" \
+    && "$skill_eval_runner" --responses "$workflow_projection_responses" --skill "$workflow_projection_skill" \
+        --case progressive-collaborative-contributor-evidence >"$workflow_projection_output" 2>&1 \
+    && grep -Fq "structured_json_assertion_failures=0" "$workflow_projection_output"; then
+    pass
+else
+    fail "workflow collaborative contributor fixture did not validate and grade its two registered singleton projections: $(cat "$workflow_projection_output")"
 fi
 
 test_start "fixture validation rejects assertion literals outside resolved enums"
@@ -4245,6 +4273,90 @@ else
     fail "array_object_values_exact does not distinguish present null from missing keys: ${object_null_failures[*]}"
 fi
 
+test_start "object_keys_exact rejects extra and missing root and nested keys"
+object_keys_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-object-keys.XXXXXX")"
+object_keys_skill="$object_keys_root/assistant-workflow"
+object_keys_responses="$object_keys_root/responses"
+object_keys_err="$object_keys_root/validation.err"
+object_keys_output="$object_keys_root/grading.out"
+p0p4_register_cleanup "$object_keys_root"
+mkdir -p "$object_keys_skill/evals" "$object_keys_responses/assistant-workflow"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$object_keys_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$object_keys_skill/contracts"
+jq '
+  .cases |= map(
+    if .id == "native-slice-execution-uses-dependencies-not-runner-topology"
+      or .id == "isolated-independent-slices-integrate-before-review" then
+      .machine_expectations.structured_json_assertions += [
+        {operator:"object_keys_exact",path:[],fields:["execution_policy"]},
+        {operator:"object_keys_exact",path:["execution_policy"],fields:["source_writer_policy","read_only_analysis_policy","isolation_evidence_ref","c_start_decisions","per_slice_verification","integration_validation","integration_checks","fresh_review","fresh_review_after"]},
+        {operator:"object_keys_exact",path:["execution_policy","c_start_decisions",0],fields:["a_status","c_decision"]},
+        {operator:"object_keys_exact",path:["execution_policy","c_start_decisions",1],fields:["a_status","c_decision"]},
+        {operator:"object_keys_exact",path:["execution_policy","c_start_decisions",2],fields:["a_status","c_decision"]},
+        {operator:"equals",path:["execution_policy","c_start_decisions",0,"a_status"],expected:"PENDING"},
+        {operator:"equals",path:["execution_policy","integration_checks",0],expected:"cross-slice"}
+      ]
+    else . end
+  )
+' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$object_keys_skill/evals/cases.json"
+cp "$object_keys_skill/evals/cases.json" "$object_keys_root/base-cases.json"
+cat >"$object_keys_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"sequential_shared_or_unknown","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
+EOF
+cat >"$object_keys_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
+EOF
+object_keys_failures=()
+if ! "$skill_eval_runner" --validate-fixture --skill "$object_keys_skill" >/dev/null 2>"$object_keys_err"; then
+    object_keys_failures+=("valid fixture: $(cat "$object_keys_err")")
+else
+    for object_keys_case in native-slice-execution-uses-dependencies-not-runner-topology isolated-independent-slices-integrate-before-review; do
+        if ! "$skill_eval_runner" --responses "$object_keys_responses" --skill "$object_keys_skill" --case "$object_keys_case" >"$object_keys_output" 2>&1; then
+            object_keys_failures+=("valid response:$object_keys_case")
+        fi
+    done
+    object_keys_baseline="$object_keys_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt"
+    cp "$object_keys_baseline" "$object_keys_root/valid-response.json"
+    for object_keys_mutation in \
+        'setpath(["unsafe_override"]; true)' \
+        'del(.execution_policy)' \
+        'setpath(["execution_policy","unsafe_override"]; true)' \
+        'setpath(["execution_policy","c_start_decisions",0,"unsafe_override"]; true)' \
+        'del(.execution_policy.fresh_review)' \
+        'del(.execution_policy.c_start_decisions[0].a_status)' \
+        '.execution_policy = "unsafe"' \
+        '.execution_policy.c_start_decisions[0] = "ready"'; do
+        jq "$object_keys_mutation" "$object_keys_root/valid-response.json" >"$object_keys_baseline"
+        if "$skill_eval_runner" --responses "$object_keys_responses" --skill "$object_keys_skill" --case native-slice-execution-uses-dependencies-not-runner-topology >"$object_keys_output" 2>&1 \
+            || ! grep -Fq "structured JSON assertion failure" "$object_keys_output"; then
+            object_keys_failures+=("response mutation:$object_keys_mutation")
+        fi
+        cp "$object_keys_root/valid-response.json" "$object_keys_baseline"
+    done
+fi
+for object_keys_invalid in \
+    '{"operator":"object_keys_exact","path":[],"fields":["unsafe_override"]}' \
+    '{"operator":"object_keys_exact","path":[],"fields":["execution_policy","execution_policy"]}' \
+    '{"operator":"object_keys_exact","path":["execution_policy"],"fields":["unsafe_override"]}' \
+    '{"operator":"object_keys_exact","path":["execution_policy","source_writer_policy"],"fields":["value"]}' \
+    '{"operator":"object_keys_exact","path":["execution_policy"],"fields":["source_writer_policy","source_writer_policy"]}' \
+    '{"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",0,0],"fields":["a_status","c_decision"]}' \
+    '{"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",0,0,0],"fields":["a_status","c_decision"]}' \
+    '{"operator":"equals","path":["execution_policy","c_start_decisions","a_status"],"expected":"PENDING"}' \
+    '{"operator":"object_keys_exact","path":["execution_policy","source_writer_policy",0],"fields":["value"]}'; do
+    jq --argjson assertion "$object_keys_invalid" '(.cases[] | select(.id == "native-slice-execution-uses-dependencies-not-runner-topology") | .machine_expectations.structured_json_assertions) += [$assertion]' "$object_keys_root/base-cases.json" >"$object_keys_root/invalid.json"
+    mv "$object_keys_root/invalid.json" "$object_keys_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$object_keys_skill" >/dev/null 2>"$object_keys_err"; then
+        object_keys_failures+=("invalid assertion accepted:$object_keys_invalid")
+    fi
+    cp "$object_keys_root/base-cases.json" "$object_keys_skill/evals/cases.json"
+done
+if [[ "${#object_keys_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "exact object-key assertions accepted unsafe response keys or malformed schema paths: ${object_keys_failures[*]}"
+fi
+
 test_start "structured assertion declaration bounds accept exact limits and reject one-over limits"
 structured_bounds_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-structured-bounds.XXXXXX")"
 structured_bounds_skill="$structured_bounds_root/assistant-eval-structured-bounds"
@@ -4595,6 +4707,7 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq '`array_type` requires the target path to resolve to an array and permits an empty array.' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`path_absent`' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`array_object_values_exact`' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq '`object_keys_exact`' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'In this exhaustive fixed operator list, `path_absent` passes only when its target' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'path cannot resolve; a present `null` value is present and therefore fails.' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq '`absent_or_empty_array` passes when its target path is unresolved or resolves to' "$FRAMEWORK_DIR/docs/evals/README.md" \
@@ -4606,6 +4719,7 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq '`path_absent` accepts only absence; present `null` fails.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq '`absent_or_empty_array` accepts only absence or `[]`; `null` and other values fail.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq '`array_object_values_exact` projects every target-array object' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq '`object_keys_exact` requires an object whose keys exactly match' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq 'at most 16 unique projected fields and 32 expected objects' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq 'unordered multiset, preserves field correlation, and treats' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq 'an absent field differently from a present `null`.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
@@ -4617,7 +4731,7 @@ else
 fi
 
 test_start "skill eval docs enumerate the exact canonical structured operator list"
-expected_structured_operator_names='equals one_of nonempty_string nonempty_array empty_array array_type array_nonblank_strings path_absent absent_or_empty_array equals_path required_when_equals array_field_values_exact array_object_values_exact array_items_nonempty_fields array_items_nonempty_array_fields'
+expected_structured_operator_names='equals one_of nonempty_string nonempty_array empty_array array_type array_nonblank_strings path_absent absent_or_empty_array equals_path required_when_equals array_field_values_exact array_object_values_exact object_keys_exact array_items_nonempty_fields array_items_nonempty_array_fields'
 structured_operator_list_is_exact() {
     local document="$1" source_kind="$2" paragraph actual
     case "$source_kind" in

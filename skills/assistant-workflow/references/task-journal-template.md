@@ -194,9 +194,9 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 - Evidence ref: [validation output or carried-forward evidence]
 
 ## Slice Verification Ledger
-[required for medium+ tasks; update after each slice before starting the next]
+[required for medium+ tasks; update after each slice and before starting a dependent slice or another source-changing slice in a shared or unknown workspace]
 [applies only when `execution_intent != prepare_only`; prepare_only has no slices]
-do not start the next slice until the current one is `VERIFIED`
+do not start a dependent slice until every `depends_on` prerequisite is `VERIFIED`; source-changing slices may overlap only with runtime-proven isolated workspaces
 | Slice | Task Packet | RED Status | Implementation Status | Verification Command/Result | Criteria Checked | Self-Check Result | Final Status |
 |-----------|-------------|------------|-----------------------|-----------------------------|------------------|-------------------|--------------|
 | 1. [slice_id] [name] | [packet id] | [pass/fail/N/A] | [done/blocked] | `["executable", "arg"]` → [pass/fail + signal] | [X/Y passed] | [pass/fail + note] | [VERIFIED/BLOCKED] |
@@ -319,7 +319,7 @@ do not start the next slice until the current one is `VERIFIED`
 2. **Triage** records task/risk/QA/harness/lane/state/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
 3. **Clarification** has no numeric cap or quota. Apply deterministic safe defaults immediately with source/rationale and set the applied flag from those records. Ask every remaining admissible material question grouped by topic; waiting state stays `DISCOVERING` only for questions with no safe default; explicit `defaults` accepts displayed recommendations without changing automatic-default evidence.
 4. **Decompose/Plan** persists the slice manifest for medium+ work only when `execution_intent != prepare_only`. For `prepare_only`, retain readiness context and optionally record an inline no-wait Plan; do not create or persist Decompose slices. Plan is omitted only for eligible `plan_mode=none`; `approval_required` captures approval only when `execution_intent != prepare_only`.
-5. **Build** (`execution_intent != prepare_only`) updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before the next slice.
+5. **Build** (`execution_intent != prepare_only`) updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before starting a dependent slice or another source-changing slice in a shared or unknown workspace.
 6. **Review** (`execution_intent != prepare_only`) owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.
 7. **Document/Handoff** (`execution_intent != prepare_only`) solely creates the developer handoff and fills Verification Summary, conditional Manual Verification Result, and Review Notes.
 8. **Preparation Completion** (`execution_intent=prepare_only`) records readiness only, then proceeds directly to Done without Build, Review, or developer handoff.

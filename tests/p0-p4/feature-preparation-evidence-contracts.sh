@@ -620,7 +620,7 @@ if ruby -ryaml -e '
     phases.include?("**Run condition:** `execution_intent != prepare_only`.") &&
     plan.include?("For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits.") &&
     plan.include?("It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests.") &&
-    journal.include?("[required for medium+ tasks; update after each slice before starting the next]") &&
+    journal.include?("[required for medium+ tasks; update after each slice and before starting a dependent slice or another source-changing slice in a shared or unknown workspace]") &&
     journal.include?("[applies only when `execution_intent != prepare_only`; prepare_only has no slices]") &&
     journal.include?("**Preparation Completion** (`execution_intent=prepare_only`) records readiness only, then proceeds directly to Done without Build, Review, or developer handoff.") &&
     roles.include?("## Dispatch rules by task size (`execution_intent != prepare_only`)") &&
