@@ -541,9 +541,9 @@ gates:
         on_fail: "Repair evidence according to build_execution_lane: bounded_executor records executor RED/GREEN/verification; separated_workers records Code Writer and Builder/Tester dispatch/results."
 
       - id: B13
-        check: "For medium+ tasks: each slice has a final status of VERIFIED, including self-check result, before the next slice started"
+        check: "For medium+ tasks: source-changing slices in a shared or unknown workspace are VERIFIED, including self-check result, before another source-changing slice starts. Independently executable source-changing slices may overlap only when runtime evidence proves isolated workspaces; every depends_on prerequisite has final status VERIFIED before a dependent slice starts. After all slices are integrated, cross-slice and full-scope validation are complete before Review."
         condition: "size in [medium, large, mega]"
-        on_fail: "This is a process violation — slices must be verified sequentially with evidence before advancing. Note it in the configured task journal or equivalent carried-forward state."
+        on_fail: "This is a process violation — sequence source-changing slices in shared or unknown workspaces, require runtime-proven isolation for overlap, and do not start dependents before VERIFIED prerequisites. Record the evidence and complete integration validation before Review."
 
     guidance_assertions:
 

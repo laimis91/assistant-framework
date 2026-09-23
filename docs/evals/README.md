@@ -28,6 +28,41 @@ under common operating conditions:
 - pivot/restart decisions for stagnation and Code Writer blockers
 - terminal max 10 review/QA round behavior
 
+## Observed execution-pattern evidence
+
+The pattern cases distinguish a deterministic policy fixture from evidence the
+Codex adapter actually observed in its JSONL event stream.
+
+- `small-fix-stays-lightweight` requires its exact target-file discovery probe
+  to be the first workspace command or file action; the matching command-start
+  event may precede its successful completion. This rule and its no-web/MCP
+  check apply only to the disposable local typo fixture, not delegated work.
+  A grading artifact alone cannot pass the case.
+- `pivot-restart-on-stagnation-or-code-writer-blocker` seeds a trusted failing
+  check, fixture-owned failure/recovery receipts, recovery action, and fresh
+  check. Its recovery artifact retains `terminal_completed=false`: a fresh-check
+  pass validates the recovery protocol, not repair of the legacy bug or workflow
+  completion. It admits only the three trusted fixture scripts and optional
+  read-only `cat RECOVERY.md`; any other started or completed command fails the
+  bounded case. A present command start must have a nonempty id and one later
+  completion with the same admitted command kind; duplicate, unmatched, or
+  mismatched starts, and duplicate nonempty completion ids fail. The failure
+  completes before recovery starts, and the recovery completes before the fresh
+  check starts; completion-only streams use the corresponding completion index.
+  Once that unique fresh check completes, any later started or completed command
+  or file-change event also fails. This boundary applies only to the disposable
+  recovery fixture.
+- `isolated-parallel-a-b-then-c-with-integration` records the required A/B/C
+  dependency and integration policy, but current Codex CLI JSONL does not expose
+  authoritative worker, workspace, isolation, or overlap telemetry. The adapter
+  therefore emits `adapter_unavailable` with `unknown_event_shape`, no metrics,
+  and an excluded incomplete pair. Agent-message narrative never upgrades that
+  result to observed native parallel execution.
+
+The workflow policy fixtures still test shared-workspace sequencing,
+runtime-proven isolation, VERIFIED prerequisites, integration validation, and
+fresh review deterministically. They do not supply native execution telemetry.
+
 ## Generated workflow references
 
 `assistant-workflow` phase and plan views are generated from their authoritative
@@ -713,10 +748,14 @@ tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
 tools/evals/run-skill-evals.sh --emit-prompts /tmp/clarify-eval-prompts --skill assistant-clarify
 ```
 
-Prompt packets are written under `<output>/<skill>/<case-id>.md` and include the
-setup context, prompt, expected behavior, pass criteria, fail signals, optional
-seeded defects / measurable assertions, machine expectations, and an optional
-Structured JSON Assertions section when the case declares one.
+Prompt packets are written under `<output>/<skill>/<case-id>.md`. By default,
+and when a case declares `prompt_packet_mode: annotated`, they include the setup
+context, prompt, expected behavior, pass criteria, fail signals, optional seeded
+defects / measurable assertions, machine expectations, and an optional Structured
+JSON Assertions section when the case declares one. A case may instead declare
+`prompt_packet_mode: task_only`; its target packet contains only a neutral header,
+skill identity and path, setup context, and prompt. The local grader always keeps
+the complete fixture, including its grading-only expectations.
 
 Run each prompt packet with the target assistant and save captured responses as
 `<response-dir>/<skill>/<case-id>.txt` or `<response-dir>/<skill>/<case-id>.md`.

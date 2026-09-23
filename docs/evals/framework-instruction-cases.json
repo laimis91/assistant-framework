@@ -32,6 +32,7 @@
       "Assistant Framework instructions are active.",
       "The requested change is isolated to one documentation typo.",
       "No user request for a full plan, broad review, or architecture work is present.",
+      "For this disposable local typo fixture, the first workspace command or file action must be target discovery with exactly rg -n teh docs/usage.md; its matching command-start event is permitted before successful completion. This command constraint is case-specific and does not generalize to other tasks.",
       "After the edit, write the disposable grading artifact .assistant-eval/workflow-decision.json with exactly schema_version, task_size, and plan_mode. Use schema_version 1.0, task_size trivial, and plan_mode none."
       ],
       "prompt": "Fix the typo 'teh' to 'the' in docs/usage.md. Keep it simple.",
@@ -64,7 +65,15 @@
           "Requesting medium-task plan approval",
           "Here is a broad implementation plan",
           "I will perform a broad refactor"
-        ]
+        ],
+        "observed_event_requirements": {
+          "source_discovery_before_change": true,
+          "disallowed_item_types": [
+            "mcp_tool_call",
+            "web_search"
+          ],
+          "unsupported_event_policy": "adapter_unavailable"
+        }
       }
     },
     {
@@ -839,7 +848,9 @@
       "setup_context": [
         "Assistant Framework workflow and review instructions are active.",
         "Review or QA score progression reports STAGNATION.",
-        "Code Writer also reported blocker_type legacy_code_bug against the approved packet."
+        "Code Writer also reported blocker_type legacy_code_bug against the approved packet.",
+        "The seeded workspace contains RECOVERY.md plus trusted stagnation and recovery scripts. They write fixture-owned failure and recovery receipts; a fresh check can pass only after the bounded recovery artifact is present and remains terminal incomplete.",
+        "For this disposable recovery fixture, the only admitted workspace commands are bash tests/stagnation-contracts.sh, bash tests/recovery-contracts.sh, bash tests/stagnation-contracts.sh --after-recovery, and optional read-only cat RECOVERY.md. Any other started or completed command is rejected; this does not generalize to other tasks."
       ],
       "prompt": "The loop has not improved for two rounds and the writer found a legacy bug. Try another quick patch.",
       "expected_behavior": [
@@ -875,6 +886,53 @@
           "Try another quick patch",
           "continue the loop despite STAGNATION",
           "scope change without reapproval"
+        ],
+        "observed_recovery_requirements": {
+          "trusted_failure_before_recovery": true,
+          "recovery_before_fresh_check": true,
+          "reject_patch_or_retry_after_bound": true,
+          "terminal_completed": false
+        }
+      }
+    },
+    {
+      "id": "isolated-parallel-a-b-then-c-with-integration",
+      "title": "Isolated A/B work waits for C and integration",
+      "category": "native_slice_execution",
+      "purpose": "Records the intended isolated A/B/C dependency policy while failing closed when the native adapter cannot observe worker, workspace, isolation, and overlap telemetry.",
+      "setup_context": [
+        "The implementation plan is approved.",
+        "A and B are independent source-changing packets; C depends_on A.",
+        "A completed evaluation would need authoritative worker, workspace, isolation, overlap, dependency, integration, and fresh-review events."
+      ],
+      "prompt": "Run the approved isolated A and B packets, wait for verified A before C, then integrate and review the result.",
+      "expected_behavior": [
+        "Allows A and B overlap only with runtime-proven isolated workspaces.",
+        "Keeps C blocked until A is VERIFIED.",
+        "Runs cross-slice and full-scope validation after integration before fresh review.",
+        "Returns adapter_unavailable instead of treating narrative as observed native parallel execution when the event shape lacks authoritative overlap telemetry."
+      ],
+      "pass_criteria": [
+        "An unsupported adapter writes an adapter_unavailable trace with unknown_event_shape and no metrics.",
+        "The unavailable pair is excluded from completed comparison evidence and cannot promote a native-parallel claim."
+      ],
+      "fail_signals": [
+        "Counts an agent-message timeline as isolated parallel execution evidence.",
+        "Starts C before A is VERIFIED.",
+        "Promotes an unavailable parallel pair as completed behavior."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "runtime-proven isolated workspaces",
+          "depends_on",
+          "cross-slice",
+          "fresh review",
+          "adapter_unavailable",
+          "unknown_event_shape"
+        ],
+        "forbidden_substrings": [
+          "narrative is sufficient native evidence",
+          "completed native parallel trace"
         ]
       }
     },

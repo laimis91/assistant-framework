@@ -174,6 +174,26 @@ inline_eval_only_roots = {
         { "name" => "independent_review_status", "type" => "enum", "required" => true, "enum_values" => ["required"] }
       ]
     },
+    {
+      "name" => "execution_policy", "type" => "object", "required" => false,
+      "object_fields" => [
+        { "name" => "source_writer_policy", "type" => "enum", "required" => true, "enum_values" => %w[sequential_shared_or_unknown isolated_A_B_overlap_permitted] },
+        { "name" => "read_only_analysis_policy", "type" => "enum", "required" => true, "enum_values" => %w[parallel_permitted sequential_only] },
+        { "name" => "isolation_evidence_ref", "type" => "string", "required" => true },
+        {
+          "name" => "c_start_decisions", "type" => "object[]", "required" => true,
+          "object_fields" => [
+            { "name" => "a_status", "type" => "enum", "required" => true, "enum_values" => %w[PENDING RUNNING VERIFIED] },
+            { "name" => "c_decision", "type" => "enum", "required" => true, "enum_values" => %w[blocked ready] }
+          ]
+        },
+        { "name" => "per_slice_verification", "type" => "enum", "required" => true, "enum_values" => %w[required deferred_to_integration] },
+        { "name" => "integration_validation", "type" => "enum", "required" => true, "enum_values" => %w[required per_slice_only] },
+        { "name" => "integration_checks", "type" => "string[]", "required" => true },
+        { "name" => "fresh_review", "type" => "enum", "required" => true, "enum_values" => %w[required not_required] },
+        { "name" => "fresh_review_after", "type" => "enum", "required" => true, "enum_values" => %w[integration_validation per_slice_verification] }
+      ]
+    },
     { "name" => "workflow_complete", "type" => "enum", "required" => false, "enum_values" => ["--- WORKFLOW COMPLETE ---"] }
   ]
 }
@@ -764,6 +784,17 @@ validate_fixture() {
           if (.[$name]? | nonempty_string) then empty
           else "case[\($index)] missing or invalid string field: \($name)" end;
 
+        def case_prompt_packet_mode($index):
+          if has("prompt_packet_mode") then
+            .prompt_packet_mode as $mode
+            | if ($mode | type) != "string"
+                or (["task_only", "annotated"] | index($mode)) == null then
+                "case[\($index)].prompt_packet_mode must be task_only or annotated when present"
+              else
+                empty
+              end
+          else empty end;
+
         def safe_case_id($index):
           (.id? // null) as $id
           | if ($id | nonempty_string | not) then
@@ -1004,6 +1035,7 @@ validate_fixture() {
                  case_string_array($index; "expected_behavior"),
                  case_string_array($index; "pass_criteria"),
                  case_string_array($index; "fail_signals"),
+                 case_prompt_packet_mode($index),
                  case_machine_expectations($index),
                  case_seeded_defects($index),
                  case_semantic_context($index)

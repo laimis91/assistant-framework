@@ -64,12 +64,15 @@ before dispatching Code Writer or Builder/Tester. Load
 ref is missing, stop Build and return to Plan or repair state using
 `references/harness-controller.md` and `references/harness-runtime-artifacts.md`.
 
-For medium+ tasks with slices, execute one slice at a time from the approved task
-packet. Print `>> Slice [S]/[total]: [slice_id] [name]`. In
-`bounded_executor`, the bounded executor owns edit, RED, GREEN, and focused
-verification. In `separated_workers`, run Code Writer then Builder/Tester.
-Verify each acceptance criterion, record lane-matched slice ledger evidence,
-and mark the slice `VERIFIED` before advancing.
+For medium+ tasks with slices, source-changing packets run sequentially in a
+shared or unknown workspace. Independently executable source-changing packets
+may overlap only with runtime-proven isolated workspaces; dependent packets wait
+for every `depends_on` prerequisite to be `VERIFIED`. Print `>> Slice
+[S]/[total]: [slice_id] [name]`. In `bounded_executor`, the bounded executor
+owns edit, RED, GREEN, and focused verification. In `separated_workers`, run
+Code Writer then Builder/Tester. Verify each acceptance criterion, record
+lane-matched slice ledger evidence, and mark the slice `VERIFIED` before a
+dependent packet starts.
 
 For `controller_intensity=light`, implementation may run inline/direct. Use the
 plan-step loop with `workflow_state_mode=inline`,
@@ -84,7 +87,8 @@ a concrete blocked/inconclusive debugging result. Do not patch until
 reproduction/root-cause evidence identifies a fix target or mitigation. Tests
 stay alongside code, not after.
 
-After all slices are verified, run integration tests across slice boundaries.
+After all slices are verified and concurrent outputs are integrated, run
+cross-slice and full-scope validation before fresh review.
 Apply the current-verification reuse rules in
 `references/build-worker-protocol.md`: reuse only full matching
 identity/coverage evidence and rerun every invalidated case. Per-slice evidence

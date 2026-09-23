@@ -118,6 +118,13 @@ Only tracked `assistant-*` directories are first-class release skills.
 ### assistant-workflow
 Core development pipeline: idea-to-action decomposition, discover, proportional planning, build and verification, independent review, bounded repair, and evidence-backed documentation.
 
+| Pattern | Use | Combine with |
+|---|---|---|
+| Linear | One focused change with dependent steps; scale planning and review to risk. | Goal-driven checks and fresh review; a low-risk local change may use the direct lightweight path. |
+| Skill-driven | A recurring task has a matching installed skill and contract. | Any other pattern; the skill supplies the method. |
+| Parallel | Independent work can progress together. Source-changing packets remain sequential in a shared or unknown workspace; overlap requires runtime-proven isolated workspaces. | Goal-driven integration: dependents wait for VERIFIED prerequisites, then cross-slice and full-scope validation precede fresh review. |
+| Goal-driven | Acceptance checks must remain the completion condition through repair. | Linear, skill-driven, or parallel execution; bounded repair escalates instead of claiming false completion. |
+
 For dependency-shaped uncertainty, the workflow defaults to
 `uncertainty_shape=bounded`: size alone does not activate progressive Discover.
 It enters that substate only when a predecessor decision must unlock an

@@ -143,7 +143,7 @@ debugging, explorer, architect, candidate search, replan, or restart.
 ## Execution strategies
 
 **Parallel sessions (multiple conversations):**
-Use for read-only analysis. Source-changing packets may run in parallel only when the runtime explicitly proves isolated workspaces; otherwise start one verified packet at a time.
+Use for read-only analysis. Source-changing packets may run in parallel only when the runtime explicitly proves isolated workspaces; otherwise sequence source-changing packets in the shared or unknown workspace.
 
 **Sequential sessions:**
 Best when slices depend on each other. Complete one, carry verified output to next.
@@ -156,7 +156,7 @@ keep dependent packets sequenced by `depends_on`.
 
 ## Decomposition rules
 
-**Smallest iterable slice:** Each slice must deliver observable behavior, artifact output, contract surface, docs, eval coverage, config, migration, or refactor evidence that can be verified before the next slice starts.
+**Smallest iterable slice:** Each slice must deliver observable behavior, artifact output, contract surface, docs, eval coverage, config, migration, or refactor evidence that can be verified before a dependent slice starts.
 
 **Invalid live splits:** Broad feature-only splits are invalid live decomposition output. Do not split by architectural layer, module, folder, feature bucket, broad component, standalone contract setup, or standalone setup work as the execution pattern. Contract-only/setup-only work is valid only when it is the deliverable artifact slice with acceptance criteria and verification evidence.
 
