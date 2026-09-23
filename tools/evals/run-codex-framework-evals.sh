@@ -2449,11 +2449,11 @@ observed_event_shape_supported() {
 }
 
 small_fix_event_shape_supported() {
-    observed_event_shape_supported "$1" '["agent_message","command_execution","file_change","mcp_tool_call","web_search"]'
+    observed_event_shape_supported "$1" '["agent_message","reasoning","command_execution","file_change","mcp_tool_call","web_search"]'
 }
 
 stagnation_event_shape_supported() {
-    observed_event_shape_supported "$1" '["agent_message","command_execution","file_change"]'
+    observed_event_shape_supported "$1" '["agent_message","reasoning","command_execution","file_change"]'
 }
 
 small_fix_requires_unavailable_adapter_policy() {

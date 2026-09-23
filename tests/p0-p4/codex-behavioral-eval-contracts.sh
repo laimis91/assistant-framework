@@ -699,6 +699,9 @@ printf '%s\n' '{"type":"item.completed","item":{"id":"item-1","type":"agent_mess
 if [[ -f "$workspace/docs/usage.md" ]]; then
     case "${FAKE_PATTERN_EVENT_MODE:-}" in
         ""|small-positive|small-wrapped-positive|small-disallowed-tool|small-unsupported-shape|small-external-symlink|small-mcp-started-only|small-web-started-only|small-interleaved-shell-action|small-shell-edit-before-discovery|small-shell-edit-started-before-discovery|small-updated-unknown|small-updated-disallowed|small-command-only|small-command-only-wrong-final)
+            if [[ "${FAKE_SMALL_PASSIVE_REASONING:-false}" == "true" ]]; then
+                jq -cn '{type:"item.completed",item:{id:"small-reasoning-before",type:"reasoning",text:"safe summary"}}'
+            fi
             small_discovery_command='"rg -n teh docs/usage.md"'
             if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-wrapped-positive" ]]; then
                 small_discovery_command='["/bin/zsh","-lc","rg -n teh docs/usage.md"]'
@@ -713,6 +716,9 @@ if [[ -f "$workspace/docs/usage.md" ]]; then
                 printf '%s\n' '{"type":"item.started","item":{"id":"small-shell-edit","type":"command_execution","command":"sed -i.bak s/teh/the/ docs/usage.md"}}'
             fi
             jq -cn --argjson command "$small_discovery_command" '{type:"item.completed",item:{id:"small-discovery",type:"command_execution",command:$command,exit_code:0,status:"completed",aggregated_output:"1:This fixture contains teh requested typo."}}'
+            if [[ "${FAKE_SMALL_PASSIVE_REASONING:-false}" == "true" ]]; then
+                jq -cn '{type:"item.completed",item:{id:"small-reasoning-between",type:"reasoning",text:"safe summary"}}'
+            fi
             if [[ "${FAKE_PATTERN_EVENT_MODE:-}" == "small-shell-edit-started-before-discovery" ]]; then
                 printf '%s\n' '{"type":"item.completed","item":{"id":"small-shell-edit","type":"command_execution","command":"sed -i.bak s/teh/the/ docs/usage.md","exit_code":0,"status":"completed","aggregated_output":""}}'
             fi
@@ -761,6 +767,9 @@ if [[ -f "$workspace/RECOVERY.md" ]]; then
         printf 'unsupported stagnation FAKE_PATTERN_EVENT_MODE: %s\n' "$pattern_mode" >&2
         exit 2
     fi
+    if [[ "${FAKE_STAGNATION_PASSIVE_REASONING:-false}" == "true" ]]; then
+        jq -cn '{type:"item.completed",item:{id:"stagnation-reasoning-before",type:"reasoning",text:"safe summary"}}'
+    fi
     if [[ "$pattern_mode" == stagnation-early-recovery-start ]]; then
         printf '%s\n' '{"type":"item.started","item":{"id":"stagnation-recovery","type":"command_execution","command":"bash tests/recovery-contracts.sh"}}'
     elif [[ "$pattern_mode" == stagnation-early-fresh-start ]]; then
@@ -768,6 +777,9 @@ if [[ -f "$workspace/RECOVERY.md" ]]; then
     fi
     if failure_output="$(bash "$workspace/tests/stagnation-contracts.sh")"; then failure_exit=0; else failure_exit=$?; fi
     printf '%s\n' "{\"type\":\"item.completed\",\"item\":{\"id\":\"stagnation-trusted-failure\",\"type\":\"command_execution\",\"command\":\"bash tests/stagnation-contracts.sh\",\"exit_code\":${failure_exit},\"status\":\"completed\",\"aggregated_output\":\"${failure_output}\"}}"
+    if [[ "${FAKE_STAGNATION_PASSIVE_REASONING:-false}" == "true" ]]; then
+        jq -cn '{type:"item.completed",item:{id:"stagnation-reasoning-between",type:"reasoning",text:"safe summary"}}'
+    fi
     if [[ "$pattern_mode" == stagnation-unmatched-recovery-start ]]; then
         printf '%s\n' '{"type":"item.started","item":{"id":"recovery-unmatched","type":"command_execution","command":"bash tests/recovery-contracts.sh"}}'
     fi
@@ -6012,6 +6024,18 @@ else
     fail "small-fix evaluation did not require discovery-before-change or reject artifact-only and explicit external-read fixture evidence"
 fi
 
+test_start "small-fix accepts passive reasoning before and between workspace events without counting it as an action"
+small_reasoning_output="$fixture_root/small-passive-reasoning-output"
+rm -f "$capture"/*
+if FAKE_SMALL_PASSIVE_REASONING=true FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-positive "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$small_reasoning_output" --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == true and .metrics.tool_calls == 1 and .metrics.rework_count == 0)' "$small_reasoning_output/traces/"*.json >/dev/null; then
+    pass
+else
+    fail "small-fix did not accept passive reasoning without counting it as workspace work"
+fi
+
 test_start "a command-only edit with correct final content is unavailable when file-change telemetry is missing"
 small_command_only_output="$fixture_root/small-command-only-output"
 small_command_only_wrong_output="$fixture_root/small-command-only-wrong-final-output"
@@ -6194,6 +6218,18 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-positive
     pass
 else
     fail "stagnation evaluation did not verify trusted failure, recovery, fresh check, and terminal incompleteness against bounded mutations"
+fi
+
+test_start "stagnation accepts passive reasoning before and between workspace events without counting it as an action"
+stagnation_reasoning_output="$fixture_root/stagnation-passive-reasoning-output"
+rm -f "$capture"/*
+if FAKE_STAGNATION_PASSIVE_REASONING=true FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-positive "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_reasoning_output" --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == true and .metrics.tool_calls == 3 and .metrics.rework_count == 0)' "$stagnation_reasoning_output/traces/"*.json >/dev/null; then
+    pass
+else
+    fail "stagnation did not accept passive reasoning without counting it as workspace work"
 fi
 
 test_start "stagnation evaluation permits the declared read-only recovery probe"
