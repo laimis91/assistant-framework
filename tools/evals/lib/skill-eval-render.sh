@@ -107,11 +107,19 @@ emit_prompts() {
                       + ($authority | tojson)
                       + "\n```\n\n"
                     else "" end;
+                def task_only_packet:
+                  "# Task Packet\n\n"
+                  + "Skill: " + $skill + "\n\n"
+                  + "Skill Path: " + $skill_path + "\n\n"
+                  + "## Setup Context\n\n" + bullets(.setup_context) + "\n\n"
+                  + "## Prompt\n\n" + .prompt + "\n";
                 . as $fixture
                 | .cases[]
                 | select(.id == $id)
                 | if $prompt_only == "true" then
                     "# User Request\n\n" + .prompt + "\n"
+                  elif .prompt_packet_mode == "task_only" then
+                    task_only_packet
                   else
                     "# " + .title + "\n\n"
                   + "Skill: " + $skill + "\n\n"

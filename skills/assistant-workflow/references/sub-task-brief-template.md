@@ -143,7 +143,7 @@ debugging, explorer, architect, candidate search, replan, or restart.
 ## Execution strategies
 
 **Parallel sessions (multiple conversations):**
-Use for read-only analysis. Source-changing packets may run in parallel only when the runtime explicitly proves isolated workspaces; otherwise start one verified packet at a time.
+Use for read-only analysis. Source-changing packets may run in parallel only when the runtime explicitly proves isolated workspaces; otherwise sequence source-changing packets in the shared or unknown workspace.
 
 **Sequential sessions:**
 Best when slices depend on each other. Complete one, carry verified output to next.
@@ -156,7 +156,7 @@ keep dependent packets sequenced by `depends_on`.
 
 ## Decomposition rules
 
-**Smallest iterable slice:** Each slice must deliver observable behavior, artifact output, contract surface, docs, eval coverage, config, migration, or refactor evidence that can be verified before the next slice starts.
+**Smallest iterable slice:** Each slice must deliver observable behavior, artifact output, contract surface, docs, eval coverage, config, migration, or refactor evidence that can be verified before a dependent slice starts.
 
 **Invalid live splits:** Broad feature-only splits are invalid live decomposition output. Do not split by architectural layer, module, folder, feature bucket, broad component, standalone contract setup, or standalone setup work as the execution pattern. Contract-only/setup-only work is valid only when it is the deliverable artifact slice with acceptance criteria and verification evidence.
 
@@ -168,10 +168,12 @@ keep dependent packets sequenced by `depends_on`.
 All slice packets are verified. Now integrate:
 1. Integrate the completed slice changes and resolve conflicts
 2. Confirm verified prerequisite slice outputs are present and consumed
-3. Run integration checks for DI, routes, configs, data flow, and cross-slice behavior
-4. Run integration tests across slice boundaries
+3. Run integration checks for DI, routes, configs, data flow, and the full integrated scope
+4. Run tests across slice boundaries when the manifest contains multiple items
 5. Run the full relevant suite
 6. Fix integration mismatches and request fresh review
+
+After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code.
 
 Verified slices completed:
 - [name]: [what was built and verified]

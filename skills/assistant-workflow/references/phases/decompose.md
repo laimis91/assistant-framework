@@ -36,7 +36,7 @@ deviation, dispatch, and verification signals remain explicit when applicable.
 
 Print: `--- PHASE: DECOMPOSE ---`
 
-**Goal:** Break the problem into the smallest iterable slices that can each be built, tested, reviewed against acceptance criteria, and verified before moving to the next slice.
+**Goal:** Break the problem into the smallest iterable slices that can each be built, tested, and reviewed against acceptance criteria. Slices are independently verifiable; every `depends_on` prerequisite is `VERIFIED` before starting a dependent slice, and integrated output is validated before Review.
 
 A slice is not a layer, folder, module, broad feature bucket, setup step, or broad architectural component. It is the smallest deliverable increment that produces observable behavior, artifact output, contract surface, docs, eval coverage, config, migration, or refactor evidence.
 

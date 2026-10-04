@@ -60,18 +60,19 @@ else
     fail "phase-gates.yaml missing executable task packet gates: ${missing_phase_gate_terms[*]}"
 fi
 
-test_start "workflow build worker protocol enforces medium slice verification loop"
+test_start "workflow build worker protocol enforces dependency-aware slice verification"
 missing_slice_phase_terms=()
 build_worker_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"
 for term in \
-    "For medium+ tasks with slices, execute one slice at a time" \
+    "source-changing slices sequentially in a shared or unknown workspace" \
+    "Independently executable source-changing slices may overlap only when runtime evidence proves isolated workspaces" \
     "Load the approved task packet for the slice, including slice_id, observable increment, deliverable type, files, acceptance criteria, verification command, expected success signal, evidence to record, and deviation/rollback rule" \
-    "Confirm prior slice status is \`VERIFIED\` before advancing" \
+    "Confirm every \`depends_on\` prerequisite has final status \`VERIFIED\` before starting a dependent slice" \
     "Check each acceptance criterion from the slice manifest independently" \
     "Record verification evidence in the task journal slice verification ledger" \
     "Run a small self-check/local sanity check" \
     "Mark the slice \`VERIFIED\` only after all criteria pass and evidence is recorded" \
-    "Only proceed to the next slice after the current one is fully verified"; do
+    "After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item;"; do
     if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_slice_phase_terms+=("$term")
     fi
@@ -82,19 +83,19 @@ fi
 if [[ "${#missing_slice_phase_terms[@]}" -eq 0 ]]; then
     pass
 else
-    fail "build-worker-protocol.md missing per-slice verification loop terms: ${missing_slice_phase_terms[*]}"
+    fail "build-worker-protocol.md missing dependency-aware slice verification terms: ${missing_slice_phase_terms[*]}"
 fi
 
 test_start "workflow task journal template includes slice verification ledger fields"
 missing_slice_ledger_terms=()
 for term in \
     "## Slice Verification Ledger" \
-    "[required for medium+ tasks; update after each slice before starting the next]" \
+    "[required for medium+ tasks; update after each slice and before starting a dependent slice or another source-changing slice in a shared or unknown workspace]" \
     "| Slice | Task Packet | RED Status | Implementation Status | Verification Command/Result | Criteria Checked | Self-Check Result | Final Status |" \
     "[X/Y passed]" \
     "[pass/fail + note]" \
     "[VERIFIED/BLOCKED]" \
-    "do not start the next slice until the current one is \`VERIFIED\`"; do
+    "do not start a dependent slice until every \`depends_on\` prerequisite is \`VERIFIED\`; source-changing slices may overlap only with runtime-proven isolated workspaces"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
         missing_slice_ledger_terms+=("$term")
     fi
@@ -201,7 +202,7 @@ else
     pass
 fi
 
-test_start "source-changing slice packets stay sequential in shared or unknown workspaces"
+test_start "source-changing slice packets distinguish shared sequencing from isolated overlap"
 workspace_isolation_failures=()
 for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md::shared or unknown workspace" \
@@ -217,13 +218,57 @@ for file_and_term in \
 done
 if ! ruby -rjson -e '
   cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
-  item = cases.find { |entry| entry["id"] == "native-slice-execution-uses-dependencies-not-runner-topology" }
-  expected = item.fetch("expected_behavior").join(" ")
-  failures = item.fetch("fail_signals").join(" ")
-  valid = expected.include?("Sequences source-changing A and B because the workspace is shared or isolation is unknown") &&
-    expected.include?("read-only analysis in parallel") &&
-    expected.include?("runtime-proven isolated workspaces") &&
-    failures.include?("parallel source-changing A/B in a shared or unknown workspace")
+  shared = cases.find { |entry| entry["id"] == "native-slice-execution-uses-dependencies-not-runner-topology" }
+  isolated = cases.find { |entry| entry["id"] == "isolated-independent-slices-integrate-before-review" }
+  shared_expected = shared.fetch("expected_behavior").join(" ")
+  shared_failures = shared.fetch("fail_signals").join(" ")
+  isolated_expected = isolated.fetch("expected_behavior").join(" ")
+  isolated_setup = isolated.fetch("setup_context").join(" ")
+  isolated_failures = isolated.fetch("fail_signals").join(" ")
+  expected_decisions = [
+    {"a_status" => "PENDING", "c_decision" => "blocked"},
+    {"a_status" => "RUNNING", "c_decision" => "blocked"},
+    {"a_status" => "VERIFIED", "c_decision" => "ready"}
+  ]
+  structured = lambda { |entry| entry.fetch("machine_expectations").fetch("structured_json_assertions") }
+  equals = lambda do |assertions, path, expected|
+    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == path && assertion["expected"] == expected }
+  end
+  decisions = lambda do |assertions|
+    assertions.any? do |assertion|
+      assertion["operator"] == "array_object_values_exact" && assertion["path"] == ["execution_policy", "c_start_decisions"] &&
+        assertion["fields"] == ["a_status", "c_decision"] && assertion["expected_objects"] == expected_decisions
+    end
+  end
+  exact_keys = lambda do |assertions, path, fields|
+    assertions.any? { |assertion| assertion["operator"] == "object_keys_exact" && assertion["path"] == path && assertion["fields"] == fields }
+  end
+  policy_fields = %w[source_writer_policy read_only_analysis_policy isolation_evidence_ref c_start_decisions per_slice_verification integration_validation integration_checks fresh_review fresh_review_after]
+  decision_key_assertions = lambda do |assertions|
+    (0..2).all? { |index| exact_keys.call(assertions, ["execution_policy", "c_start_decisions", index], %w[a_status c_decision]) }
+  end
+  shared_assertions = structured.call(shared)
+  isolated_assertions = structured.call(isolated)
+  valid = shared_expected.include?("Sequences source-changing A and B because the workspace is shared or isolation is unknown") &&
+    shared_expected.include?("read-only analysis in parallel") &&
+    shared_failures.include?("parallel source-changing A/B in a shared or unknown workspace") &&
+    isolated_expected.include?("runtime-proven isolated workspaces") &&
+    isolated_setup.include?("isolation_evidence_ref=fixture-runtime-isolation-A-B-v1") &&
+    isolated_expected.include?("A and B may overlap") &&
+    isolated_expected.include?("C blocked until A is VERIFIED") &&
+    isolated_expected.include?("cross-slice and full-scope validation") &&
+    isolated_expected.include?("fresh review") &&
+    isolated_failures.include?("Starts C before A is VERIFIED") &&
+    equals.call(shared_assertions, ["execution_policy", "source_writer_policy"], "sequential_shared_or_unknown") &&
+    equals.call(shared_assertions, ["execution_policy", "isolation_evidence_ref"], "not_available") &&
+    equals.call(isolated_assertions, ["execution_policy", "source_writer_policy"], "isolated_A_B_overlap_permitted") &&
+    equals.call(isolated_assertions, ["execution_policy", "isolation_evidence_ref"], "fixture-runtime-isolation-A-B-v1") &&
+    exact_keys.call(shared_assertions, [], ["execution_policy"]) &&
+    exact_keys.call(shared_assertions, ["execution_policy"], policy_fields) &&
+    exact_keys.call(isolated_assertions, [], ["execution_policy"]) &&
+    exact_keys.call(isolated_assertions, ["execution_policy"], policy_fields) &&
+    decision_key_assertions.call(shared_assertions) && decision_key_assertions.call(isolated_assertions) &&
+    decisions.call(shared_assertions) && decisions.call(isolated_assertions)
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"; then
     workspace_isolation_failures+=("workflow eval does not distinguish shared/unknown sequential, isolated parallel, and read-only parallel boundaries")
@@ -236,6 +281,169 @@ if [[ "${#workspace_isolation_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "workspace isolation routing is incomplete: ${workspace_isolation_failures[*]}"
+fi
+
+test_start "task-only policy packets omit grading oracles while annotated packets retain legacy rendering"
+policy_packet_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-eval-policy-packets.XXXXXX")"
+policy_packet_explicit_skill="$policy_packet_root/assistant-workflow"
+policy_packet_invalid_skill="$policy_packet_root/invalid-assistant-workflow"
+p0p4_register_cleanup "$policy_packet_root"
+mkdir -p "$policy_packet_explicit_skill/evals" "$policy_packet_invalid_skill/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$policy_packet_explicit_skill/SKILL.md"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$policy_packet_invalid_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$policy_packet_explicit_skill/contracts"
+ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$policy_packet_invalid_skill/contracts"
+jq '(.cases[] | select(.id == "medium-task-plans-before-build") | .prompt_packet_mode) = "annotated"' \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$policy_packet_explicit_skill/evals/cases.json"
+policy_packet_failures=()
+for policy_case in native-slice-execution-uses-dependencies-not-runner-topology isolated-independent-slices-integrate-before-review; do
+    policy_packet_output="$policy_packet_root/$policy_case"
+    if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --emit-prompts "$policy_packet_output" --skill assistant-workflow --case "$policy_case" >/dev/null; then
+        policy_packet_failures+=("$policy_case:emit")
+        continue
+    fi
+    policy_packet_path="$policy_packet_output/assistant-workflow/$policy_case.md"
+    policy_packet_expected="$(jq -r --arg id "$policy_case" '
+        def bullets($items):
+          if ($items | length) > 0 then $items | map("- " + .) | join("\n")
+          else "- (none)" end;
+        .cases[] | select(.id == $id)
+        | "# Task Packet\n\n"
+          + "Skill: assistant-workflow\n\n"
+          + "Skill Path: skills/assistant-workflow/SKILL.md\n\n"
+          + "## Setup Context\n\n" + bullets(.setup_context) + "\n\n"
+          + "## Prompt\n\n" + .prompt + "\n"
+    ' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json")"
+    if [[ "$(<"$policy_packet_path")" != "$policy_packet_expected" ]]; then
+        policy_packet_failures+=("$policy_case:task-only-content")
+    fi
+done
+policy_packet_default_output="$policy_packet_root/default"
+policy_packet_explicit_output="$policy_packet_root/explicit"
+if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --emit-prompts "$policy_packet_default_output" --skill assistant-workflow --case medium-task-plans-before-build >/dev/null \
+    || ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --emit-prompts "$policy_packet_explicit_output" --skill "$policy_packet_explicit_skill" --case medium-task-plans-before-build >/dev/null \
+    || ! cmp -s \
+        <(sed 's|^Skill Path: .*|Skill Path: <path>|' "$policy_packet_default_output/assistant-workflow/medium-task-plans-before-build.md") \
+        <(sed 's|^Skill Path: .*|Skill Path: <path>|' "$policy_packet_explicit_output/assistant-workflow/medium-task-plans-before-build.md"); then
+    policy_packet_failures+=("annotated-default-or-explicit")
+fi
+for invalid_mode in '"task-only"' 'null' '""'; do
+    jq --argjson invalid_mode "$invalid_mode" '(.cases[] | select(.id == "medium-task-plans-before-build") | .prompt_packet_mode) = $invalid_mode' \
+        "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$policy_packet_invalid_skill/evals/cases.json"
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$policy_packet_invalid_skill" >/dev/null 2>&1; then
+        policy_packet_failures+=("invalid-mode:$invalid_mode")
+    fi
+done
+if [[ "${#policy_packet_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "policy prompt packet rendering or mode validation is incorrect: ${policy_packet_failures[*]}"
+fi
+
+test_start "workflow eval grading enforces structured dependency scheduling and seeded isolation evidence"
+workflow_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-eval-grading.XXXXXX")"
+p0p4_register_cleanup "$workflow_eval_root"
+workflow_eval_responses="$workflow_eval_root/positive"
+workflow_eval_unsafe_responses="$workflow_eval_root/unsafe"
+workflow_eval_missing_seed_responses="$workflow_eval_root/missing-seed"
+workflow_eval_wrong_writer_responses="$workflow_eval_root/wrong-writer"
+workflow_eval_wrong_integration_responses="$workflow_eval_root/wrong-integration"
+workflow_eval_wrong_review_responses="$workflow_eval_root/wrong-review"
+workflow_eval_extra_responses="$workflow_eval_root/extra-keys"
+mkdir -p "$workflow_eval_responses/assistant-workflow" "$workflow_eval_unsafe_responses/assistant-workflow" "$workflow_eval_missing_seed_responses/assistant-workflow" "$workflow_eval_wrong_writer_responses/assistant-workflow" "$workflow_eval_wrong_integration_responses/assistant-workflow" "$workflow_eval_wrong_review_responses/assistant-workflow" "$workflow_eval_extra_responses/assistant-workflow"
+cat >"$workflow_eval_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"sequential_shared_or_unknown","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
+EOF
+cat >"$workflow_eval_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
+EOF
+cat >"$workflow_eval_unsafe_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"sequential_shared_or_unknown","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"ready"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
+EOF
+cat >"$workflow_eval_unsafe_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"ready"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
+EOF
+cat >"$workflow_eval_missing_seed_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
+EOF
+cat >"$workflow_eval_wrong_writer_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
+EOF
+cat >"$workflow_eval_wrong_integration_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"per_slice_only","integration_checks":["per-slice"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
+EOF
+cat >"$workflow_eval_wrong_review_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
+{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"per_slice_verification"}}
+EOF
+cp "$workflow_eval_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" "$workflow_eval_extra_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt"
+workflow_eval_grading_failures=()
+for workflow_case in native-slice-execution-uses-dependencies-not-runner-topology isolated-independent-slices-integrate-before-review; do
+    if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_responses" --skill assistant-workflow --case "$workflow_case" >"$workflow_eval_root/$workflow_case-positive.out"; then
+        workflow_eval_grading_failures+=("$workflow_case:positive")
+    fi
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_unsafe_responses" --skill assistant-workflow --case "$workflow_case" >"$workflow_eval_root/$workflow_case-unsafe.out" 2>&1 \
+        || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/$workflow_case-unsafe.out"; then
+        workflow_eval_grading_failures+=("$workflow_case:unsafe-dependent-start")
+    fi
+done
+for extra_key_mutation in \
+    'setpath(["unsafe_override"]; true)' \
+    'setpath(["execution_policy","unsafe_override"]; true)' \
+    'setpath(["execution_policy","c_start_decisions",0,"unsafe_override"]; true)'; do
+    extra_key_response="$workflow_eval_extra_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt"
+    jq "$extra_key_mutation" "$workflow_eval_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" >"$workflow_eval_root/extra-key-mutated.json"
+    mv "$workflow_eval_root/extra-key-mutated.json" "$extra_key_response"
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_extra_responses" --skill assistant-workflow --case native-slice-execution-uses-dependencies-not-runner-topology >"$workflow_eval_root/extra-key.out" 2>&1 \
+        || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/extra-key.out"; then
+        workflow_eval_grading_failures+=("extra-key:$extra_key_mutation")
+    fi
+done
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_missing_seed_responses" --skill assistant-workflow --case isolated-independent-slices-integrate-before-review >"$workflow_eval_root/isolated-missing-seed.out" 2>&1 \
+    || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/isolated-missing-seed.out"; then
+    workflow_eval_grading_failures+=("isolated-independent-slices-integrate-before-review:missing-seeded-isolation-evidence")
+fi
+for policy_negative in \
+    "wrong-writer:$workflow_eval_wrong_writer_responses:native-slice-execution-uses-dependencies-not-runner-topology" \
+    "wrong-integration:$workflow_eval_wrong_integration_responses:isolated-independent-slices-integrate-before-review" \
+    "wrong-review:$workflow_eval_wrong_review_responses:isolated-independent-slices-integrate-before-review"; do
+    IFS=':' read -r policy_negative_name policy_negative_responses policy_negative_case <<< "$policy_negative"
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$policy_negative_responses" --skill assistant-workflow --case "$policy_negative_case" >"$workflow_eval_root/$policy_negative_name.out" 2>&1 \
+        || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/$policy_negative_name.out"; then
+        workflow_eval_grading_failures+=("$policy_negative_name")
+    fi
+done
+if [[ "${#workflow_eval_grading_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow eval grading accepted unsafe dependency scheduling or missing seeded isolation evidence: ${workflow_eval_grading_failures[*]}"
+fi
+
+test_start "workflow fixture schema rejects undeclared execution-policy children and invalid decisions"
+workflow_policy_schema_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-eval-policy-schema.XXXXXX")"
+workflow_policy_schema_skill="$workflow_policy_schema_root/assistant-workflow"
+workflow_policy_schema_err="$workflow_policy_schema_root/validation.err"
+p0p4_register_cleanup "$workflow_policy_schema_root"
+mkdir -p "$workflow_policy_schema_skill/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$workflow_policy_schema_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$workflow_policy_schema_skill/contracts"
+workflow_policy_schema_failures=()
+if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill assistant-workflow >/dev/null; then
+    workflow_policy_schema_failures+=("valid-fixture")
+fi
+jq '(.cases[] | select(.id == "native-slice-execution-uses-dependencies-not-runner-topology") | .machine_expectations.structured_json_assertions) += [{"operator":"equals","path":["execution_policy","invented_child"],"expected":"x"}]' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$workflow_policy_schema_skill/evals/cases.json"
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$workflow_policy_schema_skill" >/dev/null 2>"$workflow_policy_schema_err" \
+    || ! grep -Fq -- "undeclared assertion path" "$workflow_policy_schema_err"; then
+    workflow_policy_schema_failures+=("undeclared-child")
+fi
+jq '(.cases[] | select(.id == "native-slice-execution-uses-dependencies-not-runner-topology") | .machine_expectations.structured_json_assertions) |= map(if .operator == "array_object_values_exact" and .path == ["execution_policy", "c_start_decisions"] then .expected_objects[0].c_decision = "unsafe" else . end)' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$workflow_policy_schema_skill/evals/cases.json"
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$workflow_policy_schema_skill" >/dev/null 2>"$workflow_policy_schema_err" \
+    || ! grep -Fq -- "assertion literal outside contract schema" "$workflow_policy_schema_err"; then
+    workflow_policy_schema_failures+=("invalid-decision-enum")
+fi
+if [[ "${#workflow_policy_schema_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow fixture schema accepted invalid execution-policy structure: ${workflow_policy_schema_failures[*]}"
 fi
 
 test_start "workflow slice identities are descriptive while ordering stays display-only"
@@ -618,15 +826,21 @@ else
     fail "broad-split rejection proof contract missing terms: ${missing_broad_split_review_terms[*]}"
 fi
 
-test_start "workflow phase gates require recorded slice evidence before advancing"
+test_start "workflow phase gates require dependency-aware recorded slice evidence"
 missing_slice_gate_terms=()
 for term in \
     "- id: B12" \
     "independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger" \
     "record command/result evidence in the configured task journal or equivalent carried-forward state" \
     "- id: B13" \
-    "each slice has a final status of VERIFIED, including self-check result, before the next slice started" \
-    "slices must be verified sequentially with evidence before advancing"; do
+    "Full-scope validation is required before fresh Review" \
+    "Cross-slice validation applies only when slice_manifest contains more than one item" \
+    "record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale" \
+    "Single-slice full-scope validation still covers integration with existing code" \
+    "shared or unknown workspace are VERIFIED, including self-check result, before another source-changing slice starts" \
+    "runtime evidence proves isolated workspaces" \
+    "every depends_on prerequisite has final status VERIFIED before a dependent slice starts" \
+    "Cross-slice validation applies only when slice_manifest contains more than one item"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_slice_gate_terms+=("$term")
     fi
@@ -634,7 +848,41 @@ done
 if [[ "${#missing_slice_gate_terms[@]}" -eq 0 ]]; then
     pass
 else
-    fail "phase-gates.yaml missing recorded/sequential slice verification gate terms: ${missing_slice_gate_terms[*]}"
+    fail "phase-gates.yaml missing dependency-aware slice verification gate terms: ${missing_slice_gate_terms[*]}"
+fi
+
+test_start "workflow integration prompts apply cross-slice checks by manifest cardinality and keep full-scope checks"
+slice_integration_rule="After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code."
+slice_integration_failures=()
+for slice_integration_file in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/build.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/mega-and-patterns.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-handoff-templates.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md" \
+    "$FRAMEWORK_DIR/README.md"; do
+    if ! p0p4_contains_text "$slice_integration_file" "$slice_integration_rule"; then
+        slice_integration_failures+=("$slice_integration_file")
+    fi
+done
+if [[ "${#slice_integration_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "integration guidance is missing the single/multiple-slice applicability rule: ${slice_integration_failures[*]}"
+fi
+
+test_start "Decompose guidance permits isolated overlap while rejecting stale next-slice sequencing"
+decompose_source="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
+decompose_view="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/decompose.md"
+if grep -Fq "every \`depends_on\` prerequisite is \`VERIFIED\` before starting a dependent slice" "$decompose_source" \
+    && grep -Fq "integrated output is validated before Review" "$decompose_source" \
+    && grep -Fq "every \`depends_on\` prerequisite is \`VERIFIED\` before starting a dependent slice" "$decompose_view" \
+    && ! grep -Fq "every slice is verified before moving to the next slice" "$decompose_source" \
+    && ! grep -Fq "every slice is verified before moving to the next slice" "$decompose_view"; then
+    pass
+else
+    fail "Decompose source or generated view still imposes stale unconditional next-slice sequencing"
 fi
 
 test_start "workflow handoffs pass current task packets to CodeWriter and BuilderTester"

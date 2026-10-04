@@ -50,6 +50,8 @@ load_contract_roots.call(contracts_dir, skill_name == "assistant-review")
 
 # Explicitly bounded roots that eval fixtures may project outside their output
 # artifacts. This is deliberately not a pool of every input or handoff field.
+# The collaborative progressive fixture also requests singleton projections of
+# these two canonical arrays; derive each item view from the owning schema.
 eval_only_root_registry = {
   "assistant-docs" => [
     { "kind" => "input_field", "name" => "architecture_decision_pack_status" },
@@ -67,7 +69,9 @@ eval_only_root_registry = {
     { "kind" => "input_field", "name" => "feature_preparation_scope" },
     { "kind" => "handoff_field", "name" => "architecture_mapping_evidence" },
     { "kind" => "handoff_field", "name" => "implementation_steps" },
-    { "kind" => "output_child", "artifact" => "triage_result", "name" => "size" }
+    { "kind" => "output_child", "artifact" => "triage_result", "name" => "size" },
+    { "kind" => "output_array_item", "artifact" => "decision_item" },
+    { "kind" => "output_array_item", "artifact" => "decision_resolution" }
   ]
 }
 
@@ -94,6 +98,14 @@ eval_only_root_registry.fetch(skill_name, []).each do |selector|
                output = YAML.load_file(File.join(contracts_dir, "output.yaml"))
                artifact = output.fetch("artifacts", []).find { |field| field["name"] == selector.fetch("artifact") }
                artifact ? artifact.fetch("object_fields", []).select { |field| field["name"] == selector.fetch("name") } : []
+             when "output_array_item"
+               output = YAML.load_file(File.join(contracts_dir, "output.yaml"))
+               artifact = output.fetch("artifacts", []).find { |field| field["name"] == selector.fetch("artifact") }
+               if artifact.is_a?(Hash) && artifact["type"] == "object[]" && artifact["object_fields"].is_a?(Array)
+                 [artifact.dup.merge("type" => "object")]
+               else
+                 []
+               end
              else
                []
              end
@@ -174,6 +186,26 @@ inline_eval_only_roots = {
         { "name" => "independent_review_status", "type" => "enum", "required" => true, "enum_values" => ["required"] }
       ]
     },
+    {
+      "name" => "execution_policy", "type" => "object", "required" => false,
+      "object_fields" => [
+        { "name" => "source_writer_policy", "type" => "enum", "required" => true, "enum_values" => %w[sequential_shared_or_unknown isolated_A_B_overlap_permitted] },
+        { "name" => "read_only_analysis_policy", "type" => "enum", "required" => true, "enum_values" => %w[parallel_permitted sequential_only] },
+        { "name" => "isolation_evidence_ref", "type" => "string", "required" => true },
+        {
+          "name" => "c_start_decisions", "type" => "object[]", "required" => true,
+          "object_fields" => [
+            { "name" => "a_status", "type" => "enum", "required" => true, "enum_values" => %w[PENDING RUNNING VERIFIED] },
+            { "name" => "c_decision", "type" => "enum", "required" => true, "enum_values" => %w[blocked ready] }
+          ]
+        },
+        { "name" => "per_slice_verification", "type" => "enum", "required" => true, "enum_values" => %w[required deferred_to_integration] },
+        { "name" => "integration_validation", "type" => "enum", "required" => true, "enum_values" => %w[required per_slice_only] },
+        { "name" => "integration_checks", "type" => "string[]", "required" => true },
+        { "name" => "fresh_review", "type" => "enum", "required" => true, "enum_values" => %w[required not_required] },
+        { "name" => "fresh_review_after", "type" => "enum", "required" => true, "enum_values" => %w[integration_validation per_slice_verification] }
+      ]
+    },
     { "name" => "workflow_complete", "type" => "enum", "required" => false, "enum_values" => ["--- WORKFLOW COMPLETE ---"] }
   ]
 }
@@ -229,9 +261,10 @@ resolve = lambda do |path|
   path.drop(1).each do |segment|
     candidates = candidates.flat_map do |field|
       if segment.is_a?(Numeric)
-        field["type"].is_a?(String) && field["type"].end_with?("[]") ? [field] : []
+        field_type = field["type"]
+        field_type.is_a?(String) && field_type.end_with?("[]") ? [field.dup.merge("type" => field_type.delete_suffix("[]"))] : []
       elsif segment.is_a?(String)
-        field.fetch("object_fields", []).select { |child| child["name"] == segment }
+        field["type"] == "object" ? field.fetch("object_fields", []).select { |child| child["name"] == segment } : []
       else
         []
       end
@@ -246,7 +279,7 @@ path_operands = lambda do |assertion|
   operands << ["other_path", assertion["other_path"]] if assertion.key?("other_path")
   operands << ["when_path", assertion["when_path"]] if assertion.key?("when_path")
   operands << ["field", assertion["path"] + [0, assertion["field"]]] if assertion["field"].is_a?(String) && assertion["path"].is_a?(Array)
-  if assertion["fields"].is_a?(Array) && assertion["path"].is_a?(Array)
+  if assertion["operator"] != "object_keys_exact" && assertion["fields"].is_a?(Array) && assertion["path"].is_a?(Array)
     assertion["fields"].each { |field| operands << ["fields", assertion["path"] + [0, field]] if field.is_a?(String) }
   end
   if assertion["expected_objects"].is_a?(Array) && assertion["path"].is_a?(Array)
@@ -275,9 +308,12 @@ admitted_literal = lambda do |path, value|
   resolve.call(path).any? { |field| literal_valid.call(field, value) }
 end
 
-fixture.fetch("cases", []).each do |test_case|
+  fixture.fetch("cases", []).each do |test_case|
   Array(test_case.dig("machine_expectations", "structured_json_assertions")).each_with_index do |assertion, index|
     path_operands.call(assertion).each do |operand, path|
+      if assertion["operator"] == "object_keys_exact" && operand == "path" && path == []
+        next
+      end
       unless path.is_a?(Array) && path.first.is_a?(String)
         warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] invalid assertion path #{operand}: #{path.to_json}"
         exit 1
@@ -296,6 +332,35 @@ fixture.fetch("cases", []).each do |test_case|
       reason = resolved.empty? ? "undeclared" : "required field used by path_absent"
       warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] #{reason} assertion path #{operand}: #{path.to_json}"
       exit 1
+    end
+
+    if assertion["operator"] == "object_keys_exact"
+      path = assertion["path"]
+      fields = assertion["fields"]
+      if path.empty?
+        unknown_fields = fields.reject { |field| roots.key?(field) }
+        unless unknown_fields.empty?
+          warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] unknown assertion root object key: #{unknown_fields.first.to_json}"
+          exit 1
+        end
+      else
+        target = resolve.call(path)
+        target_field = target.length == 1 ? target.first : nil
+        unless target_field && target_field["type"] == "object" && target_field["object_fields"].is_a?(Array)
+          warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] object_keys_exact target must be a declared object: #{path.to_json}"
+          exit 1
+        end
+        declared_fields = target_field.fetch("object_fields").map { |field| field["name"] }.sort
+        unless fields.sort == declared_fields
+          undeclared_fields = fields - declared_fields
+          if undeclared_fields.empty?
+            warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] object_keys_exact fields must exactly match the declared object schema: #{path.to_json}"
+          else
+            warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] undeclared assertion path fields: #{undeclared_fields.to_json}"
+          end
+          exit 1
+        end
+      end
     end
 
     literal_error = case assertion["operator"]
@@ -764,6 +829,17 @@ validate_fixture() {
           if (.[$name]? | nonempty_string) then empty
           else "case[\($index)] missing or invalid string field: \($name)" end;
 
+        def case_prompt_packet_mode($index):
+          if has("prompt_packet_mode") then
+            .prompt_packet_mode as $mode
+            | if ($mode | type) != "string"
+                or (["task_only", "annotated"] | index($mode)) == null then
+                "case[\($index)].prompt_packet_mode must be task_only or annotated when present"
+              else
+                empty
+              end
+          else empty end;
+
         def safe_case_id($index):
           (.id? // null) as $id
           | if ($id | nonempty_string | not) then
@@ -872,6 +948,11 @@ validate_fixture() {
             .fields as $fields |
             if (.path? | json_path | not) or ($fields | distinct_bounded_fields | not) or (.expected_objects? | exact_expected_objects($fields) | not) then
               "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid array_object_values_exact assertion"
+            else empty end
+          elif .operator == "object_keys_exact" then
+            .fields as $fields |
+            if (.path? | type != "array") or ((.path | length) > 0 and (.path | json_path | not)) or ($fields | distinct_bounded_fields | not) or (($fields | unique | length) != ($fields | length)) then
+              "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] invalid object_keys_exact assertion"
             else empty end
           else
             "case[\($index)].machine_expectations.structured_json_assertions[\($assertion_index)] unsupported operator: \(.operator)"
@@ -1004,6 +1085,7 @@ validate_fixture() {
                  case_string_array($index; "expected_behavior"),
                  case_string_array($index; "pass_criteria"),
                  case_string_array($index; "fail_signals"),
+                 case_prompt_packet_mode($index),
                  case_machine_expectations($index),
                  case_seeded_defects($index),
                  case_semantic_context($index)

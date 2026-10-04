@@ -61,6 +61,42 @@ RESUME_RESTORE_ACTIVATION=false
 RESUME_INITIALIZE_ATTEMPTS=false
 RESUME_TRACE_RECOVERIES_FILE=""
 RESUME_ATTEMPT_COMPLETIONS_FILE=""
+readonly EVENT_EVIDENCE_NORMALIZATION_JQ="$(cat <<'JQ'
+      def normalized_workspace_path:
+        if type == "string" then ($path_mappings[.] // null) else null end;
+      def normalized_file_change_paths:
+        .item as $item
+        | (if $item | has("path") then
+             if ($item.path | type) == "string" then [$item.path] else null end
+           else [] end) as $item_paths
+        | (if $item | has("changes") then
+             if (($item.changes | type) == "array")
+                and (($item.changes | length) > 0)
+                and all($item.changes[]; type == "object" and has("path") and (.path | type) == "string") then
+               [$item.changes[].path]
+             else null
+             end
+           else [] end) as $change_paths
+        | if $item_paths == null or $change_paths == null
+             or (($item_paths | length) + ($change_paths | length) == 0) then null
+          else ($item_paths + $change_paths | map(normalized_workspace_path))
+          end;
+      def command_text: (.item.command // .item.command_line // "");
+      def is_exact_command($expected):
+        command_text as $command
+        | if ($command | type) == "array" then
+            ($command == ($expected | split(" ")))
+            or any(["/bin/bash", "/bin/zsh", "/bin/sh"][];
+              $command == [., "-lc", $expected])
+          else
+            ($command | tostring) as $text
+            | ($text == $expected)
+              or any(["/bin/bash", "/bin/zsh", "/bin/sh"][];
+                $text == (. + " -lc " + ([39] | implode) + $expected + ([39] | implode))
+                or $text == (. + " -lc " + ([34] | implode) + $expected + ([34] | implode)))
+          end;
+JQ
+)"
 
 has_framework_eval_test_hook() {
     local variable
@@ -562,8 +598,21 @@ enforce_incomplete_pair_breaker() {
         max_incomplete_pairs="$(jq -r '.max_incomplete_pairs' "$OUTPUT_DIR/run-plan.json")"
     fi
     incomplete_pairs="$(jq -s '
+      def deterministic_pre_dispatch_isolated_parallel_pair:
+        length == 2
+        and ([.[] | .variant] | sort == ["baseline", "candidate"])
+        and ([.[] | .trial_index] | unique | length == 1)
+        and all(.[];
+          .case_id == "isolated-parallel-a-b-then-c-with-integration"
+          and .status == "adapter_unavailable"
+          and .error.code == "unknown_event_shape"
+          and .execution.exit_code == 0
+          and .execution.raw_artifacts_retained == false
+          and (has("metrics") | not));
       group_by(.pair_id)
-      | map(select(length == 2 and any(.[]; .status != "completed")))
+      | map(select(length == 2
+          and any(.[]; .status != "completed")
+          and (deterministic_pre_dispatch_isolated_parallel_pair | not)))
       | length
     ' "$OUTPUT_DIR"/traces/*.json)"
     [[ "$max_incomplete_pairs" =~ ^[0-9]+$ && "$incomplete_pairs" -le "$max_incomplete_pairs" ]] \
@@ -2052,6 +2101,8 @@ path_allowed_for_case() {
     case "$case_id:$path" in
         small-fix-stays-lightweight:docs/usage.md) return 0 ;;
         small-fix-stays-lightweight:.assistant-eval/workflow-decision.json) return 0 ;;
+        pivot-restart-on-stagnation-or-code-writer-blocker:.assistant-eval/stagnation-recovery.json) return 0 ;;
+        pivot-restart-on-stagnation-or-code-writer-blocker:.assistant-eval/stagnation-failure-receipt.json) return 0 ;;
         stale-journal-yields-to-current-evidence:.codex/task.md) return 0 ;;
         requirements-map-through-completion:.assistant-eval/requirement-map.json) return 0 ;;
         ordinary-medium-bounded-executor:.assistant-eval/execution-decision.json) return 0 ;;
@@ -2083,30 +2134,53 @@ workspace_record_check() {
     fi
 }
 
-workspace_artifact_preflight() {
+workspace_regular_file_preflight() {
     local workspace="$1"
-    local artifact="$2"
-    local failure_id="$3"
-    local workspace_canonical artifact_parent_canonical artifact_canonical artifact_size=""
+    local target="$2"
+    local max_size="$3"
+    local workspace_canonical target_parent target_parent_canonical target_canonical target_size=""
     local safe=true
 
-    workspace_artifact_safe=false
-    workspace_canonical="$(cd "$workspace" 2>/dev/null && pwd -P)" || safe=false
-    if [[ "$safe" == "true" && -e "$artifact" && ! -L "$artifact" && -f "$artifact" ]]; then
-        artifact_parent_canonical="$(cd "$(dirname "$artifact")" 2>/dev/null && pwd -P)" || safe=false
-        artifact_canonical="$artifact_parent_canonical/$(basename "$artifact")"
-        artifact_size="$(wc -c <"$artifact" 2>/dev/null | tr -d '[:space:]')" || safe=false
-        if [[ "$artifact_canonical" != "$workspace_canonical/"* ]] \
-            || [[ ! "$artifact_size" =~ ^[0-9]+$ ]] \
-            || [[ "$artifact_size" -lt 1 || "$artifact_size" -gt 65536 ]]; then
+    workspace_regular_file_safe=false
+    [[ "$max_size" =~ ^[0-9]+$ ]] || safe=false
+    if [[ "$safe" == "true" && -d "$workspace" && ! -L "$workspace" ]]; then
+        workspace_canonical="$(cd "$workspace" 2>/dev/null && pwd -P)" || safe=false
+    else
+        safe=false
+    fi
+    target_parent="$(dirname "$target")"
+    while [[ "$safe" == "true" ]]; do
+        if [[ "$target_parent" != "$workspace" && "$target_parent" != "$workspace/"* ]] \
+            || [[ ! -d "$target_parent" || -L "$target_parent" ]]; then
+            safe=false
+            break
+        fi
+        [[ "$target_parent" == "$workspace" ]] && break
+        target_parent="$(dirname "$target_parent")"
+    done
+    if [[ "$safe" == "true" && -e "$target" && ! -L "$target" && -f "$target" ]]; then
+        target_parent_canonical="$(cd "$(dirname "$target")" 2>/dev/null && pwd -P)" || safe=false
+        target_canonical="$target_parent_canonical/$(basename "$target")"
+        target_size="$(wc -c <"$target" 2>/dev/null | tr -d '[:space:]')" || safe=false
+        if [[ "$target_canonical" != "$workspace_canonical/"* ]] \
+            || [[ ! "$target_size" =~ ^[0-9]+$ ]] \
+            || [[ "$target_size" -lt 1 || "$target_size" -gt "$max_size" ]]; then
             safe=false
         fi
     else
         safe=false
     fi
 
-    workspace_record_check "$failure_id" "$safe"
     if [[ "$safe" == "true" ]]; then
+        workspace_regular_file_safe=true
+    fi
+}
+
+workspace_artifact_preflight() {
+    workspace_artifact_safe=false
+    workspace_regular_file_preflight "$1" "$2" 65536
+    workspace_record_check "$3" "$workspace_regular_file_safe"
+    if [[ "$workspace_regular_file_safe" == "true" ]]; then
         workspace_artifact_safe=true
     fi
 }
@@ -2200,6 +2274,447 @@ ordered_workflow_event_evidence() {
           final_handoff_written: $final_handoff_written
         }
     ' "$jsonl"
+}
+
+workspace_event_path_mappings() {
+    local jsonl="$1" workspace="$2"
+
+    command -v python3 >/dev/null 2>&1 || return 1
+    python3 - "$jsonl" "$workspace" <<'PY'
+import json
+import os
+import re
+import sys
+
+jsonl_path, workspace = sys.argv[1:]
+workspace_real = os.path.realpath(workspace)
+if not os.path.isdir(workspace_real):
+    raise SystemExit(1)
+
+def canonical_relative(value):
+    if not isinstance(value, str) or not value:
+        return None
+    candidate = value.replace("\\", "/")
+    if candidate.startswith("/") or re.match(r"^[A-Za-z]:/", candidate):
+        return None
+    segments = candidate.split("/")
+    if any(not segment or segment == ".." for segment in segments):
+        return None
+    normalized = [segment for segment in segments if segment != "."]
+    return "/".join(normalized) or None
+
+def normalize(value):
+    if not isinstance(value, str) or any(ord(character) < 32 or ord(character) == 127 for character in value):
+        return None
+    candidate = value.replace("\\", "/")
+    if not candidate.startswith("/"):
+        return canonical_relative(candidate)
+    if candidate.startswith("//"):
+        return None
+    segments = candidate[1:].split("/")
+    if any(segment == ".." for segment in segments):
+        return None
+    absolute = "/" + "/".join(segment for segment in segments if segment and segment != ".")
+    resolved = os.path.realpath(absolute)
+    try:
+        if os.path.commonpath([workspace_real, resolved]) != workspace_real:
+            return None
+    except ValueError:
+        return None
+    return canonical_relative(os.path.relpath(resolved, workspace_real))
+
+mappings = {}
+with open(jsonl_path, encoding="utf-8") as stream:
+    for line in stream:
+        event = json.loads(line)
+        item = event.get("item") if isinstance(event, dict) else None
+        if not isinstance(item, dict) or item.get("type") != "file_change":
+            continue
+        candidates = []
+        if "path" in item:
+            candidates.append(item["path"])
+        if "changes" in item and isinstance(item["changes"], list):
+            candidates.extend(change.get("path") for change in item["changes"] if isinstance(change, dict) and "path" in change)
+        for candidate in candidates:
+            if isinstance(candidate, str):
+                mappings[candidate] = normalize(candidate)
+print(json.dumps(mappings, sort_keys=True, separators=(",", ":")))
+PY
+}
+
+small_fix_event_evidence() {
+    local jsonl="$1" workspace="$2" path_mappings allowed_file_change_paths="[]" event_path
+    path_mappings="$(workspace_event_path_mappings "$jsonl" "$workspace")" || return 1
+    while IFS= read -r event_path; do
+        [[ -n "$event_path" ]] || continue
+        if path_allowed_for_case "small-fix-stays-lightweight" "$event_path"; then
+            allowed_file_change_paths="$(jq -cn --argjson paths "$allowed_file_change_paths" --arg path "$event_path" '$paths + [$path] | unique')"
+        fi
+    done < <(jq -r 'to_entries[] | select(.value | type == "string") | .value' <<<"$path_mappings")
+    jq -cse \
+        --argjson path_mappings "$path_mappings" \
+        --argjson allowed_file_change_paths "$allowed_file_change_paths" \
+        "$EVENT_EVIDENCE_NORMALIZATION_JQ$(cat <<'JQ'
+      def changes_containing($expected):
+        normalized_file_change_paths as $paths
+        | $paths != null and ($paths | length) > 0
+          and all($paths[]; . != null) and any($paths[]; . == $expected);
+      def file_change_paths_are_allowed:
+        normalized_file_change_paths as $paths
+        | $paths != null and ($paths | length) > 0
+          and all($paths[]; . as $path | $path != null and ($allowed_file_change_paths | index($path)) != null);
+      def is_discovery:
+        .type == "item.completed"
+        and .item.type == "command_execution"
+        and .item.exit_code == 0
+        and is_exact_command("rg -n teh docs/usage.md");
+      def is_discovery_started:
+        .type == "item.started"
+        and .item.type == "command_execution"
+        and is_exact_command("rg -n teh docs/usage.md");
+      def is_workspace_action:
+        (.type == "item.completed" or .type == "item.started")
+        and (.item.type == "command_execution" or .item.type == "file_change");
+      def is_discovery_action:
+        is_discovery or is_discovery_started;
+      def is_change:
+        .type == "item.completed"
+        and .item.type == "file_change"
+        and ((.item | has("status") | not) or .item.status == "completed")
+        and changes_containing("docs/usage.md");
+      def is_observed_file_change:
+        (.type == "item.started" or .type == "item.completed" or .type == "item.updated")
+        and .item.type == "file_change";
+      def is_successful_command:
+        .type == "item.completed"
+        and .item.type == "command_execution"
+        and .item.exit_code == 0
+        and (is_exact_command("rg -n teh docs/usage.md") | not);
+      def has_file_change_event:
+        any(.[];
+          (.type == "item.started" or .type == "item.completed" or .type == "item.updated")
+          and .item.type == "file_change");
+      def is_completed_file_change:
+        .type == "item.completed" and .item.type == "file_change";
+      def is_unknown_command:
+        (.type == "item.started" or .type == "item.completed")
+        and .item.type == "command_execution"
+        and (is_exact_command("rg -n teh docs/usage.md") | not);
+
+      . as $events
+      | [range(0; length) | select($events[.] | is_discovery)] as $discoveries
+      | [range(0; length) | select($events[.] | is_change)] as $changes
+      | [range(0; length) | . as $index | $events[$index] | select(is_observed_file_change)] as $file_change_events
+      | ($file_change_events | all(.[]; file_change_paths_are_allowed)) as $file_change_scope_valid
+      | [range(0; length)
+          | . as $index
+          | $events[$index]
+          | select(is_successful_command)
+          | {index: $index}
+        ] as $successful_commands
+      | ($events | has_file_change_event) as $has_file_change_event
+      | ([range(0; length) | select($events[.] | is_unknown_command)] | length) as $unknown_command_count
+      | ([range(0; length) | $events[.] | select(is_completed_file_change and (.item | has("status")))]) as $status_events
+      | ($status_events | all(.[]; .item.status == "completed")) as $file_change_status_valid
+      | ([range(0; length) | select($events[.] | is_completed_file_change and .item.status == "failed")] | length) as $failed_file_change_count
+      | [range(0; length)
+          | . as $index
+          | $events[$index]
+          | select(is_discovery_started)
+          | {index: $index, id: .item.id}
+        ] as $discovery_starts
+      | [range(0; length)
+          | . as $index
+          | $events[$index]
+          | select(.type == "item.completed" and .item.type == "command_execution")
+          | {index: $index, id: .item.id, exact_discovery_command: is_exact_command("rg -n teh docs/usage.md")}
+        ] as $discovery_completions
+      | ($discovery_starts | map(.id)) as $discovery_start_ids
+      | ($discovery_completions | map(.id)) as $discovery_completion_ids
+      | (($discovery_starts | length) == 0 or (
+          ($discovery_start_ids | all(.[]; type == "string" and length > 0))
+          and (($discovery_start_ids | unique | length) == ($discovery_start_ids | length))
+          and (($discovery_completion_ids | all(.[]; type == "string" and length > 0))
+          and (($discovery_completion_ids | unique | length) == ($discovery_completion_ids | length)))
+          and ($discovery_starts | all(.[]; . as $start
+              | [$discovery_completions[] | select(.id == $start.id and .index > $start.index)] as $matching_completions
+              | ($matching_completions | length) == 1
+                and $matching_completions[0].exact_discovery_command
+                and ($start.index > $changes[0] or $matching_completions[0].index < $changes[0])))
+        )) as $discovery_lifecycles_valid
+      | [range(0; length) | select($events[.] | is_workspace_action)] as $workspace_actions
+      | [range(0; length) | select($events[.] | is_discovery_action)] as $discovery_actions
+      | (($discoveries | length) > 0
+          and $discovery_lifecycles_valid
+          and ($workspace_actions | length) > 0
+          and ($discovery_actions | length) > 0
+          and $workspace_actions[0] == $discovery_actions[0]
+          and all($workspace_actions[]; . as $action_index
+            | $action_index >= $discoveries[0]
+              or ($discovery_actions | index($action_index)) != null)
+          and (($changes | length) == 0 or $discoveries[0] < $changes[0])) as $discovery_sequence_valid
+    | [range(0; length) | select(
+          ($events[.].type == "item.completed" or $events[.].type == "item.started" or $events[.].type == "item.updated")
+          and ($events[.].item.type == "mcp_tool_call" or $events[.].item.type == "web_search"))] as $disallowed
+      | {
+          source_discovery_before_change: ($discovery_sequence_valid and ($changes | length) > 0 and $file_change_scope_valid and $file_change_status_valid),
+          command_only_change_without_file_change: (($discoveries | length) > 0 and $discovery_lifecycles_valid and ($workspace_actions | length) > 0 and ($discovery_actions | length) > 0 and ($successful_commands | length) > 0 and ($changes | length) == 0 and ($has_file_change_event | not) and $workspace_actions[0] == $discovery_actions[0] and all($workspace_actions[]; . as $action_index | $action_index >= $discoveries[0] or ($discovery_actions | index($action_index)) != null) and any($successful_commands[]; .index > $discoveries[0])),
+          unknown_command_count: $unknown_command_count,
+          command_scope_supported: ($unknown_command_count == 0),
+          disallowed_item_count: ($disallowed | length),
+          file_change_scope_valid: $file_change_scope_valid,
+          file_change_status_valid: $file_change_status_valid,
+          failed_file_change_count: $failed_file_change_count,
+          discovery_sequence_valid: $discovery_sequence_valid
+        }
+JQ
+)" "$jsonl"
+}
+
+small_fix_command_only_edit_missing_telemetry() {
+    local jsonl="$1" workspace="$2" event_evidence
+    event_evidence="$(small_fix_event_evidence "$jsonl" "$workspace")" || return 1
+    # Without a file_change event, command text cannot prove that the command
+    # edited this file or establish write timing. Keep the result unavailable.
+    jq -e '.command_only_change_without_file_change == true and .disallowed_item_count == 0' \
+        <<<"$event_evidence" >/dev/null
+}
+
+small_fix_command_scope_missing_telemetry() {
+    local jsonl="$1" workspace="$2" event_evidence
+    event_evidence="$(small_fix_event_evidence "$jsonl" "$workspace")" || return 1
+    jq -e '
+      .discovery_sequence_valid == true
+      and .file_change_scope_valid == true
+      and .file_change_status_valid == true
+      and .disallowed_item_count == 0
+      and ((.unknown_command_count > 0) or .command_only_change_without_file_change == true)
+    ' <<<"$event_evidence" >/dev/null
+}
+
+observed_event_shape_supported() {
+    local jsonl="$1" allowed_item_types="$2"
+    jq -se --argjson allowed_item_types "$allowed_item_types" '
+      all(.[];
+        if .type == "item.updated" then
+          false
+        elif .type == "item.completed" or .type == "item.started" then
+          (.item.type as $item_type | ($item_type | type == "string") and ($allowed_item_types | index($item_type)) != null)
+        else true end)
+    ' "$jsonl" >/dev/null
+}
+
+case_event_payload_shape_supported() {
+    local jsonl="$1" case_id="$2" allowed_item_types
+    case "$case_id" in
+        small-fix-stays-lightweight)
+            allowed_item_types='["agent_message","reasoning","command_execution","file_change","mcp_tool_call","web_search"]'
+            ;;
+        pivot-restart-on-stagnation-or-code-writer-blocker)
+            allowed_item_types='["agent_message","reasoning","command_execution","file_change"]'
+            ;;
+        *) return 1 ;;
+    esac
+    observed_event_shape_supported "$jsonl" "$allowed_item_types" || return 1
+    jq -cse --arg case_id "$case_id" "$EVENT_EVIDENCE_NORMALIZATION_JQ$(cat <<'JQ'
+      all(.[];
+        if (.type == "item.started" or .type == "item.completed")
+           and .item.type == "command_execution" then
+          (.item.command // .item.command_line // null) as $command
+          | (($command | type) == "string"
+             or (($command | type) == "array"
+                 and ($command | length) > 0
+                 and all($command[]; type == "string")))
+            and (.type == "item.started" or (.item.exit_code | type) == "number")
+            and (if $case_id == "pivot-restart-on-stagnation-or-code-writer-blocker"
+                    and .type == "item.completed"
+                    and (is_exact_command("bash tests/stagnation-contracts.sh")
+                      or is_exact_command("bash tests/recovery-contracts.sh")
+                      or is_exact_command("bash tests/stagnation-contracts.sh --after-recovery")) then
+                  ((.item.aggregated_output // .item.output // null) | type) == "string"
+                else true end)
+        elif (.type == "item.started" or .type == "item.completed")
+             and .item.type == "file_change" then
+          ((.item | has("path") | not) or (.item.path | type) == "string")
+          and ((.item | has("changes") | not)
+            or ((.item.changes | type) == "array"
+                and (.item.changes | length) > 0
+                and all(.item.changes[]; type == "object" and has("path") and (.path | type) == "string")))
+          and ($case_id != "small-fix-stays-lightweight"
+            or .type != "item.completed"
+            or (.item | has("status") | not)
+            or ((.item.status | type) == "string"
+                and (.item.status == "completed" or .item.status == "failed")))
+          and ((.item | has("path")) or (.item | has("changes")))
+        else true end)
+JQ
+    )" "$jsonl" >/dev/null 2>&1
+}
+
+small_fix_event_shape_supported() {
+    case_event_payload_shape_supported "$1" "small-fix-stays-lightweight"
+}
+
+stagnation_event_shape_supported() {
+    case_event_payload_shape_supported "$1" "pivot-restart-on-stagnation-or-code-writer-blocker"
+}
+
+small_fix_requires_unavailable_adapter_policy() {
+    jq -e '
+      .cases[] | select(.id == "small-fix-stays-lightweight")
+      | .machine_expectations.observed_event_requirements
+        == {source_discovery_before_change:true,disallowed_item_types:["mcp_tool_call","web_search"],unsupported_event_policy:"adapter_unavailable"}
+    ' "$FIXTURE" >/dev/null
+}
+
+stagnation_recovery_event_evidence() {
+    local jsonl="$1" workspace="$2" path_mappings
+    path_mappings="$(workspace_event_path_mappings "$jsonl" "$workspace")" || return 1
+    jq -cse --argjson path_mappings "$path_mappings" "$EVENT_EVIDENCE_NORMALIZATION_JQ$(cat <<'JQ'
+      def changes_only($expected):
+        normalized_file_change_paths as $paths
+        | $paths != null and ($paths | length) > 0 and all($paths[]; . == $expected);
+      def command_output: (.item.aggregated_output // .item.output // null);
+      def has_numeric_exit_code:
+        (.item.exit_code | type) == "number";
+      def is_initial_stagnation_invocation:
+        .type == "item.completed" and .item.type == "command_execution"
+        and is_exact_command("bash tests/stagnation-contracts.sh");
+      def is_failed_stagnation:
+        is_initial_stagnation_invocation
+        and has_numeric_exit_code and .item.exit_code != 0
+        and (command_output | type) == "string"
+        and (command_output | contains("STAGNATION_TRUSTED_FAILURE"));
+      def is_recovery_invocation:
+        .type == "item.completed" and .item.type == "command_execution"
+        and is_exact_command("bash tests/recovery-contracts.sh");
+      def is_recovery:
+        is_recovery_invocation
+        and has_numeric_exit_code and .item.exit_code == 0
+        and (command_output | type) == "string"
+        and (command_output | contains("RECOVERY_APPLIED"));
+      def is_fresh_check_invocation:
+        .type == "item.completed" and .item.type == "command_execution"
+        and is_exact_command("bash tests/stagnation-contracts.sh --after-recovery");
+      def is_fresh_check:
+        is_fresh_check_invocation
+        and has_numeric_exit_code and .item.exit_code == 0
+        and (command_output | type) == "string"
+        and (command_output | contains("STAGNATION_FRESH_CHECK_PASS"));
+      def recovery_command_kind:
+        if is_exact_command("bash tests/stagnation-contracts.sh") then "trusted_failure"
+        elif is_exact_command("bash tests/recovery-contracts.sh") then "recovery"
+        elif is_exact_command("bash tests/stagnation-contracts.sh --after-recovery") then "fresh_check"
+        elif is_exact_command("cat RECOVERY.md") then "recovery_read"
+        else null
+        end;
+      def is_allowed_recovery_command:
+        .item.type == "command_execution"
+        and recovery_command_kind != null;
+      def is_forbidden_recovery_command:
+        (.type == "item.started" or .type == "item.completed")
+        and .item.type == "command_execution"
+        and (is_allowed_recovery_command | not);
+      def is_forbidden_retry_or_patch:
+        .type == "item.completed" and .item.type == "command_execution"
+        and (command_text | tostring | test("(^|[[:space:]])(patch|retry)([[:space:]]|$)"; "i"));
+      def is_forbidden_source_change:
+        (.type == "item.started" or .type == "item.completed")
+        and .item.type == "file_change"
+        and (changes_only(".assistant-eval/stagnation-recovery.json") | not);
+      def is_recovery_artifact_change:
+        (.type == "item.started" or .type == "item.completed")
+        and .item.type == "file_change"
+        and changes_only(".assistant-eval/stagnation-recovery.json");
+      def is_workspace_action:
+        (.type == "item.started" or .type == "item.completed")
+        and (.item.type == "command_execution" or .item.type == "file_change");
+
+      . as $events
+      | [range(0; length) | select($events[.] | is_initial_stagnation_invocation)] as $initial_invocations
+      | [range(0; length) | select($events[.] | is_failed_stagnation)] as $failures
+      | [range(0; length) | select($events[.] | is_recovery_invocation)] as $recovery_invocations
+      | [range(0; length) | select($events[.] | is_recovery)] as $recoveries
+      | [range(0; length) | select($events[.] | is_fresh_check_invocation)] as $fresh_check_invocations
+      | [range(0; length) | select($events[.] | is_fresh_check)] as $fresh_checks
+      | [range(0; length)
+          | . as $index
+          | $events[$index]
+          | select(.type == "item.started" and .item.type == "command_execution" and is_allowed_recovery_command)
+          | {index: $index, id: .item.id, kind: recovery_command_kind}
+        ] as $command_starts
+      | [range(0; length)
+          | . as $index
+          | $events[$index]
+          | select(.type == "item.completed" and .item.type == "command_execution" and is_allowed_recovery_command)
+          | {index: $index, id: .item.id, kind: recovery_command_kind}
+        ] as $command_completions
+      | ($command_starts | all(.[]; (.id | type == "string" and length > 0))) as $start_ids_nonempty
+      | ($command_starts | map(.id)) as $start_ids
+      | (($start_ids | unique | length) == ($start_ids | length)) as $start_ids_unique
+      | ($command_completions | map(select(.id | type == "string" and length > 0) | .id)) as $completion_ids
+      | (($completion_ids | unique | length) == ($completion_ids | length)) as $completion_ids_unique
+      | ($command_starts | all(.[]; . as $start | [$command_completions[] | select(.id == $start.id and .kind == $start.kind and .index > $start.index)] | length == 1)) as $starts_match_one_later_completion
+      | ($start_ids_nonempty and $start_ids_unique and $completion_ids_unique and $starts_match_one_later_completion) as $command_lifecycles_valid
+      | ([ $command_starts[] | select(.kind == "recovery") | .index ] | if length == 1 then .[0] else $recovery_invocations[0] end) as $recovery_start_or_completion
+      | ([ $command_starts[] | select(.kind == "fresh_check") | .index ] | if length == 1 then .[0] else $fresh_check_invocations[0] end) as $fresh_check_start_or_completion
+      | [range(0; length) | select($events[.] | is_forbidden_recovery_command)] as $forbidden_commands
+      | [range(0; length) | select($events[.] | is_forbidden_retry_or_patch)] as $forbidden
+      | [range(0; length) | select($events[.] | is_forbidden_source_change)] as $forbidden_changes
+      | [range(0; length)
+          | . as $index
+          | select(($events[$index] | is_recovery_artifact_change)
+            and (($recovery_start_or_completion == null)
+              or ($fresh_check_start_or_completion == null)
+              or ($failures | length) != 1
+              or $index <= $failures[0]
+              or $index <= $recovery_start_or_completion
+              or $index >= $fresh_check_start_or_completion))
+        ] as $out_of_window_changes
+      | [range(0; length) | select(
+          . as $index
+          | ($events[$index] | is_workspace_action)
+          and ($fresh_checks | length) == 1
+          and $index > $fresh_checks[0])
+        ] as $post_bound_workspace_actions
+      | {
+          trusted_failure_before_recovery: (($initial_invocations | length) == 1 and ($failures | length) == 1 and ($recovery_invocations | length) == 1 and ($recoveries | length) == 1 and $command_lifecycles_valid and $failures[0] < $recovery_start_or_completion),
+          recovery_before_fresh_check: (($recovery_invocations | length) == 1 and ($fresh_check_invocations | length) == 1 and ($fresh_checks | length) == 1 and $command_lifecycles_valid and $recoveries[0] < $fresh_check_start_or_completion),
+          reject_patch_or_retry_after_bound: (($forbidden_commands | length) == 0 and ($forbidden | length) == 0 and ($forbidden_changes | length) == 0 and ($out_of_window_changes | length) == 0 and $command_lifecycles_valid and ($fresh_checks | length) == 1 and ($post_bound_workspace_actions | length) == 0),
+          terminal_completed: false
+        }
+JQ
+)" "$jsonl"
+}
+
+stagnation_fixture_is_trusted() {
+    local workspace="$1" fixture="$REPO_ROOT/docs/evals/fixtures/pivot-restart-on-stagnation"
+    local probe failure_output recovery_output fresh_output failure_exit=0 recovery_exit=0 fresh_exit=0 trusted=false
+    local relative
+
+    for relative in RECOVERY.md tests/stagnation-contracts.sh tests/recovery-contracts.sh; do
+        [[ -f "$workspace/$relative" && ! -L "$workspace/$relative" ]] \
+            && [[ "$(hash_file "$workspace/$relative")" == "$(hash_file "$fixture/$relative")" ]] \
+            || return 1
+    done
+    [[ -x "$workspace/tests/stagnation-contracts.sh" && -x "$workspace/tests/recovery-contracts.sh" ]] || return 1
+    probe="$(mktemp -d "${TMPDIR:-/tmp}/assistant-framework-stagnation.XXXXXX")" || return 1
+    if ! cp -R "$fixture"/. "$probe/"; then
+        rm -rf "$probe"
+        return 1
+    fi
+    failure_output="$(bash "$probe/tests/stagnation-contracts.sh")" || failure_exit=$?
+    recovery_output="$(bash "$probe/tests/recovery-contracts.sh")" || recovery_exit=$?
+    fresh_output="$(bash "$probe/tests/stagnation-contracts.sh" --after-recovery)" || fresh_exit=$?
+    if [[ "$failure_exit" -ne 0 && "$recovery_exit" -eq 0 && "$fresh_exit" -eq 0 \
+        && "$failure_output" == "STAGNATION_TRUSTED_FAILURE" \
+        && "$recovery_output" == "RECOVERY_APPLIED" \
+        && "$fresh_output" == "STAGNATION_FRESH_CHECK_PASS" ]] \
+        && grep -Fqx 'terminal_completed=false' "$probe/RECOVERY.md"; then
+        trusted=true
+    fi
+    rm -rf "$probe"
+    [[ "$trusted" == true ]]
 }
 
 viewing_inspection_event_evidence() {
@@ -2457,7 +2972,10 @@ verify_workspace() {
     local workspace_acceptance_items_total=0
     local workspace_acceptance_items_passed=0
     local workspace_artifact_safe=false
-    local artifact review_artifact event_evidence final_source_hash=""
+    local artifact review_artifact event_evidence final_source_hash="" workspace_identity=""
+
+    workspace_identity="$(cd "$workspace" && pwd -P)" \
+        || die "Could not resolve the evaluation workspace identity."
 
     while IFS= read -r changed_path; do
         [[ -n "$changed_path" ]] || continue
@@ -2469,7 +2987,9 @@ verify_workspace() {
     case "$case_id" in
         small-fix-stays-lightweight)
             status="passed"
-            if [[ ! -f "$workspace/docs/usage.md" ]] \
+            workspace_regular_file_preflight "$workspace" "$workspace/docs/usage.md" 65536
+            if [[ "$workspace_regular_file_safe" != "true" ]] \
+                || [[ ! -f "$workspace/docs/usage.md" ]] \
                 || grep -Fq -- "teh" "$workspace/docs/usage.md" \
                 || ! grep -Fq -- "the requested typo" "$workspace/docs/usage.md"; then
                 workspace_record_check "workspace-001" false
@@ -2484,6 +3004,33 @@ verify_workspace() {
               and .schema_version == "1.0"
               and .task_size == "trivial"
               and .plan_mode == "none"'
+            event_evidence="$(small_fix_event_evidence "$jsonl" "$workspace_identity")" || event_evidence='{}'
+            if small_fix_requires_unavailable_adapter_policy \
+                && jq -e '.source_discovery_before_change == true and .command_scope_supported == true and .disallowed_item_count == 0' <<<"$event_evidence" >/dev/null; then
+                workspace_record_check "workspace-003" true
+            else
+                workspace_record_check "workspace-003" false
+            fi
+            ;;
+        pivot-restart-on-stagnation-or-code-writer-blocker)
+            status="passed"
+            artifact="$workspace/.assistant-eval/stagnation-recovery.json"
+            workspace_artifact_preflight "$workspace" "$artifact" "workspace-001"
+            workspace_json_check "$artifact" "workspace-002" '
+              type == "object"
+              and . == {schema_version:"1.0",trusted_failure:"observed",recovery:"applied",fresh_check:"passed",terminal_completed:false}'
+            event_evidence="$(stagnation_recovery_event_evidence "$jsonl" "$workspace_identity")" || event_evidence='{}'
+            if stagnation_fixture_is_trusted "$workspace" \
+                && jq -e --argjson evidence "$event_evidence" '
+              .cases[] | select(.id == "pivot-restart-on-stagnation-or-code-writer-blocker")
+              | .machine_expectations.observed_recovery_requirements
+                == {trusted_failure_before_recovery:true,recovery_before_fresh_check:true,reject_patch_or_retry_after_bound:true,terminal_completed:false}
+            ' "$FIXTURE" >/dev/null \
+                && jq -e '.trusted_failure_before_recovery == true and .recovery_before_fresh_check == true and .reject_patch_or_retry_after_bound == true and .terminal_completed == false' <<<"$event_evidence" >/dev/null; then
+                workspace_record_check "workspace-003" true
+            else
+                workspace_record_check "workspace-003" false
+            fi
             ;;
         codex-role-constraints-native)
             status="passed"
@@ -2816,6 +3363,9 @@ EOF
         pending-architecture-pack-verification)
             printf '%s\n' 'VIEWING quality scenario has planned verification after implementation.' >"$workspace/PENDING_ARCHITECTURE_PACK.md"
             ;;
+        pivot-restart-on-stagnation-or-code-writer-blocker)
+            cp -R "$REPO_ROOT/docs/evals/fixtures/pivot-restart-on-stagnation"/. "$workspace/"
+            ;;
         medium-final-handoff-is-reconstructable)
             mkdir -p "$workspace/src" "$workspace/tests"
             cat >"$workspace/CHANGE_SUMMARY.md" <<'EOF'
@@ -3052,6 +3602,17 @@ execute_one_run() {
     grader_digest="$(grader_hash "$case_id")"
     prompt="$(blind_prompt_for_case "$case_id")"
 
+    if [[ "$case_id" == "isolated-parallel-a-b-then-c-with-integration" ]]; then
+        validate_run_attempt_identity "$attempt_path" "$pair_id" "$case_id" "$trial_index" "$variant" \
+            || die "Run-attempt state is invalid before unavailable completion: $run_id"
+        [[ "$(jq -r '.state' "$attempt_path")" == "not_started" ]] \
+            || die "Run-attempt state is not completable without model dispatch: $run_id"
+        write_unavailable_trace "$trace_path" "$run_id" "$pair_id" "$case_id" "$trial_index" "$variant" \
+            unknown_event_shape 0 "$fixture_hash" "$case_digest" "$instruction_hash" "$grader_digest" "$cli_version"
+        mark_run_attempt_completed "$attempt_path" || die "Could not complete unavailable run-attempt state for $run_id."
+        return
+    fi
+
     local run_raw workspace jsonl final_output stderr_file prompt_file seed_workspace_hash
     local now remaining_total effective_timeout
     now="$(date +%s)"
@@ -3162,6 +3723,24 @@ execute_one_run() {
         return
     fi
 
+    if [[ "$case_id" == "small-fix-stays-lightweight" ]] \
+        && small_fix_requires_unavailable_adapter_policy \
+        && ! small_fix_event_shape_supported "$jsonl"; then
+        write_unavailable_trace "$trace_path" "$run_id" "$pair_id" "$case_id" "$trial_index" "$variant" \
+            unknown_event_shape 0 "$fixture_hash" "$case_digest" "$instruction_hash" "$grader_digest" "$cli_version"
+        mark_run_attempt_completed "$attempt_path" || die "Could not complete run-attempt state for $run_id."
+        rm -rf "$run_raw"
+        return
+    fi
+    if [[ "$case_id" == "pivot-restart-on-stagnation-or-code-writer-blocker" ]] \
+        && ! stagnation_event_shape_supported "$jsonl"; then
+        write_unavailable_trace "$trace_path" "$run_id" "$pair_id" "$case_id" "$trial_index" "$variant" \
+            unknown_event_shape 0 "$fixture_hash" "$case_digest" "$instruction_hash" "$grader_digest" "$cli_version"
+        mark_run_attempt_completed "$attempt_path" || die "Could not complete run-attempt state for $run_id."
+        rm -rf "$run_raw"
+        return
+    fi
+
     local semantic_extract_path=""
     if is_synthetic_seeded_case "$case_id"; then
         semantic_extract_path="$RAW_ROOT/semantic-extracts/$pair_id-$variant.json"
@@ -3187,6 +3766,21 @@ execute_one_run() {
     fi
     response_verifier="$(grade_response "$case_id" "$final_output" "$semantic_extract_path")"
     workspace_verifier="$(verify_workspace "$case_id" "$workspace" "$jsonl")"
+    if [[ "$case_id" == "small-fix-stays-lightweight" ]] \
+        && small_fix_requires_unavailable_adapter_policy \
+        && jq -n -e \
+            --argjson response "$response_verifier" \
+            --argjson workspace "$workspace_verifier" \
+            '$response.status == "passed"
+             and $workspace.workspace_failure_ids == ["workspace-003"]
+             and $workspace.scope_deviations == 0' >/dev/null \
+        && small_fix_command_scope_missing_telemetry "$jsonl" "$workspace"; then
+        write_unavailable_trace "$trace_path" "$run_id" "$pair_id" "$case_id" "$trial_index" "$variant" \
+            unknown_event_shape 0 "$fixture_hash" "$case_digest" "$instruction_hash" "$grader_digest" "$cli_version"
+        mark_run_attempt_completed "$attempt_path" || die "Could not complete unavailable run-attempt state for $run_id."
+        rm -rf "$run_raw"
+        return
+    fi
     verifier="$(jq -cn \
         --argjson response "$response_verifier" \
         --argjson workspace "$workspace_verifier" \
