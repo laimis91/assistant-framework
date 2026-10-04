@@ -4,7 +4,16 @@ first_response_path_for_case() {
     local fixture_file="$3"
     local packet_basename
 
-    if [[ -f "$RESPONSES_DIR/$skill_name/$id.txt" ]]; then
+    packet_basename="$(clarification_task_packet_basename "$fixture_file" "$skill_name" "$id")"
+    if [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$skill_name/$packet_basename.txt" ]]; then
+        printf '%s\n' "$RESPONSES_DIR/$skill_name/$packet_basename.txt"
+    elif [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$skill_name/$packet_basename.md" ]]; then
+        printf '%s\n' "$RESPONSES_DIR/$skill_name/$packet_basename.md"
+    elif [[ "${#FIXTURE_FILES[@]}" -eq 1 && -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.txt" ]]; then
+        printf '%s\n' "$RESPONSES_DIR/$packet_basename.txt"
+    elif [[ "${#FIXTURE_FILES[@]}" -eq 1 && -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.md" ]]; then
+        printf '%s\n' "$RESPONSES_DIR/$packet_basename.md"
+    elif [[ -f "$RESPONSES_DIR/$skill_name/$id.txt" ]]; then
         printf '%s\n' "$RESPONSES_DIR/$skill_name/$id.txt"
     elif [[ -f "$RESPONSES_DIR/$skill_name/$id.md" ]]; then
         printf '%s\n' "$RESPONSES_DIR/$skill_name/$id.md"
@@ -13,18 +22,7 @@ first_response_path_for_case() {
     elif [[ "${#FIXTURE_FILES[@]}" -eq 1 && -f "$RESPONSES_DIR/$id.md" ]]; then
         printf '%s\n' "$RESPONSES_DIR/$id.md"
     else
-        packet_basename="$(clarification_task_packet_basename "$fixture_file" "$skill_name" "$id")"
-        if [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$skill_name/$packet_basename.txt" ]]; then
-            printf '%s\n' "$RESPONSES_DIR/$skill_name/$packet_basename.txt"
-        elif [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$skill_name/$packet_basename.md" ]]; then
-            printf '%s\n' "$RESPONSES_DIR/$skill_name/$packet_basename.md"
-        elif [[ "${#FIXTURE_FILES[@]}" -eq 1 && -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.txt" ]]; then
-            printf '%s\n' "$RESPONSES_DIR/$packet_basename.txt"
-        elif [[ "${#FIXTURE_FILES[@]}" -eq 1 && -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.md" ]]; then
-            printf '%s\n' "$RESPONSES_DIR/$packet_basename.md"
-        else
-            printf '\n'
-        fi
+        printf '\n'
     fi
 }
 
@@ -1372,7 +1370,7 @@ grade_responses() {
             total=$((total + 1))
             response_path="$(first_response_path_for_case "$skill_name" "$id" "$fixture_file")"
             clarification_case=false
-            if [[ "$skill_name" == "assistant-clarify" || "$category" == *clarification* ]]; then
+            if is_clarification_case "$skill_name" "$category"; then
                 clarification_case=true
             fi
             status="PASS"

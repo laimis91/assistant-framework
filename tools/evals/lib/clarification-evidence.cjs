@@ -9,6 +9,7 @@ const MAX_REVIEW_BYTES = 2 * 1024 * 1024;
 const MAX_ARTIFACT_BYTES = 24 * 1024 * 1024;
 const MAX_TOTAL_ARTIFACT_BYTES = 96 * 1024 * 1024;
 const MAX_JSONL_LINES = 100000;
+const MAX_DIFF_PATHS = 10000;
 const SHA256 = /^[0-9a-f]{64}$/;
 
 function fail(message) {
@@ -276,6 +277,62 @@ function changedManifestPaths(before, after) {
   return [...paths].filter((filePath) => before[filePath] !== after[filePath]).sort();
 }
 
+function parseDiffPaths(diffText) {
+  const lines = diffText.split(/\r?\n/);
+  if (lines.length > MAX_JSONL_LINES) return null;
+  const paths = new Set();
+  let current = null;
+  let sectionCount = 0;
+
+  const safeDiffPath = (value) => isSafeProjectRelativePath(value) ? value : null;
+  const parseGitHeader = (line) => {
+    const prefix = "diff --git a/";
+    if (!line.startsWith(prefix)) return null;
+    const body = line.slice(prefix.length);
+    const separator = body.indexOf(" b/");
+    if (separator < 0 || body.indexOf(" b/", separator + 3) >= 0) return null;
+    const from = safeDiffPath(body.slice(0, separator));
+    const to = safeDiffPath(body.slice(separator + 3));
+    return from && to ? { from, to } : null;
+  };
+  const finishSection = () => {
+    if (!current) return true;
+    const isRename = current.from !== current.to;
+    if (isRename) {
+      if (current.renameFrom !== current.from || current.renameTo !== current.to) return false;
+    } else if (current.renameFrom !== null || current.renameTo !== null) {
+      return false;
+    }
+    paths.add(current.from);
+    paths.add(current.to);
+    return true;
+  };
+
+  for (const line of lines) {
+    if (line.startsWith("diff --git ")) {
+      if (!finishSection()) return null;
+      sectionCount += 1;
+      if (sectionCount > MAX_DIFF_PATHS) return null;
+      const header = parseGitHeader(line);
+      if (!header) return null;
+      current = { ...header, renameFrom: null, renameTo: null };
+      continue;
+    }
+    if (line.startsWith("diff --")) return null;
+    if (line.startsWith("rename from ") || line.startsWith("rename to ")) {
+      if (!current) return null;
+      const isFrom = line.startsWith("rename from ");
+      const field = isFrom ? "renameFrom" : "renameTo";
+      const renamePath = safeDiffPath(line.slice(isFrom ? 12 : 10));
+      if (!renamePath || current[field] !== null) return null;
+      current[field] = renamePath;
+    }
+  }
+  if (!finishSection()) return null;
+  if (sectionCount === 0 && diffText.trim().length > 0) return null;
+  return paths;
+}
+
 function normalizeWorkspacePath(filePath, workspaceRoot) {
   if (!path.isAbsolute(filePath)) return null;
   const root = path.resolve(workspaceRoot);
@@ -429,7 +486,17 @@ function main() {
   }
   const prompts = admittedInputList.filter((input) => input.kind === "initial_prompt");
   const answers = admittedInputList.filter((input) => input.kind === "answer").sort((a, b) => a.turn - b.turn);
-  if (prompts.length !== 1 || !prompts[0] || prompts[0].turn !== 1 || !prompts[0].record) unavailableReasons.push("initial_prompt_receipt_unavailable");
+  let initialPromptBindingValid = false;
+  if (prompts.length !== 1 || !prompts[0] || prompts[0].turn !== 1 || !prompts[0].record) {
+    unavailableReasons.push("initial_prompt_receipt_unavailable");
+    unavailableReasons.push("initial_prompt_oracle_binding_unavailable");
+  } else if (typeof oracleCase.initial_prompt_sha256 !== "string" || !SHA256.test(oracleCase.initial_prompt_sha256)) {
+    unavailableReasons.push("initial_prompt_oracle_binding_unavailable");
+  } else if (prompts[0].record.digest !== oracleCase.initial_prompt_sha256) {
+    unavailableReasons.push("initial_prompt_payload_mismatch");
+  } else {
+    initialPromptBindingValid = true;
+  }
   if (answers.some((answer, index) => !answer.record || answer.turn <= 1 || (index > 0 && answer.turn <= answers[index - 1].turn))) unavailableReasons.push("answer_receipt_order_unavailable");
 
   const transcripts = new Map();
@@ -556,8 +623,20 @@ function main() {
     for (const observedPath of observedChanges.keys()) {
       if (!changedPaths.includes(observedPath)) unavailableReasons.push("file_event_manifest_mismatch");
     }
-    const diffHeaders = [...diffText.matchAll(/^diff --git a\/(.+) b\/(.+)$/gm)].map((match) => match[1] === match[2] ? match[1] : null).filter(Boolean);
-    if (projectChangedPaths.some((changedPath) => !diffHeaders.includes(changedPath))) unavailableReasons.push("changed_file_diff_context_unavailable");
+    const diffPaths = parseDiffPaths(diffText);
+    if (!diffPaths) {
+      unavailableReasons.push("workspace_diff_paths_unavailable");
+    } else {
+      const projectDiffPaths = new Set([...diffPaths].filter((filePath) => !filePath.startsWith(".codex/")));
+      const projectManifestPaths = new Set(projectChangedPaths);
+      if (projectChangedPaths.some((changedPath) => !projectDiffPaths.has(changedPath))) {
+        unavailableReasons.push("changed_file_diff_context_unavailable");
+      }
+      if (projectDiffPaths.size !== projectManifestPaths.size
+        || [...projectDiffPaths].some((filePath) => !projectManifestPaths.has(filePath))) {
+        unavailableReasons.push("workspace_diff_manifest_mismatch");
+      }
+    }
   }
 
   const semanticReview = isObject(review.semantic_review) ? review.semantic_review : {};
@@ -823,6 +902,7 @@ function main() {
       || /^answer_turn_\d+_response_transcript_unavailable$/.test(reason)
       || /^transcript_turn_\d+_completion_unavailable$/.test(reason);
     const behaviorEvidenceSupported = reviewShapeSupported
+      && initialPromptBindingValid
       && changedPaths !== null
       && reviewIndependent
       && (!hasRequiredContinuation || continuationBinding !== null)

@@ -14,6 +14,27 @@ clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
 adversarial_case="ambiguous-risky-task-blocks-before-plan"
 framework_adversarial_task="$(clarification_task_packet_basename "$framework_fixture" framework-instruction "$adversarial_case").md"
 
+test_start "clarification oracle binds every frozen initial prompt by exact bytes"
+if python3 - "$FRAMEWORK_DIR/docs/evals/fixtures/clarification/clarification-oracle.json" "$FRAMEWORK_DIR/docs/evals/fixtures/clarification/actor-prompts" <<'PY_ORACLE_PROMPTS'
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+oracle = json.loads(Path(sys.argv[1]).read_text())
+prompt_root = Path(sys.argv[2])
+for case in oracle["cases"]:
+    prompt_path = prompt_root / f"{case['case_id']}.md"
+    actual = sha256(prompt_path.read_bytes()).hexdigest()
+    if case.get("initial_prompt_sha256") != actual:
+        raise SystemExit(f"frozen prompt digest is missing or stale for {case['case_id']}")
+PY_ORACLE_PROMPTS
+then
+    pass
+else
+    fail "clarification oracle did not bind each case to its frozen initial prompt bytes"
+fi
+
 framework_prompt_dir="$(mktemp -d "${TMPDIR:-/tmp}/clarification-framework-prompts.XXXXXX")"
 framework_responses="$(mktemp -d "${TMPDIR:-/tmp}/clarification-framework-responses.XXXXXX")"
 framework_grade="$(mktemp "${TMPDIR:-/tmp}/clarification-framework-grade.XXXXXX")"
@@ -73,6 +94,53 @@ else
     fail "workflow clarification packet did not project only its user request"
 fi
 
+uppercase_skill_root="$(mktemp -d "${TMPDIR:-/tmp}/clarification-uppercase-skill.XXXXXX")"
+uppercase_skill_dir="$uppercase_skill_root/assistant-workflow"
+uppercase_skill_case="clarification-is-material-not-capped"
+mkdir -p "$uppercase_skill_dir/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$uppercase_skill_dir/SKILL.md"
+python3 - "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$uppercase_skill_dir/evals/cases.json" "$uppercase_skill_root/lower-cases.json" "$uppercase_skill_case" <<'PY_UPPERCASE_FIXTURE'
+import json
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1])
+target = Path(sys.argv[2])
+lower_target = Path(sys.argv[3])
+case_id = sys.argv[4]
+fixture = json.loads(source.read_text())
+for case in fixture["cases"]:
+    if case["id"] == case_id:
+        case["category"] = "Clarification"
+        break
+else:
+    raise SystemExit(f"missing fixture case {case_id}")
+target.write_text(json.dumps(fixture, sort_keys=True) + "\n")
+lower = json.loads(source.read_text())
+for case in lower["cases"]:
+    if case["id"] == case_id:
+        case["category"] = "clarification"
+        break
+lower_target.write_text(json.dumps(lower, sort_keys=True) + "\n")
+PY_UPPERCASE_FIXTURE
+uppercase_skill_task="$(clarification_task_packet_basename "$uppercase_skill_root/lower-cases.json" assistant-workflow "$uppercase_skill_case").md"
+uppercase_skill_prompt_dir="$uppercase_skill_root/prompts"
+uppercase_skill_prompt_file="$uppercase_skill_prompt_dir/assistant-workflow/$uppercase_skill_task"
+uppercase_skill_responses="$uppercase_skill_root/responses"
+mkdir -p "$uppercase_skill_responses/assistant-workflow"
+jq -r --arg id "$uppercase_skill_case" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$uppercase_skill_dir/evals/cases.json" >"$uppercase_skill_responses/assistant-workflow/$uppercase_skill_case.txt"
+p0p4_register_cleanup "$uppercase_skill_root"
+test_start "mixed-case clarification category stays opaque in per-skill rendering and grading"
+if "$skill_runner" --emit-prompts "$uppercase_skill_prompt_dir" --skill "$uppercase_skill_dir" --case "$uppercase_skill_case" >/dev/null \
+    && [[ -f "$uppercase_skill_prompt_file" ]] \
+    && ! grep -Eiq 'Expected Behavior|Pass Criteria|Fail Signals|Machine Expectations' "$uppercase_skill_prompt_file" \
+    && "$skill_runner" --responses "$uppercase_skill_responses" --skill "$uppercase_skill_dir" --case "$uppercase_skill_case" >"$uppercase_skill_root/grade.txt" 2>&1 \
+    && grep -Fq $'UNAVAILABLE\tassistant-workflow\t'"$uppercase_skill_case"$'\tClarification\t' "$uppercase_skill_root/grade.txt"; then
+    pass
+else
+    fail "mixed-case clarification category was exposed or graded as an ordinary proxy case"
+fi
+
 test_start "offline clarification graders resolve the emitted opaque packet basename"
 write_framework_responses
 framework_saved_case_response="$framework_responses/$adversarial_case.saved"
@@ -92,6 +160,20 @@ if [[ -f "$framework_saved_case_response" ]]; then
     mv "$framework_saved_case_response" "$framework_responses/$adversarial_case.txt"
 fi
 
+test_start "framework grader prefers a fresh opaque response over a legacy case-id response"
+: >"$framework_responses/$adversarial_case.txt"
+printf '%s\n' "Fresh response for the emitted opaque packet." >"$framework_responses/${framework_adversarial_task%.md}.txt"
+if "$framework_runner" --responses "$framework_responses" >"$framework_grade" 2>&1 \
+    && grep -Fq $'UNAVAILABLE\t'"$adversarial_case"$'\t' "$framework_grade" \
+    && grep -Fq "substring anchors do not establish an admissible question or edit ordering" "$framework_grade" \
+    && ! grep -Fq "empty response file" "$framework_grade"; then
+    pass
+else
+    fail "framework grader selected the stale legacy response ahead of the emitted opaque packet"
+fi
+rm -f "$framework_responses/${framework_adversarial_task%.md}.txt"
+write_framework_responses
+
 opaque_skill_case="compressed-request-produces-structured-brief"
 opaque_skill_task="$(clarification_task_packet_basename "$clarify_fixture" assistant-clarify "$opaque_skill_case")"
 workflow_clarification_case="clarification-is-material-not-capped"
@@ -110,6 +192,22 @@ if "$skill_runner" --responses "$opaque_skill_response_dir" --skill assistant-cl
     pass
 else
     fail "per-skill grader did not resolve the clarification packet basename as non-PASS evidence"
+fi
+
+flat_legacy_priority_dir="$(mktemp -d "${TMPDIR:-/tmp}/clarification-flat-legacy-priority.XXXXXX")"
+flat_legacy_priority_grade="$(mktemp "${TMPDIR:-/tmp}/clarification-flat-legacy-priority-grade.XXXXXX")"
+mkdir -p "$flat_legacy_priority_dir/assistant-clarify"
+: >"$flat_legacy_priority_dir/$opaque_skill_case.txt"
+printf '%s\n' "Fresh response for the emitted opaque packet." >"$flat_legacy_priority_dir/assistant-clarify/$opaque_skill_task.txt"
+p0p4_register_cleanup "$flat_legacy_priority_dir" "$flat_legacy_priority_grade"
+test_start "per-skill grader prefers a fresh opaque response over a flat legacy response"
+if "$skill_runner" --responses "$flat_legacy_priority_dir" --skill assistant-clarify --case "$opaque_skill_case" >"$flat_legacy_priority_grade" 2>&1 \
+    && grep -Fq $'UNAVAILABLE\tassistant-clarify\t'"$opaque_skill_case"$'\t' "$flat_legacy_priority_grade" \
+    && grep -Fq "substring anchors do not establish an admissible question or edit ordering" "$flat_legacy_priority_grade" \
+    && ! grep -Fq "empty response file" "$flat_legacy_priority_grade"; then
+    pass
+else
+    fail "per-skill grader selected a flat legacy response ahead of the emitted opaque packet"
 fi
 
 printf '%s\n' "A response for the selected opaque task packet." >"$flat_multi_skill_responses/$opaque_skill_task.txt"
@@ -219,13 +317,15 @@ def transcript(lines):
 
 old_hash = sha256(old).hexdigest()
 new_hash = sha256(new).hexdigest()
+initial_prompt_bytes = b"Add a private issue share link for external customers.\n"
+initial_prompt_digest = sha256(initial_prompt_bytes).hexdigest()
 oracle = {
     "schema_version": "clarification-oracle/v1",
     "cases": [
-        {"case_id": "task-01", "hidden_material_decisions": ["recipient access", "link revocation"]},
-        {"case_id": "task-03", "hidden_material_decisions": []},
-        {"case_id": "task-04", "hidden_material_decisions": ["recipient access"]},
-        {"case_id": "task-08", "hidden_material_decisions": ["link revocation"]},
+        {"case_id": "task-01", "initial_prompt_sha256": initial_prompt_digest, "hidden_material_decisions": ["recipient access", "link revocation"]},
+        {"case_id": "task-03", "initial_prompt_sha256": initial_prompt_digest, "hidden_material_decisions": []},
+        {"case_id": "task-04", "initial_prompt_sha256": initial_prompt_digest, "hidden_material_decisions": ["recipient access"]},
+        {"case_id": "task-08", "initial_prompt_sha256": initial_prompt_digest, "hidden_material_decisions": ["link revocation"]},
     ],
 }
 oracle_bytes = (json.dumps(oracle, sort_keys=True) + "\n").encode()
@@ -243,7 +343,7 @@ def planning_applicability(case_id, requirement):
     return value
 
 write("workspace/src/issue_detail.py", new)
-initial = write("turn-01.prompt.txt", "Add a private issue share link for external customers.\n")
+initial = write("turn-01.prompt.txt", initial_prompt_bytes)
 answer = write("turn-02.answer.txt", "Account-free access is okay; the owner can revoke the link.\n")
 selection = write("activation.json", {
     "schema_version": "clarification-activation-observation/v1",
@@ -509,6 +609,251 @@ if [[ -f "$importer" ]]; then
         fail "evidence importer did not accept supported native question-answer-edit evidence: $(cat "$framework_grade")"
     fi
 
+    python3 - "$evidence_root" <<'PY_WRONG_INITIAL_PROMPT'
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+review = json.loads((root / "review.json").read_text())
+prompt = b"An obsolete prompt assigned to a different frozen case.\n"
+(root / "turn-01.prompt-wrong.txt").write_bytes(prompt)
+review["inputs"][0]["artifact"] = {
+    "path": "turn-01.prompt-wrong.txt",
+    "sha256": sha256(prompt).hexdigest(),
+}
+review["semantic_review"]["decisions"] = [
+    {"decision_index": index, "outcome": "not_asked", "question_refs": [],
+     "rationale": "The other case's hidden decision was not asked."}
+    for index in range(2)
+]
+question = review["semantic_review"]["question_assessments"][0]
+question["classification"] = "non_material"
+question["decision_indexes"] = []
+question.pop("text_spans", None)
+(root / "review-wrong-initial-prompt.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_WRONG_INITIAL_PROMPT
+    test_start "wrong frozen initial prompt makes case-dependent judgments unavailable"
+    if node "$importer" --review "$evidence_root/review-wrong-initial-prompt.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and .semantic_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("initial_prompt_payload_mismatch")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a review of the wrong frozen prompt retained case-dependent behavioral judgments: $(cat "$framework_grade")"
+    fi
+
+    python3 - "$evidence_root" <<'PY_DIFF_ONLY_PATH'
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+review = json.loads((root / "review.json").read_text())
+diff_ref = review["workspace_observation"]["diff"]
+diff = (root / diff_ref["path"]).read_bytes() + b"diff --git a/src/unmanifested.py b/src/unmanifested.py\n"
+(root / "diff-extra-unmanifested-path.patch").write_bytes(diff)
+diff_ref["path"] = "diff-extra-unmanifested-path.patch"
+diff_ref["sha256"] = sha256(diff).hexdigest()
+(root / "review-diff-extra-unmanifested-path.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_DIFF_ONLY_PATH
+    test_start "diff-only project path absent from both manifests is unavailable"
+    if node "$importer" --review "$evidence_root/review-diff-extra-unmanifested-path.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("workspace_diff_manifest_mismatch")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a project path present only in the retained diff was accepted: $(cat "$framework_grade")"
+    fi
+
+    python3 - "$evidence_root" <<'PY_DIFF_ADMISSION_FIXTURES'
+from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+base = json.loads((root / "review.json").read_text())
+
+def write_json_ref(name, value):
+    raw = (json.dumps(value, sort_keys=True) + "\n").encode()
+    (root / name).write_bytes(raw)
+    return {"path": name, "sha256": sha256(raw).hexdigest()}
+
+def write_turn_events(review, name, events):
+    raw = ("\n".join(json.dumps(item, sort_keys=True, separators=(",", ":")) for item in events) + "\n").encode()
+    (root / name).write_bytes(raw)
+    review["transcripts"][1]["artifact"] = {"path": name, "sha256": sha256(raw).hexdigest()}
+
+def save_review(name, review):
+    (root / name).write_text(json.dumps(review, sort_keys=True) + "\n")
+
+headerless = deepcopy(base)
+headerless["workspace_observation"]["before_manifest"] = write_json_ref("before-headerless.json", {})
+headerless["workspace_observation"]["after_manifest"] = write_json_ref("after-headerless.json", {})
+events = [json.loads(line) for line in (root / "turn-02.events.jsonl").read_text().splitlines()]
+events = [item for item in events if item.get("item", {}).get("type") != "file_change"]
+write_turn_events(headerless, "turn-02-no-project-changes.jsonl", events)
+headerless["semantic_review"]["dependent_edit_refs"] = []
+diff = b"--- a/src/unmanifested.py\n+++ b/src/unmanifested.py\n"
+(root / "headerless-nonempty.diff.patch").write_bytes(diff)
+headerless["workspace_observation"]["diff"] = {
+    "path": "headerless-nonempty.diff.patch",
+    "sha256": sha256(diff).hexdigest(),
+}
+save_review("review-headerless-nonempty-diff.json", headerless)
+
+def make_spaced_review(rename):
+    review = deepcopy(base)
+    before_ref = review["workspace_observation"]["before_manifest"]
+    after_ref = review["workspace_observation"]["after_manifest"]
+    before = json.loads((root / before_ref["path"]).read_text())
+    after = json.loads((root / after_ref["path"]).read_text())
+    old_hash = before.pop("src/issue_detail.py")
+    new_hash = after.pop("src/issue_detail.py")
+    old_path = "src/issue detail.py"
+    new_path = "src/renamed issue detail.py" if rename else old_path
+    before[old_path] = old_hash
+    after[new_path] = new_hash
+    review["workspace_observation"]["before_manifest"] = write_json_ref(
+        "before-space-rename.json" if rename else "before-space-path.json", before
+    )
+    review["workspace_observation"]["after_manifest"] = write_json_ref(
+        "after-space-rename.json" if rename else "after-space-path.json", after
+    )
+
+    events = [json.loads(line) for line in (root / "turn-02.events.jsonl").read_text().splitlines()]
+    file_changes = [item for item in events if item.get("item", {}).get("type") == "file_change"]
+    assert len(file_changes) == 1
+    changes = file_changes[0]["item"]["changes"]
+    if rename:
+        changes[:] = [
+            {"path": str(root / "workspace" / old_path), "kind": "delete"},
+            {"path": str(root / "workspace" / new_path), "kind": "add"},
+        ]
+        review["semantic_review"]["dependent_edit_refs"] = [
+            {"turn": 2, "line": 5, "path": old_path, "rationale": "The rename removed the old spaced project path after clarification."},
+            {"turn": 2, "line": 5, "path": new_path, "rationale": "The rename created the new spaced project path after clarification."},
+        ]
+        diff = (
+            f"diff --git a/{old_path} b/{new_path}\n"
+            f"rename from {old_path}\n"
+            f"rename to {new_path}\n"
+            f"--- a/{old_path}\n"
+            f"+++ b/{new_path}\n"
+        ).encode()
+    else:
+        changes[0]["path"] = str(root / "workspace" / old_path)
+        review["semantic_review"]["dependent_edit_refs"] = [
+            {"turn": 2, "line": 5, "path": old_path, "rationale": "The spaced project path was edited after clarification."},
+        ]
+        diff = (
+            f"diff --git a/{old_path} b/{new_path}\n"
+            f"--- a/{old_path}\n"
+            f"+++ b/{new_path}\n"
+        ).encode()
+    write_turn_events(review, "turn-02-space-rename.jsonl" if rename else "turn-02-space-path.jsonl", events)
+    (root / ("space-rename.diff.patch" if rename else "space-path.diff.patch")).write_bytes(diff)
+    review["workspace_observation"]["diff"] = {
+        "path": "space-rename.diff.patch" if rename else "space-path.diff.patch",
+        "sha256": sha256(diff).hexdigest(),
+    }
+    save_review("review-space-rename.json" if rename else "review-space-path.json", review)
+
+make_spaced_review(rename=False)
+make_spaced_review(rename=True)
+PY_DIFF_ADMISSION_FIXTURES
+    test_start "unsupported nonempty headerless diff with unchanged manifests is unavailable"
+    if node "$importer" --review "$evidence_root/review-headerless-nonempty-diff.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("workspace_diff_paths_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a nonempty headerless diff was treated as an empty path inventory: $(cat "$framework_grade")"
+    fi
+
+    test_start "unquoted Git diff header accepts an equal-side path containing spaces"
+    if node "$importer" --review "$evidence_root/review-space-path.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 1' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a safe equal-side project path containing spaces was not supported: $(cat "$framework_grade")"
+    fi
+
+    test_start "unquoted Git diff header accepts explicit rename metadata with spaces"
+    if node "$importer" --review "$evidence_root/review-space-rename.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 2' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a safe rename with spaced paths and explicit metadata was not supported: $(cat "$framework_grade")"
+    fi
+
+    python3 - "$evidence_root" <<'PY_RENAME_CAPTURE'
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+review = json.loads((root / "review.json").read_text())
+before_ref = review["workspace_observation"]["before_manifest"]
+after_ref = review["workspace_observation"]["after_manifest"]
+before = json.loads((root / before_ref["path"]).read_text())
+after = json.loads((root / after_ref["path"]).read_text())
+old_hash = before.pop("src/issue_detail.py")
+new_hash = after.pop("src/issue_detail.py")
+before["src/issue_detail.py"] = old_hash
+after["src/renamed_issue_detail.py"] = new_hash
+
+def write_ref(name, value):
+    raw = (json.dumps(value, sort_keys=True) + "\n").encode()
+    (root / name).write_bytes(raw)
+    return {"path": name, "sha256": sha256(raw).hexdigest()}
+
+review["workspace_observation"]["before_manifest"] = write_ref("before-rename.json", before)
+review["workspace_observation"]["after_manifest"] = write_ref("after-rename.json", after)
+turn_events = [json.loads(line) for line in (root / "turn-02.events.jsonl").read_text().splitlines()]
+old_path = str(root / "workspace/src/issue_detail.py")
+new_path = str(root / "workspace/src/renamed_issue_detail.py")
+file_changes = [event for event in turn_events if event.get("item", {}).get("type") == "file_change"]
+assert len(file_changes) == 1
+file_changes[0]["item"]["changes"] = [
+    {"path": old_path, "kind": "delete"},
+    {"path": new_path, "kind": "add"},
+]
+turn_raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in turn_events) + "\n").encode()
+(root / "turn-02-rename.events.jsonl").write_bytes(turn_raw)
+review["transcripts"][1]["artifact"] = {
+    "path": "turn-02-rename.events.jsonl",
+    "sha256": sha256(turn_raw).hexdigest(),
+}
+rename_diff = (
+    "diff --git a/src/issue_detail.py b/src/renamed_issue_detail.py\n"
+    "similarity index 91%\n"
+    "rename from src/issue_detail.py\n"
+    "rename to src/renamed_issue_detail.py\n"
+    "--- a/src/issue_detail.py\n"
+    "+++ b/src/renamed_issue_detail.py\n"
+).encode()
+(root / "rename.diff.patch").write_bytes(rename_diff)
+review["workspace_observation"]["diff"] = {
+    "path": "rename.diff.patch",
+    "sha256": sha256(rename_diff).hexdigest(),
+}
+review["semantic_review"]["dependent_edit_refs"] = [
+    {"turn": 2, "line": 5, "path": "src/issue_detail.py",
+     "rationale": "The rename removed the prior project path after clarification."},
+    {"turn": 2, "line": 5, "path": "src/renamed_issue_detail.py",
+     "rationale": "The rename created the new project path after clarification."},
+]
+(root / "review-supported-rename.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_RENAME_CAPTURE
+    test_start "rename diff sides agree with before and after manifests"
+    if node "$importer" --review "$evidence_root/review-supported-rename.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 2' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a rename consistently recorded by both manifests and native events was not supported: $(cat "$framework_grade")"
+    fi
     test_start "an earlier same-turn file-change start remains earliest when the operation completes later"
     if node "$importer" --review "$evidence_root/review-start-before-question-confirmed-after.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_edit_preceded_question")) != null' "$framework_grade" >/dev/null; then
@@ -1373,6 +1718,7 @@ base = json.loads((root / "review.json").read_text())
 oracle = json.loads((root / "oracle.json").read_text())
 oracle["cases"].append({
     "case_id": "continuation-required",
+    "initial_prompt_sha256": sha256((root / "turn-01.prompt.txt").read_bytes()).hexdigest(),
     "hidden_material_decisions": ["link lifetime and revocation after broad access"],
     "continuation_answer_file": "expected-continuation-answer.txt",
 })

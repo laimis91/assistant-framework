@@ -211,10 +211,14 @@ For a retained runtime capture, create a review JSON conforming to
 it with the bounded local helper:
 
 ```bash
+EVIDENCE_ROOT=/path/to/evidence
+mkdir -p "$EVIDENCE_ROOT/actor-prompts"
+cp docs/evals/fixtures/clarification/clarification-oracle.json "$EVIDENCE_ROOT/clarification-oracle.json"
+cp docs/evals/fixtures/clarification/actor-prompts/task-08-answer.txt "$EVIDENCE_ROOT/actor-prompts/task-08-answer.txt"
 node tools/evals/lib/clarification-evidence.cjs \
-  --review /path/to/evidence/review.json \
-  --oracle docs/evals/fixtures/clarification/clarification-oracle.json \
-  --evidence-root /path/to/evidence
+  --review "$EVIDENCE_ROOT/review.json" \
+  --oracle "$EVIDENCE_ROOT/clarification-oracle.json" \
+  --evidence-root "$EVIDENCE_ROOT"
 ```
 
 The review binds controller-retained prompt/answer inputs, per-turn native
@@ -231,6 +235,11 @@ hide an earlier write. It retains all workspace manifest paths and counts
 framework-owned `.codex/` journal changes separately from dependent project
 edits; unsupported edit events for changed project paths remain `UNAVAILABLE`.
 Punctuation by itself is never a material question.
+
+Each oracle case includes `initial_prompt_sha256` for its frozen actor prompt.
+The importer compares the exact bytes of the retained turn-1 controller input
+with that digest; a missing binding or a different prompt keeps behavior
+`UNAVAILABLE` and does not grade that review against the case's hidden decisions.
 
 An oracle case with `continuation_answer_file` requires a top-level
 `oracle_requirements` binding: the exact case ID and raw oracle hash, required

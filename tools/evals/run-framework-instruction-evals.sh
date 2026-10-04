@@ -148,7 +148,7 @@ emit_prompts() {
 
     local id category packet_path packet_name packet_basename
     while IFS=$'\t' read -r id category; do
-        if [[ "$category" == *clarification* ]]; then
+        if is_clarification_case "framework-instruction" "$category"; then
             packet_basename="$(clarification_task_packet_basename "$FIXTURE" framework-instruction "$id")"
             [[ -n "$packet_basename" ]] || die "Could not resolve opaque prompt packet name for framework case $id."
             packet_name="$packet_basename.md"
@@ -189,19 +189,17 @@ emit_prompts() {
 first_response_path_for_case() {
     local id="$1"
     local packet_basename
-    if [[ -f "$RESPONSES_DIR/$id.txt" ]]; then
+    packet_basename="$(clarification_task_packet_basename "$FIXTURE" framework-instruction "$id")"
+    if [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.txt" ]]; then
+        printf '%s\n' "$RESPONSES_DIR/$packet_basename.txt"
+    elif [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.md" ]]; then
+        printf '%s\n' "$RESPONSES_DIR/$packet_basename.md"
+    elif [[ -f "$RESPONSES_DIR/$id.txt" ]]; then
         printf '%s\n' "$RESPONSES_DIR/$id.txt"
     elif [[ -f "$RESPONSES_DIR/$id.md" ]]; then
         printf '%s\n' "$RESPONSES_DIR/$id.md"
     else
-        packet_basename="$(clarification_task_packet_basename "$FIXTURE" framework-instruction "$id")"
-        if [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.txt" ]]; then
-            printf '%s\n' "$RESPONSES_DIR/$packet_basename.txt"
-        elif [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.md" ]]; then
-            printf '%s\n' "$RESPONSES_DIR/$packet_basename.md"
-        else
-            printf '\n'
-        fi
+        printf '\n'
     fi
 }
 
@@ -281,7 +279,7 @@ grade_responses() {
         reason="non-empty response with no exact fail-signal phrase hits and no machine expectation failures"
 
         if [[ -z "$response_path" ]]; then
-            if [[ "$category" == *clarification* ]]; then
+            if is_clarification_case "framework-instruction" "$category"; then
                 status="UNAVAILABLE"
                 reason="missing response file; clarification behavior was not observed"
                 unavailable=$((unavailable + 1))
@@ -292,7 +290,7 @@ grade_responses() {
             fi
             missing=$((missing + 1))
         elif ! is_file_nonempty "$response_path"; then
-            if [[ "$category" == *clarification* ]]; then
+            if is_clarification_case "framework-instruction" "$category"; then
                 status="UNAVAILABLE"
                 reason="empty response file; clarification behavior was not observed"
                 unavailable=$((unavailable + 1))
@@ -331,7 +329,7 @@ grade_responses() {
             fi
         fi
 
-        if [[ "$category" == *clarification* ]]; then
+        if is_clarification_case "framework-instruction" "$category"; then
             if [[ "$status" == "PASS" || "$status" == "FAIL" ]]; then
                 status="UNAVAILABLE"
                 reason="substring anchors do not establish an admissible question or edit ordering; offline grading remains proxy-only"

@@ -28,7 +28,7 @@ emit_prompts() {
 
         while IFS=$'\t' read -r id category; do
             prompt_only=false
-            if [[ "$skill_name" == "assistant-clarify" || "$category" == *clarification* ]]; then
+            if is_clarification_case "$skill_name" "$category"; then
                 packet_basename="$(clarification_task_packet_basename "$fixture_file" "$skill_name" "$id")"
                 [[ -n "$packet_basename" ]] || die "Could not resolve opaque prompt packet name for $skill_name case $id."
                 packet_name="$packet_basename.md"
