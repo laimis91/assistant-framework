@@ -609,6 +609,116 @@ if [[ -f "$importer" ]]; then
         fail "evidence importer did not accept supported native question-answer-edit evidence: $(cat "$framework_grade")"
     fi
 
+    python3 - "$evidence_root" <<'PY_RELATIVE_FILE_CHANGE'
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+review = json.loads((root / "review.json").read_text())
+events = [json.loads(line) for line in (root / "turn-02.events.jsonl").read_text().splitlines()]
+file_change = next(event["item"] for event in events if event.get("item", {}).get("type") == "file_change")
+file_change["changes"][0]["path"] = "src/issue_detail.py"
+raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n").encode()
+(root / "turn-02-relative-file-change.jsonl").write_bytes(raw)
+review["transcripts"][1]["artifact"] = {"path":"turn-02-relative-file-change.jsonl","sha256":sha256(raw).hexdigest()}
+(root / "review-relative-file-change.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_RELATIVE_FILE_CHANGE
+    test_start "native project-relative file-change paths resolve from workspace_root"
+    if node "$importer" --review "$evidence_root/review-relative-file-change.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.observed_dependent_edits == 1 and (.unavailable_reasons | index("changed_file_order_telemetry_unavailable")) == null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a safe native project-relative file path was not matched under workspace_root: $(cat "$framework_grade")"
+    fi
+
+    python3 - "$evidence_root" <<'PY_IN_ROOT_ABSOLUTE_BACKSLASH_FILE_CHANGE'
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+review = json.loads((root / "review-relative-file-change.json").read_text())
+events = [json.loads(line) for line in (root / "turn-02-relative-file-change.jsonl").read_text().splitlines()]
+file_change = next(event["item"] for event in events if event.get("item", {}).get("type") == "file_change")
+file_change["changes"][0]["path"] = str(Path(review["workspace_root"]) / "src" / "issue_detail.py\\unsupported")
+raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n").encode()
+(root / "turn-02-in-root-absolute-backslash-file-change.jsonl").write_bytes(raw)
+review["transcripts"][1]["artifact"] = {
+    "path": "turn-02-in-root-absolute-backslash-file-change.jsonl",
+    "sha256": sha256(raw).hexdigest(),
+}
+(root / "review-in-root-absolute-backslash-file-change.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_IN_ROOT_ABSOLUTE_BACKSLASH_FILE_CHANGE
+    test_start "absolute in-root backslash file-change paths return structured unavailable evidence"
+    if node "$importer" --review "$evidence_root/review-in-root-absolute-backslash-file-change.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("changed_file_order_telemetry_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "an absolute in-root backslash path did not produce structured unavailable evidence: $(cat "$framework_grade")"
+    fi
+
+    python3 - "$evidence_root" <<'PY_PARENT_TRAVERSAL_FILE_CHANGE'
+from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+review = json.loads((root / "review-relative-file-change.json").read_text())
+events = [json.loads(line) for line in (root / "turn-02-relative-file-change.jsonl").read_text().splitlines()]
+file_change = next(event["item"] for event in events if event.get("item", {}).get("type") == "file_change")
+file_change["changes"][0]["path"] = "../outside.py"
+raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n").encode()
+(root / "turn-02-parent-traversal-file-change.jsonl").write_bytes(raw)
+review["transcripts"][1]["artifact"] = {"path":"turn-02-parent-traversal-file-change.jsonl","sha256":sha256(raw).hexdigest()}
+(root / "review-parent-traversal-file-change.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_PARENT_TRAVERSAL_FILE_CHANGE
+    test_start "unsafe native project-relative paths return structured unavailable evidence"
+    if node "$importer" --review "$evidence_root/review-parent-traversal-file-change.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("changed_file_order_telemetry_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "an unsafe native relative path did not produce structured unavailable evidence: $(cat "$framework_grade")"
+    fi
+
+    python3 - "$evidence_root" <<'PY_POST_COMPLETION_EVENTS'
+from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+base = json.loads((root / "review.json").read_text())
+events = [json.loads(line) for line in (root / "turn-02.events.jsonl").read_text().splitlines()]
+variants = {
+    "repeated-completion": [{"type":"turn.completed"}],
+    "item-started-after-completion": [{"type":"item.started","item":{"id":"late-start","type":"command_execution","command":"true","status":"in_progress"}}],
+    "item-completed-after-completion": [{"type":"item.completed","item":{"id":"late-message","type":"agent_message","text":"This message is outside the completed turn."}}],
+}
+for name, appended in variants.items():
+    review = deepcopy(base)
+    raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events + appended) + "\n").encode()
+    event_name = f"turn-02-{name}.jsonl"
+    review_name = f"review-{name}.json"
+    (root / event_name).write_bytes(raw)
+    review["transcripts"][1]["artifact"] = {"path":event_name,"sha256":sha256(raw).hexdigest()}
+    (root / review_name).write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_POST_COMPLETION_EVENTS
+    test_start "repeated completion or item events after completion invalidate the transcript"
+    invalid_terminal_count=0
+    for variant in repeated-completion item-started-after-completion item-completed-after-completion; do
+        if node "$importer" --review "$evidence_root/review-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_2_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_terminal_count=$((invalid_terminal_count + 1))
+        fi
+    done
+    if [[ "$invalid_terminal_count" -eq 3 ]]; then
+        pass
+    else
+        fail "a repeated completion or post-completion item event remained usable as transcript evidence"
+    fi
+
     python3 - "$evidence_root" <<'PY_WRONG_INITIAL_PROMPT'
 from hashlib import sha256
 import json

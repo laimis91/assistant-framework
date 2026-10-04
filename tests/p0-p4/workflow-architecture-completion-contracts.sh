@@ -8,6 +8,7 @@ source "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 workflow_skill="$workflow_dir/SKILL.md"
+workflow_journal="$workflow_dir/references/task-journal-template.md"
 workflow_index="$workflow_dir/contracts/index.yaml"
 input_contract="$workflow_dir/contracts/input.yaml"
 output_contract="$workflow_dir/contracts/output.yaml"
@@ -977,15 +978,28 @@ else
 fi
 
 test_start "Discover applies recorded source-backed technical defaults without confirmation"
+clarification_status_block="$(contract_field_block "$input_contract" clarification_status)"
 clarification_defaults_block="$(contract_field_block "$input_contract" clarification_defaults_applied)"
+clarification_values_block="$(contract_field_block "$input_contract" clarification_defaults)"
 discover_block="$(phase_block DISCOVER)"
 if ! p0p4_contains_text_ci "$phases_reference" \
     'automatically apply only source-backed technical defaults; record topic, value, source, and rationale' \
     || ! grep -Fq -- 'auto-apply source-backed technical defaults; never default new material choices.' <<<"$discover_block" \
     || ! grep -Fq -- 'Apply evidenced defaults without confirmation; ask and await explicit answers for new material choices.' <<<"$discover_block"; then
     fail "Discover omits recorded source-backed technical defaults or its no-confirmation and explicit-choice boundary"
-elif ! grep -Eiq 'safe default.*appl|appl.*safe default' <<<"$clarification_defaults_block"; then
-    fail "clarification_defaults_applied does not represent automatically applied safe defaults"
+elif ! grep -Fqi -- 'source-backed technical defaults' <<<"$clarification_status_block" \
+    || ! grep -Fqi -- 'explicit acceptance of a displayed recommendation' <<<"$clarification_status_block" \
+    || ! grep -Fqi -- 'convention or reversibility alone' <<<"$clarification_status_block" \
+    || ! grep -Fqi -- 'source-backed technical default' <<<"$clarification_defaults_block" \
+    || ! grep -Fqi -- 'are not automatic defaults' <<<"$clarification_defaults_block" \
+    || ! grep -Fqi -- 'technical implementation detail' <<<"$clarification_values_block" \
+    || ! grep -Fqi -- 'convention or reversibility alone' <<<"$clarification_values_block" \
+    || ! grep -Fq -- 'Automatically apply only source-backed technical defaults' "$workflow_journal" \
+    || ! grep -Fqi -- 'convention or reversibility alone cannot settle material product choices' "$workflow_journal" \
+    || ! grep -Fq -- '`defaults` reply is an explicit user answer accepting displayed recommendations' "$workflow_journal"; then
+    fail "canonical input or journal contract can apply an unsourced material product choice as a default"
+elif ! grep -Fqi -- 'without asking' <<<"$clarification_defaults_block"; then
+    fail "clarification_defaults_applied does not represent automatic source-backed technical defaults"
 elif grep -Eiq 'true only after.*(reply|response)|safe default.*(requires?|depends on).*(reply|response)' <<<"$clarification_defaults_block"; then
     fail "automatic safe-default evidence still depends on a user reply"
 elif ! grep -Eiq 'Every clarification question.*lacks a safe default' <<<"$discover_block"; then

@@ -53,9 +53,9 @@ Clarification status: [ready | needs_clarification]
 Clarification defaults applied: [true | false]
 Clarification defaults:
 - Topic: [implementation-shaping topic]
-  Value: [automatically selected value]
-  Source: [user instruction, repository evidence, policy, or stable convention]
-  Rationale: [why this default is justified by its source and does not decide product intent]
+  Value: [automatic technical implementation default]
+  Source: [repository evidence or applicable policy supporting this technical detail]
+  Rationale: [why this default is justified by its source for a technical detail; convention or reversibility alone cannot settle a material product choice]
 Clarification confidence: [low | medium | high]
 Clarification questions asked: [0+]
 Clarification admissibility: [satisfied | needs_clarification | not_applicable; keep a concise sufficiency basis in existing acceptance criteria/map: requested intent, relevant authority/behavior checked, justified defaults, proposed assumptions, unresolved choices; an empty question list alone is insufficient]
@@ -317,7 +317,7 @@ do not start a dependent slice until every `depends_on` prerequisite is `VERIFIE
 
 1. **Create** during Discover only when `workflow_state_mode=journal`; otherwise keep state inline. Record task and repository identity.
 2. **Triage** records task/risk/QA/harness/lane/state/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
-3. **Clarification** has no numeric cap or quota. Apply deterministic safe defaults immediately with source/rationale and set the applied flag from those records. Ask every remaining admissible material question grouped by topic; waiting state stays `DISCOVERING` only for questions with no safe default; explicit `defaults` accepts displayed recommendations without changing automatic-default evidence.
+3. **Clarification** has no numeric cap or quota. Automatically apply only source-backed technical defaults, record source/rationale, and derive the applied flag from those entries. Convention or reversibility alone cannot settle material product choices. Ask every remaining admissible question by topic and wait for explicit answers where required. A `defaults` reply is an explicit user answer accepting displayed recommendations, not an automatic default.
 4. **Decompose/Plan** persists the slice manifest for medium+ work only when `execution_intent != prepare_only`. For `prepare_only`, retain readiness context and optionally record an inline no-wait Plan; do not create or persist Decompose slices. Plan is omitted only for eligible `plan_mode=none`; `approval_required` captures approval only when `execution_intent != prepare_only`.
 5. **Build** (`execution_intent != prepare_only`) updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before starting a dependent slice or another source-changing slice in a shared or unknown workspace.
 6. **Review** (`execution_intent != prepare_only`) owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.
@@ -328,7 +328,7 @@ do not start a dependent slice until every `depends_on` prerequisite is `VERIFIE
 ## Rules
 
 - Keep entries concise — this is a log, not documentation
-- Resume from clarification waits only on explicit numbered answers or explicit `defaults`; apply deterministic safe defaults before any wait
+- Resume from clarification waits only on explicit numbered answers or explicit `defaults`; apply only source-backed technical defaults before waiting. A `defaults` reply is an answer accepting displayed recommendations, not an automatic default.
 - Constraints are checked before each Build step
 - Producer roles update Artifact Reference Ledger entries in `references/task-journal-harness-appendix.md` when they create or move artifacts; Consumer roles validate `schema_or_contract` and update `validation_status` before using them
 - Pivot/Restart Decisions are append-only recovery records. If the selected action changes scope, files, behavior, risk, verification, or acceptance criteria, record `reapproval_required: true` and wait for approval before continuing.

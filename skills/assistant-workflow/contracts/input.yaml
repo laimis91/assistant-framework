@@ -459,9 +459,9 @@ fields:
     required: true
     enum_values: [ready, needs_clarification]
     description: "Whether Discover is clear to continue or is waiting on explicit clarification about implementation-shaping fields"
-    validation: "ready requires zero unresolved clarification topics and every implementation-shaping field is explicit or defaulted. needs_clarification requires at least one unresolved clarification topic."
+    validation: "ready requires no unresolved topics and every implementation-shaping field explicit, governed by applicable authority, or covered by a source-backed technical default or explicit acceptance of a displayed recommendation. needs_clarification requires an unresolved topic."
     on_missing: infer
-    infer_from: "If any implementation-shaping field that affects files, behavior, interfaces, data shape, rollout, or verification is still unresolved, set to needs_clarification and add a deterministic topic label. Set to ready only when each such field is explicit or has an explicit default."
+    infer_from: "Set needs_clarification for unresolved implementation-shaping fields or material product choices. Set ready only on explicit answers, applicable authority, or source-backed technical defaults; explicit acceptance of a displayed recommendation is an answer. Convention or reversibility alone cannot settle product intent."
 
   - name: clarification_confidence
     type: enum
@@ -485,7 +485,7 @@ fields:
     required: false
     enum_values: [satisfied, needs_clarification, not_applicable]
     description: "Whether any asked clarification questions pass the admissibility test"
-    validation: "satisfied means every asked question affects correctness/scope/behavior/security/verification, cannot be discovered from code/context, lacks a safe default, and states risk if guessed."
+    validation: "satisfied means every asked question affects correctness/scope/behavior/security/verification, is not discoverable from code/context, lacks an applicable source-backed technical default, and states risk if guessed."
     default: not_applicable
     on_missing: skip
 
@@ -504,8 +504,8 @@ fields:
   - name: clarification_defaults_applied
     type: boolean
     required: true
-    description: "Whether Discover automatically applied at least one deterministic safe default and recorded its source and rationale without asking"
-    validation: "Must be true when clarification_defaults contains one or more automatically applied safe defaults and false when it is empty. Safe-default application never waits for a user reply. An explicit `defaults` reply remains compatibility shorthand for accepting displayed recommendations on questions that had no deterministic safe default; it is recorded as a user answer, not an automatically applied safe default."
+    description: "Whether Discover automatically applied a source-backed technical default and recorded its source and rationale without asking"
+    validation: "True only when clarification_defaults records an automatic source-backed technical default; false when empty. Explicit answers, including `defaults` acceptance, are not automatic defaults. Convention, reversibility, recommendation, or missing plumbing alone cannot settle a product choice."
     default: false
     on_missing: skip
     notes: "Do not set true merely because a user replied `defaults`; tie it to clarification_defaults evidence."
@@ -513,8 +513,8 @@ fields:
   - name: clarification_defaults
     type: object[]
     required: true
-    description: "Deterministic safe defaults applied automatically during Discover"
-    validation: "Each entry records one implementation-shaping topic, chosen value, discoverable source, and concrete rationale. Empty only when no safe default was applied."
+    description: "Source-backed technical implementation defaults applied automatically during Discover"
+    validation: "Each entry records one technical implementation detail, value, applicable source, and concrete rationale. Product choices need explicit user answers; convention or reversibility alone cannot settle them. Empty only when no automatic default was applied."
     default: []
     on_missing: skip
     object_fields:
@@ -527,11 +527,11 @@ fields:
       - name: source
         type: string
         required: true
-        description: "User instruction, repository evidence, active policy, or stable local convention supporting the default"
+        description: "Applicable repository evidence or policy supporting this technical default"
       - name: rationale
         type: string
         required: true
-        description: "Why this value is safe, reversible, and does not materially change scope"
+        description: "Why that source supports this technical value; convention or reversibility alone cannot settle a material product choice"
 
   - name: feature_preparation_scope
     type: enum
@@ -698,5 +698,5 @@ fields:
 # 3. If on_missing=infer: state the inference ("I'm treating this as a feature task")
 # 4. If on_missing=skip: proceed with default value
 # 5. Clarification has no numeric cap or quota. Ask every admissible material question, grouped by topic; never ask a ritual question because of task size.
-# 6. Apply deterministic safe defaults immediately, record source/rationale, and set clarification_defaults_applied=true. If clarification_status=needs_clarification, carry only topics with no safe default into Discover and stop for explicit answers; `defaults` remains an acceptance shorthand for displayed recommendations.
+# 6. Auto-apply only source-backed technical defaults; record topic/value/source/rationale; derive flag from entries. Convention/reversibility cannot settle product choices. Carry unanswered topics; `defaults` explicitly accepts displayed recommendations as an answer.
 # 7. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}

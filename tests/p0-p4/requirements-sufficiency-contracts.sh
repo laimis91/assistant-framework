@@ -6,6 +6,7 @@ fi
 p0p4_bootstrap_suite "$BASH_SOURCE"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
+input_contract="$workflow_dir/contracts/input.yaml"
 phase_gates="$workflow_dir/contracts/phase-gates.yaml"
 phases="$workflow_dir/references/phases.md"
 map_ref="$workflow_dir/references/requirement-acceptance-map.md"
@@ -442,6 +443,55 @@ if ruby -ryaml -e '
     pass
 else
     fail "DC7/P8 recovery can fabricate ready state instead of retaining unanswered topics"
+fi
+
+test_start "canonical clarification contracts restrict automatic defaults to sourced technical details"
+if ruby -ryaml -e '
+  fields = YAML.load_file(ARGV.fetch(0)).fetch("fields")
+  journal = File.read(ARGV.fetch(1))
+  validation = File.read(ARGV.fetch(0)).split(/^# Validation behavior:/, 2).last
+  by_name = fields.to_h { |field| [field.fetch("name"), field] }
+  expected_shapes = {
+    "clarification_status" => ["enum", true, nil],
+    "clarification_admissibility" => ["enum", false, "not_applicable"],
+    "unresolved_clarification_topics" => ["string[]", true, []],
+    "clarification_defaults_applied" => ["boolean", true, false],
+    "clarification_defaults" => ["object[]", true, []]
+  }
+  shapes_valid = expected_shapes.all? do |name, (type, required, default)|
+    field = by_name[name]
+    field && field["type"] == type && field["required"] == required && field["default"] == default
+  end
+  defaults = by_name.fetch("clarification_defaults")
+  defaults_applied = by_name.fetch("clarification_defaults_applied")
+  defaults_object_fields = defaults.fetch("object_fields").map { |field| field.fetch("name") }
+  status = by_name.fetch("clarification_status")
+  admissibility = by_name.fetch("clarification_admissibility")
+  required = [
+    status.fetch("validation"), status.fetch("infer_from"),
+    admissibility.fetch("validation"), defaults.fetch("description"),
+    defaults.fetch("validation"), defaults_applied.fetch("description"),
+    defaults_applied.fetch("validation"), validation, journal
+  ].join(" ").downcase.gsub(/[`*]/, "").gsub(/\s+/, " ")
+  required_phrases = [
+    "source-backed technical default",
+    "material product choice",
+    "explicit acceptance of a displayed recommendation",
+    "explicit answers",
+    "convention or reversibility alone",
+    "source and rationale",
+    "not an automatic default"
+  ]
+  valid = shapes_valid && defaults_object_fields == %w[topic value source rationale] &&
+    required_phrases.all? { |phrase| required.include?(phrase) } &&
+    defaults.fetch("object_fields").find { |field| field["name"] == "source" }.fetch("description").downcase.include?("technical default") &&
+    defaults.fetch("object_fields").find { |field| field["name"] == "rationale" }.fetch("description").downcase.include?("product choice") &&
+    !defaults.fetch("object_fields").find { |field| field["name"] == "source" }.fetch("description").downcase.include?("stable local convention")
+  exit(valid ? 0 : 1)
+' "$input_contract" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
+    pass
+else
+    fail "input and journal contracts still allow conventions or reversibility to auto-settle material product choices"
 fi
 
 p0p4_finish_suite "$BASH_SOURCE"

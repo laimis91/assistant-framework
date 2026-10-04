@@ -171,6 +171,9 @@ function parseTranscript(turn, admitted, label) {
       if (turnStartSeen) validStartedPrefix = false;
       turnStartSeen = true;
     }
+    if (completedTurn && (event.type === "turn.completed" || event.type.startsWith("item."))) {
+      validStartedPrefix = false;
+    }
     if (event.type.startsWith("item.") && !turnStartSeen) validStartedPrefix = false;
     if (event.type === "turn.completed") {
       if (!turnStartSeen) validStartedPrefix = false;
@@ -334,16 +337,17 @@ function parseDiffPaths(diffText) {
 }
 
 function normalizeWorkspacePath(filePath, workspaceRoot) {
-  if (!path.isAbsolute(filePath)) return null;
   const root = path.resolve(workspaceRoot);
-  const full = path.resolve(filePath);
+  let full;
+  if (path.isAbsolute(filePath)) {
+    full = path.resolve(filePath);
+  } else {
+    if (!isSafeProjectRelativePath(filePath)) return null;
+    full = path.resolve(root, filePath);
+  }
   if (!full.startsWith(`${root}${path.sep}`)) return null;
   const relative = path.relative(root, full).split(path.sep).join("/");
-  try {
-    return safeProjectRelativePath(relative, "file change path");
-  } catch (_error) {
-    return null;
-  }
+  return isSafeProjectRelativePath(relative) ? relative : null;
 }
 
 function main() {
