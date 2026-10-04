@@ -976,11 +976,14 @@ else
     fail "workflow-kernel overlay omits the compact conditional phase/controller/progressive route loads"
 fi
 
-test_start "Discover applies deterministic safe defaults without asking"
+test_start "Discover applies recorded source-backed technical defaults without confirmation"
 clarification_defaults_block="$(contract_field_block "$input_contract" clarification_defaults_applied)"
 discover_block="$(phase_block DISCOVER)"
-if ! grep -Eiq 'deterministic safe default.*appl.*record.*without asking|appl.*record.*deterministic safe default.*without asking' "$phases_reference"; then
-    fail "Discover does not explicitly apply and record deterministic safe defaults without asking"
+if ! p0p4_contains_text_ci "$phases_reference" \
+    'automatically apply only source-backed technical defaults; record topic, value, source, and rationale' \
+    || ! grep -Fq -- 'auto-apply source-backed technical defaults; never default new material choices.' <<<"$discover_block" \
+    || ! grep -Fq -- 'Apply evidenced defaults without confirmation; ask and await explicit answers for new material choices.' <<<"$discover_block"; then
+    fail "Discover omits recorded source-backed technical defaults or its no-confirmation and explicit-choice boundary"
 elif ! grep -Eiq 'safe default.*appl|appl.*safe default' <<<"$clarification_defaults_block"; then
     fail "clarification_defaults_applied does not represent automatically applied safe defaults"
 elif grep -Eiq 'true only after.*(reply|response)|safe default.*(requires?|depends on).*(reply|response)' <<<"$clarification_defaults_block"; then
@@ -2556,8 +2559,8 @@ else
 fi
 
 test_start "Discover sizing distinguishes harness promotion from deferred QA"
-if grep -Fq 'The harness obligation promotes an initially small implementation to at least medium' "$phase_gates" \
-    && grep -Fq 'The QA obligation preserves small size unless independent size or risk criteria promote it' "$phase_gates"; then
+if grep -Fq 'Harness activates pre-Build gates, promoting small implementation to medium' "$phase_gates" \
+    && grep -Fq 'QA preserves size unless independent size or risk promotes it' "$phase_gates"; then
     pass
 else
     fail "Discover still promotes QA-only small work to medium"

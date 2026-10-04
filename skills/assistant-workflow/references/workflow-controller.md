@@ -68,6 +68,8 @@ file centralizes decision boundaries that cut across phase details while
   scope choices, repository approval policy, or an explicit user request. Wait
   for approval before Build.
 
+- Before Plan or plan_mode=none dependent work, confirm a sufficient intended outcome and material behavior from relevant evidence. Use references/phases.md step 5 for defaults and choice answers; missing or conflicting controlling authority remains evidence_gap/source_conflict, and an empty question list alone is not proof. Record the basis in existing criteria/map and task journal or carried state; keep small-work checks inline.
+
 - `light`: small, low-risk, localized work with no public behavior, data, security,
   harness, or QA acceptance risk. It may run inline/direct with relevant
   automated validation and a fresh self-review. Use
@@ -130,12 +132,7 @@ gates.
 
 ## State, Verification, and Learning Defaults
 
-- During Discover, apply deterministic safe defaults immediately and record
-  topic, value, source, and rationale with
-  `clarification_defaults_applied=true`; never ask for confirmation of a safe
-  default. Ask only when no safe default exists. A `defaults` reply remains
-  compatibility shorthand for accepting displayed recommendations on questions
-  that actually required a response; it is not automatic-default evidence.
+- During Discover, preserve applicable authoritative behavior and apply only source-backed technical defaults automatically. Record each default's topic, value, source, and rationale in the existing state; do not confirm it. Follow the sufficiency rule for questions and partial answers; defaults accepts displayed recommendations only when a response was required.
 
 - Before using persisted state, load `references/task-state-reconciliation.md`.
   Compare the newest user request and current repository identity/evidence,

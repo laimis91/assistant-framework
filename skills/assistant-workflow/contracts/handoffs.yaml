@@ -634,7 +634,7 @@ handoffs:
       - name: requirement_acceptance_map
         type: string
         required: true
-        description: "Stable requirement ids, criteria, verification methods, manual scenarios/N/A, assumptions, and non-goals from Discover"
+        description: "Stable requirement ids, criteria, verification methods, assumptions, non-goals, and sufficiency basis across requested intent, applicable authority, justified defaults, product assumptions, and unresolved choices; confirmed answers are in existing acceptance criteria before dependent implementation."
       - name: architecture_design_mode
         type: enum
         required: true
@@ -949,7 +949,7 @@ handoffs:
       - name: requirement_acceptance_map
         type: string
         required: true
-        description: "Approved traceability spine; task packets and slice criteria must reference these requirement ids"
+        description: "Approved traceability spine with a sufficiency basis across requested intent, applicable authority, justified defaults, product assumptions, and unresolved choices; confirmed answers are in existing acceptance criteria before dependent implementation. Task packets and slices reference these requirement ids."
       - name: architecture_design_mode
         type: enum
         required: true
@@ -1651,7 +1651,8 @@ handoffs:
       - name: plan
         type: string
         required: true
-        description: "Approved plan — the CodeWriter follows this exactly"
+        description: "Approved plan or compact inline execution scope — the CodeWriter follows this exactly"
+        validation: "Carries the fresh sufficiency basis and accepted criteria; confirmed answers appear in existing acceptance criteria before dependent implementation, and unresolved material product choices or controlling-source gaps/conflicts are not guessed."
       - name: current_step
         type: int
         required: true

@@ -30,6 +30,12 @@ if [[ -f "$installer" ]]; then
         || failures+=("missing native .agents skills destination")
     grep -Fq -- 'CODEX_HOME' "$installer" \
         || failures+=("missing CODEX_HOME support")
+
+    route_guidance="For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent."
+    grep -Fq -- "$route_guidance" "$FRAMEWORK_DIR/install.sh" \
+        || failures+=("Bash installer guidance omits ordinary development routing")
+    grep -Fq -- "$route_guidance" "$installer" \
+        || failures+=("PowerShell installer guidance differs from Bash routing")
     grep -Fq -- 'LiteralPath' "$installer" \
         || failures+=("missing literal-path file operations")
     grep -Fq -- 'ConvertTo-Json -Depth 100' "$installer" \

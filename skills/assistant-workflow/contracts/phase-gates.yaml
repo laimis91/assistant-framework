@@ -135,17 +135,21 @@ gates:
         check: "Discovery confirms or updates task_type, risk_tier, qa_evaluation_mode, harness_capable, build_execution_lane, workflow_state_mode, required_gates, required_agents, subagent_policy_state, and subagent_execution_mode based on code/context evidence"
         on_fail: "Re-triage with code/context evidence before proceeding"
 
+      - id: D_REQUIREMENTS_SUFFICIENCY
+        check: "Before Plan or plan_mode=none dependent work, pass references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
+        on_fail: "Return to Discover; ask about material choices and resolve controlling-source gaps/conflicts."
+
       - id: D2
-        check: "clarification_status is ready and every implementation-shaping field is explicit, automatically resolved by a recorded deterministic safe default, accepted from a displayed recommendation, or no longer unresolved"
-        on_fail: "Apply and record any deterministic safe default immediately. Persist only topics with no safe default, ask admissible structured questions, and wait for explicit answers; `defaults` is accepted only as shorthand for the displayed recommendations."
+        check: "clarification_status=ready; each implementation-shaping field is explicit, source-backed-defaulted, accepted from displayed recommendations, or resolved; approval alone never resolves choices."
+        on_fail: "Follow Discover step 5. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
 
       - id: D3
         check: "clarification_defaults_applied is true exactly when clarification_defaults contains automatically applied entries with topic, value, source, and rationale; unresolved clarification topics are empty before Discover completes"
-        on_fail: "Repair clarification_defaults and its applied flag, record source/rationale for each safe default, and clear only resolved topics before continuing"
+        on_fail: "Repair clarification_defaults and its applied flag, record source/rationale for each source-backed technical default, and clear only resolved topics before continuing"
 
       - id: D3A
-        check: "Every deterministic safe default is applied and recorded without asking or waiting for user confirmation"
-        on_fail: "Apply the safe default immediately, record topic/value/source/rationale, set clarification_defaults_applied=true, and remove any ritual confirmation wait."
+        check: "Preserve authoritative behavior; auto-apply source-backed technical defaults; never default new material choices."
+        on_fail: "Apply evidenced defaults without confirmation; ask and await explicit answers for new material choices."
 
       - id: D4
         check: "If Discover prints a clarification wait for any task size: task journal exists before the wait when local state artifacts are configured/policy-allowed, or equivalent clarification state is included in the response before the wait"
@@ -160,9 +164,9 @@ gates:
         on_fail: "Remove non-admissible questions, do more discovery, or state a safe default instead of asking."
 
       - id: D_FEATURE_PREPARATION_EVIDENCE
-        check: "Existing-system prepare_only/end_to_end completes feature_preparation_evidence before questions, Plan, or Build; every implement_only workflow carries approved_feature_preparation_result unchanged through triage, Plan, task packets, and Build. Existing-system also resolves approved_feature_preparation_evidence_ref equal to that result; not_applicable retains result fields without an evidence ref. Harness and QA obligations preserve approved payloads, add exactly one applicable source binding, and carry unchanged downstream; harness activates its pre-Build gate and QA the post-Build Code Reviewer then QA Evaluator lane. The harness obligation promotes an initially small implementation to at least medium. The QA obligation preserves small size unless independent size or risk criteria promote it. The stable identity feature_preparation_evidence.ref stays unchanged in plans, packets, Packs, diagrams, and docs. Every Pack behavior claim or Product question has exactly one stable {evidence_ref, item_id, claim_or_question} binding; missing, extra, duplicate, stale, or mismatched bindings block it. Product questions fail closed: inspect implementation and relevant tests; existing observable behavior defaults to preservation unless explicitly changed; inaccessible evidence is evidence_gap, contradiction is source_conflict, and a new route/scope is existing_behavior_to_preserve + implementation_gap."
+        check: "Existing-system prepare_only and end_to_end completes feature_preparation_evidence before questions, Plan, Build. Every implement_only carries approved_feature_preparation_result unchanged through triage, Plan, task packets, Build; existing-system approved_feature_preparation_evidence_ref equals its ref; not_applicable retains result fields without evidence ref. Harness and QA obligations preserve exact approved payloads, add exactly one applicable source binding, and carry unchanged downstream. Harness activates pre-Build gates, promoting small implementation to medium; QA preserves size unless independent size or risk promotes it, using post-Build Code Reviewer then QA Evaluator. Preserve stable identity feature_preparation_evidence.ref unchanged in plans, packets, Packs, diagrams, docs. Each Pack behavior claim or Product question has exactly one stable {evidence_ref, item_id, claim_or_question} binding; missing, extra, duplicate, stale, or mismatched bindings block. Enforce INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY; supported route/scope adaptation is existing_behavior_to_preserve + implementation_gap."
         condition: "execution_intent == implement_only or feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present or approved_feature_preparation_qa_acceptance_obligation is present"
-        on_fail: "Prepare by tracing behavior/tests when applicable, classifying each row, preserving the evidence id or exact not_applicable basis, and replacing unsupported Product questions with the correct gap/conflict. Implement only after the applicable source binding and any deferred obligation resolve exactly; apply the pre-Build harness gate only for harness work and the post-Build QA lane only for QA work."
+        on_fail: "Trace behavior and tests, classify gaps and conflicts within supported context, retain evidence identity or exact not_applicable basis. Resolve source bindings and deferred obligations before implementation; enforce invariant state, pre-Build harness gates, and post-Build QA."
 
       - id: D_PROGRESSIVE_DISCOVERY_HOLD
         check: "When progressive_discovery_state in [mapping, resolving, route_clear, blocked], typed progressive state must remain in Discover and prohibits Decompose, Plan, Build, project/source mutation, external writes, branch creation, and credential-location recording. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."
@@ -247,6 +251,11 @@ gates:
     checkpoint_start: "--- PHASE: DECOMPOSE ---"
     checkpoint_end: "--- PHASE: DECOMPOSE COMPLETE ---"
     condition: "size in [medium, large, mega] and execution_intent != prepare_only"
+    entry_assertions:
+      - id: DC_REQUIREMENTS_SUFFICIENCY
+        check: "Before dependent decomposition, all applicable Discover exit assertions pass on current evidence, including D_REQUIREMENTS_SUFFICIENCY, D2, and the existing conditions for D_REQUIREMENT_ACCEPTANCE_MAP and D_FEATURE_PREPARATION_EVIDENCE. Compact criteria or carried state substitute only where those conditions permit. No unresolved material product choice or controlling-source evidence_gap/source_conflict remains; missing saved state is not readiness evidence."
+        condition: "execution_intent != prepare_only"
+        on_fail: "Stop dependent decomposition; return to Discover and revalidate applicable exit assertions. Preserve unanswered topics and derive clarification status from their actual resolution. Technical defaults cover implementation details only; request missing or reconciled controlling authority. Do not fabricate ready or pending state to satisfy a gate."
     exit_assertions:
 
       - id: DC1
@@ -284,7 +293,7 @@ gates:
 
       - id: DC7
         check: "Saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
-        on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
+        on_fail: "Return to Discover and revalidate its applicable exit assertions against request/source/answer evidence. Preserve unanswered topics; needs_clarification requires unresolved material topics, while ready requires a sufficient basis and none remaining. Missing metadata alone does not create questions. Material product choices require explicit answers or accepted displayed choices; defaults cover only technical implementation details; controlling-source gaps/conflicts require missing or reconciled authority. Record clarification_defaults_applied from actual recorded defaults."
 
       - id: DC8
         check: "For medium+ tasks: decomposition_plan_review exists and decision is proceed after checking broad_split_rejection proof, scope understanding, slice/subagent count sanity, step/cost budget, dependency order, output-plan match, and fallback path"
@@ -298,6 +307,11 @@ gates:
     checkpoint_start: "--- PHASE: PLAN ---"
     checkpoint_end: "--- PHASE: PLAN COMPLETE ---"
     condition: "plan_mode != none"
+    entry_assertions:
+      - id: P_REQUIREMENTS_SUFFICIENCY
+        check: "Before dependent planning, all applicable Discover exit assertions pass on current evidence, including D_REQUIREMENTS_SUFFICIENCY, D2, and the existing conditions for D_REQUIREMENT_ACCEPTANCE_MAP and D_FEATURE_PREPARATION_EVIDENCE. Compact criteria or carried state substitute only where those conditions permit. No unresolved material product choice or controlling-source evidence_gap/source_conflict remains; missing saved state is not readiness evidence."
+        condition: "execution_intent != prepare_only"
+        on_fail: "Stop dependent planning; return to Discover and revalidate applicable exit assertions. Preserve unanswered topics and derive clarification status from their actual resolution. Technical defaults cover implementation details only; request missing or reconciled controlling authority. Do not fabricate ready or pending state to satisfy a gate."
     exit_assertions:
 
       - id: P_FEATURE_PREPARATION_REFERENCE
@@ -363,7 +377,7 @@ gates:
 
       - id: P8
         check: "If clarification state was persisted for this task: saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
-        on_fail: "Return to Discover and persist clarification_status=ready, clarification_defaults_applied explicit true/false, and unresolved clarification topics empty before continuing"
+        on_fail: "Return to Discover and revalidate its applicable exit assertions against request/source/answer evidence. Preserve unanswered topics; needs_clarification requires unresolved material topics, while ready requires a sufficient basis and none remaining. Missing metadata alone does not create questions. Material product choices require explicit answers or accepted displayed choices; defaults cover only technical implementation details; controlling-source gaps/conflicts require missing or reconciled authority. Record clarification_defaults_applied from actual recorded defaults."
 
       - id: P_PATTERN_RETRIEVAL
         check: "When editing framework skills, contracts, evals, runtime integrations, templates, or workflow patterns: pattern_retrieval_note records real local search queries or paths, canonical repository pattern used, and counterexample/edge case checked or no-pattern rationale. If a concrete design force remains and an external library is explicitly configured, load references/design-pattern-retrieval.md; otherwise not_configured continues without asking."
@@ -456,6 +470,11 @@ gates:
     checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
     condition: "execution_intent != prepare_only"
     entry_assertions:
+
+      - id: B_REQUIREMENTS_SUFFICIENCY
+        check: "plan_mode=none: revalidate fresh Discover sufficiency before Build; criteria carry confirmed answers and sourced defaults, not guessed choices or evidence_gap/source_conflict."
+        condition: "execution_intent != prepare_only and plan_mode == none"
+        on_fail: "Stop Build; return to Discover for explicit answers or controlling-source resolution."
 
       - id: B_CHANGE_IMPACT_APPLICABILITY
         check: "Before any source/test mutation or mutation dispatch, record change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
@@ -799,7 +818,7 @@ invariants:
     on_fail: "Stop retrying and record terminal_pivot or blocked with a pivot_restart_decision/evidence reference before any continuation."
 
   - id: INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY
-    check: "Product question admissibility fails closed for existing-system feature preparation: every Product question resolves to a feature_preparation_evidence item with requirements/design, implementation, behavioral-test, conflict, and gap evidence. Existing observable behavior is preserved unless explicitly changed; missing access or inspection is evidence_gap and contradictions are source_conflict."
+    check: "Product question admissibility fails closed for existing-system preparation: each resolves to a feature_preparation_evidence item with requirements, design, implementation, behavioral-test, conflict, gap evidence; existing observable behavior defaults to preservation only within the actor, data, and authorization context supported by its sources. Adding a route does not itself change that context; a new audience or disclosure boundary may. Internal implementation or access controls alone cannot settle policy for new audiences or data boundaries. In every response and task journal draft, keep each unanswered material choice unresolved and its recommendation provisional together; do not record an applied default or confirmed criterion. Source-backed technical defaults remain automatic. Missing inspection or access is evidence_gap; contradiction is source_conflict."
     condition: "feature_preparation_scope == existing_system"
     scope: all_phases
     on_fail: "Do not propagate the question into a plan, Architecture Decision Pack, diagram, or document. Complete the evidence row or classify the unresolved state accurately."

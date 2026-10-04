@@ -1,0 +1,761 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assistant-framework.local/schemas/clarification-evidence-review.schema.json",
+  "title": "Clarification Semantic Evidence Review",
+  "description": "Hash-bound controller inputs, native transcript references, workspace observations, and an independently asserted semantic review. Reviewer identity, independence, planning applicability, and semantic classifications are assertions and are not cryptographically authenticated. Legacy v1 payloads remain parseable but are behaviorally UNAVAILABLE until planning applicability and required coverage are supplied.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "actor_id",
+    "execution_mode",
+    "workspace_root",
+    "activation",
+    "inputs",
+    "transcripts",
+    "workspace_observation",
+    "semantic_review"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "clarification-evidence/v1"
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "actor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "oracle_requirements": {
+      "description": "Transport-only oracle binding for cases with a required continuation. Required answer payloads are hash-bound to the oracle-declared continuation input. The applicability list is an independent assertion with hash-bound source bytes; the binding does not authenticate either assertion.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "oracle_case_id",
+        "oracle_sha256",
+        "required_answer_turns",
+        "required_post_answer_question_decision_indexes",
+        "continuation_answers",
+        "applicability_basis"
+      ],
+      "properties": {
+        "oracle_case_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "oracle_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "required_answer_turns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "const": 2
+          },
+          "uniqueItems": true
+        },
+        "required_post_answer_question_decision_indexes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uniqueItems": true
+        },
+        "continuation_answers": {
+          "description": "Expected controller-input bytes for each required answer turn. The importer requires each artifact path to designate the oracle-declared continuation_answer_file resolved from the oracle file directory and staged inside the evidence root.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "turn",
+              "expected_artifact"
+            ],
+            "properties": {
+              "turn": {
+                "const": 2
+              },
+              "expected_artifact": {
+                "$ref": "#/$defs/artifactRef"
+              }
+            }
+          }
+        },
+        "applicability_basis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact",
+            "record_ref",
+            "rationale"
+          ],
+          "properties": {
+            "artifact": {
+              "$ref": "#/$defs/artifactRef"
+            },
+            "record_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "execution_mode": {
+      "enum": [
+        "native",
+        "forced_skill_load",
+        "offline_proxy"
+      ]
+    },
+    "workspace_root": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/"
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "skill_name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "skill_read_ref": {
+          "description": "Legacy-compatible reference to a completed command event. A staged skill path appearing in command text is only a reference observation; it does not attest that file content was read or that the native skill router selected it.",
+          "$ref": "#/$defs/eventRef"
+        },
+        "forced_load_receipt": {
+          "$ref": "#/$defs/artifactRef"
+        }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "turn",
+          "kind"
+        ],
+        "properties": {
+          "turn": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "kind": {
+            "enum": [
+              "initial_prompt",
+              "answer"
+            ]
+          },
+          "artifact": {
+            "$ref": "#/$defs/artifactRef"
+          }
+        }
+      }
+    },
+    "transcripts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "turn"
+        ],
+        "properties": {
+          "turn": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "artifact": {
+            "$ref": "#/$defs/artifactRef"
+          }
+        }
+      }
+    },
+    "workspace_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "before_manifest": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "after_manifest": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "diff": {
+          "$ref": "#/$defs/artifactRef"
+        }
+      }
+    },
+    "semantic_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reviewer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "attestation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "planning_applicability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "oracle_case_id",
+            "oracle_sha256",
+            "requirement",
+            "rationale"
+          ],
+          "properties": {
+            "oracle_case_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "oracle_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "requirement": {
+              "enum": [
+                "before_plan",
+                "before_edit_only"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "coverage_attestation": {
+              "const": "reviewed_every_completed_agent_message_for_dependent_planning"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "requirement": {
+                    "const": "before_plan"
+                  }
+                },
+                "required": [
+                  "requirement"
+                ]
+              },
+              "then": {
+                "required": [
+                  "coverage_attestation"
+                ]
+              }
+            }
+          ]
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "decision_index",
+              "outcome",
+              "question_refs",
+              "rationale"
+            ],
+            "properties": {
+              "decision_index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "outcome": {
+                "enum": [
+                  "asked",
+                  "not_asked"
+                ]
+              },
+              "question_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/eventRef"
+                }
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "question_assessments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "turn",
+              "line",
+              "classification",
+              "decision_indexes",
+              "rationale"
+            ],
+            "properties": {
+              "turn": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "classification": {
+                "enum": [
+                  "material",
+                  "non_material",
+                  "punctuation_only"
+                ]
+              },
+              "decision_indexes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "uniqueItems": true
+              },
+              "text_spans": {
+                "type": "array",
+                "description": "Exact question excerpts. Required for material question assessments when planning_applicability.requirement is before_plan. Offsets are zero-based UTF-16 code units into the referenced completed agent-message text.",
+                "items": {
+                  "$ref": "#/$defs/semanticTextSpan"
+                }
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "dependent_planning_assessments": {
+          "type": "array",
+          "description": "For before_plan, an explicit observed-plan or no-plan assertion is required for every frozen decision index.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "decision_index",
+              "outcome",
+              "plan_refs",
+              "rationale"
+            ],
+            "properties": {
+              "decision_index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "outcome": {
+                "enum": [
+                  "dependent_plan_observed",
+                  "no_dependent_plan"
+                ]
+              },
+              "plan_refs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "turn",
+                    "line",
+                    "text_span",
+                    "rationale"
+                  ],
+                  "properties": {
+                    "turn": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "line": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "text_span": {
+                      "$ref": "#/$defs/textSpan"
+                    },
+                    "rationale": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "outcome": {
+                      "const": "dependent_plan_observed"
+                    }
+                  },
+                  "required": [
+                    "outcome"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "plan_refs": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "outcome": {
+                      "const": "no_dependent_plan"
+                    }
+                  },
+                  "required": [
+                    "outcome"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "plan_refs": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "answer_assessments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "answer_turn",
+              "question_ref",
+              "outcome",
+              "decision_indexes",
+              "carry_refs",
+              "rationale"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "answer_to_question",
+                  "unsolicited"
+                ]
+              },
+              "answer_turn": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "question_ref": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/eventRef"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "outcome": {
+                "enum": [
+                  "carried_forward",
+                  "pending",
+                  "not_carried",
+                  "unprompted"
+                ]
+              },
+              "decision_indexes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "uniqueItems": true
+              },
+              "carry_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/eventRef"
+                }
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "unsolicited"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "question_ref": {
+                      "type": "null"
+                    },
+                    "outcome": {
+                      "const": "unprompted"
+                    },
+                    "decision_indexes": {
+                      "maxItems": 0
+                    },
+                    "carry_refs": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "answer_to_question"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "question_ref": {
+                      "$ref": "#/$defs/eventRef"
+                    },
+                    "outcome": {
+                      "enum": [
+                        "carried_forward",
+                        "pending",
+                        "not_carried"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "dependent_edit_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "turn",
+              "line",
+              "path",
+              "rationale"
+            ],
+            "properties": {
+              "turn": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "planning_applicability": {
+                "properties": {
+                  "requirement": {
+                    "const": "before_plan"
+                  }
+                },
+                "required": [
+                  "requirement"
+                ]
+              }
+            },
+            "required": [
+              "planning_applicability"
+            ]
+          },
+          "then": {
+            "required": [
+              "dependent_planning_assessments"
+            ],
+            "properties": {
+              "question_assessments": {
+                "items": {
+                  "if": {
+                    "properties": {
+                      "classification": {
+                        "const": "material"
+                      }
+                    },
+                    "required": [
+                      "classification"
+                    ]
+                  },
+                  "then": {
+                    "required": [
+                      "text_spans"
+                    ],
+                    "properties": {
+                      "text_spans": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "eventRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turn",
+        "line"
+      ],
+      "properties": {
+        "turn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "textSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "semanticTextSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end",
+        "decision_indexes",
+        "rationale"
+      ],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "decision_indexes": {
+          "type": "array",
+          "description": "May be empty for a material question that the reviewer found outside the frozen decision set.",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uniqueItems": true
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

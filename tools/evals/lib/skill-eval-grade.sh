@@ -1,6 +1,8 @@
 first_response_path_for_case() {
     local skill_name="$1"
     local id="$2"
+    local fixture_file="$3"
+    local packet_basename
 
     if [[ -f "$RESPONSES_DIR/$skill_name/$id.txt" ]]; then
         printf '%s\n' "$RESPONSES_DIR/$skill_name/$id.txt"
@@ -11,7 +13,18 @@ first_response_path_for_case() {
     elif [[ "${#FIXTURE_FILES[@]}" -eq 1 && -f "$RESPONSES_DIR/$id.md" ]]; then
         printf '%s\n' "$RESPONSES_DIR/$id.md"
     else
-        printf '\n'
+        packet_basename="$(clarification_task_packet_basename "$fixture_file" "$skill_name" "$id")"
+        if [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$skill_name/$packet_basename.txt" ]]; then
+            printf '%s\n' "$RESPONSES_DIR/$skill_name/$packet_basename.txt"
+        elif [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$skill_name/$packet_basename.md" ]]; then
+            printf '%s\n' "$RESPONSES_DIR/$skill_name/$packet_basename.md"
+        elif [[ "${#FIXTURE_FILES[@]}" -eq 1 && -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.txt" ]]; then
+            printf '%s\n' "$RESPONSES_DIR/$packet_basename.txt"
+        elif [[ "${#FIXTURE_FILES[@]}" -eq 1 && -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.md" ]]; then
+            printf '%s\n' "$RESPONSES_DIR/$packet_basename.md"
+        else
+            printf '\n'
+        fi
     fi
 }
 
@@ -1307,6 +1320,8 @@ grade_responses() {
     local total=0
     local passed=0
     local failed=0
+    local unavailable=0
+    local incomplete=0
     local missing=0
     local empty=0
     local signal_failures=0
@@ -1336,6 +1351,7 @@ grade_responses() {
     local semantic_failures
     local status
     local reason
+    local clarification_case
     local selected_cases
 
     echo "Heuristic/local grading only. Deterministic substring checks are local proxies; no provider API is invoked."
@@ -1350,7 +1366,11 @@ grade_responses() {
 
         while IFS=$'\t' read -r id category title; do
             total=$((total + 1))
-            response_path="$(first_response_path_for_case "$skill_name" "$id")"
+            response_path="$(first_response_path_for_case "$skill_name" "$id" "$fixture_file")"
+            clarification_case=false
+            if [[ "$skill_name" == "assistant-clarify" || "$category" == *clarification* ]]; then
+                clarification_case=true
+            fi
             status="PASS"
             reason="non-empty response with no exact fail-signal phrase hits and no machine expectation failures"
 
@@ -1447,9 +1467,25 @@ grade_responses() {
                 fi
             fi
 
+            if [[ "$clarification_case" == true ]]; then
+                status="UNAVAILABLE"
+                if [[ -z "$response_path" ]]; then
+                    reason="missing response file; clarification behavior was not observed"
+                    unavailable=$((unavailable + 1))
+                    incomplete=$((incomplete + 1))
+                elif ! is_file_nonempty "$response_path"; then
+                    reason="empty response file; clarification behavior was not observed"
+                    unavailable=$((unavailable + 1))
+                    incomplete=$((incomplete + 1))
+                else
+                    reason="substring anchors do not establish an admissible question or edit ordering; import independent semantic evidence"
+                    unavailable=$((unavailable + 1))
+                fi
+            fi
+
             if [[ "$status" == "PASS" ]]; then
                 passed=$((passed + 1))
-            else
+            elif [[ "$status" == "FAIL" ]]; then
                 failed=$((failed + 1))
             fi
 
@@ -1464,8 +1500,8 @@ grade_responses() {
     done
 
     echo ""
-    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s ordered_substring_failures=%s seeded_defect_failures=%s false_positive_marker_failures=%s structured_json_assertion_failures=%s semantic_validation_failures=%s skills=%s\n' \
-        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures" "$ordered_substring_failures" "$seeded_defect_failures" "$false_positive_marker_failures" "$structured_json_assertion_failures" "$semantic_validation_failures" "${#FIXTURE_FILES[@]}"
+    printf 'Summary: total=%s passed=%s failed=%s unavailable=%s incomplete=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s ordered_substring_failures=%s seeded_defect_failures=%s false_positive_marker_failures=%s structured_json_assertion_failures=%s semantic_validation_failures=%s skills=%s\n' \
+        "$total" "$passed" "$failed" "$unavailable" "$incomplete" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures" "$ordered_substring_failures" "$seeded_defect_failures" "$false_positive_marker_failures" "$structured_json_assertion_failures" "$semantic_validation_failures" "${#FIXTURE_FILES[@]}"
 
-    [[ "$failed" -eq 0 ]]
+    [[ "$failed" -eq 0 && "$incomplete" -eq 0 ]]
 }

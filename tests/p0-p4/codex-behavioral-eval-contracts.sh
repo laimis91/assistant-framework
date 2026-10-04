@@ -1353,7 +1353,8 @@ fi
 run_inside_outer_seatbelt() {
     if [[ "$(/usr/bin/uname -s)" == "Darwin" ]] \
         && /usr/bin/sandbox-exec -p '(version 1) (allow default)' /usr/bin/true >/dev/null 2>&1; then
-        /usr/bin/sandbox-exec -p '(version 1) (allow default)' "$@"
+        # Keep test -x true while denying nested sandbox-exec execution.
+        /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny file-map-executable (literal "/usr/bin/sandbox-exec"))' "$@"
     else
         "$@"
     fi

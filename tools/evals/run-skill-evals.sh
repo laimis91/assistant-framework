@@ -17,6 +17,7 @@ SKILL_FILES=()
 FIXTURE_FILES=()
 
 source "$SCRIPT_DIR/lib/skill-eval-common.sh"
+source "$SCRIPT_DIR/lib/clarification-packet-names.sh"
 source "$SCRIPT_DIR/lib/skill-eval-inventory.sh"
 source "$SCRIPT_DIR/lib/skill-eval-fixtures.sh"
 source "$SCRIPT_DIR/lib/skill-eval-render.sh"

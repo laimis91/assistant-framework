@@ -55,10 +55,10 @@ Clarification defaults:
 - Topic: [implementation-shaping topic]
   Value: [automatically selected value]
   Source: [user instruction, repository evidence, policy, or stable convention]
-  Rationale: [why safe/reversible and not scope-changing]
+  Rationale: [why this default is justified by its source and does not decide product intent]
 Clarification confidence: [low | medium | high]
 Clarification questions asked: [0+]
-Clarification admissibility: [satisfied | needs_clarification | not_applicable]
+Clarification admissibility: [satisfied | needs_clarification | not_applicable; keep a concise sufficiency basis in existing acceptance criteria/map: requested intent, relevant authority/behavior checked, justified defaults, proposed assumptions, unresolved choices; an empty question list alone is insufficient]
 Unresolved clarification topics:
 - [none, or one short topic per line]
 Required gates:

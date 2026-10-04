@@ -72,6 +72,71 @@ else
     fail "feature preparation evidence contract missing: ${workflow_failures[*]}"
 fi
 
+test_start "feature-preparation rejects contradictory preservation and default guidance"
+if ruby -ryaml -e '
+  evidence = File.read(ARGV.fetch(0))
+  contract = YAML.load_file(ARGV.fetch(1))
+  gates = contract.fetch("gates")
+  docs = File.read(ARGV.fetch(2))
+  invariants = contract.fetch("invariants")
+  discover_gate = gates.find { |gate| gate["phase"] == "DISCOVER" }
+  prep_gate = discover_gate.fetch("exit_assertions").find { |item| item["id"] == "D_FEATURE_PREPARATION_EVIDENCE" }
+  invariant = invariants.find { |item| item["id"] == "INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY" }
+  normalized = ->(value) { value.downcase.delete("`*").gsub(/\s+/, " ").gsub(/context, while a new audience/, "context; a new audience").gsub(/preserve established observable behavior/, "preserve existing observable behavior") }
+  scope_rules = [
+    "preserve existing observable behavior only within the actor, data, and authorization context supported by its sources",
+    "adding a route does not itself change that context; a new audience or disclosure boundary may"
+  ]
+  context_qualified = "only within the actor, data, and authorization context supported by its sources"
+  provisional_fragments = ["unanswered material", "recommendation", "provisional", "response", "task journal", "do not record", "applied default", "confirmed criterion"]
+  same_context_example = "existing_behavior_to_preserve + implementation_gap: preserve those effects for viewing without enabling editing"
+  unsafe_rules = [
+    "existing observable behavior is preserved unless explicitly changed",
+    "existing observable behavior defaults to preservation unless explicitly changed",
+    "a new route/scope is existing_behavior_to_preserve + implementation_gap",
+    "apply every unanswered recommendation as a default",
+    "apply unanswered product recommendations as defaults",
+    "record each unanswered material choice as an applied default"
+  ].map { |term| normalized.call(term) }
+  policy_valid = lambda do |evidence_text, gate_text, docs_text, invariant_text|
+    sections = [evidence_text, gate_text, docs_text, invariant_text].map { |value| normalized.call(value) }
+    combined = sections.join(" ")
+    scope_rules.all? { |term| sections[0].include?(normalized.call(term)) } &&
+      same_context_example && sections[0].include?(normalized.call(same_context_example)) &&
+      provisional_fragments.all? { |term| sections[0].include?(normalized.call(term)) } &&
+      sections[1].include?(normalized.call(context_qualified)) &&
+      sections[1].include?(normalized.call(scope_rules.last)) &&
+      provisional_fragments.all? { |term| sections[1].include?(normalized.call(term)) } &&
+      sections[2].include?(normalized.call(context_qualified)) &&
+      sections[2].include?(normalized.call(scope_rules.last)) &&
+      provisional_fragments.all? { |term| sections[2].include?(normalized.call(term)) } &&
+      sections[2].include?("source-backed technical defaults remain automatic") &&
+      sections[3].include?(normalized.call(context_qualified)) &&
+      sections[3].include?(normalized.call(scope_rules.last)) &&
+      provisional_fragments.all? { |term| sections[3].include?(normalized.call(term)) } &&
+      unsafe_rules.none? { |term| combined.include?(term) }
+  end
+  gate = prep_gate.fetch("check") + " " + invariant.fetch("check")
+  invariant_check = invariant.fetch("check")
+  valid = prep_gate.fetch("check").include?("INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY") && policy_valid.call(evidence, gate, docs, invariant_check)
+  safe_evidence = "#{scope_rules.join(" ")} #{provisional_fragments.join(" ")} #{same_context_example}"
+  safe_gate = "#{scope_rules.join(" ")} #{provisional_fragments.join(" ")}"
+  safe_docs = "#{context_qualified} #{scope_rules.last} #{provisional_fragments.join(" ")} source-backed technical defaults remain automatic"
+  safe_invariant = "#{context_qualified} #{scope_rules.last} #{provisional_fragments.join(" ")}"
+  safe_fixture = [safe_evidence, safe_gate, safe_docs, safe_invariant]
+  admits_safe_fixture = policy_valid.call(*safe_fixture)
+  rejects_contradictions = unsafe_rules.all? do |term|
+    mutated = safe_fixture.map(&:dup)
+    mutated[0] += " #{term}"
+    !policy_valid.call(*mutated)
+  end
+  exit(valid && admits_safe_fixture && rejects_contradictions ? 0 : 1)
+' "$workflow_dir/references/feature-preparation-evidence.md" "$workflow_dir/contracts/phase-gates.yaml" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md"; then
+    pass
+else
+    fail "feature-preparation evidence or guide generalizes behavior beyond supported authority context or settles pending choices"
+fi
+
 test_start "workflow evidence gate covers prepare-only, end-to-end, and approved implementation-only lanes"
 if ruby -ryaml -e '
   input = YAML.load_file(ARGV.fetch(0))

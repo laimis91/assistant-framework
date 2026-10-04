@@ -118,8 +118,10 @@ tools/evals/run-framework-instruction-evals.sh --emit-prompts /tmp/framework-eva
 ```
 
 Run each prompt packet with any model or provider, then save the captured
-assistant responses as `<case-id>.txt` or `<case-id>.md` in a response directory.
-Grade those saved responses locally:
+assistant response using the packet basename with a `.txt` or `.md` extension.
+Clarification packet names are opaque `task-NN` aliases; their numbering is
+stable in full-fixture order, even when prompt emission filters cases. Other
+packets keep their case-id names. Grade those saved responses locally:
 
 ```bash
 tools/evals/run-framework-instruction-evals.sh --responses /tmp/framework-eval-responses
@@ -135,6 +137,121 @@ missing files, empty responses, exact fail-signal phrase hits where useful,
 missing required substrings, and forbidden substring hits. These deterministic
 substring checks are proxies that complement human review or a separate LLM
 judge; they do not replace natural language judgment.
+
+### Clarification evidence boundary
+
+Clarification behavior cannot be graded from required/forbidden substrings. The
+offline framework and skill graders return `UNAVAILABLE` for affected cases;
+phrase counts remain proxy diagnostics only. Prompt emission gives the actor an
+opaque `task-01.md`-style packet containing only the current user request. The
+frozen actor prompts and separate expected-behavior oracle live under
+`fixtures/clarification/`; copy only one task's `actor-projects/task-*` directory
+into a disposable workspace, and send only its current prompt to the actor.
+Never copy evaluator fixtures or the oracle into that workspace.
+
+For a retained runtime capture, create a review JSON conforming to
+`fixtures/clarification/clarification-evidence-review.schema.json`, then import
+it with the bounded local helper:
+
+```bash
+node tools/evals/lib/clarification-evidence.cjs \
+  --review /path/to/evidence/review.json \
+  --oracle docs/evals/fixtures/clarification/clarification-oracle.json \
+  --evidence-root /path/to/evidence
+```
+
+The review binds controller-retained prompt/answer inputs, per-turn native
+Codex JSONL, before/after workspace manifests and a diff by SHA-256. A separate
+semantic review must cite actual assistant questions, user answers, carry-forward
+evidence and dependent edits. It can record an unsolicited controller answer as
+`kind: "unsolicited"` with a null question reference and an explicit rationale;
+this records the input without inventing an earlier question or satisfying an
+open decision. Missing or unmatched turns, unsupported edit
+ordering, absent semantic review or missing telemetry is `UNAVAILABLE`; a
+supported missing material question is `FAIL`. The importer derives the earliest
+observed edit for each reviewer-designated dependent path so a later write cannot
+hide an earlier write. It retains all workspace manifest paths and counts
+framework-owned `.codex/` journal changes separately from dependent project
+edits; unsupported edit events for changed project paths remain `UNAVAILABLE`.
+Punctuation by itself is never a material question.
+
+An oracle case with `continuation_answer_file` requires a top-level
+`oracle_requirements` binding: the exact case ID and raw oracle hash, required
+answer turns, required post-answer decision indexes, an expected answer artifact
+for each required turn, and an applicability-basis artifact with a record
+reference and rationale. The importer resolves `continuation_answer_file`
+relative to the supplied oracle file and admits that exact path and its SHA-256
+inside the evidence root. Stage the unchanged oracle and its declared answer
+payload inside that root. The importer compares those bytes with the captured
+controller input. Hashes bind the files but do not authenticate the applicability
+assertion or the independent semantic review.
+
+Required answer receipt, relevance, completed response and post-answer question
+coverage are separate fields. A required answer is relevant when its captured
+bytes match the oracle payload and the independent review links it to a
+completed material question from an earlier turn. That initial question may
+have an empty `decision_indexes` list: an access answer can trigger a later
+lifecycle question without itself covering that hidden lifecycle decision. The
+required post-answer question must separately be material and linked to its
+frozen decision index. A completed relevant response with that question missing
+is `FAIL`; an absent or incomplete required continuation keeps the top-level
+`behavior_status` `UNAVAILABLE`, even when a separate supported violation makes
+`semantic_status` `FAIL` and appears in `behavior_reasons`.
+
+For a valid started transcript prefix, a completed dependent plan or edit before
+clarification remains in `behavior_reasons` even if the turn later times out. In
+that case `semantic_status` can be `FAIL` while top-level `behavior_status` stays
+`UNAVAILABLE` because required scenario coverage is incomplete. Consumers must
+preserve both fields and the supported reasons; they must not drop those
+violations or relabel the top-level result. A timeout with no supported
+premature action stays `UNAVAILABLE` without inferring a missing question
+failure. A file-change `item.started` event alone does not prove a write. If a
+matching `item.completed` event in the same turn has the same native item ID and
+exact path, the importer uses the matching start for earliest write ordering
+and the completion event as confirmation. An independent `dependent_edit_ref`
+may cite either the completion line or that confirmed start line; an unpaired
+start cannot support a semantic reference. Pairing requires the same turn, a
+nonempty native item ID and the exact path. Event item IDs can be reused by
+later turns, so starts never pair across turns.
+
+
+For oracle cases that require asking before planning, the independent review must
+also bind a `planning_applicability` assertion to the exact `case_id` and raw
+oracle SHA-256, choosing `before_plan` or `before_edit_only`. The importer does
+not infer that requirement from case names or English text. A `before_plan`
+assertion requires an explicit assessment for every frozen decision: either a
+dependent plan with one or more evidence references, or an explicit
+`no_dependent_plan` result. The reviewer attests that every completed agent
+message was checked for dependent planning. Missing applicability or coverage
+is `UNAVAILABLE`.
+
+Planning and material-question references point to completed agent-message
+events and bounded, nonempty text spans. Span offsets are zero-based UTF-16 code
+units into the captured message text. Within one event, plan and question spans
+must not overlap; a dependent plan must follow each linked material question
+and a carried-forward answer. A material question may have an empty
+`decision_indexes` list when it concerns a choice outside the frozen decision
+set; it does not satisfy any indexed decision. Offering options in a question
+can be assessed as `no_dependent_plan` when no dependent plan was committed.
+Cases whose oracle requires only clarification before edits use
+`before_edit_only` and do not acquire a before-plan ordering check.
+
+These applicability, coverage, and semantic classifications remain independent
+reviewer assertions. Hashes and text spans bind those assertions to retained
+oracle and transcript bytes; they do not authenticate the reviewer or prove
+that the asserted meaning is correct. Older v1 evidence documents still parse
+under the additive schema, but an importer run without the new applicability
+and required coverage reports `UNAVAILABLE` rather than inheriting a pass.
+
+Codex JSONL does not echo controller inputs or provide a dedicated native skill
+selection event. The result labels controller-captured input separately, reports
+turn/event-line ordering without claiming wall-clock chronology, and keeps native
+selection `UNAVAILABLE`. It may report that a completed command names a staged
+`SKILL.md` path, but that text reference does not prove the file was read or the
+native skill router selected it. A forced skill-load receipt is reported as
+forced loading and cannot stand in for native activation. The semantic reviewer ID and independence role
+are assertions; artifact hashing binds retained bytes but does not authenticate
+the reviewer or prove that the review was independent.
 
 ### Trace import and A/B comparison
 
@@ -713,15 +830,21 @@ tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
 tools/evals/run-skill-evals.sh --emit-prompts /tmp/clarify-eval-prompts --skill assistant-clarify
 ```
 
-Prompt packets are written under `<output>/<skill>/<case-id>.md` and include the
-setup context, prompt, expected behavior, pass criteria, fail signals, optional
-seeded defects / measurable assertions, machine expectations, and an optional
-Structured JSON Assertions section when the case declares one.
+Prompt packets are written under `<output>/<skill>/<case-id>.md`, except
+clarification packets use their opaque `task-NN.md` basename. Task numbering is
+stable in full-fixture order, including when `--case` filters emitted packets.
+Clarification packets contain only the user request; they omit fixture identity
+and grading criteria. Other packets include setup context, prompt, expected
+behavior, pass criteria, fail signals, optional seeded defects / measurable
+assertions, machine expectations, and an optional Structured JSON Assertions
+section when the case declares one. For response grading, use the matching
+packet basename under the same skill folder; flat response filenames are
+accepted only when one skill fixture is selected.
 
-Run each prompt packet with the target assistant and save captured responses as
-`<response-dir>/<skill>/<case-id>.txt` or `<response-dir>/<skill>/<case-id>.md`.
-When a single fixture is selected, the runner also accepts flat
-`<response-dir>/<case-id>.txt` or `<response-dir>/<case-id>.md` files.
+Run each prompt packet with the target assistant and save the captured response
+using the packet basename under `<response-dir>/<skill>/`, with a `.txt` or
+`.md` extension. When a single fixture is selected, the runner also accepts a
+flat response file. Existing case-id response filenames remain supported.
 
 Grade saved responses locally:
 
