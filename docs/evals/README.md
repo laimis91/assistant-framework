@@ -239,6 +239,9 @@ must still reference every observed project path. Events for paths absent from
 the manifests remain `UNAVAILABLE`. The importer validates unified diff file
 headers against their Git section and ignores marker-like text inside hunks.
 Punctuation by itself is never a material question.
+For a case with zero frozen material decisions, an actual `material` or
+`non_material` question is `FAIL`; `punctuation_only` and `not_a_question`
+assessments do not trigger that failure.
 
 Each oracle case includes `initial_prompt_sha256` for its frozen actor prompt
 and `initial_workspace_sha256`, a path-to-digest map for every file in that
@@ -249,6 +252,19 @@ behavior `UNAVAILABLE`; `.codex/` framework journal paths remain outside the
 actor-project comparison. The owning contract test cross-checks every case map
 against the frozen fixture manifest and checks that manifest against the exact
 retained fixture file set and hashes, including the oracle digest.
+The importer reads `docs/evals/fixtures/clarification/frozen-cases-sha256.json`
+from its fixed repository-relative location and compares the supplied oracle's
+raw bytes with its `clarification-oracle.json` entry. An altered or untrusted
+oracle, or an unavailable manifest, keeps behavior `UNAVAILABLE` even when a
+review repeats that oracle's digest; no review-provided digest can replace the
+repository-owned manifest. The importer still evaluates supported evidence so
+other specific unavailable reasons remain visible.
+
+The task-08 prompt assigns the stable ID `link-access` only if an access
+clarification is needed and permits the actor to proceed without asking when
+access is already clear. Its retained continuation answer uses that ID as a
+prefix: `link-access: Anyone who has the link should be able to open it without
+an account.`
 
 For an oracle case that declares `required_missing_policy_path`, task-specific
 behavior remains `UNAVAILABLE` until turn 1 contains a completed, failed read
@@ -373,6 +389,23 @@ native skill router selected it. A forced skill-load receipt is reported as
 forced loading and cannot stand in for native activation. The semantic reviewer ID and independence role
 are assertions; artifact hashing binds retained bytes but does not authenticate
 the reviewer or prove that the review was independent.
+
+A forced-load receipt must include `invocation_mode: "forced_skill_load"`, the
+`skill_name`, a `skill_sha256` recorded by the loader for the staged skill bytes,
+and a `run_binding_sha256`. The importer binds that claimed skill digest to the
+current case and actor, the supplied oracle digest, and every admitted controller
+input and transcript digest. It cannot independently authenticate the staged
+skill bytes from Codex JSONL; the receipt remains a loader assertion. Reusing a
+generic or stale receipt makes activation `UNAVAILABLE`.
+
+Compute `run_binding_sha256` as SHA-256 over the UTF-8 bytes of the binding
+object serialized with JavaScript `JSON.stringify`. Preserve this key order:
+`case_id`, `actor_id`, `oracle_sha256`, `inputs`, `transcripts`, `skill_name`,
+`skill_sha256`. Sort `inputs` by ascending turn; each input object uses the key
+order `turn`, `kind`, `sha256`. Sort `transcripts` by ascending turn; each
+transcript object uses `turn`, `sha256`. Python producers can reproduce the
+serialization with `json.dumps(binding, separators=(",", ":"),
+ensure_ascii=False).encode("utf-8")`, preserving insertion order.
 
 ### Trace import and A/B comparison
 

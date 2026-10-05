@@ -29,6 +29,32 @@ function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
+function frozenClarificationOracleDigest() {
+  const manifestPath = path.resolve(__dirname, "../../../docs/evals/fixtures/clarification/frozen-cases-sha256.json");
+  try {
+    const stat = fs.lstatSync(manifestPath);
+    if (stat.isSymbolicLink() || !stat.isFile() || stat.size > MAX_REVIEW_BYTES) return null;
+    const manifest = JSON.parse(fs.readFileSync(manifestPath).toString("utf8"));
+    const digest = isObject(manifest) ? manifest["clarification-oracle.json"] : null;
+    return typeof digest === "string" && SHA256.test(digest) ? digest : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function forcedLoadRunBindingDigest(review, oracleDigest, skillName, skillDigest, inputs, transcripts) {
+  const binding = {
+    case_id: review.case_id,
+    actor_id: review.actor_id,
+    oracle_sha256: oracleDigest,
+    inputs,
+    transcripts,
+    skill_name: skillName,
+    skill_sha256: skillDigest,
+  };
+  return sha256(Buffer.from(JSON.stringify(binding), "utf8"));
+}
+
 function parseArgs(argv) {
   const result = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -614,6 +640,7 @@ function main() {
   const oracleCase = oracle.cases.find((entry) => entry.case_id === review.case_id);
   if (!oracleCase || !Array.isArray(oracleCase.hidden_material_decisions)) fail("review case is not bound to a valid oracle entry");
   const oracleDigest = sha256(oracleBytes);
+  const frozenOracleDigest = frozenClarificationOracleDigest();
   const initialWorkspaceBaseline = initialWorkspaceBaselineMap(oracleCase);
   const hasRequiredMissingPolicyRead = Object.prototype.hasOwnProperty.call(oracleCase, "required_missing_policy_path");
   const requiredMissingPolicyPath = isSafeProjectRelativePath(oracleCase.required_missing_policy_path)
@@ -636,6 +663,8 @@ function main() {
       && requiredPolicyClaims.every((claim) => requiredPolicyConflict.claims.includes(claim)));
   const admitted = artifactReader(root);
   const unavailableReasons = admitted.unavailable;
+  if (!frozenOracleDigest) unavailableReasons.push("frozen_oracle_manifest_unavailable");
+  else if (frozenOracleDigest !== oracleDigest) unavailableReasons.push("oracle_frozen_manifest_mismatch");
   if (!task05PolicyConflictRequirementValid) unavailableReasons.push("policy_conflict_assessment_unavailable");
   let initialWorkspaceBaselineStatus = "unavailable";
   if (!initialWorkspaceBaseline) unavailableReasons.push("initial_workspace_baseline_unavailable");
@@ -763,6 +792,7 @@ function main() {
   if (answers.some((answer, index) => !answer.record || answer.turn <= 1 || (index > 0 && answer.turn <= answers[index - 1].turn))) unavailableReasons.push("answer_receipt_order_unavailable");
 
   const transcripts = new Map();
+  const admittedTranscriptList = [];
   const transcriptEntries = Array.isArray(review.transcripts) ? review.transcripts : [];
   if (!Array.isArray(review.transcripts) || transcriptEntries.length === 0) unavailableReasons.push("native_transcript_missing");
   const orderedTranscriptEntries = [...transcriptEntries].sort((a, b) => (a && a.turn || 0) - (b && b.turn || 0));
@@ -776,6 +806,7 @@ function main() {
       continue;
     }
     const record = admitted.read(entry.artifact, `transcript_turn_${entry.turn}`);
+    if (record) admittedTranscriptList.push({ turn: entry.turn, record });
     const parsed = parseTranscript(entry.turn, record, `transcript turn ${entry.turn}`);
     if (!parsed) continue;
     if (!parsed.completedTurn) unavailableReasons.push("transcript_turn_" + entry.turn + "_completion_unavailable");
@@ -832,8 +863,36 @@ function main() {
     const receipt = admitted.read(activation.forced_load_receipt, "forced_load_receipt", activationReasons);
     let validForcedReceipt = false;
     if (receipt) {
-      const receiptJson = parseJson(receipt.bytes, "forced load receipt");
-      validForcedReceipt = isObject(receiptJson) && receiptJson.invocation_mode === "forced_skill_load" && receiptJson.skill_name === skillName;
+      let receiptJson = null;
+      try {
+        receiptJson = JSON.parse(receipt.bytes.toString("utf8"));
+      } catch (_error) {
+        receiptJson = null;
+      }
+      const boundInputs = admittedInputList
+        .filter((input) => input.record)
+        .map((input) => ({ turn: input.turn, kind: input.kind, sha256: input.record.digest }))
+        .sort((left, right) => left.turn - right.turn);
+      const boundTranscripts = admittedTranscriptList
+        .map((entry) => ({ turn: entry.turn, sha256: entry.record.digest }))
+        .sort((left, right) => left.turn - right.turn);
+      const retainedRunComplete = Array.isArray(review.inputs)
+        && boundInputs.length === review.inputs.length
+        && Array.isArray(review.transcripts)
+        && boundTranscripts.length === review.transcripts.length;
+      const boundRunDigest = isObject(receiptJson)
+        && typeof receiptJson.skill_sha256 === "string"
+        && SHA256.test(receiptJson.skill_sha256)
+        && retainedRunComplete
+        ? forcedLoadRunBindingDigest(review, oracleDigest, skillName, receiptJson.skill_sha256, boundInputs, boundTranscripts)
+        : null;
+      validForcedReceipt = isObject(receiptJson)
+        && receiptJson.invocation_mode === "forced_skill_load"
+        && receiptJson.skill_name === skillName
+        && boundRunDigest !== null
+        && typeof receiptJson.run_binding_sha256 === "string"
+        && SHA256.test(receiptJson.run_binding_sha256)
+        && receiptJson.run_binding_sha256 === boundRunDigest;
     }
     if (!validForcedReceipt) {
       activationReasons.push("forced_load_receipt_unavailable");
@@ -1425,7 +1484,10 @@ function main() {
         }
       }
       for (const assessment of semanticReview.question_assessments) {
-        if (assessment.classification === "material" && expectedDecisionCount === 0) behaviorReasons.push("unnecessary_material_question");
+        if (expectedDecisionCount === 0) {
+          if (assessment.classification === "material") behaviorReasons.push("unnecessary_material_question");
+          if (assessment.classification === "non_material") behaviorReasons.push("unnecessary_non_material_question");
+        }
       }
       if (hasRequiredContinuation
         && missingPostAnswerQuestionIndexes.length > 0

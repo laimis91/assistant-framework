@@ -150,7 +150,7 @@
     },
     {
       "case_id": "task-08",
-      "initial_prompt_sha256": "7abbd3ad6b78f4855b2df5742ed999741e0d1721c555261dd1c0de78b1caeb62",
+      "initial_prompt_sha256": "615e63fb56a22bd3cebd3562a120a7e313b9e072328970f14c44ef1046da5651",
       "hidden_material_decisions": [
         "link lifetime and revocation after the user authorizes anyone-with-link access"
       ],

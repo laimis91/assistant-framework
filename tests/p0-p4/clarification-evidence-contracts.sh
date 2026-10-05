@@ -79,6 +79,12 @@ expected_policy_conflict = {
 }
 if task05.get("required_policy_conflict") != expected_policy_conflict:
     raise SystemExit("task-05 policy-conflict requirement is missing or drifted")
+task08_prompt = (fixture_root / "actor-prompts/task-08.md").read_text()
+task08_answer = (fixture_root / "actor-prompts/task-08-answer.txt").read_text()
+if "stable question ID `link-access`" not in task08_prompt or "do not ask it when the access rule is already clear" not in task08_prompt:
+    raise SystemExit("task-08 does not bind its optional access question to the stable ID")
+if not task08_answer.startswith("link-access: "):
+    raise SystemExit("task-08 continuation answer does not identify its open question")
 PY_ORACLE_PROMPTS
 then
     pass
@@ -430,6 +436,8 @@ forced_load_receipt = write("forced-load-receipt.json", {
     "skill_name": "assistant-workflow",
 })
 read_skill = command("sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md", "# Development Workflow\n")
+(root / ".agents/skills/assistant-workflow/SKILL.md").parent.mkdir(parents=True, exist_ok=True)
+(root / ".agents/skills/assistant-workflow/SKILL.md").write_bytes(b"# Development Workflow\n")
 question_text = "Before editing, who can open a private issue link and how long does it remain valid before revocation?"
 turn_1 = transcript([
     event("thread.started"), event("turn.started"), read_skill,
@@ -951,15 +959,77 @@ PY_LATE_COMPLETION_FIXTURE
 
 importer="$FRAMEWORK_DIR/tools/evals/lib/clarification-evidence.cjs"
 
+test_importer_for_oracle() {
+    local oracle_path="$1"
+    local oracle_name
+    local trust_id
+    local pinned_digest
+    local install_root
+    local selected_importer
+    if cmp -s "$oracle_path" "$canonical_oracle_file"; then
+        printf '%s\n' "$importer"
+        return
+    fi
+    oracle_name="$(basename "$oracle_path")"
+    case "$oracle_name" in
+        oracle-pure-delete.json)
+            trust_id="pure-delete"
+            pinned_digest="ae92328920758ba9060ed9c2d0092036193169797f1f99c5ef0020a60dd446d0"
+            ;;
+        oracle-space-path.json|oracle-space-rename.json)
+            trust_id="space-paths"
+            pinned_digest="4b8443d6ddb3e27ce9f4e54ca00cced5bb644aced68d08614692f6c71a9a1bc4"
+            ;;
+        oracle-continuation.json)
+            trust_id="continuation"
+            pinned_digest="5c3fa714276a6bb78dd1a41a0e3242024e6ea5dd709c4604a5a8bb9086373cf7"
+            ;;
+        *)
+            trust_id="base"
+            pinned_digest="a243f7f1f860e1af38cfb7200e0cef3c15da4e22b14b65ce8919aba8bbe2a634"
+            ;;
+    esac
+    install_root="$evidence_root/test-importers/$trust_id"
+    selected_importer="$install_root/tools/evals/lib/clarification-evidence.cjs"
+    if [[ ! -f "$selected_importer" ]]; then
+        mkdir -p "$(dirname "$selected_importer")" "$install_root/docs/evals/fixtures/clarification"
+        cp "$importer" "$selected_importer"
+        printf '{"clarification-oracle.json":"%s"}\n' "$pinned_digest" \
+            >"$install_root/docs/evals/fixtures/clarification/frozen-cases-sha256.json"
+    fi
+    printf '%s\n' "$selected_importer"
+}
+
 run_importer() {
+    local oracle_path
+    local selected_importer
+    local review_path
+    local prepared_review_path
+    local current_argument
+    local -a node_arguments=()
+    local index
+    for ((index = 1; index < $#; index += 1)); do
+        if [[ "${!index}" == "--review" ]]; then
+            index=$((index + 1))
+            review_path="${!index}"
+        elif [[ "${!index}" == "--oracle" ]]; then
+            index=$((index + 1))
+            oracle_path="${!index}"
+        fi
+    done
+    prepared_review_path="${review_path%.json}-prepared.json"
+    selected_importer="$(test_importer_for_oracle "$oracle_path")"
     python3 - "$@" <<'PY_SYNTHETIC_MESSAGE_INTENTS'
+from hashlib import sha256
 import json
 from pathlib import Path
 import sys
 
 arguments = sys.argv[1:]
 review_path = Path(arguments[arguments.index("--review") + 1])
+prepared_review_path = review_path.with_name(f"{review_path.stem}-prepared.json")
 evidence_root = Path(arguments[arguments.index("--evidence-root") + 1])
+oracle_path = Path(arguments[arguments.index("--oracle") + 1])
 review = json.loads(review_path.read_text())
 semantic = review.get("semantic_review")
 if isinstance(semantic, dict) and isinstance(semantic.get("question_assessments"), list):
@@ -993,10 +1063,150 @@ if isinstance(semantic, dict) and isinstance(semantic.get("question_assessments"
                     "rationale": "The synthetic fixture explicitly declares this message is not a product question.",
                 })
                 assessed.add(key)
-    review_path.write_text(json.dumps(review, sort_keys=True) + "\n")
+activation = review.get("activation", {})
+receipt_ref = activation.get("forced_load_receipt") if isinstance(activation, dict) else None
+generic_receipt = evidence_root / "forced-load-receipt.json"
+is_synthetic_generic_receipt = (
+    isinstance(receipt_ref, dict)
+    and receipt_ref.get("path") == generic_receipt.name
+    and generic_receipt.is_file()
+    and json.loads(generic_receipt.read_text()).get("invocation_mode") == "forced_skill_load"
+    and json.loads(generic_receipt.read_text()).get("skill_name") == activation.get("skill_name")
+)
+if review.get("execution_mode") == "forced_skill_load" and is_synthetic_generic_receipt:
+    skill_name = review.get("activation", {}).get("skill_name")
+    skill_bytes = (evidence_root / ".agents" / "skills" / skill_name / "SKILL.md").read_bytes()
+    inputs = []
+    for entry in sorted(review.get("inputs", []), key=lambda item: item.get("turn", 0)):
+        artifact = entry.get("artifact", {})
+        artifact_path = evidence_root / artifact.get("path", "")
+        digest = sha256(artifact_path.read_bytes()).hexdigest() if artifact_path.is_file() else artifact.get("sha256")
+        inputs.append({"turn": entry.get("turn"), "kind": entry.get("kind"), "sha256": digest})
+    transcripts = []
+    for entry in sorted(review.get("transcripts", []), key=lambda item: item.get("turn", 0)):
+        artifact = entry.get("artifact", {})
+        artifact_path = evidence_root / artifact.get("path", "")
+        digest = sha256(artifact_path.read_bytes()).hexdigest() if artifact_path.is_file() else artifact.get("sha256")
+        transcripts.append({"turn": entry.get("turn"), "sha256": digest})
+    binding = {
+        "case_id": review.get("case_id"),
+        "actor_id": review.get("actor_id"),
+        "oracle_sha256": sha256(oracle_path.read_bytes()).hexdigest(),
+        "inputs": inputs,
+        "transcripts": transcripts,
+        "skill_name": skill_name,
+        "skill_sha256": sha256(skill_bytes).hexdigest(),
+    }
+    binding_bytes = json.dumps(binding, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    receipt = {
+        "invocation_mode": "forced_skill_load",
+        "skill_name": skill_name,
+        "skill_sha256": binding["skill_sha256"],
+        "run_binding_sha256": sha256(binding_bytes).hexdigest(),
+    }
+    receipt_bytes = (json.dumps(receipt, sort_keys=True) + "\n").encode("utf-8")
+    receipt_path = evidence_root / f"bound-forced-load-receipt-{prepared_review_path.stem}.json"
+    receipt_path.write_bytes(receipt_bytes)
+    review.setdefault("activation", {})["forced_load_receipt"] = {
+        "path": receipt_path.name,
+        "sha256": sha256(receipt_bytes).hexdigest(),
+    }
+prepared_review_path.write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_SYNTHETIC_MESSAGE_INTENTS
-    node "$importer" "$@"
+    for ((index = 1; index <= $#; index += 1)); do
+        current_argument="${!index}"
+        if [[ "$current_argument" == "--review" ]]; then
+            node_arguments+=("--review" "$prepared_review_path")
+            index=$((index + 1))
+        else
+            node_arguments+=("$current_argument")
+        fi
+    done
+    node "$selected_importer" "${node_arguments[@]}"
 }
+
+run_importer_raw() {
+    local oracle_path
+    local selected_importer
+    local index
+    for ((index = 1; index < $#; index += 1)); do
+        if [[ "${!index}" == "--oracle" ]]; then
+            index=$((index + 1))
+            oracle_path="${!index}"
+            break
+        fi
+    done
+    selected_importer="$(test_importer_for_oracle "$oracle_path")"
+    node "$selected_importer" "$@"
+}
+
+python3 - "$evidence_root" <<'PY_SEVENTH_COMMENT_FIXTURES'
+from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+
+def write_json(name, value):
+    raw = (json.dumps(value, sort_keys=True) + "\n").encode()
+    (root / name).write_bytes(raw)
+    return {"path": name, "sha256": sha256(raw).hexdigest()}
+
+base = json.loads((root / "review.json").read_text())
+generic_receipt_review = deepcopy(base)
+generic_receipt_review["activation"]["forced_load_receipt"] = {
+    "path": "forced-load-receipt.json",
+    "sha256": sha256((root / "forced-load-receipt.json").read_bytes()).hexdigest(),
+}
+(root / "review-generic-forced-receipt.json").write_text(json.dumps(generic_receipt_review, sort_keys=True) + "\n")
+
+oracle = json.loads((root / "oracle.json").read_text())
+task01 = next(case for case in oracle["cases"] if case["case_id"] == "task-01")
+task01["planning_requirement"] = "before_edit_only"
+tampered_oracle_bytes = (json.dumps(oracle, sort_keys=True) + "\n").encode()
+(root / "oracle-tampered.json").write_bytes(tampered_oracle_bytes)
+tampered_review = deepcopy(base)
+tampered_review["semantic_review"]["planning_applicability"]["requirement"] = "before_edit_only"
+tampered_review["semantic_review"]["planning_applicability"]["oracle_sha256"] = sha256(tampered_oracle_bytes).hexdigest()
+(root / "review-oracle-tampered.json").write_text(json.dumps(tampered_review, sort_keys=True) + "\n")
+
+baseline = json.loads((root / "review-baseline-control.json").read_text())
+question_texts = {
+    "material": "Who should be permitted to access this private issue?",
+    "non-material": "Should I proceed with what is already specified?",
+    "punctuation-only": "?",
+    "not-a-question": "I will proceed with the specified behavior.",
+}
+classifications = {
+    "material": "material",
+    "non-material": "non_material",
+    "punctuation-only": "punctuation_only",
+    "not-a-question": "not_a_question",
+}
+for name, text in question_texts.items():
+    review = deepcopy(baseline)
+    transcript_entry = review["transcripts"][0]
+    events = [json.loads(line) for line in (root / transcript_entry["artifact"]["path"]).read_text().splitlines()]
+    message = next(event["item"] for event in events if event.get("item", {}).get("type") == "agent_message")
+    message["text"] = text
+    raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n").encode()
+    transcript_path = f"zero-decision-{name}.jsonl"
+    (root / transcript_path).write_bytes(raw)
+    review["transcripts"] = [{
+        "turn": 1,
+        "artifact": {"path": transcript_path, "sha256": sha256(raw).hexdigest()},
+    }]
+    review["semantic_review"]["question_assessments"] = [{
+        "turn": 1,
+        "line": 4,
+        "classification": classifications[name],
+        "decision_indexes": [],
+        "rationale": "The independent synthetic reviewer classified this completed message explicitly.",
+    }]
+    (root / f"review-zero-decision-{name}.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_SEVENTH_COMMENT_FIXTURES
 
 if [[ -f "$importer" ]]; then
     python3 - "$evidence_root" <<'PY_FOURTH_COMMENT_REGRESSIONS'
@@ -1287,15 +1497,16 @@ import sys
 root = Path(sys.argv[1])
 fixture_root = Path(sys.argv[2])
 base = json.loads((root / "review.json").read_text())
-oracle = json.loads((fixture_root / "clarification-oracle.json").read_bytes())
+oracle_bytes = (fixture_root / "clarification-oracle.json").read_bytes()
+oracle = json.loads(oracle_bytes)
 case = next(item for item in oracle["cases"] if item["case_id"] == "task-05")
 requirement = {
     "decision_index": 0,
     "source_paths": ["docs/security-link-rules.md", "docs/product-sharing-notes.md"],
     "claims": ["conflict_identified", "security_impact_explained"],
 }
-case["required_policy_conflict"] = requirement
-oracle_bytes = (json.dumps(oracle, sort_keys=True) + "\n").encode()
+if case.get("required_policy_conflict") != requirement:
+    raise SystemExit("the frozen task-05 policy requirement changed")
 oracle_ref = {"path": "canonical-task05-oracle.json", "sha256": sha256(oracle_bytes).hexdigest()}
 (root / oracle_ref["path"]).write_bytes(oracle_bytes)
 
@@ -1473,6 +1684,50 @@ PY_TASK05_POLICY_CONFLICT
         fail "native behavior passed without observable native selection: $(cat "$framework_grade")"
     fi
 
+    test_start "a generic forced-load receipt cannot establish this captured run"
+    if run_importer_raw --review "$evidence_root/review-generic-forced-receipt.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and .activation_status == "forced_load_unavailable" and (.unavailable_reasons | index("forced_load_receipt_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a generic mode-and-skill receipt was accepted without a run binding: $(cat "$framework_grade")"
+    fi
+
+    test_start "forced-load receipts reject a changed actor or retained transcript"
+    stale_receipt_count=0
+    if run_importer --review "$evidence_root/review.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >/dev/null 2>&1; then
+        python3 - "$evidence_root" <<'PY_STALE_RECEIPT'
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+base = json.loads((root / "review-prepared.json").read_text())
+actor_stale = json.loads(json.dumps(base))
+actor_stale["actor_id"] = "actor-reused-capture"
+(root / "review-stale-forced-receipt-actor.json").write_text(json.dumps(actor_stale, sort_keys=True) + "\n")
+transcript_stale = json.loads(json.dumps(base))
+reference = transcript_stale["transcripts"][0]["artifact"]
+changed_path = "turn-01-stale-forced-receipt.jsonl"
+changed_bytes = (root / reference["path"]).read_bytes() + b"\n"
+(root / changed_path).write_bytes(changed_bytes)
+reference["path"] = changed_path
+reference["sha256"] = sha256(changed_bytes).hexdigest()
+(root / "review-stale-forced-receipt-transcript.json").write_text(json.dumps(transcript_stale, sort_keys=True) + "\n")
+PY_STALE_RECEIPT
+        for stale_variant in actor transcript; do
+            if run_importer_raw --review "$evidence_root/review-stale-forced-receipt-$stale_variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+                && jq -e '.behavior_status == "UNAVAILABLE" and (.activation_status == "forced_load_unavailable") and (.unavailable_reasons | index("forced_load_receipt_unavailable")) != null' "$framework_grade" >/dev/null; then
+                stale_receipt_count=$((stale_receipt_count + 1))
+            fi
+        done
+    fi
+    if [[ "$stale_receipt_count" -eq 2 ]]; then
+        pass
+    else
+        fail "a receipt did not bind both actor identity and retained transcript bytes ($stale_receipt_count/2): $(cat "$framework_grade")"
+    fi
+
     test_start "forced activation evidence participates in overall availability"
     invalid_activation_count=0
     for variant in missing-receipt invalid-receipt missing-skill-reference; do
@@ -1503,6 +1758,14 @@ PY_TASK05_POLICY_CONFLICT
         pass
     else
         fail "missing, unsupported, or mismatched oracle planning requirements were accepted"
+    fi
+
+    test_start "a self-consistent modified oracle stays unavailable under the frozen manifest"
+    if run_importer --review "$evidence_root/review-oracle-tampered.json" --oracle "$evidence_root/oracle-tampered.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("oracle_frozen_manifest_mismatch")) != null and .evidence_counts.controller_input_turns == 2' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "an altered oracle rebound to its own digest was accepted or was not identified: $(cat "$framework_grade")"
     fi
 
     test_start "every completed message needs an explicit semantic assessment"
@@ -1586,6 +1849,29 @@ PY_TASK05_POLICY_CONFLICT
         pass
     else
         fail "a supported failed, empty, or started-only file-change event was rejected or counted as a write"
+    fi
+
+    test_start "zero-decision controls reject actual questions and retain punctuation/non-question cases"
+    zero_question_results=0
+    for variant in material non-material punctuation-only not-a-question; do
+        if run_importer --review "$evidence_root/review-zero-decision-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1; then
+            case "$variant" in
+                material)
+                    jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("unnecessary_material_question")) != null' "$framework_grade" >/dev/null && zero_question_results=$((zero_question_results + 1))
+                    ;;
+                non-material)
+                    jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("unnecessary_non_material_question")) != null' "$framework_grade" >/dev/null && zero_question_results=$((zero_question_results + 1))
+                    ;;
+                punctuation-only|not-a-question)
+                    jq -e '.behavior_status == "PASS" and .behavior_reasons == []' "$framework_grade" >/dev/null && zero_question_results=$((zero_question_results + 1))
+                    ;;
+            esac
+        fi
+    done
+    if [[ "$zero_question_results" -eq 4 ]]; then
+        pass
+    else
+        fail "zero-decision question classifications were not distinguished correctly ($zero_question_results/4)"
     fi
 
     test_start "Git diff headers and hunks are section-bound"
@@ -2420,11 +2706,7 @@ PY_MISSING_EDIT_EVENT
     fi
 
     test_start "forced skill load is labelled separately from native activation"
-    jq '.execution_mode = "forced_skill_load" | .activation.forced_load_receipt = {"path":"forced.json","sha256":"'"$(printf forced | shasum -a 256 | awk '{print $1}')"'"}' "$evidence_root/review.json" >"$evidence_root/forced-review.json"
-    printf '%s\n' '{"invocation_mode":"forced_skill_load","skill_name":"assistant-workflow"}' >"$evidence_root/forced.json"
-    expected_forced_sha="$(shasum -a 256 "$evidence_root/forced.json" | awk '{print $1}')"
-    jq --arg hash "$expected_forced_sha" '.activation.forced_load_receipt.sha256 = $hash' "$evidence_root/forced-review.json" >"$evidence_root/forced-review.tmp"
-    mv "$evidence_root/forced-review.tmp" "$evidence_root/forced-review.json"
+    jq '.execution_mode = "forced_skill_load"' "$evidence_root/review.json" >"$evidence_root/forced-review.json"
     if run_importer --review "$evidence_root/forced-review.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.execution_mode == "forced_skill_load" and .activation_status == "forced_load" and .native_selection_status == "not_applicable_forced_load" and .behavior_status == "PASS"' "$framework_grade" >/dev/null; then
         pass

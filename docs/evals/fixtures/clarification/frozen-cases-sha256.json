@@ -57,7 +57,7 @@
   "actor-prompts/task-05.md": "4eb354f5ae6371d496207e697f5bde267eeb3f215ae7daa2c40d3cb72e648043",
   "actor-prompts/task-06.md": "f443559ce6bdac5e450dd0efbade5ebd3cb1f4d8b7c6fbc64a423d27c9f103a0",
   "actor-prompts/task-07.md": "268fcd5c6f354b953c75246ec523778fe25d82b29234d4763e99919c431d4683",
-  "actor-prompts/task-08-answer.txt": "1e852e77372355ada2459756d5939b02e7e574a05f7a42fa21351450049b9007",
-  "actor-prompts/task-08.md": "7abbd3ad6b78f4855b2df5742ed999741e0d1721c555261dd1c0de78b1caeb62",
-  "clarification-oracle.json": "0ac9f2a8ee3b2b1ed6529274a3b756930a9570611646adbf82c6536e9de39083"
+  "actor-prompts/task-08-answer.txt": "52245a18caff31829c7bdef2b0668b866f17de343267565991d3e0f0593f2319",
+  "actor-prompts/task-08.md": "615e63fb56a22bd3cebd3562a120a7e313b9e072328970f14c44ef1046da5651",
+  "clarification-oracle.json": "e4d3b216b8a237a4bce50e943778ff82ac25f571e645d2471b16cc4c02f280e7"
 }
