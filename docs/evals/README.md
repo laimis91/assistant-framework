@@ -317,18 +317,33 @@ each matching decision's `plan_refs`. These native references use turn and line
 without a text span. Message plan references still require bounded text spans.
 Missing event coverage or conflicting no-plan assertions is `UNAVAILABLE`.
 
+Task-05 also requires a `policy_conflict_assessment` bound to the exact case and
+raw oracle SHA-256. The frozen oracle names decision 0 and exactly
+`docs/security-link-rules.md` plus `docs/product-sharing-notes.md`; the
+assessment must explicitly cover whether it identified their conflict and
+explained its security impact, with at least one bounded nonempty span from an
+actual completed message. Missing or malformed assessment evidence is
+`UNAVAILABLE`. A complete supported assessment that explicitly denies either
+claim is `FAIL`; incomplete transcript evidence does not infer a failure from
+an explanation that may still be in progress. These boolean fields are
+independent semantic judgments, not keyword checks, and transcript spans bind
+them to retained message bytes without authenticating the reviewer.
+
 Every completed `agent_message` needs an explicit question assessment:
 `material`, `non_material`, `punctuation_only`, or `not_a_question`. Only
 `material` and `non_material` are question events; punctuation-only and
 not-a-question results remain explicit but are not counted as questions. The
 importer does not infer message intent from punctuation. Message planning and
 material-question references point to completed agent-message events and
-bounded, nonempty text spans. Span offsets are
-zero-based UTF-16 code units into the captured message text. Within one event,
-plan and question spans must not overlap; a dependent plan must follow each
-linked material question and a carried-forward answer. Native todo-list events
-instead use their exact event line, so every started, updated, or completed
-observation retains its own ordering. A material question may have an empty
+bounded, nonempty text spans. Agent-message carry references also need such a
+span, so a carried answer and plan in one message retain their internal order;
+overlapping carry and plan spans are `UNAVAILABLE`, while a plan before the
+carried span is `FAIL`. Span offsets are zero-based UTF-16 code units into the
+captured message text. Within one event, plan and question spans must not
+overlap; a dependent plan must follow each linked material question and a
+carried-forward answer. Native command and file-change carries, like native
+todo-list plans, retain event-line ordering and have no text span. Each native
+todo-list started, updated, or completed observation retains its own ordering. A material question may have an empty
 `decision_indexes` list when it concerns a choice outside the frozen decision
 set; it does not satisfy any indexed decision. Offering options in a question
 can be assessed as `no_dependent_plan` when no dependent plan was committed.

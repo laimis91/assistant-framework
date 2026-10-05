@@ -561,6 +561,86 @@
           "description": "Optional direct reference to the completed, failed read command that observed the oracle-declared missing policy path.",
           "$ref": "#/$defs/eventRef"
         },
+        "policy_conflict_assessment": {
+          "description": "For task-05, an independent semantic assertion bound to the exact frozen oracle case, digest, required decision, policy documents, and message evidence.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "oracle_case_id",
+            "oracle_sha256",
+            "decision_index",
+            "source_paths",
+            "conflict_identified",
+            "security_impact_explained",
+            "message_spans",
+            "rationale"
+          ],
+          "properties": {
+            "oracle_case_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "oracle_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "decision_index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "source_paths": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "conflict_identified": {
+              "type": "boolean"
+            },
+            "security_impact_explained": {
+              "type": "boolean"
+            },
+            "message_spans": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "turn",
+                  "line",
+                  "text_span",
+                  "rationale"
+                ],
+                "properties": {
+                  "turn": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "text_span": {
+                    "$ref": "#/$defs/textSpan"
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
         "answer_assessments": {
           "type": "array",
           "items": {
@@ -615,7 +695,7 @@
               "carry_refs": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/eventRef"
+                  "$ref": "#/$defs/carryReference"
                 }
               },
               "rationale": {
@@ -767,6 +847,29 @@
       ]
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "case_id": {
+            "const": "task-05"
+          }
+        },
+        "required": [
+          "case_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "semantic_review": {
+            "required": [
+              "policy_conflict_assessment"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "artifactRef": {
       "type": "object",
@@ -801,6 +904,28 @@
         "line": {
           "type": "integer",
           "minimum": 1
+        }
+      }
+    },
+    "carryReference": {
+      "description": "Agent-message carries require a bounded text span; native completed command and file-change carries use event-line order without one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turn",
+        "line"
+      ],
+      "properties": {
+        "turn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text_span": {
+          "$ref": "#/$defs/textSpan"
         }
       }
     },
