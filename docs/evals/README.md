@@ -356,6 +356,12 @@ decision indexes; a dependent event maps to its decisions and must appear in
 each matching decision's `plan_refs`. These native references use turn and line
 without a text span. Message plan references still require bounded text spans.
 Missing event coverage or conflicting no-plan assertions is `UNAVAILABLE`.
+Each native `todo_list` item ID must be a nonempty string with a same-turn
+`item.started`, zero or more `item.updated` events, and one `item.completed`
+event. Duplicate starts, unmatched updates or completions, and events after
+completion make the transcript unavailable. A completed response turn must
+close every started todo item; a genuine partial prefix may retain an open item
+so supported pre-timeout plan violations remain visible.
 
 Task-05 also requires a `policy_conflict_assessment` bound to the exact case and
 raw oracle SHA-256. The frozen oracle names decision 0 and exactly
@@ -373,7 +379,12 @@ Every completed `agent_message` needs an explicit question assessment:
 `material`, `non_material`, `punctuation_only`, or `not_a_question`. Only
 `material` and `non_material` are question events; punctuation-only and
 not-a-question results remain explicit but are not counted as questions. The
-importer does not infer message intent from punctuation. Message planning and
+importer does not infer message intent from punctuation. For task-04, both
+frozen-target reads must complete in the initial response before its final
+message and before the earliest observed project edit across all retained
+response turns. Matched file-change starts determine edit order, including
+stable or reverted paths; `.codex/` framework-state paths are excluded. Message
+planning and
 material-question references point to completed agent-message events and
 bounded, nonempty text spans. Agent-message carry references also need such a
 span, so a carried answer and plan in one message retain their internal order;
@@ -382,8 +393,11 @@ carried span is `FAIL`. Span offsets are zero-based UTF-16 code units into the
 captured message text. Within one event, plan and question spans must not
 overlap; a dependent plan must follow each linked material question and a
 carried-forward answer. Native command and file-change carries, like native
-todo-list plans, retain event-line ordering and have no text span. Each native
-todo-list started, updated, or completed observation retains its own ordering. A material question may have an empty
+todo-list plans, retain event-line ordering and have no text span. A completed
+command carry requires an integer `exit_code` exactly equal to `0`; nulls,
+booleans, strings, and other coercible values do not establish successful
+carry evidence. Each native todo-list started, updated, or completed
+observation retains its own ordering. A material question may have an empty
 `decision_indexes` list when it concerns a choice outside the frozen decision
 set; it does not satisfy any indexed decision. Offering options in a question
 can be assessed as `no_dependent_plan` when no dependent plan was committed.

@@ -177,6 +177,7 @@ function parseTranscript(turn, admitted, label) {
   const messages = [];
   const commands = [];
   const nativePlanEvents = [];
+  const todoListLifecycles = new Map();
   const changes = [];
   const startedChanges = [];
   let completedTurn = false;
@@ -224,12 +225,26 @@ function parseTranscript(turn, admitted, label) {
     }
     if (event.type === "turn.completed") {
       if (!turnStartSeen || failureSeen) validStartedPrefix = false;
+      if ([...todoListLifecycles.values()].some((state) => state !== "completed")) validStartedPrefix = false;
       completedTurn = true;
     }
     if (["item.completed", "item.started", "item.updated"].includes(event.type) && item) {
       if (event.type === "item.completed" && item.type === "agent_message" && typeof item.text === "string") messages.push(parsed);
       if (item.type === "command_execution") commands.push(parsed);
-      if (item.type === "todo_list") nativePlanEvents.push(parsed);
+      if (item.type === "todo_list") {
+        nativePlanEvents.push(parsed);
+        const itemId = item.id;
+        if (!nonempty(itemId)) {
+          validStartedPrefix = false;
+        } else if (event.type === "item.started") {
+          if (todoListLifecycles.has(itemId)) validStartedPrefix = false;
+          else todoListLifecycles.set(itemId, "started");
+        } else if (todoListLifecycles.get(itemId) !== "started") {
+          validStartedPrefix = false;
+        } else if (event.type === "item.completed") {
+          todoListLifecycles.set(itemId, "completed");
+        }
+      }
       if (event.type === "item.started" && item.type === "file_change" && Array.isArray(item.changes)) {
         for (const change of item.changes) {
           if (isObject(change) && nonempty(change.path)) {
@@ -319,7 +334,7 @@ function isCarryEvent(transcripts, ref) {
   const parsed = lineEvent(transcripts, ref);
   if (!parsed || parsed.event.type !== "item.completed" || !parsed.item) return false;
   if (parsed.item.type === "agent_message") return typeof parsed.item.text === "string" && parsed.item.text.trim().length > 0;
-  if (parsed.item.type === "command_execution") return parsed.item.status === "completed" && Number(parsed.item.exit_code) === 0 && nonempty(parsed.item.aggregated_output);
+  if (parsed.item.type === "command_execution") return parsed.item.status === "completed" && Number.isInteger(parsed.item.exit_code) && parsed.item.exit_code === 0 && nonempty(parsed.item.aggregated_output);
   if (parsed.item.type === "file_change") return parsed.item.status === "completed" && Array.isArray(parsed.item.changes) && parsed.item.changes.length > 0;
   return false;
 }
@@ -1054,6 +1069,7 @@ function main() {
     if (validReadObserved) missingPolicyReadStatus = "observed";
     else unavailableReasons.push("required_missing_policy_read_unavailable");
   }
+  const earliestObservedProjectEdit = [...observedChanges.values()].flat().sort(compareOrder)[0] || null;
   let task04InspectionStatus = review.case_id === "task-04" ? "unavailable" : "not_required";
   if (requiresTask04Inspection) {
     const declaredPaths = oracleCase.required_inspection_paths;
@@ -1074,7 +1090,8 @@ function main() {
           continue;
         }
         if (initialTranscript.commands.some((command) => isRequiredProjectFileRead(
-          command, relative, digest, review.workspace_root, initialTranscript.turnStartLine, responseLine))) {
+          command, relative, digest, review.workspace_root, initialTranscript.turnStartLine, responseLine)
+          && (!earliestObservedProjectEdit || compareOrder(command, earliestObservedProjectEdit) < 0))) {
           observedPaths.add(relative);
         }
       }

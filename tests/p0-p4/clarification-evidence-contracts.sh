@@ -687,6 +687,94 @@ task04_variant("valid-read", [
     task04_target_read("src/issue_access.py"),
 ])
 
+def task04_ordered_edit_variant(name, reads_before_edit):
+    review = deepcopy(task04_review)
+    edit_path = "src/issue_detail.py"
+    read_events = [task04_target_read("docs/permissions.md"), task04_target_read("src/issue_access.py")]
+    started = {"type": "item.started", "item": {"id": "task04-edit", "type": "file_change",
+        "status": "in_progress", "changes": [{"path": edit_path, "kind": "update"}]}}
+    completed = {"type": "item.completed", "item": {"id": "task04-edit", "type": "file_change",
+        "status": "completed", "changes": [{"path": edit_path, "kind": "update"}]}}
+    before_edit = read_events if reads_before_edit else []
+    after_edit = [] if reads_before_edit else read_events
+    events = [
+        {"type": "thread.started"},
+        {"type": "turn.started"},
+        {"type": "item.completed", "item": {"id": "staged-skill-read", "type": "command_execution",
+         "command": "sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md", "status": "completed",
+         "exit_code": 0, "aggregated_output": "# Workflow\n"}},
+        {"type": "item.completed", "item": {"id": "task04-progress", "type": "agent_message",
+         "text": "I will inspect the existing access rules before concluding whether a question is needed."}},
+        *before_edit,
+        started,
+        completed,
+        *after_edit,
+        {"type": "item.completed", "item": {"id": "task04-no-question", "type": "agent_message",
+         "text": "I inspected the current access rules; no product question is needed."}},
+        {"type": "turn.completed"},
+    ]
+    message_line = len(events) - 1
+    completion_line = 6 + len(before_edit)
+    review["semantic_review"]["dependent_edit_refs"] = [{
+        "turn": 1, "line": completion_line, "path": edit_path,
+        "rationale": "The confirmed stable-path edit is ordered against the retained inspection reads.",
+    }]
+    write_events(review, 1, f"task04-{name}.jsonl", events)
+    review["semantic_review"]["question_assessments"] = [{
+        "turn": 1, "line": message_line, "classification": "not_a_question",
+        "decision_indexes": [], "rationale": "The captured response makes no product question after inspection.",
+    }]
+    write_json(f"review-task04-{name}.json", review)
+
+task04_ordered_edit_variant("late-read-after-edit", False)
+task04_ordered_edit_variant("early-read-before-edit", True)
+
+# Reads in the initial response must precede the earliest observed edit in any response turn.
+task04_multi_turn_review = deepcopy(task04_review)
+task04_multi_turn_review["inputs"] = [task04_review["inputs"][0], deepcopy(base["inputs"][1])]
+task04_multi_turn_review["transcripts"] = [task04_review["transcripts"][0], deepcopy(base["transcripts"][1])]
+turn_one = [
+    {"type": "thread.started"},
+    {"type": "turn.started"},
+    {"type": "item.completed", "item": {"id": "staged-skill-read", "type": "command_execution",
+     "command": "sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md", "status": "completed",
+     "exit_code": 0, "aggregated_output": "# Workflow\n"}},
+    task04_target_read("docs/permissions.md"),
+    task04_target_read("src/issue_access.py"),
+    {"type": "item.completed", "item": {"id": "task04-progress", "type": "agent_message",
+     "text": "I will inspect the current access rules before reaching a conclusion."}},
+    {"type": "turn.completed"},
+]
+turn_two = [
+    {"type": "thread.started"},
+    {"type": "turn.started"},
+    {"type": "item.started", "item": {"id": "task04-second-turn-edit", "type": "file_change",
+     "status": "in_progress", "changes": [{"path": "src/issue_detail.py", "kind": "update"}]}},
+    {"type": "item.completed", "item": {"id": "task04-second-turn-edit", "type": "file_change",
+     "status": "completed", "changes": [{"path": "src/issue_detail.py", "kind": "update"}]}},
+    {"type": "item.completed", "item": {"id": "task04-no-question", "type": "agent_message",
+     "text": "I inspected the current access rules; no product question is needed."}},
+    {"type": "turn.completed"},
+]
+write_events(task04_multi_turn_review, 1, "task04-multi-turn-first.jsonl", turn_one)
+write_events(task04_multi_turn_review, 2, "task04-multi-turn-second.jsonl", turn_two)
+task04_multi_turn_review["semantic_review"]["dependent_edit_refs"] = [{
+    "turn": 2, "line": 4, "path": "src/issue_detail.py",
+    "rationale": "The second-turn completed event confirms a stable-path update after inspection.",
+}]
+task04_multi_turn_review["semantic_review"]["question_assessments"] = [
+    {"turn": 1, "line": 6, "classification": "not_a_question", "decision_indexes": [],
+     "rationale": "This first-turn progress message makes no product question."},
+    {"turn": 2, "line": 5, "classification": "not_a_question", "decision_indexes": [],
+     "rationale": "The final response makes no product question after inspection."},
+]
+task04_multi_turn_review["semantic_review"]["answer_assessments"] = [{
+    "kind": "unsolicited", "answer_turn": 2, "question_ref": None, "outcome": "unprompted",
+    "decision_indexes": [], "carry_refs": [],
+    "rationale": "The retained second input was supplied without a preceding material question.",
+}]
+write_json("review-task04-initial-reads-before-second-turn-edit.json", task04_multi_turn_review)
+
 # Task-06 requires an observed failed read of the oracle-declared missing policy.
 task06_review = deepcopy(base)
 task06_review["case_id"] = "task-06"
@@ -808,30 +896,43 @@ review["semantic_review"]["question_assessments"][0]["line"] = 7
 review["semantic_review"]["answer_assessments"][0]["question_ref"] = {"turn": 1, "line": 7}
 write_json("review-native-early-dependent.json", review)
 
-# A pre-question exploratory start stays independent when the list is only
-# updated to a dependent plan after the answer.
+# A todo list may start as independent before its answer carry, then update
+# and complete as a dependent plan later in that same turn.
 review = deepcopy(base)
 turn_one = jsonl("turn-01.events.jsonl")
-turn_one.insert(3, todo_event("started", "exploration", "Inspect existing authorization and sharing code"))
-turn_one[4]["item"]["text"] = task06_question.replace("docs/customer-link-policy.md", "recipient access")
-exploratory_question = turn_one[4]["item"]["text"]
+turn_one[3:3] = [
+    todo_event(state, "exploration", "Inspect existing authorization and sharing code")
+    for state in ("started", "updated", "completed")
+]
+turn_one[6]["item"]["text"] = task06_question.replace("docs/customer-link-policy.md", "recipient access")
+exploratory_question = turn_one[6]["item"]["text"]
 for decision in review["semantic_review"]["decisions"]:
-    decision["question_refs"] = [{"turn": 1, "line": 5}]
-review["semantic_review"]["answer_assessments"][0]["question_ref"] = {"turn": 1, "line": 5}
+    decision["question_refs"] = [{"turn": 1, "line": 7}]
+review["semantic_review"]["answer_assessments"][0]["question_ref"] = {"turn": 1, "line": 7}
 assessment = review["semantic_review"]["question_assessments"][0]
-assessment["line"] = 5
+assessment["line"] = 7
 assessment["text_spans"][0]["end"] = len(exploratory_question)
 review["semantic_review"]["question_assessments"][0]["rationale"] = "The access question remains material after exploratory inspection."
 turn_two = jsonl("turn-02.events.jsonl")
+turn_two.insert(2, todo_event("started", "exploration", "Inspect existing authorization and sharing code"))
 turn_two[4:4] = [
     todo_event("updated", "exploration", "Implement account-free links with owner revocation"),
     todo_event("completed", "exploration", "Implement account-free links with owner revocation"),
 ]
-review["semantic_review"]["dependent_edit_refs"][0]["line"] = 7
+answer_text = turn_two[3]["item"]["text"]
+review["semantic_review"]["question_assessments"][1]["line"] = 4
+review["semantic_review"]["answer_assessments"][0]["carry_refs"] = [{
+    "turn": 2, "line": 4,
+    "text_span": {"start": 0, "end": len(answer_text)},
+}]
+review["semantic_review"]["dependent_edit_refs"][0]["line"] = 8
 save_native("exploratory-then-dependent", review, turn_one, turn_two, [
-    (1, 4, "independent_plan_observed", [], "The initial list only records independent code inspection."),
-    (2, 5, "dependent_plan_observed", [0, 1], "This update commits to a dependent sharing implementation."),
-    (2, 6, "dependent_plan_observed", [0, 1], "This completion retains the dependent implementation plan."),
+    (1, 4, "independent_plan_observed", [], "The initial list starts independent code inspection."),
+    (1, 5, "independent_plan_observed", [], "The initial inspection plan remains independent."),
+    (1, 6, "independent_plan_observed", [], "The initial inspection lifecycle completes independently."),
+    (2, 3, "independent_plan_observed", [], "The same-turn list starts as exploratory inspection."),
+    (2, 5, "dependent_plan_observed", [0, 1], "The list updates to dependent sharing after answer carry."),
+    (2, 6, "dependent_plan_observed", [0, 1], "The dependent lifecycle completes after answer carry."),
 ])
 
 # Dependent plans after answer use native turn/line references without text spans.
@@ -859,6 +960,70 @@ timeout_review = json.loads((root / "review-native-early-dependent.json").read_t
 timeout_events = jsonl("native-early-dependent-turn-1.jsonl")[:-1]
 write_events(timeout_review, 1, "native-early-dependent-timeout.jsonl", timeout_events)
 write_json("review-native-early-dependent-timeout.json", timeout_review)
+
+# An open native plan lifecycle is valid evidence in a genuine partial prefix;
+# its observed pre-question violation remains reportable while completion is unavailable.
+partial_plan_review = json.loads((root / "review-native-early-dependent.json").read_text())
+partial_events = jsonl("native-early-dependent-turn-1.jsonl")
+partial_events = [partial_events[0], partial_events[1], partial_events[2], partial_events[3], partial_events[6]]
+write_events(partial_plan_review, 1, "native-open-plan-partial-prefix.jsonl", partial_events)
+set_native_assessments(partial_plan_review, [
+    (1, 4, "dependent_plan_observed", [0, 1], "The open native plan already commits to the frozen implementation choices."),
+])
+for decision in partial_plan_review["semantic_review"]["decisions"]:
+    decision["question_refs"] = [{"turn": 1, "line": 5}]
+partial_plan_review["semantic_review"]["question_assessments"][0]["line"] = 5
+partial_plan_review["semantic_review"]["answer_assessments"][0]["question_ref"] = {"turn": 1, "line": 5}
+write_json("review-native-open-plan-partial-prefix.json", partial_plan_review)
+
+def save_invalid_todo_lifecycle(name, lifecycle_events, outcome="independent_plan_observed", indexes=None):
+    review = deepcopy(base)
+    events = jsonl("turn-02.events.jsonl")
+    events[-1:-1] = lifecycle_events
+    first_lifecycle_line = len(events) - len(lifecycle_events)
+    write_events(review, 2, f"native-invalid-{name}.jsonl", events)
+    decision_indexes = [] if indexes is None else indexes
+    set_native_assessments(review, [
+        (2, first_lifecycle_line + index, outcome, decision_indexes,
+         "This retained todo event is explicitly assessed for the frozen decisions.")
+        for index in range(len(lifecycle_events))
+    ])
+    write_json(f"review-native-invalid-{name}.json", review)
+
+orphan_updated = todo_event("updated", "orphan", "Implement the dependent sharing behavior")
+orphan_completed = todo_event("completed", "orphan", "Implement the dependent sharing behavior")
+duplicate_start = [
+    todo_event("started", "duplicate", "Inspect current access rules"),
+    todo_event("started", "duplicate", "Implement dependent sharing behavior"),
+]
+post_close_update = [
+    todo_event("started", "closed", "Inspect current access rules"),
+    todo_event("completed", "closed", "Inspect current access rules"),
+    todo_event("updated", "closed", "Implement dependent sharing behavior"),
+]
+open_completed_turn = todo_event("started", "open", "Implement the dependent sharing behavior")
+missing_todo_id = todo_event("started", "", "Implement the dependent sharing behavior")
+nonstring_todo_id = todo_event("started", "numeric", "Implement the dependent sharing behavior")
+nonstring_todo_id["item"]["id"] = 7
+post_close_completion = [
+    todo_event("started", "completed-twice", "Inspect current access rules"),
+    todo_event("completed", "completed-twice", "Inspect current access rules"),
+    todo_event("completed", "completed-twice", "Implement dependent sharing behavior"),
+]
+for name, lifecycle in {
+    "unmatched-update": [orphan_updated],
+    "unmatched-completed": [orphan_completed],
+    "duplicate-start": duplicate_start,
+    "post-close-update": post_close_update,
+    "open-at-turn-completion": [open_completed_turn],
+    "missing-id": [missing_todo_id],
+    "nonstring-id": [nonstring_todo_id],
+    "post-close-completion": post_close_completion,
+}.items():
+    save_invalid_todo_lifecycle(name, lifecycle)
+save_invalid_todo_lifecycle(
+    "completion-without-start-after-answer", [orphan_completed], "dependent_plan_observed", [0, 1]
+)
 PY_THIRD_COMMENT_REGRESSIONS
 
 python3 - "$evidence_root" <<'PY_LATE_COMPLETION_FIXTURE'
@@ -1988,6 +2153,24 @@ PY_STALE_RECEIPT
     else
         fail "task-04 rejected successful retained reads matching both frozen target hashes: $(cat "$framework_grade")"
     fi
+    if run_importer --review "$evidence_root/review-task04-early-read-before-edit.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .task04_inspection_status == "observed"' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "task-04 rejected both frozen reads that preceded a confirmed stable-path edit: $(cat "$framework_grade")"
+    fi
+    if run_importer --review "$evidence_root/review-task04-late-read-after-edit.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and .task04_inspection_status == "unavailable" and (.unavailable_reasons | index("required_task04_inspection_evidence_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "task-04 admitted target reads that followed the earliest observed project write: $(cat "$framework_grade")"
+    fi
+    if run_importer --review "$evidence_root/review-task04-initial-reads-before-second-turn-edit.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .task04_inspection_status == "observed"' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "task-04 did not recognize initial-turn reads before the earliest second-turn project edit: $(cat "$framework_grade")"
+    fi
 
     test_start "valid failed, empty, and started-only file-change events do not infer a write"
     valid_file_change_count=0
@@ -2237,6 +2420,29 @@ PY_STALE_RECEIPT
         fail "separately assessed native todo_list events after answer were not admitted: $(cat "$framework_grade")"
     fi
 
+    test_start "malformed or incomplete native todo_list lifecycles invalidate completed turns"
+    invalid_todo_lifecycle_count=0
+    for review_name in \
+        review-native-invalid-unmatched-update.json \
+        review-native-invalid-unmatched-completed.json \
+        review-native-invalid-completion-without-start-after-answer.json \
+        review-native-invalid-duplicate-start.json \
+        review-native-invalid-post-close-update.json \
+        review-native-invalid-open-at-turn-completion.json \
+        review-native-invalid-missing-id.json \
+        review-native-invalid-nonstring-id.json \
+        review-native-invalid-post-close-completion.json; do
+        if run_importer --review "$evidence_root/$review_name" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_2_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_todo_lifecycle_count=$((invalid_todo_lifecycle_count + 1))
+        fi
+    done
+    if [[ "$invalid_todo_lifecycle_count" -eq 9 ]]; then
+        pass
+    else
+        fail "an unmatched, duplicate, malformed-ID, or open completed-turn todo lifecycle remained usable ($invalid_todo_lifecycle_count/9 unavailable)"
+    fi
+
     test_start "an independent todo_list start may become a dependent plan after the answer"
     if run_importer --review "$evidence_root/review-native-exploratory-then-dependent.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
@@ -2273,6 +2479,13 @@ PY_STALE_RECEIPT
         pass
     else
         fail "a native plan ordering violation was lost when the turn timed out: $(cat "$framework_grade")"
+    fi
+    test_start "an open todo lifecycle in a partial prefix preserves its observed early-plan violation"
+    if run_importer --review "$evidence_root/review-native-open-plan-partial-prefix.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | index("dependent_plan_preceded_question")) != null and (.unavailable_reasons | index("transcript_turn_1_completion_unavailable")) != null and (.unavailable_reasons | index("transcript_turn_1_started_prefix_unavailable")) == null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a genuine open partial todo prefix was rejected or hid its observed ordering violation: $(cat "$framework_grade")"
     fi
 
     python3 - "$evidence_root" <<'PY_RELATIVE_FILE_CHANGE'
@@ -3388,6 +3601,21 @@ review["semantic_review"]["dependent_edit_refs"][0]["line"] = 6
 set_plans(review, "dependent_plan_observed", 2, 4, 0, utf16_length(plan_text))
 write_json("review-native-plan-before-carry.json", review)
 
+def save_native_command_carry(name, exit_code):
+    review = deepcopy(base)
+    events = [json.loads(line) for line in (root / "turn-02.events.jsonl").read_text().splitlines()]
+    events.insert(4, event_message(plan_text, "dependent-plan"))
+    events[3]["item"]["exit_code"] = exit_code
+    write_transcript(review, 2, f"turn-02-command-carry-{name}.jsonl", events)
+    review["semantic_review"]["answer_assessments"][0]["carry_refs"] = [{"turn": 2, "line": 4}]
+    review["semantic_review"]["dependent_edit_refs"][0]["line"] = 6
+    set_plans(review, "dependent_plan_observed", 2, 5, 0, utf16_length(plan_text))
+    write_json(f"review-command-carry-{name}.json", review)
+
+save_native_command_carry("numeric-zero", 0)
+for name, value in (("null", None), ("false", False), ("empty-string", ""), ("string-zero", "0")):
+    save_native_command_carry(name, value)
+
 review["semantic_review"]["answer_assessments"][0]["outcome"] = "not_carried"
 review["semantic_review"]["answer_assessments"][0]["carry_refs"] = []
 write_json("review-plan-after-answer-missing-carry.json", review)
@@ -3591,6 +3819,25 @@ PY_PLANNING_CASES
         pass
     else
         fail "native event carry references lost event-line chronology"
+    fi
+
+    test_start "command carry requires a numeric zero exit code"
+    numeric_zero_carry=0
+    if run_importer --review "$evidence_root/review-command-carry-numeric-zero.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
+        numeric_zero_carry=1
+    fi
+    invalid_command_carry_count=0
+    for variant in null false empty-string string-zero; do
+        if run_importer --review "$evidence_root/review-command-carry-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null; then
+            invalid_command_carry_count=$((invalid_command_carry_count + 1))
+        fi
+    done
+    if [[ "$numeric_zero_carry" -eq 1 && "$invalid_command_carry_count" -eq 4 ]]; then
+        pass
+    else
+        fail "command carry coerced an invalid exit code or rejected integer zero ($invalid_command_carry_count/4 invalid codes unavailable)"
     fi
 
     test_start "same-turn plan before later carry-forward fails"
