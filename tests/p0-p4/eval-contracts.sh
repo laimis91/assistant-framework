@@ -381,6 +381,21 @@ const unsolicited = {
   }
 };
 if (!validate(unsolicited)) process.exit(1);
+const validateArtifactRef = new Ajv2020({ allErrors: true, strict: false }).compile(schema.$defs.artifactRef);
+for (const artifactPath of [
+  "actor-prompts/task-01.md", "C:/relative-like/path", "space path/file name.txt", "folder/file\n"
+]) {
+  if (!validateArtifactRef({ path: artifactPath, sha256: "a".repeat(64) })) {
+    throw new Error("safe importer-relative artifact path was rejected: " + JSON.stringify(artifactPath));
+  }
+}
+for (const artifactPath of [
+  null, "", "   ", "/absolute", "../outside", "a/../b", "a/.", "a//b", "a/", "back\\slash", "nul\u0000byte"
+]) {
+  if (validateArtifactRef({ path: artifactPath, sha256: "a".repeat(64) })) {
+    throw new Error("unsafe importer artifact path was accepted: " + JSON.stringify(artifactPath));
+  }
+}
 const falselyBoundUnsolicited = structuredClone(unsolicited);
 falselyBoundUnsolicited.semantic_review.answer_assessments[0].question_ref = { turn: 1, line: 1 };
 if (validate(falselyBoundUnsolicited)) process.exit(1);

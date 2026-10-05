@@ -78,7 +78,11 @@
         "tests/test_issue_access.py": "1d239e9688a050c6b4b51a7b16e35e64c2d0c13dd78878c4c04bf5ec0d05bede",
         "tests/test_issue_detail.py": "4a12135c8a5e31356982d1637972ea0046cd761d0f11b21a1dae1db0100019cc"
       },
-      "planning_requirement": "before_edit_only"
+      "planning_requirement": "before_edit_only",
+      "required_inspection_paths": [
+        "docs/permissions.md",
+        "src/issue_access.py"
+      ]
     },
     {
       "case_id": "task-05",

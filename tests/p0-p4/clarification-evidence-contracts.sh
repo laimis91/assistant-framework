@@ -85,6 +85,9 @@ if "stable question ID `link-access`" not in task08_prompt or "do not ask it whe
     raise SystemExit("task-08 does not bind its optional access question to the stable ID")
 if not task08_answer.startswith("link-access: "):
     raise SystemExit("task-08 continuation answer does not identify its open question")
+task04 = next(case for case in oracle["cases"] if case["case_id"] == "task-04")
+if task04.get("required_inspection_paths") != ["docs/permissions.md", "src/issue_access.py"]:
+    raise SystemExit("task-04 frozen inspection targets are missing or drifted")
 PY_ORACLE_PROMPTS
 then
     pass
@@ -402,7 +405,7 @@ oracle = {
     "cases": [
         {"case_id": "task-01", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_plan", "hidden_material_decisions": ["recipient access", "link revocation"]},
         {"case_id": "task-03", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_edit_only", "hidden_material_decisions": []},
-        {"case_id": "task-04", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_edit_only", "hidden_material_decisions": ["recipient access"]},
+        {"case_id": "test-before-edit-only", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_edit_only", "hidden_material_decisions": ["recipient access"]},
         {"case_id": "task-06", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_edit_only", "hidden_material_decisions": ["external-link policy from unavailable authority"]},
         {"case_id": "task-08", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_edit_only", "hidden_material_decisions": ["link revocation"]},
     ],
@@ -454,7 +457,7 @@ t1 = write("turn-01.events.jsonl", turn_1)
 t2 = write("turn-02.events.jsonl", turn_2)
 before = write("before-files.json", {"src/issue_detail.py": old_hash})
 after = write("after-files.json", {"src/issue_detail.py": new_hash})
-diff = write("turn.diff.patch", "diff --git a/src/issue_detail.py b/src/issue_detail.py\n--- a/src/issue_detail.py\n+++ b/src/issue_detail.py\n")
+diff = write("turn.diff.patch", "diff --git a/src/issue_detail.py b/src/issue_detail.py\n--- a/src/issue_detail.py\n+++ b/src/issue_detail.py\n@@ -1 +1 @@\n-old implementation\n+account-free access with revocation\n")
 
 review = {
     "schema_version": "clarification-evidence/v1",
@@ -522,6 +525,7 @@ oracle = json.loads((root / "oracle.json").read_text())
 canonical_oracle_bytes = (fixture_root / "clarification-oracle.json").read_bytes()
 canonical_oracle = json.loads(canonical_oracle_bytes)
 canonical_task06 = next(case for case in canonical_oracle["cases"] if case["case_id"] == "task-06")
+canonical_task04 = next(case for case in canonical_oracle["cases"] if case["case_id"] == "task-04")
 
 def write_json(name, value):
     raw = (json.dumps(value, sort_keys=True) + "\n").encode()
@@ -604,6 +608,84 @@ save_baseline_variant("added-project-file", valid_baseline, {
 save_baseline_variant("modified-project-file", valid_baseline, {
     "src/issue_detail.py": sha256(b"modified before admission\n").hexdigest(),
 })
+
+# Task-04 requires successful retained reads of both frozen inspection targets.
+task04_prompt = write_bytes("canonical-task04-prompt.txt", (fixture_root / "actor-prompts/task-04.md").read_bytes())
+task04_oracle = write_bytes("canonical-task04-oracle.json", canonical_oracle_bytes)
+task04_baseline = write_json("canonical-task04-before-files.json", canonical_task04["initial_workspace_sha256"])
+task04_review = deepcopy(base)
+task04_review["case_id"] = "task-04"
+task04_review["inputs"] = [{"turn": 1, "kind": "initial_prompt", "artifact": task04_prompt}]
+task04_review["transcripts"] = [base["transcripts"][0]]
+task04_review["workspace_observation"].update({
+    "before_manifest": task04_baseline,
+    "after_manifest": task04_baseline,
+    "diff": write_bytes("task04-no-edit.patch", b""),
+})
+task04_review["semantic_review"].update({
+    "planning_applicability": {
+        "oracle_case_id": "task-04",
+        "oracle_sha256": task04_oracle["sha256"],
+        "requirement": "before_edit_only",
+        "rationale": "The frozen task permits no product question only after the existing access rules are inspected.",
+    },
+    "decisions": [],
+    "question_assessments": [],
+    "answer_assessments": [],
+    "dependent_edit_refs": [],
+})
+task04_review["semantic_review"].pop("dependent_planning_assessments", None)
+task04_review["activation"]["skill_read_ref"] = {"turn": 1, "line": 3}
+
+def task04_command(command_text, output, item_id):
+    return {"type": "item.completed", "item": {
+        "id": item_id, "type": "command_execution", "command": command_text,
+        "status": "completed", "exit_code": 0, "aggregated_output": output,
+    }}
+
+def task04_target_read(relative, output=None):
+    if output is None:
+        output = (fixture_root / "actor-projects/task-04" / relative).read_bytes().decode("utf-8")
+    return task04_command(f"cat {relative}", output, "read-" + relative.replace("/", "-"))
+
+def task04_variant(name, reads):
+    review = deepcopy(task04_review)
+    events = [
+        {"type": "thread.started"},
+        {"type": "turn.started"},
+        {"type": "item.completed", "item": {"id": "staged-skill-read", "type": "command_execution",
+         "command": "sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md", "status": "completed",
+         "exit_code": 0, "aggregated_output": "# Workflow\n"}},
+        {"type": "item.completed", "item": {"id": "task04-progress", "type": "agent_message",
+         "text": "I will inspect the existing access rules before concluding whether a question is needed."}},
+        *reads,
+        {"type": "item.completed", "item": {"id": "task04-no-question", "type": "agent_message",
+         "text": "I inspected the current access rules; no product question is needed."}},
+        {"type": "turn.completed"},
+    ]
+    message_line = len(events) - 1
+    write_events(review, 1, f"task04-{name}.jsonl", events)
+    review["semantic_review"]["question_assessments"] = [{
+        "turn": 1, "line": message_line, "classification": "not_a_question",
+        "decision_indexes": [], "rationale": "The captured response makes no product question after the stated inspection.",
+    }]
+    write_json(f"review-task04-{name}.json", review)
+
+task04_variant("no-read", [])
+task04_variant("search-only", [task04_command(
+    "rg docs/permissions.md src/issue_access.py",
+    "docs/permissions.md\n" + (fixture_root / "actor-projects/task-04/docs/permissions.md").read_bytes().decode("utf-8")
+    + "\nsrc/issue_access.py\n" + (fixture_root / "actor-projects/task-04/src/issue_access.py").read_bytes().decode("utf-8"),
+    "search-read-mentions-targets",
+)])
+task04_variant("wrong-content", [
+    task04_target_read("docs/permissions.md", "The output does not match the frozen policy bytes."),
+    task04_target_read("src/issue_access.py"),
+])
+task04_variant("valid-read", [
+    task04_target_read("docs/permissions.md"),
+    task04_target_read("src/issue_access.py"),
+])
 
 # Task-06 requires an observed failed read of the oracle-declared missing policy.
 task06_review = deepcopy(base)
@@ -974,19 +1056,23 @@ test_importer_for_oracle() {
     case "$oracle_name" in
         oracle-pure-delete.json)
             trust_id="pure-delete"
-            pinned_digest="ae92328920758ba9060ed9c2d0092036193169797f1f99c5ef0020a60dd446d0"
+            pinned_digest="7bf5cdd501bb45d5509063402a8e1407b5e9d8dd93f09155f0cd85a6362b4467"
             ;;
         oracle-space-path.json|oracle-space-rename.json)
             trust_id="space-paths"
-            pinned_digest="4b8443d6ddb3e27ce9f4e54ca00cced5bb644aced68d08614692f6c71a9a1bc4"
+            pinned_digest="65f45be56eaf95b53762c0185f00e5743d71ce1be427ce2396f67a956cf452d3"
             ;;
         oracle-continuation.json)
             trust_id="continuation"
-            pinned_digest="5c3fa714276a6bb78dd1a41a0e3242024e6ea5dd709c4604a5a8bb9086373cf7"
+            pinned_digest="75c88c6469e3c3015174fd61e43eca2f3fa5f875f319358cbeb6f543f384e661"
+            ;;
+        oracle-empty-file-changes.json)
+            trust_id="empty-file-changes"
+            pinned_digest="43aaefe8db32e89f15e38c68dc98ff20d60856d9fd3944ef237c45e151683aeb"
             ;;
         *)
             trust_id="base"
-            pinned_digest="a243f7f1f860e1af38cfb7200e0cef3c15da4e22b14b65ce8919aba8bbe2a634"
+            pinned_digest="540c3b83e5bc4f5530d68f2d3960c74b1beb1fc699cda7e7ac9b2fe01912d10d"
             ;;
     esac
     install_root="$evidence_root/test-importers/$trust_id"
@@ -1347,6 +1433,13 @@ events[-1:-1] = [
 write_events(review, 1, "turn-01-item-payload-valid-zero-decision.jsonl", events)
 save_review("review-item-payload-valid-zero-decision.json", review)
 
+review = deepcopy(zero_decision_control)
+events = [event for event in events_for(review, 1)
+          if not (event.get("type") == "item.completed"
+                  and event.get("item", {}).get("type") == "agent_message")]
+write_events(review, 1, "turn-01-no-agent-message-zero-decision.jsonl", events)
+save_review("review-no-agent-message-zero-decision.json", review)
+
 workspace_file = str(root / "workspace/src/issue_detail.py")
 for suffix, payload in (
     ("missing-status", {"changes": []}),
@@ -1449,6 +1542,37 @@ write_diff(review, "diff-pure-delete.patch", (
     + b"diff --git a/src/removed.py b/src/removed.py\ndeleted file mode 100644\n--- a/src/removed.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-removed file\n"
 ))
 save_review("review-diff-pure-delete.json", review)
+
+empty_digest = sha256(b"").hexdigest()
+review = deepcopy(base)
+before = json.loads((root / review["workspace_observation"]["before_manifest"]["path"]).read_text())
+after = json.loads((root / review["workspace_observation"]["after_manifest"]["path"]).read_text())
+before["src/removed-empty.py"] = empty_digest
+after["src/new-empty.py"] = empty_digest
+review["workspace_observation"]["before_manifest"] = write_json("before-empty-file-changes.json", before)
+review["workspace_observation"]["after_manifest"] = write_json("after-empty-file-changes.json", after)
+oracle = json.loads((root / "oracle.json").read_text())
+task = next(case for case in oracle["cases"] if case["case_id"] == "task-01")
+task["initial_workspace_sha256"]["src/removed-empty.py"] = empty_digest
+oracle_ref = write_json("oracle-empty-file-changes.json", oracle)
+review["semantic_review"]["planning_applicability"]["oracle_sha256"] = oracle_ref["sha256"]
+events = events_for(review, 2)
+file_change = next(event["item"] for event in events if event.get("item", {}).get("type") == "file_change")
+file_change["changes"].extend([
+    {"path": str(root / "workspace/src/new-empty.py"), "kind": "add"},
+    {"path": str(root / "workspace/src/removed-empty.py"), "kind": "delete"},
+])
+write_events(review, 2, "turn-02-empty-file-changes.jsonl", events)
+review["semantic_review"]["dependent_edit_refs"].extend([
+    {"turn": 2, "line": 5, "path": "src/new-empty.py", "rationale": "An empty project file was added after clarification."},
+    {"turn": 2, "line": 5, "path": "src/removed-empty.py", "rationale": "An empty project file was deleted after clarification."},
+])
+write_diff(review, "diff-empty-file-changes.patch", (
+    (root / "turn.diff.patch").read_bytes()
+    + b"diff --git a/src/new-empty.py b/src/new-empty.py\nnew file mode 100644\n"
+    + b"diff --git a/src/removed-empty.py b/src/removed-empty.py\ndeleted file mode 100644\n"
+))
+save_review("review-empty-file-changes.json", review)
 
 stable_manifest = json.loads((root / base["workspace_observation"]["before_manifest"]["path"]).read_text())
 for name, early in (("proper", False), ("early", True), ("missing-refs", False)):
@@ -1837,6 +1961,34 @@ PY_STALE_RECEIPT
         fail "a valid item lifecycle, future item type, empty message, or zero-decision control was rejected: $(cat "$framework_grade")"
     fi
 
+    test_start "a completed response turn without an agent message is unavailable"
+    if run_importer --review "$evidence_root/review-no-agent-message-zero-decision.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_1_agent_message_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a completed zero-decision turn without an observed agent message was admitted: $(cat "$framework_grade")"
+    fi
+
+    test_start "task-04 zero-question behavior requires successful hash-bound reads of both frozen targets"
+    invalid_task04_read_count=0
+    for variant in no-read search-only wrong-content; do
+        if run_importer --review "$evidence_root/review-task04-$variant.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and .task04_inspection_status == "unavailable" and (.unavailable_reasons | index("required_task04_inspection_evidence_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_task04_read_count=$((invalid_task04_read_count + 1))
+        fi
+    done
+    if [[ "$invalid_task04_read_count" -eq 3 ]]; then
+        pass
+    else
+        fail "task-04 accepted missing, search-only, or non-matching inspection output ($invalid_task04_read_count/3 unavailable)"
+    fi
+    if run_importer --review "$evidence_root/review-task04-valid-read.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .task04_inspection_status == "observed"' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "task-04 rejected successful retained reads matching both frozen target hashes: $(cat "$framework_grade")"
+    fi
+
     test_start "valid failed, empty, and started-only file-change events do not infer a write"
     valid_file_change_count=0
     for variant in completed-empty failed-empty failed-with-change-entry started-only; do
@@ -1908,6 +2060,14 @@ PY_STALE_RECEIPT
         pass
     else
         fail "a valid pure add or pure delete diff did not remain supported"
+    fi
+
+    test_start "mode-only empty-file additions and deletions remain supported"
+    if run_importer --review "$evidence_root/review-empty-file-changes.json" --oracle "$evidence_root/oracle-empty-file-changes.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 3' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "valid mode-only empty-file changes were rejected: $(cat "$framework_grade")"
     fi
 
     test_start "reverted edits remain ordered evidence with full path-reference coverage"
@@ -2304,6 +2464,21 @@ def write_turn_events(review, name, events):
 def save_review(name, review):
     (root / name).write_text(json.dumps(review, sort_keys=True) + "\n")
 
+for variant, content in (
+    ("header-only", b""),
+    ("empty-hunk", b"@@ -0,0 +0,0 @@\n"),
+    ("context-only", b"@@ -1 +1 @@\n old implementation\n"),
+    ("unsupported-binary", b"Binary files a/src/issue_detail.py and b/src/issue_detail.py differ\n"),
+    ("hybrid-binary", b"@@ -1 +1 @@\n-old implementation\n+account-free access with revocation\nGIT binary patch\nliteral 3\n"),
+):
+    review = deepcopy(base)
+    diff = (b"diff --git a/src/issue_detail.py b/src/issue_detail.py\n"
+            b"--- a/src/issue_detail.py\n+++ b/src/issue_detail.py\n" + content)
+    diff_name = f"same-path-{variant}.diff.patch"
+    (root / diff_name).write_bytes(diff)
+    review["workspace_observation"]["diff"] = {"path": diff_name, "sha256": sha256(diff).hexdigest()}
+    save_review(f"review-same-path-{variant}.json", review)
+
 headerless = deepcopy(base)
 headerless["workspace_observation"]["before_manifest"] = write_json_ref("before-headerless.json", {})
 headerless["workspace_observation"]["after_manifest"] = write_json_ref("after-headerless.json", {})
@@ -2364,6 +2539,7 @@ def make_spaced_review(rename):
             f"rename to {new_path}\n"
             f"--- a/{old_path}\n"
             f"+++ b/{new_path}\n"
+            "@@ -1 +1 @@\n-old implementation\n+account-free access with revocation\n"
         ).encode()
     else:
         changes[0]["path"] = str(root / "workspace" / old_path)
@@ -2374,6 +2550,7 @@ def make_spaced_review(rename):
             f"diff --git a/{old_path} b/{new_path}\n"
             f"--- a/{old_path}\n"
             f"+++ b/{new_path}\n"
+            "@@ -1 +1 @@\n-old implementation\n+account-free access with revocation\n"
         ).encode()
     write_turn_events(review, "turn-02-space-rename.jsonl" if rename else "turn-02-space-path.jsonl", events)
     (root / ("space-rename.diff.patch" if rename else "space-path.diff.patch")).write_bytes(diff)
@@ -2392,6 +2569,20 @@ PY_DIFF_ADMISSION_FIXTURES
         pass
     else
         fail "a nonempty headerless diff was treated as an empty path inventory: $(cat "$framework_grade")"
+    fi
+
+    test_start "content changes require complete counted textual changes or supported empty-file metadata"
+    incomplete_diff_count=0
+    for variant in header-only empty-hunk context-only unsupported-binary hybrid-binary; do
+        if run_importer --review "$evidence_root/review-same-path-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("workspace_diff_paths_unavailable")) != null' "$framework_grade" >/dev/null; then
+            incomplete_diff_count=$((incomplete_diff_count + 1))
+        fi
+    done
+    if [[ "$incomplete_diff_count" -eq 5 ]]; then
+        pass
+    else
+        fail "a changed manifest was supported without added/deleted text lines in a complete hunk ($incomplete_diff_count/5 unavailable)"
     fi
 
     test_start "unquoted Git diff header accepts an equal-side path containing spaces"
@@ -2456,6 +2647,7 @@ rename_diff = (
     "rename to src/renamed_issue_detail.py\n"
     "--- a/src/issue_detail.py\n"
     "+++ b/src/renamed_issue_detail.py\n"
+    "@@ -1 +1 @@\n-old implementation\n+account-free access with revocation\n"
 ).encode()
 (root / "rename.diff.patch").write_bytes(rename_diff)
 review["workspace_observation"]["diff"] = {
@@ -2469,6 +2661,37 @@ review["semantic_review"]["dependent_edit_refs"] = [
      "rationale": "The rename created the new project path after clarification."},
 ]
 (root / "review-supported-rename.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+
+reverse_review = json.loads(json.dumps(review))
+reverse_diff = (
+    "diff --git a/src/renamed_issue_detail.py b/src/issue_detail.py\n"
+    "similarity index 91%\n"
+    "rename from src/renamed_issue_detail.py\n"
+    "rename to src/issue_detail.py\n"
+    "--- a/src/renamed_issue_detail.py\n"
+    "+++ b/src/issue_detail.py\n"
+).encode()
+(root / "reverse-rename.diff.patch").write_bytes(reverse_diff)
+reverse_review["workspace_observation"]["diff"] = {"path": "reverse-rename.diff.patch", "sha256": sha256(reverse_diff).hexdigest()}
+(root / "review-reversed-rename-without-digests.json").write_text(json.dumps(reverse_review, sort_keys=True) + "\n")
+
+pure_review = json.loads(json.dumps(review))
+pure_after = json.loads((root / pure_review["workspace_observation"]["after_manifest"]["path"]).read_text())
+pure_after["src/renamed_issue_detail.py"] = old_hash
+pure_after_raw = (json.dumps(pure_after, sort_keys=True) + "\n").encode()
+(root / "after-pure-rename.json").write_bytes(pure_after_raw)
+pure_review["workspace_observation"]["after_manifest"] = {"path": "after-pure-rename.json", "sha256": sha256(pure_after_raw).hexdigest()}
+pure_diff = (
+    "diff --git a/src/issue_detail.py b/src/renamed_issue_detail.py\n"
+    "similarity index 100%\n"
+    "rename from src/issue_detail.py\n"
+    "rename to src/renamed_issue_detail.py\n"
+    "--- a/src/issue_detail.py\n"
+    "+++ b/src/renamed_issue_detail.py\n"
+).encode()
+(root / "pure-rename.diff.patch").write_bytes(pure_diff)
+pure_review["workspace_observation"]["diff"] = {"path": "pure-rename.diff.patch", "sha256": sha256(pure_diff).hexdigest()}
+(root / "review-pure-rename.json").write_text(json.dumps(pure_review, sort_keys=True) + "\n")
 PY_RENAME_CAPTURE
     test_start "rename diff sides agree with before and after manifests"
     if run_importer --review "$evidence_root/review-supported-rename.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
@@ -2476,6 +2699,20 @@ PY_RENAME_CAPTURE
         pass
     else
         fail "a rename consistently recorded by both manifests and native events was not supported: $(cat "$framework_grade")"
+    fi
+    test_start "reversed rename without directional manifest digests is unavailable"
+    if run_importer --review "$evidence_root/review-reversed-rename-without-digests.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("workspace_diff_paths_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a reversed rename was admitted without before-source and after-destination digests: $(cat "$framework_grade")"
+    fi
+    test_start "content-preserving rename remains supported without a content hunk"
+    if run_importer --review "$evidence_root/review-pure-rename.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 2' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "an equal-content rename was rejected without textual content changes: $(cat "$framework_grade")"
     fi
     test_start "an earlier same-turn file-change start remains earliest when the operation completes later"
     if run_importer --review "$evidence_root/review-start-before-question-confirmed-after.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
@@ -2662,7 +2899,7 @@ for name, value in (("before-journal.json", before), ("after-journal.json", afte
         review["workspace_observation"]["before_manifest"] = ref
     else:
         review["workspace_observation"]["after_manifest"] = ref
-diff = b"diff --git a/.codex/tasks/task-state.json b/.codex/tasks/task-state.json\n--- a/.codex/tasks/task-state.json\n+++ b/.codex/tasks/task-state.json\n"
+diff = b"diff --git a/.codex/tasks/task-state.json b/.codex/tasks/task-state.json\n--- a/.codex/tasks/task-state.json\n+++ b/.codex/tasks/task-state.json\n@@ -1 +1 @@\n-workflow state before\n+workflow state after\n"
 (root / "journal-only.patch").write_bytes(diff)
 review["workspace_observation"]["diff"] = {"path":"journal-only.patch","sha256":sha256(diff).hexdigest()}
 (root / "review-journal-only.json").write_text(json.dumps(review, sort_keys=True) + "\n")
@@ -3217,9 +3454,9 @@ review["workspace_observation"]["diff"] = {
 write_json("review-unrelated-material-question.json", review)
 
 review = deepcopy(base)
-review["case_id"] = "task-04"
+review["case_id"] = "test-before-edit-only"
 review["semantic_review"]["planning_applicability"] = {
-    "oracle_case_id": "task-04",
+    "oracle_case_id": "test-before-edit-only",
     "oracle_sha256": oracle_hash,
     "requirement": "before_edit_only",
     "rationale": "This oracle case requires clarification before edits and states no before-plan obligation.",

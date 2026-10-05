@@ -222,7 +222,14 @@ node tools/evals/lib/clarification-evidence.cjs \
 ```
 
 The review binds controller-retained prompt/answer inputs, per-turn native
-Codex JSONL, before/after workspace manifests and a diff by SHA-256. A separate
+Codex JSONL, before/after workspace manifests and a diff by SHA-256. Every
+completed response turn must contain at least one completed `agent_message`; an
+empty message string still counts as an observed event, while a partial turn
+remains incomplete. Artifact
+paths are non-whitespace POSIX project-relative paths: they cannot be absolute,
+contain backslashes or NUL, or have empty, `.` or `..` slash-separated segments.
+The published schema mirrors these importer rules while retaining runtime-accepted
+spaces, newlines, and drive-colon-relative names. A separate
 semantic review must cite actual assistant questions, user answers, carry-forward
 evidence and dependent edits. It can record an unsolicited controller answer as
 `kind: "unsolicited"` with a null question reference and an explicit rationale;
@@ -238,6 +245,13 @@ project path is present with the same digest in both manifests; the reviewer
 must still reference every observed project path. Events for paths absent from
 the manifests remain `UNAVAILABLE`. The importer validates unified diff file
 headers against their Git section and ignores marker-like text inside hunks.
+For a path with changed before/after hashes, its retained section must include a
+fully counted textual hunk with at least one added or deleted content line.
+Pure renames with unchanged content and explicit rename metadata remain valid;
+empty-file additions and deletions require the corresponding file-mode marker
+and SHA-256 of empty bytes, with `/dev/null` headers when file headers are
+present. Binary diff encodings are currently
+unsupported and keep the evidence `UNAVAILABLE`.
 Punctuation by itself is never a material question.
 For a case with zero frozen material decisions, an actual `material` or
 `non_material` question is `FAIL`; `punctuation_only` and `not_a_question`
@@ -259,6 +273,16 @@ oracle, or an unavailable manifest, keeps behavior `UNAVAILABLE` even when a
 review repeats that oracle's digest; no review-provided digest can replace the
 repository-owned manifest. The importer still evaluates supported evidence so
 other specific unavailable reasons remain visible.
+
+For task-04, a zero-question result requires turn 1 to retain successful
+single-file `cat PATH` or `cat -- PATH` commands for both `docs/permissions.md`
+and `src/issue_access.py`, before the final assistant response. An earlier
+progress message is allowed. Each completed
+command must have exit code zero, and its captured output bytes must hash to the
+corresponding frozen workspace digest. The bounded parser accepts optional
+`sh`, `bash`, or `zsh` `-lc` wrappers; search commands, echoed path strings,
+failed or started-only commands, and output that differs from the frozen file
+cannot establish inspection.
 
 The task-08 prompt assigns the stable ID `link-access` only if an access
 clarification is needed and permits the actor to proceed without asking when

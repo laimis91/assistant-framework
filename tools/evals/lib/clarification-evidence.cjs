@@ -11,6 +11,8 @@ const MAX_TOTAL_ARTIFACT_BYTES = 96 * 1024 * 1024;
 const MAX_JSONL_LINES = 100000;
 const MAX_DIFF_PATHS = 10000;
 const SHA256 = /^[0-9a-f]{64}$/;
+const EMPTY_FILE_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+const TASK04_REQUIRED_INSPECTION_PATHS = ["docs/permissions.md", "src/issue_access.py"];
 
 function fail(message) {
   process.stderr.write(`Error: ${message}\n`);
@@ -364,10 +366,35 @@ function changedManifestPaths(before, after) {
   return [...paths].filter((filePath) => before[filePath] !== after[filePath]).sort();
 }
 
+function diffContentMatchesManifest(diff, before, after) {
+  for (const section of diff.sections) {
+    if (section.from !== section.to) {
+      if (section.newFile || section.deletedFile) return false;
+      const oldDigest = before[section.from];
+      const newDigest = after[section.to];
+      if (typeof oldDigest !== "string" || typeof newDigest !== "string") return false;
+      if (oldDigest !== newDigest && !section.hasContentChange) return false;
+      continue;
+    }
+    const oldExists = Object.prototype.hasOwnProperty.call(before, section.from);
+    const newExists = Object.prototype.hasOwnProperty.call(after, section.to);
+    if (oldExists && newExists) {
+      if (section.newFile || section.deletedFile) return false;
+      if (before[section.from] !== after[section.to] && !section.hasContentChange) return false;
+    } else if (!oldExists && newExists) {
+      if (!section.newFile || (after[section.to] !== EMPTY_FILE_SHA256 && !section.hasContentChange)) return false;
+    } else if (oldExists && !newExists) {
+      if (!section.deletedFile || (before[section.from] !== EMPTY_FILE_SHA256 && !section.hasContentChange)) return false;
+    }
+  }
+  return true;
+}
+
 function parseDiffPaths(diffText) {
   const lines = diffText.split(/\r?\n/);
   if (lines.length > MAX_JSONL_LINES) return null;
   const paths = new Set();
+  const sections = [];
   let current = null;
   let sectionCount = 0;
 
@@ -402,6 +429,13 @@ function parseDiffPaths(diffText) {
     }
     paths.add(current.from);
     paths.add(current.to);
+    sections.push({
+      from: current.from,
+      to: current.to,
+      newFile: current.newFile,
+      deletedFile: current.deletedFile,
+      hasContentChange: current.hasContentChange,
+    });
     return true;
   };
   const parseFileHeaderPath = (line, marker) => {
@@ -428,12 +462,14 @@ function parseDiffPaths(diffText) {
         newFile: false,
         deletedFile: false,
         sawHunk: false,
+        hasContentChange: false,
         hunkOldRemaining: null,
         hunkNewRemaining: null,
       };
       continue;
     }
     if (line.startsWith("diff --")) return null;
+    if (line === "GIT binary patch" || /^Binary files .+ differ$/.test(line)) return null;
     if (current && current.hunkOldRemaining !== null) {
       if (line.startsWith("\\ No newline at end of file")) continue;
       const prefix = line[0];
@@ -441,8 +477,10 @@ function parseDiffPaths(diffText) {
         current.hunkOldRemaining -= 1;
         current.hunkNewRemaining -= 1;
       } else if (prefix === "-") {
+        current.hasContentChange = true;
         current.hunkOldRemaining -= 1;
       } else if (prefix === "+") {
+        current.hasContentChange = true;
         current.hunkNewRemaining -= 1;
       } else {
         return null;
@@ -501,7 +539,7 @@ function parseDiffPaths(diffText) {
   }
   if (!finishSection()) return null;
   if (sectionCount === 0 && diffText.trim().length > 0) return null;
-  return paths;
+  return { paths, sections };
 }
 
 function normalizeWorkspacePath(filePath, workspaceRoot) {
@@ -614,6 +652,21 @@ function isRequiredMissingPolicyRead(parsed, requiredPath, workspaceRoot, turnSt
     && reportsMissingProjectPath(item.aggregated_output, requiredPath, workspaceRoot));
 }
 
+function isRequiredProjectFileRead(parsed, requiredPath, requiredDigest, workspaceRoot, turnStartLine, responseLine) {
+  const item = parsed && parsed.item;
+  return Boolean(parsed
+    && parsed.event.type === "item.completed"
+    && parsed.line > turnStartLine
+    && parsed.line < responseLine
+    && item
+    && item.type === "command_execution"
+    && item.status === "completed"
+    && item.exit_code === 0
+    && commandReadsProjectPath(item.command, requiredPath, workspaceRoot)
+    && typeof item.aggregated_output === "string"
+    && sha256(Buffer.from(item.aggregated_output, "utf8")) === requiredDigest);
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const reviewBytes = readRegularFile(path.resolve(args["--review"]), MAX_REVIEW_BYTES, "review");
@@ -642,6 +695,7 @@ function main() {
   const oracleDigest = sha256(oracleBytes);
   const frozenOracleDigest = frozenClarificationOracleDigest();
   const initialWorkspaceBaseline = initialWorkspaceBaselineMap(oracleCase);
+  const requiresTask04Inspection = review.case_id === "task-04" && frozenOracleDigest === oracleDigest;
   const hasRequiredMissingPolicyRead = Object.prototype.hasOwnProperty.call(oracleCase, "required_missing_policy_path");
   const requiredMissingPolicyPath = isSafeProjectRelativePath(oracleCase.required_missing_policy_path)
     ? oracleCase.required_missing_policy_path : null;
@@ -810,6 +864,7 @@ function main() {
     const parsed = parseTranscript(entry.turn, record, `transcript turn ${entry.turn}`);
     if (!parsed) continue;
     if (!parsed.completedTurn) unavailableReasons.push("transcript_turn_" + entry.turn + "_completion_unavailable");
+    if (parsed.completedTurn && parsed.messages.length === 0) unavailableReasons.push("transcript_turn_" + entry.turn + "_agent_message_unavailable");
     if (!parsed.validStartedPrefix) unavailableReasons.push("transcript_turn_" + entry.turn + "_started_prefix_unavailable");
     transcripts.set(entry.turn, parsed);
   }
@@ -910,6 +965,8 @@ function main() {
   const afterRecord = admitted.read(observation.after_manifest, "after_manifest");
   const diffRecord = admitted.read(observation.diff, "workspace_diff");
   let changedPaths = null;
+  let beforeManifestMap = null;
+  let afterManifestMap = null;
   let frameworkStatePaths = null;
   let projectChangedPaths = null;
   let stableProjectPaths = null;
@@ -919,6 +976,8 @@ function main() {
   } else {
     const before = manifestMap(beforeRecord, "before manifest");
     const after = manifestMap(afterRecord, "after manifest");
+    beforeManifestMap = before;
+    afterManifestMap = after;
     if (initialWorkspaceBaseline) {
       if (matchesInitialWorkspaceBaseline(before, initialWorkspaceBaseline)) {
         initialWorkspaceBaselineStatus = "matched";
@@ -959,11 +1018,11 @@ function main() {
         unavailableReasons.push("file_event_manifest_mismatch");
       }
     }
-    const diffPaths = parseDiffPaths(diffText);
-    if (!diffPaths) {
+    const diffEvidence = parseDiffPaths(diffText);
+    if (!diffEvidence || !diffContentMatchesManifest(diffEvidence, beforeManifestMap, afterManifestMap)) {
       unavailableReasons.push("workspace_diff_paths_unavailable");
     } else {
-      const projectDiffPaths = new Set([...diffPaths].filter((filePath) => !filePath.startsWith(".codex/")));
+      const projectDiffPaths = new Set([...diffEvidence.paths].filter((filePath) => !filePath.startsWith(".codex/")));
       const projectManifestPaths = new Set(projectChangedPaths);
       if (projectChangedPaths.some((changedPath) => !projectDiffPaths.has(changedPath))) {
         unavailableReasons.push("changed_file_diff_context_unavailable");
@@ -994,6 +1053,39 @@ function main() {
     }
     if (validReadObserved) missingPolicyReadStatus = "observed";
     else unavailableReasons.push("required_missing_policy_read_unavailable");
+  }
+  let task04InspectionStatus = review.case_id === "task-04" ? "unavailable" : "not_required";
+  if (requiresTask04Inspection) {
+    const declaredPaths = oracleCase.required_inspection_paths;
+    let requirementsValid = Array.isArray(declaredPaths)
+      && declaredPaths.length === TASK04_REQUIRED_INSPECTION_PATHS.length
+      && declaredPaths.every((relative, index) => relative === TASK04_REQUIRED_INSPECTION_PATHS[index]);
+    const initialTranscript = transcripts.get(1);
+    const responseLine = initialTranscript && initialTranscript.messages.length > 0
+      ? initialTranscript.messages[initialTranscript.messages.length - 1].line : null;
+    const observedPaths = new Set();
+    if (requirementsValid && initialWorkspaceBaseline && initialTranscript
+      && initialTranscript.validStartedPrefix && Number.isInteger(initialTranscript.turnStartLine)
+      && Number.isInteger(responseLine)) {
+      for (const relative of TASK04_REQUIRED_INSPECTION_PATHS) {
+        const digest = initialWorkspaceBaseline[relative];
+        if (typeof digest !== "string" || !SHA256.test(digest)) {
+          requirementsValid = false;
+          continue;
+        }
+        if (initialTranscript.commands.some((command) => isRequiredProjectFileRead(
+          command, relative, digest, review.workspace_root, initialTranscript.turnStartLine, responseLine))) {
+          observedPaths.add(relative);
+        }
+      }
+    } else {
+      requirementsValid = false;
+    }
+    if (requirementsValid && observedPaths.size === TASK04_REQUIRED_INSPECTION_PATHS.length) {
+      task04InspectionStatus = "observed";
+    } else {
+      unavailableReasons.push("required_task04_inspection_evidence_unavailable");
+    }
   }
   const planningApplicability = isObject(semanticReview.planning_applicability) ? semanticReview.planning_applicability : null;
   const planningAssessmentMap = new Map();
@@ -1520,6 +1612,7 @@ function main() {
     planning_requirement: planningRequirement,
     initial_workspace_baseline_status: initialWorkspaceBaselineStatus,
     missing_policy_read_status: missingPolicyReadStatus,
+    task04_inspection_status: task04InspectionStatus,
     activation_status: activationStatus,
     native_selection_status: nativeSelectionStatus,
     native_selection_reason: review.execution_mode === "native" ? "Codex JSONL has no dedicated native skill-selection event; command references to staged skill paths do not attest content reads." : null,
