@@ -148,10 +148,12 @@ function parseTranscript(turn, admitted, label) {
   const byLine = new Map();
   const messages = [];
   const commands = [];
+  const nativePlanEvents = [];
   const changes = [];
   const startedChanges = [];
   let completedTurn = false;
   let turnStartSeen = false;
+  let turnStartLine = null;
   let validStartedPrefix = true;
   if (lines.length > MAX_JSONL_LINES) fail(`${label} exceeds the event-line limit`);
   for (let index = 0; index < lines.length; index += 1) {
@@ -170,6 +172,7 @@ function parseTranscript(turn, admitted, label) {
     if (event.type === "turn.started") {
       if (turnStartSeen) validStartedPrefix = false;
       turnStartSeen = true;
+      if (turnStartLine === null) turnStartLine = parsed.line;
     }
     if (completedTurn && (event.type === "turn.completed" || event.type.startsWith("item."))) {
       validStartedPrefix = false;
@@ -179,9 +182,10 @@ function parseTranscript(turn, admitted, label) {
       if (!turnStartSeen) validStartedPrefix = false;
       completedTurn = true;
     }
-    if ((event.type === "item.completed" || event.type === "item.started") && item) {
-      if (item.type === "agent_message" && typeof item.text === "string") messages.push(parsed);
+    if (["item.completed", "item.started", "item.updated"].includes(event.type) && item) {
+      if (event.type === "item.completed" && item.type === "agent_message" && typeof item.text === "string") messages.push(parsed);
       if (item.type === "command_execution") commands.push(parsed);
+      if (item.type === "todo_list") nativePlanEvents.push(parsed);
       if (event.type === "item.started" && item.type === "file_change" && Array.isArray(item.changes)) {
         for (const change of item.changes) {
           if (isObject(change) && nonempty(change.path)) {
@@ -214,7 +218,7 @@ function parseTranscript(turn, admitted, label) {
     }
   }
   const validTurnStartPrefix = turnStartSeen && validStartedPrefix;
-  return { turn, byLine, messages, commands, changes, completedTurn, validStartedPrefix: validTurnStartPrefix };
+  return { turn, byLine, messages, commands, nativePlanEvents, changes, completedTurn, turnStartLine, validStartedPrefix: validTurnStartPrefix };
 }
 
 function referenceKey(ref) {
@@ -235,6 +239,13 @@ function lineEvent(transcripts, ref) {
 function isAgentMessage(transcripts, ref) {
   const parsed = lineEvent(transcripts, ref);
   return parsed && parsed.event.type === "item.completed" && parsed.item && parsed.item.type === "agent_message" && typeof parsed.item.text === "string";
+}
+
+function isNativeTodoListEvent(parsed) {
+  return Boolean(parsed
+    && parsed.item
+    && parsed.item.type === "todo_list"
+    && ["item.started", "item.updated", "item.completed"].includes(parsed.event.type));
 }
 
 function boundedMessageSpan(transcripts, ref, span) {
@@ -273,6 +284,21 @@ function manifestMap(admitted, label) {
     if (typeof digest !== "string" || !SHA256.test(digest)) fail(`${label} contains an invalid file hash`);
   }
   return manifest;
+}
+
+function initialWorkspaceBaselineMap(oracleCase) {
+  const baseline = oracleCase.initial_workspace_sha256;
+  if (!isObject(baseline) || Object.keys(baseline).length === 0) return null;
+  for (const [relative, digest] of Object.entries(baseline)) {
+    if (!isSafeProjectRelativePath(relative) || typeof digest !== "string" || !SHA256.test(digest)) return null;
+  }
+  return baseline;
+}
+
+function matchesInitialWorkspaceBaseline(before, baseline) {
+  const projectEntries = Object.entries(before).filter(([relative]) => !relative.startsWith(".codex/"));
+  if (projectEntries.length !== Object.keys(baseline).length) return false;
+  return projectEntries.every(([relative, digest]) => baseline[relative] === digest);
 }
 
 function changedManifestPaths(before, after) {
@@ -350,6 +376,102 @@ function normalizeWorkspacePath(filePath, workspaceRoot) {
   return isSafeProjectRelativePath(relative) ? relative : null;
 }
 
+function unwrapCommandShell(commandText) {
+  let command = commandText.trim();
+  for (let depth = 0; depth < 3; depth += 1) {
+    const wrapper = command.match(/^(?:\/[^\s]+\/)?(?:sh|bash|zsh)\s+-lc\s+([\s\S]+)$/);
+    if (!wrapper) break;
+    command = wrapper[1].trim();
+    if (command.length >= 2
+      && ((command[0] === "\"" && command[command.length - 1] === "\"")
+        || (command[0] === "'" && command[command.length - 1] === "'"))) {
+      const quote = command[0];
+      command = command.slice(1, -1);
+      if (quote === "\"") command = command.replace(/\\([\\"'$`])/g, "$1");
+    }
+  }
+  return command;
+}
+
+function tokenizeBoundedCommand(commandText) {
+  if (/[;&|<>`$()\r\n]/.test(commandText)) return null;
+  const tokens = [];
+  let token = "";
+  let quote = null;
+  let started = false;
+  for (let index = 0; index < commandText.length; index += 1) {
+    const character = commandText[index];
+    if (quote && character === "\\" && quote === "\"") {
+      if (index + 1 >= commandText.length) return null;
+      token += commandText[index + 1];
+      index += 1;
+      started = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = null;
+      else token += character;
+      started = true;
+      continue;
+    }
+    if (character === "\"" || character === "'") {
+      quote = character;
+      started = true;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      if (started) tokens.push(token);
+      token = "";
+      started = false;
+      continue;
+    }
+    if (character === "\\") {
+      if (index + 1 >= commandText.length) return null;
+      token += commandText[index + 1];
+      index += 1;
+      started = true;
+      continue;
+    }
+    token += character;
+    started = true;
+  }
+  if (quote) return null;
+  if (started) tokens.push(token);
+  return tokens;
+}
+
+function commandReadsProjectPath(commandText, requiredPath, workspaceRoot) {
+  if (typeof commandText !== "string") return false;
+  const tokens = tokenizeBoundedCommand(unwrapCommandShell(commandText));
+  if (!tokens || tokens.length < 2) return false;
+  if (path.posix.basename(tokens[0]) !== "cat") return false;
+  const operands = tokens.slice(1);
+  if (operands[0] === "--") operands.shift();
+  return operands.length === 1 && normalizeWorkspacePath(operands[0], workspaceRoot) === requiredPath;
+}
+
+function reportsMissingProjectPath(output, requiredPath, workspaceRoot) {
+  if (typeof output !== "string") return false;
+  return output.split(/\r?\n/).some((line) => {
+    const match = line.match(/^cat: (.+): No such file or directory$/);
+    return Boolean(match && normalizeWorkspacePath(match[1], workspaceRoot) === requiredPath);
+  });
+}
+
+function isRequiredMissingPolicyRead(parsed, requiredPath, workspaceRoot, turnStartLine) {
+  const item = parsed && parsed.item;
+  return Boolean(parsed
+    && parsed.event.type === "item.completed"
+    && parsed.line > turnStartLine
+    && item
+    && item.type === "command_execution"
+    && item.status === "completed"
+    && Number.isInteger(item.exit_code)
+    && item.exit_code !== 0
+    && commandReadsProjectPath(item.command, requiredPath, workspaceRoot)
+    && reportsMissingProjectPath(item.aggregated_output, requiredPath, workspaceRoot));
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const reviewBytes = readRegularFile(path.resolve(args["--review"]), MAX_REVIEW_BYTES, "review");
@@ -376,10 +498,16 @@ function main() {
   const oracleCase = oracle.cases.find((entry) => entry.case_id === review.case_id);
   if (!oracleCase || !Array.isArray(oracleCase.hidden_material_decisions)) fail("review case is not bound to a valid oracle entry");
   const oracleDigest = sha256(oracleBytes);
+  const initialWorkspaceBaseline = initialWorkspaceBaselineMap(oracleCase);
+  const hasRequiredMissingPolicyRead = Object.prototype.hasOwnProperty.call(oracleCase, "required_missing_policy_path");
+  const requiredMissingPolicyPath = isSafeProjectRelativePath(oracleCase.required_missing_policy_path)
+    ? oracleCase.required_missing_policy_path : null;
   const expectedDecisionCount = oracleCase.hidden_material_decisions.length;
   const expectedDecisionIndexes = new Set(Array.from({ length: expectedDecisionCount }, (_value, index) => index));
   const admitted = artifactReader(root);
   const unavailableReasons = admitted.unavailable;
+  let initialWorkspaceBaselineStatus = "unavailable";
+  if (!initialWorkspaceBaseline) unavailableReasons.push("initial_workspace_baseline_unavailable");
   const hasRequiredContinuation = Object.prototype.hasOwnProperty.call(oracleCase, "continuation_answer_file");
   let continuationBinding = null;
   const continuationAnswerArtifacts = new Map();
@@ -598,6 +726,13 @@ function main() {
   } else {
     const before = manifestMap(beforeRecord, "before manifest");
     const after = manifestMap(afterRecord, "after manifest");
+    if (initialWorkspaceBaseline) {
+      if (matchesInitialWorkspaceBaseline(before, initialWorkspaceBaseline)) {
+        initialWorkspaceBaselineStatus = "matched";
+      } else {
+        unavailableReasons.push("initial_workspace_baseline_unavailable");
+      }
+    }
     changedPaths = changedManifestPaths(before, after);
     frameworkStatePaths = changedPaths.filter((filePath) => filePath.startsWith(".codex/"));
     projectChangedPaths = changedPaths.filter((filePath) => !filePath.startsWith(".codex/"));
@@ -644,8 +779,29 @@ function main() {
   }
 
   const semanticReview = isObject(review.semantic_review) ? review.semantic_review : {};
+  let missingPolicyReadStatus = hasRequiredMissingPolicyRead ? "unavailable" : "not_required";
+  if (hasRequiredMissingPolicyRead) {
+    const initialTranscript = transcripts.get(1);
+    const explicitReadRef = semanticReview.missing_policy_read_ref;
+    let validReadObserved = false;
+    if (requiredMissingPolicyPath && initialTranscript && initialTranscript.validStartedPrefix
+      && Number.isInteger(initialTranscript.turnStartLine)) {
+      if (explicitReadRef !== undefined) {
+        const explicitEvent = lineEvent(transcripts, explicitReadRef);
+        validReadObserved = explicitReadRef.turn === 1
+          && isRequiredMissingPolicyRead(explicitEvent, requiredMissingPolicyPath, review.workspace_root, initialTranscript.turnStartLine);
+      } else {
+        validReadObserved = initialTranscript.commands.some((command) =>
+          isRequiredMissingPolicyRead(command, requiredMissingPolicyPath, review.workspace_root, initialTranscript.turnStartLine));
+      }
+    }
+    if (validReadObserved) missingPolicyReadStatus = "observed";
+    else unavailableReasons.push("required_missing_policy_read_unavailable");
+  }
   const planningApplicability = isObject(semanticReview.planning_applicability) ? semanticReview.planning_applicability : null;
   const planningAssessmentMap = new Map();
+  const nativePlanEvents = [...transcripts.values()].flatMap((transcript) => transcript.nativePlanEvents);
+  const nativePlanAssessmentMap = new Map();
   let planningRequirement = "unavailable";
   let planningCoverageValid = false;
   if (!planningApplicability
@@ -678,12 +834,21 @@ function main() {
             validPlanningCoverage = false;
             continue;
           }
-          const span = boundedMessageSpan(transcripts, ref, ref.text_span);
-          if (!span) {
-            validPlanningCoverage = false;
-            continue;
+          if (Object.prototype.hasOwnProperty.call(ref, "text_span")) {
+            const span = boundedMessageSpan(transcripts, ref, ref.text_span);
+            if (!span) {
+              validPlanningCoverage = false;
+              continue;
+            }
+            planRefs.push({ ...span, native: false, rationale: ref.rationale });
+          } else {
+            const nativeEvent = lineEvent(transcripts, ref);
+            if (!isNativeTodoListEvent(nativeEvent)) {
+              validPlanningCoverage = false;
+              continue;
+            }
+            planRefs.push({ turn: nativeEvent.turn, line: nativeEvent.line, native: true, rationale: ref.rationale });
           }
-          planRefs.push({ ...span, rationale: ref.rationale });
         }
         if ((assessment.outcome === "no_dependent_plan" && planRefs.length !== 0)
           || (assessment.outcome === "dependent_plan_observed" && planRefs.length === 0)) {
@@ -697,6 +862,72 @@ function main() {
       if (planningAssessmentMap.size !== expectedDecisionCount) validPlanningCoverage = false;
       planningCoverageValid = validPlanningCoverage;
       if (!planningCoverageValid) unavailableReasons.push("dependent_planning_coverage_unavailable");
+    }
+  }
+  let nativePlanningCoverageValid = true;
+  if (planningRequirement === "before_plan") {
+    const assessments = semanticReview.native_plan_assessments;
+    if (nativePlanEvents.length > 0 || assessments !== undefined) {
+      nativePlanningCoverageValid = Array.isArray(assessments);
+      for (const assessment of Array.isArray(assessments) ? assessments : []) {
+        if (!isObject(assessment)
+          || !Number.isInteger(assessment.turn)
+          || !Number.isInteger(assessment.line)
+          || !["dependent_plan_observed", "independent_plan_observed"].includes(assessment.outcome)
+          || !Array.isArray(assessment.decision_indexes)
+          || !nonempty(assessment.rationale)) {
+          nativePlanningCoverageValid = false;
+          continue;
+        }
+        const key = referenceKey(assessment);
+        const observed = nativePlanEvents.find((event) => event.turn === assessment.turn && event.line === assessment.line);
+        const event = lineEvent(transcripts, assessment);
+        if (!key || nativePlanAssessmentMap.has(key) || !observed || !isNativeTodoListEvent(event)
+          || new Set(assessment.decision_indexes).size !== assessment.decision_indexes.length) {
+          nativePlanningCoverageValid = false;
+          continue;
+        }
+        if (assessment.outcome === "dependent_plan_observed") {
+          if (assessment.decision_indexes.length === 0
+            || assessment.decision_indexes.some((index) => !expectedDecisionIndexes.has(index))) {
+            nativePlanningCoverageValid = false;
+          }
+        } else if (assessment.decision_indexes.length !== 0) {
+          nativePlanningCoverageValid = false;
+        }
+        nativePlanAssessmentMap.set(key, {
+          outcome: assessment.outcome,
+          decision_indexes: assessment.decision_indexes,
+        });
+      }
+      if (nativePlanAssessmentMap.size !== nativePlanEvents.length) nativePlanningCoverageValid = false;
+      for (const [key, assessment] of nativePlanAssessmentMap) {
+        for (const decisionIndex of assessment.decision_indexes) {
+          const decisionPlanning = planningAssessmentMap.get(decisionIndex);
+          const hasMatchingPlanRef = Boolean(decisionPlanning
+            && decisionPlanning.outcome === "dependent_plan_observed"
+            && decisionPlanning.plan_refs.some((ref) => ref.native && referenceKey(ref) === key));
+          if (assessment.outcome !== "dependent_plan_observed" || !hasMatchingPlanRef) {
+            nativePlanningCoverageValid = false;
+          }
+        }
+        if (assessment.outcome === "independent_plan_observed"
+          && [...planningAssessmentMap.values()].some((decisionPlanning) =>
+            decisionPlanning.plan_refs.some((ref) => ref.native && referenceKey(ref) === key))) {
+          nativePlanningCoverageValid = false;
+        }
+      }
+      for (const [decisionIndex, decisionPlanning] of planningAssessmentMap) {
+        for (const planRef of decisionPlanning.plan_refs.filter((ref) => ref.native)) {
+          const nativeAssessment = nativePlanAssessmentMap.get(referenceKey(planRef));
+          if (!nativeAssessment
+            || nativeAssessment.outcome !== "dependent_plan_observed"
+            || !nativeAssessment.decision_indexes.includes(decisionIndex)) {
+            nativePlanningCoverageValid = false;
+          }
+        }
+      }
+      if (!nativePlanningCoverageValid) unavailableReasons.push("native_plan_coverage_unavailable");
     }
   }
   const reviewer = isObject(semanticReview.reviewer) ? semanticReview.reviewer : {};
@@ -721,7 +952,7 @@ function main() {
   const incompleteContinuationResponseTurns = continuationRequiredAnswerTurns.filter((turn) =>
     receivedAnswerTurns.includes(turn) && !completedResponseTurns.includes(turn));
   if (incompleteContinuationResponseTurns.length > 0) unavailableReasons.push("required_continuation_response_incomplete");
-  let reviewShapeSupported = semanticTelemetryValid && planningCoverageValid;
+  let reviewShapeSupported = semanticTelemetryValid && planningCoverageValid && nativePlanningCoverageValid;
   const decisionMap = new Map();
   const questionMap = new Map();
   const questionSpanMap = new Map();
@@ -1002,6 +1233,8 @@ function main() {
     case_id: review.case_id,
     execution_mode: review.execution_mode,
     planning_requirement: planningRequirement,
+    initial_workspace_baseline_status: initialWorkspaceBaselineStatus,
+    missing_policy_read_status: missingPolicyReadStatus,
     activation_status: activationStatus,
     native_selection_status: nativeSelectionStatus,
     native_selection_reason: review.execution_mode === "native" ? "Codex JSONL has no dedicated native skill-selection event; command references to staged skill paths do not attest content reads." : null,

@@ -124,7 +124,17 @@
     "workspace_root": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^/"
+      "anyOf": [
+        {
+          "pattern": "^/"
+        },
+        {
+          "pattern": "^[A-Za-z]:[\\\\/]"
+        },
+        {
+          "pattern": "^\\\\\\\\[^\\\\/]+[\\\\/][^\\\\/]+(?:[\\\\/]|$)"
+        }
+      ]
     },
     "activation": {
       "type": "object",
@@ -394,7 +404,6 @@
                   "required": [
                     "turn",
                     "line",
-                    "text_span",
                     "rationale"
                   ],
                   "properties": {
@@ -462,6 +471,93 @@
               }
             ]
           }
+        },
+        "native_plan_assessments": {
+          "description": "When native todo_list events occur under before_plan applicability, assess each started, updated, and completed event separately. Independent exploratory events use no decision indexes; dependent events name every linked frozen decision.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "turn",
+              "line",
+              "outcome",
+              "decision_indexes",
+              "rationale"
+            ],
+            "properties": {
+              "turn": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "outcome": {
+                "enum": [
+                  "dependent_plan_observed",
+                  "independent_plan_observed"
+                ]
+              },
+              "decision_indexes": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "outcome": {
+                      "const": "dependent_plan_observed"
+                    }
+                  },
+                  "required": [
+                    "outcome"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "decision_indexes": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "outcome": {
+                      "const": "independent_plan_observed"
+                    }
+                  },
+                  "required": [
+                    "outcome"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "decision_indexes": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "missing_policy_read_ref": {
+          "description": "Optional direct reference to the completed, failed read command that observed the oracle-declared missing policy path.",
+          "$ref": "#/$defs/eventRef"
         },
         "answer_assessments": {
           "type": "array",

@@ -14,25 +14,67 @@ clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
 adversarial_case="ambiguous-risky-task-blocks-before-plan"
 framework_adversarial_task="$(clarification_task_packet_basename "$framework_fixture" framework-instruction "$adversarial_case").md"
 
-test_start "clarification oracle binds every frozen initial prompt by exact bytes"
-if python3 - "$FRAMEWORK_DIR/docs/evals/fixtures/clarification/clarification-oracle.json" "$FRAMEWORK_DIR/docs/evals/fixtures/clarification/actor-prompts" <<'PY_ORACLE_PROMPTS'
+test_start "clarification manifest binds every fixture file and selected project baseline"
+if python3 - "$FRAMEWORK_DIR/docs/evals/fixtures/clarification" <<'PY_ORACLE_PROMPTS'
 from hashlib import sha256
 import json
 from pathlib import Path
 import sys
 
-oracle = json.loads(Path(sys.argv[1]).read_text())
-prompt_root = Path(sys.argv[2])
+fixture_root = Path(sys.argv[1])
+oracle_path = fixture_root / "clarification-oracle.json"
+manifest = json.loads((fixture_root / "frozen-cases-sha256.json").read_text())
+oracle = json.loads(oracle_path.read_text())
+actual = {}
+for root_name in ("actor-projects", "actor-prompts"):
+    root = fixture_root / root_name
+    for path in root.rglob("*"):
+        if path.is_file():
+            actual[path.relative_to(fixture_root).as_posix()] = sha256(path.read_bytes()).hexdigest()
+actual["clarification-oracle.json"] = sha256(oracle_path.read_bytes()).hexdigest()
+if actual != manifest:
+    missing = sorted(set(manifest) - set(actual))
+    added = sorted(set(actual) - set(manifest))
+    changed = sorted(path for path in set(actual) & set(manifest) if actual[path] != manifest[path])
+    raise SystemExit(f"frozen fixture manifest drift: missing={missing}, added={added}, changed={changed}")
 for case in oracle["cases"]:
-    prompt_path = prompt_root / f"{case['case_id']}.md"
+    prompt_path = fixture_root / "actor-prompts" / f"{case['case_id']}.md"
     actual = sha256(prompt_path.read_bytes()).hexdigest()
     if case.get("initial_prompt_sha256") != actual:
         raise SystemExit(f"frozen prompt digest is missing or stale for {case['case_id']}")
+    project_prefix = f"actor-projects/{case['case_id']}/"
+    expected_baseline = {
+        path[len(project_prefix):]: digest
+        for path, digest in manifest.items()
+        if path.startswith(project_prefix)
+    }
+    if not expected_baseline or case.get("initial_workspace_sha256") != expected_baseline:
+        raise SystemExit(f"frozen workspace baseline is missing or stale for {case['case_id']}")
 PY_ORACLE_PROMPTS
 then
     pass
 else
-    fail "clarification oracle did not bind each case to its frozen initial prompt bytes"
+    fail "clarification fixture manifest, prompt hashes, or selected workspace baselines drifted"
+fi
+
+test_start "clarification evidence schema recognizes POSIX and Windows absolute roots only"
+if node - "$FRAMEWORK_DIR/docs/evals/fixtures/clarification/clarification-evidence-review.schema.json" <<'NODE_WORKSPACE_ROOT_SCHEMA'
+const fs = require("node:fs");
+const schema = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const rootSchema = schema.properties.workspace_root;
+const patterns = rootSchema.anyOf ? rootSchema.anyOf.map((entry) => entry.pattern) : [rootSchema.pattern];
+const matches = (value) => patterns.some((pattern) => typeof pattern === "string" && new RegExp(pattern).test(value));
+for (const root of ["/tmp/actor", "C:\\Users\\actor", "C:/Users/actor", "\\\\server\\share\\actor"]) {
+  if (!matches(root)) throw new Error(`absolute workspace root was rejected: ${root}`);
+}
+for (const root of ["actor/workspace", "C:actor\\workspace"]) {
+  if (matches(root)) throw new Error(`relative workspace root was accepted: ${root}`);
+}
+NODE_WORKSPACE_ROOT_SCHEMA
+then
+    pass
+else
+    fail "clarification evidence schema does not distinguish supported absolute workspace-root forms"
 fi
 
 framework_prompt_dir="$(mktemp -d "${TMPDIR:-/tmp}/clarification-framework-prompts.XXXXXX")"
@@ -272,6 +314,7 @@ fi
 # Codex JSONL observations.
 evidence_root="$(mktemp -d "${TMPDIR:-/tmp}/clarification-evidence.XXXXXX")"
 oracle_file="$evidence_root/oracle.json"
+canonical_oracle_file="$FRAMEWORK_DIR/docs/evals/fixtures/clarification/clarification-oracle.json"
 p0p4_register_cleanup "$evidence_root"
 python3 - "$evidence_root" <<'PY_EVIDENCE'
 from hashlib import sha256
@@ -322,10 +365,11 @@ initial_prompt_digest = sha256(initial_prompt_bytes).hexdigest()
 oracle = {
     "schema_version": "clarification-oracle/v1",
     "cases": [
-        {"case_id": "task-01", "initial_prompt_sha256": initial_prompt_digest, "hidden_material_decisions": ["recipient access", "link revocation"]},
-        {"case_id": "task-03", "initial_prompt_sha256": initial_prompt_digest, "hidden_material_decisions": []},
-        {"case_id": "task-04", "initial_prompt_sha256": initial_prompt_digest, "hidden_material_decisions": ["recipient access"]},
-        {"case_id": "task-08", "initial_prompt_sha256": initial_prompt_digest, "hidden_material_decisions": ["link revocation"]},
+        {"case_id": "task-01", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": ["recipient access", "link revocation"]},
+        {"case_id": "task-03", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": []},
+        {"case_id": "task-04", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": ["recipient access"]},
+        {"case_id": "task-06", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": ["external-link policy from unavailable authority"]},
+        {"case_id": "task-08", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": ["link revocation"]},
     ],
 }
 oracle_bytes = (json.dumps(oracle, sort_keys=True) + "\n").encode()
@@ -419,6 +463,275 @@ review = {
 }
 write("review.json", review)
 PY_EVIDENCE
+
+python3 - "$evidence_root" "$FRAMEWORK_DIR/docs/evals/fixtures/clarification" <<'PY_THIRD_COMMENT_REGRESSIONS'
+from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+fixture_root = Path(sys.argv[2])
+base = json.loads((root / "review.json").read_text())
+oracle = json.loads((root / "oracle.json").read_text())
+canonical_oracle_bytes = (fixture_root / "clarification-oracle.json").read_bytes()
+canonical_oracle = json.loads(canonical_oracle_bytes)
+canonical_task06 = next(case for case in canonical_oracle["cases"] if case["case_id"] == "task-06")
+
+def write_json(name, value):
+    raw = (json.dumps(value, sort_keys=True) + "\n").encode()
+    (root / name).write_bytes(raw)
+    return {"path": name, "sha256": sha256(raw).hexdigest()}
+
+def write_bytes(name, raw):
+    (root / name).write_bytes(raw)
+    return {"path": name, "sha256": sha256(raw).hexdigest()}
+
+def write_events(review, turn, name, events):
+    raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n").encode()
+    (root / name).write_bytes(raw)
+    for transcript in review["transcripts"]:
+        if transcript["turn"] == turn:
+            transcript["artifact"] = {"path": name, "sha256": sha256(raw).hexdigest()}
+            return
+    raise AssertionError(f"transcript turn {turn} is missing")
+
+def jsonl(name):
+    return [json.loads(line) for line in (root / name).read_text().splitlines()]
+
+def task_case(case_id):
+    return next(case for case in oracle["cases"] if case["case_id"] == case_id)
+
+# Baseline-only control makes baseline failures independently observable.
+baseline_review = deepcopy(base)
+baseline_review["case_id"] = "task-03"
+baseline_review["inputs"] = base["inputs"][:1]
+baseline_events = [
+    {"type": "thread.started"}, {"type": "turn.started"},
+    {"type": "item.completed", "item": {"id": "c1", "type": "command_execution", "command": "sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md", "status": "completed", "exit_code": 0, "aggregated_output": "# Workflow\n"}},
+    {"type": "item.completed", "item": {"id": "m1", "type": "agent_message", "text": "I will preserve the existing read-only behavior and check it with the current tests."}},
+    {"type": "turn.completed"},
+]
+write_events(baseline_review, 1, "baseline-control.jsonl", baseline_events)
+baseline_review["transcripts"] = [baseline_review["transcripts"][0]]
+baseline_review["activation"]["skill_read_ref"] = {"turn": 1, "line": 3}
+baseline_review["workspace_observation"]["after_manifest"] = baseline_review["workspace_observation"]["before_manifest"]
+baseline_review["workspace_observation"]["diff"] = write_bytes("baseline-control.patch", b"")
+baseline_review["semantic_review"].update({
+    "planning_applicability": {
+        "oracle_case_id": "task-03",
+        "oracle_sha256": sha256((root / "oracle.json").read_bytes()).hexdigest(),
+        "requirement": "before_edit_only",
+        "rationale": "This zero-decision control has no before-plan obligation.",
+    },
+    "decisions": [], "question_assessments": [], "answer_assessments": [], "dependent_edit_refs": [],
+})
+baseline_review["semantic_review"].pop("dependent_planning_assessments", None)
+write_json("review-baseline-control.json", baseline_review)
+
+def save_baseline_variant(name, expected_map=None, actual_map=None):
+    changed_oracle = deepcopy(oracle)
+    changed_case = next(case for case in changed_oracle["cases"] if case["case_id"] == "task-03")
+    if expected_map is None:
+        changed_case.pop("initial_workspace_sha256", None)
+    else:
+        changed_case["initial_workspace_sha256"] = expected_map
+    oracle_ref = write_json(f"oracle-baseline-{name}.json", changed_oracle)
+    review = deepcopy(baseline_review)
+    review["semantic_review"]["planning_applicability"]["oracle_sha256"] = oracle_ref["sha256"]
+    if actual_map is not None:
+        before = write_json(f"before-baseline-{name}.json", actual_map)
+        review["workspace_observation"]["before_manifest"] = before
+        review["workspace_observation"]["after_manifest"] = before
+        review["workspace_observation"]["diff"] = write_bytes(f"baseline-{name}.patch", b"")
+    write_json(f"review-baseline-{name}.json", review)
+
+valid_baseline = task_case("task-03")["initial_workspace_sha256"]
+save_baseline_variant("missing-map", None)
+save_baseline_variant("wrong-digest", {"src/issue_detail.py": "0" * 64})
+save_baseline_variant("removed-project-file", {
+    **valid_baseline, "src/removed.py": sha256(b"was present in the frozen baseline\n").hexdigest(),
+})
+save_baseline_variant("added-project-file", valid_baseline, {
+    **json.loads((root / "before-files.json").read_text()),
+    "src/unexpected.py": sha256(b"unlisted project file\n").hexdigest(),
+})
+save_baseline_variant("modified-project-file", valid_baseline, {
+    "src/issue_detail.py": sha256(b"modified before admission\n").hexdigest(),
+})
+
+# Task-06 requires an observed failed read of the oracle-declared missing policy.
+task06_review = deepcopy(base)
+task06_review["case_id"] = "task-06"
+task06_prompt = write_bytes("canonical-task06-prompt.txt", (fixture_root / "actor-prompts/task-06.md").read_bytes())
+canonical_task06_oracle = write_bytes("canonical-task06-oracle.json", canonical_oracle_bytes)
+canonical_task06_baseline = write_json("canonical-task06-before-files.json", canonical_task06["initial_workspace_sha256"])
+task06_review["inputs"] = [{"turn": 1, "kind": "initial_prompt", "artifact": task06_prompt}]
+task06_review["transcripts"] = [base["transcripts"][0]]
+task06_review["workspace_observation"]["before_manifest"] = canonical_task06_baseline
+task06_review["workspace_observation"]["after_manifest"] = canonical_task06_baseline
+task06_review["workspace_observation"]["diff"] = write_bytes("task06-no-edit.patch", b"")
+task06_question = "I cannot inspect docs/customer-link-policy.md because it is missing. Which access policy should govern before I edit?"
+task06_review["semantic_review"].update({
+    "planning_applicability": {
+        "oracle_case_id": "task-06",
+        "oracle_sha256": canonical_task06_oracle["sha256"],
+        "requirement": "before_plan",
+        "coverage_attestation": "reviewed_every_completed_agent_message_for_dependent_planning",
+        "rationale": "This case requires resolving its unavailable authority before a dependent plan.",
+    },
+    "dependent_planning_assessments": [{
+        "decision_index": 0, "outcome": "no_dependent_plan", "plan_refs": [],
+        "rationale": "No dependent plan was observed before the policy question.",
+    }],
+    "decisions": [{"decision_index": 0, "outcome": "asked", "question_refs": [{"turn": 1, "line": 4}], "rationale": "The question asks which missing authority governs external access."}],
+    "question_assessments": [{
+        "turn": 1, "line": 4, "classification": "material", "decision_indexes": [0],
+        "text_spans": [{"start": 0, "end": len(task06_question), "decision_indexes": [0], "rationale": "The bounded question identifies the missing authority and asks for its governing policy."}],
+        "rationale": "The question is tied to the unavailable policy authority.",
+    }],
+    "answer_assessments": [], "dependent_edit_refs": [],
+})
+
+def task06_variant(name, command_event=None, explicit_ref=None):
+    review = deepcopy(task06_review)
+    events = [{"type": "thread.started"}, {"type": "turn.started"}]
+    if command_event is not None:
+        events.append(command_event)
+        review["activation"]["skill_read_ref"] = {"turn": 1, "line": 3}
+    else:
+        review["activation"].pop("skill_read_ref", None)
+    question_line = len(events) + 1
+    events.extend([
+        {"type": "item.completed", "item": {"id": "missing-policy-question", "type": "agent_message", "text": task06_question}},
+        {"type": "turn.completed"},
+    ])
+    write_events(review, 1, f"task06-{name}.jsonl", events)
+    review["semantic_review"]["decisions"][0]["question_refs"] = [{"turn": 1, "line": question_line}]
+    assessment = review["semantic_review"]["question_assessments"][0]
+    assessment["line"] = question_line
+    if explicit_ref is not None:
+        review["semantic_review"]["missing_policy_read_ref"] = explicit_ref
+    write_json(f"review-task06-{name}.json", review)
+
+def command_event(command_text, output, exit_code=1, event_type="item.completed"):
+    item = {"id": "missing-policy-read", "type": "command_execution", "command": command_text,
+            "status": "completed" if event_type == "item.completed" else "in_progress",
+            "aggregated_output": output}
+    if event_type == "item.completed":
+        item["exit_code"] = exit_code
+    return {"type": event_type, "item": item}
+
+task06_variant("valid-read", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"))
+task06_variant("valid-read-explicit-ref", command_event("bash -lc 'cat -- docs/customer-link-policy.md'", "cat: docs/customer-link-policy.md: No such file or directory"), {"turn": 1, "line": 3})
+task06_variant("question-only")
+task06_variant("echo-only", command_event("echo 'cat docs/customer-link-policy.md'", "cat: docs/customer-link-policy.md: No such file or directory"))
+task06_variant("wrong-file", command_event("cat docs/permissions.md", "cat: docs/permissions.md: No such file or directory"))
+task06_variant("successful-read", command_event("cat docs/customer-link-policy.md", "policy text was returned", exit_code=0))
+task06_variant("started-only", command_event("cat docs/customer-link-policy.md", "", event_type="item.started"))
+task06_variant("wrong-explicit-ref", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"), {"turn": 1, "line": 4})
+task06_variant("pattern-is-not-file-operand", command_event("rg docs/customer-link-policy.md docs/customer-link-policy.md.bak", "rg: docs/customer-link-policy.md.bak: No such file or directory"))
+
+# Native todo_list lifecycle observations need separate semantic assessments.
+def todo_event(state, item_id, text):
+    return {"type": f"item.{state}", "item": {"id": item_id, "type": "todo_list", "items": [{"id": "todo-1", "text": text, "status": "in_progress"}]}}
+
+def set_native_assessments(review, events):
+    review["semantic_review"]["native_plan_assessments"] = [
+        {"turn": turn, "line": line, "outcome": outcome, "decision_indexes": indexes,
+         "rationale": rationale}
+        for turn, line, outcome, indexes, rationale in events
+    ]
+    plans = []
+    for decision_index in range(2):
+        refs = [
+            {"turn": turn, "line": line, "rationale": "This native todo_list event commits to work for this frozen decision."}
+            for turn, line, outcome, indexes, _rationale in events
+            if outcome == "dependent_plan_observed" and decision_index in indexes
+        ]
+        plans.append({
+            "decision_index": decision_index,
+            "outcome": "dependent_plan_observed" if refs else "no_dependent_plan",
+            "plan_refs": refs,
+            "rationale": "The independent assessor checked every plan event for this decision.",
+        })
+    review["semantic_review"]["dependent_planning_assessments"] = plans
+
+def save_native(name, review, turn_one, turn_two, assessed_events):
+    write_events(review, 1, f"native-{name}-turn-1.jsonl", turn_one)
+    write_events(review, 2, f"native-{name}-turn-2.jsonl", turn_two)
+    set_native_assessments(review, assessed_events)
+    write_json(f"review-native-{name}.json", review)
+
+# All three dependent lifecycle events before the question must remain visible.
+review = deepcopy(base)
+turn_one = jsonl("turn-01.events.jsonl")
+early = [todo_event(state, "early-plan", "Implement account-free links with owner revocation") for state in ("started", "updated", "completed")]
+turn_one[3:3] = early
+save_native("early-dependent", review, turn_one, jsonl("turn-02.events.jsonl"), [
+    (1, 4, "dependent_plan_observed", [0, 1], "This started event commits to the external-access implementation."),
+    (1, 5, "dependent_plan_observed", [0, 1], "This updated event retains the dependent implementation plan."),
+    (1, 6, "dependent_plan_observed", [0, 1], "The completed plan records the dependent implementation."),
+])
+for index, decision in enumerate(review["semantic_review"]["decisions"]):
+    decision["question_refs"] = [{"turn": 1, "line": 7}]
+review["semantic_review"]["question_assessments"][0]["line"] = 7
+review["semantic_review"]["answer_assessments"][0]["question_ref"] = {"turn": 1, "line": 7}
+write_json("review-native-early-dependent.json", review)
+
+# A pre-question exploratory start stays independent when the list is only
+# updated to a dependent plan after the answer.
+review = deepcopy(base)
+turn_one = jsonl("turn-01.events.jsonl")
+turn_one.insert(3, todo_event("started", "exploration", "Inspect existing authorization and sharing code"))
+turn_one[4]["item"]["text"] = task06_question.replace("docs/customer-link-policy.md", "recipient access")
+exploratory_question = turn_one[4]["item"]["text"]
+for decision in review["semantic_review"]["decisions"]:
+    decision["question_refs"] = [{"turn": 1, "line": 5}]
+review["semantic_review"]["answer_assessments"][0]["question_ref"] = {"turn": 1, "line": 5}
+assessment = review["semantic_review"]["question_assessments"][0]
+assessment["line"] = 5
+assessment["text_spans"][0]["end"] = len(exploratory_question)
+review["semantic_review"]["question_assessments"][0]["rationale"] = "The access question remains material after exploratory inspection."
+turn_two = jsonl("turn-02.events.jsonl")
+turn_two[4:4] = [
+    todo_event("updated", "exploration", "Implement account-free links with owner revocation"),
+    todo_event("completed", "exploration", "Implement account-free links with owner revocation"),
+]
+review["semantic_review"]["dependent_edit_refs"][0]["line"] = 7
+save_native("exploratory-then-dependent", review, turn_one, turn_two, [
+    (1, 4, "independent_plan_observed", [], "The initial list only records independent code inspection."),
+    (2, 5, "dependent_plan_observed", [0, 1], "This update commits to a dependent sharing implementation."),
+    (2, 6, "dependent_plan_observed", [0, 1], "This completion retains the dependent implementation plan."),
+])
+
+# Dependent plans after answer use native turn/line references without text spans.
+review = deepcopy(base)
+turn_two = jsonl("turn-02.events.jsonl")
+turn_two[4:4] = [todo_event(state, "after-answer", "Implement account-free links with owner revocation") for state in ("started", "updated", "completed")]
+review["semantic_review"]["dependent_edit_refs"][0]["line"] = 8
+save_native("after-answer", review, jsonl("turn-01.events.jsonl"), turn_two, [
+    (2, 5, "dependent_plan_observed", [0, 1], "This started event records the post-answer dependent plan."),
+    (2, 6, "dependent_plan_observed", [0, 1], "This update records the post-answer dependent plan."),
+    (2, 7, "dependent_plan_observed", [0, 1], "This completion records the post-answer dependent plan."),
+])
+incomplete = deepcopy(review)
+incomplete["semantic_review"]["native_plan_assessments"] = incomplete["semantic_review"]["native_plan_assessments"][:-1]
+write_json("review-native-missing-event-assessment.json", incomplete)
+contradictory = deepcopy(review)
+contradictory["semantic_review"]["dependent_planning_assessments"] = [
+    {"decision_index": index, "outcome": "no_dependent_plan", "plan_refs": [], "rationale": "The reviewer asserted no dependent plan."}
+    for index in range(2)
+]
+write_json("review-native-contradictory-no-plan.json", contradictory)
+
+# A completed-plan claim cannot hide its started-only predecessor on timeout.
+timeout_review = json.loads((root / "review-native-early-dependent.json").read_text())
+timeout_events = jsonl("native-early-dependent-turn-1.jsonl")[:-1]
+write_events(timeout_review, 1, "native-early-dependent-timeout.jsonl", timeout_events)
+write_json("review-native-early-dependent-timeout.json", timeout_review)
+PY_THIRD_COMMENT_REGRESSIONS
 
 python3 - "$evidence_root" <<'PY_LATE_COMPLETION_FIXTURE'
 from hashlib import sha256
@@ -607,6 +920,104 @@ if [[ -f "$importer" ]]; then
         pass
     else
         fail "evidence importer did not accept supported native question-answer-edit evidence: $(cat "$framework_grade")"
+    fi
+
+    test_start "an admitted frozen project baseline preserves the no-edit control"
+    if node "$importer" --review "$evidence_root/review-baseline-control.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .initial_workspace_baseline_status == "matched"' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a review with the exact selected project baseline did not remain admissible: $(cat "$framework_grade")"
+    fi
+
+    test_start "missing or mismatched selected project baselines are unavailable"
+    invalid_baseline_count=0
+    for variant in missing-map wrong-digest removed-project-file added-project-file modified-project-file; do
+        if node "$importer" --review "$evidence_root/review-baseline-$variant.json" --oracle "$evidence_root/oracle-baseline-$variant.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("initial_workspace_baseline_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_baseline_count=$((invalid_baseline_count + 1))
+        fi
+    done
+    if [[ "$invalid_baseline_count" -eq 5 ]]; then
+        pass
+    else
+        fail "a missing, wrong, removed, added, or modified project baseline was admitted"
+    fi
+
+    test_start "task-06 requires a completed failed read of the exact missing policy"
+    if node "$importer" --review "$evidence_root/review-task06-valid-read.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .missing_policy_read_status == "observed"' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a hash-bound failed read and policy-specific question did not satisfy task-06 evidence: $(cat "$framework_grade")"
+    fi
+
+    test_start "task-06 accepts an explicit ref only when it names the qualifying read event"
+    if node "$importer" --review "$evidence_root/review-task06-valid-read-explicit-ref.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .missing_policy_read_status == "observed"' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "an explicit missing-policy read reference was not bound to its completed event: $(cat "$framework_grade")"
+    fi
+
+    test_start "a question, echoed command, wrong file, successful read, started-only command, or search-pattern confusion cannot establish missing-policy evidence"
+    invalid_missing_policy_count=0
+    for variant in question-only echo-only wrong-file successful-read started-only wrong-explicit-ref pattern-is-not-file-operand; do
+        if node "$importer" --review "$evidence_root/review-task06-$variant.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and .missing_policy_read_status == "unavailable" and (.unavailable_reasons | index("required_missing_policy_read_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_missing_policy_count=$((invalid_missing_policy_count + 1))
+        fi
+    done
+    if [[ "$invalid_missing_policy_count" -eq 7 ]]; then
+        pass
+    else
+        fail "unsupported task-06 evidence was trusted as an attempted read"
+    fi
+
+    test_start "every native todo_list lifecycle event is assessed separately"
+    if node "$importer" --review "$evidence_root/review-native-after-answer.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "separately assessed native todo_list events after answer were not admitted: $(cat "$framework_grade")"
+    fi
+
+    test_start "an independent todo_list start may become a dependent plan after the answer"
+    if node "$importer" --review "$evidence_root/review-native-exploratory-then-dependent.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "an exploratory native start was incorrectly treated as a dependent plan from inception: $(cat "$framework_grade")"
+    fi
+
+    test_start "a dependent todo_list start before the question cannot be hidden by later completion"
+    if node "$importer" --review "$evidence_root/review-native-early-dependent.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_plan_preceded_question")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "the earlier dependent todo_list start was hidden by its later completion: $(cat "$framework_grade")"
+    fi
+
+    test_start "missing or contradictory native todo_list assessments are unavailable"
+    invalid_native_plan_count=0
+    for review_name in review-native-missing-event-assessment.json review-native-contradictory-no-plan.json; do
+        if node "$importer" --review "$evidence_root/$review_name" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("native_plan_coverage_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_native_plan_count=$((invalid_native_plan_count + 1))
+        fi
+    done
+    if [[ "$invalid_native_plan_count" -eq 2 ]]; then
+        pass
+    else
+        fail "native todo_list event coverage or per-decision mapping contradictions were admitted"
+    fi
+
+    test_start "a completed native plan violation remains visible through a later timeout"
+    if node "$importer" --review "$evidence_root/review-native-early-dependent-timeout.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | index("dependent_plan_preceded_question")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a native plan ordering violation was lost when the turn timed out: $(cat "$framework_grade")"
     fi
 
     python3 - "$evidence_root" <<'PY_RELATIVE_FILE_CHANGE'
@@ -825,6 +1236,13 @@ def make_spaced_review(rename):
     new_path = "src/renamed issue detail.py" if rename else old_path
     before[old_path] = old_hash
     after[new_path] = new_hash
+    spaced_oracle = json.loads((root / "oracle.json").read_text())
+    spaced_case = next(case for case in spaced_oracle["cases"] if case["case_id"] == "task-01")
+    spaced_case["initial_workspace_sha256"] = {old_path: old_hash}
+    spaced_oracle_bytes = (json.dumps(spaced_oracle, sort_keys=True) + "\n").encode()
+    oracle_name = "oracle-space-rename.json" if rename else "oracle-space-path.json"
+    (root / oracle_name).write_bytes(spaced_oracle_bytes)
+    review["semantic_review"]["planning_applicability"]["oracle_sha256"] = sha256(spaced_oracle_bytes).hexdigest()
     review["workspace_observation"]["before_manifest"] = write_json_ref(
         "before-space-rename.json" if rename else "before-space-path.json", before
     )
@@ -882,7 +1300,7 @@ PY_DIFF_ADMISSION_FIXTURES
     fi
 
     test_start "unquoted Git diff header accepts an equal-side path containing spaces"
-    if node "$importer" --review "$evidence_root/review-space-path.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if node "$importer" --review "$evidence_root/review-space-path.json" --oracle "$evidence_root/oracle-space-path.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 1' "$framework_grade" >/dev/null; then
         pass
     else
@@ -890,7 +1308,7 @@ PY_DIFF_ADMISSION_FIXTURES
     fi
 
     test_start "unquoted Git diff header accepts explicit rename metadata with spaces"
-    if node "$importer" --review "$evidence_root/review-space-rename.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if node "$importer" --review "$evidence_root/review-space-rename.json" --oracle "$evidence_root/oracle-space-rename.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 2' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1829,6 +2247,7 @@ oracle = json.loads((root / "oracle.json").read_text())
 oracle["cases"].append({
     "case_id": "continuation-required",
     "initial_prompt_sha256": sha256((root / "turn-01.prompt.txt").read_bytes()).hexdigest(),
+    "initial_workspace_sha256": json.loads((root / "before-files.json").read_text()),
     "hidden_material_decisions": ["link lifetime and revocation after broad access"],
     "continuation_answer_file": "expected-continuation-answer.txt",
 })

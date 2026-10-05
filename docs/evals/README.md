@@ -236,10 +236,26 @@ framework-owned `.codex/` journal changes separately from dependent project
 edits; unsupported edit events for changed project paths remain `UNAVAILABLE`.
 Punctuation by itself is never a material question.
 
-Each oracle case includes `initial_prompt_sha256` for its frozen actor prompt.
-The importer compares the exact bytes of the retained turn-1 controller input
-with that digest; a missing binding or a different prompt keeps behavior
-`UNAVAILABLE` and does not grade that review against the case's hidden decisions.
+Each oracle case includes `initial_prompt_sha256` for its frozen actor prompt
+and `initial_workspace_sha256`, a path-to-digest map for every file in that
+case's frozen actor project. The importer compares the exact bytes of the
+retained turn-1 controller input and the complete before-workspace manifest
+with those bindings. Missing, changed, removed, or extra project files keep
+behavior `UNAVAILABLE`; `.codex/` framework journal paths remain outside the
+actor-project comparison. The owning contract test cross-checks every case map
+against the frozen fixture manifest and checks that manifest against the exact
+retained fixture file set and hashes, including the oracle digest.
+
+For an oracle case that declares `required_missing_policy_path`, task-specific
+behavior remains `UNAVAILABLE` until turn 1 contains a completed, failed read
+of that exact project-relative path and a matching `cat: PATH: No such file or
+directory` diagnostic. The bounded importer recognizes only a single-file
+`cat PATH` or `cat -- PATH` command, optionally wrapped by `sh`, `bash`, or
+`zsh` with `-lc`. It only parses captured command text and never executes it.
+Other readers, multiple file operands, search patterns, shell compounds,
+successful commands, started-only events, and diagnostics for another path do
+not establish the read. An optional `semantic_review.missing_policy_read_ref`
+can bind the qualifying command to one exact turn/line event.
 
 An oracle case with `continuation_answer_file` requires a top-level
 `oracle_requirements` binding: the exact case ID and raw oracle hash, required
@@ -288,19 +304,31 @@ not infer that requirement from case names or English text. A `before_plan`
 assertion requires an explicit assessment for every frozen decision: either a
 dependent plan with one or more evidence references, or an explicit
 `no_dependent_plan` result. The reviewer attests that every completed agent
-message was checked for dependent planning. Missing applicability or coverage
-is `UNAVAILABLE`.
+message was checked for dependent planning. When native `todo_list` events
+occur, `native_plan_assessments` also covers each `item.started`, `item.updated`,
+and `item.completed` event separately. An independent exploratory event has no
+decision indexes; a dependent event maps to its decisions and must appear in
+each matching decision's `plan_refs`. These native references use turn and line
+without a text span. Message plan references still require bounded text spans.
+Missing event coverage or conflicting no-plan assertions is `UNAVAILABLE`.
 
-Planning and material-question references point to completed agent-message
-events and bounded, nonempty text spans. Span offsets are zero-based UTF-16 code
-units into the captured message text. Within one event, plan and question spans
-must not overlap; a dependent plan must follow each linked material question
-and a carried-forward answer. A material question may have an empty
+Message planning and material-question references point to completed
+agent-message events and bounded, nonempty text spans. Span offsets are
+zero-based UTF-16 code units into the captured message text. Within one event,
+plan and question spans must not overlap; a dependent plan must follow each
+linked material question and a carried-forward answer. Native todo-list events
+instead use their exact event line, so every started, updated, or completed
+observation retains its own ordering. A material question may have an empty
 `decision_indexes` list when it concerns a choice outside the frozen decision
 set; it does not satisfy any indexed decision. Offering options in a question
 can be assessed as `no_dependent_plan` when no dependent plan was committed.
 Cases whose oracle requires only clarification before edits use
 `before_edit_only` and do not acquire a before-plan ordering check.
+
+The review schema accepts POSIX roots, drive-qualified Windows roots, and UNC
+roots while rejecting relative and drive-relative roots. This is a schema
+contract; the importer still uses the host platform's path rules, so validating
+a Windows root in the schema does not exercise the importer on Windows.
 
 These applicability, coverage, and semantic classifications remain independent
 reviewer assertions. Hashes and text spans bind those assertions to retained
