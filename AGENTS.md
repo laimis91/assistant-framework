@@ -11,6 +11,9 @@ Root `skills/assistant-*` directories are the editable source of truth. See `REA
 - Keep behavior-driving skill prose, contracts, evals, tests, and documentation aligned.
 - Before changing skills, read `docs/skill-contract-design-guide.md`; keep detailed contract rules there.
 - Run focused checks first, then the aggregate verification appropriate to the changed surface.
+- When proposing verification, identify the remaining acceptance claims, reusable evidence, and smallest checks needed.
+- Propose a bounded allowance for routine, reversible recovery within the approved file scope, access, and cost limits; state explicit stop conditions.
+- Carry approval through recovery within that allowance. Request a new decision when its limits are exhausted or scope, risk, access, cost, or acceptance criteria materially change.
 
 ## Commands
 
