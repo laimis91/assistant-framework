@@ -127,9 +127,9 @@ gates:
         on_fail: "Write a requirements summary before proceeding"
 
       - id: D_REQUIREMENT_ACCEPTANCE_MAP
-        check: "For medium+ work, small required/review_intensive architecture work, or progressive_route_clear_consumption_state=consumed with progressive_artifact_retention_state=retained, requirement_acceptance_map exists with stable requirement_id values, atomic binary criteria, verification methods, manual scenarios or explicit N/A, assumptions/defaults, non-goals, and no unresolved material questions"
+        check: "requirement_acceptance_map exists with stable requirement_id values, atomic binary criteria, verification methods, manual scenarios or explicit N/A, assumptions/defaults, non-goals. For execution_intent != prepare_only, no unresolved material questions remain. For prepare_only, retain unresolved material questions in map and feature_preparation_result.open_decisions."
         condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
-        on_fail: "Load references/requirement-acceptance-map.md, map every accepted requirement, resolve material questions, and do not decompose from an untraceable criteria list"
+        on_fail: "Use references/requirement-acceptance-map.md; resolve material questions before execution; prepare_only retains open decisions."
 
       - id: D1A
         check: "Discovery confirms or updates task_type, risk_tier, qa_evaluation_mode, harness_capable, build_execution_lane, workflow_state_mode, required_gates, required_agents, subagent_policy_state, and subagent_execution_mode based on code/context evidence"
@@ -141,11 +141,12 @@ gates:
 
       - id: D2
         check: "clarification_status=ready; each implementation-shaping field is explicit, source-backed-defaulted, accepted from displayed recommendations, or resolved; approval alone never resolves choices."
+        condition: "execution_intent != prepare_only"
         on_fail: "Follow Discover step 5. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
 
       - id: D3
-        check: "clarification_defaults_applied is true exactly when clarification_defaults contains automatically applied entries with topic, value, source, and rationale; unresolved clarification topics are empty before Discover completes"
-        on_fail: "Repair clarification_defaults and its applied flag, record source/rationale for each source-backed technical default, and clear only resolved topics before continuing"
+        check: "clarification_defaults_applied is true exactly when clarification_defaults contains automatically applied entries with topic, value, source, and rationale; for execution_intent != prepare_only, unresolved clarification topics are empty before Discover completes"
+        on_fail: "Repair defaults/flag/sources; clear only resolved topics. prepare_only preserves unresolved topics and their open_decisions."
 
       - id: D3A
         check: "Preserve authoritative behavior; auto-apply source-backed technical defaults; never default new material choices."
@@ -376,7 +377,7 @@ gates:
         on_fail: "Produce implementation blueprint using delegated execution or direct fallback; record subagent_policy_state, subagent_execution_mode, and which path was used"
 
       - id: P8
-        check: "If clarification state was persisted for this task: saved clarification state is ready, clarification_defaults_applied is explicit (true/false), and unresolved clarification topics are empty before proceeding"
+        check: "If persisted: clarification_defaults_applied is explicit (true/false). execution_intent != prepare_only requires ready/empty topics; prepare_only preserves pending state/topics in feature_preparation_result.open_decisions."
         on_fail: "Return to Discover and revalidate its applicable exit assertions against request/source/answer evidence. Preserve unanswered topics; needs_clarification requires unresolved material topics, while ready requires a sufficient basis and none remaining. Missing metadata alone does not create questions. Material product choices require explicit answers or accepted displayed choices; defaults cover only technical implementation details; controlling-source gaps/conflicts require missing or reconciled authority. Record clarification_defaults_applied from actual recorded defaults."
 
       - id: P_PATTERN_RETRIEVAL

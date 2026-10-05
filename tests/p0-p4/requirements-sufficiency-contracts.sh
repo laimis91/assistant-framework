@@ -17,6 +17,89 @@ handoffs="$workflow_dir/contracts/handoffs.yaml"
 contract_index="$workflow_dir/contracts/index.yaml"
 discover_view="$workflow_dir/references/phases/discover.md"
 
+test_start "prepare-only Discover completes with retained open decisions while dependent intents remain gated"
+if ruby -ryaml -e '
+  gates = YAML.load_file(ARGV.fetch(0)).fetch("gates")
+  phases = File.read(ARGV.fetch(1))
+  generated = File.read(ARGV.fetch(2))
+  discover = gates.find { |gate| gate["phase"] == "DISCOVER" }
+  acceptance = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D_REQUIREMENT_ACCEPTANCE_MAP" }
+  d2 = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D2" }
+  d3 = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D3" }
+  normalize = ->(value) { value.downcase.delete("`").gsub(/\s+/, " ") }
+  map_check = normalize.call(acceptance.fetch("check"))
+  d3_check = normalize.call(d3.fetch("check"))
+  map_ready_scope = map_check.include?("for execution_intent != prepare_only, no unresolved material questions remain")
+  map_retains_open = map_check.include?("for prepare_only, retain unresolved material questions in map and feature_preparation_result.open_decisions")
+  d3_ready_scope = d3_check.include?("for execution_intent != prepare_only, unresolved clarification topics are empty before discover completes")
+  defaults_consistency = d3_check.include?("clarification_defaults_applied is true exactly when clarification_defaults contains automatically applied entries with topic, value, source, and rationale")
+  d3_retains_open = normalize.call(d3.fetch("on_fail")).include?("prepare_only preserves unresolved topics and their open_decisions")
+  map_is_still_required = map_check.include?("requirement_acceptance_map exists with stable requirement_id values") && map_check.include?("assumptions/defaults, non-goals")
+  map_condition = "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
+  map_trigger_preserved = acceptance.fetch("condition") == map_condition
+  d2_scoped = d2 && d2["condition"] == "execution_intent != prepare_only"
+  source_phase = phases[/^## Phase: Discover.*?(?=^## Phase: Decompose)/m]
+  generated_phase = generated[/^## Phase: Discover.*?(?=^## Phase: Decompose|\z)/m]
+  prep_state = normalize.call(source_phase.to_s)
+  prep_requirements = [
+    "for execution_intent=prepare_only, retain unresolved topics and provisional recommendations",
+    "finish discover through preparation completion without readiness or dependent work",
+    "in feature_preparation_result.open_decisions and existing map/state",
+    "preserve needs_clarification and actual technical defaults",
+    "optional readiness context settles no decisions",
+    "the following clarification wait rules apply to other execution intents",
+    "for execution_intent != prepare_only, discover does not complete while clarification status: needs_clarification"
+  ]
+  source_allows_preparation = prep_requirements.all? { |term| prep_state.include?(normalize.call(term)) } && normalize.call(generated_phase.to_s) == prep_state
+  unresolved_topic = ["product choice: open question"]
+  gate_blocks = lambda do |intent|
+    d2_applies = !(d2_scoped && intent == "prepare_only")
+    d3_applies = !(d3_ready_scope && intent == "prepare_only")
+    map_applies = !(map_ready_scope && intent == "prepare_only")
+    {
+      "D2" => unresolved_topic.any? && d2_applies,
+      "D3" => unresolved_topic.any? && d3_applies,
+      "D_REQUIREMENT_ACCEPTANCE_MAP" => unresolved_topic.any? && map_applies
+    }
+  end
+  preparation = gate_blocks.call("prepare_only")
+  end_to_end = gate_blocks.call("end_to_end")
+  implement_only = gate_blocks.call("implement_only")
+  result_valid = d2_scoped && map_ready_scope && map_retains_open && d3_ready_scope &&
+    defaults_consistency && d3_retains_open && map_is_still_required && map_trigger_preserved &&
+    source_allows_preparation && preparation.values.none? &&
+    %w[D2 D3 D_REQUIREMENT_ACCEPTANCE_MAP].all? { |id| end_to_end[id] && implement_only[id] }
+  exit(result_valid ? 0 : 1)
+' "$phase_gates" "$phases" "$discover_view"; then
+    pass
+else
+    fail "prepare-only Discover cannot complete with recorded open decisions while execution intents remain gated"
+fi
+
+test_start "optional preparation readiness Plan retains pending decisions through entry and exit"
+if ruby -ryaml -e '
+  source = File.read(ARGV.fetch(0))
+  view = File.read(ARGV.fetch(1))
+  plan = source[/^## Phase: Plan.*?(?=^## Phase: Design)/m]
+  entry = plan.to_s.lines.find { |line| line.start_with?("**Entry rule:") }
+  scoped = entry && entry.include?("For `execution_intent != prepare_only`,")
+  freshness = entry && entry.include?("Architecture Decision Pack must also be fresh")
+  preparation = plan.to_s.include?("For `prepare_only`, an explicitly requested readiness Plan is inline and never waits.")
+  pending_allowed = scoped && preparation
+  dependent_blocked = entry && entry.downcase.include?("do not enter plan while the saved clarification state is pending")
+  mirror = view.include?(entry.to_s.strip) && view.include?("For `prepare_only`, an explicitly requested readiness Plan is inline and never waits.")
+  gates = YAML.load_file(ARGV.fetch(2)).fetch("gates")
+  p8 = gates.find { |gate| gate["phase"] == "PLAN" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "P8" }.fetch("check")
+  common_defaults = p8.include?("clarification_defaults_applied is explicit (true/false)")
+  execution_ready = p8.include?("execution_intent != prepare_only requires ready/empty topics")
+  preparation_retained = p8.include?("prepare_only preserves pending state/topics in feature_preparation_result.open_decisions")
+  exit(pending_allowed && dependent_blocked && freshness && mirror && common_defaults && execution_ready && preparation_retained ? 0 : 1)
+' "$phases" "$workflow_dir/references/phases/plan.md" "$phase_gates"; then
+    pass
+else
+    fail "readiness Plan contradicts preserved pending preparation state or loses execution/freshness guards"
+fi
+
 test_start "Discover and selected no-Plan Build gates enforce positive sufficiency and partial-answer readiness"
 if ruby -ryaml -e '
   gates = YAML.load_file(ARGV.fetch(0)).fetch("gates")

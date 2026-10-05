@@ -12,7 +12,7 @@ framework_fixture="$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json"
 skill_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
 test_start "clarification review schema carries bounded message references and task-05 assessment"
-if node - "$FRAMEWORK_DIR/docs/evals/fixtures/clarification/clarification-evidence-review.schema.json" <<'NODE_CARRY_AND_POLICY_SCHEMA'
+if node - "$FRAMEWORK_DIR/docs/evals/fixtures/clarification/clarification-evidence-review.schema.json" "$FRAMEWORK_DIR" <<'NODE_CARRY_AND_POLICY_SCHEMA'
 const fs = require("node:fs");
 const schema = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const semantic = schema.properties.semantic_review;
@@ -25,6 +25,36 @@ const required = new Set(policyAssessment && policyAssessment.required || []);
 for (const key of ["oracle_case_id", "oracle_sha256", "decision_index", "source_paths",
                    "conflict_identified", "security_impact_explained", "message_spans", "rationale"]) {
   if (!required.has(key)) throw new Error("task-05 semantic assessment schema omits " + key);
+}
+const { createRequire } = require("node:module");
+const path = require("node:path");
+const localRequire = createRequire(path.join(process.argv[3], "tools/evals/package.json"));
+const Ajv2020 = localRequire("ajv/dist/2020").default;
+const envelope = { schema_version: "clarification-evidence/v1", case_id: "task-06", actor_id: "actor",
+  execution_mode: "native", workspace_root: "/tmp/project", activation: {}, inputs: [], transcripts: [],
+  workspace_observation: {}, semantic_review: {} };
+const validate = new Ajv2020({allErrors:true,strict:false}).compile(schema);
+if (!validate(envelope)) throw new Error("legacy envelope stopped parsing");
+const effect = {turn:1,line:3,classification:"project_write",affected_paths:["src/issue_access.py"],rationale:"Retained write."};
+envelope.semantic_review.command_effect_assessments = [effect];
+envelope.semantic_review.missing_authority_assessment = {oracle_case_id:"task-06",oracle_sha256:"a".repeat(64),decision_index:0,
+  missing_policy_path:"docs/customer-link-policy.md",unavailable_authority_explained:true,policy_contents_not_invented:true,
+  message_spans:[{turn:1,line:4,text_span:{start:0,end:10},rationale:"Bound evidence."}],rationale:"Reviewed response."};
+if (!validate(envelope)) throw new Error(JSON.stringify(validate.errors));
+for (const bad of [ {...effect, affected_paths:[]}, {...effect, affected_paths:["../escape"]},
+  {...effect,classification:"read_only"}, {...effect,classification:"framework_state_only"},
+  {...effect,affected_paths:[".codex/task.md"]}, {...effect,extra:true} ]) {
+  const changed=structuredClone(envelope); changed.semantic_review.command_effect_assessments=[bad];
+  if (validate(changed)) throw new Error("invalid effect schema accepted " + JSON.stringify(bad));
+}
+for (const good of [ {...effect,classification:"read_only",affected_paths:[]},
+  {...effect,classification:"framework_state_only",affected_paths:[".codex/task.md"]} ]) {
+  const changed=structuredClone(envelope); changed.semantic_review.command_effect_assessments=[good];
+  if (!validate(changed)) throw new Error("valid effect schema rejected");
+}
+for (const value of ["true", null, 1]) {
+  const changed=structuredClone(envelope); changed.semantic_review.missing_authority_assessment.policy_contents_not_invented=value;
+  if (validate(changed)) throw new Error("non-boolean authority claim accepted");
 }
 NODE_CARRY_AND_POLICY_SCHEMA
 then
@@ -827,6 +857,15 @@ def task06_variant(name, command_event=None, explicit_ref=None):
     review["semantic_review"]["decisions"][0]["question_refs"] = [{"turn": 1, "line": question_line}]
     assessment = review["semantic_review"]["question_assessments"][0]
     assessment["line"] = question_line
+    review["semantic_review"]["missing_authority_assessment"] = {
+        "oracle_case_id": "task-06", "oracle_sha256": canonical_task06_oracle["sha256"],
+        "decision_index": 0, "missing_policy_path": "docs/customer-link-policy.md",
+        "unavailable_authority_explained": True, "policy_contents_not_invented": True,
+        "message_spans": [{"turn": 1, "line": question_line,
+                           "text_span": {"start": 0, "end": len(task06_question)},
+                           "rationale": "The synthetic message explains the absent authority and invents no policy."}],
+        "rationale": "Both claims explicitly cover the retained synthetic response."
+    }
     if explicit_ref is not None:
         review["semantic_review"]["missing_policy_read_ref"] = explicit_ref
     write_json(f"review-task06-{name}.json", review)
@@ -1314,6 +1353,23 @@ if isinstance(semantic, dict) and isinstance(semantic.get("question_assessments"
                     "rationale": "The synthetic fixture explicitly declares this message is not a product question.",
                 })
                 assessed.add(key)
+# Existing synthetic controls declare their command effects explicitly. This is
+# fixture preparation only; production never derives a safe effect from text.
+if isinstance(semantic, dict) and "command_effect_assessments" not in semantic:
+    semantic["command_effect_assessments"] = []
+    for transcript in review.get("transcripts", []):
+        artifact = transcript.get("artifact", {})
+        path = evidence_root / artifact.get("path", "")
+        if not path.is_file():
+            continue
+        for line, raw in enumerate(path.read_text().splitlines(), 1):
+            event = json.loads(raw)
+            item = event.get("item")
+            if event.get("type") == "item.completed" and isinstance(item, dict) and item.get("type") == "command_execution":
+                semantic["command_effect_assessments"].append({
+                    "turn": transcript["turn"], "line": line, "classification": "read_only",
+                    "affected_paths": [], "rationale": "This existing synthetic control declares a command with no workspace writes."
+                })
 activation = review.get("activation", {})
 receipt_ref = activation.get("forced_load_receipt") if isinstance(activation, dict) else None
 generic_receipt = evidence_root / "forced-load-receipt.json"
@@ -4357,5 +4413,126 @@ else
     test_start "semantic evidence importer reports question answer and file order"
     fail "clarification semantic evidence importer is missing"
 fi
+
+
+
+# Command effects and task-06 semantic claims use real importer statuses, not
+# prose inventories. Missing-field probes bypass fixture auto-preparation.
+python3 - "$evidence_root" <<'PY_TENTH_BOUNDARIES'
+from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+base = json.loads((root / "review-task06-valid-read-prepared.json").read_text())
+checks = []
+def save(name, review, status, reason=None, raw=True):
+    (root / f"review-tenth-{name}.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+    checks.append([name, status, reason or "", "raw" if raw else "prepared"])
+for field in ("command_effect_assessments", "missing_authority_assessment"):
+    r = deepcopy(base); r["semantic_review"].pop(field)
+    save("missing-" + field, r, "UNAVAILABLE", "command_effect_assessment_unavailable" if field.startswith("command") else "missing_authority_assessment_unavailable")
+for name, mutate in [
+    ("duplicate-effect", lambda a: a.append(deepcopy(a[0]))),
+    ("extra-effect", lambda a: a.append(dict(a[0], line=99))),
+    ("unsafe-effect-path", lambda a: a[0].update(classification="project_write", affected_paths=["../outside"])),
+    ("read-with-path", lambda a: a[0].update(affected_paths=["src/issue_access.py"])),
+    ("project-without-path", lambda a: a[0].update(classification="project_write")),
+]:
+    r=deepcopy(base); mutate(r["semantic_review"]["command_effect_assessments"])
+    save(name,r,"UNAVAILABLE","command_effect_assessment_unavailable")
+for field, reason in [("unavailable_authority_explained", "required_missing_authority_not_explained"),
+                      ("policy_contents_not_invented", "missing_policy_contents_invented")]:
+    r=deepcopy(base); r["semantic_review"]["missing_authority_assessment"][field]=False
+    save("false-"+field,r,"FAIL",reason)
+for name, mutate in [
+    ("authority-wrong-hash", lambda a: a.update(oracle_sha256="a"*64)),
+    ("authority-wrong-case", lambda a: a.update(oracle_case_id="task-05")),
+    ("authority-wrong-decision", lambda a: a.update(decision_index=1)),
+    ("authority-wrong-path", lambda a: a.update(missing_policy_path="docs/permissions.md")),
+    ("authority-nonboolean", lambda a: a.update(policy_contents_not_invented="true")),
+    ("authority-invalid-span", lambda a: a["message_spans"][0]["text_span"].update(end=99999)),
+]:
+    r=deepcopy(base); mutate(r["semantic_review"]["missing_authority_assessment"])
+    save(name,r,"UNAVAILABLE","missing_authority_assessment_unavailable")
+events=[json.loads(x) for x in (root/base["transcripts"][0]["artifact"]["path"]).read_text().splitlines()]
+def changed_events(r, name, evs):
+    raw=("\n".join(json.dumps(x,sort_keys=True) for x in evs)+"\n").encode()
+    path=f"tenth-{name}.jsonl"; (root/path).write_bytes(raw)
+    r["transcripts"][0]["artifact"]={"path":path,"sha256":sha256(raw).hexdigest()}
+    r["activation"]["forced_load_receipt"]={"path":"forced-load-receipt.json", "sha256":sha256((root/"forced-load-receipt.json").read_bytes()).hexdigest()}
+    sem=r["semantic_review"]
+    sem["command_effect_assessments"]=[]
+    for line,e in enumerate(evs,1):
+        if e.get("type")=="item.completed" and e.get("item",{}).get("type")=="command_execution":
+            sem["command_effect_assessments"].append({"turn":1,"line":line,"classification":"read_only","affected_paths":[],"rationale":"Explicit synthetic effect assessment."})
+        if e.get("item",{}).get("id")=="missing-policy-question":
+            sem["decisions"][0]["question_refs"][0]["line"]=line
+            sem["question_assessments"][0]["line"]=line
+            sem["missing_authority_assessment"]["message_spans"][0]["line"]=line
+    return r
+write_item={"id":"restored-shell-write","type":"command_execution","command":"python3 -c 'write_then_restore()'","status":"in_progress"}
+started={"type":"item.started","item":write_item}
+completed={"type":"item.completed","item":dict(write_item,status="completed",exit_code=0,aggregated_output="restored")}
+for name, variant, status, reason in [
+    ("restored-shell-write", "normal", "FAIL", "dependent_edit_preceded_question"),
+    ("failed-shell-write", "failed", "FAIL", "dependent_edit_preceded_question"),
+    ("dropped-shell-start", "dropped", "UNAVAILABLE", "command_write_order_unavailable"),
+    ("ambiguous-shell-start", "ambiguous", "UNAVAILABLE", "command_write_order_unavailable"),
+    ("cross-turn-shell-start", "cross-turn", "UNAVAILABLE", "command_write_order_unavailable"),
+    ("read-only-terminal", "read", "PASS", None),
+    ("framework-terminal", "framework", "PASS", None),
+    ("partial-prior-write", "partial", "UNAVAILABLE", "dependent_edit_preceded_question"),
+]:
+    r=deepcopy(base); evs=deepcopy(events)
+    terminal=deepcopy(completed)
+    if variant=="failed": terminal["item"].update(exit_code=1,status="failed")
+    if variant not in ("dropped","read","framework","cross-turn"): evs.insert(4,deepcopy(started))
+    if variant=="ambiguous": evs.insert(4,deepcopy(started))
+    evs.insert(len(evs)-1,terminal)
+    if variant=="partial":
+        evs[-1:] = [{"type":"item.started","item":{"id":"unfinished-command","type":"command_execution","command":"true","status":"in_progress"}}]
+    changed_events(r,name,evs)
+    effect=r["semantic_review"]["command_effect_assessments"][-1]
+    if variant=="framework": effect.update(classification="framework_state_only",affected_paths=[".codex/task.md"])
+    elif variant!="read":
+        effect.update(classification="project_write",affected_paths=["src/issue_access.py"])
+        r["semantic_review"]["dependent_edit_refs"]=[{"turn":1,"line":effect["line"],"path":"src/issue_access.py","rationale":"The shell wrote and restored this stable baseline path."}]
+    if variant=="cross-turn":
+        raw=(json.dumps({"type":"turn.started"})+"\n"+json.dumps(started)+"\n").encode()
+        (root/"tenth-other-turn-start.jsonl").write_bytes(raw)
+        r["transcripts"].append({"turn":2,"artifact":{"path":"tenth-other-turn-start.jsonl","sha256":sha256(raw).hexdigest()}})
+    save(name,r,status,reason,raw=False)
+for name, partial in [("reopened-command-complete",False),("reopened-command-partial",True)]:
+    r=deepcopy(base); evs=deepcopy(events)
+    evs.insert(-1,{"type":"item.started","item":{"id":"staged-skill-read","type":"command_execution","command":"unknown effect","status":"in_progress"}})
+    if partial: evs.pop()
+    changed_events(r,name,evs)
+    save(name,r,"UNAVAILABLE","command_completion_unavailable" if partial else "command_effect_assessment_unavailable",raw=False)
+r=json.loads((root/"review-tenth-partial-prior-write.json").read_text())
+evs=[json.loads(x) for x in (root/r["transcripts"][0]["artifact"]["path"]).read_text().splitlines()]
+evs[-1]["item"]["id"]="staged-skill-read"
+changed_events(r,"reopened-command-prior-violation",evs)
+effect=r["semantic_review"]["command_effect_assessments"][-1]
+effect.update(classification="project_write",affected_paths=["src/issue_access.py"])
+save("reopened-command-prior-violation",r,"UNAVAILABLE","dependent_edit_preceded_question",raw=False)
+r=deepcopy(base); evs=deepcopy(events[:-1]); changed_events(r,"partial-authority",evs)
+r["semantic_review"]["missing_authority_assessment"]["unavailable_authority_explained"]=False
+save("partial-authority",r,"UNAVAILABLE",raw=False)
+(root/"tenth-checks.tsv").write_text("\n".join("\t".join(c) for c in checks)+"\n")
+PY_TENTH_BOUNDARIES
+while IFS=$'\t' read -r probe expected reason preparation; do
+    test_start "command/authority evidence boundary: $probe"
+    # read collapses adjacent tab separators; retain explicit empty reason below.
+    if [[ "$reason" == "raw" || "$reason" == "prepared" ]]; then preparation="$reason"; reason=""; fi
+    if [[ "$preparation" == "raw" ]]; then tenth_importer=run_importer_raw; else tenth_importer=run_importer; fi
+    if "$tenth_importer" --review "$evidence_root/review-tenth-$probe.json" --oracle "$evidence_root/canonical-task06-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e --arg expected "$expected" --arg reason "$reason" '.behavior_status == $expected and ($reason == "" or ((.unavailable_reasons + .behavior_reasons) | index($reason)) != null) and (if $expected == "UNAVAILABLE" and $reason == "" then (.behavior_reasons | length) == 0 else true end)' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "$probe did not establish $expected/$reason: $(cat "$framework_grade")"
+    fi
+done < "$evidence_root/tenth-checks.tsv"
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

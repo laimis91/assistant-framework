@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://assistant-framework.local/schemas/clarification-evidence-review.schema.json",
   "title": "Clarification Semantic Evidence Review",
-  "description": "Hash-bound controller inputs, native transcript references, workspace observations, and an independently asserted semantic review. Reviewer identity, independence, planning applicability, and semantic classifications are assertions and are not cryptographically authenticated. Legacy v1 payloads remain parseable but are behaviorally UNAVAILABLE until planning applicability and required coverage are supplied.",
+  "description": "Hash-bound controller inputs, native transcript references, workspace observations, and an independently asserted semantic review. Reviewer identity, independence, planning applicability, and semantic classifications are assertions and are not cryptographically authenticated. Legacy v1 payloads remain parseable but are behaviorally UNAVAILABLE until planning applicability and required coverage are supplied. Current evidence also requires exhaustive command-effect assertions and task-06 missing-authority assertions; absence never supplies implicit safe claims.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -789,6 +789,192 @@
                 "type": "string",
                 "minLength": 1
               }
+            }
+          }
+        },
+        "command_effect_assessments": {
+          "description": "Exact-once independent effects for every terminal command, including nonzero exits. Project writes additionally require an unambiguous earlier same-turn native start; completion alone cannot establish ordering. Missing legacy evidence is unavailable.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "turn",
+              "line",
+              "classification",
+              "affected_paths",
+              "rationale"
+            ],
+            "properties": {
+              "turn": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "classification": {
+                "enum": [
+                  "read_only",
+                  "framework_state_only",
+                  "project_write"
+                ]
+              },
+              "affected_paths": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?=[\\s\\S]*\\S)(?!/)(?![\\s\\S]*\\\\)(?![\\s\\S]*\\u0000)(?![\\s\\S]*//)(?![\\s\\S]*/(?![\\s\\S]))(?!\\.{1,2}(?:/|(?![\\s\\S])))(?![\\s\\S]*/\\.{1,2}(?:/|(?![\\s\\S])))[\\s\\S]*"
+                }
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "classification": {
+                      "const": "read_only"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "affected_paths": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "classification": {
+                      "const": "framework_state_only"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "affected_paths": {
+                      "minItems": 1,
+                      "items": {
+                        "allOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "^(?=[\\s\\S]*\\S)(?!/)(?![\\s\\S]*\\\\)(?![\\s\\S]*\\u0000)(?![\\s\\S]*//)(?![\\s\\S]*/(?![\\s\\S]))(?!\\.{1,2}(?:/|(?![\\s\\S])))(?![\\s\\S]*/\\.{1,2}(?:/|(?![\\s\\S])))[\\s\\S]*"
+                          },
+                          {
+                            "pattern": "^\\.codex/"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "classification": {
+                      "const": "project_write"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "affected_paths": {
+                      "minItems": 1,
+                      "contains": {
+                        "not": {
+                          "pattern": "^\\.codex/"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "missing_authority_assessment": {
+          "description": "Task-06 independent explanation and non-invention assertions covering all retained response messages, bound to frozen case, digest, missing policy path and decision 0.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "oracle_case_id",
+            "oracle_sha256",
+            "decision_index",
+            "missing_policy_path",
+            "unavailable_authority_explained",
+            "policy_contents_not_invented",
+            "message_spans",
+            "rationale"
+          ],
+          "properties": {
+            "oracle_case_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "oracle_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "decision_index": {
+              "const": 0
+            },
+            "message_spans": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "turn",
+                  "line",
+                  "text_span",
+                  "rationale"
+                ],
+                "properties": {
+                  "turn": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "text_span": {
+                    "$ref": "#/$defs/textSpan"
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "missing_policy_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?=[\\s\\S]*\\S)(?!/)(?![\\s\\S]*\\\\)(?![\\s\\S]*\\u0000)(?![\\s\\S]*//)(?![\\s\\S]*/(?![\\s\\S]))(?!\\.{1,2}(?:/|(?![\\s\\S])))(?![\\s\\S]*/\\.{1,2}(?:/|(?![\\s\\S])))[\\s\\S]*"
+            },
+            "unavailable_authority_explained": {
+              "type": "boolean"
+            },
+            "policy_contents_not_invented": {
+              "type": "boolean"
             }
           }
         }
