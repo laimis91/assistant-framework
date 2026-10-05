@@ -8,10 +8,16 @@ than a free-form essay or a permanent extra agent.
 
 The Architecture Decision Pack (ADP) records the smallest set of facts,
 decisions, semantic interface commitments, and verification needed to build a
-single goal safely. It is AI-led: the agent discovers what it can from the
-repository, asks every remaining material design question, and escalates to a
-human only when a choice is materially irreversible, business-owned, or lacks
-a safe default.
+single goal safely. It is AI-led: the agent discovers repository-backed facts
+and automatically applies only source-backed technical defaults, recording
+their source and rationale. Unresolved material product choices about a new
+audience, public contract, data boundary, or other business-owned behavior need
+an explicit user answer. A repository convention or reversibility alone cannot
+decide a new audience, public contract, or data boundary. Keep unresolved
+material product choices and recommendations provisional until the user gives
+an explicit answer; explicitly accepting a displayed recommendation counts as
+a user answer. Escalate for business policy, irreversible commitments, cost or
+compliance choices, or alternatives with materially different outcomes.
 
 Use one pack per implementation goal. Keep it file- and boundary-oriented; do
 not expand it into a project rewrite, a general knowledge base, or a standing
@@ -36,8 +42,12 @@ drivers would change the outcome.
 
 1. Read local code, tests, contracts, configuration, and the current revision
    before asking. Put source-backed observations in **Facts**.
-2. Apply a safe default when it is reversible and repository evidence supports
-   it. Record the source and rationale.
+2. Automatically apply only source-backed technical defaults; record topic,
+   value, source, and rationale. A repository convention or reversibility alone
+   cannot decide a new audience, public contract, or data boundary. Keep
+   unresolved material product choices and recommendations provisional until
+   the user gives an explicit answer; explicitly accepting a displayed
+   recommendation counts as a user answer.
 3. Ask every remaining material question. Group questions by decision topic;
    each question resolves one decision and states why it matters, risk if
    guessed, and a recommended default when one exists. There is no numeric

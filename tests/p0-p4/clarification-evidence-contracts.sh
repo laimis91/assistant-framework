@@ -1053,6 +1053,61 @@ for terminal in ("turn.failed", "error"):
     write_events(review, 2, f"turn-02-{terminal.replace('.', '-')}-after-completion.jsonl", events)
     save_review(f"review-{terminal.replace('.', '-')}-after-completion.json", review)
 
+    review = deepcopy(base)
+    events = events_for(review, 2)
+    assert events[-1]["type"] == "turn.completed"
+    events.insert(-1, {"type": terminal, "message": "captured failure"})
+    write_events(review, 2, f"turn-02-{terminal.replace('.', '-')}-before-completion.jsonl", events)
+    save_review(f"review-{terminal.replace('.', '-')}-before-completion.json", review)
+
+zero_decision_control = json.loads((root / "review-baseline-control.json").read_text())
+for event_type in ("item.started", "item.updated", "item.completed"):
+    for payload_shape, payload in (("missing", None), ("null", None),
+                                   ("primitive", "not-an-object"), ("array", [])):
+        review = deepcopy(zero_decision_control)
+        events = events_for(review, 1)
+        assert events[-1]["type"] == "turn.completed"
+        malformed = {"type": event_type}
+        if payload_shape != "missing":
+            malformed["item"] = payload
+        events.insert(-1, malformed)
+        suffix = event_type.removeprefix("item.")
+        name = f"review-item-{suffix}-{payload_shape}-zero-decision.json"
+        write_events(review, 1, f"turn-01-item-{suffix}-{payload_shape}-zero-decision.jsonl", events)
+        save_review(name, review)
+
+for suffix, item in (
+    ("missing-type", {"id": "missing-item-type"}),
+    ("null-type", {"id": "null-item-type", "type": None}),
+    ("primitive-type", {"id": "primitive-item-type", "type": 7}),
+    ("blank-type", {"id": "blank-item-type", "type": ""}),
+    ("agent-message-missing-text", {"id": "missing-message-text", "type": "agent_message"}),
+    ("agent-message-null-text", {"id": "null-message-text", "type": "agent_message", "text": None}),
+    ("agent-message-primitive-text", {"id": "primitive-message-text", "type": "agent_message", "text": 7}),
+):
+    review = deepcopy(zero_decision_control)
+    events = events_for(review, 1)
+    assert events[-1]["type"] == "turn.completed"
+    events.insert(-1, {"type": "item.completed", "item": item})
+    write_events(review, 1, f"turn-01-item-{suffix}-zero-decision.jsonl", events)
+    save_review(f"review-item-{suffix}-zero-decision.json", review)
+
+review = deepcopy(zero_decision_control)
+events = events_for(review, 1)
+assert events[-1]["type"] == "turn.completed"
+events[-1:-1] = [
+    {"type": "item.completed", "item": {"id": "future-event", "type": "future_item"}},
+    {"type": "item.completed", "item": {"id": "empty-message", "type": "agent_message", "text": ""}},
+    {"type": "item.started", "item": {"id": "valid-lifecycle", "type": "command_execution",
+     "command": "true", "status": "in_progress"}},
+    {"type": "item.updated", "item": {"id": "valid-lifecycle", "type": "command_execution",
+     "command": "true", "status": "in_progress"}},
+    {"type": "item.completed", "item": {"id": "valid-lifecycle", "type": "command_execution",
+     "command": "true", "status": "completed", "exit_code": 0, "aggregated_output": ""}},
+]
+write_events(review, 1, "turn-01-item-payload-valid-zero-decision.jsonl", events)
+save_review("review-item-payload-valid-zero-decision.json", review)
+
 review = deepcopy(base)
 original_diff = (root / review["workspace_observation"]["diff"]["path"]).read_bytes()
 write_diff(review, "diff-appended-headerless-patch.patch", original_diff + b"@@ -1 +1 @@\n-old line\n+new line\n--- a/src/unmanifested.py\n+++ b/src/unmanifested.py\n")
@@ -1198,18 +1253,51 @@ PY_FOURTH_COMMENT_REGRESSIONS
         fail "a completed non-question message without an assessment did not make evidence unavailable: $(cat "$framework_grade")"
     fi
 
-    test_start "completed turn failure terminals invalidate an otherwise completed capture"
+    test_start "failure terminals invalidate captures in either completion order"
     invalid_failure_terminal_count=0
-    for variant in turn-failed error; do
-        if run_importer --review "$evidence_root/review-$variant-after-completion.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    for variant in turn-failed-after-completion error-after-completion turn-failed-before-completion error-before-completion; do
+        if run_importer --review "$evidence_root/review-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
             && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_2_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
             invalid_failure_terminal_count=$((invalid_failure_terminal_count + 1))
         fi
     done
-    if [[ "$invalid_failure_terminal_count" -eq 2 ]]; then
+    if [[ "$invalid_failure_terminal_count" -eq 4 ]]; then
         pass
     else
-        fail "a failure terminal after completion remained usable transcript evidence"
+        fail "a failure terminal in either completion order remained usable transcript evidence"
+    fi
+
+    test_start "malformed item inventory events invalidate zero-decision controls"
+    invalid_item_inventory_count=0
+    for event_type in started updated completed; do
+        for payload_shape in missing null primitive array; do
+            variant="$event_type-$payload_shape"
+            if run_importer --review "$evidence_root/review-item-$variant-zero-decision.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+                && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_1_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
+                invalid_item_inventory_count=$((invalid_item_inventory_count + 1))
+            fi
+        done
+    done
+    for variant in missing-type null-type primitive-type blank-type agent-message-missing-text agent-message-null-text agent-message-primitive-text; do
+        if run_importer --review "$evidence_root/review-item-$variant-zero-decision.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_1_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_item_inventory_count=$((invalid_item_inventory_count + 1))
+        fi
+    done
+    if [[ "$invalid_item_inventory_count" -eq 19 ]]; then
+        pass
+    else
+        fail "a malformed item lifecycle, role, or completed-message event remained usable evidence ($invalid_item_inventory_count/19)"
+    fi
+
+    test_start "valid item lifecycle, future item types, and zero-decision controls remain accepted"
+    if run_importer --review "$evidence_root/review-baseline-control.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-item-payload-valid-zero-decision.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a valid item lifecycle, future item type, empty message, or zero-decision control was rejected: $(cat "$framework_grade")"
     fi
 
     test_start "Git diff headers and hunks are section-bound"

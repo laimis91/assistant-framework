@@ -982,7 +982,16 @@ clarification_status_block="$(contract_field_block "$input_contract" clarificati
 clarification_defaults_block="$(contract_field_block "$input_contract" clarification_defaults_applied)"
 clarification_values_block="$(contract_field_block "$input_contract" clarification_defaults)"
 discover_block="$(phase_block DISCOVER)"
-if ! p0p4_contains_text_ci "$phases_reference" \
+architecture_pack_reference="$workflow_dir/references/architecture-decision-pack.md"
+if ! p0p4_contains_text_ci "$architecture_pack_reference" \
+    'automatically apply only source-backed technical defaults; record topic, value, source, and rationale' \
+    || ! p0p4_contains_text_ci "$architecture_pack_reference" \
+        'repository convention or reversibility alone cannot decide a new audience, public contract, or data boundary' \
+    || ! p0p4_contains_text_ci "$architecture_pack_reference" \
+        'keep unresolved material product choices and recommendations provisional until the user gives an explicit answer' \
+    || ! p0p4_contains_text_ci "$architecture_pack_reference" \
+        'explicitly accepting a displayed recommendation counts as a user answer' \
+    || ! p0p4_contains_text_ci "$phases_reference" \
     'automatically apply only source-backed technical defaults; record topic, value, source, and rationale' \
     || ! grep -Fq -- 'auto-apply source-backed technical defaults; never default new material choices.' <<<"$discover_block" \
     || ! grep -Fq -- 'Apply evidenced defaults without confirmation; ask and await explicit answers for new material choices.' <<<"$discover_block"; then

@@ -154,6 +154,7 @@ function parseTranscript(turn, admitted, label) {
   let completedTurn = false;
   let turnStartSeen = false;
   let turnStartLine = null;
+  let failureSeen = false;
   let validStartedPrefix = true;
   if (lines.length > MAX_JSONL_LINES) fail(`${label} exceeds the event-line limit`);
   for (let index = 0; index < lines.length; index += 1) {
@@ -174,13 +175,21 @@ function parseTranscript(turn, admitted, label) {
       turnStartSeen = true;
       if (turnStartLine === null) turnStartLine = parsed.line;
     }
-    if (completedTurn && (event.type === "turn.completed" || event.type === "turn.failed"
-      || event.type === "error" || event.type.startsWith("item."))) {
+    if (event.type === "turn.failed" || event.type === "error") {
+      failureSeen = true;
+      if (completedTurn) validStartedPrefix = false;
+    }
+    if (completedTurn && (event.type === "turn.completed" || event.type.startsWith("item."))) {
       validStartedPrefix = false;
     }
-    if (event.type.startsWith("item.") && !turnStartSeen) validStartedPrefix = false;
+    if (event.type.startsWith("item.") && (!turnStartSeen || !item || !nonempty(item.type))) {
+      validStartedPrefix = false;
+    }
+    if (event.type === "item.completed" && item && item.type === "agent_message" && typeof item.text !== "string") {
+      validStartedPrefix = false;
+    }
     if (event.type === "turn.completed") {
-      if (!turnStartSeen) validStartedPrefix = false;
+      if (!turnStartSeen || failureSeen) validStartedPrefix = false;
       completedTurn = true;
     }
     if (["item.completed", "item.started", "item.updated"].includes(event.type) && item) {
