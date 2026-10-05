@@ -25,7 +25,8 @@
         "src/issue_detail.py": "a88fab0fdcfdf086a8b733d725fb43a3efb43c73b58eb4aa857d14830819e925",
         "tests/test_issue_access.py": "1d239e9688a050c6b4b51a7b16e35e64c2d0c13dd78878c4c04bf5ec0d05bede",
         "tests/test_issue_detail.py": "4a12135c8a5e31356982d1637972ea0046cd761d0f11b21a1dae1db0100019cc"
-      }
+      },
+      "planning_requirement": "before_plan"
     },
     {
       "case_id": "task-02",
@@ -43,7 +44,8 @@
         "src/issue_detail.py": "a88fab0fdcfdf086a8b733d725fb43a3efb43c73b58eb4aa857d14830819e925",
         "tests/test_issue_access.py": "1d239e9688a050c6b4b51a7b16e35e64c2d0c13dd78878c4c04bf5ec0d05bede",
         "tests/test_issue_detail.py": "4a12135c8a5e31356982d1637972ea0046cd761d0f11b21a1dae1db0100019cc"
-      }
+      },
+      "planning_requirement": "before_edit_only"
     },
     {
       "case_id": "task-03",
@@ -58,7 +60,8 @@
         "src/issue_detail.py": "a88fab0fdcfdf086a8b733d725fb43a3efb43c73b58eb4aa857d14830819e925",
         "tests/test_issue_access.py": "1d239e9688a050c6b4b51a7b16e35e64c2d0c13dd78878c4c04bf5ec0d05bede",
         "tests/test_issue_detail.py": "4a12135c8a5e31356982d1637972ea0046cd761d0f11b21a1dae1db0100019cc"
-      }
+      },
+      "planning_requirement": "before_edit_only"
     },
     {
       "case_id": "task-04",
@@ -74,7 +77,8 @@
         "src/issue_detail.py": "a88fab0fdcfdf086a8b733d725fb43a3efb43c73b58eb4aa857d14830819e925",
         "tests/test_issue_access.py": "1d239e9688a050c6b4b51a7b16e35e64c2d0c13dd78878c4c04bf5ec0d05bede",
         "tests/test_issue_detail.py": "4a12135c8a5e31356982d1637972ea0046cd761d0f11b21a1dae1db0100019cc"
-      }
+      },
+      "planning_requirement": "before_edit_only"
     },
     {
       "case_id": "task-05",
@@ -93,7 +97,8 @@
         "src/issue_detail.py": "a88fab0fdcfdf086a8b733d725fb43a3efb43c73b58eb4aa857d14830819e925",
         "tests/test_issue_access.py": "1d239e9688a050c6b4b51a7b16e35e64c2d0c13dd78878c4c04bf5ec0d05bede",
         "tests/test_issue_detail.py": "4a12135c8a5e31356982d1637972ea0046cd761d0f11b21a1dae1db0100019cc"
-      }
+      },
+      "planning_requirement": "before_edit_only"
     },
     {
       "case_id": "task-06",
@@ -111,7 +116,8 @@
         "src/issue_detail.py": "a88fab0fdcfdf086a8b733d725fb43a3efb43c73b58eb4aa857d14830819e925",
         "tests/test_issue_access.py": "1d239e9688a050c6b4b51a7b16e35e64c2d0c13dd78878c4c04bf5ec0d05bede",
         "tests/test_issue_detail.py": "4a12135c8a5e31356982d1637972ea0046cd761d0f11b21a1dae1db0100019cc"
-      }
+      },
+      "planning_requirement": "before_edit_only"
     },
     {
       "case_id": "task-07",
@@ -128,7 +134,8 @@
         "src/issue_detail.py": "a88fab0fdcfdf086a8b733d725fb43a3efb43c73b58eb4aa857d14830819e925",
         "tests/test_issue_access.py": "1d239e9688a050c6b4b51a7b16e35e64c2d0c13dd78878c4c04bf5ec0d05bede",
         "tests/test_issue_detail.py": "4a12135c8a5e31356982d1637972ea0046cd761d0f11b21a1dae1db0100019cc"
-      }
+      },
+      "planning_requirement": "before_plan"
     },
     {
       "case_id": "task-08",
@@ -146,7 +153,8 @@
         "src/issue_detail.py": "a88fab0fdcfdf086a8b733d725fb43a3efb43c73b58eb4aa857d14830819e925",
         "tests/test_issue_access.py": "1d239e9688a050c6b4b51a7b16e35e64c2d0c13dd78878c4c04bf5ec0d05bede",
         "tests/test_issue_detail.py": "4a12135c8a5e31356982d1637972ea0046cd761d0f11b21a1dae1db0100019cc"
-      }
+      },
+      "planning_requirement": "before_edit_only"
     }
   ],
   "grading_boundary": {

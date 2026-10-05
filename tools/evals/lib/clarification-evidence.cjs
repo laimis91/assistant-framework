@@ -174,7 +174,8 @@ function parseTranscript(turn, admitted, label) {
       turnStartSeen = true;
       if (turnStartLine === null) turnStartLine = parsed.line;
     }
-    if (completedTurn && (event.type === "turn.completed" || event.type.startsWith("item."))) {
+    if (completedTurn && (event.type === "turn.completed" || event.type === "turn.failed"
+      || event.type === "error" || event.type.startsWith("item."))) {
       validStartedPrefix = false;
     }
     if (event.type.startsWith("item.") && !turnStartSeen) validStartedPrefix = false;
@@ -332,9 +333,26 @@ function parseDiffPaths(diffText) {
     } else if (current.renameFrom !== null || current.renameTo !== null) {
       return false;
     }
+    if (current.hunkOldRemaining !== null || current.hunkNewRemaining !== null) return false;
+    const hasOldFileHeader = current.oldFileHeader !== null;
+    const hasNewFileHeader = current.newFileHeader !== null;
+    if (hasOldFileHeader !== hasNewFileHeader) return false;
+    if (current.sawHunk && !hasOldFileHeader) return false;
+    if (hasOldFileHeader) {
+      const expectedOld = current.newFile ? "/dev/null" : `a/${current.from}`;
+      const expectedNew = current.deletedFile ? "/dev/null" : `b/${current.to}`;
+      if (current.oldFileHeader !== expectedOld || current.newFileHeader !== expectedNew) return false;
+    }
     paths.add(current.from);
     paths.add(current.to);
     return true;
+  };
+  const parseFileHeaderPath = (line, marker) => {
+    if (!line.startsWith(`${marker} `)) return null;
+    const value = line.slice(marker.length + 1).split("\t", 1)[0];
+    return value === "/dev/null" || safeDiffPath(value.slice(2)) && (value.startsWith("a/") || value.startsWith("b/"))
+      ? value
+      : null;
   };
 
   for (const line of lines) {
@@ -344,18 +362,85 @@ function parseDiffPaths(diffText) {
       if (sectionCount > MAX_DIFF_PATHS) return null;
       const header = parseGitHeader(line);
       if (!header) return null;
-      current = { ...header, renameFrom: null, renameTo: null };
+      current = {
+        ...header,
+        renameFrom: null,
+        renameTo: null,
+        oldFileHeader: null,
+        newFileHeader: null,
+        newFile: false,
+        deletedFile: false,
+        sawHunk: false,
+        hunkOldRemaining: null,
+        hunkNewRemaining: null,
+      };
       continue;
     }
     if (line.startsWith("diff --")) return null;
+    if (current && current.hunkOldRemaining !== null) {
+      if (line.startsWith("\\ No newline at end of file")) continue;
+      const prefix = line[0];
+      if (prefix === " ") {
+        current.hunkOldRemaining -= 1;
+        current.hunkNewRemaining -= 1;
+      } else if (prefix === "-") {
+        current.hunkOldRemaining -= 1;
+      } else if (prefix === "+") {
+        current.hunkNewRemaining -= 1;
+      } else {
+        return null;
+      }
+      if (current.hunkOldRemaining < 0 || current.hunkNewRemaining < 0) return null;
+      if (current.hunkOldRemaining === 0 && current.hunkNewRemaining === 0) {
+        current.hunkOldRemaining = null;
+        current.hunkNewRemaining = null;
+      }
+      continue;
+    }
     if (line.startsWith("rename from ") || line.startsWith("rename to ")) {
-      if (!current) return null;
+      if (!current || current.sawHunk) return null;
       const isFrom = line.startsWith("rename from ");
       const field = isFrom ? "renameFrom" : "renameTo";
       const renamePath = safeDiffPath(line.slice(isFrom ? 12 : 10));
       if (!renamePath || current[field] !== null) return null;
       current[field] = renamePath;
+      continue;
     }
+    if (line.startsWith("new file mode ") || line.startsWith("deleted file mode ")) {
+      if (!current || current.sawHunk) return null;
+      const isNew = line.startsWith("new file mode ");
+      if ((isNew && current.newFile) || (!isNew && current.deletedFile)) return null;
+      current[isNew ? "newFile" : "deletedFile"] = true;
+      continue;
+    }
+    if (line.startsWith("--- ")) {
+      if (!current || current.sawHunk || current.oldFileHeader !== null) return null;
+      current.oldFileHeader = parseFileHeaderPath(line, "---");
+      if (current.oldFileHeader === null) return null;
+      continue;
+    }
+    if (line.startsWith("+++ ")) {
+      if (!current || current.sawHunk || current.newFileHeader !== null) return null;
+      current.newFileHeader = parseFileHeaderPath(line, "+++");
+      if (current.newFileHeader === null) return null;
+      continue;
+    }
+    if (line.startsWith("@@")) {
+      if (!current || current.oldFileHeader === null || current.newFileHeader === null) return null;
+      const hunk = line.match(/^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@(?:.*)$/);
+      if (!hunk) return null;
+      current.hunkOldRemaining = hunk[1] === undefined ? 1 : Number(hunk[1]);
+      current.hunkNewRemaining = hunk[2] === undefined ? 1 : Number(hunk[2]);
+      if (!Number.isSafeInteger(current.hunkOldRemaining) || !Number.isSafeInteger(current.hunkNewRemaining)
+        || current.hunkOldRemaining > lines.length || current.hunkNewRemaining > lines.length) return null;
+      current.sawHunk = true;
+      if (current.hunkOldRemaining === 0 && current.hunkNewRemaining === 0) {
+        current.hunkOldRemaining = null;
+        current.hunkNewRemaining = null;
+      }
+      continue;
+    }
+    if ((line.startsWith("---") || line.startsWith("+++")) && !current?.sawHunk) return null;
   }
   if (!finishSection()) return null;
   if (sectionCount === 0 && diffText.trim().length > 0) return null;
@@ -712,6 +797,8 @@ function main() {
     nativeSelectionStatus = "not_applicable_text_proxy";
     activationStatus = "text_proxy_only";
   }
+  if (review.execution_mode === "native") activationReasons.push("native_selection_unavailable");
+  for (const reason of activationReasons) unavailableReasons.push(reason);
 
   const observation = isObject(review.workspace_observation) ? review.workspace_observation : {};
   const beforeRecord = admitted.read(observation.before_manifest, "before_manifest");
@@ -720,6 +807,7 @@ function main() {
   let changedPaths = null;
   let frameworkStatePaths = null;
   let projectChangedPaths = null;
+  let stableProjectPaths = null;
   let diffText = null;
   if (!beforeRecord || !afterRecord || !diffRecord) {
     unavailableReasons.push("workspace_change_observation_unavailable");
@@ -736,6 +824,8 @@ function main() {
     changedPaths = changedManifestPaths(before, after);
     frameworkStatePaths = changedPaths.filter((filePath) => filePath.startsWith(".codex/"));
     projectChangedPaths = changedPaths.filter((filePath) => !filePath.startsWith(".codex/"));
+    stableProjectPaths = Object.keys(before).filter((filePath) =>
+      !filePath.startsWith(".codex/") && Object.prototype.hasOwnProperty.call(after, filePath) && before[filePath] === after[filePath]);
     diffText = diffRecord.bytes.toString("utf8");
   }
 
@@ -760,7 +850,9 @@ function main() {
       if (!observedChanges.has(changedPath)) unavailableReasons.push("changed_file_order_telemetry_unavailable");
     }
     for (const observedPath of observedChanges.keys()) {
-      if (!changedPaths.includes(observedPath)) unavailableReasons.push("file_event_manifest_mismatch");
+      if (!changedPaths.includes(observedPath) && !stableProjectPaths.includes(observedPath)) {
+        unavailableReasons.push("file_event_manifest_mismatch");
+      }
     }
     const diffPaths = parseDiffPaths(diffText);
     if (!diffPaths) {
@@ -804,14 +896,16 @@ function main() {
   const nativePlanAssessmentMap = new Map();
   let planningRequirement = "unavailable";
   let planningCoverageValid = false;
+  const frozenPlanningRequirement = oracleCase.planning_requirement;
   if (!planningApplicability
+    || !["before_plan", "before_edit_only"].includes(frozenPlanningRequirement)
     || planningApplicability.oracle_case_id !== review.case_id
     || planningApplicability.oracle_sha256 !== oracleDigest
-    || !["before_plan", "before_edit_only"].includes(planningApplicability.requirement)
+    || planningApplicability.requirement !== frozenPlanningRequirement
     || !nonempty(planningApplicability.rationale)) {
     unavailableReasons.push("planning_applicability_unavailable");
   } else {
-    planningRequirement = planningApplicability.requirement;
+    planningRequirement = frozenPlanningRequirement;
     if (planningRequirement === "before_edit_only") {
       planningCoverageValid = true;
     } else {
@@ -973,7 +1067,7 @@ function main() {
     }
     if (decisionMap.size !== expectedDecisionCount) reviewShapeSupported = false;
     for (const assessment of semanticReview.question_assessments) {
-      if (!isObject(assessment) || !Number.isInteger(assessment.turn) || !Number.isInteger(assessment.line) || !["material", "non_material", "punctuation_only"].includes(assessment.classification) || !Array.isArray(assessment.decision_indexes) || !nonempty(assessment.rationale)) {
+      if (!isObject(assessment) || !Number.isInteger(assessment.turn) || !Number.isInteger(assessment.line) || !["material", "non_material", "punctuation_only", "not_a_question"].includes(assessment.classification) || !Array.isArray(assessment.decision_indexes) || !nonempty(assessment.rationale)) {
         reviewShapeSupported = false;
         continue;
       }
@@ -1010,7 +1104,7 @@ function main() {
     }
     for (const transcript of transcripts.values()) {
       for (const message of transcript.messages) {
-        if (message.item.text.includes("?") && !questionMap.has(`${message.turn}:${message.line}`)) reviewShapeSupported = false;
+        if (!questionMap.has(`${message.turn}:${message.line}`)) reviewShapeSupported = false;
       }
     }
     for (const [index, decision] of decisionMap) {
@@ -1123,7 +1217,8 @@ function main() {
       if (!hasConfirmedEditReference) reviewShapeSupported = false;
       editRefPaths.add(ref.path);
     }
-    if (projectChangedPaths !== null && projectChangedPaths.some((filePath) => !editRefPaths.has(filePath))) reviewShapeSupported = false;
+    const requiredEditPaths = new Set([...(projectChangedPaths || []), ...observedChanges.keys()]);
+    if ([...requiredEditPaths].some((filePath) => !editRefPaths.has(filePath))) reviewShapeSupported = false;
     const earliestDependentEdits = [...editRefPaths].map((filePath) => {
       const observed = [...(observedChanges.get(filePath) || [])].sort(compareOrder);
       return observed.length > 0 ? { path: filePath, turn: observed[0].turn, line: observed[0].line } : null;
@@ -1272,10 +1367,11 @@ function main() {
       answer_receipts: answers.filter((answer) => answer.record).length,
       completed_transcript_turns: [...transcripts.values()].filter((transcript) => transcript.completedTurn).length,
       independently_reviewed_decisions: decisionMap.size,
-      reviewed_question_events: questionMap.size,
+      reviewed_question_events: [...questionMap.values()].filter((assessment) =>
+        assessment.classification === "material" || assessment.classification === "non_material").length,
       workspace_changed_paths: changedPaths === null ? null : changedPaths.length,
       framework_state_paths_changed: frameworkStatePaths === null ? null : frameworkStatePaths.length,
-      observed_dependent_edits: projectChangedPaths === null ? null : projectChangedPaths.length,
+      observed_dependent_edits: changedPaths === null ? null : observedChanges.size,
     },
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

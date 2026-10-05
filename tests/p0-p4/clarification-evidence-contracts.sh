@@ -365,11 +365,11 @@ initial_prompt_digest = sha256(initial_prompt_bytes).hexdigest()
 oracle = {
     "schema_version": "clarification-oracle/v1",
     "cases": [
-        {"case_id": "task-01", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": ["recipient access", "link revocation"]},
-        {"case_id": "task-03", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": []},
-        {"case_id": "task-04", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": ["recipient access"]},
-        {"case_id": "task-06", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": ["external-link policy from unavailable authority"]},
-        {"case_id": "task-08", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "hidden_material_decisions": ["link revocation"]},
+        {"case_id": "task-01", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_plan", "hidden_material_decisions": ["recipient access", "link revocation"]},
+        {"case_id": "task-03", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_edit_only", "hidden_material_decisions": []},
+        {"case_id": "task-04", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_edit_only", "hidden_material_decisions": ["recipient access"]},
+        {"case_id": "task-06", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_edit_only", "hidden_material_decisions": ["external-link policy from unavailable authority"]},
+        {"case_id": "task-08", "initial_prompt_sha256": initial_prompt_digest, "initial_workspace_sha256": {"src/issue_detail.py": old_hash}, "planning_requirement": "before_edit_only", "hidden_material_decisions": ["link revocation"]},
     ],
 }
 oracle_bytes = (json.dumps(oracle, sort_keys=True) + "\n").encode()
@@ -396,6 +396,10 @@ selection = write("activation.json", {
     "selected_skill": "assistant-workflow",
     "selected_skills": ["assistant-workflow"],
 })
+forced_load_receipt = write("forced-load-receipt.json", {
+    "invocation_mode": "forced_skill_load",
+    "skill_name": "assistant-workflow",
+})
 read_skill = command("sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md", "# Development Workflow\n")
 question_text = "Before editing, who can open a private issue link and how long does it remain valid before revocation?"
 turn_1 = transcript([
@@ -419,11 +423,12 @@ review = {
     "schema_version": "clarification-evidence/v1",
     "case_id": "task-01",
     "actor_id": "actor-1",
-    "execution_mode": "native",
+    "execution_mode": "forced_skill_load",
     "workspace_root": str(workspace),
     "activation": {
         "skill_name": "assistant-workflow",
         "skill_read_ref": {"turn": 1, "line": 3},
+        "forced_load_receipt": forced_load_receipt,
     },
     "inputs": [
         {"turn": 1, "kind": "initial_prompt", "artifact": initial},
@@ -451,6 +456,8 @@ review = {
              "text_spans": [{"start": 0, "end": len(question_text), "decision_indexes": [0, 1],
                              "rationale": "This captured span asks both material choices."}],
              "rationale": "Both choices change authorization and data exposure."},
+            {"turn": 2, "line": 3, "classification": "not_a_question", "decision_indexes": [],
+             "rationale": "This synthetic support message explicitly carries the answer without asking a question."},
         ],
         "answer_assessments": [
             {"kind": "answer_to_question", "answer_turn": 2, "question_ref": {"turn": 1, "line": 4}, "outcome": "carried_forward",
@@ -577,9 +584,8 @@ task06_review["semantic_review"].update({
     "planning_applicability": {
         "oracle_case_id": "task-06",
         "oracle_sha256": canonical_task06_oracle["sha256"],
-        "requirement": "before_plan",
-        "coverage_attestation": "reviewed_every_completed_agent_message_for_dependent_planning",
-        "rationale": "This case requires resolving its unavailable authority before a dependent plan.",
+        "requirement": "before_edit_only",
+        "rationale": "The frozen task contract requires clarification before edits; it does not impose a before-plan ordering check.",
     },
     "dependent_planning_assessments": [{
         "decision_index": 0, "outcome": "no_dependent_plan", "plan_refs": [],
@@ -596,12 +602,15 @@ task06_review["semantic_review"].update({
 
 def task06_variant(name, command_event=None, explicit_ref=None):
     review = deepcopy(task06_review)
-    events = [{"type": "thread.started"}, {"type": "turn.started"}]
+    events = [
+        {"type": "thread.started"}, {"type": "turn.started"},
+        {"type": "item.completed", "item": {"id": "staged-skill-read", "type": "command_execution",
+         "command": "sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md", "status": "completed",
+         "exit_code": 0, "aggregated_output": "# Workflow\n"}},
+    ]
+    review["activation"]["skill_read_ref"] = {"turn": 1, "line": 3}
     if command_event is not None:
         events.append(command_event)
-        review["activation"]["skill_read_ref"] = {"turn": 1, "line": 3}
-    else:
-        review["activation"].pop("skill_read_ref", None)
     question_line = len(events) + 1
     events.extend([
         {"type": "item.completed", "item": {"id": "missing-policy-question", "type": "agent_message", "text": task06_question}},
@@ -624,13 +633,13 @@ def command_event(command_text, output, exit_code=1, event_type="item.completed"
     return {"type": event_type, "item": item}
 
 task06_variant("valid-read", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"))
-task06_variant("valid-read-explicit-ref", command_event("bash -lc 'cat -- docs/customer-link-policy.md'", "cat: docs/customer-link-policy.md: No such file or directory"), {"turn": 1, "line": 3})
+task06_variant("valid-read-explicit-ref", command_event("bash -lc 'cat -- docs/customer-link-policy.md'", "cat: docs/customer-link-policy.md: No such file or directory"), {"turn": 1, "line": 4})
 task06_variant("question-only")
 task06_variant("echo-only", command_event("echo 'cat docs/customer-link-policy.md'", "cat: docs/customer-link-policy.md: No such file or directory"))
 task06_variant("wrong-file", command_event("cat docs/permissions.md", "cat: docs/permissions.md: No such file or directory"))
 task06_variant("successful-read", command_event("cat docs/customer-link-policy.md", "policy text was returned", exit_code=0))
 task06_variant("started-only", command_event("cat docs/customer-link-policy.md", "", event_type="item.started"))
-task06_variant("wrong-explicit-ref", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"), {"turn": 1, "line": 4})
+task06_variant("wrong-explicit-ref", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"), {"turn": 1, "line": 5})
 task06_variant("pattern-is-not-file-operand", command_event("rg docs/customer-link-policy.md docs/customer-link-policy.md.bak", "rg: docs/customer-link-policy.md.bak: No such file or directory"))
 
 # Native todo_list lifecycle observations need separate semantic assessments.
@@ -913,17 +922,369 @@ PY_LATE_COMPLETION_FIXTURE
 
 importer="$FRAMEWORK_DIR/tools/evals/lib/clarification-evidence.cjs"
 
+run_importer() {
+    python3 - "$@" <<'PY_SYNTHETIC_MESSAGE_INTENTS'
+import json
+from pathlib import Path
+import sys
+
+arguments = sys.argv[1:]
+review_path = Path(arguments[arguments.index("--review") + 1])
+evidence_root = Path(arguments[arguments.index("--evidence-root") + 1])
+review = json.loads(review_path.read_text())
+semantic = review.get("semantic_review")
+if isinstance(semantic, dict) and isinstance(semantic.get("question_assessments"), list):
+    assessments = semantic["question_assessments"]
+    assessed = {
+        (item.get("turn"), item.get("line"))
+        for item in assessments
+        if isinstance(item, dict)
+    }
+    for transcript in review.get("transcripts", []):
+        if not isinstance(transcript, dict) or not isinstance(transcript.get("turn"), int):
+            continue
+        artifact = transcript.get("artifact")
+        if not isinstance(artifact, dict) or not isinstance(artifact.get("path"), str):
+            continue
+        transcript_path = evidence_root / artifact["path"]
+        if not transcript_path.is_file():
+            continue
+        for line_number, raw in enumerate(transcript_path.read_text().splitlines(), start=1):
+            event = json.loads(raw)
+            item = event.get("item") if isinstance(event, dict) else None
+            key = (transcript["turn"], line_number)
+            if (isinstance(event, dict) and event.get("type") == "item.completed"
+                    and isinstance(item, dict) and item.get("type") == "agent_message"
+                    and isinstance(item.get("text"), str) and key not in assessed):
+                assessments.append({
+                    "turn": key[0],
+                    "line": key[1],
+                    "classification": "not_a_question",
+                    "decision_indexes": [],
+                    "rationale": "The synthetic fixture explicitly declares this message is not a product question.",
+                })
+                assessed.add(key)
+    review_path.write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_SYNTHETIC_MESSAGE_INTENTS
+    node "$importer" "$@"
+}
+
 if [[ -f "$importer" ]]; then
-    test_start "independent semantic evidence binds native questions answers and ordered edits"
-    if node "$importer" --review "$evidence_root/review.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-        && jq -e '.execution_mode == "native" and .native_selection_status == "unavailable" and .staged_skill_command_reference_status == "observed" and .skill_file_read_attestation == "not_attested" and .behavior_status == "PASS" and .chronology_support == "controller_turn_order_and_native_event_line_order"' "$framework_grade" >/dev/null; then
+    python3 - "$evidence_root" <<'PY_FOURTH_COMMENT_REGRESSIONS'
+from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+base = json.loads((root / "review.json").read_text())
+
+def write_json(name, value):
+    raw = (json.dumps(value, sort_keys=True) + "\n").encode()
+    (root / name).write_bytes(raw)
+    return {"path": name, "sha256": sha256(raw).hexdigest()}
+
+def write_events(review, turn, name, events):
+    raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n").encode()
+    (root / name).write_bytes(raw)
+    reference = {"turn": turn, "artifact": {"path": name, "sha256": sha256(raw).hexdigest()}}
+    review["transcripts"] = [item for item in review["transcripts"] if item["turn"] != turn] + [reference]
+    review["transcripts"].sort(key=lambda item: item["turn"])
+
+def events_for(review, turn):
+    reference = next(item for item in review["transcripts"] if item["turn"] == turn)
+    return [json.loads(line) for line in (root / reference["artifact"]["path"]).read_text().splitlines()]
+
+def save_review(name, review):
+    write_json(name, review)
+
+def write_diff(review, name, diff):
+    (root / name).write_bytes(diff)
+    review["workspace_observation"]["diff"] = {"path": name, "sha256": sha256(diff).hexdigest()}
+
+native = deepcopy(base)
+native["execution_mode"] = "native"
+native["activation"].pop("forced_load_receipt", None)
+save_review("review-native-no-selection.json", native)
+
+for name, mutate in (
+    ("missing-receipt", lambda review: review["activation"].pop("forced_load_receipt", None)),
+    ("missing-skill-reference", lambda review: review["activation"].pop("skill_read_ref", None)),
+):
+    review = deepcopy(base)
+    mutate(review)
+    save_review(f"review-activation-{name}.json", review)
+
+review = deepcopy(base)
+invalid_receipt = write_json("invalid-forced-load-receipt.json", {
+    "invocation_mode": "forced_skill_load", "skill_name": "assistant-clarify",
+})
+review["activation"]["forced_load_receipt"] = invalid_receipt
+save_review("review-activation-invalid-receipt.json", review)
+
+review = deepcopy(base)
+review["semantic_review"]["planning_applicability"]["requirement"] = "before_edit_only"
+save_review("review-planning-mismatched-requirement.json", review)
+
+for name, mutate in (
+    ("missing", lambda case: case.pop("planning_requirement", None)),
+    ("unsupported", lambda case: case.__setitem__("planning_requirement", "when_convenient")),
+):
+    oracle = json.loads((root / "oracle.json").read_text())
+    task = next(case for case in oracle["cases"] if case["case_id"] == "task-01")
+    mutate(task)
+    oracle_ref = write_json(f"oracle-planning-{name}.json", oracle)
+    review = deepcopy(base)
+    review["semantic_review"]["planning_applicability"]["oracle_sha256"] = oracle_ref["sha256"]
+    save_review(f"review-planning-oracle-{name}.json", review)
+
+review = deepcopy(base)
+review["semantic_review"]["question_assessments"] = [
+    item for item in review["semantic_review"]["question_assessments"]
+    if (item["turn"], item["line"]) != (2, 3)
+]
+save_review("review-missing-nonquestion-assessment.json", review)
+
+for terminal in ("turn.failed", "error"):
+    review = deepcopy(base)
+    events = events_for(review, 2)
+    events.append({"type": terminal, "message": "captured failure"})
+    write_events(review, 2, f"turn-02-{terminal.replace('.', '-')}-after-completion.jsonl", events)
+    save_review(f"review-{terminal.replace('.', '-')}-after-completion.json", review)
+
+review = deepcopy(base)
+original_diff = (root / review["workspace_observation"]["diff"]["path"]).read_bytes()
+write_diff(review, "diff-appended-headerless-patch.patch", original_diff + b"@@ -1 +1 @@\n-old line\n+new line\n--- a/src/unmanifested.py\n+++ b/src/unmanifested.py\n")
+save_review("review-diff-appended-headerless-patch.json", review)
+
+review = deepcopy(base)
+write_diff(review, "diff-mismatched-git-headers.patch", (
+    b"diff --git a/src/issue_detail.py b/src/issue_detail.py\n"
+    b"--- a/src/other.py\n+++ b/src/issue_detail.py\n"
+))
+save_review("review-diff-mismatched-git-headers.json", review)
+
+review = deepcopy(base)
+write_diff(review, "diff-hunk-prefix-content.patch", (
+    b"diff --git a/src/issue_detail.py b/src/issue_detail.py\n"
+    b"--- a/src/issue_detail.py\n+++ b/src/issue_detail.py\n"
+    b"@@ -1 +1 @@\n---old line\n+++new line\n"
+))
+save_review("review-diff-hunk-prefix-content.json", review)
+
+review = deepcopy(base)
+before = json.loads((root / review["workspace_observation"]["before_manifest"]["path"]).read_text())
+after = json.loads((root / review["workspace_observation"]["after_manifest"]["path"]).read_text())
+after["src/new.py"] = sha256(b"new file\n").hexdigest()
+review["workspace_observation"]["after_manifest"] = write_json("after-pure-add.json", after)
+events = events_for(review, 2)
+file_change = next(event["item"] for event in events if event.get("item", {}).get("type") == "file_change")
+file_change["changes"].append({"path": str(root / "workspace/src/new.py"), "kind": "add"})
+write_events(review, 2, "turn-02-pure-add.jsonl", events)
+review["semantic_review"]["dependent_edit_refs"].append({
+    "turn": 2, "line": 5, "path": "src/new.py", "rationale": "A new project file was added after clarification.",
+})
+write_diff(review, "diff-pure-add.patch", (
+    (root / "turn.diff.patch").read_bytes()
+    + b"diff --git a/src/new.py b/src/new.py\nnew file mode 100644\n--- /dev/null\n+++ b/src/new.py\n@@ -0,0 +1 @@\n+new file\n"
+))
+save_review("review-diff-pure-add.json", review)
+
+review = deepcopy(base)
+before = json.loads((root / review["workspace_observation"]["before_manifest"]["path"]).read_text())
+before["src/removed.py"] = sha256(b"removed file\n").hexdigest()
+review["workspace_observation"]["before_manifest"] = write_json("before-pure-delete.json", before)
+oracle = json.loads((root / "oracle.json").read_text())
+task = next(case for case in oracle["cases"] if case["case_id"] == "task-01")
+task["initial_workspace_sha256"]["src/removed.py"] = before["src/removed.py"]
+oracle_ref = write_json("oracle-pure-delete.json", oracle)
+review["semantic_review"]["planning_applicability"]["oracle_sha256"] = oracle_ref["sha256"]
+events = events_for(review, 2)
+file_change = next(event["item"] for event in events if event.get("item", {}).get("type") == "file_change")
+file_change["changes"].append({"path": str(root / "workspace/src/removed.py"), "kind": "delete"})
+write_events(review, 2, "turn-02-pure-delete.jsonl", events)
+review["semantic_review"]["dependent_edit_refs"].append({
+    "turn": 2, "line": 5, "path": "src/removed.py", "rationale": "A project file was deleted after clarification.",
+})
+write_diff(review, "diff-pure-delete.patch", (
+    (root / "turn.diff.patch").read_bytes()
+    + b"diff --git a/src/removed.py b/src/removed.py\ndeleted file mode 100644\n--- a/src/removed.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-removed file\n"
+))
+save_review("review-diff-pure-delete.json", review)
+
+stable_manifest = json.loads((root / base["workspace_observation"]["before_manifest"]["path"]).read_text())
+for name, early in (("proper", False), ("early", True), ("missing-refs", False)):
+    review = deepcopy(base)
+    stable_ref = write_json(f"{name}-reverted-after.json", stable_manifest)
+    review["workspace_observation"]["after_manifest"] = stable_ref
+    write_diff(review, f"{name}-reverted.patch", b"")
+    if early:
+        events = events_for(review, 1)
+        events.insert(3, {
+            "type": "item.completed",
+            "item": {"id": "reverted-early", "type": "file_change", "status": "completed",
+                     "changes": [{"path": str(root / "workspace/src/issue_detail.py"), "kind": "update"}]},
+        })
+        write_events(review, 1, "turn-01-reverted-early.jsonl", events)
+        review["semantic_review"]["decisions"][0]["question_refs"] = [{"turn": 1, "line": 5}]
+        review["semantic_review"]["decisions"][1]["question_refs"] = [{"turn": 1, "line": 5}]
+        material = next(item for item in review["semantic_review"]["question_assessments"] if item["turn"] == 1)
+        material["line"] = 5
+        review["semantic_review"]["answer_assessments"][0]["question_ref"]["line"] = 5
+    if name == "missing-refs":
+        review["semantic_review"]["dependent_edit_refs"] = []
+    save_review(f"review-reverted-{name}.json", review)
+
+review = deepcopy(base)
+events = events_for(review, 1)
+events.insert(4, {
+    "type": "item.completed",
+    "item": {"id": "unknown-observed-path", "type": "file_change", "status": "completed",
+             "changes": [{"path": str(root / "workspace/src/unlisted.py"), "kind": "update"}]},
+})
+write_events(review, 1, "turn-01-unlisted-observed-path.jsonl", events)
+review["semantic_review"]["dependent_edit_refs"].append({
+    "turn": 1, "line": 5, "path": "src/unlisted.py", "rationale": "This observed path is intentionally absent from both manifests.",
+})
+save_review("review-unlisted-observed-path.json", review)
+PY_FOURTH_COMMENT_REGRESSIONS
+
+    test_start "native capture without observable selection is unavailable"
+    if run_importer --review "$evidence_root/review-native-no-selection.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.execution_mode == "native" and .native_selection_status == "unavailable" and .behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("native_selection_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "native behavior passed without observable native selection: $(cat "$framework_grade")"
+    fi
+
+    test_start "forced activation evidence participates in overall availability"
+    invalid_activation_count=0
+    for variant in missing-receipt invalid-receipt missing-skill-reference; do
+        if run_importer --review "$evidence_root/review-activation-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | length) > 0 and (.activation_evidence_reasons | length) > 0' "$framework_grade" >/dev/null; then
+            invalid_activation_count=$((invalid_activation_count + 1))
+        fi
+    done
+    if [[ "$invalid_activation_count" -eq 3 ]]; then
+        pass
+    else
+        fail "missing or invalid forced-load evidence remained behaviorally available"
+    fi
+
+    test_start "planning requirement is frozen with the oracle case"
+    invalid_planning_count=0
+    if run_importer --review "$evidence_root/review-planning-mismatched-requirement.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("planning_applicability_unavailable")) != null' "$framework_grade" >/dev/null; then
+        invalid_planning_count=$((invalid_planning_count + 1))
+    fi
+    for variant in missing unsupported; do
+        if run_importer --review "$evidence_root/review-planning-oracle-$variant.json" --oracle "$evidence_root/oracle-planning-$variant.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("planning_applicability_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_planning_count=$((invalid_planning_count + 1))
+        fi
+    done
+    if [[ "$invalid_planning_count" -eq 3 ]]; then
+        pass
+    else
+        fail "missing, unsupported, or mismatched oracle planning requirements were accepted"
+    fi
+
+    test_start "every completed message needs an explicit semantic assessment"
+    if node "$importer" --review "$evidence_root/review-missing-nonquestion-assessment.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a completed non-question message without an assessment did not make evidence unavailable: $(cat "$framework_grade")"
+    fi
+
+    test_start "completed turn failure terminals invalidate an otherwise completed capture"
+    invalid_failure_terminal_count=0
+    for variant in turn-failed error; do
+        if run_importer --review "$evidence_root/review-$variant-after-completion.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_2_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_failure_terminal_count=$((invalid_failure_terminal_count + 1))
+        fi
+    done
+    if [[ "$invalid_failure_terminal_count" -eq 2 ]]; then
+        pass
+    else
+        fail "a failure terminal after completion remained usable transcript evidence"
+    fi
+
+    test_start "Git diff headers and hunks are section-bound"
+    diff_guard_count=0
+    for variant in appended-headerless-patch mismatched-git-headers; do
+        if run_importer --review "$evidence_root/review-diff-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("workspace_diff_paths_unavailable")) != null' "$framework_grade" >/dev/null; then
+            diff_guard_count=$((diff_guard_count + 1))
+        fi
+    done
+    hunk_prefix_ok=0
+    if run_importer --review "$evidence_root/review-diff-hunk-prefix-content.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
+        hunk_prefix_ok=1
+    fi
+    if [[ "$diff_guard_count" -eq 2 && "$hunk_prefix_ok" -eq 1 ]]; then
+        pass
+    else
+        fail "headerless or mismatched sections were admitted, or hunk data was mistaken for a header"
+    fi
+
+    test_start "pure add and delete sections retain Git null-side headers"
+    add_ok=0
+    if run_importer --review "$evidence_root/review-diff-pure-add.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 2' "$framework_grade" >/dev/null; then
+        add_ok=1
+    fi
+    delete_ok=0
+    if run_importer --review "$evidence_root/review-diff-pure-delete.json" --oracle "$evidence_root/oracle-pure-delete.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 2' "$framework_grade" >/dev/null; then
+        delete_ok=1
+    fi
+    if [[ "$add_ok" -eq 1 && "$delete_ok" -eq 1 ]]; then
+        pass
+    else
+        fail "a valid pure add or pure delete diff did not remain supported"
+    fi
+
+    test_start "reverted edits remain ordered evidence with full path-reference coverage"
+    proper_restore_ok=0
+    if run_importer --review "$evidence_root/review-reverted-proper.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 0 and .evidence_counts.observed_dependent_edits == 1' "$framework_grade" >/dev/null; then
+        proper_restore_ok=1
+    fi
+    early_restore_fails=0
+    if run_importer --review "$evidence_root/review-reverted-early.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_edit_preceded_question")) != null' "$framework_grade" >/dev/null; then
+        early_restore_fails=1
+    fi
+    missing_refs_unavailable=0
+    if run_importer --review "$evidence_root/review-reverted-missing-refs.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null; then
+        missing_refs_unavailable=1
+    fi
+    unknown_path_unavailable=0
+    if run_importer --review "$evidence_root/review-unlisted-observed-path.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("file_event_manifest_mismatch")) != null' "$framework_grade" >/dev/null; then
+        unknown_path_unavailable=1
+    fi
+    if [[ "$proper_restore_ok" -eq 1 && "$early_restore_fails" -eq 1 && "$missing_refs_unavailable" -eq 1 && "$unknown_path_unavailable" -eq 1 ]]; then
+        pass
+    else
+        fail "reverted edits were not classified with path-presence, order, and semantic-reference evidence"
+    fi
+
+    test_start "independent semantic evidence binds forced-load questions answers and ordered edits"
+    if run_importer --review "$evidence_root/review.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.execution_mode == "forced_skill_load" and .activation_status == "forced_load" and .native_selection_status == "not_applicable_forced_load" and .staged_skill_command_reference_status == "observed" and .skill_file_read_attestation == "not_attested" and .behavior_status == "PASS" and .chronology_support == "controller_turn_order_and_native_event_line_order"' "$framework_grade" >/dev/null; then
         pass
     else
         fail "evidence importer did not accept supported native question-answer-edit evidence: $(cat "$framework_grade")"
     fi
 
     test_start "an admitted frozen project baseline preserves the no-edit control"
-    if node "$importer" --review "$evidence_root/review-baseline-control.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-baseline-control.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .initial_workspace_baseline_status == "matched"' "$framework_grade" >/dev/null; then
         pass
     else
@@ -933,7 +1294,7 @@ if [[ -f "$importer" ]]; then
     test_start "missing or mismatched selected project baselines are unavailable"
     invalid_baseline_count=0
     for variant in missing-map wrong-digest removed-project-file added-project-file modified-project-file; do
-        if node "$importer" --review "$evidence_root/review-baseline-$variant.json" --oracle "$evidence_root/oracle-baseline-$variant.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        if run_importer --review "$evidence_root/review-baseline-$variant.json" --oracle "$evidence_root/oracle-baseline-$variant.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
             && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("initial_workspace_baseline_unavailable")) != null' "$framework_grade" >/dev/null; then
             invalid_baseline_count=$((invalid_baseline_count + 1))
         fi
@@ -945,7 +1306,7 @@ if [[ -f "$importer" ]]; then
     fi
 
     test_start "task-06 requires a completed failed read of the exact missing policy"
-    if node "$importer" --review "$evidence_root/review-task06-valid-read.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-task06-valid-read.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .missing_policy_read_status == "observed"' "$framework_grade" >/dev/null; then
         pass
     else
@@ -953,7 +1314,7 @@ if [[ -f "$importer" ]]; then
     fi
 
     test_start "task-06 accepts an explicit ref only when it names the qualifying read event"
-    if node "$importer" --review "$evidence_root/review-task06-valid-read-explicit-ref.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-task06-valid-read-explicit-ref.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .missing_policy_read_status == "observed"' "$framework_grade" >/dev/null; then
         pass
     else
@@ -963,7 +1324,7 @@ if [[ -f "$importer" ]]; then
     test_start "a question, echoed command, wrong file, successful read, started-only command, or search-pattern confusion cannot establish missing-policy evidence"
     invalid_missing_policy_count=0
     for variant in question-only echo-only wrong-file successful-read started-only wrong-explicit-ref pattern-is-not-file-operand; do
-        if node "$importer" --review "$evidence_root/review-task06-$variant.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        if run_importer --review "$evidence_root/review-task06-$variant.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
             && jq -e '.behavior_status == "UNAVAILABLE" and .missing_policy_read_status == "unavailable" and (.unavailable_reasons | index("required_missing_policy_read_unavailable")) != null' "$framework_grade" >/dev/null; then
             invalid_missing_policy_count=$((invalid_missing_policy_count + 1))
         fi
@@ -975,7 +1336,7 @@ if [[ -f "$importer" ]]; then
     fi
 
     test_start "every native todo_list lifecycle event is assessed separately"
-    if node "$importer" --review "$evidence_root/review-native-after-answer.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-native-after-answer.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
         pass
     else
@@ -983,7 +1344,7 @@ if [[ -f "$importer" ]]; then
     fi
 
     test_start "an independent todo_list start may become a dependent plan after the answer"
-    if node "$importer" --review "$evidence_root/review-native-exploratory-then-dependent.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-native-exploratory-then-dependent.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
         pass
     else
@@ -991,7 +1352,7 @@ if [[ -f "$importer" ]]; then
     fi
 
     test_start "a dependent todo_list start before the question cannot be hidden by later completion"
-    if node "$importer" --review "$evidence_root/review-native-early-dependent.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-native-early-dependent.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_plan_preceded_question")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1001,7 +1362,7 @@ if [[ -f "$importer" ]]; then
     test_start "missing or contradictory native todo_list assessments are unavailable"
     invalid_native_plan_count=0
     for review_name in review-native-missing-event-assessment.json review-native-contradictory-no-plan.json; do
-        if node "$importer" --review "$evidence_root/$review_name" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        if run_importer --review "$evidence_root/$review_name" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
             && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("native_plan_coverage_unavailable")) != null' "$framework_grade" >/dev/null; then
             invalid_native_plan_count=$((invalid_native_plan_count + 1))
         fi
@@ -1013,7 +1374,7 @@ if [[ -f "$importer" ]]; then
     fi
 
     test_start "a completed native plan violation remains visible through a later timeout"
-    if node "$importer" --review "$evidence_root/review-native-early-dependent-timeout.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-native-early-dependent-timeout.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | index("dependent_plan_preceded_question")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1036,7 +1397,7 @@ review["transcripts"][1]["artifact"] = {"path":"turn-02-relative-file-change.jso
 (root / "review-relative-file-change.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_RELATIVE_FILE_CHANGE
     test_start "native project-relative file-change paths resolve from workspace_root"
-    if node "$importer" --review "$evidence_root/review-relative-file-change.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-relative-file-change.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .evidence_counts.observed_dependent_edits == 1 and (.unavailable_reasons | index("changed_file_order_telemetry_unavailable")) == null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1062,7 +1423,7 @@ review["transcripts"][1]["artifact"] = {
 (root / "review-in-root-absolute-backslash-file-change.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_IN_ROOT_ABSOLUTE_BACKSLASH_FILE_CHANGE
     test_start "absolute in-root backslash file-change paths return structured unavailable evidence"
-    if node "$importer" --review "$evidence_root/review-in-root-absolute-backslash-file-change.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-in-root-absolute-backslash-file-change.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("changed_file_order_telemetry_unavailable")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1086,7 +1447,7 @@ review["transcripts"][1]["artifact"] = {"path":"turn-02-parent-traversal-file-ch
 (root / "review-parent-traversal-file-change.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_PARENT_TRAVERSAL_FILE_CHANGE
     test_start "unsafe native project-relative paths return structured unavailable evidence"
-    if node "$importer" --review "$evidence_root/review-parent-traversal-file-change.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-parent-traversal-file-change.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("changed_file_order_telemetry_unavailable")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1119,7 +1480,7 @@ PY_POST_COMPLETION_EVENTS
     test_start "repeated completion or item events after completion invalidate the transcript"
     invalid_terminal_count=0
     for variant in repeated-completion item-started-after-completion item-completed-after-completion; do
-        if node "$importer" --review "$evidence_root/review-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        if run_importer --review "$evidence_root/review-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
             && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_2_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
             invalid_terminal_count=$((invalid_terminal_count + 1))
         fi
@@ -1156,7 +1517,7 @@ question.pop("text_spans", None)
 (root / "review-wrong-initial-prompt.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_WRONG_INITIAL_PROMPT
     test_start "wrong frozen initial prompt makes case-dependent judgments unavailable"
-    if node "$importer" --review "$evidence_root/review-wrong-initial-prompt.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-wrong-initial-prompt.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and .semantic_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("initial_prompt_payload_mismatch")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1179,7 +1540,7 @@ diff_ref["sha256"] = sha256(diff).hexdigest()
 (root / "review-diff-extra-unmanifested-path.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_DIFF_ONLY_PATH
     test_start "diff-only project path absent from both manifests is unavailable"
-    if node "$importer" --review "$evidence_root/review-diff-extra-unmanifested-path.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-diff-extra-unmanifested-path.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("workspace_diff_manifest_mismatch")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1292,7 +1653,7 @@ make_spaced_review(rename=False)
 make_spaced_review(rename=True)
 PY_DIFF_ADMISSION_FIXTURES
     test_start "unsupported nonempty headerless diff with unchanged manifests is unavailable"
-    if node "$importer" --review "$evidence_root/review-headerless-nonempty-diff.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-headerless-nonempty-diff.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("workspace_diff_paths_unavailable")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1300,7 +1661,7 @@ PY_DIFF_ADMISSION_FIXTURES
     fi
 
     test_start "unquoted Git diff header accepts an equal-side path containing spaces"
-    if node "$importer" --review "$evidence_root/review-space-path.json" --oracle "$evidence_root/oracle-space-path.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-space-path.json" --oracle "$evidence_root/oracle-space-path.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 1' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1308,7 +1669,7 @@ PY_DIFF_ADMISSION_FIXTURES
     fi
 
     test_start "unquoted Git diff header accepts explicit rename metadata with spaces"
-    if node "$importer" --review "$evidence_root/review-space-rename.json" --oracle "$evidence_root/oracle-space-rename.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-space-rename.json" --oracle "$evidence_root/oracle-space-rename.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 2' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1376,14 +1737,14 @@ review["semantic_review"]["dependent_edit_refs"] = [
 (root / "review-supported-rename.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_RENAME_CAPTURE
     test_start "rename diff sides agree with before and after manifests"
-    if node "$importer" --review "$evidence_root/review-supported-rename.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-supported-rename.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .evidence_counts.workspace_changed_paths == 2' "$framework_grade" >/dev/null; then
         pass
     else
         fail "a rename consistently recorded by both manifests and native events was not supported: $(cat "$framework_grade")"
     fi
     test_start "an earlier same-turn file-change start remains earliest when the operation completes later"
-    if node "$importer" --review "$evidence_root/review-start-before-question-confirmed-after.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-start-before-question-confirmed-after.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_edit_preceded_question")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1391,7 +1752,7 @@ PY_RENAME_CAPTURE
     fi
 
     test_start "a reused native item ID in a later turn does not confirm an earlier started-only write"
-    if node "$importer" --review "$evidence_root/review-reused-operation-id-across-turns.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-reused-operation-id-across-turns.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and (.behavior_reasons | length) == 0' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1399,35 +1760,35 @@ PY_RENAME_CAPTURE
     fi
 
     test_start "a confirmed start-line reference preserves earliest premature-write ordering"
-    if node "$importer" --review "$evidence_root/review-start-reference-before-question-confirmed-after.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "FAIL" and .semantic_status == "FAIL" and (.behavior_reasons | index("dependent_edit_preceded_question")) != null and (.unavailable_reasons | index("semantic_review_binding_incomplete")) == null' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/review-start-reference-before-question-confirmed-after.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "FAIL" and .semantic_status == "FAIL" and (.behavior_reasons | index("dependent_edit_preceded_question")) != null and (.unavailable_reasons | index("semantic_review_binding_incomplete")) == null' "$framework_grade" >/dev/null; then
         pass
     else
         fail "a confirmed start-line reference was rejected or failed to retain earliest ordering: $(cat "$framework_grade")"
     fi
 
     test_start "a confirmed start-line reference after answer carry preserves a valid edit"
-    if node "$importer" --review "$evidence_root/review-start-reference-after-question.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "PASS" and .semantic_status == "PASS" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("semantic_review_binding_incomplete")) == null' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/review-start-reference-after-question.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "PASS" and .semantic_status == "PASS" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("semantic_review_binding_incomplete")) == null' "$framework_grade" >/dev/null; then
         pass
     else
         fail "a confirmed start-line reference for a valid after-answer edit was rejected: $(cat "$framework_grade")"
     fi
 
     test_start "a same-turn completion with a different native item ID does not confirm a started reference"
-    if node "$importer" --review "$evidence_root/review-start-reference-with-mismatched-id.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "UNAVAILABLE" and .semantic_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/review-start-reference-with-mismatched-id.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "UNAVAILABLE" and .semantic_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null; then
         pass
     else
         fail "a mismatched same-turn operation ID was accepted as confirmation: $(cat "$framework_grade")"
     fi
 
     test_start "empty native item IDs do not confirm a started reference"
-    if node "$importer" --review "$evidence_root/review-start-reference-with-empty-id.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "UNAVAILABLE" and .semantic_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/review-start-reference-with-empty-id.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "UNAVAILABLE" and .semantic_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null; then
         pass
     else
         fail "an empty operation ID was accepted as confirmation: $(cat "$framework_grade")"
     fi
 
     test_start "a same-turn completion on a different exact path does not confirm a started reference"
-    if node "$importer" --review "$evidence_root/review-start-reference-with-mismatched-path.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "UNAVAILABLE" and .semantic_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/review-start-reference-with-mismatched-path.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 && jq -e '.behavior_status == "UNAVAILABLE" and .semantic_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0 and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null; then
         pass
     else
         fail "a different exact path was accepted as confirmation of the started event: $(cat "$framework_grade")"
@@ -1453,7 +1814,7 @@ review["semantic_review"]["question_assessments"][0]["line"] = 5
 review["semantic_review"]["answer_assessments"][0]["question_ref"]["line"] = 5
 (root / "review-repeated-edit.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_REPEATED_EDIT
-    if node "$importer" --review "$evidence_root/review-repeated-edit.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-repeated-edit.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_edit_preceded_question")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1476,8 +1837,8 @@ raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for ev
 review["transcripts"][0] = {"turn":1,"artifact":{"path":"turn-01-skill-listing.jsonl","sha256":sha256(raw).hexdigest()}}
 (root / "review-skill-listing.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_SKILL_LISTING
-    if node "$importer" --review "$evidence_root/review-skill-listing.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-        && jq -e '.staged_skill_command_reference_status == "observed" and .skill_file_read_attestation == "not_attested" and .native_selection_status == "unavailable" and .behavior_status == "PASS"' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/review-skill-listing.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.staged_skill_command_reference_status == "observed" and .skill_file_read_attestation == "not_attested" and .native_selection_status == "not_applicable_forced_load" and .behavior_status == "PASS"' "$framework_grade" >/dev/null; then
         pass
     else
         fail "a directory listing did not retain its path-reference-only limitation: $(cat "$framework_grade")"
@@ -1499,8 +1860,8 @@ raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for ev
 review["transcripts"][0] = {"turn":1,"artifact":{"path":"turn-01-shell-wrapper.jsonl","sha256":sha256(raw).hexdigest()}}
 (root / "review-shell-wrapper.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_SHELL_WRAPPER
-    if node "$importer" --review "$evidence_root/review-shell-wrapper.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-        && jq -e '.staged_skill_command_reference_status == "observed" and .skill_file_read_attestation == "not_attested" and .native_selection_status == "unavailable" and .behavior_status == "PASS"' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/review-shell-wrapper.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.staged_skill_command_reference_status == "observed" and .skill_file_read_attestation == "not_attested" and .native_selection_status == "not_applicable_forced_load" and .behavior_status == "PASS"' "$framework_grade" >/dev/null; then
         pass
     else
         fail "the wrapped staged-path reference did not retain its explicit non-attestation limit: $(cat "$framework_grade")"
@@ -1522,8 +1883,8 @@ raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for ev
 review["transcripts"][0] = {"turn":1,"artifact":{"path":"turn-01-shell-echo.jsonl","sha256":sha256(raw).hexdigest()}}
 (root / "review-shell-echo.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_SHELL_ECHO
-    if node "$importer" --review "$evidence_root/review-shell-echo.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-        && jq -e '.staged_skill_command_reference_status == "observed" and .skill_file_read_attestation == "not_attested" and .native_selection_status == "unavailable" and .behavior_status == "PASS"' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/review-shell-echo.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.staged_skill_command_reference_status == "observed" and .skill_file_read_attestation == "not_attested" and .native_selection_status == "not_applicable_forced_load" and .behavior_status == "PASS"' "$framework_grade" >/dev/null; then
         pass
     else
         fail "echoed path text did not retain its explicit non-attestation limit: $(cat "$framework_grade")"
@@ -1572,7 +1933,7 @@ diff = b"diff --git a/.codex/tasks/task-state.json b/.codex/tasks/task-state.jso
 review["workspace_observation"]["diff"] = {"path":"journal-only.patch","sha256":sha256(diff).hexdigest()}
 (root / "review-journal-only.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_JOURNAL_ONLY
-    if node "$importer" --review "$evidence_root/review-journal-only.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-journal-only.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .unavailable_reasons == [] and .evidence_counts.workspace_changed_paths == 1 and .evidence_counts.framework_state_paths_changed == 1 and .evidence_counts.observed_dependent_edits == 0' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1594,20 +1955,20 @@ raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for ev
 review["transcripts"][1] = {"turn":2,"artifact":{"path":"turn-02-no-file-change.jsonl","sha256":sha256(raw).hexdigest()}}
 (root / "review-missing-edit-event.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_MISSING_EDIT_EVENT
-    if node "$importer" --review "$evidence_root/review-missing-edit-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-missing-edit-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("changed_file_order_telemetry_unavailable")) != null' "$framework_grade" >/dev/null; then
         pass
     else
         fail "a changed project path without native edit telemetry was not unavailable: $(cat "$framework_grade")"
     fi
 
-    test_start "missing staged-path reference does not erase independently assessed behavior"
+    test_start "missing staged-path reference makes overall evidence unavailable"
     jq 'del(.activation.skill_read_ref)' "$evidence_root/review.json" >"$evidence_root/no-skill-read.json"
-    if node "$importer" --review "$evidence_root/no-skill-read.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-        && jq -e '.native_selection_status == "unavailable" and .staged_skill_command_reference_status == "unavailable" and .skill_file_read_attestation == "not_attested" and .behavior_status == "PASS" and (.activation_evidence_reasons | index("staged_skill_command_reference_not_observed")) != null' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/no-skill-read.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.native_selection_status == "not_applicable_forced_load" and .staged_skill_command_reference_status == "unavailable" and .skill_file_read_attestation == "not_attested" and .behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("staged_skill_command_reference_not_observed")) != null and (.activation_evidence_reasons | index("staged_skill_command_reference_not_observed")) != null' "$framework_grade" >/dev/null; then
         pass
     else
-        fail "missing command-reference telemetry erased behavior evidence or changed native-selection status: $(cat "$framework_grade")"
+        fail "missing command-reference telemetry remained behaviorally available or changed forced-load status: $(cat "$framework_grade")"
     fi
 
     test_start "forced skill load is labelled separately from native activation"
@@ -1616,17 +1977,17 @@ PY_MISSING_EDIT_EVENT
     expected_forced_sha="$(shasum -a 256 "$evidence_root/forced.json" | awk '{print $1}')"
     jq --arg hash "$expected_forced_sha" '.activation.forced_load_receipt.sha256 = $hash' "$evidence_root/forced-review.json" >"$evidence_root/forced-review.tmp"
     mv "$evidence_root/forced-review.tmp" "$evidence_root/forced-review.json"
-    if node "$importer" --review "$evidence_root/forced-review.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/forced-review.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.execution_mode == "forced_skill_load" and .activation_status == "forced_load" and .native_selection_status == "not_applicable_forced_load" and .behavior_status == "PASS"' "$framework_grade" >/dev/null; then
         pass
     else
         fail "forced skill-load evidence was mislabeled or not assessable: $(cat "$framework_grade")"
     fi
 
-    test_start "missing forced-load proof does not erase independent behavior evidence"
+    test_start "missing forced-load proof makes overall evidence unavailable"
     jq 'del(.activation.forced_load_receipt)' "$evidence_root/forced-review.json" >"$evidence_root/forced-unproven.json"
-    if node "$importer" --review "$evidence_root/forced-unproven.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-        && jq -e '.execution_mode == "forced_skill_load" and .activation_status == "forced_load_unavailable" and .behavior_status == "PASS" and (.activation_evidence_reasons | index("forced_load_receipt_unavailable")) != null' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/forced-unproven.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.execution_mode == "forced_skill_load" and .activation_status == "forced_load_unavailable" and .behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("forced_load_receipt_unavailable")) != null and (.activation_evidence_reasons | index("forced_load_receipt_unavailable")) != null' "$framework_grade" >/dev/null; then
         pass
     else
         fail "missing forced-load proof erased behavior evidence or was reported as verified activation: $(cat "$framework_grade")"
@@ -1634,7 +1995,7 @@ PY_MISSING_EDIT_EVENT
 
     test_start "self-authored semantic readiness is unavailable"
     jq '.semantic_review.reviewer.id = .actor_id' "$evidence_root/review.json" >"$evidence_root/self-review.json"
-    if node "$importer" --review "$evidence_root/self-review.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/self-review.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("semantic_reviewer_not_independent")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1652,14 +2013,11 @@ review = json.loads((root / "review.json").read_text())
 review["case_id"] = "task-08"
 review["semantic_review"]["planning_applicability"].update({
     "oracle_case_id": "task-08",
-    "requirement": "before_plan",
-    "coverage_attestation": "reviewed_every_completed_agent_message_for_dependent_planning",
-    "rationale": "The test oracle requires clarification before a dependent plan.",
+    "requirement": "before_edit_only",
+    "rationale": "The frozen task contract requires clarification before edits; it does not impose a before-plan ordering check.",
 })
-review["semantic_review"]["dependent_planning_assessments"] = [
-    {"decision_index": 0, "outcome": "no_dependent_plan", "plan_refs": [],
-     "rationale": "No dependent plan was observed before this unanswered decision."}
-]
+review["semantic_review"]["planning_applicability"].pop("coverage_attestation", None)
+review["semantic_review"].pop("dependent_planning_assessments", None)
 turn_one = [
     {"type":"thread.started"}, {"type":"turn.started"},
     {"type":"item.completed","item":{"id":"c1","type":"command_execution","command":"sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md","status":"completed","exit_code":0,"aggregated_output":"# Workflow\n"}},
@@ -1695,7 +2053,7 @@ review["workspace_observation"]["after_manifest"] = review["workspace_observatio
 review["workspace_observation"]["diff"] = {"path":"unsolicited-no-edit.patch","sha256":sha256(b"").hexdigest()}
 (root / "review-unsolicited.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_UNSOLICITED
-    if node "$importer" --review "$evidence_root/review-unsolicited.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-unsolicited.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("material_decision_not_asked")) != null and (.unavailable_reasons | index("semantic_review_binding_incomplete")) == null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1727,7 +2085,7 @@ review["semantic_review"]["answer_assessments"].insert(0, {
 })
 (root / "review-null-question-ref.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_NULL_QUESTION_REF
-    if node "$importer" --review "$evidence_root/review-null-question-ref.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-null-question-ref.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .evidence_counts.answer_receipts == 2' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1765,8 +2123,8 @@ review["workspace_observation"]["after_manifest"] = {"path":"after-files-no-edit
 review["workspace_observation"]["diff"] = {"path":"no-edit.patch", "sha256":sha256((root / "no-edit.patch").read_bytes()).hexdigest()}
 (root / "review-no-question.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_NO_QUESTION
-    if node "$importer" --review "$evidence_root/review-no-question.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-        && jq -e '.native_selection_status == "unavailable" and .behavior_status == "FAIL" and (.behavior_reasons | index("material_decision_not_asked")) != null' "$framework_grade" >/dev/null; then
+    if run_importer --review "$evidence_root/review-no-question.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.activation_status == "forced_load" and .behavior_status == "FAIL" and (.behavior_reasons | index("material_decision_not_asked")) != null' "$framework_grade" >/dev/null; then
         pass
     else
         fail "independent review did not fail the observed no-question clarification case: $(cat "$framework_grade")"
@@ -1807,7 +2165,7 @@ review["workspace_observation"]["after_manifest"] = review["workspace_observatio
 review["workspace_observation"]["diff"] = {"path":"dropped-initial.patch","sha256":sha256(b"").hexdigest()}
 (root / "review-dropped-initial.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_DROPPED_INITIAL
-    if node "$importer" --review "$evidence_root/review-dropped-initial.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-dropped-initial.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("initial_prompt_response_transcript_unavailable")) != null and (.unavailable_reasons | index("transcript_turn_2_without_controller_input")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -1849,7 +2207,7 @@ review["semantic_review"]["answer_assessments"] = []
 review["semantic_review"]["dependent_edit_refs"] = []
 (root / "review-punctuation.json").write_text(json.dumps(review, sort_keys=True) + "\n")
 PY_PUNCTUATION
-    if node "$importer" --review "$evidence_root/review-punctuation.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-punctuation.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("material_decision_not_asked")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2106,7 +2464,7 @@ PY_PLANNING_CASES
 
     test_start "missing oracle-bound planning applicability is unavailable"
     jq 'del(.semantic_review.planning_applicability)' "$evidence_root/review.json" >"$evidence_root/review-missing-planning-applicability.json"
-    if node "$importer" --review "$evidence_root/review-missing-planning-applicability.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-missing-planning-applicability.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("planning_applicability_unavailable")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2115,7 +2473,7 @@ PY_PLANNING_CASES
 
     test_start "missing per-decision planning coverage is unavailable"
     jq 'del(.semantic_review.dependent_planning_assessments)' "$evidence_root/review.json" >"$evidence_root/review-missing-planning-coverage.json"
-    if node "$importer" --review "$evidence_root/review-missing-planning-coverage.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-missing-planning-coverage.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("dependent_planning_coverage_unavailable")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2123,7 +2481,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "same-event dependent plan before material question fails"
-    if node "$importer" --review "$evidence_root/review-plan-before-question-same-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-plan-before-question-same-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_plan_preceded_question")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2131,7 +2489,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "earlier completed dependent plan before material question fails"
-    if node "$importer" --review "$evidence_root/review-plan-before-question-earlier-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-plan-before-question-earlier-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_plan_preceded_question")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2139,7 +2497,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "plan before the bound user answer turn fails"
-    if node "$importer" --review "$evidence_root/review-question-before-plan-unanswered.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-question-before-plan-unanswered.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_plan_preceded_user_answer")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2147,7 +2505,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "dependent plan after the carried user answer passes"
-    if node "$importer" --review "$evidence_root/review-plan-after-answer.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-plan-after-answer.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2155,7 +2513,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "same-event carry-forward and dependent plan after the answer pass"
-    if node "$importer" --review "$evidence_root/review-plan-after-answer-same-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-plan-after-answer-same-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2163,7 +2521,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "same-turn plan before later carry-forward fails"
-    if node "$importer" --review "$evidence_root/review-plan-before-later-carry.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-plan-before-later-carry.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_plan_preceded_user_answer")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2171,7 +2529,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "dependent plan without a carried answer fails"
-    if node "$importer" --review "$evidence_root/review-plan-after-answer-missing-carry.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-plan-after-answer-missing-carry.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_plan_preceded_user_answer")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2179,7 +2537,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "dependent plan with an answer unlinked to its decision fails"
-    if node "$importer" --review "$evidence_root/review-plan-after-answer-unlinked.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-plan-after-answer-unlinked.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("dependent_plan_preceded_user_answer")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2187,7 +2545,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "options offered inside a question are not treated as a dependent plan"
-    if node "$importer" --review "$evidence_root/review-options-only.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-options-only.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2195,7 +2553,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "out-of-bounds dependent-plan span is unavailable"
-    if node "$importer" --review "$evidence_root/review-plan-span-out-of-bounds.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-plan-span-out-of-bounds.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2203,7 +2561,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "dependent-plan span must reference a completed agent message"
-    if node "$importer" --review "$evidence_root/review-plan-wrong-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-plan-wrong-event.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2211,7 +2569,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "empty-index material question cannot satisfy an indexed omission"
-    if node "$importer" --review "$evidence_root/review-unrelated-material-question.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-unrelated-material-question.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("material_decision_not_asked")) != null and (.unavailable_reasons | index("semantic_review_binding_incomplete")) == null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2219,7 +2577,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "before-edit-only control does not acquire a before-plan obligation"
-    if node "$importer" --review "$evidence_root/review-before-edit-only-plan-before-question.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-before-edit-only-plan-before-question.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.planning_requirement == "before_edit_only" and .behavior_status == "PASS" and .unavailable_reasons == []' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2227,7 +2585,7 @@ PY_PLANNING_CASES
     fi
 
     test_start "planning applicability is bound to the exact oracle bytes"
-    if node "$importer" --review "$evidence_root/review-planning-wrong-oracle-hash.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-planning-wrong-oracle-hash.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("planning_applicability_unavailable")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2248,6 +2606,7 @@ oracle["cases"].append({
     "case_id": "continuation-required",
     "initial_prompt_sha256": sha256((root / "turn-01.prompt.txt").read_bytes()).hexdigest(),
     "initial_workspace_sha256": json.loads((root / "before-files.json").read_text()),
+    "planning_requirement": "before_plan",
     "hidden_material_decisions": ["link lifetime and revocation after broad access"],
     "continuation_answer_file": "expected-continuation-answer.txt",
 })
@@ -2289,10 +2648,14 @@ review["transcripts"] = review["transcripts"][:1]
 review["semantic_review"]["planning_applicability"] = {
     "oracle_case_id": "continuation-required",
     "oracle_sha256": oracle_hash,
-    "requirement": "before_edit_only",
-    "rationale": "The initial question is assessed; the frozen oracle requires a later answer and post-answer reassessment.",
+    "requirement": "before_plan",
+    "coverage_attestation": "reviewed_every_completed_agent_message_for_dependent_planning",
+    "rationale": "The synthetic continuation fixture explicitly tests before-plan coverage as well as its later answer requirement.",
 }
-review["semantic_review"].pop("dependent_planning_assessments", None)
+review["semantic_review"]["dependent_planning_assessments"] = [{
+    "decision_index": 0, "outcome": "no_dependent_plan", "plan_refs": [],
+    "rationale": "No dependent plan was observed in the initial synthetic prefix.",
+}]
 initial_access_question = "Who will be able to open the private issue link?"
 initial_events = [json.loads(line) for line in (root / "turn-01.events.jsonl").read_text().splitlines()]
 initial_events[3]["item"]["text"] = initial_access_question
@@ -2313,6 +2676,8 @@ review["semantic_review"]["question_assessments"] = [{
     "line": 4,
     "classification": "material",
     "decision_indexes": [],
+    "text_spans": [{"start": 0, "end": len(initial_access_question), "decision_indexes": [],
+                    "rationale": "This captured span asks about access scope outside the indexed lifecycle decision."}],
     "rationale": "The initial question settles access scope outside the frozen lifecycle decision.",
 }]
 review["semantic_review"]["answer_assessments"] = []
@@ -2333,7 +2698,7 @@ review["workspace_observation"]["diff"] = {
 PY_REQUIRED_CONTINUATION_ONLY_INITIAL
 
     test_start "initial access question without the required lifecycle continuation stays unavailable"
-    if node "$importer" --review "$evidence_root/review-continuation-only-initial.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-continuation-only-initial.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | index("material_decision_not_asked")) == null and (.unavailable_reasons | index("required_continuation_answer_missing")) != null and (.unavailable_reasons | index("required_continuation_answer_relevance_unavailable")) == null and .continuation_coverage.required_answer_turns == [2] and .continuation_coverage.missing_answer_turns == [2]' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2393,6 +2758,8 @@ review["semantic_review"]["decisions"] = [{
 review["semantic_review"]["question_assessments"] = [
     *review["semantic_review"]["question_assessments"],
     {"turn": 2, "line": 4, "classification": "material", "decision_indexes": [0],
+     "text_spans": [{"start": 0, "end": len(post_question_text), "decision_indexes": [0],
+                     "rationale": "This span asks whether the link expires and can be revoked."}],
      "rationale": "The completed continuation asks for the unresolved lifecycle choice."},
 ]
 review["semantic_review"]["answer_assessments"] = [{
@@ -2430,14 +2797,27 @@ save_review("review-continuation-timeout-no-action.json", review)
 def partial_review(name, turn_events, outcome="no_dependent_plan", plan=None, edit=None, changed=False, plan_line=3):
     review = deepcopy(base)
     semantic = review["semantic_review"]
+    valid_start = len(turn_events) > 1 and turn_events[1].get("type") == "turn.started"
+    if valid_start:
+        turn_events.insert(2, event("item.completed", item={
+            "id": "staged-skill-read", "type": "command_execution",
+            "command": "sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md",
+            "status": "completed", "exit_code": 0, "aggregated_output": "# Workflow\n",
+        }))
+        review["activation"]["skill_read_ref"] = {"turn": 1, "line": 3}
+        plan_line += 1
+        if edit is not None:
+            edit = {**edit, "line": edit["line"] + 1}
+    else:
+        review["activation"].pop("skill_read_ref", None)
     semantic["planning_applicability"] = {
         "oracle_case_id": review["case_id"],
         "oracle_sha256": review["oracle_requirements"]["oracle_sha256"],
-        "requirement": "before_plan" if outcome == "dependent_plan_observed" else "before_edit_only",
-        "rationale": "The independent reviewer assessed the indexed planning boundary.",
+        "requirement": "before_plan",
+        "coverage_attestation": "reviewed_every_completed_agent_message_for_dependent_planning",
+        "rationale": "The synthetic continuation oracle freezes a before-plan requirement.",
     }
     if outcome == "dependent_plan_observed":
-        semantic["planning_applicability"]["coverage_attestation"] = "reviewed_every_completed_agent_message_for_dependent_planning"
         semantic["dependent_planning_assessments"] = [{
             "decision_index": 0, "outcome": "dependent_plan_observed",
             "plan_refs": [{
@@ -2447,7 +2827,10 @@ def partial_review(name, turn_events, outcome="no_dependent_plan", plan=None, ed
             "rationale": "The independent reviewer found a dependent plan in the valid prefix.",
         }]
     else:
-        semantic.pop("dependent_planning_assessments", None)
+        semantic["dependent_planning_assessments"] = [{
+            "decision_index": 0, "outcome": "no_dependent_plan", "plan_refs": [],
+            "rationale": "No dependent plan was observed in this captured prefix.",
+        }]
     semantic["decisions"] = [{
         "decision_index": 0, "outcome": "not_asked", "question_refs": [],
         "rationale": "No material question is present in the captured prefix.",
@@ -2513,7 +2896,7 @@ review["semantic_review"]["answer_assessments"] = [{
 PY_UNRELATED_CONTINUATION_ANSWER
 
     test_start "answer receipt without an oracle-linked material answer cannot satisfy continuation"
-    if node "$importer" --review "$evidence_root/review-continuation-unrelated-answer.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-continuation-unrelated-answer.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and .continuation_coverage.missing_relevant_answer_turns == [2]' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2537,7 +2920,7 @@ review["inputs"][1]["artifact"] = {
 PY_MISMATCHED_CONTINUATION_ANSWER
 
     test_start "a mismatched answer payload cannot satisfy an oracle-required continuation"
-    if node "$importer" --review "$evidence_root/review-continuation-mismatched-answer.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-continuation-mismatched-answer.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and .continuation_coverage.answer_payload_mismatch_turns == [2]' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2568,7 +2951,7 @@ PY_INVALID_CONTINUATION_REQUIREMENTS
         "$evidence_root/review-continuation-missing-payload-binding.json" \
         "$evidence_root/review-continuation-empty-required-turns.json" \
         "$evidence_root/review-continuation-unrelated-expected-path.json"; do
-        if node "$importer" --review "$invalid_review" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        if run_importer --review "$invalid_review" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
             && jq -e '.behavior_status == "UNAVAILABLE" and .continuation_coverage.applicability_status == "unavailable" and (.unavailable_reasons | index("continuation_applicability_unavailable")) != null' "$framework_grade" >/dev/null; then
             invalid_binding_count=$((invalid_binding_count + 1))
         fi
@@ -2580,7 +2963,7 @@ PY_INVALID_CONTINUATION_REQUIREMENTS
     fi
 
     test_start "completed post-answer question covers the oracle-bound continuation decision"
-    if node "$importer" --review "$evidence_root/review-continuation-post-answer-question.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-continuation-post-answer-question.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and .continuation_coverage.observed_post_answer_question_decision_indexes == [0] and .continuation_coverage.missing_post_answer_question_decision_indexes == []' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2588,7 +2971,7 @@ PY_INVALID_CONTINUATION_REQUIREMENTS
     fi
 
     test_start "completed continuation without a required post-answer question fails"
-    if node "$importer" --review "$evidence_root/review-continuation-completed-no-post-answer-question.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-continuation-completed-no-post-answer-question.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("required_post_answer_question_missing")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2596,7 +2979,7 @@ PY_INVALID_CONTINUATION_REQUIREMENTS
     fi
 
     test_start "incomplete continuation without premature action remains unavailable"
-    if node "$importer" --review "$evidence_root/review-continuation-timeout-no-action.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-continuation-timeout-no-action.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0 and .continuation_coverage.incomplete_response_turns == [2]' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2604,7 +2987,7 @@ PY_INVALID_CONTINUATION_REQUIREMENTS
     fi
 
     test_start "completed premature plan remains visible through a later timeout"
-    if node "$importer" --review "$evidence_root/review-timeout-completed-plan-before-question.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-timeout-completed-plan-before-question.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | index("dependent_plan_preceded_question")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2612,7 +2995,7 @@ PY_INVALID_CONTINUATION_REQUIREMENTS
     fi
 
     test_start "completed premature edit remains visible through a later timeout"
-    if node "$importer" --review "$evidence_root/review-timeout-completed-edit-before-question.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-timeout-completed-edit-before-question.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | index("dependent_edit_preceded_question")) != null' "$framework_grade" >/dev/null; then
         pass
     else
@@ -2621,12 +3004,12 @@ PY_INVALID_CONTINUATION_REQUIREMENTS
 
     test_start "started-only write and dropped-prefix plan cannot prove premature behavior"
     started_ok=0
-    if node "$importer" --review "$evidence_root/review-timeout-started-only-write.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-timeout-started-only-write.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0' "$framework_grade" >/dev/null; then
         started_ok=1
     fi
     prefix_ok=0
-    if node "$importer" --review "$evidence_root/review-timeout-plan-with-dropped-prefix.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-timeout-plan-with-dropped-prefix.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0' "$framework_grade" >/dev/null; then
         prefix_ok=1
     fi
@@ -2637,7 +3020,7 @@ PY_INVALID_CONTINUATION_REQUIREMENTS
     fi
 
     test_start "incomplete no-action plan prefix remains unavailable without omission failure"
-    if node "$importer" --review "$evidence_root/review-timeout-no-action.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    if run_importer --review "$evidence_root/review-timeout-no-action.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | length) == 0' "$framework_grade" >/dev/null; then
         pass
     else

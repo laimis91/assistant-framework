@@ -1490,6 +1490,22 @@ else
     fail "skill eval runner --emit-prompts did not create recognizable skill/case prompt packets"
 fi
 
+test_start "opaque workflow clarification packet contains its complete isolated example"
+workflow_clarification_packet_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-workflow-clarification.XXXXXX")"
+p0p4_register_cleanup "$workflow_clarification_packet_dir"
+workflow_clarification_packet="$workflow_clarification_packet_dir/assistant-workflow/task-01.md"
+if "$skill_eval_runner" --emit-prompts "$workflow_clarification_packet_dir" --skill assistant-workflow --case clarification-is-material-not-capped >/dev/null \
+    && [[ -f "$workflow_clarification_packet" ]] \
+    && grep -Fq 'src/rolling_window.py' "$workflow_clarification_packet" \
+    && grep -Fq 'tests/test_rolling_window.py' "$workflow_clarification_packet" \
+    && grep -Fq 'raise NotImplementedError' "$workflow_clarification_packet" \
+    && grep -Fq 'python3 -m unittest discover -s tests -v' "$workflow_clarification_packet" \
+    && ! grep -Eiq 'Setup Context|Expected Behavior|Pass Criteria|Fail Signals|Machine Expectations' "$workflow_clarification_packet"; then
+    pass
+else
+    fail "opaque workflow packet relied on unstaged issue context or exposed grading criteria"
+fi
+
 test_start "skill eval runner emits prompts only for targeted skill selection"
 targeted_prompt_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-targeted-prompts.XXXXXX")"
 p0p4_register_cleanup "$targeted_prompt_dir"

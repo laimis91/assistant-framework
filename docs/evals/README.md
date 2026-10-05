@@ -233,7 +233,11 @@ supported missing material question is `FAIL`. The importer derives the earliest
 observed edit for each reviewer-designated dependent path so a later write cannot
 hide an earlier write. It retains all workspace manifest paths and counts
 framework-owned `.codex/` journal changes separately from dependent project
-edits; unsupported edit events for changed project paths remain `UNAVAILABLE`.
+edits. A confirmed file-change event may also establish ordering when a stable
+project path is present with the same digest in both manifests; the reviewer
+must still reference every observed project path. Events for paths absent from
+the manifests remain `UNAVAILABLE`. The importer validates unified diff file
+headers against their Git section and ignores marker-like text inside hunks.
 Punctuation by itself is never a material question.
 
 Each oracle case includes `initial_prompt_sha256` for its frozen actor prompt
@@ -299,8 +303,9 @@ later turns, so starts never pair across turns.
 
 For oracle cases that require asking before planning, the independent review must
 also bind a `planning_applicability` assertion to the exact `case_id` and raw
-oracle SHA-256, choosing `before_plan` or `before_edit_only`. The importer does
-not infer that requirement from case names or English text. A `before_plan`
+oracle SHA-256. Its requirement must exactly match the frozen
+`planning_requirement` field in that oracle case; a missing, unsupported or
+mismatched value is `UNAVAILABLE`. A `before_plan`
 assertion requires an explicit assessment for every frozen decision: either a
 dependent plan with one or more evidence references, or an explicit
 `no_dependent_plan` result. The reviewer attests that every completed agent
@@ -312,8 +317,13 @@ each matching decision's `plan_refs`. These native references use turn and line
 without a text span. Message plan references still require bounded text spans.
 Missing event coverage or conflicting no-plan assertions is `UNAVAILABLE`.
 
-Message planning and material-question references point to completed
-agent-message events and bounded, nonempty text spans. Span offsets are
+Every completed `agent_message` needs an explicit question assessment:
+`material`, `non_material`, `punctuation_only`, or `not_a_question`. Only
+`material` and `non_material` are question events; punctuation-only and
+not-a-question results remain explicit but are not counted as questions. The
+importer does not infer message intent from punctuation. Message planning and
+material-question references point to completed agent-message events and
+bounded, nonempty text spans. Span offsets are
 zero-based UTF-16 code units into the captured message text. Within one event,
 plan and question spans must not overlap; a dependent plan must follow each
 linked material question and a carried-forward answer. Native todo-list events
@@ -338,7 +348,9 @@ under the additive schema, but an importer run without the new applicability
 and required coverage reports `UNAVAILABLE` rather than inheriting a pass.
 
 Codex JSONL does not echo controller inputs or provide a dedicated native skill
-selection event. The result labels controller-captured input separately, reports
+selection event. Missing activation evidence, including native selection, a
+forced-load receipt, or a staged skill command reference, contributes to
+`UNAVAILABLE`. The result labels controller-captured input separately, reports
 turn/event-line ordering without claiming wall-clock chronology, and keeps native
 selection `UNAVAILABLE`. It may report that a completed command names a staged
 `SKILL.md` path, but that text reference does not prove the file was read or the

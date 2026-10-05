@@ -325,6 +325,7 @@
         },
         "question_assessments": {
           "type": "array",
+          "description": "Provide one explicit intent assessment for every completed agent_message; do not infer question intent from punctuation.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -348,7 +349,8 @@
                 "enum": [
                   "material",
                   "non_material",
-                  "punctuation_only"
+                  "punctuation_only",
+                  "not_a_question"
                 ]
               },
               "decision_indexes": {
