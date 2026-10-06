@@ -328,7 +328,7 @@ do not start a dependent slice until every `depends_on` prerequisite is `VERIFIE
 ## Rules
 
 - Keep entries concise — this is a log, not documentation
-- Resume from clarification waits only on explicit numbered answers or explicit `defaults`; apply only source-backed technical defaults before waiting. A `defaults` reply is an answer accepting displayed recommendations, not an automatic default.
+- Resume from clarification waits only on explicit question/option answers associated with open question IDs (including stable IDs such as `link-access`) or explicit `defaults`; apply only source-backed technical defaults before waiting. A `defaults` reply is an answer accepting displayed recommendations, not an automatic default.
 - Constraints are checked before each Build step
 - Producer roles update Artifact Reference Ledger entries in `references/task-journal-harness-appendix.md` when they create or move artifacts; Consumer roles validate `schema_or_contract` and update `validation_status` before using them
 - Pivot/Restart Decisions are append-only recovery records. If the selected action changes scope, files, behavior, risk, verification, or acceptance criteria, record `reapproval_required: true` and wait for approval before continuing.

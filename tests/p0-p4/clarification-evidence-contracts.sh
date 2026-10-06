@@ -1868,6 +1868,21 @@ events.insert(-1, {"type": "item.started", "item": {
 write_events(review, 1, "turn-01-file-change-started-only.jsonl", events)
 save_review("review-file-change-started-only.json", review)
 
+review = deepcopy(zero_decision_control)
+events = events_for(review, 1)
+assert events[-1]["type"] == "turn.completed"
+failed_change = {"path": workspace_file, "kind": "update"}
+events.insert(-1, {"type": "item.started", "item": {
+    "id": "failed-matched-file-change", "type": "file_change", "status": "in_progress",
+    "changes": [failed_change],
+}})
+events.insert(-1, {"type": "item.completed", "item": {
+    "id": "failed-matched-file-change", "type": "file_change", "status": "failed",
+    "changes": [failed_change],
+}})
+write_events(review, 1, "turn-01-file-change-failed-matched.jsonl", events)
+save_review("review-file-change-failed-matched.json", review)
+
 review = deepcopy(base)
 original_diff = (root / review["workspace_observation"]["diff"]["path"]).read_bytes()
 write_diff(review, "diff-appended-headerless-patch.patch", original_diff + b"@@ -1 +1 @@\n-old line\n+new line\n--- a/src/unmanifested.py\n+++ b/src/unmanifested.py\n")
@@ -2419,9 +2434,9 @@ PY_STALE_RECEIPT
         fail "task-04 did not retain observed initial-turn reads while rejecting the undeclared second turn: $(cat "$framework_grade")"
     fi
 
-    test_start "valid failed, empty, and started-only file-change events do not infer a write"
+    test_start "valid failed and empty file-change terminals do not infer a write"
     valid_file_change_count=0
-    for variant in completed-empty failed-empty failed-with-change-entry started-only; do
+    for variant in completed-empty failed-empty failed-with-change-entry failed-matched; do
         if run_importer --review "$evidence_root/review-file-change-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
             && jq -e '.behavior_status == "PASS" and .unavailable_reasons == [] and .evidence_counts.observed_dependent_edits == 0' "$framework_grade" >/dev/null; then
             valid_file_change_count=$((valid_file_change_count + 1))
@@ -2430,7 +2445,15 @@ PY_STALE_RECEIPT
     if [[ "$valid_file_change_count" -eq 4 ]]; then
         pass
     else
-        fail "a supported failed, empty, or started-only file-change event was rejected or counted as a write"
+        fail "a valid failed or empty file-change terminal was rejected or counted as a write"
+    fi
+
+    test_start "a completed unmatched file-change start makes lifecycle evidence unavailable"
+    if run_importer --review "$evidence_root/review-file-change-started-only.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("file_change_order_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a completed turn with an unmatched nonempty file-change start remained usable: $(cat "$framework_grade")"
     fi
 
     test_start "zero-decision controls reject actual questions and retain punctuation/non-question cases"
@@ -3216,12 +3239,12 @@ PY_RENAME_CAPTURE
         fail "a malformed started file-change array or entry lost the early edit timestamp ($invalid_started_count/2 unavailable): $(cat "$framework_grade")"
     fi
 
-    test_start "a reused native item ID in a later turn does not confirm an earlier started-only write"
+    test_start "a later turn cannot settle an unmatched completed earlier-turn start"
     if run_importer --review "$evidence_root/review-reused-operation-id-across-turns.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-        && jq -e '.behavior_status == "PASS" and (.behavior_reasons | length) == 0' "$framework_grade" >/dev/null; then
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("file_change_order_unavailable")) != null' "$framework_grade" >/dev/null; then
         pass
     else
-        fail "a later turn's reused operation ID was paired with an earlier started-only write: $(cat "$framework_grade")"
+        fail "a later turn's reused operation ID settled an unmatched start in a completed earlier turn: $(cat "$framework_grade")"
     fi
 
     test_start "a confirmed start-line reference preserves earliest premature-write ordering"

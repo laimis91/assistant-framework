@@ -348,15 +348,18 @@ that case `semantic_status` can be `FAIL` while top-level `behavior_status` stay
 preserve both fields and the supported reasons; they must not drop those
 violations or relabel the top-level result. A timeout with no supported
 premature action stays `UNAVAILABLE` without inferring a missing question
-failure. A file-change `item.started` event alone does not prove a write.
-Malformed started file-change changes arrays or entries make that transcript
-prefix `UNAVAILABLE`; valid starts remain available for ordering and supported
-partial-prefix violations remain in the result. A successful file-change completion must have an earlier matching
-`item.started` event in the same turn with the same nonempty native item ID and
-exact path. An unmatched completion makes file-change ordering unavailable;
-completion time cannot stand in for the missing start. The importer uses the
-matching start for earliest write ordering and the completion event as
-confirmation. An independent `dependent_edit_ref`
+failure. A file-change `item.started` event alone does not prove a write. Malformed
+started change arrays or entries make that transcript prefix `UNAVAILABLE`;
+valid starts remain available for ordering and supported partial-prefix
+violations remain in the result. A successful file-change completion must have
+an earlier matching `item.started` in the same turn with the same nonempty
+native item ID and exact path. Failed terminals settle matching starts without
+inferring writes. An unmatched completion, or any nonempty start left unmatched
+when its turn completes, makes file-change ordering unavailable. Completion
+time cannot stand in for a missing start. On a genuine incomplete prefix,
+unmatched starts alone do not infer writes; earlier supported violations remain
+in the result. The importer uses the matching start for earliest write ordering
+and the completion event as confirmation. An independent `dependent_edit_ref`
 may cite either the completion line or that confirmed start line; an unpaired
 start cannot support a semantic reference. Pairing requires the same turn, a
 nonempty native item ID and the exact path. Event item IDs can be reused by
@@ -431,10 +434,11 @@ Every completed `agent_message` needs an explicit question assessment:
 `material` and `non_material` are question events; punctuation-only and
 not-a-question results remain explicit but are not counted as questions. The
 importer does not infer message intent from punctuation. For task-04, both
-frozen-target reads must complete in the initial response before its final
-message and before the earliest observed project edit across all retained
-response turns. Matched file-change starts determine edit order, including
-stable or reverted paths; `.codex/` framework-state paths are excluded. Message
+frozen-target reads must complete in the initial response before its first
+completed assistant message and before the earliest observed project edit
+across all retained response turns. Matched file-change starts determine edit
+order, including stable or reverted paths; `.codex/` framework-state paths are
+excluded. Message
 planning and
 material-question references point to completed agent-message events and
 bounded, nonempty text spans. Agent-message carry references also need such a

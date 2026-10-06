@@ -266,7 +266,8 @@ function parseTranscript(turn, admitted, label) {
           }
         }
       }
-      if (event.type === "item.completed" && item.type === "file_change" && item.status === "completed" && Array.isArray(item.changes)) {
+      if (event.type === "item.completed" && item.type === "file_change"
+        && ["completed", "failed"].includes(item.status) && Array.isArray(item.changes)) {
         for (const change of item.changes) {
           if (!isObject(change) || !nonempty(change.path)) continue;
           const operationId = nonempty(item.id) ? item.id : null;
@@ -276,10 +277,11 @@ function parseTranscript(turn, admitted, label) {
               && candidate.path === change.path)
             : null;
           if (!start) {
-            fileChangeOrderUnavailable = true;
+            if (item.status === "completed") fileChangeOrderUnavailable = true;
             continue;
           }
           start.matched = true;
+          if (item.status === "failed") continue;
           changes.push({
             ...parsed,
             change,
@@ -289,6 +291,7 @@ function parseTranscript(turn, admitted, label) {
       }
     }
   }
+  if (completedTurn && startedChanges.some((change) => !change.matched)) fileChangeOrderUnavailable = true;
   const validTurnStartPrefix = turnStartSeen && validStartedPrefix;
   return {
     turn, byLine, messages, commands, nativePlanEvents, changes, completedTurn, turnStartLine,

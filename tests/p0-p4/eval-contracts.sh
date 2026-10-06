@@ -329,6 +329,7 @@ if (!validate(envelope)) process.exit(1);
 if (validate({ ...envelope, hidden_material_decisions: [] })) process.exit(1);
 const continuationBound = {
   ...envelope,
+  case_id: "task-08",
   oracle_requirements: {
     oracle_case_id: "task-08",
     oracle_sha256: "a".repeat(64),
