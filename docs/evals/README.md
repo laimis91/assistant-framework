@@ -275,11 +275,11 @@ repository-owned manifest. The importer still evaluates supported evidence so
 other specific unavailable reasons remain visible.
 
 For task-04, a zero-question result requires turn 1 to retain successful
-single-file `cat PATH` or `cat -- PATH` commands for both `docs/permissions.md`
-and `src/issue_access.py`, before the final assistant response. An earlier
-progress message is allowed. Each completed
-command must have exit code zero, and its captured output bytes must hash to the
-corresponding frozen workspace digest. The bounded parser accepts optional
+single-file `cat PATH` or `cat -- PATH` commands for both
+`docs/permissions.md` and `src/issue_access.py`, before the first completed
+assistant message and before the earliest project edit. Each completed command must have exit code
+zero, and its captured output bytes must hash to the corresponding frozen
+workspace digest. The bounded parser accepts optional
 `sh`, `bash`, or `zsh` `-lc` wrappers; search commands, echoed path strings,
 failed or started-only commands, and output that differs from the frozen file
 cannot establish inspection.
@@ -308,11 +308,16 @@ matching command; without an explicit reference, the importer uses the earliest
 qualifying read. Missing or out-of-order evidence keeps
 `missing_policy_read_status` unavailable.
 
+Controller input and transcript turn 1 is always eligible for admission. Later
+answer and response turns are admitted only when the trusted oracle declares
+the continuation; undeclared extra turns keep behavior `UNAVAILABLE`.
+
 An oracle case with `continuation_answer_file` requires a top-level
 `oracle_requirements` binding: the exact case ID and raw oracle hash, required
 answer turns, required post-answer decision indexes, an expected answer artifact
 for each required turn, and an applicability-basis artifact with a record
-reference and rationale. The importer resolves `continuation_answer_file`
+reference and rationale. Generic declared continuations may have an empty
+post-answer decision list; task-08 requires at least one reassessment decision. The importer resolves `continuation_answer_file`
 relative to the supplied oracle file and admits that exact path and its SHA-256
 inside the evidence root. Its bytes must also match the helper-relative frozen
 manifest entry keyed by the oracle-declared path; changing both the staged bytes
@@ -346,10 +351,12 @@ premature action stays `UNAVAILABLE` without inferring a missing question
 failure. A file-change `item.started` event alone does not prove a write.
 Malformed started file-change changes arrays or entries make that transcript
 prefix `UNAVAILABLE`; valid starts remain available for ordering and supported
-partial-prefix violations remain in the result. If a matching `item.completed`
-event in the same turn has the same native item ID and
-exact path, the importer uses the matching start for earliest write ordering
-and the completion event as confirmation. An independent `dependent_edit_ref`
+partial-prefix violations remain in the result. A successful file-change completion must have an earlier matching
+`item.started` event in the same turn with the same nonempty native item ID and
+exact path. An unmatched completion makes file-change ordering unavailable;
+completion time cannot stand in for the missing start. The importer uses the
+matching start for earliest write ordering and the completion event as
+confirmation. An independent `dependent_edit_ref`
 may cite either the completion line or that confirmed start line; an unpaired
 start cannot support a semantic reference. Pairing requires the same turn, a
 nonempty native item ID and the exact path. Event item IDs can be reused by

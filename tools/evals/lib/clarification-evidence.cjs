@@ -184,6 +184,7 @@ function parseTranscript(turn, admitted, label) {
   const todoListLifecycles = new Map();
   const changes = [];
   const startedChanges = [];
+  let fileChangeOrderUnavailable = false;
   let completedTurn = false;
   let turnStartSeen = false;
   let turnStartLine = null;
@@ -274,18 +275,26 @@ function parseTranscript(turn, admitted, label) {
               && candidate.operationId === operationId
               && candidate.path === change.path)
             : null;
-          if (start) start.matched = true;
+          if (!start) {
+            fileChangeOrderUnavailable = true;
+            continue;
+          }
+          start.matched = true;
           changes.push({
             ...parsed,
             change,
-            startLine: start ? start.line : parsed.line,
+            startLine: start.line,
           });
         }
       }
     }
   }
   const validTurnStartPrefix = turnStartSeen && validStartedPrefix;
-  return { turn, byLine, messages, commands, nativePlanEvents, changes, completedTurn, turnStartLine, validStartedPrefix: validTurnStartPrefix };
+  return {
+    turn, byLine, messages, commands, nativePlanEvents, changes, completedTurn, turnStartLine,
+    fileChangeOrderUnavailable,
+    validStartedPrefix: validTurnStartPrefix,
+  };
 }
 
 function assessedCommandChanges(transcripts, assessments, unavailableReasons) {
@@ -866,7 +875,7 @@ function main() {
       && requiredAnswerTurns[0] === 2
       && new Set(requiredAnswerTurns).size === requiredAnswerTurns.length
       && Array.isArray(requirements.required_post_answer_question_decision_indexes)
-      && requiredPostAnswerIndexes.length > 0
+      && (review.case_id !== "task-08" || requiredPostAnswerIndexes.length > 0)
       && new Set(requiredPostAnswerIndexes).size === requiredPostAnswerIndexes.length
       && requiredPostAnswerIndexes.every((index) => Number.isInteger(index) && expectedDecisionIndexes.has(index));
     const basis = requirements && isObject(requirements.applicability_basis) ? requirements.applicability_basis : null;
@@ -892,15 +901,25 @@ function main() {
   } else if (Object.prototype.hasOwnProperty.call(review, "oracle_requirements")) {
     unavailableReasons.push("continuation_applicability_oracle_mismatch");
   }
+  const declaredTurns = new Set([1]);
+  if (continuationBinding) {
+    for (const turn of continuationBinding.requiredAnswerTurns) declaredTurns.add(turn);
+  }
   const admittedInputList = [];
   const inputTurns = new Map();
+  const seenInputTurns = new Set();
   const inputs = Array.isArray(review.inputs) ? review.inputs : [];
   if (!Array.isArray(review.inputs)) unavailableReasons.push("controller_input_receipts_missing");
   for (const input of inputs) {
     if (!isObject(input) || !Number.isInteger(input.turn) || input.turn < 1 || !["initial_prompt", "answer"].includes(input.kind)) {
       fail("controller input entries require a positive turn and supported kind");
     }
-    if (inputTurns.has(input.turn)) fail("controller input turns must be unique");
+    if (seenInputTurns.has(input.turn)) fail("controller input turns must be unique");
+    seenInputTurns.add(input.turn);
+    if (!declaredTurns.has(input.turn)) {
+      unavailableReasons.push(`controller_input_turn_${input.turn}_undeclared`);
+      continue;
+    }
     const record = admitted.read(input.artifact, `input_turn_${input.turn}`);
     if (record && record.bytes.toString("utf8").trim().length === 0) unavailableReasons.push(`input_turn_${input.turn}_empty`);
     inputTurns.set(input.turn, { ...input, record });
@@ -938,6 +957,8 @@ function main() {
 
   const transcripts = new Map();
   const admittedTranscriptList = [];
+  const seenTranscriptTurns = new Set();
+  let fileChangeOrderUnavailable = false;
   const transcriptEntries = Array.isArray(review.transcripts) ? review.transcripts : [];
   if (!Array.isArray(review.transcripts) || transcriptEntries.length === 0) unavailableReasons.push("native_transcript_missing");
   const orderedTranscriptEntries = [...transcriptEntries].sort((a, b) => (a && a.turn || 0) - (b && b.turn || 0));
@@ -946,8 +967,13 @@ function main() {
       unavailableReasons.push("transcript_turn_identity_unavailable");
       continue;
     }
-    if (transcripts.has(entry.turn)) {
+    if (seenTranscriptTurns.has(entry.turn)) {
       unavailableReasons.push("transcript_turn_duplicate");
+      continue;
+    }
+    seenTranscriptTurns.add(entry.turn);
+    if (!declaredTurns.has(entry.turn)) {
+      unavailableReasons.push(`transcript_turn_${entry.turn}_undeclared`);
       continue;
     }
     const record = admitted.read(entry.artifact, `transcript_turn_${entry.turn}`);
@@ -957,8 +983,10 @@ function main() {
     if (!parsed.completedTurn) unavailableReasons.push("transcript_turn_" + entry.turn + "_completion_unavailable");
     if (parsed.completedTurn && parsed.messages.length === 0) unavailableReasons.push("transcript_turn_" + entry.turn + "_agent_message_unavailable");
     if (!parsed.validStartedPrefix) unavailableReasons.push("transcript_turn_" + entry.turn + "_started_prefix_unavailable");
+    if (parsed.fileChangeOrderUnavailable) fileChangeOrderUnavailable = true;
     transcripts.set(entry.turn, parsed);
   }
+  if (fileChangeOrderUnavailable) unavailableReasons.push("file_change_order_unavailable");
   const inputTurnNumbers = [...inputTurns.keys()].sort((a, b) => a - b);
   const transcriptTurnNumbers = [...transcripts.keys()].sort((a, b) => a - b);
   const contiguousInputTurns = inputTurnNumbers.every((turn, index) => turn === index + 1);
@@ -1166,7 +1194,7 @@ function main() {
       && declaredPaths.every((relative, index) => relative === TASK04_REQUIRED_INSPECTION_PATHS[index]);
     const initialTranscript = transcripts.get(1);
     const responseLine = initialTranscript && initialTranscript.messages.length > 0
-      ? initialTranscript.messages[initialTranscript.messages.length - 1].line : null;
+      ? initialTranscript.messages[0].line : null;
     const observedPaths = new Set();
     if (requirementsValid && initialWorkspaceBaseline && initialTranscript
       && initialTranscript.validStartedPrefix && Number.isInteger(initialTranscript.turnStartLine)

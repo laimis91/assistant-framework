@@ -27,7 +27,8 @@
     },
     "actor_id": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "\\S"
     },
     "oracle_requirements": {
       "description": "Transport-only oracle binding for cases with a required continuation. Required answer payloads are hash-bound to the oracle-declared continuation input. The applicability list is an independent assertion with hash-bound source bytes; the binding does not authenticate either assertion.",
@@ -61,7 +62,6 @@
         },
         "required_post_answer_question_decision_indexes": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "type": "integer",
             "minimum": 0
@@ -1051,6 +1051,30 @@
             "required": [
               "policy_conflict_assessment"
             ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "case_id": {
+            "const": "task-08"
+          }
+        },
+        "required": [
+          "case_id",
+          "oracle_requirements"
+        ]
+      },
+      "then": {
+        "properties": {
+          "oracle_requirements": {
+            "properties": {
+              "required_post_answer_question_decision_indexes": {
+                "minItems": 1
+              }
+            }
           }
         }
       }
