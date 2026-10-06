@@ -23,7 +23,8 @@
     },
     "case_id": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "\\S"
     },
     "actor_id": {
       "type": "string",

@@ -94,9 +94,18 @@ for (const bad of [
   changed.semantic_review.implementation_outcome_assessment = bad;
   if (validate(changed)) throw new Error("malformed implementation outcome assessment accepted");
 }
-const whitespaceActor = structuredClone(envelope);
-whitespaceActor.actor_id = " \t\n";
-if (validate(whitespaceActor)) throw new Error("whitespace-only actor identity accepted");
+for (const field of ["case_id", "actor_id"]) {
+  for (const value of ["", " ", "\t\n", "\u00a0", "\ufeff"]) {
+    const changed = structuredClone(envelope);
+    changed[field] = value;
+    if (validate(changed)) throw new Error("blank identity accepted: " + field);
+  }
+}
+for (const caseId of ["task-06", "synthetic-case"]) {
+  const changed = structuredClone(envelope);
+  changed.case_id = caseId;
+  if (!validate(changed)) throw new Error("nonblank case identity rejected");
+}
 NODE_CARRY_AND_POLICY_SCHEMA
 then
     pass
