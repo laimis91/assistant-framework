@@ -837,7 +837,7 @@ task06_review["semantic_review"].update({
     "answer_assessments": [], "dependent_edit_refs": [],
 })
 
-def task06_variant(name, command_event=None, explicit_ref=None):
+def task06_variant(name, command_event=None, explicit_ref=None, read_after_question=False, duplicate_late_read=False):
     review = deepcopy(task06_review)
     events = [
         {"type": "thread.started"}, {"type": "turn.started"},
@@ -846,13 +846,13 @@ def task06_variant(name, command_event=None, explicit_ref=None):
          "exit_code": 0, "aggregated_output": "# Workflow\n"}},
     ]
     review["activation"]["skill_read_ref"] = {"turn": 1, "line": 3}
-    if command_event is not None:
+    if command_event is not None and not read_after_question:
         events.append(command_event)
     question_line = len(events) + 1
-    events.extend([
-        {"type": "item.completed", "item": {"id": "missing-policy-question", "type": "agent_message", "text": task06_question}},
-        {"type": "turn.completed"},
-    ])
+    events.append({"type": "item.completed", "item": {"id": "missing-policy-question", "type": "agent_message", "text": task06_question}})
+    if command_event is not None and (read_after_question or duplicate_late_read):
+        events.append(command_event)
+    events.append({"type": "turn.completed"})
     write_events(review, 1, f"task06-{name}.jsonl", events)
     review["semantic_review"]["decisions"][0]["question_refs"] = [{"turn": 1, "line": question_line}]
     assessment = review["semantic_review"]["question_assessments"][0]
@@ -880,6 +880,9 @@ def command_event(command_text, output, exit_code=1, event_type="item.completed"
 
 task06_variant("valid-read", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"))
 task06_variant("valid-read-explicit-ref", command_event("bash -lc 'cat -- docs/customer-link-policy.md'", "cat: docs/customer-link-policy.md: No such file or directory"), {"turn": 1, "line": 4})
+task06_variant("late-read-auto", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"), read_after_question=True)
+task06_variant("early-read-with-late-duplicate", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"), duplicate_late_read=True)
+task06_variant("explicit-late-read", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"), {"turn": 1, "line": 6}, duplicate_late_read=True)
 task06_variant("question-only")
 task06_variant("echo-only", command_event("echo 'cat docs/customer-link-policy.md'", "cat: docs/customer-link-policy.md: No such file or directory"))
 task06_variant("wrong-file", command_event("cat docs/permissions.md", "cat: docs/permissions.md: No such file or directory"))
@@ -887,6 +890,38 @@ task06_variant("successful-read", command_event("cat docs/customer-link-policy.m
 task06_variant("started-only", command_event("cat docs/customer-link-policy.md", "", event_type="item.started"))
 task06_variant("wrong-explicit-ref", command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"), {"turn": 1, "line": 5})
 task06_variant("pattern-is-not-file-operand", command_event("rg docs/customer-link-policy.md docs/customer-link-policy.md.bak", "rg: docs/customer-link-policy.md.bak: No such file or directory"))
+
+omitted_early_policy_question_review = deepcopy(task06_review)
+omitted_early_policy_question = "Which access policy governs this link?"
+omitted_early_policy_question_review["activation"]["skill_read_ref"] = {"turn": 1, "line": 3}
+omitted_early_policy_question_events = [
+    {"type": "thread.started"}, {"type": "turn.started"},
+    {"type": "item.completed", "item": {"id": "staged-skill-read", "type": "command_execution",
+     "command": "sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md", "status": "completed",
+     "exit_code": 0, "aggregated_output": "# Workflow\n"}},
+    {"type": "item.completed", "item": {"id": "early-policy-question", "type": "agent_message", "text": omitted_early_policy_question}},
+    command_event("cat docs/customer-link-policy.md", "cat: docs/customer-link-policy.md: No such file or directory"),
+    {"type": "item.completed", "item": {"id": "missing-policy-question", "type": "agent_message", "text": task06_question}},
+    {"type": "turn.completed"},
+]
+write_events(omitted_early_policy_question_review, 1, "task06-omitted-early-policy-question.jsonl", omitted_early_policy_question_events)
+omitted_early_policy_question_review["semantic_review"]["decisions"][0]["question_refs"] = [{"turn": 1, "line": 6}]
+omitted_early_policy_question_review["semantic_review"]["question_assessments"] = [
+    {"turn": 1, "line": 4, "classification": "material", "decision_indexes": [0],
+     "rationale": "The early question asks for the policy governing this link."},
+    {"turn": 1, "line": 6, "classification": "material", "decision_indexes": [0],
+     "rationale": "The later selected question asks which missing authority governs external access."},
+]
+omitted_early_policy_question_review["semantic_review"]["missing_authority_assessment"] = {
+    "oracle_case_id": "task-06", "oracle_sha256": canonical_task06_oracle["sha256"],
+    "decision_index": 0, "missing_policy_path": "docs/customer-link-policy.md",
+    "unavailable_authority_explained": True, "policy_contents_not_invented": True,
+    "message_spans": [{"turn": 1, "line": 6,
+                       "text_span": {"start": 0, "end": len(task06_question)},
+                       "rationale": "The later message explains the absent authority without inventing its policy."}],
+    "rationale": "Both claims explicitly cover the retained synthetic response.",
+}
+write_json("review-task06-omitted-early-policy-question.json", omitted_early_policy_question_review)
 
 # Native todo_list lifecycle observations need separate semantic assessments.
 def todo_event(state, item_id, text):
@@ -1250,6 +1285,7 @@ test_importer_for_oracle() {
     local oracle_name
     local trust_id
     local pinned_digest
+    local pinned_answer_digest=""
     local install_root
     local selected_importer
     if cmp -s "$oracle_path" "$canonical_oracle_file"; then
@@ -1269,6 +1305,7 @@ test_importer_for_oracle() {
         oracle-continuation.json)
             trust_id="continuation"
             pinned_digest="75c88c6469e3c3015174fd61e43eca2f3fa5f875f319358cbeb6f543f384e661"
+            pinned_answer_digest="92306c6ccb861066cfb95456a2031c65088fb0290909a938bcf2bdc4fc744bd0"
             ;;
         oracle-empty-file-changes.json)
             trust_id="empty-file-changes"
@@ -1284,8 +1321,14 @@ test_importer_for_oracle() {
     if [[ ! -f "$selected_importer" ]]; then
         mkdir -p "$(dirname "$selected_importer")" "$install_root/docs/evals/fixtures/clarification"
         cp "$importer" "$selected_importer"
-        printf '{"clarification-oracle.json":"%s"}\n' "$pinned_digest" \
-            >"$install_root/docs/evals/fixtures/clarification/frozen-cases-sha256.json"
+        if [[ -n "$pinned_answer_digest" ]]; then
+            printf '{"clarification-oracle.json":"%s","expected-continuation-answer.txt":"%s"}\n' \
+                "$pinned_digest" "$pinned_answer_digest" \
+                >"$install_root/docs/evals/fixtures/clarification/frozen-cases-sha256.json"
+        else
+            printf '{"clarification-oracle.json":"%s"}\n' "$pinned_digest" \
+                >"$install_root/docs/evals/fixtures/clarification/frozen-cases-sha256.json"
+        fi
     fi
     printf '%s\n' "$selected_importer"
 }
@@ -4309,6 +4352,39 @@ PY_MISMATCHED_CONTINUATION_ANSWER
         fail "a received answer with unrelated payload satisfied continuation: $(cat "$framework_grade")"
     fi
 
+    python3 - "$evidence_root" <<'PY_TAMPERED_EXPECTED_CONTINUATION'
+import json
+from hashlib import sha256
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+review = json.loads((root / "review-continuation-post-answer-question.json").read_text())
+tampered = b"The staged expected answer and captured controller answer were both replaced.\n"
+digest = sha256(tampered).hexdigest()
+(root / "expected-continuation-answer.txt").write_bytes(tampered)
+(root / "turn-02.answer.txt").write_bytes(tampered)
+review["oracle_requirements"]["continuation_answers"][0]["expected_artifact"]["sha256"] = digest
+review["inputs"][1]["artifact"]["sha256"] = digest
+(root / "review-continuation-tampered-expected-and-received-answer.json").write_text(json.dumps(review, sort_keys=True) + "\n")
+PY_TAMPERED_EXPECTED_CONTINUATION
+
+    test_start "self-consistent tampering cannot replace the frozen continuation answer"
+    if run_importer --review "$evidence_root/review-continuation-tampered-expected-and-received-answer.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and .continuation_coverage.applicability_status == "unavailable" and (.unavailable_reasons | index("continuation_applicability_unavailable")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "matching tampered expected-answer and captured-input hashes replaced the trusted frozen answer: $(cat "$framework_grade")"
+    fi
+
+    python3 - "$evidence_root" <<'PY_RESTORE_CONTINUATION_FIXTURE'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+original = b"Anyone with the link may open it without an account.\n"
+(root / "expected-continuation-answer.txt").write_bytes(original)
+(root / "turn-02.answer.txt").write_bytes(original)
+PY_RESTORE_CONTINUATION_FIXTURE
+
     python3 - "$evidence_root" <<'PY_INVALID_CONTINUATION_REQUIREMENTS'
 import json
 from pathlib import Path
@@ -4534,5 +4610,37 @@ while IFS=$'\t' read -r probe expected reason preparation; do
         fail "$probe did not establish $expected/$reason: $(cat "$framework_grade")"
     fi
 done < "$evidence_root/tenth-checks.tsv"
+
+test_start "task-06 policy read must precede cited authority explanations and decision questions"
+if run_importer --review "$evidence_root/review-task06-late-read-auto.json" --oracle "$evidence_root/canonical-task06-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    && jq -e '.behavior_status == "UNAVAILABLE" and .missing_policy_read_status == "unavailable" and (.unavailable_reasons | index("required_missing_policy_read_unavailable")) != null' "$framework_grade" >/dev/null; then
+    pass
+else
+    fail "a failed policy read after its cited initial explanation/question remained supported: $(cat "$framework_grade")"
+fi
+
+test_start "automatic task-06 read discovery uses the earlier qualifying read"
+if run_importer --review "$evidence_root/review-task06-early-read-with-late-duplicate.json" --oracle "$evidence_root/canonical-task06-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    && jq -e '.behavior_status == "PASS" and .missing_policy_read_status == "observed"' "$framework_grade" >/dev/null; then
+    pass
+else
+    fail "automatic discovery ignored the earlier qualifying failed read: $(cat "$framework_grade")"
+fi
+
+test_start "an explicit late task-06 read reference cannot fall back to an earlier read"
+if run_importer --review "$evidence_root/review-task06-explicit-late-read.json" --oracle "$evidence_root/canonical-task06-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    && jq -e '.behavior_status == "UNAVAILABLE" and .missing_policy_read_status == "unavailable" and (.unavailable_reasons | index("required_missing_policy_read_unavailable")) != null' "$framework_grade" >/dev/null; then
+    pass
+else
+    fail "an explicit late failed-read reference fell back to an earlier qualifying read: $(cat "$framework_grade")"
+fi
+
+test_start "an omitted early material policy question cannot be hidden by a later selected question"
+if run_importer --review "$evidence_root/review-task06-omitted-early-policy-question.json" --oracle "$evidence_root/canonical-task06-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+    && jq -e '.behavior_status == "UNAVAILABLE" and .missing_policy_read_status == "unavailable" and (.unavailable_reasons | index("required_missing_policy_read_unavailable")) != null' "$framework_grade" >/dev/null; then
+    pass
+else
+    fail "an early assessed material question omitted from decision refs remained supported: $(cat "$framework_grade")"
+fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

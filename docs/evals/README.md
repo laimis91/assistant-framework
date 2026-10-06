@@ -299,7 +299,14 @@ directory` diagnostic. The bounded importer recognizes only a single-file
 Other readers, multiple file operands, search patterns, shell compounds,
 successful commands, started-only events, and diagnostics for another path do
 not establish the read. An optional `semantic_review.missing_policy_read_ref`
-can bind the qualifying command to one exact turn/line event.
+can bind the qualifying command to one exact turn/line event. That completed
+failed read must precede every cited task-06 authority-explanation span,
+each validated material question assessment linked to decision 0 (including
+one omitted from its selected question references), and every selected question
+reference. An explicit reference to a later read is not replaced by an earlier
+matching command; without an explicit reference, the importer uses the earliest
+qualifying read. Missing or out-of-order evidence keeps
+`missing_policy_read_status` unavailable.
 
 An oracle case with `continuation_answer_file` requires a top-level
 `oracle_requirements` binding: the exact case ID and raw oracle hash, required
@@ -307,10 +314,13 @@ answer turns, required post-answer decision indexes, an expected answer artifact
 for each required turn, and an applicability-basis artifact with a record
 reference and rationale. The importer resolves `continuation_answer_file`
 relative to the supplied oracle file and admits that exact path and its SHA-256
-inside the evidence root. Stage the unchanged oracle and its declared answer
-payload inside that root. The importer compares those bytes with the captured
-controller input. Hashes bind the files but do not authenticate the applicability
-assertion or the independent semantic review.
+inside the evidence root. Its bytes must also match the helper-relative frozen
+manifest entry keyed by the oracle-declared path; changing both the staged bytes
+and review-provided hashes cannot replace the trusted expected answer. Stage the
+unchanged oracle and its declared answer payload inside that root. The importer
+compares those trusted bytes with the captured controller input. Hashes bind the
+files but do not authenticate the applicability assertion or the independent
+semantic review.
 
 Required answer receipt, relevance, completed response and post-answer question
 coverage are separate fields. A required answer is relevant when its captured

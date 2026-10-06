@@ -31,17 +31,21 @@ function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-function frozenClarificationOracleDigest() {
+function readFrozenClarificationManifest() {
   const manifestPath = path.resolve(__dirname, "../../../docs/evals/fixtures/clarification/frozen-cases-sha256.json");
   try {
     const stat = fs.lstatSync(manifestPath);
     if (stat.isSymbolicLink() || !stat.isFile() || stat.size > MAX_REVIEW_BYTES) return null;
     const manifest = JSON.parse(fs.readFileSync(manifestPath).toString("utf8"));
-    const digest = isObject(manifest) ? manifest["clarification-oracle.json"] : null;
-    return typeof digest === "string" && SHA256.test(digest) ? digest : null;
+    return isObject(manifest) ? manifest : null;
   } catch (_error) {
     return null;
   }
+}
+
+function frozenClarificationOracleDigest(manifest) {
+  const digest = isObject(manifest) ? manifest["clarification-oracle.json"] : null;
+  return typeof digest === "string" && SHA256.test(digest) ? digest : null;
 }
 
 function forcedLoadRunBindingDigest(review, oracleDigest, skillName, skillDigest, inputs, transcripts) {
@@ -769,7 +773,8 @@ function main() {
   const oracleCase = oracle.cases.find((entry) => entry.case_id === review.case_id);
   if (!oracleCase || !Array.isArray(oracleCase.hidden_material_decisions)) fail("review case is not bound to a valid oracle entry");
   const oracleDigest = sha256(oracleBytes);
-  const frozenOracleDigest = frozenClarificationOracleDigest();
+  const frozenManifest = readFrozenClarificationManifest();
+  const frozenOracleDigest = frozenClarificationOracleDigest(frozenManifest);
   const initialWorkspaceBaseline = initialWorkspaceBaselineMap(oracleCase);
   const requiresTask04Inspection = review.case_id === "task-04" && frozenOracleDigest === oracleDigest;
   const hasRequiredMissingPolicyRead = Object.prototype.hasOwnProperty.call(oracleCase, "required_missing_policy_path");
@@ -799,6 +804,12 @@ function main() {
   let initialWorkspaceBaselineStatus = "unavailable";
   if (!initialWorkspaceBaseline) unavailableReasons.push("initial_workspace_baseline_unavailable");
   const hasRequiredContinuation = Object.prototype.hasOwnProperty.call(oracleCase, "continuation_answer_file");
+  const trustedExpectedAnswerDigest = isSafeProjectRelativePath(oracleCase.continuation_answer_file)
+    && isObject(frozenManifest)
+    && Object.prototype.hasOwnProperty.call(frozenManifest, oracleCase.continuation_answer_file)
+    && typeof frozenManifest[oracleCase.continuation_answer_file] === "string"
+    && SHA256.test(frozenManifest[oracleCase.continuation_answer_file])
+    ? frozenManifest[oracleCase.continuation_answer_file] : null;
   let continuationBinding = null;
   const continuationAnswerArtifacts = new Map();
   if (hasRequiredContinuation) {
@@ -821,7 +832,7 @@ function main() {
     const answerEntries = requirements && Array.isArray(requirements.continuation_answers)
       ? requirements.continuation_answers : [];
     const answerEntriesByTurn = new Map();
-    let answerEntriesValid = Boolean(expectedAnswerRelative)
+    let answerEntriesValid = Boolean(expectedAnswerRelative && trustedExpectedAnswerDigest)
       && answerEntries.length === requiredAnswerTurns.length;
     for (const answerEntry of answerEntries) {
       if (!isObject(answerEntry) || !Number.isInteger(answerEntry.turn)
@@ -838,7 +849,7 @@ function main() {
     if (answerEntriesValid) {
       for (const [turn, answerEntry] of answerEntriesByTurn) {
         const expectedAnswer = admitted.read(answerEntry.expected_artifact, "continuation_answer_turn_" + turn);
-        if (expectedAnswer) continuationAnswerArtifacts.set(turn, expectedAnswer);
+        if (expectedAnswer && expectedAnswer.digest === trustedExpectedAnswerDigest) continuationAnswerArtifacts.set(turn, expectedAnswer);
         else answerEntriesValid = false;
       }
     }
@@ -1117,23 +1128,30 @@ function main() {
   }
 
   let missingPolicyReadStatus = hasRequiredMissingPolicyRead ? "unavailable" : "not_required";
+  let missingPolicyReadOrder = null;
   if (hasRequiredMissingPolicyRead) {
     const initialTranscript = transcripts.get(1);
     const explicitReadRef = semanticReview.missing_policy_read_ref;
-    let validReadObserved = false;
+    let observedRead = null;
     if (requiredMissingPolicyPath && initialTranscript && initialTranscript.validStartedPrefix
       && Number.isInteger(initialTranscript.turnStartLine)) {
       if (explicitReadRef !== undefined) {
         const explicitEvent = lineEvent(transcripts, explicitReadRef);
-        validReadObserved = explicitReadRef.turn === 1
-          && isRequiredMissingPolicyRead(explicitEvent, requiredMissingPolicyPath, review.workspace_root, initialTranscript.turnStartLine);
+        if (explicitReadRef.turn === 1
+          && isRequiredMissingPolicyRead(explicitEvent, requiredMissingPolicyPath, review.workspace_root, initialTranscript.turnStartLine)) {
+          observedRead = explicitEvent;
+        }
       } else {
-        validReadObserved = initialTranscript.commands.some((command) =>
-          isRequiredMissingPolicyRead(command, requiredMissingPolicyPath, review.workspace_root, initialTranscript.turnStartLine));
+        observedRead = initialTranscript.commands.find((command) =>
+          isRequiredMissingPolicyRead(command, requiredMissingPolicyPath, review.workspace_root, initialTranscript.turnStartLine)) || null;
       }
     }
-    if (validReadObserved) missingPolicyReadStatus = "observed";
-    else unavailableReasons.push("required_missing_policy_read_unavailable");
+    if (observedRead) {
+      missingPolicyReadOrder = { turn: observedRead.turn, line: observedRead.line };
+      missingPolicyReadStatus = "observed";
+    } else {
+      unavailableReasons.push("required_missing_policy_read_unavailable");
+    }
   }
   const earliestObservedProjectEdit = [...observedChanges.values()].flat().sort(compareOrder)[0] || null;
   let task04InspectionStatus = review.case_id === "task-04" ? "unavailable" : "not_required";
@@ -1530,9 +1548,31 @@ function main() {
         && typeof assessment.policy_contents_not_invented === "boolean"
         && Array.isArray(assessment.message_spans) && assessment.message_spans.length > 0
         && nonempty(assessment.rationale);
+      const authoritySpans = [];
       for (const spanRef of Array.isArray(assessment && assessment.message_spans) ? assessment.message_spans : []) {
-        if (!isObject(spanRef) || !Number.isInteger(spanRef.turn) || !Number.isInteger(spanRef.line)
-          || !nonempty(spanRef.rationale) || !boundedMessageSpan(transcripts, spanRef, spanRef.text_span)) valid = false;
+        const span = isObject(spanRef) && Number.isInteger(spanRef.turn) && Number.isInteger(spanRef.line)
+          && nonempty(spanRef.rationale) ? boundedMessageSpan(transcripts, spanRef, spanRef.text_span) : null;
+        if (!span) {
+          valid = false;
+          continue;
+        }
+        authoritySpans.push(span);
+      }
+      const decision = decisionMap.get(0);
+      const materialDecisionQuestions = [...questionMap.values()].filter((question) =>
+        question.classification === "material" && question.decision_indexes.includes(0));
+      const readPrecedesAuthoritySpans = Boolean(missingPolicyReadOrder)
+        && authoritySpans.every((span) => compareOrder(missingPolicyReadOrder, span) < 0);
+      const readPrecedesDecisionQuestions = Boolean(missingPolicyReadOrder)
+        && (!decision || decision.outcome !== "asked"
+          || decision.question_refs.every((ref) => isObject(ref)
+            && Number.isInteger(ref.turn) && Number.isInteger(ref.line)
+            && compareOrder(missingPolicyReadOrder, ref) < 0))
+        && materialDecisionQuestions.every((question) => compareOrder(missingPolicyReadOrder, question) < 0);
+      if (!readPrecedesAuthoritySpans || !readPrecedesDecisionQuestions) {
+        valid = false;
+        missingPolicyReadStatus = "unavailable";
+        unavailableReasons.push("required_missing_policy_read_unavailable");
       }
       if (!valid) {
         reviewShapeSupported = false;
