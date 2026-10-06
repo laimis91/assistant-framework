@@ -329,7 +329,9 @@ completed material question from an earlier turn. That initial question may
 have an empty `decision_indexes` list: an access answer can trigger a later
 lifecycle question without itself covering that hidden lifecycle decision. The
 required post-answer question must separately be material and linked to its
-frozen decision index. A completed relevant response with that question missing
+frozen decision index, and it must occur in that exact required relevant answer
+turn; a later unrelated controller turn cannot satisfy the requirement. A
+completed relevant response with that question missing
 is `FAIL`; an absent or incomplete required continuation keeps the top-level
 `behavior_status` `UNAVAILABLE`, even when a separate supported violation makes
 `semantic_status` `FAIL` and appears in `behavior_reasons`.
@@ -341,8 +343,11 @@ that case `semantic_status` can be `FAIL` while top-level `behavior_status` stay
 preserve both fields and the supported reasons; they must not drop those
 violations or relabel the top-level result. A timeout with no supported
 premature action stays `UNAVAILABLE` without inferring a missing question
-failure. A file-change `item.started` event alone does not prove a write. If a
-matching `item.completed` event in the same turn has the same native item ID and
+failure. A file-change `item.started` event alone does not prove a write.
+Malformed started file-change changes arrays or entries make that transcript
+prefix `UNAVAILABLE`; valid starts remain available for ordering and supported
+partial-prefix violations remain in the result. If a matching `item.completed`
+event in the same turn has the same native item ID and
 exact path, the importer uses the matching start for earliest write ordering
 and the completion event as confirmation. An independent `dependent_edit_ref`
 may cite either the completion line or that confirmed start line; an unpaired

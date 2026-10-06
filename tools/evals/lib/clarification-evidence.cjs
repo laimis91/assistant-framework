@@ -189,6 +189,8 @@ function parseTranscript(turn, admitted, label) {
   let turnStartLine = null;
   let failureSeen = false;
   let validStartedPrefix = true;
+  const validFileChangeEntries = (entries) => Array.isArray(entries) && entries.every((change) =>
+    isObject(change) && nonempty(change.path) && nonempty(change.kind));
   if (lines.length > MAX_JSONL_LINES) fail(`${label} exceeds the event-line limit`);
   for (let index = 0; index < lines.length; index += 1) {
     const raw = lines[index];
@@ -221,11 +223,13 @@ function parseTranscript(turn, admitted, label) {
     if (event.type === "item.completed" && item && item.type === "agent_message" && typeof item.text !== "string") {
       validStartedPrefix = false;
     }
+    if (event.type === "item.started" && item && item.type === "file_change"
+      && !validFileChangeEntries(item.changes)) {
+      validStartedPrefix = false;
+    }
     if (event.type === "item.completed" && item && item.type === "file_change") {
       const validStatus = ["completed", "failed"].includes(item.status);
-      const validChanges = Array.isArray(item.changes) && item.changes.every((change) =>
-        isObject(change) && nonempty(change.path) && nonempty(change.kind));
-      if (!validStatus || !validChanges) validStartedPrefix = false;
+      if (!validStatus || !validFileChangeEntries(item.changes)) validStartedPrefix = false;
     }
     if (event.type === "turn.completed") {
       if (!turnStartSeen || failureSeen) validStartedPrefix = false;
@@ -1608,7 +1612,7 @@ function main() {
             || !indexedDecision
             || indexedDecision.outcome !== "asked"
             || !indexedDecision.question_refs.some((ref) => referenceKey(ref) === key)) continue;
-          if (relevantContinuationAnswerTurns.some((answerTurn) => answerTurn <= question.turn)) {
+          if (relevantContinuationAnswerTurns.includes(question.turn)) {
             observedPostAnswerQuestionIndexes.add(index);
           }
         }

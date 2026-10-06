@@ -1150,6 +1150,30 @@ start_reference_review["semantic_review"]["dependent_edit_refs"][0]["line"] = 4
     json.dumps(start_reference_review, sort_keys=True) + "\n"
 )
 
+for suffix in ("non-array", "missing-kind"):
+    malformed_review = deepcopy(review)
+    source_path = root / malformed_review["transcripts"][0]["artifact"]["path"]
+    events = [json.loads(line) for line in source_path.read_text().splitlines()]
+    start_event = next(
+        item for item in events
+        if item.get("type") == "item.started"
+        and item.get("item", {}).get("type") == "file_change"
+    )
+    if suffix == "non-array":
+        start_event["item"]["changes"] = {}
+    else:
+        start_event["item"]["changes"][0].pop("kind")
+    raw = ("\n".join(json.dumps(item, sort_keys=True, separators=(",", ":")) for item in events) + "\n").encode()
+    name = f"turn-01-malformed-start-{suffix}.jsonl"
+    (root / name).write_bytes(raw)
+    malformed_review["transcripts"][0]["artifact"] = {
+        "path": name,
+        "sha256": sha256(raw).hexdigest(),
+    }
+    (root / f"review-malformed-start-{suffix}.json").write_text(
+        json.dumps(malformed_review, sort_keys=True) + "\n"
+    )
+
 after_question_review = json.loads((root / "review.json").read_text())
 after_question_events = [json.loads(line) for line in (root / "turn-02.events.jsonl").read_text().splitlines()]
 for item in after_question_events:
@@ -3034,6 +3058,20 @@ PY_RENAME_CAPTURE
         fail "a later same-turn completion hid the operation's earlier started write: $(cat "$framework_grade")"
     fi
 
+    test_start "malformed started file-change payloads make edit ordering unavailable"
+    invalid_started_count=0
+    for variant in non-array missing-kind; do
+        if run_importer --review "$evidence_root/review-malformed-start-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_1_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_started_count=$((invalid_started_count + 1))
+        fi
+    done
+    if [[ "$invalid_started_count" -eq 2 ]]; then
+        pass
+    else
+        fail "a malformed started file-change array or entry lost the early edit timestamp ($invalid_started_count/2 unavailable): $(cat "$framework_grade")"
+    fi
+
     test_start "a reused native item ID in a later turn does not confirm an earlier started-only write"
     if run_importer --review "$evidence_root/review-reused-operation-id-across-turns.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "PASS" and (.behavior_reasons | length) == 0' "$framework_grade" >/dev/null; then
@@ -4192,6 +4230,44 @@ review["semantic_review"]["answer_assessments"] = [{
 }]
 save_review("review-continuation-post-answer-question.json", review)
 
+review = deepcopy(json.loads((root / "review-continuation-post-answer-question.json").read_text()))
+later_answer = b"One unrelated note is ready for the next controller response."
+(root / "turn-03-unrelated-answer.txt").write_bytes(later_answer)
+review["inputs"].append({"turn": 3, "kind": "answer", "artifact": {
+    "path": "turn-03-unrelated-answer.txt", "sha256": sha256(later_answer).hexdigest(),
+}})
+review["semantic_review"]["answer_assessments"].append({
+    "kind": "unsolicited", "answer_turn": 3, "question_ref": None,
+    "outcome": "unprompted", "decision_indexes": [], "carry_refs": [],
+    "rationale": "This unrelated controller input does not answer the turn-2 continuation question.",
+})
+turn_2_path = root / next(entry for entry in review["transcripts"] if entry["turn"] == 2)["artifact"]["path"]
+turn_2_events = [json.loads(line) for line in turn_2_path.read_text().splitlines()]
+turn_2_question = next(
+    item for item in turn_2_events
+    if item.get("item", {}).get("text") == post_question_text
+)
+turn_2_question["item"]["text"] = "The lifecycle choice remains open for a later discussion."
+write_transcript(review, 2, "turn-02-no-required-post-answer-question.jsonl", turn_2_events)
+review["semantic_review"]["decisions"][0]["question_refs"] = [{"turn": 3, "line": 3}]
+review["semantic_review"]["question_assessments"] = [
+    item for item in review["semantic_review"]["question_assessments"]
+    if (item["turn"], item["line"]) != (2, 4)
+]
+review["semantic_review"]["question_assessments"].extend([
+    {"turn": 2, "line": 4, "classification": "not_a_question", "decision_indexes": [],
+     "rationale": "The completed required answer response records the answer without asking a new question."},
+    {"turn": 3, "line": 3, "classification": "material", "decision_indexes": [0],
+     "text_spans": [{"start": 0, "end": len(post_question_text), "decision_indexes": [0],
+                     "rationale": "This later message asks the unresolved lifecycle choice."}],
+     "rationale": "A later unrelated controller turn asks the lifecycle choice."},
+])
+write_transcript(review, 3, "turn-03-unrelated-post-answer-question.jsonl", [
+    event("thread.started"), event("turn.started"),
+    agent_message(post_question_text), event("turn.completed"),
+])
+save_review("review-continuation-later-unrelated-question.json", review)
+
 review = make_answer_review()
 write_transcript(review, 2, "turn-02-no-post-answer-question.jsonl", [
     event("thread.started"), event("turn.started"),
@@ -4426,6 +4502,14 @@ PY_INVALID_CONTINUATION_REQUIREMENTS
         pass
     else
         fail "a supported post-answer question did not satisfy continuation coverage: $(cat "$framework_grade")"
+    fi
+
+    test_start "a later unrelated controller turn cannot satisfy the required response question"
+    if run_importer --review "$evidence_root/review-continuation-later-unrelated-question.json" --oracle "$evidence_root/oracle-continuation.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("required_post_answer_question_missing")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a later unrelated question satisfied the required answer-response turn: $(cat "$framework_grade")"
     fi
 
     test_start "completed continuation without a required post-answer question fails"

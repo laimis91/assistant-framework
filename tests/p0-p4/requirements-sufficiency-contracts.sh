@@ -27,6 +27,22 @@ if ruby -ryaml -e '
   d2 = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D2" }
   d3 = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D3" }
   normalize = ->(value) { value.downcase.delete("`").gsub(/\s+/, " ") }
+  pack = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D_ARCHITECTURE_DECISION_PACK" }
+  pack_check = normalize.call(pack.fetch("check"))
+  pack_failure = normalize.call(pack.fetch("on_fail"))
+  pack_resolution_scoped = pack_check.include?("for execution_intent != prepare_only, resolve blocking material questions")
+  pack_retains_open = pack_check.include?("prepare_only retains unresolved questions in feature_preparation_result.open_decisions")
+  pack_keeps_integrity = pack_check.include?("architecture_decision_pack is current") &&
+    pack_check.include?("architecture_decision_pack.mode equals canonical architecture_design_mode") &&
+    pack_check.include?("verified evidence and verification_ref are permitted only when status=verified")
+  pack_condition_preserved = pack.fetch("condition") == "architecture_design_mode in [lightweight, required, review_intensive]"
+  pack_failure_scoped = pack_failure.include?("for prepare_only, retain unresolved questions in feature_preparation_result.open_decisions and only the context/journal ref through preparation completion; do not wait") &&
+    pack_failure.include?("for execution intents, resolve material questions before dependent work and bind the pack ref")
+  architecture_ref = File.read(ARGV.fetch(3))
+  discovery = architecture_ref[/^## AI-led question discovery.*?(?=^## Semantic interface policy)/m]
+  question_policy = normalize.call(discovery.to_s)
+  prepare_questions_retained = question_policy.include?("for prepare_only, record open architecture questions in the typed pack and feature_preparation_result.open_decisions; do not wait")
+  execution_questions_resolved = question_policy.include?("resolve blocking material questions before dependent work for execution intents")
   map_check = normalize.call(acceptance.fetch("check"))
   d3_check = normalize.call(d3.fetch("check"))
   map_ready_scope = map_check.include?("for execution_intent != prepare_only, no unresolved material questions remain")
@@ -63,14 +79,21 @@ if ruby -ryaml -e '
     }
   end
   preparation = gate_blocks.call("prepare_only")
+  preparation["D_ARCHITECTURE_DECISION_PACK"] = unresolved_topic.any? &&
+    !(pack_resolution_scoped && pack_retains_open && pack_condition_preserved)
   end_to_end = gate_blocks.call("end_to_end")
+  end_to_end["D_ARCHITECTURE_DECISION_PACK"] = unresolved_topic.any?
   implement_only = gate_blocks.call("implement_only")
-  result_valid = d2_scoped && map_ready_scope && map_retains_open && d3_ready_scope &&
+  implement_only["D_ARCHITECTURE_DECISION_PACK"] = unresolved_topic.any?
+  result_valid = pack_resolution_scoped && pack_retains_open && pack_keeps_integrity &&
+    pack_condition_preserved && pack_failure_scoped && prepare_questions_retained && execution_questions_resolved &&
+    d2_scoped && map_ready_scope && map_retains_open && d3_ready_scope &&
     defaults_consistency && d3_retains_open && map_is_still_required && map_trigger_preserved &&
     source_allows_preparation && preparation.values.none? &&
+    end_to_end["D_ARCHITECTURE_DECISION_PACK"] && implement_only["D_ARCHITECTURE_DECISION_PACK"] &&
     %w[D2 D3 D_REQUIREMENT_ACCEPTANCE_MAP].all? { |id| end_to_end[id] && implement_only[id] }
   exit(result_valid ? 0 : 1)
-' "$phase_gates" "$phases" "$discover_view"; then
+' "$phase_gates" "$phases" "$discover_view" "$workflow_dir/references/architecture-decision-pack.md"; then
     pass
 else
     fail "prepare-only Discover cannot complete with recorded open decisions while execution intents remain gated"
@@ -80,12 +103,18 @@ test_start "optional preparation readiness Plan retains pending decisions throug
 if ruby -ryaml -e '
   source = File.read(ARGV.fetch(0))
   view = File.read(ARGV.fetch(1))
+  normalize = ->(value) { value.downcase.delete(96.chr).gsub(/\s+/, " ") }
   plan = source[/^## Phase: Plan.*?(?=^## Phase: Design)/m]
   entry = plan.to_s.lines.find { |line| line.start_with?("**Entry rule:") }
   scoped = entry && entry.include?("For `execution_intent != prepare_only`,")
   freshness = entry && entry.include?("Architecture Decision Pack must also be fresh")
   preparation = plan.to_s.include?("For `prepare_only`, an explicitly requested readiness Plan is inline and never waits.")
-  pending_allowed = scoped && preparation
+  pack_questions_retained = normalize.call(plan.to_s).include?("unresolved pack questions") &&
+    normalize.call(plan.to_s).include?("feature_preparation_result.open_decisions") &&
+    normalize.call(plan.to_s).include?("optional plan never waits")
+  generated_pack_questions_retained = normalize.call(view).include?("unresolved pack questions") &&
+    normalize.call(view).include?("feature_preparation_result.open_decisions")
+  pending_allowed = scoped && preparation && pack_questions_retained && generated_pack_questions_retained
   dependent_blocked = entry && entry.downcase.include?("do not enter plan while the saved clarification state is pending")
   mirror = view.include?(entry.to_s.strip) && view.include?("For `prepare_only`, an explicitly requested readiness Plan is inline and never waits.")
   gates = YAML.load_file(ARGV.fetch(2)).fetch("gates")

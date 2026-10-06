@@ -52,9 +52,11 @@ drivers would change the outcome.
    each question resolves one decision and states why it matters, risk if
    guessed, and a recommended default when one exists. There is no numeric
    question quota or cap.
-4. Stop only when unresolved material questions block correctness, scope,
-   public behavior, data, security, rollout, or verification. Do not ask
-   questions that source inspection can answer.
+4. Resolve blocking material questions before dependent work for execution
+   intents. For prepare_only, record open architecture questions in the
+   typed Pack and `feature_preparation_result.open_decisions`; do not wait.
+   Other Pack freshness, mode, evidence, and binding checks still apply.
+   Avoid questions answerable by source inspection.
 5. Escalate to the user for business policy, irreversible commitments, cost or
    compliance choices, or a choice among valid alternatives with materially
    different outcomes. The agent owns ordinary technical synthesis.
