@@ -653,8 +653,9 @@ function normalizeWorkspacePath(filePath, workspaceRoot) {
     if (!isSafeProjectRelativePath(filePath)) return null;
     full = path.resolve(root, filePath);
   }
-  if (!full.startsWith(`${root}${path.sep}`)) return null;
-  const relative = path.relative(root, full).split(path.sep).join("/");
+  const nativeRelative = path.relative(root, full);
+  if (path.isAbsolute(nativeRelative)) return null;
+  const relative = nativeRelative.split(path.sep).join("/");
   return isSafeProjectRelativePath(relative) ? relative : null;
 }
 
@@ -1367,7 +1368,7 @@ function main() {
     }
   }
   const reviewer = isObject(semanticReview.reviewer) ? semanticReview.reviewer : {};
-  const reviewIndependent = nonempty(reviewer.id) && reviewer.id !== review.actor_id && reviewer.role === "independent" && semanticReview.attestation === "reviewed_actual_questions_answers_and_file_changes";
+  const reviewIndependent = nonempty(reviewer.id) && reviewer.id.trim() !== review.actor_id.trim() && reviewer.role === "independent" && semanticReview.attestation === "reviewed_actual_questions_answers_and_file_changes";
   if (!reviewIndependent) unavailableReasons.push("semantic_reviewer_not_independent");
   const semanticTelemetryValid = Array.isArray(semanticReview.decisions) && Array.isArray(semanticReview.question_assessments) && Array.isArray(semanticReview.answer_assessments) && Array.isArray(semanticReview.dependent_edit_refs);
   if (!semanticTelemetryValid) unavailableReasons.push("semantic_review_records_missing");

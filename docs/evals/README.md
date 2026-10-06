@@ -513,9 +513,11 @@ turn/event-line ordering without claiming wall-clock chronology, and keeps nativ
 selection `UNAVAILABLE`. It may report that a completed command names a staged
 `SKILL.md` path, but that text reference does not prove the file was read or the
 native skill router selected it. A forced skill-load receipt is reported as
-forced loading and cannot stand in for native activation. The semantic reviewer ID and independence role
-are assertions; artifact hashing binds retained bytes but does not authenticate
-the reviewer or prove that the review was independent.
+forced loading and cannot stand in for native activation. The importer compares
+actor and reviewer IDs after trimming surrounding whitespace; IDs remain
+case-sensitive. The semantic reviewer ID and independence role are assertions;
+artifact hashing binds retained bytes but does not authenticate the reviewer or
+prove that the review was independent.
 
 A forced-load receipt must include `invocation_mode: "forced_skill_load"`, the
 `skill_name`, a `skill_sha256` recorded by the loader for the staged skill bytes,

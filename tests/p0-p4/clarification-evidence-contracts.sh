@@ -112,6 +112,38 @@ then
 else
     fail "the review schema omits bounded message carry and task-05 semantic contracts"
 fi
+test_start "workspace containment supports POSIX and Windows roots without accepting outside paths"
+if node - "$FRAMEWORK_DIR/tools/evals/lib/clarification-evidence.cjs" <<'NODE_WORKSPACE_ROOT_PATHS'
+const fs = require("node:fs");
+const vm = require("node:vm");
+const paths = require("node:path");
+const source = fs.readFileSync(process.argv[2], "utf8");
+const definitions = source.slice(0, source.indexOf("function main()"));
+for (const [flavor, root, absolute, otherRoot, outside] of [
+  [paths.posix, "/", "/src/file.py", "/project", "/project-other/src/file.py"],
+  [paths.win32, "C:\\", "C:\\src\\file.py", "C:\\project", "C:\\project-other\\src\\file.py"],
+]) {
+  const context = {require: (name) => name === "node:path" ? {...flavor, posix: paths.posix} : require(name)};
+  const api = vm.runInNewContext(definitions + "\n({normalizeWorkspacePath, commandReadsProjectPath});", context);
+  for (const input of [absolute, "src/file.py"]) {
+    if (api.normalizeWorkspacePath(input, root) !== "src/file.py") throw new Error("root child rejected: " + input);
+  }
+  if (!api.commandReadsProjectPath("cat src/file.py", "src/file.py", root)) throw new Error("root policy read rejected");
+  for (const input of [root, "../outside.py", outside]) {
+    const workspace = input === outside ? otherRoot : root;
+    if (api.normalizeWorkspacePath(input, workspace) !== null) throw new Error("unsafe or empty path accepted: " + input);
+  }
+  if (flavor === paths.win32 && api.normalizeWorkspacePath("D:\\src\\file.py", root) !== null) {
+    throw new Error("different drive accepted as contained");
+  }
+}
+NODE_WORKSPACE_ROOT_PATHS
+then
+    pass
+else
+    fail "root workspace containment rejected children or accepted an outside path"
+fi
+
 adversarial_case="ambiguous-risky-task-blocks-before-plan"
 framework_adversarial_task="$(clarification_task_packet_basename "$framework_fixture" framework-instruction "$adversarial_case").md"
 
@@ -3328,6 +3360,44 @@ PY_RELATIVE_FILE_CHANGE
         fail "a safe native project-relative file path was not matched under workspace_root: $(cat "$framework_grade")"
     fi
 
+    python3 - "$evidence_root" <<'PY_FILESYSTEM_ROOT_WORKSPACE'
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+for name, source in [("generic", "review.json"), ("task04", "review-task04-durable.json")]:
+    review = json.loads((root / source).read_text())
+    old_root = Path(review["workspace_root"])
+    workspace_root = Path(old_root.anchor)
+    review["workspace_root"] = str(workspace_root)
+    for transcript in review["transcripts"]:
+        events = [json.loads(line) for line in (root / transcript["artifact"]["path"]).read_text().splitlines()]
+        for event in events:
+            item = event.get("item", {})
+            if item.get("type") == "file_change":
+                for change in item.get("changes", []):
+                    original = Path(change["path"])
+                    relative = original.relative_to(old_root) if original.is_absolute() else original
+                    change["path"] = str(workspace_root / relative)
+            if item.get("type") == "command_execution":
+                item["command"] = item["command"].replace(str(old_root) + "/", str(workspace_root))
+        raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n").encode()
+        filename = f"root-{name}-{transcript['turn']}.jsonl"
+        (root / filename).write_bytes(raw)
+        transcript["artifact"] = {"path": filename, "sha256": sha256(raw).hexdigest()}
+    (root / f"review-root-{name}.json").write_text(json.dumps(review) + "\n")
+PY_FILESYSTEM_ROOT_WORKSPACE
+    test_start "filesystem-root workspaces retain edits and task-04 policy reads"
+    if run_importer --review "$evidence_root/review-root-generic.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .evidence_counts.observed_dependent_edits == 1' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-root-task04.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS" and .task04_inspection_status == "observed"' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a filesystem-root workspace lost valid edits or required inspection reads: $(cat "$framework_grade")"
+    fi
+
     python3 - "$evidence_root" <<'PY_IN_ROOT_ABSOLUTE_BACKSLASH_FILE_CHANGE'
 from hashlib import sha256
 import json
@@ -4031,6 +4101,44 @@ PY_MISSING_EDIT_EVENT
         pass
     else
         fail "actor-authored semantic readiness was trusted: $(cat "$framework_grade")"
+    fi
+
+    python3 - "$evidence_root" <<'PY_REVIEWER_ID_ALIASES'
+import json
+from pathlib import Path
+from copy import deepcopy
+import sys
+root = Path(sys.argv[1])
+base = json.loads((root / "review.json").read_text())
+actor = base["actor_id"]
+for name, actor_id, reviewer_id in [
+    ("reviewer-padded", actor, "\t" + actor + " \u00a0"),
+    ("actor-padded", "\t" + actor + " \u00a0", actor),
+    ("both-padded", " " + actor, actor + "\n"),
+    ("distinct-padded", " " + actor, " reviewer-independent "),
+    ("case-distinct", actor, actor.upper()),
+]:
+    review = deepcopy(base)
+    review["actor_id"] = actor_id
+    review["semantic_review"]["reviewer"]["id"] = reviewer_id
+    (root / f"review-identity-{name}.json").write_text(json.dumps(review) + "\n")
+PY_REVIEWER_ID_ALIASES
+    test_start "surrounding whitespace cannot disguise self-review and distinct IDs stay usable"
+    identity_alias_count=0
+    for variant in reviewer-padded actor-padded both-padded; do
+        if run_importer --review "$evidence_root/review-identity-$variant.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("semantic_reviewer_not_independent")) != null' "$framework_grade" >/dev/null; then
+            identity_alias_count=$((identity_alias_count + 1))
+        fi
+    done
+    if [[ "$identity_alias_count" -eq 3 ]] \
+        && run_importer --review "$evidence_root/review-identity-distinct-padded.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS"' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-identity-case-distinct.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS"' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "whitespace aliases bypassed reviewer independence or a distinct ID was rejected: $(cat "$framework_grade")"
     fi
 
     test_start "unsolicited answer is recorded without inventing a preceding question"
