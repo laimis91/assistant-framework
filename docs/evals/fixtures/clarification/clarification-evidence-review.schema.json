@@ -904,6 +904,88 @@
             ]
           }
         },
+        "lifecycle_question_assessment": {
+          "description": "Task-08 independent, oracle-bound assessment of bounded turn-2 questions about link lifetime and owner revocation. Empty arrays are supported negative assessments.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "oracle_case_id",
+            "oracle_sha256",
+            "lifetime_question_refs",
+            "revocation_question_refs",
+            "rationale"
+          ],
+          "properties": {
+            "oracle_case_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "oracle_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "lifetime_question_refs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/lifecycleQuestionRef"
+              }
+            },
+            "revocation_question_refs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/lifecycleQuestionRef"
+              }
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "implementation_outcome_assessment": {
+          "description": "Independent task-03/task-04 semantic outcome bound to the admitted oracle, diff and every final changed project path; it does not prove execution correctness or authenticate patch reconstruction.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "oracle_case_id",
+            "oracle_sha256",
+            "diff_sha256",
+            "outcome",
+            "reviewed_paths",
+            "rationale"
+          ],
+          "properties": {
+            "oracle_case_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "oracle_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "diff_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "outcome": {
+              "enum": [
+                "implemented",
+                "not_implemented"
+              ]
+            },
+            "reviewed_paths": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/reviewedProjectPath"
+              }
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
         "missing_authority_assessment": {
           "description": "Task-06 independent explanation and non-invention assertions covering all retained response messages, bound to frozen case, digest, missing policy path and decision 0.",
           "type": "object",
@@ -1155,6 +1237,58 @@
         "end": {
           "type": "integer",
           "minimum": 1
+        }
+      }
+    },
+    "lifecycleQuestionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turn",
+        "line",
+        "text_span",
+        "rationale"
+      ],
+      "properties": {
+        "turn": {
+          "const": 2
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text_span": {
+          "$ref": "#/$defs/textSpan"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "reviewedProjectPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "after_sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?=[\\s\\S]*\\S)(?!/)(?![\\s\\S]*\\\\)(?![\\s\\S]*\\u0000)(?![\\s\\S]*//)(?![\\s\\S]*/(?![\\s\\S]))(?!\\.{1,2}(?:/|(?![\\s\\S])))(?![\\s\\S]*/\\.{1,2}(?:/|(?![\\s\\S])))[\\s\\S]*"
+        },
+        "after_sha256": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },

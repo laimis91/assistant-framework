@@ -64,6 +64,36 @@ const genericContinuation = {...envelope, case_id:"task-01", oracle_requirements
 if (!validate(genericContinuation)) throw new Error("generic declared continuation with no required reassessment rejected");
 const task08Continuation = {...genericContinuation, case_id:"task-08"};
 if (validate(task08Continuation)) throw new Error("task-08 continuation without required reassessment accepted");
+const lifecycle = {oracle_case_id:"task-08", oracle_sha256:"a".repeat(64), lifetime_question_refs:[], revocation_question_refs:[], rationale:"Reviewed both lifecycle choices."};
+const task08Shape = structuredClone(envelope);
+task08Shape.case_id = "task-08";
+task08Shape.semantic_review.lifecycle_question_assessment = lifecycle;
+if (!validate(task08Shape)) throw new Error("empty task-08 lifecycle arrays must represent a supported negative assessment");
+const outcome = {oracle_case_id:"task-03", oracle_sha256:"a".repeat(64), diff_sha256:"b".repeat(64), outcome:"implemented", reviewed_paths:[{path:"src/issue_detail.py", after_sha256:"c".repeat(64)}], rationale:"Reviewed the complete frozen request."};
+const task03Shape = structuredClone(envelope);
+task03Shape.case_id = "task-03";
+task03Shape.semantic_review.implementation_outcome_assessment = outcome;
+if (!validate(task03Shape)) throw new Error("valid implementation outcome assessment rejected");
+const deletion = structuredClone(task03Shape);
+deletion.semantic_review.implementation_outcome_assessment.reviewed_paths.push({path:"README.md", after_sha256:null});
+if (!validate(deletion)) throw new Error("deleted final path must use a null after hash");
+for (const bad of [
+  {...lifecycle, lifetime_question_refs:[{turn:2,line:4,text_span:{start:0,end:4}}]},
+  {...lifecycle, extra:true},
+]) {
+  const changed = structuredClone(task08Shape);
+  changed.semantic_review.lifecycle_question_assessment = bad;
+  if (validate(changed)) throw new Error("malformed lifecycle assessment accepted");
+}
+for (const bad of [
+  {...outcome, reviewed_paths:[{path:"../escape",after_sha256:"c".repeat(64)}]},
+  {...outcome, reviewed_paths:[{path:"src/issue_detail.py",after_sha256:"bad"}]},
+  {...outcome, outcome:"maybe"},
+]) {
+  const changed = structuredClone(task03Shape);
+  changed.semantic_review.implementation_outcome_assessment = bad;
+  if (validate(changed)) throw new Error("malformed implementation outcome assessment accepted");
+}
 const whitespaceActor = structuredClone(envelope);
 whitespaceActor.actor_id = " \t\n";
 if (validate(whitespaceActor)) throw new Error("whitespace-only actor identity accepted");
@@ -959,6 +989,7 @@ task04_multi_turn_review["semantic_review"]["answer_assessments"] = [{
 }]
 write_json("review-task04-initial-reads-before-second-turn-edit.json", task04_multi_turn_review)
 
+
 # Task-06 requires an observed failed read of the oracle-declared missing policy.
 task06_review = deepcopy(base)
 task06_review["case_id"] = "task-06"
@@ -1254,6 +1285,269 @@ save_invalid_todo_lifecycle(
     "completion-without-start-after-answer", [orphan_completed], "dependent_plan_observed", [0, 1]
 )
 PY_THIRD_COMMENT_REGRESSIONS
+
+# Canonical positive captures use durable final files, bound diffs and independent outcomes.
+python3 - "$evidence_root" "$FRAMEWORK_DIR/docs/evals/fixtures/clarification" <<'PY_CANONICAL_OUTCOME_FIXTURES'
+from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+root, fixture_root = map(Path, sys.argv[1:])
+canonical_oracle = json.loads((fixture_root / "clarification-oracle.json").read_bytes())
+oracle_digest = sha256((fixture_root / "clarification-oracle.json").read_bytes()).hexdigest()
+cases = {item["case_id"]: item for item in canonical_oracle["cases"]}
+
+def write_json(name, value):
+    raw = (json.dumps(value, sort_keys=True) + "\n").encode()
+    (root / name).write_bytes(raw)
+    return {"path": name, "sha256": sha256(raw).hexdigest()}
+
+def write_bytes(name, raw):
+    (root / name).write_bytes(raw)
+    return {"path": name, "sha256": sha256(raw).hexdigest()}
+
+def diff_section(path, before, after):
+    old = before.decode("utf-8").splitlines()
+    new = after.decode("utf-8").splitlines()
+    lines = [f"diff --git a/{path} b/{path}"]
+    if not old and new:
+        lines.append("new file mode 100644")
+    if old and not new:
+        lines.append("deleted file mode 100644")
+    lines.extend(["--- " + ("/dev/null" if not old else "a/" + path),
+                  "+++ " + ("/dev/null" if not new else "b/" + path)])
+    old_start = "0,0" if not old else f"1,{len(old)}"
+    new_start = "0,0" if not new else f"1,{len(new)}"
+    lines.append(f"@@ -{old_start} +{new_start} @@")
+    lines.extend("-" + line for line in old)
+    lines.extend("+" + line for line in new)
+    return "\n".join(lines) + "\n"
+
+def materialize(review, name, case_id, observed_paths, changed_files, deleted_paths=(), outcome=None, rationale="Reviewed the complete frozen request."):
+    events = [json.loads(line) for line in (root / review["transcripts"][0]["artifact"]["path"]).read_text().splitlines()]
+    completion = None
+    for index, event in enumerate(events):
+        item = event.get("item", {})
+        if event.get("type") == "item.completed" and item.get("type") == "file_change":
+            completion = index + 1
+        if item.get("type") == "file_change":
+            item["changes"] = [{"path": str(Path(review["workspace_root"]) / path), "kind": "delete" if path in deleted_paths else "update"} for path in observed_paths]
+    if observed_paths and completion is None:
+        raise AssertionError("canonical edit fixture has no completed file-change event")
+    transcript_name = f"{name}.jsonl"
+    transcript_raw = ("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n").encode()
+    (root / transcript_name).write_bytes(transcript_raw)
+    review["transcripts"][0]["artifact"] = {"path": transcript_name, "sha256": sha256(transcript_raw).hexdigest()}
+    final_message_line = max(index + 1 for index, event in enumerate(events)
+                             if event.get("type") == "item.completed" and event.get("item", {}).get("type") == "agent_message")
+    for assessment in review["semantic_review"].get("question_assessments", []):
+        if assessment.get("turn") == 1:
+            assessment["line"] = final_message_line
+    review["semantic_review"]["dependent_edit_refs"] = [
+        {"turn": 1, "line": completion, "path": path,
+         "rationale": "The completed event confirms this captured project path."}
+        for path in observed_paths
+    ]
+    before = dict(cases[case_id]["initial_workspace_sha256"])
+    after = dict(before)
+    diff_parts = []
+    for path in sorted(set(changed_files) | set(deleted_paths)):
+        old_bytes = (fixture_root / "actor-projects" / case_id / path).read_bytes()
+        if path in deleted_paths:
+            after.pop(path, None)
+            new_bytes = b""
+        else:
+            new_bytes = changed_files[path]
+            after[path] = sha256(new_bytes).hexdigest()
+        diff_parts.append(diff_section(path, old_bytes, new_bytes))
+    before_ref = write_json(name + "-before.json", before)
+    after_ref = write_json(name + "-after.json", after)
+    diff_raw = "".join(diff_parts).encode()
+    diff_ref = write_bytes(name + ".patch", diff_raw)
+    review["workspace_observation"] = {"before_manifest": before_ref, "after_manifest": after_ref, "diff": diff_ref}
+    if outcome is not None:
+        reviewed = []
+        for path in sorted(set(before) | set(after)):
+            if path.startswith(".codex/") or before.get(path) == after.get(path):
+                continue
+            reviewed.append({"path": path, "after_sha256": after.get(path)})
+        review["semantic_review"]["implementation_outcome_assessment"] = {
+            "oracle_case_id": case_id, "oracle_sha256": oracle_digest,
+            "diff_sha256": diff_ref["sha256"], "outcome": outcome,
+            "reviewed_paths": reviewed, "rationale": rationale,
+        }
+    else:
+        review["semantic_review"].pop("implementation_outcome_assessment", None)
+    write_json("review-" + name + ".json", review)
+
+# Make the existing task-03 and task-04 positive controls durable and assess them.
+task03_seed = json.loads((root / "review-task03-confirmed-edit.json").read_text())
+share_code = (
+    b"\nfrom datetime import timedelta\nimport secrets\n\n"
+    b"def create_share_link(issue, reporter, now):\n"
+    b"    if issue['reporter_id'] != reporter['id']:\n        raise PermissionError('only the reporter may share')\n"
+    b"    return {'token': secrets.token_urlsafe(32), 'issue': issue, 'expires_at': now + timedelta(hours=24), 'revoked': False}\n\n"
+    b"def revoke_share_link(link, reporter):\n"
+    b"    if link['issue']['reporter_id'] != reporter['id']:\n        raise PermissionError('only the reporter may revoke')\n"
+    b"    link['revoked'] = True\n\n"
+    b"def render_shared_issue(link, now):\n"
+    b"    if link['revoked'] or now >= link['expires_at']:\n        raise PermissionError('share link is inactive')\n"
+    b"    issue = link['issue']\n"
+    b"    fields = ('summary', 'description', 'status', 'comments')\n"
+    b"    return tuple(escape(str(issue[field])) for field in fields)\n"
+)
+test_code = b"\n\ndef test_share_link_create_read_expiry_and_revocation():\n    assert created_link['expires_at'] - created_at == timedelta(hours=24)\n    assert render_shared_issue(created_link, created_at)\n    revoke_share_link(created_link, reporter)\n    with pytest.raises(PermissionError):\n        render_shared_issue(created_link, created_at)\n"
+materialize(task03_seed, "task03-durable", "task-03", ["src/issue_detail.py", "tests/test_issue_detail.py"], {
+    "src/issue_detail.py": (fixture_root / "actor-projects/task-03/src/issue_detail.py").read_bytes() + share_code,
+    "tests/test_issue_detail.py": (fixture_root / "actor-projects/task-03/tests/test_issue_detail.py").read_bytes() + test_code,
+}, outcome="implemented", rationale="Reviewed bearer access, fields, 24-hour expiry, reporter revocation, preserved behavior and requested tests.")
+# Keep the existing assertion's expected canonical fixture name.
+(root / "review-task03-confirmed-edit.json").write_bytes((root / "review-task03-durable.json").read_bytes())
+
+task04_seed = json.loads((root / "review-task04-early-read-before-edit.json").read_text())
+copy_code = (
+    b"\n\ndef render_issue_detail_with_copy_control(issue, user, issue_url):\n"
+    b"    rendered = render_issue_detail(issue, user)\n"
+    b"    button = f'<button data-copy-url=\"{escape(issue_url, quote=True)}\">Copy link</button>'\n"
+    b"    return rendered.replace('</main>', button + '</main>')\n"
+)
+materialize(task04_seed, "task04-durable", "task-04", ["src/issue_detail.py"], {
+    "src/issue_detail.py": (fixture_root / "actor-projects/task-04/src/issue_detail.py").read_bytes() + copy_code,
+}, outcome="implemented", rationale="Reviewed the authorized issue-page copy control and unchanged access guard.")
+(root / "review-task04-early-read-before-edit.json").write_bytes((root / "review-task04-durable.json").read_bytes())
+
+# Canonical task-03 negatives expose edit-presence and final-state gaps.
+seed = json.loads((root / "review-task03-confirmed-edit.json").read_text())
+readme = (fixture_root / "actor-projects/task-03/README.md").read_bytes() + b"\nUnrelated documentation change.\n"
+materialize(deepcopy(seed), "task03-readme-only", "task-03", ["README.md"], {"README.md": readme})
+materialize(deepcopy(seed), "task03-reverted-source", "task-03", ["src/issue_detail.py"], {})
+inert = (fixture_root / "actor-projects/task-03/src/issue_detail.py").read_bytes() + b"\n# unrelated retained edit\n"
+materialize(deepcopy(seed), "task03-inert-missing", "task-03", ["src/issue_detail.py"], {"src/issue_detail.py": inert})
+materialize(deepcopy(seed), "task03-supported-negative", "task-03", ["src/issue_detail.py"], {"src/issue_detail.py": inert}, outcome="not_implemented", rationale="Reviewed the complete request; required behavior remains absent.")
+materialize(deepcopy(seed), "task03-deleted-reviewed-path", "task-03", ["src/issue_detail.py", "README.md"], {
+    "src/issue_detail.py": inert,
+}, deleted_paths=["README.md"], outcome="not_implemented", rationale="Reviewed all changed paths, including the deleted README entry.")
+review = json.loads((root / "review-task03-supported-negative.json").read_text())
+review["semantic_review"]["implementation_outcome_assessment"]["diff_sha256"] = "0" * 64
+write_json("review-task03-stale-outcome.json", review)
+review = json.loads((root / "review-task03-durable.json").read_text())
+review["semantic_review"]["implementation_outcome_assessment"]["reviewed_paths"] = []
+write_json("review-task03-incomplete-path-coverage.json", review)
+PY_CANONICAL_OUTCOME_FIXTURES
+
+# The frozen task-08 continuation must separately assess lifetime and revocation.
+python3 - "$evidence_root" "$FRAMEWORK_DIR/docs/evals/fixtures/clarification" <<'PY_CANONICAL_LIFECYCLE_FIXTURES'
+from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+root, fixture_root = map(Path, sys.argv[1:])
+fixture = fixture_root / "clarification-oracle.json"
+oracle_bytes = fixture.read_bytes()
+(root / "canonical-task08-oracle.json").write_bytes(oracle_bytes)
+oracle = json.loads(oracle_bytes)
+case = next(item for item in oracle["cases"] if item["case_id"] == "task-08")
+oracle_digest = sha256(oracle_bytes).hexdigest()
+answer = (fixture_root / "actor-prompts/task-08-answer.txt").read_bytes()
+prompt = (fixture_root / "actor-prompts/task-08.md").read_bytes()
+(root / "actor-prompts").mkdir(exist_ok=True)
+(root / "actor-prompts/task-08-answer.txt").write_bytes(answer)
+(root / "task08-prompt.txt").write_bytes(prompt)
+(root / "task08-answer.txt").write_bytes(answer)
+
+def ref(path, raw): return {"path":path,"sha256":sha256(raw).hexdigest()}
+def write_json(name, value):
+    raw=(json.dumps(value,sort_keys=True)+"\n").encode(); (root/name).write_bytes(raw); return ref(name,raw)
+def event(kind, **fields): return {"type":kind,**fields}
+def message(text): return event("item.completed",item={"id":"task08-message","type":"agent_message","text":text})
+
+def build(name, question, lifecycle, complete=True):
+    initial="Who should be able to open this link?"
+    first=[event("thread.started"),event("turn.started"),
+           event("item.completed",item={"id":"skill-read","type":"command_execution","command":"sed -n '1,160p' .agents/skills/assistant-workflow/SKILL.md","status":"completed","exit_code":0,"aggregated_output":"# Workflow\\n"}),
+           message(initial),event("turn.completed")]
+    carry="I recorded the account-free access choice."
+    second=[event("thread.started"),event("turn.started"),message(carry),message(question)]
+    if complete: second.append(event("turn.completed"))
+    def transcript(turn, events):
+        raw=("\n".join(json.dumps(x,sort_keys=True,separators=(",",":")) for x in events)+"\n").encode()
+        path=f"task08-{name}-{turn}.jsonl"; (root/path).write_bytes(raw); return {"turn":turn,"artifact":ref(path,raw)}
+    (root / "task08-empty.patch").write_bytes(b"")
+    before=write_json(f"task08-{name}-before.json",case["initial_workspace_sha256"])
+    basis=write_json(f"task08-{name}-basis.json",{"assessment":"canonical task-08 applicability"})
+    assessment=deepcopy(lifecycle)
+    assessment.update({"oracle_case_id":"task-08","oracle_sha256":oracle_digest,"rationale":"Separately reviewed the captured lifetime and revocation choices."})
+    review={"schema_version":"clarification-evidence/v1","case_id":"task-08","actor_id":"actor-task08","execution_mode":"forced_skill_load","workspace_root":str(root/"workspace"),
+      "activation":{"skill_name":"assistant-workflow","skill_read_ref":{"turn":1,"line":3},"forced_load_receipt":{"path":"forced-load-receipt.json","sha256":sha256((root/"forced-load-receipt.json").read_bytes()).hexdigest()}},
+      "inputs":[{"turn":1,"kind":"initial_prompt","artifact":ref("task08-prompt.txt",prompt)},{"turn":2,"kind":"answer","artifact":ref("task08-answer.txt",answer)}],
+      "transcripts":[transcript(1,first),transcript(2,second)],
+      "workspace_observation":{"before_manifest":before,"after_manifest":before,"diff":ref("task08-empty.patch",b"")},
+      "oracle_requirements":{"oracle_case_id":"task-08","oracle_sha256":oracle_digest,"required_answer_turns":[2],"required_post_answer_question_decision_indexes":[0],
+         "continuation_answers":[{"turn":2,"expected_artifact":ref("actor-prompts/task-08-answer.txt",answer)}],
+         "applicability_basis":{"artifact":basis,"record_ref":"records/task-08/applicability","rationale":"The frozen answer opens the required lifecycle reassessment."}},
+      "semantic_review":{"reviewer":{"id":"independent-reviewer","role":"independent"},"attestation":"reviewed_actual_questions_answers_and_file_changes",
+        "planning_applicability":{"oracle_case_id":"task-08","oracle_sha256":oracle_digest,"requirement":"before_edit_only","rationale":"No before-plan obligation is frozen."},
+        "decisions":[{"decision_index":0,"outcome":"asked","question_refs":[{"turn":2,"line":4}],"rationale":"The completed answer response asks the lifecycle decision."}],
+        "question_assessments":[{"turn":1,"line":4,"classification":"material","decision_indexes":[],"rationale":"This initial question concerns optional access scope."},
+          {"turn":2,"line":3,"classification":"not_a_question","decision_indexes":[],"rationale":"This message carries the controller answer."},
+          {"turn":2,"line":4,"classification":"material","decision_indexes":[0],"text_spans":[{"start":0,"end":len(question),"decision_indexes":[0],"rationale":"This bounded question assesses the indexed lifecycle decision."}],"rationale":"The question is linked to task-08 decision 0."}],
+        "answer_assessments":[{"kind":"answer_to_question","answer_turn":2,"question_ref":{"turn":1,"line":4},"outcome":"carried_forward","decision_indexes":[],"carry_refs":[{"turn":2,"line":3,"text_span":{"start":0,"end":len(carry)}}],"rationale":"The access answer is carried into the lifecycle follow-up."}],
+        "dependent_edit_refs":[],"lifecycle_question_assessment":assessment}}
+    write_json("review-task08-"+name+".json",review)
+
+compound="How long should the link remain active, and may its owner revoke it before expiry?"
+lifetime_end=compound.index(",")
+revocation_start=compound.index("may")
+build("compound",compound,{"lifetime_question_refs":[{"turn":2,"line":4,"text_span":{"start":0,"end":lifetime_end},"rationale":"This span asks about expiry."}],"revocation_question_refs":[{"turn":2,"line":4,"text_span":{"start":revocation_start,"end":len(compound)},"rationale":"This span asks about owner revocation."}]})
+expiry="How long should the link remain active?"
+build("expiry-only",expiry,{"lifetime_question_refs":[{"turn":2,"line":4,"text_span":{"start":0,"end":len(expiry)},"rationale":"This span asks about expiry."}],"revocation_question_refs":[]})
+revoke="May the reporter revoke the link before it expires?"
+build("revocation-only",revoke,{"lifetime_question_refs":[],"revocation_question_refs":[{"turn":2,"line":4,"text_span":{"start":0,"end":len(revoke)},"rationale":"This span asks about revocation."}]})
+build("no-followup","What should happen to this link?",{"lifetime_question_refs":[],"revocation_question_refs":[]})
+build("incomplete",expiry,{"lifetime_question_refs":[],"revocation_question_refs":[]},complete=False)
+
+def remove_post_answer_question(name):
+    review_path = root / f"review-task08-{name}.json"
+    review = json.loads(review_path.read_text())
+    transcript_ref = review["transcripts"][1]["artifact"]
+    transcript_path = root / transcript_ref["path"]
+    events = [json.loads(line) for line in transcript_path.read_text().splitlines()]
+    question_line = None
+    for index, entry in enumerate(events, start=1):
+        item = entry.get("item", {})
+        if item.get("type") == "agent_message" and item.get("text") == "I have enough information to proceed.":
+            question_line = index
+    if question_line is None:
+        raise AssertionError("canonical no-question fixture has no target response message")
+    raw = ("\n".join(json.dumps(entry, sort_keys=True, separators=(",", ":")) for entry in events) + "\n").encode()
+    transcript_path.write_bytes(raw)
+    transcript_ref["sha256"] = sha256(raw).hexdigest()
+    review["semantic_review"]["decisions"][0].update(outcome="not_asked", question_refs=[])
+    assessment = next(item for item in review["semantic_review"]["question_assessments"]
+                      if item.get("turn") == 2 and item.get("line") == question_line)
+    assessment.update(classification="not_a_question", decision_indexes=[])
+    assessment.pop("text_spans", None)
+    write_json(f"review-task08-{name}.json", review)
+
+build("completed-no-post-answer-question", "I have enough information to proceed.",
+      {"lifetime_question_refs":[],"revocation_question_refs":[]})
+build("partial-no-post-answer-question", "I have enough information to proceed.",
+      {"lifetime_question_refs":[],"revocation_question_refs":[]}, complete=False)
+remove_post_answer_question("completed-no-post-answer-question")
+remove_post_answer_question("partial-no-post-answer-question")
+review=json.loads((root/"review-task08-compound.json").read_text())
+review["semantic_review"]["lifecycle_question_assessment"]["oracle_sha256"]="0"*64
+write_json("review-task08-stale-oracle.json",review)
+review=json.loads((root/"review-task08-compound.json").read_text())
+review["semantic_review"]["lifecycle_question_assessment"]["lifetime_question_refs"][0]["text_span"]["end"] += 100
+write_json("review-task08-unbounded-span.json",review)
+review=json.loads((root/"review-task08-compound.json").read_text())
+review["semantic_review"]["decisions"][0]["question_refs"]=[]
+write_json("review-task08-unlinked-question.json",review)
+PY_CANONICAL_LIFECYCLE_FIXTURES
+
 
 python3 - "$evidence_root" <<'PY_LATE_COMPLETION_FIXTURE'
 from hashlib import sha256
@@ -2596,7 +2890,7 @@ PY_STALE_RECEIPT
         && run_importer --review "$evidence_root/review-task03-unbound-edit.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
         && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("semantic_review_binding_incomplete")) != null' "$framework_grade" >/dev/null \
         && run_importer --review "$evidence_root/review-task03-confirmed-edit.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-        && jq -e '.behavior_status == "PASS" and .initial_workspace_baseline_status == "matched" and .evidence_counts.observed_dependent_edits == 1' "$framework_grade" >/dev/null; then
+        && jq -e '.behavior_status == "PASS" and .initial_workspace_baseline_status == "matched" and .evidence_counts.observed_dependent_edits == 2' "$framework_grade" >/dev/null; then
         pass
     else
         fail "task-03 conflated an incomplete or unbound action with confirmed project implementation: $(cat "$framework_grade")"
@@ -5150,5 +5444,81 @@ if run_importer --review "$evidence_root/review-task06-omitted-early-policy-ques
 else
     fail "an early assessed material question omitted from decision refs remained supported: $(cat "$framework_grade")"
 fi
+
+    test_start "task-03 and task-04 durable outcomes require exact independent coverage"
+    if run_importer --review "$evidence_root/review-task03-durable.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS"' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task04-durable.json" --oracle "$canonical_oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS"' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "durable, oracle-bound implementation outcomes did not pass: $(cat "$framework_grade")"
+    fi
+
+    test_start "task-03 README-only, reverted and inert edits cannot establish the requested implementation"
+    if run_importer --review "$evidence_root/review-task03-readme-only.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("required_project_edit_not_observed")) != null' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task03-reverted-source.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("required_project_edit_not_observed")) != null' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task03-inert-missing.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("implementation_outcome_assessment_unavailable")) != null' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task03-supported-negative.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("requested_implementation_not_confirmed")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "unsupported project edits were mistaken for a complete frozen implementation outcome: $(cat "$framework_grade")"
+    fi
+
+    test_start "task-03 mismatched outcomes stay unavailable and deleted paths use null final hashes"
+    if run_importer --review "$evidence_root/review-task03-stale-outcome.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("implementation_outcome_assessment_unavailable")) != null' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task03-incomplete-path-coverage.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("implementation_outcome_assessment_unavailable")) != null' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task03-deleted-reviewed-path.json" --oracle "$evidence_root/canonical-task03-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("requested_implementation_not_confirmed")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "mismatched or incomplete outcome evidence passed, or a deleted path lacked null-hash support: $(cat "$framework_grade")"
+    fi
+
+    test_start "canonical task-08 separately requires link expiry and owner revocation"
+    if run_importer --review "$evidence_root/review-task08-compound.json" --oracle "$evidence_root/canonical-task08-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "PASS"' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task08-expiry-only.json" --oracle "$evidence_root/canonical-task08-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("required_revocation_question_missing")) != null' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task08-revocation-only.json" --oracle "$evidence_root/canonical-task08-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("required_lifetime_question_missing")) != null' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task08-no-followup.json" --oracle "$evidence_root/canonical-task08-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("required_lifetime_question_missing")) != null and (.behavior_reasons | index("required_revocation_question_missing")) != null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "the frozen task-08 case did not require both separately assessed lifecycle choices: $(cat "$framework_grade")"
+    fi
+
+    test_start "canonical task-08 no-question completion fails and partial response stays unavailable"
+    if run_importer --review "$evidence_root/review-task08-completed-no-post-answer-question.json" --oracle "$evidence_root/canonical-task08-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "FAIL" and (.behavior_reasons | index("required_post_answer_question_missing")) != null and (.behavior_reasons | index("required_lifetime_question_missing")) != null and (.behavior_reasons | index("required_revocation_question_missing")) != null' "$framework_grade" >/dev/null \
+        && run_importer --review "$evidence_root/review-task08-partial-no-post-answer-question.json" --oracle "$evidence_root/canonical-task08-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | index("required_post_answer_question_missing")) == null and (.behavior_reasons | index("required_lifetime_question_missing")) == null and (.behavior_reasons | index("required_revocation_question_missing")) == null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "a complete answer without a post-answer question did not retain all supported failures, or a partial response acquired omission failures: $(cat "$framework_grade")"
+    fi
+
+    test_start "task-08 malformed lifecycle binding is unavailable and partial follow-up stays unavailable"
+    invalid_lifecycle_count=0
+    for variant in stale-oracle unbounded-span unlinked-question; do
+        if run_importer --review "$evidence_root/review-task08-$variant.json" --oracle "$evidence_root/canonical-task08-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+            && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("lifecycle_question_assessment_unavailable")) != null' "$framework_grade" >/dev/null; then
+            invalid_lifecycle_count=$((invalid_lifecycle_count + 1))
+        fi
+    done
+    if [[ "$invalid_lifecycle_count" -eq 3 ]] \
+        && run_importer --review "$evidence_root/review-task08-incomplete.json" --oracle "$evidence_root/canonical-task08-oracle.json" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
+        && jq -e '.behavior_status == "UNAVAILABLE" and (.behavior_reasons | index("required_lifetime_question_missing")) == null and (.behavior_reasons | index("required_revocation_question_missing")) == null' "$framework_grade" >/dev/null; then
+        pass
+    else
+        fail "malformed claims or an incomplete response were graded as a completed lifecycle failure: $(cat "$framework_grade")"
+    fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

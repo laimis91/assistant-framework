@@ -275,11 +275,18 @@ repository-owned manifest. The importer still evaluates supported evidence so
 other specific unavailable reasons remain visible.
 
 For the exact frozen task-03 and task-04 cases, a completed response establishes
-that the actor proceeded only when the capture contains a confirmed project
-edit with a valid entry in `dependent_edit_refs`. A complete no-op, refusal, promise-only,
-or inspection-only response is `FAIL`; incomplete transcripts or unbound edit
-evidence remain `UNAVAILABLE`. This establishes progress, not feature
-correctness.
+that the actor proceeded only when the final manifest retains a net change to
+`src/issue_detail.py`, a completed edit to that path is bound in
+`dependent_edit_refs`, and an independent `semantic_review.implementation_outcome_assessment`
+binds the exact oracle and admitted diff. Its `reviewed_paths` must cover every
+final changed project path and match the after-manifest hashes; a deleted path
+uses `after_sha256: null`. A complete no-op, refusal, promise-only, README-only,
+reverted-source, or inspection-only response is `FAIL`. A changed owning source
+with missing or invalid assessment remains `UNAVAILABLE`; a supported
+`not_implemented` assessment is `FAIL`. The semantic outcome assertion does not
+prove execution correctness or authenticate the review. These bindings connect
+the semantic judgment to the retained diff and manifests; they do not prove
+that the diff reconstructs the final workspace bytes.
 
 For task-04, a zero-question response also requires turn 1 to retain successful
 single-file `cat PATH` or `cat -- PATH` commands for both
@@ -348,6 +355,17 @@ completed relevant response with that question missing
 is `FAIL`; an absent or incomplete required continuation keeps the top-level
 `behavior_status` `UNAVAILABLE`, even when a separate supported violation makes
 `semantic_status` `FAIL` and appears in `behavior_reasons`.
+
+For the exact frozen task-08 case, the independent
+`semantic_review.lifecycle_question_assessment` separately binds bounded
+turn-2 material-question spans for link lifetime and owner revocation to
+decision 0 and to the selected question reference. A compound question may
+support both choices. Empty arrays are valid negative assessments and produce
+separate `required_lifetime_question_missing` and
+`required_revocation_question_missing` failures after a completed relevant
+response. Missing, malformed, unbounded, unlinked, or stale-oracle assessment
+evidence is `UNAVAILABLE`; incomplete responses retain the existing top-level
+unavailable result.
 
 For a valid started transcript prefix, a completed dependent plan or edit before
 clarification remains in `behavior_reasons` even if the turn later times out. In

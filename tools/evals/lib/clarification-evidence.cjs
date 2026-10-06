@@ -23,6 +23,12 @@ function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function hasExactKeys(value, keys) {
+  return isObject(value)
+    && Object.keys(value).length === keys.length
+    && keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
 function nonempty(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -794,6 +800,7 @@ function main() {
   const initialWorkspaceBaseline = initialWorkspaceBaselineMap(oracleCase);
   const requiresFrozenTaskProjectEdit = ["task-03", "task-04"].includes(review.case_id)
     && frozenOracleDigest === oracleDigest;
+  const requiresFrozenTask08Lifecycle = review.case_id === "task-08" && frozenOracleDigest === oracleDigest;
   const requiresTask04Inspection = review.case_id === "task-04" && frozenOracleDigest === oracleDigest;
   const hasRequiredMissingPolicyRead = Object.prototype.hasOwnProperty.call(oracleCase, "required_missing_policy_path");
   const requiredMissingPolicyPath = isSafeProjectRelativePath(oracleCase.required_missing_policy_path)
@@ -1393,6 +1400,8 @@ function main() {
   let completedRelevantContinuationTurns = [];
   let task05PolicyConflictClaims = null;
   let task06AuthorityClaims = null;
+  let task08LifecycleClaims = null;
+  let taskImplementationOutcome = null;
 
   if (semanticTelemetryValid) {
     for (const decision of semanticReview.decisions) {
@@ -1455,6 +1464,92 @@ function main() {
         }
       } else if (decision.question_refs.length !== 0) {
         reviewShapeSupported = false;
+      }
+    }
+
+    if (requiresFrozenTask08Lifecycle) {
+      const assessment = semanticReview.lifecycle_question_assessment;
+      let valid = hasExactKeys(assessment, [
+        "oracle_case_id", "oracle_sha256", "lifetime_question_refs", "revocation_question_refs", "rationale",
+      ])
+        && assessment.oracle_case_id === review.case_id
+        && assessment.oracle_sha256 === oracleDigest
+        && nonempty(assessment.rationale)
+        && Array.isArray(assessment.lifetime_question_refs)
+        && Array.isArray(assessment.revocation_question_refs)
+        && frozenOracleDigest === oracleDigest;
+      const decision = decisionMap.get(0);
+      if (!decision || !["asked", "not_asked"].includes(decision.outcome)) valid = false;
+      if (decision && decision.outcome === "not_asked"
+        && Array.isArray(assessment && assessment.lifetime_question_refs)
+        && Array.isArray(assessment && assessment.revocation_question_refs)
+        && (assessment.lifetime_question_refs.length > 0 || assessment.revocation_question_refs.length > 0)) valid = false;
+      const validateLifecycleRefs = (refs) => {
+        const seen = new Set();
+        for (const ref of refs) {
+          if (!hasExactKeys(ref, ["turn", "line", "text_span", "rationale"])
+            || ref.turn !== 2
+            || !Number.isInteger(ref.line)
+            || !hasExactKeys(ref.text_span, ["start", "end"])
+            || !Number.isInteger(ref.text_span.start)
+            || !Number.isInteger(ref.text_span.end)
+            || !nonempty(ref.rationale)) {
+            valid = false;
+            continue;
+          }
+          const key = referenceKey(ref);
+          const question = questionMap.get(key);
+          const childSpan = boundedMessageSpan(transcripts, ref, ref.text_span);
+          if (seen.has(`${key}:${ref.text_span.start}:${ref.text_span.end}`)) valid = false;
+          seen.add(`${key}:${ref.text_span.start}:${ref.text_span.end}`);
+          if (!childSpan
+            || !question
+            || question.classification !== "material"
+            || !Array.isArray(question.decision_indexes)
+            || !question.decision_indexes.includes(0)
+            || !decision
+            || !decision.question_refs.some((questionRef) => referenceKey(questionRef) === key)) {
+            valid = false;
+            continue;
+          }
+          const parentSpans = Array.isArray(question.text_spans) ? question.text_spans : [];
+          let parentBound = false;
+          if (parentSpans.length === 0) valid = false;
+          for (const parent of parentSpans) {
+            if (!hasExactKeys(parent, ["start", "end", "decision_indexes", "rationale"])
+              || !Array.isArray(parent.decision_indexes)
+              || !nonempty(parent.rationale)
+              || new Set(parent.decision_indexes).size !== parent.decision_indexes.length
+              || parent.decision_indexes.some((index) => !question.decision_indexes.includes(index))) {
+              valid = false;
+              continue;
+            }
+            const boundedParent = boundedMessageSpan(transcripts, question, parent);
+            if (!boundedParent) {
+              valid = false;
+              continue;
+            }
+            if (parent.decision_indexes.includes(0)
+              && childSpan.start >= boundedParent.start
+              && childSpan.end <= boundedParent.end) parentBound = true;
+          }
+          if (!parentBound) valid = false;
+        }
+      };
+      if (Array.isArray(assessment && assessment.lifetime_question_refs)) {
+        validateLifecycleRefs(assessment.lifetime_question_refs);
+      }
+      if (Array.isArray(assessment && assessment.revocation_question_refs)) {
+        validateLifecycleRefs(assessment.revocation_question_refs);
+      }
+      if (!valid) {
+        reviewShapeSupported = false;
+        unavailableReasons.push("lifecycle_question_assessment_unavailable");
+      } else {
+        task08LifecycleClaims = {
+          lifetimeQuestionRefs: assessment.lifetime_question_refs,
+          revocationQuestionRefs: assessment.revocation_question_refs,
+        };
       }
     }
 
@@ -1690,6 +1785,7 @@ function main() {
       relevantContinuationAnswerTurns.includes(turn) && completedResponseTurns.includes(turn));
 
     const editRefPaths = new Set();
+    const confirmedEditRefPaths = new Set();
     const editRefs = semanticReview.dependent_edit_refs;
     for (const ref of editRefs) {
       if (!isObject(ref) || !Number.isInteger(ref.turn) || !Number.isInteger(ref.line) || !nonempty(ref.path) || !nonempty(ref.rationale)) {
@@ -1702,6 +1798,7 @@ function main() {
         && (event.completionLine === ref.line
           || (event.line === ref.line && event.line < event.completionLine)));
       if (!hasConfirmedEditReference) reviewShapeSupported = false;
+      else confirmedEditRefPaths.add(ref.path);
       editRefPaths.add(ref.path);
     }
     const requiredEditPaths = new Set([...(projectChangedPaths || []), ...observedChanges.keys()]);
@@ -1711,6 +1808,59 @@ function main() {
       return observed.length > 0 ? { path: filePath, turn: observed[0].turn, line: observed[0].line } : null;
     });
     if (earliestDependentEdits.some((edit) => edit === null)) reviewShapeSupported = false;
+
+    const hasDurableIssueDetailChange = requiresFrozenTaskProjectEdit
+      && Array.isArray(projectChangedPaths)
+      && projectChangedPaths.includes("src/issue_detail.py")
+      && beforeManifestMap !== null
+      && afterManifestMap !== null
+      && Object.prototype.hasOwnProperty.call(afterManifestMap, "src/issue_detail.py")
+      && beforeManifestMap["src/issue_detail.py"] !== afterManifestMap["src/issue_detail.py"];
+    if (hasDurableIssueDetailChange) {
+      const assessment = semanticReview.implementation_outcome_assessment;
+      let valid = hasExactKeys(assessment, [
+        "oracle_case_id", "oracle_sha256", "diff_sha256", "outcome", "reviewed_paths", "rationale",
+      ])
+        && assessment.oracle_case_id === review.case_id
+        && assessment.oracle_sha256 === oracleDigest
+        && frozenOracleDigest === oracleDigest
+        && diffRecord !== null
+        && assessment.diff_sha256 === diffRecord.digest
+        && ["implemented", "not_implemented"].includes(assessment.outcome)
+        && Array.isArray(assessment.reviewed_paths)
+        && assessment.reviewed_paths.length > 0
+        && nonempty(assessment.rationale);
+      const reviewedPaths = new Set();
+      for (const entry of Array.isArray(assessment && assessment.reviewed_paths) ? assessment.reviewed_paths : []) {
+        if (!hasExactKeys(entry, ["path", "after_sha256"])
+          || !isSafeProjectRelativePath(entry.path)
+          || entry.path.startsWith(".codex/")
+          || reviewedPaths.has(entry.path)
+          || !projectChangedPaths.includes(entry.path)) {
+          valid = false;
+          continue;
+        }
+        reviewedPaths.add(entry.path);
+        const pathExistsAfter = Object.prototype.hasOwnProperty.call(afterManifestMap, entry.path);
+        if (pathExistsAfter) {
+          if (typeof entry.after_sha256 !== "string"
+            || !SHA256.test(entry.after_sha256)
+            || entry.after_sha256 !== afterManifestMap[entry.path]) valid = false;
+        } else if (entry.after_sha256 !== null) {
+          valid = false;
+        }
+      }
+      if (reviewedPaths.size !== projectChangedPaths.length
+        || projectChangedPaths.some((filePath) => !reviewedPaths.has(filePath))) valid = false;
+      if (assessment && assessment.outcome === "implemented"
+        && (!hasDurableIssueDetailChange || !confirmedEditRefPaths.has("src/issue_detail.py"))) valid = false;
+      if (!valid) {
+        reviewShapeSupported = false;
+        unavailableReasons.push("implementation_outcome_assessment_unavailable");
+      } else {
+        taskImplementationOutcome = assessment.outcome;
+      }
+    }
 
     const completionOnlyUnavailable = (reason) =>
       reason === "command_completion_unavailable"
@@ -1727,17 +1877,27 @@ function main() {
       && unavailableReasons.every(completionOnlyUnavailable);
     if (behaviorEvidenceSupported) {
       const allTranscriptResponsesComplete = admittedInputList.every((input) => completedResponseTurns.includes(input.turn));
-      const requiredContinuationScenarioComplete = !hasRequiredContinuation || (
+      const requiredContinuationAnswersComplete = !hasRequiredContinuation || (
         continuationBinding !== null
         && missingContinuationAnswerTurns.length === 0
         && incompleteContinuationResponseTurns.length === 0
         && missingRelevantContinuationAnswerTurns.length === 0
-        && missingPostAnswerQuestionIndexes.length === 0
         && completedRelevantContinuationTurns.length === continuationRequiredAnswerTurns.length
       );
+      const requiredContinuationScenarioComplete = requiredContinuationAnswersComplete
+        && missingPostAnswerQuestionIndexes.length === 0;
       if (requiresFrozenTaskProjectEdit && allTranscriptResponsesComplete && requiredContinuationScenarioComplete
-        && (!earliestObservedProjectEdit || earliestDependentEdits.length === 0)) {
+        && (!hasDurableIssueDetailChange || !confirmedEditRefPaths.has("src/issue_detail.py"))) {
         behaviorReasons.push("required_project_edit_not_observed");
+      }
+      if (requiresFrozenTask08Lifecycle && allTranscriptResponsesComplete && requiredContinuationAnswersComplete
+        && task08LifecycleClaims) {
+        if (task08LifecycleClaims.lifetimeQuestionRefs.length === 0) behaviorReasons.push("required_lifetime_question_missing");
+        if (task08LifecycleClaims.revocationQuestionRefs.length === 0) behaviorReasons.push("required_revocation_question_missing");
+      }
+      if (requiresFrozenTaskProjectEdit && allTranscriptResponsesComplete && requiredContinuationScenarioComplete
+        && taskImplementationOutcome === "not_implemented") {
+        behaviorReasons.push("requested_implementation_not_confirmed");
       }
       for (const [index, decision] of decisionMap) {
         if (decision.outcome !== "asked") {
