@@ -8,6 +8,7 @@ source "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 workflow_skill="$workflow_dir/SKILL.md"
+workflow_journal="$workflow_dir/references/task-journal-template.md"
 workflow_index="$workflow_dir/contracts/index.yaml"
 input_contract="$workflow_dir/contracts/input.yaml"
 output_contract="$workflow_dir/contracts/output.yaml"
@@ -976,13 +977,38 @@ else
     fail "workflow-kernel overlay omits the compact conditional phase/controller/progressive route loads"
 fi
 
-test_start "Discover applies deterministic safe defaults without asking"
+test_start "Discover applies recorded source-backed technical defaults without confirmation"
+clarification_status_block="$(contract_field_block "$input_contract" clarification_status)"
 clarification_defaults_block="$(contract_field_block "$input_contract" clarification_defaults_applied)"
+clarification_values_block="$(contract_field_block "$input_contract" clarification_defaults)"
 discover_block="$(phase_block DISCOVER)"
-if ! grep -Eiq 'deterministic safe default.*appl.*record.*without asking|appl.*record.*deterministic safe default.*without asking' "$phases_reference"; then
-    fail "Discover does not explicitly apply and record deterministic safe defaults without asking"
-elif ! grep -Eiq 'safe default.*appl|appl.*safe default' <<<"$clarification_defaults_block"; then
-    fail "clarification_defaults_applied does not represent automatically applied safe defaults"
+architecture_pack_reference="$workflow_dir/references/architecture-decision-pack.md"
+if ! p0p4_contains_text_ci "$architecture_pack_reference" \
+    'automatically apply only source-backed technical defaults; record topic, value, source, and rationale' \
+    || ! p0p4_contains_text_ci "$architecture_pack_reference" \
+        'repository convention or reversibility alone cannot decide a new audience, public contract, or data boundary' \
+    || ! p0p4_contains_text_ci "$architecture_pack_reference" \
+        'keep unresolved material product choices and recommendations provisional until the user gives an explicit answer' \
+    || ! p0p4_contains_text_ci "$architecture_pack_reference" \
+        'explicitly accepting a displayed recommendation counts as a user answer' \
+    || ! p0p4_contains_text_ci "$phases_reference" \
+    'automatically apply only source-backed technical defaults; record topic, value, source, and rationale' \
+    || ! grep -Fq -- 'auto-apply source-backed technical defaults; never default new material choices.' <<<"$discover_block" \
+    || ! grep -Fq -- 'Apply evidenced defaults without confirmation; ask and await explicit answers for new material choices.' <<<"$discover_block"; then
+    fail "Discover omits recorded source-backed technical defaults or its no-confirmation and explicit-choice boundary"
+elif ! grep -Fqi -- 'source-backed technical defaults' <<<"$clarification_status_block" \
+    || ! grep -Fqi -- 'explicit acceptance of a displayed recommendation' <<<"$clarification_status_block" \
+    || ! grep -Fqi -- 'convention or reversibility alone' <<<"$clarification_status_block" \
+    || ! grep -Fqi -- 'source-backed technical default' <<<"$clarification_defaults_block" \
+    || ! grep -Fqi -- 'are not automatic defaults' <<<"$clarification_defaults_block" \
+    || ! grep -Fqi -- 'technical implementation detail' <<<"$clarification_values_block" \
+    || ! grep -Fqi -- 'convention or reversibility alone' <<<"$clarification_values_block" \
+    || ! grep -Fq -- 'Automatically apply only source-backed technical defaults' "$workflow_journal" \
+    || ! grep -Fqi -- 'convention or reversibility alone cannot settle material product choices' "$workflow_journal" \
+    || ! grep -Fq -- '`defaults` reply is an explicit user answer accepting displayed recommendations' "$workflow_journal"; then
+    fail "canonical input or journal contract can apply an unsourced material product choice as a default"
+elif ! grep -Fqi -- 'without asking' <<<"$clarification_defaults_block"; then
+    fail "clarification_defaults_applied does not represent automatic source-backed technical defaults"
 elif grep -Eiq 'true only after.*(reply|response)|safe default.*(requires?|depends on).*(reply|response)' <<<"$clarification_defaults_block"; then
     fail "automatic safe-default evidence still depends on a user reply"
 elif ! grep -Eiq 'Every clarification question.*lacks a safe default' <<<"$discover_block"; then
@@ -2556,8 +2582,8 @@ else
 fi
 
 test_start "Discover sizing distinguishes harness promotion from deferred QA"
-if grep -Fq 'The harness obligation promotes an initially small implementation to at least medium' "$phase_gates" \
-    && grep -Fq 'The QA obligation preserves small size unless independent size or risk criteria promote it' "$phase_gates"; then
+if grep -Fq 'Harness activates pre-Build gates, promoting small implementation to medium' "$phase_gates" \
+    && grep -Fq 'QA preserves size unless independent size or risk promotes it' "$phase_gates"; then
     pass
 else
     fail "Discover still promotes QA-only small work to medium"

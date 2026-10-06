@@ -968,7 +968,7 @@ artifacts:
     required: conditional
     condition: "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
     description: "Completion traceability from accepted requirements to verification evidence; a pending route-clear handoff prepares this completed map without requiring it yet"
-    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A. When execution_intent == prepare_only, each unimplemented accepted requirement remains status=pending with an evidence_ref and readiness or next-implementation evidence; preparation does not fabricate passed verification. When execution_intent != prepare_only, every accepted requirement has status=passed or approved_exclusion; approved exclusions include approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
+    validation: "Every accepted requirement_id has a binary acceptance criterion, verification method, manual scenario or explicit N/A. The existing assumptions_and_defaults, open_material_questions, entries, and non_goals retain a concise sufficiency basis that distinguishes requested intent, applicable authoritative behavior, justified technical defaults, proposed product assumptions, and unresolved material choices; an empty open_material_questions list alone does not establish sufficiency. Partial answers resolve only answered choices; confirmed answers appear in existing acceptance criteria before dependent implementation, then newly exposed decisions are rechecked. Material missing or conflicting controlling authority remains evidence_gap/source_conflict and blocks dependent work until resolved, not a Product question. When execution_intent == prepare_only, each unimplemented accepted requirement remains status=pending with an evidence_ref and readiness or next-implementation evidence; preparation does not fabricate passed verification. When execution_intent != prepare_only, every accepted requirement has status=passed or approved_exclusion; approved exclusions include approval and reason. entries is empty only for a consumed legitimate all-excluded route with route_clear_handoff.decisions=[] and acceptance_seed=[], no accepted requirement, and every source excluded or retired item traced exactly once to a concrete non_goals or approved-exclusion target; never fabricate an acceptance entry. Every consumed route_clear_handoff.retired_or_excluded_deferred_uncertainty_refs entry is bound exactly once by retired_or_excluded_deferred_uncertainty_traces to a concrete non-goal or approved exclusion target."
     on_fail: "Load references/requirement-acceptance-map.md, repair missing coverage, run missing verification, or obtain explicit exclusion approval before completion"
     object_fields:
       - name: intended_outcome
@@ -1711,7 +1711,7 @@ artifacts:
     type: file
     required: conditional
     condition: "workflow_state_mode == journal and agent_state_dir is configured and policy allows local state artifacts"
-    validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/task.md, contains Status: DONE and Task state: completed, and was reconciled before any continuation"
+    validation: "Ignored orchestrator-owned state artifact exists at {agent_state_dir}/task.md, contains Status: DONE and Task state: completed, retains a concise sufficiency basis in the existing Clarification admissibility/acceptance criteria when a zero-question decision is carried, and was reconciled before any continuation; an empty question count alone is insufficient"
     on_fail: "Create, reconcile, or update task journal when configured and policy-allowed, or record carried-forward state fallback"
     location: "{agent_state_dir}/task.md"
 
@@ -2957,8 +2957,8 @@ artifacts:
     required: conditional
     condition: "execution_intent == prepare_only"
     description: "Typed no-execution readiness handoff for provider-neutral technical preparation"
-    validation: "Records execution_status=not_started, scoped outcome, conditional evidence ref, gaps, decisions, implications, and next step. Explicit QA/acceptance and harness requests live only in future_qa_acceptance_obligation and future_harness_obligation while qa_evaluation_mode remains not_required and harness_capable remains false. Never claims changed files, Build, test execution, review, or final handoff."
-    on_fail: "Return to feature preparation, complete the scoped readiness record, and explicitly keep execution not started."
+    validation: "Records execution_status=not_started, scoped outcome, conditional evidence ref, gaps, decisions, implications, and next step. Explicit QA/acceptance and harness requests appear only in future_qa_acceptance_obligation and future_harness_obligation; qa_evaluation_mode=not_required and harness_capable=false. Never claims changed files, Build, tests, review, or final handoff."
+    on_fail: "Complete the scoped readiness record; keep execution not started."
     object_fields:
       - name: execution_status
         type: enum
@@ -2985,20 +2985,20 @@ artifacts:
       - name: open_decisions
         type: string[]
         required: true
-        description: "Admissible remaining Product or technical decisions; never duplicate explicit QA/acceptance or harness requests, which belong only in their typed future obligations; empty only when none remain"
+        description: "Remaining Product or technical decisions; explicit QA/acceptance and harness requests belong only in their typed future obligations; empty only when none remain"
         on_missing: fail
       - name: implementation_implications
         type: string[]
         required: true
         min_items: 1
-        description: "Concrete future implementation work, preservation obligation, conflict resolution, or explicit no-change result; do not duplicate explicit QA/acceptance or harness requests outside their typed future obligations"
+        description: "Future implementation work, preservation, conflict resolution, or explicit no-change result; typed obligations carry QA/acceptance and harness requests"
         on_missing: fail
       - name: readiness_plan
         type: object
         required: conditional
         condition: "execution_intent == prepare_only and plan_mode == inline"
         description: "Machine-checkable contents of an explicitly requested readiness-only Plan"
-        validation: "For existing_system, binds the same completed feature-preparation evidence ref; for not_applicable, records preparation_basis=not_applicable and omits evidence_ref. In both cases it records concrete implementation implications, any remaining open decisions, a next implementation state, and execution_status=not_started; it never contains executable packets, files, tests, or approval waiting."
+        validation: "For existing_system, binds the same completed evidence ref; for not_applicable, sets preparation_basis=not_applicable and omits evidence_ref. Both record implementation implications, remaining open decisions, next implementation state, and execution_status=not_started; neither contains executable packets, files, tests, or approval waiting."
         on_missing: fail
         object_fields:
           - name: evidence_ref
@@ -3037,7 +3037,7 @@ artifacts:
         required: conditional
         condition: "an explicit qa or acceptance request was supplied during prepare_only"
         description: "Typed deferred QA/acceptance work that cannot activate execution during preparation"
-        validation: "Records the exact requested QA/acceptance scope and the future execution prerequisite; it is absent when no explicit QA/acceptance request exists and cannot be inferred from generic readiness wording. Later implement_only preserves both payload fields exactly as approved_feature_preparation_qa_acceptance_obligation, adds exactly one existing-system evidence-ref or typed not_applicable source binding, sets qa_evaluation_mode=required, and carries the enriched object through the post-Build Code Reviewer then QA Evaluator acceptance lane."
+        validation: "Records exact requested QA/acceptance scope and future execution prerequisite; absent without an explicit request, never inferred from generic readiness wording. Later implement_only preserves both payload fields exactly as approved_feature_preparation_qa_acceptance_obligation, adds exactly one existing-system evidence-ref or typed not_applicable source binding, sets qa_evaluation_mode=required, and carries the enriched object through the post-Build Code Reviewer then QA Evaluator acceptance lane."
         on_missing: fail
         object_fields:
           - name: requested_scope
@@ -3054,7 +3054,7 @@ artifacts:
         required: conditional
         condition: "an explicit harness request or accepted independent harness evidence was supplied during prepare_only"
         description: "Deferred harness work that cannot activate preparation runtime capability"
-        validation: "Records exact requested scope, non-empty evidence basis, and future execution prerequisite. Absent without an explicit request or accepted evidence; never loads the harness controller, activates runtime artifacts, selects Build, or independently requires strict/journal state. Later implement_only preserves those three payload fields exactly, adds exactly one existing-system evidence-ref or typed not_applicable source binding, and activates the pre-Build harness gate; the enriched consumer object is then carried unchanged downstream."
+        validation: "Records exact requested scope, non-empty evidence basis, and future execution prerequisite. Absent without explicit request or accepted evidence; never loads the harness controller, activates runtime artifacts, selects Build, or independently requires strict/journal state. Later implement_only preserves all three payload fields exactly, adds exactly one existing-system evidence-ref or typed not_applicable source binding, activates the pre-Build harness gate, and carries the enriched consumer object unchanged downstream."
         on_missing: fail
         object_fields:
           - name: requested_scope
@@ -3074,7 +3074,7 @@ artifacts:
       - name: recommended_next_step
         type: string
         required: true
-        description: "Next safe action after preparation, such as seek a decision, approve a plan, or begin a separate implementation workflow; do not duplicate explicit QA/acceptance or harness requests outside their typed future obligations"
+        description: "Next safe post-preparation action: seek a decision, approve a plan, or start a separate implementation workflow. Keep QA/acceptance and harness requests in their typed future obligations"
         on_missing: fail
 
   - name: feature_preparation_evidence
@@ -3082,8 +3082,8 @@ artifacts:
     required: conditional
     condition: "execution_intent in [prepare_only, end_to_end] and feature_preparation_scope == existing_system"
     description: "Canonical, provider-neutral evidence matrix for existing-system feature preparation before questions, plans, Architecture Decision Packs, diagrams, or documentation can treat behavior as unknown."
-    validation: "Every item traces generic requirements, design evidence or an explicit not_applicable/unavailable disposition, current implementation and observable execution behavior or a typed inspection gap, behavioral tests/assertions or inspected absence/access gap, conflict analysis, evidence gaps, rationale, and implementation implication. Product question admissibility fails closed: absence from requirements/design alone is insufficient; implementation and relevant tests must be inspected; existing observable behavior defaults to preservation unless explicitly changed; inaccessible or uninspected evidence is evidence_gap; contradictory sources are source_conflict plus source_conflict_resolution; an existing behavior adapted to a new route/scope is existing_behavior_to_preserve plus implementation_gap."
-    on_fail: "Inspect the requirement/design sources, current implementation path, and relevant behavioral tests; classify each item before asking a Product question or finalizing a preparation plan."
+    validation: "Every row traces generic requirements; design evidence or explicit not_applicable/unavailable disposition; current implementation/observable execution behavior or typed inspection gap; behavioral tests/assertions or inspected absence/access gap; conflict analysis, evidence gaps, rationale, implementation implication. Product questions require implementation/test inspection; requirements/design omission insufficient; existing behavior defaults to preservation only within the actor, data, and authorization context supported by its sources. Uninspected/inaccessible evidence: evidence_gap; contradictions require both source_conflict and source_conflict_resolution; a route/scope adaptation is classified as existing_behavior_to_preserve plus implementation_gap only when the source-supported actor, data, and authorization context remains the same; a new audience or disclosure boundary may change that context, and unanswered choices remain unresolved with recommendations provisional in both the response and task journal, never as applied defaults or confirmed criteria. Sufficiency classifies requested intent, applicable authoritative behavior, justified technical defaults, proposed product assumptions, unresolved material choices from rows; empty questions alone insufficient. Missing/conflicting authority blocks dependent work as evidence_gap/source_conflict until resolved."
+    on_fail: "Inspect requirements/design sources, implementation path, and behavioral tests; classify each item before Product questions or plan finalization."
     object_fields:
       - name: ref
         type: string

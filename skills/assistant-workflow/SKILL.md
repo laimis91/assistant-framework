@@ -1,13 +1,13 @@
 ---
 name: assistant-workflow
-description: "Prepare, plan, build, or resume persisted task state. Use for repository-grounded feature/epic/story technical preparation, implementation, fixes, migrations, refactors, and project artifacts."
+description: "Prepare, plan, build, or resume repository task state: feature/epic/story technical preparation, implementation, fixes, migrations, refactors, project artifacts, backlog items, and intended-change ideas."
 requires:
   - assistant-review
 ---
 
 # Development Workflow
 
-Public routing contract; mechanics live in references and contracts.
+Public routing: clear implementation requests, backlog items, and ideas with an intended change enter Discover requirements check.
 
 ## Goal
 
@@ -36,9 +36,8 @@ Move work to verified outcome through right-sized phases, gates, tests, review, 
 
 - Explicit user or repository artifact schemas override workflow-internal shapes; preserve exact paths, keys, types, ids, and supplied literals.
 - Run phases. `prepare_only`: Discover -> Preparation Completion; readiness optional, implementation gates inapplicable. Other work skips Plan only when eligible.
-- Do not ask ritual questions when code/context makes the next safe action clear.
-- Ask material clarifications only when an undiscoverable implementation-shaping unknown lacks a safe default and affects correctness, scope, behavior, data, public contract, security, migration safety, or verification; group by topic.
-- assistant-clarify owns prompt-level ambiguity when its routing matches; clear prompts do not invoke it. Existing workflow clarification owns precise, answerable questions and safe defaults.
+- Before Plan/plan_mode=none dependent work, establish sufficient intent and material behavior. Preserve authoritative behavior; auto-apply source-backed technical defaults. For new material product choices, ask concrete questions and obtain explicit user answers; Plan approval alone cannot settle unstated choices.
+- assistant-clarify owns prompt-level ambiguity; workflow owns precise, answerable questions and evidence-backed defaults.
 - Load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, `progressive_route_clear_consumption_state in [pending, consumed]`, `progressive_sequence_readiness_state in [active, closed]`, or `progressive_artifact_retention_state=terminally_archived`. The durable markers load validation regardless of whether progressive_artifact_retention_state is missing, not_applicable, or retained, so invalid carried state fails closed instead of releasing artifacts. Retained state keeps active/resumable progressive artifacts available after `uncertainty_shape=bounded`. `terminally_archived` is allowed only with a typed `progressive_terminal_archival` tombstone binding the current task, final decision map, archival/termination basis, and resolvable evidence proving continuation and reference resolution are impossible; `Task state: completed` does not qualify by itself, and terminally archived state cannot revert. Fully specified tasks with `not_applicable` markers stay bounded, and size alone is not a trigger.
 - Progressive Discover is a no-execution boundary; any mutating prerequisite uses a separate approved workflow that returns evidence before normal workflow gates continue.
 - Keep scope changes explicit and tied to correctness, security, safety, or verification.
@@ -176,7 +175,7 @@ Do not use phrases like "should work", "probably fixed", or "looks good" unless 
 
 ## Stop Rules
 
-- Stop and ask when an implementation-shaping field is material, undiscoverable, and has no safe default.
+- Stop when a new material product choice lacks an explicit answer or controlling authority is missing/conflicting; do not substitute convention or approval for intent.
 - Stop before Build when `plan_mode=approval_required` until plan approval.
 - Stop before response if required output-contract evidence is missing; implementation also requires build, tests, and review evidence.
 - Stop when a plan deviation changes approved scope, files, behavior, risk, verification, or acceptance criteria; record the deviation and get approval before continuing.

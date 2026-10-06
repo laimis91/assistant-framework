@@ -41,6 +41,20 @@ Requirement Acceptance Map:
   statements.
 - Ask only about open questions that materially change implementation and lack
   a safe, discoverable default.
+- Before Plan or dependent implementation, use the existing entries,
+  assumptions_and_defaults, and open_material_questions to retain a concise
+  positive sufficiency basis: requested intent, applicable authoritative
+  behavior, justified technical defaults, proposed product assumptions, and
+  unresolved material choices. An empty list of questions alone is not evidence
+  of sufficiency.
+- Partial answers resolve only answered choices. Record confirmed answers in
+  existing acceptance criteria before dependent implementation, then recheck
+  for newly exposed decisions. Missing or conflicting controlling authority
+  remains evidence_gap or source_conflict; request the authority and keep
+  affected dependent work blocked instead of turning it into a Product question.
+- Existing-policy and complete tasks proceed without ritual questions. Small
+  tasks keep this check inline in compact acceptance criteria or the carried
+  task state; no additional report is required.
 - Every slice and task packet references the requirement ids it advances.
 - Spec Review checks that all accepted requirement ids have criteria and that
   no extra scope was introduced.

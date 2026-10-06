@@ -56,15 +56,17 @@ Assumptions I would otherwise have to make:
 - ...
 ```
 
-### Step 3: Ask high-yield questions only
+### Step 3: Ask concise, grouped rounds
 
-Ask **1-3 questions max**. Prefer questions that collapse the largest ambiguity first.
+Ask all currently material questions that still change execution, grouped by decision topic. There is no numeric question quota; keep each round concise and avoid asking questions that context can resolve.
 
 Rules:
 - Prefer open or choice-based questions over yes/no
-- Give options or defaults when you can
+- Give options or recommendations when useful, while making clear that a recommendation is not the user's answer
 - Ask about output shape, priority, and constraints before implementation details
-- If one answer unlocks the rest, ask only that one first
+- If one answer changes which other decisions matter, ask it first, then reassess before the next round
+- After each response, reassess unresolved decisions and treat only explicitly answered choices as resolved; expose newly material questions in another concise round.
+- For proposed product choices, wait for an explicit answer before dependent work; a recommendation is not consent.
 
 Preferred format:
 
@@ -76,12 +78,12 @@ Need to pin down
    c) ...
    Recommendation: (a) because ...
 
-Reply with: "1a" or "defaults".
+Reply with the numbered choice or choices, such as "1a, 2c". You may answer only the decisions that are ready; I will reassess what remains open.
 ```
 
 ### Step 4: Summarize into a confirmed target
 
-Once the user answers, rewrite the request into a crisp execution brief:
+Once the user answers, reassess all unresolved decisions. Rewrite the request into a crisp execution brief only when the material product choices have explicit answers:
 
 ```md
 Confirmed target:
@@ -144,11 +146,12 @@ What still changes the implementation:
 - [unknown]
 
 Need to pin down
-1. [highest-yield question]?
+1. [currently material decision question]?
    a) [option]
    b) [option]
-   c) [option]
    Recommendation: ([x]) because [reason]
+2. [another currently material decision, if any]?
+   ...
 
-Reply with: "1a" or "defaults".
+Reply with the numbered choice or choices. After each reply, I will reassess the remaining questions.
 ```

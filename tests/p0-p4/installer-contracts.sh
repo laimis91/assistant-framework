@@ -17,6 +17,7 @@ p0p4_file_mode_octal() {
 
 legacy_orchestrator_role="You are an orchestrator. You delegate ALL ""file editing, code implementation, and phase execution to specialized agents."
 stale_generated_phrase="delegate ALL ""file editing, code implementation, and phase execution"
+route_guidance="For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent."
 
 p0p4_path_without_jq() {
     local tmpbin="$1"
@@ -100,11 +101,33 @@ if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent cod
         fail "expected lean Codex AGENTS.md to avoid duplicating installed skill routing tables; found $assistant_skill_rows rows"
     elif ! grep -Fq "Codex uses installed skills through native skill routing." "$agents_file"; then
         fail "expected generated Codex AGENTS.md to delegate routing to the installed SKILL.md"
+    elif ! grep -Fq -- "$route_guidance" "$agents_file"; then
+        fail "expected generated Codex AGENTS.md to route through assistant-workflow only when that skill is installed"
     else
         pass
     fi
 else
     fail "single-skill Codex install failed; see /tmp/p0p4-install-single-skill-table.err"
+fi
+
+test_start "Codex selective clarify install qualifies routing for an absent workflow skill"
+INSTALL_HOME_CLARIFY_ONLY="$(mktemp -d)"
+p0p4_register_cleanup "$INSTALL_HOME_CLARIFY_ONLY"
+if HOME="$INSTALL_HOME_CLARIFY_ONLY" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-clarify --no-hooks >/tmp/p0p4-install-clarify-only.out 2>/tmp/p0p4-install-clarify-only.err; then
+    agents_file="$INSTALL_HOME_CLARIFY_ONLY/.codex/AGENTS.md"
+    installed_skills_dir="$INSTALL_HOME_CLARIFY_ONLY/.codex/skills"
+    if [[ ! -f "$installed_skills_dir/assistant-clarify/SKILL.md" ]]; then
+        fail "expected the selected assistant-clarify skill to be installed"
+    elif [[ -e "$installed_skills_dir/assistant-workflow" ]]; then
+        fail "expected assistant-clarify selective installation to omit assistant-workflow"
+    elif ! grep -Fq -- "$route_guidance" "$agents_file" \
+        || grep -Fq -- "go through assistant-workflow" "$agents_file"; then
+        fail "expected generated Codex AGENTS.md to qualify workflow routing by installed-skill availability"
+    else
+        pass
+    fi
+else
+    fail "assistant-clarify selective Codex install failed; see /tmp/p0p4-install-clarify-only.err"
 fi
 
 test_start "selected bundled requirements close transitively without duplicate cycle copies"

@@ -302,6 +302,114 @@ else
     fail "framework CI does not install the exact safe Ajv lock used by Draft 2020 validation"
 fi
 
+test_start "clarification review schema accepts evidence envelopes and rejects oracle leakage"
+if node - "$FRAMEWORK_DIR" <<'NODE_CLARIFICATION_SCHEMA'
+const fs = require("node:fs");
+const path = require("node:path");
+const { createRequire } = require("node:module");
+const root = process.argv[2];
+const localRequire = createRequire(path.join(root, "tools/evals/package.json"));
+const Ajv2020 = localRequire("ajv/dist/2020").default;
+const schemaPath = path.join(root, "docs/evals/fixtures/clarification/clarification-evidence-review.schema.json");
+const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
+const validate = new Ajv2020({ allErrors: true, strict: false }).compile(schema);
+const envelope = {
+  schema_version: "clarification-evidence/v1",
+  case_id: "task-03",
+  actor_id: "actor-1",
+  execution_mode: "native",
+  workspace_root: "/tmp/project",
+  activation: {},
+  inputs: [{ turn: 1, kind: "initial_prompt" }],
+  transcripts: [{ turn: 1 }],
+  workspace_observation: {},
+  semantic_review: {}
+};
+if (!validate(envelope)) process.exit(1);
+if (validate({ ...envelope, hidden_material_decisions: [] })) process.exit(1);
+const continuationBound = {
+  ...envelope,
+  case_id: "task-08",
+  oracle_requirements: {
+    oracle_case_id: "task-08",
+    oracle_sha256: "a".repeat(64),
+    required_answer_turns: [2],
+    required_post_answer_question_decision_indexes: [0],
+    continuation_answers: [{
+      turn: 2,
+      expected_artifact: { path: "task-08-answer.txt", sha256: "c".repeat(64) }
+    }],
+    applicability_basis: {
+      artifact: { path: "independent-assessment.json", sha256: "b".repeat(64) },
+      record_ref: "records/task-08/scope_results/post_answer_reassessment",
+      rationale: "The frozen oracle and independent assessment require a post-answer question for decision 0."
+    }
+  }
+};
+if (!validate(continuationBound)) process.exit(1);
+const missingContinuationPayload = structuredClone(continuationBound);
+delete missingContinuationPayload.oracle_requirements.continuation_answers;
+if (validate(missingContinuationPayload)) process.exit(1);
+const continuationPayloadOnWrongTurn = structuredClone(continuationBound);
+continuationPayloadOnWrongTurn.oracle_requirements.continuation_answers[0].turn = 3;
+if (validate(continuationPayloadOnWrongTurn)) process.exit(1);
+if (validate({
+  ...continuationBound,
+  oracle_requirements: {
+    ...continuationBound.oracle_requirements,
+    required_post_answer_question_decision_indexes: []
+  }
+})) process.exit(1);
+if (validate({
+  ...continuationBound,
+  oracle_requirements: {
+    ...continuationBound.oracle_requirements,
+    unbound_extra: true
+  }
+})) process.exit(1);
+const unsolicited = {
+  ...envelope,
+  semantic_review: {
+    answer_assessments: [{
+      kind: "unsolicited",
+      answer_turn: 2,
+      question_ref: null,
+      outcome: "unprompted",
+      decision_indexes: [],
+      carry_refs: [],
+      rationale: "The controller supplied a follow-up without a preceding agent question."
+    }]
+  }
+};
+if (!validate(unsolicited)) process.exit(1);
+const validateArtifactRef = new Ajv2020({ allErrors: true, strict: false }).compile(schema.$defs.artifactRef);
+for (const artifactPath of [
+  "actor-prompts/task-01.md", "C:/relative-like/path", "space path/file name.txt", "folder/file\n"
+]) {
+  if (!validateArtifactRef({ path: artifactPath, sha256: "a".repeat(64) })) {
+    throw new Error("safe importer-relative artifact path was rejected: " + JSON.stringify(artifactPath));
+  }
+}
+for (const artifactPath of [
+  null, "", "   ", "/absolute", "../outside", "a/../b", "a/.", "a//b", "a/", "back\\slash", "nul\u0000byte"
+]) {
+  if (validateArtifactRef({ path: artifactPath, sha256: "a".repeat(64) })) {
+    throw new Error("unsafe importer artifact path was accepted: " + JSON.stringify(artifactPath));
+  }
+}
+const falselyBoundUnsolicited = structuredClone(unsolicited);
+falselyBoundUnsolicited.semantic_review.answer_assessments[0].question_ref = { turn: 1, line: 1 };
+if (validate(falselyBoundUnsolicited)) process.exit(1);
+const falselyCarriedUnsolicited = structuredClone(unsolicited);
+falselyCarriedUnsolicited.semantic_review.answer_assessments[0].outcome = "carried_forward";
+if (validate(falselyCarriedUnsolicited)) process.exit(1);
+NODE_CLARIFICATION_SCHEMA
+then
+    pass
+else
+    fail "clarification review schema did not compile or reject leaked oracle fields"
+fi
+
 test_start "docs eval runner validates fixture"
 if "$eval_runner" --validate-fixture >/dev/null; then
     pass
@@ -315,8 +423,10 @@ for expectation_field in required_substrings forbidden_substrings; do
     empty_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/framework-eval-empty-array.XXXXXX")"
     empty_fixture_err="$(mktemp "${TMPDIR:-/tmp}/framework-eval-empty-array-err.XXXXXX")"
     p0p4_register_cleanup "$empty_fixture_root" "$empty_fixture_err"
-    mkdir -p "$empty_fixture_root/tools/evals" "$empty_fixture_root/docs/evals"
+    mkdir -p "$empty_fixture_root/tools/evals/lib" "$empty_fixture_root/docs/evals"
     cp "$eval_runner" "$empty_fixture_root/tools/evals/run-framework-instruction-evals.sh"
+    cp "$FRAMEWORK_DIR/tools/evals/lib/clarification-packet-names.sh" \
+        "$empty_fixture_root/tools/evals/lib/clarification-packet-names.sh"
     chmod +x "$empty_fixture_root/tools/evals/run-framework-instruction-evals.sh"
     jq --arg expectation_field "$expectation_field" '
         (.cases[] | select(.id == "small-fix-stays-lightweight") | .machine_expectations[$expectation_field]) = []
@@ -338,6 +448,8 @@ fi
 
 test_start "docs eval runner lists all fixture cases"
 case_count="$(jq '.cases | length' "$eval_fixture")"
+clarification_case_count="$(jq '[.cases[] | select(.category | test("clarification"; "i"))] | length' "$eval_fixture")"
+nonclarification_case_count=$((case_count - clarification_case_count))
 list_output="$("$eval_runner" --list)"
 list_count="$(printf '%s\n' "$list_output" | grep -c .)"
 if [[ "$list_count" -eq "$case_count" ]] \
@@ -386,7 +498,8 @@ if "$eval_runner" --responses "$response_dir" >"$response_output" 2>&1; then
 elif grep -Fq "Heuristic/local grading only" "$response_output" \
     && grep -Fq $'FAIL\tsmall-fix-stays-lightweight' "$response_output" \
     && grep -Fq "empty response file" "$response_output" \
-    && grep -Fq "missing response file" "$response_output"; then
+    && grep -Fq "missing response file" "$response_output" \
+    && grep -Fq "Summary: total=$case_count passed=0 failed=$nonclarification_case_count unavailable=$clarification_case_count incomplete=$clarification_case_count missing=$((case_count - 1)) empty=1" "$response_output"; then
     pass
 else
     fail "eval runner --responses did not report empty and missing responses clearly"
@@ -425,18 +538,18 @@ else
     fail "eval runner --responses did not report forbidden substrings clearly"
 fi
 
-test_start "docs eval runner passes generated responses with all required substrings"
+test_start "docs eval runner keeps clarification responses unavailable while grading other proxies"
 passing_response_dir="$(mktemp -d "${TMPDIR:-/tmp}/framework-eval-passing.XXXXXX")"
 passing_response_output="$(mktemp "${TMPDIR:-/tmp}/framework-eval-passing-output.XXXXXX")"
 p0p4_register_cleanup "$passing_response_dir" "$passing_response_output"
 write_machine_expectation_responses "$passing_response_dir"
 if "$eval_runner" --responses "$passing_response_dir" >"$passing_response_output" 2>&1 \
-    && grep -Fq "Summary: total=$case_count passed=$case_count failed=0" "$passing_response_output" \
+    && grep -Fq "Summary: total=$case_count passed=$nonclarification_case_count failed=0 unavailable=$clarification_case_count" "$passing_response_output" \
     && grep -Fq "missing_required_substrings=0" "$passing_response_output" \
     && grep -Fq "forbidden_substring_hits=0" "$passing_response_output"; then
     pass
 else
-    fail "eval runner --responses did not pass generated all-required response set"
+    fail "eval runner --responses did not keep clarification behavior unavailable while grading other proxies"
 fi
 
 test_start "trace result schema is versioned and distinguishes count metrics from durations"

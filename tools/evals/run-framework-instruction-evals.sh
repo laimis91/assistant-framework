@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FIXTURE="$REPO_ROOT/docs/evals/framework-instruction-cases.json"
+source "$SCRIPT_DIR/lib/clarification-packet-names.sh"
 MODE=""
 OUTPUT_DIR=""
 RESPONSES_DIR=""
@@ -145,38 +146,55 @@ emit_prompts() {
     validate_fixture
     mkdir -p "$OUTPUT_DIR"
 
-    local id packet_path
-    while IFS= read -r id; do
-        packet_path="$OUTPUT_DIR/$id.md"
+    local id category packet_path packet_name packet_basename
+    while IFS=$'\t' read -r id category; do
+        if is_clarification_case "framework-instruction" "$category"; then
+            packet_basename="$(clarification_task_packet_basename "$FIXTURE" framework-instruction "$id")"
+            [[ -n "$packet_basename" ]] || die "Could not resolve opaque prompt packet name for framework case $id."
+            packet_name="$packet_basename.md"
+        else
+            packet_name="$id.md"
+        fi
+        packet_path="$OUTPUT_DIR/$packet_name"
         jq -r --arg id "$id" '
             def bullets($items):
               if ($items | length) > 0 then $items | map("- " + .) | join("\n")
               else "- (none)" end;
             .cases[]
             | select(.id == $id)
-            | "# " + .title + "\n\n"
-              + "Case ID: " + .id + "\n\n"
-              + "Category: " + .category + "\n\n"
-              + "Purpose: " + .purpose + "\n\n"
-              + "## Setup Context\n\n" + bullets(.setup_context) + "\n\n"
-              + "## Prompt\n\n" + .prompt + "\n\n"
-              + "## Expected Behavior\n\n" + bullets(.expected_behavior) + "\n\n"
-              + "## Pass Criteria\n\n" + bullets(.pass_criteria) + "\n\n"
-              + "## Fail Signals\n\n" + bullets(.fail_signals) + "\n\n"
-              + "## Machine Expectations\n\n"
-              + "### Required Substrings\n\n"
-              + bullets(.machine_expectations.required_substrings) + "\n\n"
-              + "### Forbidden Substrings\n\n"
-              + bullets(.machine_expectations.forbidden_substrings) + "\n"
+            | if (.category | test("clarification"; "i")) then
+                "# User Request\n\n" + .prompt + "\n"
+              else
+                "# " + .title + "\n\n"
+                + "Case ID: " + .id + "\n\n"
+                + "Category: " + .category + "\n\n"
+                + "Purpose: " + .purpose + "\n\n"
+                + "## Setup Context\n\n" + bullets(.setup_context) + "\n\n"
+                + "## Prompt\n\n" + .prompt + "\n\n"
+                + "## Expected Behavior\n\n" + bullets(.expected_behavior) + "\n\n"
+                + "## Pass Criteria\n\n" + bullets(.pass_criteria) + "\n\n"
+                + "## Fail Signals\n\n" + bullets(.fail_signals) + "\n\n"
+                + "## Machine Expectations\n\n"
+                + "### Required Substrings\n\n"
+                + bullets(.machine_expectations.required_substrings) + "\n\n"
+                + "### Forbidden Substrings\n\n"
+                + bullets(.machine_expectations.forbidden_substrings) + "\n"
+              end
         ' "$FIXTURE" >"$packet_path"
-    done < <(jq -r '.cases[].id' "$FIXTURE")
+    done < <(jq -r '.cases[] | [.id, .category] | @tsv' "$FIXTURE")
 
     echo "Wrote $(jq '.cases | length' "$FIXTURE") prompt packets to $OUTPUT_DIR"
 }
 
 first_response_path_for_case() {
     local id="$1"
-    if [[ -f "$RESPONSES_DIR/$id.txt" ]]; then
+    local packet_basename
+    packet_basename="$(clarification_task_packet_basename "$FIXTURE" framework-instruction "$id")"
+    if [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.txt" ]]; then
+        printf '%s\n' "$RESPONSES_DIR/$packet_basename.txt"
+    elif [[ -n "$packet_basename" && -f "$RESPONSES_DIR/$packet_basename.md" ]]; then
+        printf '%s\n' "$RESPONSES_DIR/$packet_basename.md"
+    elif [[ -f "$RESPONSES_DIR/$id.txt" ]]; then
         printf '%s\n' "$RESPONSES_DIR/$id.txt"
     elif [[ -f "$RESPONSES_DIR/$id.md" ]]; then
         printf '%s\n' "$RESPONSES_DIR/$id.md"
@@ -242,6 +260,8 @@ grade_responses() {
     local total=0
     local passed=0
     local failed=0
+    local unavailable=0
+    local incomplete=0
     local missing=0
     local empty=0
     local signal_failures=0
@@ -249,7 +269,7 @@ grade_responses() {
     local forbidden_substring_failures=0
     local id category title response_path fail_signal_hits required_misses forbidden_hits status reason
 
-    echo "Heuristic/local grading only. Deterministic substring checks are local proxies; no provider API is invoked."
+    echo "Heuristic/local grading only. Deterministic substring checks are local proxies; no provider API is invoked. Clarification cases require separate semantic runtime evidence."
     echo ""
 
     while IFS=$'\t' read -r id category title; do
@@ -259,12 +279,26 @@ grade_responses() {
         reason="non-empty response with no exact fail-signal phrase hits and no machine expectation failures"
 
         if [[ -z "$response_path" ]]; then
-            status="FAIL"
-            reason="missing response file"
+            if is_clarification_case "framework-instruction" "$category"; then
+                status="UNAVAILABLE"
+                reason="missing response file; clarification behavior was not observed"
+                unavailable=$((unavailable + 1))
+                incomplete=$((incomplete + 1))
+            else
+                status="FAIL"
+                reason="missing response file"
+            fi
             missing=$((missing + 1))
         elif ! is_file_nonempty "$response_path"; then
-            status="FAIL"
-            reason="empty response file"
+            if is_clarification_case "framework-instruction" "$category"; then
+                status="UNAVAILABLE"
+                reason="empty response file; clarification behavior was not observed"
+                unavailable=$((unavailable + 1))
+                incomplete=$((incomplete + 1))
+            else
+                status="FAIL"
+                reason="empty response file"
+            fi
             empty=$((empty + 1))
         else
             fail_signal_hits="$(count_fail_signal_hits "$id" "$response_path")"
@@ -295,9 +329,19 @@ grade_responses() {
             fi
         fi
 
+        if is_clarification_case "framework-instruction" "$category"; then
+            if [[ "$status" == "PASS" || "$status" == "FAIL" ]]; then
+                status="UNAVAILABLE"
+                reason="substring anchors do not establish an admissible question or edit ordering; offline grading remains proxy-only"
+            fi
+            if [[ "$status" == "UNAVAILABLE" && "$reason" != missing* && "$reason" != empty* ]]; then
+                unavailable=$((unavailable + 1))
+            fi
+        fi
+
         if [[ "$status" == "PASS" ]]; then
             passed=$((passed + 1))
-        else
+        elif [[ "$status" == "FAIL" ]]; then
             failed=$((failed + 1))
         fi
 
@@ -305,10 +349,10 @@ grade_responses() {
     done < <(jq -r '.cases[] | [.id, .category, .title] | @tsv' "$FIXTURE")
 
     echo ""
-    printf 'Summary: total=%s passed=%s failed=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s\n' \
-        "$total" "$passed" "$failed" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures"
+    printf 'Summary: total=%s passed=%s failed=%s unavailable=%s incomplete=%s missing=%s empty=%s fail_signal_hits=%s missing_required_substrings=%s forbidden_substring_hits=%s\n' \
+        "$total" "$passed" "$failed" "$unavailable" "$incomplete" "$missing" "$empty" "$signal_failures" "$missing_required_failures" "$forbidden_substring_failures"
 
-    [[ "$failed" -eq 0 ]]
+    [[ "$failed" -eq 0 && "$incomplete" -eq 0 ]]
 }
 
 trace_validation_errors() {

@@ -510,7 +510,7 @@
       "title": "Clarification is material, not capped",
       "category": "clarification_admissibility",
       "purpose": "Checks that clear medium+ tasks can proceed with zero clarification questions while ambiguous risky tasks block before planning.",
-      "prompt": "Implement the approved runtime integration contract test exactly as described in the issue, using the named files and expected assertion text.",
+      "prompt": "Treat this as a medium-sized implementation task. In a disposable Python project, use only the files and requirements below. The starting file `src/rolling_window.py` contains exactly:\n\n```python\nfrom collections.abc import Sequence\n\ndef mean_last(values: Sequence[float], count: int) -> float | None:\n    raise NotImplementedError\n```\n\nReplace the function so it returns the arithmetic mean of the last `min(count, len(values))` values. Raise `ValueError` when `count` is not positive, return `None` for an empty input, and leave the input unchanged. Add `tests/test_rolling_window.py` using only the standard-library `unittest` module. Cover `[1, 3, 8]` with count 2 returning 5.5, `[7]` with count 5 returning 7.0, an empty input returning `None`, and count 0 raising `ValueError`. Verify the example with `python3 -m unittest discover -s tests -v`.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "The request is medium-sized but includes concrete files, behavior, and verification expectations.",

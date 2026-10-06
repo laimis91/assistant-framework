@@ -44,8 +44,8 @@ artifacts:
     required: true
     description: "Every material clarification question grouped by decision topic. Empty when safe defaults or evidence make the request ready to execute."
     min_items: 0
-    validation: "Contains every unresolved material question that affects correctness, scope, behavior, public contract, data, security, rollout, or verification; each cannot be discovered from context, lacks a safe default, and includes topic, impact, risk if guessed, and a default or bounded recommendation. There is no numeric cap. Empty list is allowed only when status is ready_to_execute."
-    on_fail: "Inspect available context, apply safe defaults, then ask every remaining admissible question grouped by topic before proceeding."
+    validation: "Contains every unresolved material question that affects correctness, scope, behavior, public contract, data, security, rollout, or verification; each cannot be discovered from context, lacks an evidence-backed safe default, and includes topic, impact, risk if guessed, and a default or bounded recommendation. Reversibility, convention, or a plausible preference alone does not establish user intent. Proposed product choices require a question and explicit user answer before dependent work. There is no numeric cap. Empty list is allowed only when status is ready_to_execute."
+    on_fail: "Inspect available context, apply evidence-backed safe defaults, then ask every remaining admissible question grouped by topic. Reassess after each reply and do not proceed with dependent work until proposed product choices have explicit user answers."
     object_fields:
       - name: topic
         type: string

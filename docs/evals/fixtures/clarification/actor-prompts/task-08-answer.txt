@@ -1,0 +1,1 @@
+link-access: Anyone who has the link should be able to open it without an account.

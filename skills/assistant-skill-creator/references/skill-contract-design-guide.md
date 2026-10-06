@@ -4,15 +4,15 @@ docs/skill-contract-design-guide.md is canonical. The skill-local copy is
 generated for installed-skill portability; refresh it with
 `tools/skills/sync-skill-contract-guide.sh --apply` and verify it with `--check`.
 
-Enforcements and best practices for designing strict, well-defined skills with typed inputs, validated outputs, and structural gates. Based on research across DSPy, CrewAI, Guardrails AI, RAIL spec, OpenAI Agents SDK, Google A2A, and Addy Osmani's agent spec work.
+Guidance for strict skills with typed inputs, validated outputs, and structural gates, based on DSPy, CrewAI, Guardrails AI/RAIL, OpenAI Agents SDK, Google A2A, and Addy Osmani's agent specification.
 
 ## Core Principle
 
 A skill without contracts is a suggestion. A skill with contracts is a specification.
 
-Every skill MUST define what it accepts, what it produces, and what must be true at every transition point. Agents treat prose instructions as guidance; they treat typed schemas as constraints.
+Every skill MUST define accepted inputs, outputs, and what must be true at every transition point. Prose guides agents; typed schemas constrain them.
 
-Keep the root `SKILL.md` outcome-shaped and compact. For complex skills, include only the sections that change behavior:
+Keep root `SKILL.md` compact and outcome-shaped; complex skills include only behavior-changing sections:
 
 - **Goal** — the user-visible outcome the skill exists to produce.
 - **Success criteria** — what must be true before the final response or artifact is complete.
@@ -185,7 +185,7 @@ Without source-of-truth validation, outputs slowly become inaccurate or inconsis
 
 ### Progressive contract loading
 
-Contract files required by a skill tier are mandatory for applicable validation, not mandatory for eager context loading. Every applicable canonical rule must still be checked at its enforcement point, but a skill does not need to load every canonical contract file when it starts.
+Validate tier-required files at applicable enforcement points; eager loading is unnecessary, but every applicable canonical rule must still be checked.
 
 Non-trivial Process or Analysis skills MAY add `contracts/index.yaml` as a progressive load index. The index is optional and does not replace or redefine the canonical tier contracts. When present, it should:
 
@@ -299,9 +299,16 @@ be `existing_behavior_to_preserve` while the work is an `implementation_gap`.
 
 Product-question promotion fails closed. Uninspected or inaccessible evidence is
 an evidence gap, contradictory sources are a source conflict, and tested current
-behavior defaults to preservation unless an authoritative source explicitly
-changes it. The gate applies before Plan or Build in prepare-only and end-to-end
-work; implementation-only work must resolve the approved evidence reference.
+behavior defaults to preservation only within the actor, data, and authorization
+context supported by its sources. Adding a route does not itself change that
+context; a new audience or disclosure boundary may. Implementation details and
+internal access controls do not by themselves establish a policy for a new
+audience or data boundary. Keep each unanswered material product choice and its
+recommendation provisional in both the response and task journal; do not record
+it as an applied default or confirmed criterion. Record the provisional recommendation and unresolved status together in each task-state draft; the same choice cannot also be an applied default. Source-backed technical defaults
+remain automatic. The gate applies before Plan or Build in prepare-only and
+end-to-end work; implementation-only work must resolve the approved evidence
+reference.
 Prepare-only completion reports that execution has not started and never
 manufactures changed-files or implementation verification evidence.
 
@@ -432,25 +439,18 @@ It intentionally stays on the source side. Canonical source paths such as
 `.codex` and `.gemini` stays covered by installer tests.
 
 ### Level 1: Contract files exist (passive)
-The contracts are YAML files in the skill directory. Agents read them as part of skill execution. This relies on the agent following instructions — the same trust model as the existing SKILL.md.
+Contracts are skill-directory YAML read during execution; adherence relies on the instruction-following trust model used by SKILL.md.
 
 ### Level 2: SKILL.md references contracts (active)
-The SKILL.md explicitly says "read and follow contracts/". The Contracts section lists the files and summarizes the rules. This makes contracts visible and hard to miss.
+SKILL.md says to read and follow `contracts/`, then lists each file and summarizes its rules, making them visible.
 
 ### Level 3: Source structural validation (automated)
-The source validator checks that skill metadata and contracts have a consistent,
-machine-checkable shape before release. It catches missing tier files, malformed
-headers, missing recovery behavior, undeclared enum values, invalid index
-selectors, and other structural drift. This remains provider-neutral and does
-not depend on an agent lifecycle integration.
+Source validation checks machine-readable skill and contract structure before release, catching missing tiers, malformed headers, missing recovery actions, undeclared enum values, invalid selectors, and other drift. It is provider-neutral and needs no agent lifecycle integration.
 
-Runtime adherence still uses the agent's normal instruction-following model:
-the skill entrypoint loads the applicable contracts, the orchestrator records
-the required evidence, and review verifies that completion gates were met.
-Optional metrics remain non-blocking observability.
+Runtime adherence depends on normal instruction-following: entrypoints load applicable contracts, orchestrators record required evidence, and review checks completion gates. Optional metrics are non-blocking.
 
 ### Level 4: Conformance test suite (automated)
-YAML test cases define "given this input, skill must produce output matching this schema." Can be run as a verification step after skill modifications.
+YAML test cases define "given this input, skill must produce output matching this schema." They can verify skill changes.
 
 The validator is the Level 4 foundation because it provides the inventory and structural checks that per-skill conformance suites build on. Provider-neutral per-skill eval fixtures now live at `skills/<skill>/evals/cases.json` and run through `tools/evals/run-skill-evals.sh`.
 

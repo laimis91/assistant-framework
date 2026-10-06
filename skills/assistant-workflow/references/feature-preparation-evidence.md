@@ -1,30 +1,29 @@
 # Existing-System Feature Preparation Evidence
 
-Use this reference whenever `feature_preparation_scope=existing_system`.
-Prepare-only and end-to-end work produce the evidence during Discover;
-implement-only work resolves the approved result before Build. It is provider-neutral: a
-requirement source may be a ticket, brief, issue, conversation, or local
-document; design evidence may be supplied, not applicable, or unavailable.
+Use this provider-neutral reference when `feature_preparation_scope=existing_system`.
+Prepare-only and end-to-end work capture evidence during Discover; implement-only
+resolves the approved result before Build. Requirements may come from tickets,
+briefs, issues, conversations, or local documents; design evidence may be supplied,
+not applicable, or unavailable.
+
 
 ## Procedure
 
-For each scoped behavior or proposed open question, create one
-`feature_preparation_evidence.items[]` row.
+Create one `feature_preparation_evidence.items[]` row per scoped behavior or
+proposed question.
 
-1. Record the requirement evidence and the design disposition.
-2. Trace the current execution path from entry point through coordinator/service
-   to every relevant observable effect. Record `inspected_absent` with bounded
+1. Record requirement evidence and design disposition.
+2. Trace the current path from entry through coordinator/service to every
+   relevant observable effect. Record `inspected_absent` with bounded
    searches or `inaccessible` with the concrete access limitation instead of
    inventing a file, symbol, or behavior.
-3. Inspect the behavioral tests and name the assertion, inspected absence, or
-   access limitation.
-   When a hash-bound evaluator or downstream consumer requires exact inspection
-   provenance, record the inspected implementation trace's `content_sha256` and
-   `inspection_event_ref`; also record the behavioral test `file`,
-   `content_sha256`, `test_name`, and `inspection_event_ref`. Each event ref
-   resolves to the completed successful read-only inspection that produced the
-   cited evidence.
-4. Compare the sources and classify the row on both axes.
+3. Inspect behavioral tests; name the assertion, inspected absence, or access
+   limitation. When exact provenance is required by a hash-bound evaluator or
+   downstream consumer, record the implementation trace's `content_sha256` and
+   `inspection_event_ref`, plus each test's `file`, `content_sha256`, `test_name`,
+   and `inspection_event_ref`. Each event ref resolves to the completed successful
+   read-only inspection that produced its evidence.
+4. Compare sources and classify both axes.
 5. Treat `feature_preparation_evidence.ref` as the stable identity of the evidence artifact.
    It is carried unchanged into preparation plans, task packets,
    any applicable Architecture Decision Pack, diagrams, and documentation;
@@ -69,30 +68,30 @@ for VIEWING without enabling editing.
 
 ## Product-question admissibility
 
-Product question admissibility fails closed. Do not ask a Product question
-merely because the requirements or design source omits a behavior.
+Product questions fail closed. Requirements or design omissions are insufficient.
 
-- Inspect the current implementation path and relevant behavioral tests first.
-- Preserve existing observable behavior unless a source explicitly changes it.
-- If code or tests cannot be inspected, record `evidence_gap`, not
-  `product_question`.
-- If sources conflict, record `source_conflict`, not `product_question`.
-- Pair `behavior_status=source_conflict` with
-  `work_status=source_conflict_resolution` until an authoritative source
-  resolves the conflict.
-- Use `product_question` only when behavior remains materially unknown after
-  the available requirements/design, implementation, and tests were inspected
-  and no safe default exists.
+- Inspect implementation, behavioral tests, and available sources; ask only about
+  materially unknown behavior without a safe default.
+- Preserve existing observable behavior only within the actor, data, and
+  authorization context supported by its sources. Adding a route does not itself
+  change that context; a new audience or disclosure boundary may.
+- Implementation or internal controls alone cannot establish policy for new audiences or data boundaries.
+- Every response and task journal draft keeps each unanswered material choice
+  unresolved alongside its provisional recommendation; do not record an
+  applied default or confirmed criterion. Source-backed technical defaults remain automatic.
+- Missing inspection or access is `evidence_gap`; contradictions are `source_conflict`,
+  never `product_question`. Pair `behavior_status=source_conflict` with
+  `work_status=source_conflict_resolution` until an authoritative source resolves it.
 
 ## Preparation-only completion
 
-Preparation-only completion returns `feature_preparation_result`: execution
-status `not_started`, exact scope, the evidence ref only for existing-system
-work, evidence gaps, open decisions, implementation implications, and a
-recommended next step. Medium+ preparation may include an optional readiness
-plan, but it does not wait for implementation approval: record the approval or
-delegation required for a later implementation workflow in `open_decisions`
-and/or `recommended_next_step`. When an explicit QA/acceptance evaluation was
+Preparation-only returns `feature_preparation_result` with
+`execution_status=not_started`, exact scope, the evidence ref only for
+existing-system work, evidence gaps, open decisions, implementation implications,
+and a recommended next step. Medium+ may include a readiness plan without
+waiting for implementation approval; record later approval or delegation in
+`open_decisions` or `recommended_next_step`.
+When an explicit QA/acceptance evaluation was
 requested, keep it only in
 `feature_preparation_result.future_qa_acceptance_obligation` while preparation
 uses `qa_evaluation_mode=not_required`.

@@ -146,7 +146,7 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 
 ## Medium Tasks — Standard Plan (`execution_intent != prepare_only`)
 
-Covers the essentials without Security/Operability overhead. Fill this in during Phase 3 (Plan).
+Covers the essentials without Security/Operability overhead. Fill this in during Phase 3 (Plan). Plan approval alone does not settle an unanswered product choice; an explicit answer that accepts a clearly presented choice resolves it without ritual reconfirmation.
 
 ```markdown
 ## Goal
@@ -154,7 +154,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 
 ## Requirement Acceptance Map
 - Intended outcome: [one outcome]
-- Assumptions/defaults: [explicit inferred decisions]
+- Assumptions/defaults: [source-backed technical defaults or applicable authoritative behavior, with source and rationale]
 - Open material questions: [none before approval]
 - Non-goals: [exclusions]
 - Entries: [requirement_id -> acceptance criterion -> verification method -> evidence pending -> manual scenario or N/A]
@@ -180,7 +180,7 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 
 ## Constraints & decisions (from Discovery)
 - [Q&A question]: [chosen option and why]
-- Assumed (not explicitly asked): [assumption and reasoning]
+- Assumed (not explicitly asked): [only source-backed technical defaults or applicable authoritative behavior, with source and rationale; no unanswered new material product choices]
 - Non-goals: [what's explicitly out of scope]
 - Reuse search: [copy the CodeMapper result; not_applicable needs a concrete reason, otherwise include searches, candidates or no_candidate_reason, decision, and decision_rationale]
 - Implement-only preparation result: [execution_intent=implement_only: copy the exact typed approved_feature_preparation_result, feature_preparation_scope, and applicable evidence/basis unchanged into every implementation step and task packet; otherwise N/A]

@@ -6,9 +6,13 @@ emit_prompts() {
     local fixture_file
     local skill_output_dir
     local id
+    local category
+    local packet_name
     local packet_path
     local case_count
     local selected_cases
+    local packet_basename
+    local prompt_only
 
     validate_all_fixtures
     validate_selected_case_ids
@@ -22,9 +26,18 @@ emit_prompts() {
         skill_output_dir="$OUTPUT_DIR/$skill_name"
         mkdir -p "$skill_output_dir"
 
-        while IFS= read -r id; do
-            packet_path="$skill_output_dir/$id.md"
-            jq -r --arg id "$id" --arg skill "$skill_name" --arg skill_path "$(display_path "$skill_file")" '
+        while IFS=$'\t' read -r id category; do
+            prompt_only=false
+            if is_clarification_case "$skill_name" "$category"; then
+                packet_basename="$(clarification_task_packet_basename "$fixture_file" "$skill_name" "$id")"
+                [[ -n "$packet_basename" ]] || die "Could not resolve opaque prompt packet name for $skill_name case $id."
+                packet_name="$packet_basename.md"
+                prompt_only=true
+            else
+                packet_name="$id.md"
+            fi
+            packet_path="$skill_output_dir/$packet_name"
+            jq -r --arg id "$id" --arg prompt_only "$prompt_only" --arg skill "$skill_name" --arg skill_path "$(display_path "$skill_file")" '
                 def bullets($items):
                   if ($items | length) > 0 then $items | map("- " + .) | join("\n")
                   else "- (none)" end;
@@ -103,7 +116,9 @@ emit_prompts() {
                 . as $fixture
                 | .cases[]
                 | select(.id == $id)
-                | if .prompt_packet_mode == "task_only" then
+                | if $prompt_only == "true" then
+                    "# User Request\n\n" + .prompt + "\n"
+                  elif .prompt_packet_mode == "task_only" then
                     task_only_packet
                   else
                     "# " + .title + "\n\n"
@@ -135,7 +150,8 @@ emit_prompts() {
             .cases[]
             | .id as $id
             | select(($selected_cases | length) == 0 or ($selected_cases | index($id)) != null)
-            | .id
+            | [.id, .category]
+            | @tsv
         ' "$fixture_file")
 
         case_count="$(jq --argjson selected_cases "$selected_cases" '[

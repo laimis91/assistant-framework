@@ -1901,6 +1901,8 @@ printf '%s\n' \
     >>"$state_fake_dir/assistant-workflow/$mapping_case.txt"
 
 workflow_case_count="$(jq '.cases | length' "$eval_fixture")"
+workflow_clarification_case_count="$(jq '[.cases[] | select((.category // "") | contains("clarification"))] | length' "$eval_fixture")"
+workflow_expected_pass_count=$((workflow_case_count - workflow_clarification_case_count))
 workflow_fake_case_count=2
 workflow_fake_pass_count=0
 state_compliant_status=0
@@ -1912,9 +1914,16 @@ if run_workflow_eval "$state_fake_dir" "$state_fake_output" "$resolved_then_bloc
     state_fake_status=1
 fi
 
+while IFS= read -r clarification_case_id; do
+    if ! grep -Fq $'UNAVAILABLE\tassistant-workflow\t'"$clarification_case_id" "$state_compliant_output" \
+        || grep -Fq $'PASS\tassistant-workflow\t'"$clarification_case_id" "$state_compliant_output"; then
+        state_eval_missing+=("clarification case $clarification_case_id must remain unavailable to offline string grading")
+    fi
+done < <(jq -r '.cases[] | select((.category // "") | contains("clarification")) | .id' "$eval_fixture")
+
 if [[ "${#state_eval_missing[@]}" -eq 0 ]] \
     && [[ "$state_compliant_status" -eq 0 ]] \
-    && grep -Fq "Summary: total=$workflow_case_count passed=$workflow_case_count failed=0" "$state_compliant_output" \
+    && grep -Fq "Summary: total=$workflow_case_count passed=$workflow_expected_pass_count failed=0 unavailable=$workflow_clarification_case_count" "$state_compliant_output" \
     && [[ "$state_fake_status" -eq 0 ]] \
     && grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolved-then-blocked-recovery' "$state_fake_output" \
     && grep -Fq $'FAIL\tassistant-workflow\tprogressive-mapping-single-active-negative' "$state_fake_output" \
@@ -1924,7 +1933,7 @@ if [[ "${#state_eval_missing[@]}" -eq 0 ]] \
     && ! grep -Fq "forbidden substring hit" "$state_fake_output"; then
     pass
 else
-    fail "progressive state evals must require declared blocked/mapping state and reject both keyword-rich premature-Plan responses only for their missing state"
+    fail "progressive state evals must keep clarification proxies unavailable, require declared blocked/mapping state, and reject both premature-Plan responses"
 fi
 
 test_start "workflow gives progressive decision sequences one cumulative non-resettable readiness record"

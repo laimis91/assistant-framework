@@ -180,6 +180,32 @@ else
     fail "assistant-clarify utility contract requirements failed: ${clarify_contract_failures[*]}"
 fi
 
+test_start "assistant-clarify requires evidence for defaults and explicit product decisions"
+clarify_skill="$FRAMEWORK_DIR/skills/assistant-clarify/SKILL.md"
+chaotic_prompts="$FRAMEWORK_DIR/skills/assistant-clarify/chaotic-prompts.md"
+clarify_output="$FRAMEWORK_DIR/skills/assistant-clarify/contracts/output.yaml"
+if grep -Fq -- "Reversibility alone, convention, or a plausible preference does not establish user intent." "$clarify_skill" \
+    && grep -Fq -- "A proposed product choice requires a question and an explicit user answer before dependent work proceeds; a recommendation is not an answer." "$clarify_skill" \
+    && grep -Fq -- "Ask all currently material questions that still change execution, grouped by decision topic. There is no numeric question quota; keep each round concise and avoid asking questions that context can resolve." "$chaotic_prompts" \
+    && grep -Fq -- "After each response, reassess unresolved decisions and treat only explicitly answered choices as resolved;" "$chaotic_prompts" \
+    && grep -Fq -- "Proposed product choices require a question and explicit user answer before dependent work." "$clarify_output" \
+    && ! grep -Fq -- 'Ask **1-3 questions max**.' "$chaotic_prompts"; then
+    pass
+else
+    fail "assistant-clarify must avoid quota limits, reassess partial answers, and require explicit product decisions"
+fi
+
+test_start "assistant-workflow routes clear repository changes through requirements discovery"
+workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+if grep -Fq -- "clear implementation requests" "$workflow_skill" \
+    && grep -Fq -- "backlog items" "$workflow_skill" \
+    && grep -Fq -- "ideas with an intended change" "$workflow_skill" \
+    && grep -Fq -- "Discover requirements check" "$workflow_skill"; then
+    pass
+else
+    fail "assistant-workflow must route clear requests, backlog items, and change-bearing ideas through Discover requirements check"
+fi
+
 test_start "assistant-review resolves mode from authorization and asks on ambiguity"
 review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
 review_audit_failures=()
