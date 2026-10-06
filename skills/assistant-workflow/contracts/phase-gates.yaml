@@ -136,7 +136,8 @@ gates:
         on_fail: "Re-triage with code/context evidence before proceeding"
 
       - id: D_REQUIREMENTS_SUFFICIENCY
-        check: "Before Plan or plan_mode=none dependent work, pass references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
+        check: "Dependent work requires references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
+        condition: "execution_intent != prepare_only"
         on_fail: "Return to Discover; ask about material choices and resolve controlling-source gaps/conflicts."
 
       - id: D2

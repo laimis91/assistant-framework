@@ -792,6 +792,8 @@ function main() {
   const frozenManifest = readFrozenClarificationManifest();
   const frozenOracleDigest = frozenClarificationOracleDigest(frozenManifest);
   const initialWorkspaceBaseline = initialWorkspaceBaselineMap(oracleCase);
+  const requiresFrozenTaskProjectEdit = ["task-03", "task-04"].includes(review.case_id)
+    && frozenOracleDigest === oracleDigest;
   const requiresTask04Inspection = review.case_id === "task-04" && frozenOracleDigest === oracleDigest;
   const hasRequiredMissingPolicyRead = Object.prototype.hasOwnProperty.call(oracleCase, "required_missing_policy_path");
   const requiredMissingPolicyPath = isSafeProjectRelativePath(oracleCase.required_missing_policy_path)
@@ -1570,6 +1572,39 @@ function main() {
           conflict_identified: assessment.conflict_identified,
           security_impact_explained: assessment.security_impact_explained,
         };
+        const initialTranscript = transcripts.get(1);
+        const associatedMaterialQuestions = semanticReview.question_assessments.filter((question) =>
+          isObject(question)
+          && question.classification === "material"
+          && Array.isArray(question.decision_indexes)
+          && question.decision_indexes.includes(policyDecisionIndex));
+        const policyReferences = [
+          ...assessment.message_spans,
+          ...decision.question_refs,
+          ...associatedMaterialQuestions,
+        ];
+        const sourceReadsPrecedeReference = (reference) => {
+          if (!initialTranscript || !initialTranscript.validStartedPrefix
+            || !Number.isInteger(initialTranscript.turnStartLine)
+            || !isObject(reference) || reference.turn !== 1 || !Number.isInteger(reference.line)) {
+            return false;
+          }
+          return requiredPolicyConflict.source_paths.every((sourcePath) => {
+            const requiredDigest = initialWorkspaceBaseline && initialWorkspaceBaseline[sourcePath];
+            return typeof requiredDigest === "string" && SHA256.test(requiredDigest)
+              && initialTranscript.commands.some((command) => isRequiredProjectFileRead(
+                command,
+                sourcePath,
+                requiredDigest,
+                review.workspace_root,
+                initialTranscript.turnStartLine,
+                reference.line,
+              ));
+          });
+        };
+        if (policyReferences.length === 0 || !policyReferences.every(sourceReadsPrecedeReference)) {
+          unavailableReasons.push("required_task05_policy_source_reads_unavailable");
+        }
       }
     }
 
@@ -1700,6 +1735,10 @@ function main() {
         && missingPostAnswerQuestionIndexes.length === 0
         && completedRelevantContinuationTurns.length === continuationRequiredAnswerTurns.length
       );
+      if (requiresFrozenTaskProjectEdit && allTranscriptResponsesComplete && requiredContinuationScenarioComplete
+        && (!earliestObservedProjectEdit || earliestDependentEdits.length === 0)) {
+        behaviorReasons.push("required_project_edit_not_observed");
+      }
       for (const [index, decision] of decisionMap) {
         if (decision.outcome !== "asked") {
           if (allTranscriptResponsesComplete && requiredContinuationScenarioComplete) behaviorReasons.push("material_decision_not_asked");

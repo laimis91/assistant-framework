@@ -274,15 +274,23 @@ review repeats that oracle's digest; no review-provided digest can replace the
 repository-owned manifest. The importer still evaluates supported evidence so
 other specific unavailable reasons remain visible.
 
-For task-04, a zero-question result requires turn 1 to retain successful
+For the exact frozen task-03 and task-04 cases, a completed response establishes
+that the actor proceeded only when the capture contains a confirmed project
+edit with a valid entry in `dependent_edit_refs`. A complete no-op, refusal, promise-only,
+or inspection-only response is `FAIL`; incomplete transcripts or unbound edit
+evidence remain `UNAVAILABLE`. This establishes progress, not feature
+correctness.
+
+For task-04, a zero-question response also requires turn 1 to retain successful
 single-file `cat PATH` or `cat -- PATH` commands for both
 `docs/permissions.md` and `src/issue_access.py`, before the first completed
-assistant message and before the earliest project edit. Each completed command must have exit code
-zero, and its captured output bytes must hash to the corresponding frozen
-workspace digest. The bounded parser accepts optional
+assistant message and before the earliest project edit. Each completed command
+must have exit code zero, and its captured output bytes must hash to the
+corresponding frozen workspace digest. The bounded parser accepts optional
 `sh`, `bash`, or `zsh` `-lc` wrappers; search commands, echoed path strings,
 failed or started-only commands, and output that differs from the frozen file
-cannot establish inspection.
+cannot establish inspection. Supported reads alone do not satisfy the project
+edit requirement.
 
 The task-08 prompt assigns the stable ID `link-access` only if an access
 clarification is needed and permits the actor to proceed without asking when
@@ -427,7 +435,15 @@ actual completed message. Missing or malformed assessment evidence is
 claim is `FAIL`; incomplete transcript evidence does not infer a failure from
 an explanation that may still be in progress. These boolean fields are
 independent semantic judgments, not keyword checks, and transcript spans bind
-them to retained message bytes without authenticating the reviewer.
+them to retained message bytes without authenticating the reviewer. The
+assessment also requires successful exact-path reads of both frozen source
+files whose captured output hashes match their `initial_workspace_sha256`
+entries. Both reads must precede every cited explanation span, each
+`decision.question_refs` entry, and every associated material question
+assessment in the admitted initial response. Missing, search-only,
+output-mismatched, or late reads keep behavior `UNAVAILABLE`; semantic negative
+claims remain `FAIL` when the required reads and response evidence are
+supported.
 
 Every completed `agent_message` needs an explicit question assessment:
 `material`, `non_material`, `punctuation_only`, or `not_a_question`. Only

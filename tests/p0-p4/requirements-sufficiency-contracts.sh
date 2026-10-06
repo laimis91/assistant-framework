@@ -23,6 +23,7 @@ if ruby -ryaml -e '
   phases = File.read(ARGV.fetch(1))
   generated = File.read(ARGV.fetch(2))
   discover = gates.find { |gate| gate["phase"] == "DISCOVER" }
+  sufficiency = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D_REQUIREMENTS_SUFFICIENCY" }
   acceptance = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D_REQUIREMENT_ACCEPTANCE_MAP" }
   d2 = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D2" }
   d3 = discover && discover.fetch("exit_assertions").find { |item| item["id"] == "D3" }
@@ -53,6 +54,9 @@ if ruby -ryaml -e '
   map_is_still_required = map_check.include?("requirement_acceptance_map exists with stable requirement_id values") && map_check.include?("assumptions/defaults, non-goals")
   map_condition = "size in [medium, large, mega] or (progressive_artifact_retention_state != terminally_archived and progressive_route_clear_consumption_state != pending and (architecture_design_mode in [required, review_intensive] or progressive_route_clear_consumption_state == consumed))"
   map_trigger_preserved = acceptance.fetch("condition") == map_condition
+  sufficiency_check = "Dependent work requires references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
+  sufficiency_failure = "Return to Discover; ask about material choices and resolve controlling-source gaps/conflicts."
+  sufficiency_scoped = sufficiency && sufficiency["condition"] == "execution_intent != prepare_only"
   d2_scoped = d2 && d2["condition"] == "execution_intent != prepare_only"
   source_phase = phases[/^## Phase: Discover.*?(?=^## Phase: Decompose)/m]
   generated_phase = generated[/^## Phase: Discover.*?(?=^## Phase: Decompose|\z)/m]
@@ -72,7 +76,9 @@ if ruby -ryaml -e '
     d2_applies = !(d2_scoped && intent == "prepare_only")
     d3_applies = !(d3_ready_scope && intent == "prepare_only")
     map_applies = !(map_ready_scope && intent == "prepare_only")
+    sufficiency_applies = !(sufficiency_scoped && intent == "prepare_only")
     {
+      "D_REQUIREMENTS_SUFFICIENCY" => ["material product choice", "controlling-source conflict"].any? && sufficiency_applies,
       "D2" => unresolved_topic.any? && d2_applies,
       "D3" => unresolved_topic.any? && d3_applies,
       "D_REQUIREMENT_ACCEPTANCE_MAP" => unresolved_topic.any? && map_applies
@@ -89,9 +95,10 @@ if ruby -ryaml -e '
     pack_condition_preserved && pack_failure_scoped && prepare_questions_retained && execution_questions_resolved &&
     d2_scoped && map_ready_scope && map_retains_open && d3_ready_scope &&
     defaults_consistency && d3_retains_open && map_is_still_required && map_trigger_preserved &&
-    source_allows_preparation && preparation.values.none? &&
+    source_allows_preparation && sufficiency_scoped && sufficiency.fetch("check") == sufficiency_check &&
+    sufficiency.fetch("on_fail") == sufficiency_failure && preparation.values.none? &&
     end_to_end["D_ARCHITECTURE_DECISION_PACK"] && implement_only["D_ARCHITECTURE_DECISION_PACK"] &&
-    %w[D2 D3 D_REQUIREMENT_ACCEPTANCE_MAP].all? { |id| end_to_end[id] && implement_only[id] }
+    %w[D_REQUIREMENTS_SUFFICIENCY D2 D3 D_REQUIREMENT_ACCEPTANCE_MAP].all? { |id| end_to_end[id] && implement_only[id] }
   exit(result_valid ? 0 : 1)
 ' "$phase_gates" "$phases" "$discover_view" "$workflow_dir/references/architecture-decision-pack.md"; then
     pass
@@ -151,7 +158,7 @@ if ruby -ryaml -e '
   generated_phase = generated[/^## Phase: Discover.*?(?=^## Phase: Decompose)/m]
   source_state = discover_phase && discover_phase[/^\*\*Clarification state rules:\*\*.*?(?=^\*\*Rules:\*\*)/m]
   generated_state = generated[/^\*\*Clarification state rules:\*\*.*?(?=^\*\*Rules:\*\*)/m]
-  d_check = "Before Plan or plan_mode=none dependent work, pass references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
+  d_check = "Dependent work requires references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
   d2_check = "clarification_status=ready; each implementation-shaping field is explicit, source-backed-defaulted, accepted from displayed recommendations, or resolved; approval alone never resolves choices."
   tick = 96.chr
   d2_fail = "Follow Discover step 5. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
@@ -441,7 +448,7 @@ if ruby -ryaml -e '
   build_gate = gates.find { |gate| gate["phase"] == "BUILD" }
   build_check = build_gate && build_gate.fetch("entry_assertions").find { |item| item["id"] == "B_REQUIREMENTS_SUFFICIENCY" }
   plan_approval = "Plan approval alone does not settle an unanswered product choice; an explicit answer that accepts a clearly presented choice resolves it without ritual reconfirmation."
-  d_check = "Before Plan or plan_mode=none dependent work, pass references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
+  d_check = "Dependent work requires references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
   d2_check = "clarification_status=ready; each implementation-shaping field is explicit, source-backed-defaulted, accepted from displayed recommendations, or resolved; approval alone never resolves choices."
   d2_fail = "Follow Discover step 5. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
   b_check = "plan_mode=none: revalidate fresh Discover sufficiency before Build; criteria carry confirmed answers and sourced defaults, not guessed choices or evidence_gap/source_conflict."
