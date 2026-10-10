@@ -90,7 +90,6 @@ missing_typed_artifact_terms=()
 for term in \
     "artifact_reference_protocol:" \
     "required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]" \
-    "artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]" \
     "location_ref is the typed location/ref pointer" \
     "Producer responsibility: create or update the artifact" \
     "Consumer responsibility: validate schema_or_contract and validation_status before relying on location_ref" \
@@ -114,7 +113,6 @@ for term in \
     "schema_or_contract" \
     "validation_status" \
     "ledger covers Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
-    "enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]" \
     "- name: pivot_restart_decision"; do
     if ! grep -Fq -- "$term" "$output_contract"; then
         missing_typed_artifact_terms+=("output.yaml: $term")
@@ -130,8 +128,31 @@ for artifact_contract_file in "$handoffs_file" "$output_contract"; do
         fi
     done < <(grep -F "enum_values: [done_contract" "$artifact_contract_file")
 done
-if [[ "$concrete_artifact_enum_count" -ne 6 ]]; then
-    missing_typed_artifact_terms+=("expected five handoff and one output concrete artifact_type enums; found $concrete_artifact_enum_count")
+if [[ "$concrete_artifact_enum_count" -eq 0 ]]; then
+    missing_typed_artifact_terms+=("no concrete ArtifactRef enums were checked")
+fi
+if ! ruby -ryaml -e '
+    handoffs = YAML.load_file(ARGV.fetch(0))
+    output = YAML.load_file(ARGV.fetch(1))
+    types = handoffs.fetch("artifact_reference_protocol").fetch("artifact_types")
+    exit 1 unless %w[verification_decision evidence_assessment].all? { |name| types.include?(name) }
+    field = ->(fields, name) { fields.find { |f| f["name"] == name } || raise("missing #{name}") }
+    owners = handoffs.fetch("handoffs").to_h { |h| [h.fetch("name"), h] }
+    [["orchestrator_to_architect", "return_fields", "implementation_steps"],
+     ["orchestrator_to_code_writer", "context_fields", "current_task_packet"],
+     ["orchestrator_to_builder_tester", "context_fields", "current_task_packet"]].each do |name, side, parent|
+        packet = field.call(owners.fetch(name).fetch(side), parent)
+        refs = field.call(packet.fetch("object_fields"), "artifact_refs")
+        exit 1 unless refs["type"] == "object[]" && field.call(refs.fetch("object_fields"), "artifact_type")["enum_values"] == types
+    end
+    %w[orchestrator_to_code_writer orchestrator_to_builder_tester].each do |name|
+        refs = field.call(owners.fetch(name).fetch("return_fields"), "artifact_refs")
+        exit 1 unless refs["type"] == "object[]" && field.call(refs.fetch("object_fields"), "artifact_type")["enum_values"] == types
+    end
+    ledger = field.call(output.fetch("artifacts"), "artifact_reference_ledger")
+    exit 1 unless field.call(ledger.fetch("object_fields"), "artifact_type")["enum_values"] == types
+' "$handoffs_file" "$output_contract"; then
+    missing_typed_artifact_terms+=("typed producer/consumer ArtifactRefs or verification artifact registration differs from the canonical protocol")
 fi
 for term in \
     "## Harness Appendix Routing" \
@@ -237,6 +258,44 @@ else
     fail "Architect DECOMPOSE/PLAN return schemas missing status/evidence/deviation support: ${missing_architect_schema_terms[*]}"
 fi
 
+test_start "Architect test_plan schema names the selected automated-test condition"
+if ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  architect = handoffs.find { |h| h["name"] == "orchestrator_to_architect" }
+  plan = architect.fetch("return_fields").find { |f| f["name"] == "test_plan" }
+  exit 1 unless plan && plan["required"] == "conditional" &&
+    plan["condition"] == "at least one slice\u0027s canonical verification_decision selects method == automated_test" &&
+    plan.fetch("description").include?("required only for slices with selected automated_test CheckSpecs")
+' "$handoffs_file"; then
+    pass
+else
+    fail "Architect test_plan schema does not bind applicability to the selected automated-test decision"
+fi
+
+test_start "Decompose slice schema binds verification and TDD fields to the canonical context"
+if ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  decompose = handoffs.find { |h| h["name"] == "orchestrator_to_architect_decompose" }
+  field = ->(fields, name) { fields.find { |f| f["name"] == name } || raise("missing #{name}") }
+  context_decision = field.call(decompose.fetch("context_fields"), "verification_decision")
+  context_tdd = field.call(decompose.fetch("context_fields"), "tdd_applies")
+  return_fields = decompose.fetch("return_fields")
+  manifest = field.call(return_fields, "slice_manifest")
+  slice_fields = manifest.fetch("object_fields")
+  slice_decision = field.call(slice_fields, "verification_decision")
+  slice_tdd = field.call(slice_fields, "tdd_applies")
+  valid_schema = context_decision["required"] == true && context_tdd["required"] == true &&
+    manifest["required"] == true && manifest["type"] == "object[]" &&
+    slice_decision["required"] == true && slice_tdd["required"] == true &&
+    slice_decision.fetch("validation").include?("equals context_fields.verification_decision") &&
+    slice_tdd.fetch("validation").include?("Equals verification_decision.tdd_choice.mode and context_fields.tdd_applies")
+  exit(valid_schema ? 0 : 1)
+' "$handoffs_file"; then
+    pass
+else
+    fail "Architect Decompose schema does not require the canonical verification/TDD projection in each slice"
+fi
+
 test_start "Code Writer status packet schema and prompts require status changed_files evidence"
 missing_code_writer_status_terms=()
 if ! handoff_return_field_required "$handoffs_file" "orchestrator_to_code_writer" "status"; then
@@ -299,9 +358,9 @@ else
     fail "Code Writer status packet schema/prompts missing terms: ${missing_code_writer_status_terms[*]}"
 fi
 
-test_start "Builder Tester status packet schema and prompts require status verification"
+test_start "Builder Tester status packet keeps selected-check and no-build outcomes distinct"
 missing_builder_status_terms=()
-for field in status verification; do
+for field in status verification build_result test_summary; do
     if ! handoff_return_field_required "$handoffs_file" "orchestrator_to_builder_tester" "$field"; then
         missing_builder_status_terms+=("handoff return $field required")
     fi
@@ -309,28 +368,50 @@ done
 if ! grep -Fq -- "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]" "$handoffs_file"; then
     missing_builder_status_terms+=("BuilderTester status enum values")
 fi
-if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "enum_values: [passed, failed, not_run]"; then
-    missing_builder_status_terms+=("build_result enum supports not_run")
+if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "enum_values: [passed, failed, not_run, not_applicable]"; then
+    missing_builder_status_terms+=("build_result enum includes not_applicable")
 fi
-if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "Use not_run only when status is NEEDS_CONTEXT or BLOCKED before verification can run"; then
-    missing_builder_status_terms+=("build_result not_run is limited to NEEDS_CONTEXT/BLOCKED")
-fi
+for term in \
+    "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints" \
+    "do not infer it from file type, command presence, method, or technique alone" \
+    "Use not_run only when a required build could not run and status is NEEDS_CONTEXT or BLOCKED" \
+    "Use not_applicable only when no due selected or binding build check applies and no build was executed"; do
+    if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "$term"; then
+        missing_builder_status_terms+=("build_result missing scoped applicability rule: $term")
+    fi
+done
 if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "commands" "min_items: 0"; then
     missing_builder_status_terms+=("verification.commands may be empty")
 fi
-if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "commands" "empty only when verification.result is not_run for NEEDS_CONTEXT or BLOCKED"; then
-    missing_builder_status_terms+=("verification.commands empty only for NEEDS_CONTEXT/BLOCKED not_run")
+if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "commands" "may be empty for selected checks whose concrete procedure has no command" \
+    || ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "commands" "Empty commands do not waive a selected or binding check"; then
+    missing_builder_status_terms+=("verification.commands distinguish no-command checks without waiving selected/binding checks")
 fi
 if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "enum_values: [passed, failed, not_run]"; then
     missing_builder_status_terms+=("verification.result enum supports not_run")
 fi
+if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "passed requires current observed or admissibly reused passing results for every due selected and binding check" \
+    || ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED"; then
+    missing_builder_status_terms+=("verification.result preserves due-check pass and blocker conditions")
+fi
+if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "evidence" "When commands is empty for a no-command check, identify the concrete procedure performed and its observed result"; then
+    missing_builder_status_terms+=("no-command verification requires observed procedure/result evidence")
+fi
+for term in \
+    "Actual test counts for selected or binding automated-test checks" \
+    "Zero counts mean no tests were executed; they do not mean required tests passed" \
+    "Applicability comes from due selected CheckSpecs and resolved binding constraints"; do
+    if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "test_summary" "$term"; then
+        missing_builder_status_terms+=("test_summary missing scoped count rule: $term")
+    fi
+done
 for file in \
     agents/codex/builder-tester.toml \
     agents/claude/builder-tester.md; do
     for term in \
         '**Status**: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '**Verification**: commands/checks run plus concise success signals or failure messages' \
-        '`FAILED_VERIFICATION`: build, tests, or required checks ran and failed'; do
+        '`FAILED_VERIFICATION`: an executed build, test, or other required check failed'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_builder_status_terms+=("$file: $term")
         fi

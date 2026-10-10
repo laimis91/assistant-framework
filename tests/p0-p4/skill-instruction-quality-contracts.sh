@@ -197,7 +197,7 @@ fi
 
 test_start "assistant-workflow routes clear repository changes through requirements discovery"
 workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
-if grep -Fq -- "clear implementation requests" "$workflow_skill" \
+if grep -Fq -- "Clear implementation requests" "$workflow_skill" \
     && grep -Fq -- "backlog items" "$workflow_skill" \
     && grep -Fq -- "ideas with an intended change" "$workflow_skill" \
     && grep -Fq -- "Discover requirements check" "$workflow_skill"; then
@@ -407,7 +407,8 @@ for term in \
     fi
 done
 for term in \
-    "Use this exact format:" \
+    "When required, use this exact format:" \
+    'Use exact markers only for `controller_intensity=strict`, explicit policy, or user request' \
     "--- PHASE: [name] ---" \
     "--- PHASE: [name] COMPLETE ---"; do
     if ! p0p4_section_has_term "$workflow_skill" "## Visible Checkpoints" "$term"; then
@@ -635,8 +636,8 @@ for reviewer_agent in \
     done
 done
 for review_term in \
-    "assistant-review contracts are v7.2" \
-    "Persisted 6.0/7.0/7.1 batch packets are invalidated and rebuilt" \
+    "assistant-review contracts are v8.0" \
+    "Persisted 6.0/7.0/7.1/7.2 batch packets are invalidated and rebuilt from a fresh 8.0 snapshot" \
     "risk_selected_specialist" \
     "assistant-security checklist/perspective"; do
     if ! grep -Fq "$review_term" "$review_skill"; then

@@ -16,7 +16,7 @@ Structured scoring system for evaluator calibration. Replaces open-ended "find i
 | **Code Quality** | 0.20 | Readability, naming, maintainability, right-sized SOLID/KISS/DRY/YAGNI adherence |
 | **Architecture** | 0.20 | Layer boundaries, dependency direction, pattern consistency |
 | **Security** | 0.15 | Injection, auth bypass, data exposure, OWASP top 10 |
-| **Test Coverage** | 0.15 | New behavior tested, edge cases covered, test quality |
+| **Verification Evidence** | 0.15 | Selected verification methods, evidence quality, material gaps, and test quality when tests were selected |
 
 ## Clean-Code Principle Lens
 
@@ -66,15 +66,15 @@ Each dimension is scored 1-5. Use these anchors to calibrate:
 | **2** | Exploitable vulnerability under specific conditions (e.g., SQL injection via crafted input). |
 | **1** | Open vulnerability. Auth bypass, credential exposure, injection with no mitigation. |
 
-### Test Coverage (weight: 0.15)
+### Verification Evidence (weight: 0.15; output key remains `test_coverage`)
 
 | Score | Anchor |
 |---|---|
-| **5** | All new behavior tested. Edge cases covered. Tests are readable and maintainable. |
-| **4** | Happy path tested well. One edge case could use a test but isn't critical. |
-| **3** | Some tests exist but gaps in coverage. Missing negative cases or boundary tests. |
-| **2** | Minimal testing. Only trivial assertions. Would not catch regression. |
-| **1** | No tests for new/changed behavior. Or tests exist but don't assert meaningful behavior. |
+| **5** | The selected methods address material claims with current, discriminating evidence; tests are meaningful and maintainable when selected; no material evidence gap is hidden. |
+| **4** | Selected evidence is sound with one bounded noncritical gap, clearly recorded in the assessment. |
+| **3** | Evidence supports the main claim but leaves a material boundary or scenario uncertain; the limitation is explicit. |
+| **2** | Evidence is weak, stale, or poorly matched to selected claims, or tests selected for the change do not distinguish plausible wrong behavior. |
+| **1** | Selected verification was skipped or misrepresented, or no available evidence supports the material claim. Absence of tests alone is not a failure when another selected method is adequate. |
 
 ## Calculating the Weighted Score
 
@@ -154,5 +154,6 @@ rubric_scores:
     architecture: "Clean layer separation. Repository pattern matches existing conventions."
     security: "No user input reaches SQL. Auth middleware correctly applied to all new endpoints."
     test_coverage: "Happy path tested. Missing: concurrent access test for shared state in OrderCache."
-  critical_override: null  # or: "Active SQL injection in SearchController:92 — caps score at 2.0"
 ```
+
+Include `critical_override` only when a critical finding caps the score, as a string describing that override (for example, `Active SQL injection in SearchController:92 — caps score at 2.0`). Omit the field when no override applies.

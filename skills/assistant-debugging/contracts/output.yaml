@@ -1,4 +1,4 @@
-schema_version: "1.1"
+schema_version: "2.0"
 contract: output
 skill: assistant-debugging
 
@@ -38,7 +38,7 @@ artifacts:
     required: true
     description: "Debugging outcome"
     enum_values: [fixed, root_cause_found, mitigated, not_reproduced, blocked, inconclusive]
-    validation: "Must match the evidence gathered and must not claim fixed without verification"
+    validation: "Must match the evidence gathered; fixed requires the original failure path and all selected and binding checks to pass."
     on_fail: "Downgrade status to the strongest evidence-supported outcome and explain the missing proof"
 
   - name: symptom_summary
@@ -147,12 +147,20 @@ artifacts:
         required: true
         description: "Why these changes address the cause rather than only the symptom"
 
+  - name: verification_decision
+    type: object
+    required: conditional
+    condition: "when a fix or mitigation is attempted"
+    description: "Canonical assistant-verification decision consumed before mutation."
+    validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and equals the decision received in debugging input; preserve every CheckSpec and TddChoice unchanged."
+    on_fail: "Resolve the decision through assistant-verification before mutation; do not invent or rewrite test scope or checks."
+
   - name: verification
     type: object[]
     required: true
     description: "Commands, tests, inspections, or manual checks used to verify outcome"
-    validation: "Must include original reproduction path when available and at least one relevant regression check or explain why not feasible"
-    on_fail: "Run missing verification or record why it is blocked; do not count skipped checks as proof"
+    validation: "Must include the original failure path when available and every selected and binding check; a test is required only when selected. Preserve method-specific evidence and gaps."
+    on_fail: "Run missing selected or binding checks, or record the exact blocker; do not replace an unselected test with a false infeasibility claim or count skipped checks as proof."
     object_fields:
       - name: command_or_check
         type: string
@@ -172,5 +180,5 @@ artifacts:
     type: string[]
     required: true
     description: "Remaining uncertainty, skipped checks, blocked diagnostics, or follow-up risks"
-    validation: "Use an empty list only when reproduction, fix, and regression verification all passed"
-    on_fail: "List residual uncertainty or explain why none remains"
+    validation: "Use an empty list only when the original failure path and every selected and binding check passed"
+    on_fail: "List residual uncertainty, including any selected check that is missing, failed, skipped, or blocked"

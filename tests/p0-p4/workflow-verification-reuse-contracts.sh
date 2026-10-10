@@ -22,7 +22,19 @@ test_start "current verification reuse keeps conservative invalidation and revie
 missing=()
 for term in "exact argv and cwd" "complete passing result/log" "source/test/config/dependency" "toolchain and relevant non-secret environment" "covered acceptance obligations" "Unknown identity, freshness, or coverage requires rerun" "mutable external state" "user explicitly requests a fresh run" "source changes after a fix"; do normalized_contains "$worker_protocol" "$term" || missing+=("protocol:$term"); done
 for term in "references/build-worker-protocol.md" "reuse only full matching identity/coverage evidence" "new integration coverage" "final current validation" "independent code review" "final review snapshot"; do normalized_contains "$phases" "$term" || missing+=("phases:$term"); done
-for term in "original run and current comparison" "does not claim a newly executed verification" "no new mandatory"; do normalized_contains "$output_contract" "$term" || missing+=("contract:$term"); done
+for term in "When reusing evidence, retain the original run and compare exact argv/cwd when command-based, relevant inputs, environment/toolchain, and covered claims" "do not claim a new execution"; do normalized_contains "$output_contract" "$term" || missing+=("contract:$term"); done
+if ! ruby -ryaml -e '
+  artifact = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").find { |entry| entry.fetch("name") == "validation_results" }
+  fields = artifact.fetch("object_fields")
+  field_by_name = fields.to_h { |field| [field.fetch("name"), field] }
+  required_names = fields.select { |field| field["required"] == true }.map { |field| field.fetch("name") }
+  valid = required_names == %w[command_or_check result evidence] &&
+    field_by_name.fetch("command_or_check").fetch("type") == "string" &&
+    field_by_name.fetch("result").fetch("type") == "enum" &&
+    field_by_name.fetch("result").fetch("enum_values") == %w[passed failed skipped not_applicable] &&
+    field_by_name.fetch("evidence").fetch("type") == "string"
+  exit(valid ? 0 : 1)
+' "$output_contract"; then missing+=("contract:validation_results required field types"); fi
 if [[ ${#missing[@]} -eq 0 ]]; then pass; else fail "missing reuse controls: ${missing[*]}"; fi
 
 expected_matrix="$(for index in "${!matrix_ids[@]}"; do jq -n --arg id "${matrix_ids[$index]}" --arg action "${matrix_actions[$index]}" '{id:$id,action:$action}'; done | jq -s .)"

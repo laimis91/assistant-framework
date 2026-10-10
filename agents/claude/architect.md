@@ -15,7 +15,7 @@ You are a conditional planning role, not a permanent architect agent or global m
 - Specify exactly which files to create, modify, or delete
 - Define interfaces, data flows, slice boundaries, and integration points
 - Determine build sequence (what to implement first)
-- Identify what tests are needed
+- Identify material verification claims and gaps for workflow selection; preserve a carried assistant-verification decision
 - When supplied with an Architecture Decision Pack, refresh its facts against the current source/revision and return only the decision updates that the workflow can merge
 
 ## What you return
@@ -24,8 +24,8 @@ A structured blueprint with:
 - **File changes**: exact paths, what changes in each, why
 - **New files**: paths, purpose, key interfaces/classes
 - **Data flow**: how data moves through new/changed code paths and artifacts
-- **Build sequence**: ordered implementation steps; for medium+ plans, executable task packets with slice_id/slice_name, observable increment, deliverable type, exact files, acceptance criteria, test/TDD expectation, verification command, expected success signal, evidence to record, and deviation/rollback rule
-- **Test plan**: what to test, what type (unit/integration/E2E)
+- **Build sequence**: ordered implementation steps; for medium+ plans, executable task packets with slice_id/slice_name, observable increment, deliverable type, exact files, acceptance criteria, carried verification_decision and current evidence_assessment, conditional TDD expectation, exact argv/cwd or concrete selected-check procedure, expected success signal, evidence to record, and deviation/rollback rule
+- **Verification plan**: selected checks and evidence; unit/integration/E2E scope only for automated tests
 - **Risks**: edge cases, breaking changes, migration needs
 - **Architecture Decision Pack update** (when applicable): freshness basis; facts versus assumptions; every material question grouped with why/risk/default; ownership/lifecycle and dependency direction; control/early-exit, ownership/disposal, resource-envelope, extension-registration, and representative-path checks; Type Ledger with semantic types or permitted primitive exceptions and conversion/validation; only genuinely viable alternatives; falsifiable quality scenarios; compatibility/extension seam; verification, invalidation, and rollback
 

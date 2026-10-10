@@ -106,7 +106,7 @@ After rolling back, confirm:
 - [ ] Schema matches pre-migration state
 - [ ] Application starts and connects successfully
 - [ ] Existing data is intact and accessible
-- [ ] All tests pass against rolled-back schema
+- [ ] Selected rollback checks and binding project checks pass against the rolled-back schema; record actual results and remaining gaps
 
 ## Section 4: Data backfill strategy
 

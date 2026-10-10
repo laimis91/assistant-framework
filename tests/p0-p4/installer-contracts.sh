@@ -811,6 +811,9 @@ for change_impact_skill in assistant-debugging assistant-review; do
     elif [[ "$change_impact_skill" == "assistant-debugging" && ! -f "$change_impact_home/.codex/skills/assistant-review/SKILL.md" ]]; then
         change_impact_install_failure="assistant-debugging selective installation omitted its canonical assistant-review producer"
         break
+    elif [[ "$change_impact_skill" == "assistant-debugging" && ! -f "$change_impact_home/.codex/skills/assistant-verification/SKILL.md" ]]; then
+        change_impact_install_failure="assistant-debugging selective installation omitted its canonical assistant-verification producer"
+        break
     elif [[ "$change_impact_skill" == "assistant-review" ]] && { [[ -d "$change_impact_home/.codex/skills/assistant-debugging" ]] || [[ -d "$change_impact_home/.codex/skills/assistant-workflow" ]]; }; then
         change_impact_install_failure="assistant-review selective installation copied an unrelated consumer"
         break

@@ -87,6 +87,8 @@ if [[ -f "$native_suite" ]]; then
         || failures+=("native suite lacks legacy-state preservation coverage")
     grep -Fq -- 'locked Codex instructions fail preflight before installation changes' "$native_suite" \
         || failures+=("native suite lacks locked Codex update-file preflight coverage")
+    grep -Fq -- 'assistant-debugging selective installation omitted its canonical assistant-verification producer' "$native_suite" \
+        || failures+=("native suite does not verify the assistant-debugging to assistant-verification dependency")
     grep -Fq -- "'cleanup-memory-graph.ps1'" "$native_suite" \
         || failures+=("native suite lacks exact PowerShell cleanup retirement coverage")
     grep -Fq -- "'cleanup-memory-graph.sh'" "$native_suite" \

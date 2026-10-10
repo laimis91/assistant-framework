@@ -26,9 +26,9 @@ List everything external consumers depend on:
 |---|---|---|
 | [endpoint / method / event / config] | [return type, params, status codes] | [any contract callers depend on] |
 
-### Existing test outputs
+### Existing verification evidence
 
-Run the full test suite and record the results:
+Carry the canonical verification_decision and current evidence_assessment. Reuse current evidence when its identity, coverage, and freshness match; otherwise run the selected checks and binding project checks and record actual results. Automated test commands below are examples only when those checks are selected:
 
 ```bash
 # Record baseline
@@ -62,7 +62,7 @@ Explicitly list what the refactor must preserve:
 - [ ] Configuration format unchanged (appsettings keys, env var names)
 - [ ] External service contracts unchanged (HTTP endpoints, message formats)
 - [ ] Build output unchanged (assembly names, entry points, published artifacts)
-- [ ] All existing tests continue to pass without modification
+- [ ] Selected regression checks and binding project checks preserve the accepted behavior; do not delete useful tests or change their expected behavior to hide a regression
 
 ### Soft invariants (acceptable to change with justification)
 
@@ -78,20 +78,21 @@ Explicitly list what the refactor must preserve:
 
 ## After: verification plan
 
-After the refactor is complete, verify every invariant:
+After the refactor is complete, verify every applicable invariant through its selected check and assess actual evidence. A material uncovered invariant requires a decision refresh; do not infer success from unchanged test counts.
 
-### Automated verification
+### Selected automated verification
+
+Use only the commands selected for applicable claims; retain concrete procedures for selected non-command checks.
 
 ```bash
-# 1. Build must pass
+# 1. Build when selected or binding
 dotnet build  # or npm run build / pio run
 
-# 2. All tests must pass with same results as baseline
+# 2. Selected regression tests and binding suites must pass
 dotnet test
 
-# 3. Compare test counts (no tests accidentally lost)
-# Baseline: [N] total, [N] passing
-# After: [N] total, [N] passing — must match
+# 3. Confirm relevant coverage was retained
+# Counts alone do not prove coverage; inspect moved or adapted tests when needed
 
 # 4. If applicable: API contract check
 # Compare OpenAPI spec before/after (no schema drift)
@@ -134,10 +135,11 @@ Add this block to the plan as the "Refactor Safety Contract" section:
 **Hard invariants:**
 - [ ] [list each]
 
-**Verification commands:**
-1. `dotnet build` — compiles without errors
-2. `dotnet test` — all [N] tests pass
-3. [additional verification steps]
+**Verification decision:** [unchanged canonical decision]
+**Assessment:** [current evidence and remaining gaps]
+**Selected commands or procedures:**
+1. [selected or binding check, concrete procedure, actual result]
+2. [next selected check, or none]
 
-**Rollback:** If invariants break and can't be quickly fixed, `git checkout` the pre-refactor state. The refactor is atomic — partial completion is not acceptable.
+**Rollback:** If invariants break, retain failure evidence and use approved bounded recovery. Revert only owned changes when rollback is authorized; preserve pre-existing work. Partial verification does not support completion.
 ```

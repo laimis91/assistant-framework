@@ -16,7 +16,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "11.1"
+schema_version: "12.0"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -265,7 +265,7 @@ gates:
         on_fail: "Dispatch Architect to produce a strict slice manifest or add a single-slice rationale when one verified slice is the smallest correct decomposition"
 
       - id: DC2
-        check: "Each slice has slice_id, name, observable_increment, deliverable_type, acceptance_criteria, files_to_create, files_to_modify, files_to_test, enabling_changes_included, depends_on, verification_command, expected_success_signal, evidence_to_record, and deviation_rollback_rule"
+        check: "Each slice has slice_id, name, observable_increment, deliverable_type, acceptance_criteria, unchanged verification_decision, tdd_applies equal to verification_decision.tdd_choice.mode, files_to_create, files_to_modify, files_to_test, enabling_changes_included, depends_on, expected_success_signal, evidence_to_record, and deviation_rollback_rule. A command-based selected CheckSpec carries direct argv and cwd; otherwise its concrete procedure remains in the canonical CheckSpec."
         on_fail: "Rewrite the Decompose output into the strict slice schema before entering Plan"
 
       - id: DC_SLICE_IDENTITY
@@ -285,7 +285,7 @@ gates:
         on_fail: "Merge circularly dependent work into the smallest single iterable slice that can be verified"
 
       - id: DC5
-        check: "No slice is layer-only, module-only, folder-only, feature-only, setup-only, contract-only, or broad component-style unless it produces a verified deliverable artifact with deliverable_type, acceptance criteria, verification command, and expected success signal"
+        check: "No slice is layer-only, module-only, folder-only, feature-only, setup-only, contract-only, or broad component-style unless it produces a verified deliverable artifact with deliverable_type, acceptance criteria, selected verification evidence or concrete procedure, and expected success signal"
         on_fail: "Convert broad layer/module/folder/feature/component or setup-only work into a smallest observable deliverable slice, or merge it into the slice that uses it"
 
       - id: DC6
@@ -350,6 +350,11 @@ gates:
         check: "When promoting a workflow or review lesson into durable skill/constraint/eval knowledge: verified_skill_distillation exists and verifier_result is approved before durable files are written"
         on_fail: "Load references/verified-skill-distillation.md and obtain verifier approval before skill/constraint/eval promotion"
 
+      - id: P_VERIFICATION_SELECTION
+        check: "Before Plan fixes verification obligations, assistant-verification selected a current verification_decision; its tdd_choice.mode is projected unchanged to tdd_mode and each affected packet's tdd_applies. Binding policy conflicts and material capability gaps are resolved or retained as explicit blockers."
+        condition: "execution_intent != prepare_only"
+        on_fail: "Run assistant-verification before finalizing Plan; resolve binding conflicts, keep scope/technique/TDD independent, and carry the canonical decision unchanged."
+
       - id: P1
         check: "End-to-end/implement-only plans contain ordered implementation steps or task packets, each with exact file paths to create, modify, and test; for medium+ tasks the plan consumes the approved slice manifest from Decompose without rediscovering boundaries. A prepare_only plan is optional readiness context and must not manufacture executable packets."
         on_fail: "For prepare_only, repair only the readiness evidence, evidence-backed implications, open decisions, and next implementation state; do not create executable steps or task packets. For execution_intent != prepare_only, add exact create/modify/test file paths to every implementation step or task packet, and carry the approved slice manifest forward for medium+ tasks."
@@ -392,9 +397,9 @@ gates:
         on_fail: "For prepare_only, repair only the readiness evidence, evidence-backed implications, open decisions, and next implementation state; do not create executable steps or task packets. For execution_intent != prepare_only, rewrite vague implementation steps into executable task packets that consume slice_id and slice manifest fields directly."
 
       - id: P10
-        check: "Each implementation step or task packet has a verification command and expected success signal"
+        check: "Each implementation step or task packet carries the unchanged verification_decision and applicable selected CheckSpec refs, plus an expected success signal. Command-based checks carry direct argv and cwd; non-command checks carry a concrete procedure."
         condition: "execution_intent != prepare_only"
-        on_fail: "Add an exact verification command and expected success signal to each step or task packet"
+        on_fail: "Carry the unchanged decision and applicable selected CheckSpec refs into each step or task packet; add direct argv and cwd only for command-based checks, or a concrete procedure for non-command checks, with an expected success signal."
 
       - id: P11
         check: "Each task packet includes a deviation/rollback rule, or small inline plan explicitly states how deviations are handled"
@@ -478,6 +483,11 @@ gates:
         condition: "execution_intent != prepare_only and plan_mode == none"
         on_fail: "Stop Build; return to Discover for explicit answers or controlling-source resolution."
 
+      - id: B_VERIFICATION_SELECTION
+        check: "A current verification_decision is carried into the task packet before any Build action; tdd_mode equals its tdd_choice.mode, and each slice's tdd_applies preserves that mode without adding unconditional RED."
+        condition: "execution_intent != prepare_only"
+        on_fail: "Stop before mutation; run or refresh assistant-verification, bind its decision to the packet, and project TDD only from tdd_choice.mode."
+
       - id: B_CHANGE_IMPACT_APPLICABILITY
         check: "Before any source/test mutation or mutation dispatch, record change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
         on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
@@ -512,12 +522,13 @@ gates:
         on_fail: "Stop same-scope repair. Route an unknown-cause failure through assistant-debugging; otherwise reconstruct build_repair_state, then route to replan/restart through pivot_restart_decision or return blocked. Never start a fourth attempt or continue after two no-progress attempts."
 
       - id: B2
-        check: "Build command succeeded (exit code 0 or equivalent success)"
-        on_fail: "Fix build errors. Do not enter Review with a broken build."
+        check: "When a current due selected CheckSpec or resolved binding constraint requires a build, build_result is passed from current observed or admissibly reused successful evidence; an executed build failure is failed and blocks completion, while a required build not run remains not_run with NEEDS_CONTEXT or BLOCKED. not_applicable is valid only when no due selected or binding build applies and no build was executed."
+        condition: "the current due selected CheckSpec's claim, oracle, or procedure, or a resolved binding constraint, requires a build"
+        on_fail: "Resolve applicability and run or reuse current successful build evidence. Do not enter Review with a failed, missing, stale, or unresolved required build."
 
       - id: B3
-        check: "At least one relevant verification exists and passed: runnable tests for code changes, or documented validation_results for docs/no-op/discovery/non-runnable workflows"
-        on_fail: "Add or run an appropriate verification and record a passing result before proceeding"
+        check: "Every selected check due in Build and every binding project check has a current observed or admissibly reused result recorded in the existing result carriers; skipped, failed, partial, stale, and unavailable outcomes remain gaps. Missing or unresolved build/test applicability is also a gap."
+        on_fail: "Complete the selected checks or preserve their exact gaps; do not substitute an unselected full suite or a planned command for result evidence."
 
       - id: B3A
         check: "Unknown-cause bugfixes completed assistant-debugging or recorded a concrete debugging blocker before implementation; no random patching occurred before reproduction/root-cause evidence"
@@ -525,8 +536,9 @@ gates:
         on_fail: "Return to assistant-debugging: reproduce or record blocker, evaluate hypotheses, and identify root cause or mitigation target before patching."
 
       - id: B4
-        check: "All tests pass (0 failures)"
-        on_fail: "Fix failing tests before entering Review"
+        check: "Every executed selected or binding test passes with 0 failures; when a due selected or binding test check has no current result, it remains a gap under B3. No full-suite run is implied when it was not selected or required."
+        condition: "the current due selected CheckSpec's claim, oracle, or procedure, or a resolved binding constraint, requires an automated test"
+        on_fail: "Resolve any missing or failing selected verification evidence before entering Review"
 
       - id: B5
         check: "No plan deviations occurred silently — all were flagged via '>> PLAN DEVIATION DETECTED'"
@@ -547,24 +559,24 @@ gates:
         on_fail: "Return to the selected Build owner with the typed Pack obligations, record missing RED/GREEN or explicit blocker evidence, and do not enter Review with partial, duplicate, or unknown coverage."
 
       - id: B12
-        check: "For medium+ tasks: every slice's acceptance and verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger"
+        check: "For medium+ tasks: every slice's acceptance and selected verification criteria from DECOMPOSE phase are independently checked, passing, and recorded with method-appropriate result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger"
         condition: "size in [medium, large, mega]"
-        on_fail: "Run verification criteria for each slice, record command/result evidence in the configured task journal or equivalent carried-forward state, and fix failing criteria before proceeding to Review."
+        on_fail: "Run selected verification criteria for each slice, record method-appropriate results in the configured task journal or equivalent carried-forward state, and resolve failing or missing criteria before proceeding to Review."
 
       - id: B_SUBAGENT_EVIDENCE
-        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's focused RED, GREEN, and verification evidence plus changed-file evidence; build_execution_lane == separated_workers records Code Writer and Builder/Tester implementation/verification evidence"
+        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's implementation, selected-check results, and changed-file evidence, with RED/GREEN evidence only when verification_decision.tdd_choice.mode=true; build_execution_lane == separated_workers records Code Writer implementation and Builder/Tester selected-check results, with RED evidence only when TDD is active"
         condition: "controller_intensity in [standard, strict]"
-        on_fail: "Update the selected-lane implementation and verification portion of the Agent Dispatch Log before leaving Build. Light work may instead record inline/direct validation."
+        on_fail: "Update the selected-lane implementation and selected-check result portion of the Agent Dispatch Log before leaving Build, adding RED/GREEN only when the canonical TDD choice is active. Light work may instead record inline/direct validation."
 
       - id: B_SUBAGENT_SLICE_EVIDENCE
         check: "For medium+ delegated tasks with slices: per-slice evidence matches build_execution_lane before the slice is marked VERIFIED; Builder/Tester is required only when build_execution_lane == separated_workers"
         condition: "size in [medium, large, mega] and subagent_execution_mode == delegated"
-        on_fail: "Repair evidence according to build_execution_lane: bounded_executor records executor RED/GREEN/verification; separated_workers records Code Writer and Builder/Tester dispatch/results."
+        on_fail: "Repair evidence according to build_execution_lane: bounded_executor records implementation and selected-check results, with RED/GREEN only when TDD is active; separated_workers records Code Writer implementation and Builder/Tester selected-check results, with RED evidence only when TDD is active."
 
       - id: B13
-        check: "For medium+ tasks: source-changing slices in a shared or unknown workspace are VERIFIED, including self-check result, before another source-changing slice starts. Independently executable source-changing slices may overlap only when runtime evidence proves isolated workspaces; every depends_on prerequisite has final status VERIFIED before a dependent slice starts. Full-scope validation is required before fresh Review, after all slices are integrated. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code."
+        check: "For medium+ tasks: source-changing slices in a shared or unknown workspace are VERIFIED, including self-check result, before another source-changing slice starts. Independently executable source-changing slices may overlap only when runtime evidence proves isolated workspaces; every depends_on prerequisite has final status VERIFIED before a dependent slice starts. Full-scope validation using the selected checks and binding project checks is required before fresh Review, after all slices are integrated; full-scope refers to acceptance and integration coverage, not an unselected full test suite. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code."
         condition: "size in [medium, large, mega]"
-        on_fail: "This is a process violation — sequence source-changing slices in shared or unknown workspaces, require runtime-proven isolation for overlap, and do not start dependents before VERIFIED prerequisites. After integration and before Review, complete full-scope validation; complete cross-slice validation only when slice_manifest contains more than one item, or record it as not_applicable with the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code."
+        on_fail: "This is a process violation — sequence source-changing slices in shared or unknown workspaces, require runtime-proven isolation for overlap, and do not start dependents before VERIFIED prerequisites. After integration and before Review, complete selected verification and binding project checks across the integrated acceptance scope; complete cross-slice validation only when slice_manifest contains more than one item, or record it as not_applicable with the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code."
 
     guidance_assertions:
 
@@ -848,6 +860,24 @@ invariants:
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
     scope: all_phases
     on_fail: "Refresh the bounded capture and expected authority, rerun affected verification/review, or retain the result as blocked/remaining rather than complete."
+
+  - id: INV_VERIFICATION_SELECTION
+    check: "Every implementation workflow selects current verification before Plan fixes obligations or before Build in the no-plan lane. The canonical verification_decision is carried unchanged; unresolved binding conflicts or material capability gaps remain blockers."
+    condition: "execution_intent != prepare_only"
+    scope: all_phases
+    on_fail: "Return to assistant-verification, refresh selection against current scope and policy, and bind its unchanged decision before dependent work."
+
+  - id: INV_VERIFICATION_RESULTS
+    check: "EvidenceAssessment uses actual result refs for each material selected claim and binding obligation. Only current, resolved passing evidence can support sufficient; planned, failed, stale, partial, skipped, unavailable, or missing evidence remains a gap. Reused results retain original-run identity and current comparison, including argv/cwd when command-based."
+    condition: "execution_intent != prepare_only"
+    scope: all_phases
+    on_fail: "Record the precise result/gap in existing test_results or validation_results, then reassess before Review or completion."
+
+  - id: INV_TDD_PROJECTION
+    check: "tdd_mode equals verification_decision.tdd_choice.mode and each packet tdd_applies preserves that choice. RED evidence is required before production only when TDD is active; false TDD uses the selected checks without fabricated RED."
+    condition: "execution_intent != prepare_only"
+    scope: all_phases
+    on_fail: "Repair the decision projection. If active TDD lacks valid right-reason RED, stop production; otherwise remove unconditional RED demands without discarding selected evidence."
 
   - id: INV_PROGRESSIVE_DISCOVERY_BOUNDARY
     check: "Progressive mapping, resolving, route_clear, or blocked state remains in Discover and is a no-execution boundary: no Decompose, Plan, Build, project/source mutation, external writes, branch creation, or credential-location recording occurs. The only permitted local state update is the framework-owned journal/equivalent carried-state update required to record progressive state, including a route-clear handoff or its consumption; it never authorizes project/source mutation or an external write."

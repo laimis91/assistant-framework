@@ -10,8 +10,8 @@ Missing Node or checker blocks only the expanded shared/material deterministic
 gate; it is not a manual-pass exception.
 
 Every behavior change records scope, applicability reason, and causal local
-evidence. Local work keeps its ordinary
-relevant verification and self-review; it does not require Node or a common
+evidence. Local work keeps its selected verification and fresh self-review; it
+does not require Node or a common
 artifact. Discovery records the bounded base/candidate universe, unknown
 material boundaries, and the same `artifact_identity` only for shared,
 materially unresolved, or explicitly carried expanded work. Before any

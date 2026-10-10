@@ -4,7 +4,7 @@ fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 skill_validator="$FRAMEWORK_DIR/tools/skills/validate-skills.sh"
-specialists=(assistant-debugging assistant-tdd assistant-research assistant-skill-creator)
+specialists=(assistant-debugging assistant-tdd assistant-research assistant-skill-creator assistant-verification)
 
 index_has_load_set() {
     local index_file="$1"
@@ -163,18 +163,55 @@ else
     pass
 fi
 
+test_start "debugging FIX gate preserves the original path and follows selected verification"
+if ruby -ryaml -e '
+  index = YAML.load_file(ARGV.fetch(0))
+  gates = YAML.load_file(ARGV.fetch(1))
+  selector = index.dig("load_sets", "fix_verification", "selectors").find do |s|
+    s["path"] == "contracts/phase-gates.yaml" && s["section"] == "gates" && s["key"] == "phase" && s["names"] == ["FIX"]
+  end
+  fix_gate = gates.fetch("gates").find { |g| g["phase"] == "FIX" }
+  fx2 = fix_gate.fetch("exit_assertions").find { |a| a["id"] == "FX2" }
+  selected_only = lambda do |assertion, methods, original_path_preserved, selected_checks_pass|
+    wording = assertion.fetch("check")
+    preserves_original = wording.include?("preserves the original failure path")
+    completes_selected = wording.include?("every selected and binding check")
+    tests_only_when_selected = wording.include?("automated regression tests are required only when selected")
+    original_path_preserved && selected_checks_pass && preserves_original && completes_selected &&
+      tests_only_when_selected && (!methods.include?("automated_test") || selected_checks_pass)
+  end
+  valid_non_test = selected_only.call(fx2, ["manual_observation"], true, true)
+  valid_selected_test = selected_only.call(fx2, ["automated_test"], true, true)
+  wrong_missing_original_path_rejected = !selected_only.call(fx2, ["manual_observation"], false, true)
+  old_policy = Marshal.load(Marshal.dump(fx2))
+  old_policy["check"] = "The fix preserves the original failure path; an automated regression test is required whenever one is feasible."
+  feasible_but_unselected_test_rejected = !selected_only.call(old_policy, ["manual_observation"], true, true)
+  exit(selector && valid_non_test && valid_selected_test && wrong_missing_original_path_rejected && feasible_but_unselected_test_rejected ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-debugging/contracts/index.yaml" \
+    "$FRAMEWORK_DIR/skills/assistant-debugging/contracts/phase-gates.yaml"; then
+    pass
+else
+    fail "debugging FIX policy did not preserve the original failure path while allowing selected non-test verification"
+fi
+
 test_start "specialist roots route contract loading by enforcement boundary"
 root_failures=()
 for skill_name in "${specialists[@]}"; do
     skill_file="$FRAMEWORK_DIR/skills/$skill_name/SKILL.md"
     for term in \
         "contracts/index.yaml" \
-        "load only" \
-        "specialist gates are authoritative"; do
+        "load only"; do
         if ! grep -Fqi "$term" "$skill_file"; then
             root_failures+=("$skill_name root missing $term")
         fi
     done
+    if [[ "$skill_name" == "assistant-verification" ]]; then
+        if ! grep -Fqi "remain authoritative" "$skill_file"; then
+            root_failures+=("$skill_name root does not preserve canonical contract authority")
+        fi
+    elif ! grep -Fqi "specialist gates are authoritative" "$skill_file"; then
+        root_failures+=("$skill_name root missing specialist gates are authoritative")
+    fi
     if rg -qi 'read and follow the contract files in .contracts/. before|read (all |the )?contract files.*before executing|all contracts are mandatory' "$skill_file"; then
         root_failures+=("$skill_name still eagerly loads every contract")
     fi

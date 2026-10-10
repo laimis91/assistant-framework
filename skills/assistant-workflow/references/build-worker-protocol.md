@@ -15,7 +15,7 @@ no public behavior, data, security, harness, or QA acceptance risk:
 - `workflow_state_mode=inline`
 - `subagent_policy_state=not_required`
 - `subagent_execution_mode=not_applicable`
-- direct implementation with relevant automated validation/tests
+- direct implementation with the checks selected by `verification_decision`
 - a fresh self-review after validation
 
 Shared fanout alone does not promote this Build lane. The light lane does not require Code Writer, Builder/Tester, Code Reviewer, or
@@ -29,8 +29,9 @@ Expanded impact keeps this Build lane; Review records canonical
 Select `build_execution_lane` before dispatch:
 
 - `bounded_executor` is the default for ordinary medium standard-risk work.
-  One Code Writer/bounded executor owns the focused RED, GREEN, edit, test, and
-  refactor-safety loop during Build. Independent review is dispatched only
+  One Code Writer/bounded executor owns implementation and selected checks;
+  RED/GREEN/REFACTOR applies only when `verification_decision.tdd_choice.mode`
+  is true. Independent review is dispatched only
   after Build enters Review.
 - `separated_workers` is used for high or critical risk, broad or noisy
   verification, environment-heavy validation, an explicit independent TDD
@@ -85,8 +86,8 @@ Before standard/strict Build can complete, the task journal Agent Dispatch Log
 or equivalent carried-forward state contains only the selected Build-lane
 evidence:
 
-- `bounded executor dispatch/result` plus focused RED/GREEN/verification
-  evidence when `build_execution_lane=bounded_executor`, or `Code Writer` and
+- `bounded executor dispatch/result` plus selected verification evidence and
+  RED/GREEN evidence only when TDD is active for `build_execution_lane=bounded_executor`, or `Code Writer` and
   `Builder/Tester` dispatch/results when `separated_workers`
 
 After Build, Review separately adds `Code Reviewer dispatch/result` (or legacy
@@ -99,10 +100,27 @@ fallback cannot complete.
 For medium+ delegated work, record per-slice dispatch evidence before a slice is
 marked `VERIFIED`.
 
+### Build and test applicability
+
+Resolve build and test applicability from the current due `CheckSpec`s and
+resolved binding constraints, using each check's claim, oracle, and concrete
+procedure. Do not infer applicability from file type, command presence, method,
+or technique alone; missing or unresolved applicability is a gap. Keep
+`build_result` required: use `not_applicable` only when no due selected or
+binding build check applies and no build was executed, `passed` only for current
+observed or admissibly reused successful build evidence, `failed` for an
+executed failure, and `not_run` when a required build could not run and the
+worker is `NEEDS_CONTEXT` or `BLOCKED`. A failed required build blocks
+completion. Keep `test_summary` required; zero counts mean no tests were
+executed, not that selected or binding tests passed. Every due selected or
+binding check still needs a current result. A no-command check may return an
+empty `verification.commands` list only when `verification.evidence` names the
+concrete procedure performed and its observed result.
+
 ## Build Loop
 
 For light work, implement the carried Discover scope/criteria or the inline plan
-when `plan_mode=inline`, run relevant automated validation/tests, and record the
+when `plan_mode=inline`, run selected checks and binding project checks, and record the
 changed scope plus results in the inline packet. Then perform the compact fresh
 self-review. Do not create worker or
 independent-review dispatch evidence solely to satisfy the light lane.
@@ -112,8 +130,9 @@ For medium+ tasks with slices, execute source-changing slices sequentially in a 
 Before starting a slice:
 
 1. Load the approved task packet for the slice, including slice_id, observable
-   increment, deliverable type, files, acceptance criteria, verification command,
-   expected success signal, evidence to record, and deviation/rollback rule.
+    increment, deliverable type, files, acceptance criteria, unchanged verification
+   decision, selected checks, command argv/cwd or non-command procedure, expected
+   success signal, evidence to record, and deviation/rollback rule.
 2. When harness-capable, confirm the task packet carries `done_contract_ref`,
    `harness_recipe_ref`, `harness_run_state_ref`, `trace_ledger_ref`,
    `replay_packet_ref`, and typed `artifact_refs`.
@@ -123,10 +142,11 @@ Before starting a slice:
 5. Check constraints from the task journal against the slice files and criteria.
 
 For each step, dispatch the selected lane owner for one task packet at a time
-per worker. The bounded executor edits and runs focused verification in the
-same context. Separated workers dispatch Code Writer, then Builder/Tester. In
-direct fallback, perform the same selected-lane responsibilities and record
-equivalent evidence. Tests stay alongside code, not after it.
+per worker. The bounded executor implements and runs selected verification in
+the same context. Separated workers dispatch Code Writer, then Builder/Tester.
+In direct fallback, perform the same selected-lane responsibilities and record
+equivalent evidence. When TDD is active, establish meaningful RED before
+production edits; otherwise follow the selected checks without adding a RED step.
 
 If implementation or verification fails and the cause is unclear, return to
 `assistant-debugging` before another patch attempt. If the next fix is clear,
@@ -161,21 +181,22 @@ with reapproval, user input, or environment recovery through
 `pivot_restart_decision` when applicable. A changed plan version starts a new
 path only after required reapproval; it must not disguise a same-scope retry.
 
-After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code. Per-slice verification does not satisfy this integration barrier.
+After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice validation still covers the selected integration claim. Per-slice verification does not satisfy a distinct selected integration check.
 
 After each implementation step, apply the relevant SOLID check from
 `references/prompts/solid-principles.md` and fix material violations before
 moving on.
 
-## TDD Sandwich
+## Conditional TDD Boundary
 
-Workflow sets TDD active by default for behavior changes, bugfixes with
-RED-ready reproduction/root-cause evidence, and interface-affecting refactors
-unless a not-feasible exception is recorded. Unknown-cause bugfixes complete
-debugging first, then enter RED once the failure mechanism is understood.
+The canonical `verification_decision.tdd_choice.mode` selects TDD independently
+from verification scope and method. Task type alone never activates TDD. For
+unknown-cause bugfixes, complete debugging first; enter RED only if the resulting
+decision activates TDD and a meaningful assertion can fail for the intended reason.
 
 When `tdd_mode=true` or `tdd_applies=true`, preserve the behavior boundary in
-both lanes: valid RED evidence must exist before production code.
+both lanes: valid meaningful RED evidence must exist before production code.
+When false, selected checks remain required but RED is not manufactured.
 
 When the task packet carries an Architecture Decision Pack, carry its typed
 `architecture_test_obligations` into the selected Build owner handoff. The
@@ -183,11 +204,12 @@ selected owner returns `architecture_obligation_coverage` with each stable
 `obligation_id` exactly once; unknown or duplicate ids fail the Build evidence
 gate rather than being inferred from a passing wrapper test.
 
-- `bounded_executor`: the bounded executor writes/runs RED, records the
-  right-reason failure, implements minimal GREEN, then runs focused and relevant
-  regression verification.
-- `separated_workers`: Builder/Tester owns RED, Code Writer owns GREEN, and
-  Builder/Tester owns verify/refactor-safety.
+- `bounded_executor`: when TDD is active, the bounded executor adds or extends
+  one assertion, records the intended failure, implements minimal GREEN, then
+  runs selected checks and binding regressions; with false TDD it runs only the
+  selected verification plan.
+- `separated_workers`: Builder/Tester owns RED only when TDD is active, Code
+  Writer owns production changes, and Builder/Tester runs selected verification.
 
 For bugfixes, RED traces to the original reproduction/debugging evidence. A
 missing or wrong-reason RED blocks production edits in either lane.
@@ -278,13 +300,14 @@ or unknown workspace, start another source-changing slice only after the active
 source-changing slice is fully verified; start a dependent slice only after all
 its `depends_on` prerequisites are verified.
 
-After all slices are verified and concurrent outputs are integrated, apply the
-manifest-cardinality integration rule: full-scope validation is required before
-fresh Review; cross-slice validation applies only when slice_manifest contains
-more than one item, and for one item is recorded as not_applicable using the
-one-item manifest and single_slice_rationale. Single-slice full-scope
-validation still covers integration with existing code. Per-slice evidence
-does not satisfy new integration coverage.
+After all slices are verified and concurrent outputs are integrated, run the
+selected checks and binding project checks over the completed scope before
+fresh Review; do not add an unselected full suite. Cross-slice validation
+applies only when slice_manifest contains more than one item, and for one item
+is recorded as not_applicable using the one-item manifest and
+single_slice_rationale. A selected single-slice integration check covers its
+claim; per-slice evidence does not satisfy a distinct selected integration
+check.
 If implementation reveals a plan problem, print `>> PLAN DEVIATION DETECTED`,
 record `pivot_restart_decision.reapproval_required=true` when scope/files/
 behavior/risk/verification/acceptance changes, and wait for approval before

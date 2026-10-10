@@ -49,5 +49,11 @@
       "pending-architecture-pack-verification"
   ],
   "pilot_repeats": 3,
-  "status": "candidate"
+  "historical_applicability": {
+    "classification": "historical_comparison",
+    "original_source_report_provenance": "unavailable",
+    "current_promotion_evidence": false,
+    "note": "Original source/report evidence is not bound to this manifest. Retain static counts and declared smoke/pilot case-repeat scope as historical metadata only; they do not establish current source measurements or completed executions. Current promotion requires fresh source-bound measurements and run evidence."
+  },
+  "status": "historical_comparison"
 }

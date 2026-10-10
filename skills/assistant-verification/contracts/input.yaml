@@ -1,0 +1,169 @@
+schema_version: "1.0"
+contract: input
+skill: assistant-verification
+
+fields:
+  - name: operation
+    type: enum
+    required: true
+    enum_values: [select, assess, select_and_assess]
+    description: "Whether to select an approach, assess supplied evidence, or do both"
+    validation: "Infer from the user's intent and available results; an assessment request must not silently become selection-only when results are missing."
+    on_missing: infer
+
+  - name: work_scope
+    type: object
+    required: true
+    description: "The named outcome, changed behavior or content, acceptance criteria, and affected boundaries needed to judge verification"
+    validation: "Infer discoverable details from the task and sources; ask only when a material outcome remains unknowable."
+    on_missing: infer
+    object_fields:
+      - name: outcome
+        type: string
+        required: true
+        description: "The user-visible or system outcome the change must achieve"
+        validation: "Names an assessable outcome, not only files or implementation activity"
+      - name: artifact_kind
+        type: enum
+        required: true
+        enum_values: [code, skill_or_plugin, document, data_or_config, media_or_design, other]
+        description: "Primary kind of changed artifact; explicitly mention other affected kinds in the summary"
+      - name: change_summary
+        type: string
+        required: true
+        description: "What behavior, content, or boundary changes"
+      - name: acceptance_criteria
+        type: string[]
+        required: true
+        description: "User, product, or contract claims that define the requested result"
+        validation: "Use an empty list only when the task and applicable sources state no assessable criteria."
+      - name: affected_boundaries_and_risks
+        type: string[]
+        required: true
+        description: "Relevant component, user, data, security, lifecycle, or quality boundaries and consequences of failure"
+        validation: "Include credible material failure modes; do not infer low risk from small change size."
+      - name: source_refs
+        type: string[]
+        required: false
+        default: []
+        description: "Opaque refs to authoritative requirements, artifacts, a carried decision, or relevant workflow evidence"
+
+  - name: verification_policy
+    type: object
+    required: true
+    description: "Binding requirements, scope restrictions, stated preferences, current capabilities, and existing mandatory checks"
+    validation: "Inspect project instructions and configuration first; distinguish a required scope from an exclusive restriction and a capability from permission."
+    on_missing: infer
+    object_fields:
+      - name: binding_constraints
+        type: object[]
+        required: true
+        description: "User, project, CI, safety, or contract mandates and prohibitions, with their source"
+        object_fields:
+          - name: kind
+            type: enum
+            required: true
+            enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]
+            description: "Whether this constraint mandates a scope, check, or TDD, prohibits a scope, or limits resources"
+          - name: value
+            type: string
+            required: true
+            description: "Constrained scope, exact existing check ref, required TDD value, or resource limit"
+            validation: "Scope values are unit, integration, or e2e; required_tdd is true; required_check points to an existing check or command."
+          - name: source_ref
+            type: string
+            required: true
+            description: "Exact instruction, user request, CI rule, or contract that makes the constraint binding"
+      - name: preferred_test_scope
+        type: enum
+        required: true
+        enum_values: [unspecified, unit, integration, e2e]
+        description: "Explicitly stated user or project preference used only to break otherwise reasonable ties"
+        on_missing: infer
+        infer_from: "Use unspecified unless a user or project instruction explicitly prefers a test scope."
+      - name: tdd_preference
+        type: enum
+        required: true
+        enum_values: [unspecified, prefer, avoid]
+        description: "Non-binding preference about TDD, separate from a required_tdd constraint and from the selected approach"
+        on_missing: infer
+        infer_from: "Use unspecified unless the user or project explicitly states a TDD preference."
+      - name: capabilities_and_limits
+        type: string[]
+        required: true
+        description: "Available environments, tools, access, and relevant constraints; unknown capability is not assumed available"
+
+  - name: existing_coverage
+    type: object[]
+    required: true
+    description: "Current relevant checks and the claims they assert; an empty array means inspection found none, not that verification can be skipped"
+    validation: "For every check, identify asserted claims, limitations, and source; distinguish coverage inspection from an executed result."
+    on_missing: infer
+    infer_from: "Inspect relevant suites, assertions, and current result sources; use an empty list only after recording the search rationale."
+    object_fields:
+      - name: check_ref
+        type: string
+        required: true
+        description: "Source or command ref to an existing assertion or validation procedure"
+      - name: asserted_claims
+        type: string[]
+        required: true
+        description: "Behavior or invariant actually observed by the check"
+      - name: limitations
+        type: string[]
+        required: true
+        description: "Boundaries, conditions, or claims the check does not establish"
+      - name: source_ref
+        type: string
+        required: true
+        description: "Source location or evidence identity for the coverage inspection"
+
+  - name: existing_coverage_search_rationale
+    type: string
+    required: conditional
+    condition: "existing_coverage is empty"
+    description: "Relevant coverage locations and result sources inspected before concluding none apply"
+    validation: "Give a concrete search or inspection basis; an empty array is not assumed without inspection."
+    on_missing: fail
+
+  - name: available_evidence
+    type: object[]
+    required: false
+    default: []
+    description: "Actual supplied results and their claim scope; do not copy logs or create a new run-state format"
+    validation: "Assessment uses current identity, freshness, coverage, result state, exclusions, and any original/current comparison refs."
+    object_fields:
+      - name: evidence_ref
+        type: string
+        required: true
+        description: "Existing result or source ref that can be resolved"
+      - name: claim_scope
+        type: string[]
+        required: true
+        description: "Exact claims this evidence purports to support"
+      - name: result_state
+        type: enum
+        required: true
+        enum_values: [passed, failed, skipped, partial, unavailable]
+        description: "Observed result state; command start, retry, or artifact existence alone is not success"
+      - name: freshness
+        type: enum
+        required: true
+        enum_values: [current, stale, unknown, not_applicable]
+        description: "Whether existing result identity and conditions still match the current change"
+      - name: source_or_artifact_refs
+        type: string[]
+        required: true
+        description: "Relevant source, artifact, transcript, or action refs that support or challenge the claimed result"
+      - name: exclusions
+        type: string[]
+        required: true
+        description: "Unexercised boundaries, substitutes, failures, or measurement limits"
+      - name: original_result_ref
+        type: string
+        required: false
+        description: "Original execution identity when a result is proposed for reuse"
+      - name: current_comparison_ref
+        type: string
+        required: false
+        description: "Current source, config, or toolchain comparison used to establish result freshness"

@@ -897,8 +897,12 @@ An untrappable process kill, host crash, or power loss can leave a mode-0700
 is a filesystem residual, not promotion evidence, and should be removed under
 the applicable local retention policy after confirming no eval process is live.
 
-The committed `workflow-kernel-v1` overlay is measured without changing the
-production root:
+The immutable `workflow-kernel-v1` overlay can be measured without changing the
+production root. Its manifest is classified as `historical_comparison`: archived
+static counts and planned smoke/pilot cases and repeats are retained, but the
+original source/report provenance is unavailable and these values are not current
+promotion evidence. A future evaluation must freshly measure and bind the current
+baseline and candidate source before making a promotion claim:
 
 ```bash
 tools/context-budget-report.sh --agent codex --skill assistant-workflow \
@@ -906,10 +910,7 @@ tools/context-budget-report.sh --agent codex --skill assistant-workflow \
   --format json
 ```
 
-Use the exact `smoke_cases` and `pilot_cases` declared in the variant manifest.
-The smoke uses one repeat (four runs total). Only after valid/redaction-safe
-traces, expand to the eight-case three-repeat pilot (48 runs), sequentially and
-with the approved time/quota cap.
+A newly authorized evaluation uses the exact `smoke_cases` and `pilot_cases` declared in the variant manifest. The smoke scope is two cases with one repeat (four runs total); the pilot scope is eight cases with three repeats (48 runs), run sequentially under the approved time/quota cap. Those declared counts describe scope only; they do not establish that the archived runs occurred.
 
 Native routing is not invoked by this repository. A human evaluator may capture
 the six exact `assistant-workflow` activation selections from a native Codex
@@ -951,9 +952,12 @@ tools/evals/run-codex-framework-evals.sh --execute \
 
 ### Current evidence boundary
 
-The committed ordered-workflow fixture and runner changed the case and grader
-hashes. Any earlier Terra snapshot is therefore historical evidence only and
-cannot establish current behavioral promotion. Do not describe the architecture
+The workflow-kernel manifest remains historical comparison data: its archived
+static counts and case/repeat plan have no bound original source/report
+provenance, so they cannot establish current promotion. Any earlier Terra
+snapshot is also historical evidence because the committed ordered-workflow
+fixture and runner changed the case and grader hashes. A future live promotion
+claim requires fresh evidence against the current source. Do not describe the architecture
 as currently Terra-validated unless a newly authorized exact pilot completes
 48/48 runs and 24/24 pairs against the current source, an admissible
 hash-bound manual native activation observation, every automatic gate
@@ -1027,7 +1031,7 @@ instruction eval runner. Operational modes require local shell, `jq`, and Ruby
 with JSON plus Psych/YAML support; response grading also requires Ruby
 BigDecimal. It does not call provider SDKs, model APIs, or network services.
 
-This slice now covers all 14 first-class `assistant-*` skills. Local-only Unity
+This inventory now covers all 15 first-class `assistant-*` skills. Local-only Unity
 skills remain excluded from the default inventory unless `--include-local` is
 passed. The current tracked first-class fixtures are:
 
@@ -1044,6 +1048,7 @@ passed. The current tracked first-class fixtures are:
 - `skills/assistant-tdd/evals/cases.json`
 - `skills/assistant-telos/evals/cases.json`
 - `skills/assistant-thinking/evals/cases.json`
+- `skills/assistant-verification/evals/cases.json`
 - `skills/assistant-workflow/evals/cases.json`
 
 By default, the runner discovers first-class `skills/assistant-*/SKILL.md`

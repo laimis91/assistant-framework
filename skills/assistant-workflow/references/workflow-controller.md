@@ -202,13 +202,14 @@ gates.
 ## Subagent, Review, and QA Separation
 
 - For ordinary medium standard work, Code Mapper maps context, one bounded
-  executor owns focused RED/GREEN/edit/test work in Build. After Build, Review
+  executor owns selected implementation and verification work in Build. TDD
+  adds RED/GREEN/REFACTOR only when the canonical decision activates it. After Build, Review
   owns independent Code Reviewer dispatch/result evidence. Code Reviewer
   reviews code quality, defects, security, architecture, and test coverage.
 - Use separated Code Writer and Builder/Tester only for high/critical risk,
   broad/noisy/environment-heavy verification, explicit independent TDD
   evidence, or explicit separation.
-- Light work implements directly, runs relevant automated validation/tests, and
+- Light work implements directly, runs the selected checks and any binding project checks, and
   performs a fresh self-review without worker or independent-review dispatch
   evidence. Any security, high-risk, harness, or QA trigger promotes the work out
   of this lane.

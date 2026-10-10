@@ -1,4 +1,4 @@
-schema_version: "1.1"
+schema_version: "2.0"
 contract: index
 skill: assistant-debugging
 
@@ -35,6 +35,24 @@ load_sets:
         key: name
         names: [change_impact_applicability, change_impact_evidence]
     budget_words: 1800
+  fix_verification:
+    selectors:
+      - id: debugging-fix-verification-input
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [verification_decision]
+      - id: debugging-fix-verification-gate
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        names: [FIX]
+      - id: debugging-fix-verification-output
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision, verification]
+    budget_words: 3500
   current_phase:
     selectors:
       - id: debugging-current-phase
@@ -65,7 +83,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [status, symptom_summary, reproduction, hypotheses, fewer_hypotheses_reason, root_cause, confidence, fix_summary, verification, residual_risks, change_impact_applicability, change_impact_evidence]
+        allowed_names: [status, symptom_summary, reproduction, hypotheses, fewer_hypotheses_reason, root_cause, confidence, fix_summary, verification_decision, verification, residual_risks, change_impact_applicability, change_impact_evidence]
     budget_words: 5000
 
 fallback:

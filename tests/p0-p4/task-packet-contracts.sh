@@ -6,18 +6,12 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 test_start "workflow plan template defines executable task packet fields"
 missing_packet_terms=()
 for term in \
-    "## Executable Task Packet" \
-    "### Task [ID]: [short name]" \
-    "- name: [task packet name; must populate current_task_packet.name]" \
-    "- Behavior / acceptance criteria:" \
-    "- Files:" \
-    "- TDD / RED step:" \
-    "  - tdd_applies: [true/false]" \
-    "- Implementation notes / constraints:" \
-    "  - implementation_notes:" \
-    "- Verification:" \
-    "- Deviation / rollback rule:" \
-    "- Worker status / evidence:" \
+    "## Slice manifest from Decompose" \
+    "- slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]" \
+    "- verification_decision: [unchanged canonical decision and selected CheckSpecs]" \
+    "- evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]" \
+    "- tdd_applies: [verification_decision.tdd_choice.mode]" \
+    "- verification_command: [literal argv only when the selected check uses a command; otherwise omit and use its concrete CheckSpec procedure]" \
     "## Task packets"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"; then
         missing_packet_terms+=("$term")
@@ -45,11 +39,11 @@ for term in \
     "- id: P9" \
     "For medium+ end-to-end/implement-only tasks: implementation work is represented as executable task packets using plan-template.md" \
     "- id: P10" \
-    "verification command and expected success signal" \
+    "A command-based selected CheckSpec carries direct argv and cwd; otherwise its concrete procedure remains in the canonical CheckSpec." \
     "- id: P11" \
     "deviation/rollback rule" \
     "- id: B12" \
-    "every slice's acceptance and verification criteria from DECOMPOSE phase are independently checked, passing"; do
+    "every slice's acceptance and selected verification criteria from DECOMPOSE phase are independently checked, passing"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
         missing_phase_gate_terms+=("$term")
     fi
@@ -66,13 +60,12 @@ build_worker_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-work
 for term in \
     "source-changing slices sequentially in a shared or unknown workspace" \
     "Independently executable source-changing slices may overlap only when runtime evidence proves isolated workspaces" \
-    "Load the approved task packet for the slice, including slice_id, observable increment, deliverable type, files, acceptance criteria, verification command, expected success signal, evidence to record, and deviation/rollback rule" \
-    "Confirm every \`depends_on\` prerequisite has final status \`VERIFIED\` before starting a dependent slice" \
-    "Check each acceptance criterion from the slice manifest independently" \
+    "including slice_id, observable increment, deliverable type, files, acceptance criteria, unchanged verification" \
+    "Check constraints from the task journal against the slice files and criteria" \
     "Record verification evidence in the task journal slice verification ledger" \
-    "Run a small self-check/local sanity check" \
-    "Mark the slice \`VERIFIED\` only after all criteria pass and evidence is recorded" \
-    "After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item;"; do
+    "When TDD is active, establish meaningful RED before" \
+    "otherwise follow the selected checks without adding a RED step" \
+    "After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite."; do
     if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_slice_phase_terms+=("$term")
     fi
@@ -91,7 +84,7 @@ missing_slice_ledger_terms=()
 for term in \
     "## Slice Verification Ledger" \
     "[required for medium+ tasks; update after each slice and before starting a dependent slice or another source-changing slice in a shared or unknown workspace]" \
-    "| Slice | Task Packet | RED Status | Implementation Status | Verification Command/Result | Criteria Checked | Self-Check Result | Final Status |" \
+    "| Slice | Task Packet | TDD/RED | Implementation Status | Selected Check or Procedure/Result | Criteria Checked | Self-Check Result | Final Status |" \
     "[X/Y passed]" \
     "[pass/fail + note]" \
     "[VERIFIED/BLOCKED]" \
@@ -180,19 +173,20 @@ else
     fail "output.yaml missing safe slice_id/dependency contract terms: ${missing_safe_slice_contract_terms[*]}"
 fi
 
-test_start "workflow verification command schema and Build protocol use one portable argv contract"
+test_start "workflow verification command is conditional on selected CheckSpec procedure"
 if ! ruby -ryaml -e '
   output = YAML.load_file(ARGV.fetch(0))
   manifest = output.fetch("artifacts").find { |artifact| artifact["name"] == "slice_manifest" }
   command = manifest.fetch("object_fields").find { |field| field["name"] == "verification_command" }
-  valid = command["type"] == "string[]" && command["required"] == true && command["min_items"] == 1 &&
-    command.fetch("description").include?("direct-execution") &&
+  valid = command["type"] == "string[]" && command["required"] == "conditional" && command["min_items"] == 1 &&
+    command.fetch("condition").include?("selected CheckSpec has a command") &&
+    command.fetch("description").include?("otherwise use its concrete procedure") &&
     command.fetch("validation").include?("execute item 0 directly") &&
     command.fetch("validation").include?("literal argument") &&
     command.fetch("validation").include?("no shell-form command string")
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-    fail "slice verification_command schema is not a required direct argv vector"
+    fail "slice verification_command must be present for command-based CheckSpecs while allowing concrete non-command procedures"
 elif ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "either executes the slice verification argv directly or reuses a completed passing verification" \
     || ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "When executing argv, item 0 is the executable and each remaining item is one literal argument; never reconstruct a shell command"; then
     fail "Build protocol does not execute the slice verification argv using the schema contract"
@@ -558,7 +552,7 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/contracts/input.yaml|subagent_execution_mode"
     "skills/assistant-workflow/contracts/input.yaml|direct_fallback"
     "skills/assistant-workflow/contracts/input.yaml|not_applicable is invalid for Build"
-    "skills/assistant-workflow/contracts/input.yaml|bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility"
+    "skills/assistant-workflow/contracts/input.yaml|bounded_executor requires one implementation and selected-verification owner plus independent Code Reviewer responsibility"
     "skills/assistant-workflow/contracts/input.yaml|separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities"
     "skills/assistant-workflow/contracts/input.yaml|Reviewer may satisfy only compatibility routing"
     "skills/assistant-workflow/contracts/input.yaml|subagent_trigger_scope"
@@ -830,10 +824,11 @@ test_start "workflow phase gates require dependency-aware recorded slice evidenc
 missing_slice_gate_terms=()
 for term in \
     "- id: B12" \
-    "independently checked, passing, and recorded with command/result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger" \
-    "record command/result evidence in the configured task journal or equivalent carried-forward state" \
+    "independently checked, passing, and recorded with method-appropriate result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger" \
+    "record method-appropriate results in the configured task journal or equivalent carried-forward state" \
     "- id: B13" \
-    "Full-scope validation is required before fresh Review" \
+    "Full-scope validation using the selected checks and binding project checks is required before fresh Review" \
+    "not an unselected full test suite" \
     "Cross-slice validation applies only when slice_manifest contains more than one item" \
     "record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale" \
     "Single-slice full-scope validation still covers integration with existing code" \
@@ -851,21 +846,22 @@ else
     fail "phase-gates.yaml missing dependency-aware slice verification gate terms: ${missing_slice_gate_terms[*]}"
 fi
 
-test_start "workflow integration prompts apply cross-slice checks by manifest cardinality and keep full-scope checks"
-slice_integration_rule="After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code."
+test_start "workflow integration prompts apply selected checks and cross-slice checks by manifest cardinality"
+slice_integration_rule="After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice validation still covers the selected integration claim. Per-slice verification does not satisfy a distinct selected integration check."
 slice_integration_failures=()
 for slice_integration_file in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/build.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/mega-and-patterns.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-handoff-templates.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md" \
-    "$FRAMEWORK_DIR/README.md"; do
-    if ! p0p4_contains_text "$slice_integration_file" "$slice_integration_rule"; then
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"; do
+    if ! p0p4_contains_text "$slice_integration_file" "Cross-slice validation applies only when slice_manifest contains more than one item"; then
         slice_integration_failures+=("$slice_integration_file")
     fi
 done
+if ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review" \
+    || ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/build.md" "After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review"; then
+    slice_integration_failures+=("canonical Build instructions omit selected-check integration coverage")
+fi
 if [[ "${#slice_integration_failures[@]}" -eq 0 ]]; then
     pass
 else
@@ -1000,9 +996,9 @@ for file in \
         enabling_changes_included \
         depends_on \
         tdd_applies \
+        evidence_assessment \
         acceptance_criteria \
         implementation_notes \
-        verification_command \
         expected_success_signal \
         evidence_to_record \
         deviation_rollback_rule; do
@@ -1011,6 +1007,18 @@ for file in \
         fi
     done
 done
+if ! ruby -ryaml -e '
+  h = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  a = h.find { |x| x["name"] == "orchestrator_to_architect" }.fetch("return_fields").find { |x| x["name"] == "implementation_steps" }
+  fields = a.fetch("object_fields")
+  command = fields.find { |x| x["name"] == "verification_command" }
+  valid = command["required"] == "conditional" && command.fetch("condition").include?("selected CheckSpec has a command") && fields.count { |x| x["name"] == "tdd_applies" } == 1
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
+    fail "Architect command is conditional and task packet has one canonical TDD projection"
+else
+    pass
+fi
 if [[ "${#missing_required_fields[@]}" -eq 0 ]]; then
     pass
 else
@@ -1172,7 +1180,7 @@ for term in \
     "- enabling_changes_included:" \
     "- depends_on:" \
     "- acceptance_criteria:" \
-    "- verification_command:" \
+    "- selected_check_procedure: [for each CheckSpec, exact argv and cwd if command-based; otherwise concrete procedure and observable result; do not invent a command]" \
     "- expected_success_signal:" \
     "- evidence_to_record:" \
     "- deviation_rollback_rule:" \

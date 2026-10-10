@@ -1,7 +1,7 @@
 # TDD Output Contract
 # Defines what a completed TDD session MUST produce.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: output
 skill: assistant-tdd
 
@@ -61,7 +61,7 @@ artifacts:
           - name: all_tests_pass
             type: boolean
             required: true
-            validation: "Must be true — no other tests broke"
+            validation: "Must be true for the selected target, relevant regression checks, and binding project suites; no unselected-suite result is implied"
       - name: refactor
         type: object
         required: true
@@ -74,19 +74,19 @@ artifacts:
           - name: all_tests_pass
             type: boolean
             required: true
-            validation: "Must be true — refactoring did not break any tests"
+            validation: "Must be true after refactoring for the selected target, relevant regression checks, and binding project suites; no unselected-suite result is implied"
 
   - name: coverage_summary
     type: object
     required: true
     condition: always
     description: "Summary of what is now tested"
-    validation: "Must report new_tests, total_tests_run, and all_passing=true at TDD completion"
+    validation: "Must report new_tests (which may be zero when an existing assertion is extended), total_tests_run, and all_passing=true for the selected TDD checks and binding suites at completion"
     object_fields:
       - name: new_tests
         type: int
         required: true
-        validation: ">= 1"
+        validation: ">= 0; zero is valid when this cycle extends an existing assertion and still records meaningful RED evidence"
       - name: total_tests_run
         type: int
         required: true
@@ -132,7 +132,7 @@ artifacts:
 
 # Completeness check:
 # 1. Every input behavior has a corresponding cycle_log entry
-# 2. Every cycle has verified_failing=true (RED), test_passes=true (GREEN), all_tests_pass=true (REFACTOR)
+# 2. Every active cycle has verified_failing=true (RED), test_passes=true (GREEN), all_tests_pass=true (REFACTOR) for the selected target and applicable regressions/binding suites
 # 3. No production code exists without a preceding failing test
-# 4. coverage_summary.all_passing is true
+# 4. coverage_summary.all_passing is true for selected TDD checks and binding suites, not an unselected full suite
 # 5. If architecture_test_obligations are carried, every unique obligation_id has exactly one architecture_obligation_coverage entry with evidence or an explicit blocker/unknown; no coverage id is unknown or duplicated

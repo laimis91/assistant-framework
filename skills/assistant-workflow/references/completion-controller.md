@@ -29,8 +29,11 @@ or required-QA execution, including otherwise-small work.
 ### Light path
 
 Small low-risk work does not require a task journal, metrics, or manual verification. With `controller_intensity=light`, keep state inline,
-run relevant automated validation, record a fresh review pass, update docs only
-when the change needs it, and complete. If an independent trigger selects
+run the selected checks and any binding project checks, record a fresh review pass, update docs only
+when the change needs it, and complete. Document owns the visible completion return:
+include both existing output keys, `verification_decision` and `evidence_assessment`, in
+one inline JSON object with the unchanged selected decision and actual evidence refs,
+status, gaps, and exclusions. If an independent trigger selects
 `workflow_state_mode=journal` or `manual_verification_mode=required`, honor that
 mode without promoting the whole task to strict.
 

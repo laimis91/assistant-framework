@@ -28,7 +28,8 @@ No separate plan document needed. Include directly in your response:
 - Required files or deliverables: [exact paths or named artifact]
 - Output format/schema: [format]
 - Acceptance criteria: [binary checks]
-- Verification command or method: [command / inspection / review]
+- Verification decision: [canonical typed decision, unchanged]
+- Selected verification checks: [check id, method, exact argv/cwd or concrete procedure, expected evidence]
 - Expected success signal: [exact pass signal]
 - Owner/consumer: [who uses it]
 - Non-goals/exclusions: [what not to produce]
@@ -37,7 +38,7 @@ No separate plan document needed. Include directly in your response:
 - **Pack handoff binding:** [`downstream_bound`; context/journal ref plus atomically bound task-packet and review-scope refs before Build]
 - **Independent challenge evidence:** [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 **Risks:** [what could go wrong]
-**Tests:** [how to verify]
+**Verification:** [selected checks and binding project checks; test plan only when tests are selected]
 **SRP check:** [single responsibility confirmed / split needed]
 ```
 

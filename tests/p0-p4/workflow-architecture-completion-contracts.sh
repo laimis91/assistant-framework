@@ -305,7 +305,7 @@ for term in \
 done
 if [[ ${#workflow_missing[@]} -eq 0 ]]; then pass; else fail "architecture Pack propagation/traceability contract gaps: ${workflow_missing[*]}"; fi
 
-test_start "workflow v11 Pack and route-clear contracts retain stable decision and verification identity"
+test_start "workflow v12 Pack and route-clear contracts retain stable decision and verification identity"
 workflow_integrity_missing=()
 if ! ruby -ryaml -e '
     contracts = ARGV.map { |path| YAML.load_file(path) }
@@ -331,10 +331,10 @@ if ! ruby -ryaml -e '
       maps.all? { |map| entries = map.fetch("object_fields").find { |field| field["name"] == "entries" }; entries["min_items"] == 0 && entries.fetch("validation").include?("all-excluded") }
     exit valid ? 0 : 1
   ' "$output_contract" "$input_contract" "$phase_gates" "$workflow_handoffs"; then
-    workflow_integrity_missing+=("v11 workflow contracts do not enforce all-excluded map eligibility, stable alternative identity, or verified quality evidence identity")
+    workflow_integrity_missing+=("v12 workflow contracts do not enforce all-excluded map eligibility, stable alternative identity, or verified quality evidence identity")
 fi
 for file_and_term in \
-    "$workflow_skill::Migration note: assistant-workflow contracts are v11" \
+    "$workflow_skill::Migration note: assistant-workflow contracts are v12.0" \
     "$workflow_skill::selected_alternative_id" \
     "$workflow_skill::quality_scenario_id" \
     "$workflow_dir/references/architecture-decision-pack.md::alternative_id" \
@@ -344,7 +344,7 @@ for file_and_term in \
     term="${file_and_term#*::}"
     if ! grep -Fq -- "$term" "$file"; then workflow_integrity_missing+=("${file#$FRAMEWORK_DIR/}: $term"); fi
 done
-if [[ ${#workflow_integrity_missing[@]} -eq 0 ]]; then pass; else fail "workflow v11 integrity contract gaps: ${workflow_integrity_missing[*]}"; fi
+if [[ ${#workflow_integrity_missing[@]} -eq 0 ]]; then pass; else fail "workflow v12 integrity contract gaps: ${workflow_integrity_missing[*]}"; fi
 
 test_start "workflow grader independently rejects each Pack identity invariant"
 workflow_identity_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-identity-integrity.XXXXXX")"
@@ -670,28 +670,54 @@ else
     pass
 fi
 
-test_start "workflow v11 migration note preserves every breaking producer contract"
+test_start "workflow v12 migration preserves current decisions and inherited producer contracts"
 migration_note="$(awk '
     /^Migration note:/ { inside = 1 }
     inside && /^## / { exit }
     inside { print }
 ' "$workflow_skill")"
-if ! grep -Fq 'assistant-workflow contracts are v11' <<<"$migration_note"; then
-    fail "v11 migration note does not declare the breaking contract version"
-elif ! grep -Fq 'semantic_type_inspection' <<<"$migration_note" \
-    || ! grep -Fq 'contributor_evidence' <<<"$migration_note"; then
-    fail "v9 migration note does not preserve CodeMapper semantic inspection and collaborative contributor evidence migrations"
+if ! grep -Fq 'assistant-workflow contracts are v12.0' <<<"$migration_note" \
+    || ! grep -Fq 'current verification decision and matching TDD projection before Build' <<<"$migration_note" \
+    || ! grep -Fq 'never infer historical checks or RED' <<<"$migration_note"; then
+    fail "v12 migration note omits current decision, TDD, or historical-evidence boundaries"
 elif ! ruby -ryaml -e '
     expected = YAML.load_file(ARGV.first).fetch("schema_version")
     ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == expected }
+    handoffs = YAML.load_file(ARGV.fetch(3)).fetch("handoffs").to_h { |h| [h.fetch("name"), h] }
+    output = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").to_h { |a| [a.fetch("name"), a] }
+    field = ->(fields, name) { fields.find { |f| f["name"] == name } || raise("missing #{name}") }
+    mapping = field.call(handoffs.fetch("orchestrator_to_code_mapper").fetch("return_fields"), "architecture_mapping_evidence")
+    inspection = field.call(mapping.fetch("object_fields"), "semantic_type_inspection")
+    inspection_fields = inspection.fetch("object_fields")
+    exit 1 unless inspection["type"] == "object" && inspection["required"] == true &&
+      field.call(inspection_fields, "outcome")["enum_values"] == %w[candidates_found inspected_empty unresolved] &&
+      field.call(inspection_fields, "evidence_or_gap")["required"] == true &&
+      field.call(inspection_fields, "source_refs")["min_items"] == 1 &&
+      field.call(inspection_fields, "candidates")["condition"] == "outcome == candidates_found"
+    contributors = field.call(output.fetch("decision_resolution").fetch("object_fields"), "contributor_evidence")
+    exit 1 unless contributors["type"] == "object[]" && contributors["required"] == "conditional" &&
+      contributors["condition"] == "decision item interaction_mode == collaborative" && contributors["min_items"] == 2 &&
+      field.call(contributors.fetch("object_fields"), "contributor_role")["enum_values"] == %w[agent human_or_user] &&
+      %w[contribution evidence_ref].all? { |name| field.call(contributors.fetch("object_fields"), name)["required"] == true }
+    command_owners = [
+      ["orchestrator_to_architect_decompose", "return_fields", "slice_manifest", false],
+      ["orchestrator_to_architect", "context_fields", "slice_manifest", false],
+      ["orchestrator_to_architect", "return_fields", "implementation_steps", "conditional"],
+      ["orchestrator_to_code_writer", "context_fields", "current_task_packet", "conditional"],
+      ["orchestrator_to_builder_tester", "context_fields", "current_task_packet", "conditional"]
+    ]
+    command_owners.each do |name, side, parent, required|
+      container = field.call(handoffs.fetch(name).fetch(side), parent)
+      command = field.call(container.fetch("object_fields"), "verification_command")
+      exit 1 unless command["type"] == "string[]" && command["min_items"] == 1 && command["required"] == required &&
+        command.fetch("validation").include?("literal argument") &&
+        (required == false || command["condition"] == "the selected CheckSpec has a command to execute")
+    end
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
-    fail "v11 migration does not bump every assistant-workflow canonical contract header"
-elif ! grep -Fq 'verification_command' <<<"$migration_note"; then
-    fail "v9 migration note no longer explains verification_command argv migration"
-elif ! grep -Fq 'assistant-review' <<<"$migration_note" \
-    || ! grep -Eiq 'owns?' <<<"$migration_note" \
-    || ! grep -Fq 'subagent_trigger_scope' <<<"$migration_note"; then
-    fail "v9 migration note does not preserve assistant-review ownership and trigger-based delegation"
+    fail "v12 migration loses canonical header, semantic-inspection, contributor, or argv contracts"
+elif ! grep -Fq 'assistant-review owns Reviewer/QAEvaluator handoffs' "$workflow_skill" \
+    || ! grep -Fq 'subagent_trigger_scope' "$workflow_skill"; then
+    fail "workflow root loses review ownership or trigger-based delegation"
 else
     pass
 fi
@@ -1593,7 +1619,7 @@ run_workflow_case_eval() {
         && grep -Fq "Summary: total=1 passed=$([[ "$expected_status" == "PASS" ]] && echo 1 || echo 0) failed=$([[ "$expected_status" == "PASS" ]] && echo 0 || echo 1)" <<<"$runner_output"
 }
 
-test_start "workflow v11 standard reviews retain validated Pack checklist references"
+test_start "workflow v12 standard reviews retain validated Pack checklist references"
 standard_pack_review_failures=()
 review_result_block="$(contract_field_block "$output_contract" review_result)"
 for field in architecture_decision_pack_review_ref architecture_decision_pack_review_contract; do
@@ -1616,9 +1642,9 @@ for file_and_term in \
         standard_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
-if ! grep -Fq 'assistant-workflow contracts are v11' "$workflow_skill" \
+if ! grep -Fq 'assistant-workflow contracts are v12.0' "$workflow_skill" \
     || ! grep -Fq 'Pack `review_result` retains canonical refs' "$workflow_skill"; then
-    standard_pack_review_failures+=("workflow v11 migration note does not describe standard Pack review retention")
+    standard_pack_review_failures+=("workflow v12 migration note does not describe standard Pack review retention")
 fi
 if ! jq -e '
     .cases[] | select(.id == "standard-pack-review-result-retains-checklist") |
@@ -1640,7 +1666,7 @@ if ! ruby -ryaml -e '
     expected = YAML.load_file(ARGV.first).fetch("schema_version")
     ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == expected }
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
-    standard_pack_review_failures+=("workflow v11 does not cover every canonical contract header")
+    standard_pack_review_failures+=("workflow v12 does not cover every canonical contract header")
 fi
 standard_review_required_summary="$(jq -r '.cases[] | select(.id == "standard-pack-review-result-retains-checklist") | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
 standard_review_response_file="$(mktemp)"

@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "11.1"
+schema_version: "12.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -48,7 +48,7 @@ worker_status_protocol:
 artifact_reference_protocol:
   description: "Typed Artifact Reference entries are the compact producer/consumer ledger for harness task packets and worker returns; use them instead of ad hoc string refs when passing artifacts between agents."
   required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]
-  artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
+  artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, verification_decision, evidence_assessment, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
   validation_statuses: [pending, valid, invalid, stale, not_applicable]
   packet_rules:
     - "Artifact Reference entries must include artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, and summary."
@@ -635,6 +635,16 @@ handoffs:
         type: string
         required: true
         description: "Stable requirement ids, criteria, verification methods, assumptions, non-goals, and sufficiency basis across requested intent, applicable authority, justified defaults, product assumptions, and unresolved choices; confirmed answers are in existing acceptance criteria before dependent implementation."
+      - name: verification_decision
+        type: object
+        required: true
+        description: "Canonical assistant-verification decision supplied before Decompose so DC2 does not defer selection to Plan."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve its CheckSpecs and TddChoice unchanged in each slice."
+      - name: tdd_applies
+        type: boolean
+        required: true
+        description: "Projection of the canonical task verification decision."
+        validation: "Equals verification_decision.tdd_choice.mode."
       - name: architecture_design_mode
         type: enum
         required: true
@@ -849,6 +859,16 @@ handoffs:
             required: true
             description: "Binary pass/fail statements for the slice"
             min_items: 1
+          - name: verification_decision
+            type: object
+            required: true
+            description: "Canonical decision supplied by the existing assistant-verification Analysis owner and carried into this slice before DC2."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and equals context_fields.verification_decision; carry unchanged and do not select or rewrite it in Architect."
+          - name: tdd_applies
+            type: boolean
+            required: true
+            description: "Slice projection of the canonical TDD choice."
+            validation: "Equals verification_decision.tdd_choice.mode and context_fields.tdd_applies."
           - name: files_to_create
             type: string[]
             required: true
@@ -871,10 +891,10 @@ handoffs:
             description: "Slice ids that must be VERIFIED first, or empty array if independent"
           - name: verification_command
             type: string[]
-            required: true
+            required: false
             min_items: 1
-            description: "Canonical argv vector used to verify this slice; item 0 is the executable and each remaining item is one literal argument"
-            validation: "No shell-form command string, redirection, pipe, or implicit shell parsing"
+            description: "Optional direct-execution argv when a command is already selected; Plan binds the final decision and non-command procedure."
+            validation: "When present, item 0 is the executable and each remaining item is one literal argument; no shell-form command string, redirection, pipe, or implicit shell parsing."
           - name: expected_success_signal
             type: string
             required: true
@@ -925,6 +945,21 @@ handoffs:
         type: string
         required: true
         description: "Restated requirements from Discover phase"
+      - name: verification_decision
+        type: object
+        required: true
+        description: "Canonical assistant-verification producer artifact selected before Plan fixes verification obligations."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve its CheckSpec and TddChoice unchanged in the plan and every executable packet."
+      - name: evidence_assessment
+        type: object
+        required: true
+        description: "Canonical assistant-verification assessment carried from selection; it is planned until actual check results exist."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment. A planned assessment is not result evidence and must be reassessed before Review."
+      - name: tdd_mode
+        type: boolean
+        required: true
+        description: "Workflow projection of the selected TddChoice."
+        validation: "Equals verification_decision.tdd_choice.mode."
       - name: change_impact_evidence
         type: object
         required: conditional
@@ -1150,6 +1185,16 @@ handoffs:
           - name: acceptance_criteria
             type: string[]
             required: true
+          - name: verification_decision
+            type: object
+            required: true
+            description: "The unchanged canonical assistant-verification producer artifact for this approved slice."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and equals the top-level Plan decision."
+          - name: tdd_applies
+            type: boolean
+            required: true
+            description: "Whether this slice participates in the active TDD choice."
+            validation: "Equals verification_decision.tdd_choice.mode; false never creates RED duties."
           - name: files_to_create
             type: string[]
             required: true
@@ -1168,10 +1213,10 @@ handoffs:
             description: "Slice ids that must be VERIFIED first"
           - name: verification_command
             type: string[]
-            required: true
+            required: false
             min_items: 1
-            description: "Canonical argv vector; item 0 is the executable and each remaining item is one literal argument"
-            validation: "No shell-form command string, redirection, pipe, or implicit shell parsing"
+            description: "Optional direct-execution argv; the selected decision supplies a concrete procedure when no command applies."
+            validation: "When present, item 0 is the executable and each remaining item is one literal argument; no shell-form command string, redirection, pipe, or implicit shell parsing."
           - name: expected_success_signal
             type: string
             required: true
@@ -1247,7 +1292,7 @@ handoffs:
       - name: implementation_steps
         type: object[]
         required: true
-        description: "Ordered executable task packets with exact slice_id, create/modify/test file lists, acceptance/test criteria, and verification commands. Optional display summaries may exist only for human readability; they cannot satisfy or replace exact slice and files_to_* fields."
+        description: "Ordered executable task packets with exact slice_id, create/modify/test file lists, acceptance criteria, the unchanged verification_decision and conditional TDD choice, and exact command argv or concrete selected-check procedures. Optional display summaries may exist only for human readability; they cannot satisfy or replace exact slice and files_to_* fields."
         min_items: 1
         object_fields:
           - name: order
@@ -1406,10 +1451,6 @@ handoffs:
             type: string[]
             required: true
             description: "Approved slice dependencies"
-          - name: tdd_applies
-            type: boolean
-            required: true
-            description: "Whether this task packet requires a BuilderTester RED step before CodeWriter implementation"
           - name: acceptance_criteria
             type: string[]
             required: true
@@ -1499,7 +1540,7 @@ handoffs:
               - name: artifact_type
                 type: enum
                 required: true
-                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, verification_decision, evidence_assessment, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
               - name: producer
                 type: string
                 required: true
@@ -1523,22 +1564,38 @@ handoffs:
           - name: test_criteria
             type: string[]
             required: true
-            description: "What to test after this step"
+            description: "Selected test or verification criteria for this step; describe a discriminating behavior oracle only when an automated_test CheckSpec is selected."
             min_items: 1
+          - name: verification_decision
+            type: object
+            required: true
+            description: "Canonical assistant-verification decision consumed by this task packet."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and preserves its selected scope and CheckSpec entries unchanged."
+          - name: evidence_assessment
+            type: object
+            required: true
+            description: "Current canonical assessment carried into both Build lanes; planned evidence is not execution evidence."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; refresh from actual selected-check results before Review."
+          - name: tdd_applies
+            type: boolean
+            required: true
+            description: "Whether meaningful RED is active for this task packet."
+            validation: "Equals verification_decision.tdd_choice.mode."
           - name: implementation_notes
             type: string[]
             required: true
             description: "Existing patterns, constraints, non-goals, or boundaries CodeWriter must follow"
           - name: verification_command
             type: string[]
-            required: true
+            required: conditional
+            condition: "the selected CheckSpec has a command to execute"
             min_items: 1
-            description: "Exact argv BuilderTester should execute directly for this step or task packet"
-            validation: "Item 0 is the executable; remaining items are literal arguments; no shell-form command string"
+            description: "Exact direct-execution argv when the selected check uses a command; non-command checks use the concrete procedure in CheckSpec.check_ref_or_method."
+            validation: "When present, item 0 is the executable and remaining items are literal arguments; no shell-form command string."
           - name: expected_success_signal
             type: string
             required: true
-            description: "Specific pass signal for the verification command"
+            description: "Observable pass signal for the selected command or non-command check"
           - name: evidence_to_record
             type: string[]
             required: true
@@ -1588,8 +1645,9 @@ handoffs:
             required: true
       - name: test_plan
         type: object[]
-        required: true
-        description: "What to test and how"
+        required: conditional
+        condition: "at least one slice's canonical verification_decision selects method == automated_test"
+        description: "Automated test plans are required only for slices with selected automated_test CheckSpecs; omit them for slices whose selected methods are non-test."
         min_items: 1
         object_fields:
           - name: slice_id
@@ -1950,7 +2008,7 @@ handoffs:
               - name: artifact_type
                 type: enum
                 required: true
-                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, verification_decision, evidence_assessment, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
               - name: producer
                 type: string
                 required: true
@@ -1989,19 +2047,39 @@ handoffs:
           - name: tdd_applies
             type: boolean
             required: true
+            validation: "Equals verification_decision.tdd_choice.mode."
+          - name: verification_decision
+            type: object
+            required: true
+            description: "Canonical assistant-verification decision carried unchanged from Plan."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision."
+          - name: evidence_assessment
+            type: object
+            required: true
+            description: "Current canonical evidence assessment; planned before execution and refreshed from actual results before Review."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; preserve gaps and freshness limitations."
           - name: red_command
+            type: string[]
+            required: conditional
+            condition: "tdd_applies is true"
+            min_items: 1
+            description: "Planned RED argv; bounded_executor runs it after dispatch and before production edits, while separated_workers assigns RED to BuilderTester. This field is not RED evidence."
+            validation: "When present, argv[0] is the executable and each remaining item is one literal argument."
+          - name: red_cwd
             type: string
-            required: false
-            description: "Planning field for BuilderTester RED execution; not RED evidence and not sufficient to pass the implementation gate"
+            required: conditional
+            condition: "tdd_applies is true"
+            description: "Working directory for the planned RED argv."
           - name: expected_red_failure
             type: string
-            required: false
-            description: "Planning field for expected RED behavior; not RED evidence and not sufficient to pass the implementation gate"
+            required: conditional
+            condition: "tdd_applies is true"
+            description: "Expected meaningful RED behavior for the selected lane; not RED evidence and not sufficient to pass the implementation gate"
           - name: red_evidence
             type: object
-            required: false
-            condition: "required when tdd_applies is true or tdd_mode is true"
-            description: "BuilderTester RED evidence received by CodeWriter before implementation; CodeWriter does not own RED and must return NEEDS_CONTEXT if this evidence is missing while TDD is active"
+            required: conditional
+            condition: "tdd_applies is true and build_execution_lane == separated_workers"
+            description: "Incoming BuilderTester RED evidence required before production edits only in separated_workers. In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits. No active TDD lane may proceed without valid RED evidence."
             object_fields:
               - name: test_file
                 type: string
@@ -2012,9 +2090,14 @@ handoffs:
                 required: true
                 description: "Specific failing test that proves the desired behavior is not implemented yet"
               - name: command
+                type: string[]
+                required: true
+                description: "Exact argv BuilderTester ran to produce the RED failure"
+                validation: "argv[0] is the executable and each remaining item is one literal argument."
+              - name: cwd
                 type: string
                 required: true
-                description: "Exact command BuilderTester ran to produce the RED failure"
+                description: "Working directory used for the RED argv."
               - name: failure_summary
                 type: string
                 required: true
@@ -2028,10 +2111,11 @@ handoffs:
             required: true
           - name: verification_command
             type: string[]
-            required: true
+            required: conditional
+            condition: "the selected CheckSpec has a command to execute"
             min_items: 1
-            description: "Canonical verification argv; execute directly without shell parsing"
-            validation: "Item 0 is the executable and each remaining item is one literal argument"
+            description: "Canonical verification argv when the selected CheckSpec uses a command; otherwise follow its concrete procedure."
+            validation: "When present, item 0 is the executable and each remaining item is one literal argument; never reconstruct a shell command."
           - name: expected_success_signal
             type: string
             required: true
@@ -2055,9 +2139,9 @@ handoffs:
         description: "Boundaries that must not be crossed"
       - name: tdd_mode
         type: boolean
-        required: false
-        default: false
-        description: "If true, CodeWriter must receive BuilderTester RED evidence before production changes and return NEEDS_CONTEXT if RED evidence is missing"
+        required: true
+        description: "Exact projection of current_task_packet.verification_decision.tdd_choice.mode; RED is required only when true."
+        validation: "Equals current_task_packet.verification_decision.tdd_choice.mode and every affected current_task_packet.tdd_applies."
       - name: build_repair_state
         type: object
         required: conditional
@@ -2216,7 +2300,7 @@ handoffs:
           - name: artifact_type
             type: enum
             required: true
-            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
+            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, verification_decision, evidence_assessment, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
           - name: producer
             type: string
             required: true
@@ -2278,6 +2362,11 @@ handoffs:
         required: true
         enum_values: [separated_workers]
         description: "BuilderTester is dispatched only for the separated verification lane"
+      - name: tdd_mode
+        type: boolean
+        required: true
+        description: "Exact projection of the selected task packet TddChoice."
+        validation: "Equals current_task_packet.verification_decision.tdd_choice.mode."
       - name: changed_files
         type: string[]
         required: true
@@ -2307,8 +2396,9 @@ handoffs:
         description: "Custom build command if non-standard"
       - name: test_targets
         type: string[]
-        required: true
-        description: "Test projects or files to run"
+        required: conditional
+        condition: "a resolved due selected CheckSpec's claim, oracle, or procedure, or a binding constraint, requires automated tests"
+        description: "Test projects or files for selected automated checks; omit for non-test procedures."
       - name: architecture_design_mode
         type: enum
         required: true
@@ -2414,6 +2504,16 @@ handoffs:
             type: enum
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+          - name: verification_decision
+            type: object
+            required: true
+            description: "Canonical assistant-verification decision carried unchanged from the approved Plan/task packet."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision."
+          - name: evidence_assessment
+            type: object
+            required: true
+            description: "Current canonical evidence assessment; planned before execution and refreshed from actual results before Review."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; preserve gaps and freshness limitations."
           - name: architecture_decision_pack_ref
             type: string
             required: conditional
@@ -2598,7 +2698,7 @@ handoffs:
               - name: artifact_type
                 type: enum
                 required: true
-                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, verification_decision, evidence_assessment, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
               - name: producer
                 type: string
                 required: true
@@ -2626,21 +2726,24 @@ handoffs:
             type: boolean
             required: true
             description: "Whether this verification packet is in an active TDD cycle"
+            validation: "Equals verification_decision.tdd_choice.mode."
           - name: evidence_to_record
             type: string[]
             required: true
           - name: verification_command
             type: string[]
-            required: true
+            required: conditional
+            condition: "the selected CheckSpec has a command to execute"
             min_items: 1
-            description: "Canonical verification argv; execute directly without shell parsing"
-            validation: "Item 0 is the executable and each remaining item is one literal argument"
+            description: "Canonical verification argv when the selected CheckSpec uses a command; otherwise follow its concrete procedure."
+            validation: "When present, item 0 is the executable and each remaining item is one literal argument; never reconstruct a shell command."
           - name: expected_success_signal
             type: string
             required: true
           - name: expected_red_failure
             type: string
             required: false
+            condition: "tdd_applies is true"
       - name: build_repair_state
         type: object
         required: conditional
@@ -2690,15 +2793,17 @@ handoffs:
             type: string[]
             required: true
             min_items: 0
-            description: "Commands/checks actually run; empty only when verification.result is not_run for NEEDS_CONTEXT or BLOCKED."
+            description: "Commands actually run; may be empty for selected checks whose concrete procedure has no command, or when a required check could not run. Empty commands do not waive a selected or binding check."
           - name: result
             type: enum
             required: true
             enum_values: [passed, failed, not_run]
+            validation: "passed requires current observed or admissibly reused passing results for every due selected and binding check; failed records an executed failure; not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED."
           - name: evidence
             type: string[]
             required: true
-            description: "Concise success signals or failure messages, not raw logs"
+            min_items: 1
+            description: "Concise result evidence, not raw logs. When commands is empty for a no-command check, identify the concrete procedure performed and its observed result; an empty command list alone is not evidence."
       - name: architecture_obligation_coverage
         type: object[]
         required: conditional
@@ -2737,7 +2842,7 @@ handoffs:
           - name: artifact_type
             type: enum
             required: true
-            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
+            enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, verification_decision, evidence_assessment, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
           - name: producer
             type: string
             required: true
@@ -2766,8 +2871,8 @@ handoffs:
       - name: build_result
         type: enum
         required: true
-        enum_values: [passed, failed, not_run]
-        description: "Build result. Use not_run only when status is NEEDS_CONTEXT or BLOCKED before verification can run; do not fabricate passed/failed results."
+        enum_values: [passed, failed, not_run, not_applicable]
+        description: "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints, using each check's claim, oracle, and procedure; do not infer it from file type, command presence, method, or technique alone. Unresolved applicability is a gap. Use passed only for current observed or admissibly reused successful build evidence; an executed build failure is failed and blocks completion. Use not_run only when a required build could not run and status is NEEDS_CONTEXT or BLOCKED. Use not_applicable only when no due selected or binding build check applies and no build was executed."
       - name: build_errors
         type: string[]
         required: false
@@ -2776,16 +2881,20 @@ handoffs:
       - name: test_summary
         type: object
         required: true
+        description: "Actual test counts for selected or binding automated-test checks. Zero counts mean no tests were executed; they do not mean required tests passed. Applicability comes from due selected CheckSpecs and resolved binding constraints, not file type, command presence, method, or technique alone."
         object_fields:
           - name: passed
             type: int
             required: true
+            description: "Number of tests observed passing; zero means none passed, including when no tests ran."
           - name: failed
             type: int
             required: true
+            description: "Number of tests observed failing; required test checks without results remain gaps."
           - name: skipped
             type: int
             required: true
+            description: "Number of tests observed skipped; skipped required checks remain gaps."
       - name: test_failures
         type: object[]
         required: false

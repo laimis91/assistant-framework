@@ -7,14 +7,15 @@ description: "Apply Red-Green-Refactor. Use when tests-first/TDD is requested or
 
 ## Goal
 
-Protect each behavior change with verified RED, minimal GREEN, and
-behavior-neutral REFACTOR evidence before production code is trusted.
+For an active TDD decision, protect each selected behavior with meaningful RED,
+minimal GREEN, and behavior-neutral REFACTOR evidence before production code is
+trusted. TDD is independent of test scope and does not activate by default.
 
 ## Success Criteria
 
-- Each behavior starts with a test that fails for the intended reason.
+- Each behavior starts with a test assertion that fails for the intended reason; extend an existing test when that is the smallest useful change.
 - Production code is limited to the smallest change that makes that test pass.
-- Targeted and relevant regression tests pass before the next cycle.
+- The target and relevant regression checks pass before the next cycle; run binding project suites when required.
 - RED/GREEN/REFACTOR evidence is recorded in the task journal or output.
 - When a workflow Architecture Decision Pack carries semantic type, primitive-boundary, public compatibility, or quality-scenario obligations, tests prove those obligations rather than merely compiling wrappers.
 
@@ -44,7 +45,8 @@ named canonical contract; do not load every contract at entry.
 assistant-tdd owns RED-GREEN-REFACTOR correctness. Generic workflow coordinates
 task packets and role dispatch, but specialist gates are authoritative.
 
-When workflow delegates, ownership follows `execution_lane` without weakening
+When workflow delegates, ownership follows `execution_lane` and the carried
+`verification_decision` without weakening
 the phase boundary:
 
 - In `bounded_executor`, one bounded executor owns RED, GREEN, focused verification, and refactor safety; production code still starts only after valid RED evidence is recorded.
@@ -67,10 +69,12 @@ must return `NEEDS_CONTEXT` and make no production changes.
 
 ## Cycle
 
-1. **RED** — write one behavior test, run it, and verify the right failure. If it
-   passes unexpectedly, inspect whether behavior already exists or the test is wrong.
-2. **GREEN** — write the simplest passing code, rerun the target, then relevant
-   regressions. Repair regressions before continuing.
+1. **RED** — add or extend one behavior assertion, run it, and verify the right
+   failure. If it passes unexpectedly, inspect whether behavior already exists
+   or the test is wrong; use characterization or current regression evidence
+   instead of fabricating a failure when the behavior already exists.
+2. **GREEN** — write the simplest passing code, rerun the target and relevant
+   regressions, plus any binding suite. Repair regressions before continuing.
 3. **REFACTOR** — remove duplication or improve names without new behavior; keep
    tests green after each change.
 4. Repeat for the next behavior.
@@ -89,6 +93,6 @@ targeted/regression verification, approved exceptions, and blockers.
 
 ## Stop Rules
 
-- Stop before production edits when RED is absent or invalid.
+- Stop before production edits when active TDD requires RED and its evidence is absent or invalid.
 - Stop and repair the test when RED passes or fails for the wrong reason.
 - Stop and repair regressions before the next behavior.

@@ -2,7 +2,7 @@
 # The Red-Green-Refactor cycle has strict gates at each transition.
 # These are the core enforcement mechanism — violating a gate means TDD was not followed.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: phase-gates
 skill: assistant-tdd
 
@@ -17,8 +17,8 @@ gates:
     exit_assertions:
 
       - id: RED1
-        check: "Exactly ONE new test was written for the target behavior"
-        on_fail: "Write only one test per behavior. Split if testing multiple things."
+        check: "One behavior-focused test assertion was added or extended for this active TDD cycle"
+        on_fail: "Add or extend one assertion for the selected behavior; do not require a new test file or unrelated tests."
 
       - id: RED2
         check: "The test was executed and it FAILED"
@@ -30,7 +30,7 @@ gates:
 
       - id: RED4
         check: "No production code was written during the RED phase"
-        on_fail: "Delete any production code written before the test failed. Start GREEN phase cleanly."
+        on_fail: "Preserve all existing code, stop implementation, and report the ordering violation; do not delete or conceal prior work."
 
       - id: RED5
         check: "When architecture_test_obligations are present, each has a unique stable obligation_id and the RED behavior names the carried semantic type, primitive boundary, public compatibility, or quality scenario it can falsify"
@@ -50,8 +50,8 @@ gates:
         on_fail: "The implementation is incomplete. Continue writing the simplest code to make it pass."
 
       - id: GREEN2
-        check: "ALL other existing tests still PASS"
-        on_fail: "The implementation broke something. Fix the regression without changing the new test."
+        check: "The selected target, relevant regression checks, and binding project suites pass"
+        on_fail: "The implementation broke a selected or binding check. Repair the regression without weakening its oracle."
 
       - id: GREEN3
         check: "Only the SIMPLEST code was written — no extra features, no 'while I'm here' additions"
@@ -66,8 +66,8 @@ gates:
     exit_assertions:
 
       - id: REF1
-        check: "ALL tests still PASS after refactoring"
-        on_fail: "Undo the refactoring change that broke tests. Try a smaller refactoring step."
+        check: "The selected target, relevant regression checks, and binding project suites still pass after refactoring"
+        on_fail: "The refactoring broke a selected or binding check. Repair the regression or keep the refactor out."
 
       - id: REF2
         check: "No new behavior was added during refactoring"
@@ -82,14 +82,14 @@ gates:
 # ─────────────────────────────────────────────
 invariants:
   - id: INV1
-    check: "No production code exists without a preceding failing test"
+    check: "For every active TDD behavior, production changes follow a valid, right-reason RED result"
     scope: all_cycles
-    on_fail: "Delete the production code and start with a failing test. This is the iron law of TDD."
+    on_fail: "Preserve existing code and report the ordering violation; never delete work to manufacture TDD evidence."
 
   - id: INV2
-    check: "Tests run after every phase transition (RED: must fail, GREEN: must pass, REFACTOR: must pass)"
+    check: "The selected target runs at each phase transition (RED: right-reason failure, GREEN and REFACTOR: pass); relevant regressions and binding suites run when selected or required"
     scope: all_cycles
-    on_fail: "Run tests immediately. Skipping test execution defeats the purpose of TDD."
+    on_fail: "Run the selected target and any due regression or binding checks; record skipped or unavailable checks as gaps."
 
   - id: INV3
     check: "Each cycle follows RED → GREEN → REFACTOR order — no skipping, no reordering"

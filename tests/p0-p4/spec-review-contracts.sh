@@ -169,7 +169,7 @@ fi
 test_start "small elevated strict or required-QA work has coherent full Spec Review applicability"
 small_elevated_contract_terms=()
 for term in \
-    'required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, validation_results, spec_review_result, review_result, final_handoff]' \
+    'required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, verification_decision, evidence_assessment, validation_results, spec_review_result, review_result, final_handoff]' \
     'conditional_artifacts: [test_results, subagent_evidence' \
     'small strict/required-QA work selects small_elevated' \
     'Quality Review, as do medium+ tasks.'; do

@@ -8,19 +8,19 @@ previously_fixed = validated_entry.previously_fixed || []
 score_history = []
 
 PREPARE
-  - Validate entry fields, then seed `previously_fixed` from the validated entry value; use `[]` only when it is absent. Retain raw persisted history. For an invalidated persisted 7.1 packet, retain every aggregate_finding_id, source_finding_ids, and source_provenance entry while invalidating current result/delegation/snapshot/Pack/QA/plan/coverage refs. Before closure dispatch, normalize only records missing any canonical identity tuple field: preserve complete v6, 7.0, 7.1, and current tuples unchanged; for a partial v6/7.0 tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration or review_pass:persisted-v7-0-migration. When the aggregate ID is absent, use the matching UTF-8 NFC(description)/SHA-256/collision rule and legacy-v6:<fixed_in_round>:<first-24-hex> or legacy-v7-0:<fixed_in_round>:<first-24-hex>, then fill only missing source_finding_ids and source_provenance. Invalidate persisted 6.0/7.0/7.1 score-tracking refs before rebuilding the fresh 7.2 batch.
+  - Validate entry fields, then seed `previously_fixed` from the validated entry value; use `[]` only when it is absent. Retain raw persisted history. For invalidated persisted 7.1 or 7.2 packets, retain every aggregate_finding_id, source_finding_ids, and source_provenance entry while invalidating current result/delegation/snapshot/Pack/QA/plan/coverage refs. Before closure dispatch, normalize only records missing any canonical identity tuple field: preserve complete v6, 7.0, 7.1, 7.2, and current tuples unchanged; for a partial v6/7.0 tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration or review_pass:persisted-v7-0-migration. When the aggregate ID is absent, use the matching UTF-8 NFC(description)/SHA-256/collision rule and legacy-v6:<fixed_in_round>:<first-24-hex> or legacy-v7-0:<fixed_in_round>:<first-24-hex>, then fill only missing source_finding_ids and source_provenance. Invalidate persisted 6.0/7.0/7.1/7.2 score-tracking refs before rebuilding the fresh 8.0 batch.
   - Infer review mode before review or mutation. Report-only selects audit;
     in-scope authority selects review-fix. If unresolved, ask
     exactly: "Should I only report findings, or also implement and verify fixes?"
   - Standalone Spec Review on scope. Validate FIX_STEP entry_assertions before repair or mutation dispatch. On mismatch, run only in review-fix mode to repair evidence-backed must-fix and should-fix items. In audit, retain and stay read-only. Dispatch every planned read-only Reviewer pass with sanitized criteria; never expose the mismatch details to discovery siblings. Return it to the composing workflow for planning or approval when it changes scope, risk, or acceptance.
-  - Workflow consumes Spec PASS/current build evidence; after a fix, `not_applicable` is invalid.
+  - Workflow consumes Spec PASS and current selected/binding verification evidence when due. In workflow-composed review, `no_build_scope` is allowed only when no fix is required or occurred and no due selected/binding build or test check exists; after any fix, a current passed `evidence_ref` is mandatory and `not_applicable` is invalid. Standalone review-fix retains mandatory build and tests.
 
 while round <= 10:
   Round 3+ requires a recorded `additional_round_reason` with new evidence.
   A score below the rubric threshold alone is insufficient to start round 3 or later.
 
   1. REVIEW
-     - Freeze snapshot/manifest/identity; mutation invalidates. Rebuild persisted 6.0/7.0/7.1 under 7.2 before clean while retaining raw history and complete closure tuples. Load `references/review-batch.md` before batch planning.
+     - Freeze snapshot/manifest/identity; mutation invalidates. Rebuild persisted 6.0/7.0/7.1/7.2 under 8.0 before clean while retaining raw history and complete closure tuples. Load `references/review-batch.md` before batch planning.
      - Derive canonical discovery passes. Without trigger, trivial/small uses two purpose-specific isolated direct-fallback passes; trigger delegates scope. Security/post-fix closure are additive, max six.
      - First resolve `reviewer_context` from `contracts/index.yaml` strictly below 5653 words; carry bounded selector before response; siblings are blind; only closure gets ledger.
      - Load principles/rubric/triggered checklist sections. Medium+ returns Design Coherence evidence or `no concrete risk found`. Run a bounded independent capability search; carried Mapper evidence cannot satisfy review.
@@ -33,7 +33,7 @@ while round <= 10:
 
   3. FIX / VALIDATE
      - Validate FIX_STEP entry_assertions before source/test mutation or dispatch. Only review-fix repairs authorized evidence; record closure.
-     - Run build/tests; mutation invalidates the batch and requires new evidence.
+     - Standalone review-fix runs build and tests. Workflow-composed review runs every due selected/binding check; any source fix invalidates the batch and requires a current passed evidence reference before the next pass.
 
   4. NEXT ROUND
      - After round 1 fixes, start fresh round 2. Round 3+ needs new evidence. The round counts started review batches, not individual perspective passes, including incomplete or invalidated batches; round 10 is terminal after its started batch.

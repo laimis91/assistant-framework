@@ -65,8 +65,8 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 | `code-mapper` | Fast / economical | Read-only | Discover | Produces context map (`{agent_state_dir}/context-map.md`) — entry points, interfaces, data flow, conventions |
 | `explorer` | Balanced / standard | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
 | `architect` | Strongest / deep reasoning | Read-only | Decompose, Plan, Design | Strict slice decomposition, implementation blueprints, design direction |
-| `code-writer` | Strongest / deep reasoning | Write | Build | Implements the packet; in bounded_executor also writes focused tests and runs focused verification; no independent review |
-| `builder-tester` | Balanced / standard | Write | Build | Conditional separated verifier for broad/noisy/environment-heavy or high-risk validation; no production edits |
+| `code-writer` | Strongest / deep reasoning | Write | Build | Implements the packet and follows its unchanged verification decision; RED only when TDD is active; no independent review |
+| `builder-tester` | Balanced / standard | Write | Build | Conditional separated verifier for selected checks and binding suites; owns RED only when TDD is active; no production edits |
 | `code-reviewer` | Strongest / deep reasoning | Read-only | Review | Canonical code review for bugs, security issues, architecture violations, test coverage gaps, and structural problems |
 | `reviewer` | Strongest / deep reasoning | Read-only | Review compatibility | Compatibility route for existing reviewer handoffs; prefer `code-reviewer` for new code review dispatches |
 | `qa-evaluator` | Strongest / deep reasoning | Read-only | Review QA | Independent acceptance, Done Contract, verification evidence, UI/visual/product/UX/docs/DX/domain quality, score progression, and final result evaluation |

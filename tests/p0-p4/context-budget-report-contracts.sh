@@ -425,12 +425,17 @@ if HOME="$report_home" \
         .selected_load_set_context.name == "reviewer_context"
         and .selected_load_set_context.measurement_scope == "static_selected_skill_instruction_surface"
         and .selected_load_set_context.declared_budget_words == 5653
-        and .selected_load_set_context.declared_boundary_closure == {words: 5224, bytes: 42810}
+        and (.selected_load_set_context.declared_boundary_closure.words > 0)
+        and (.selected_load_set_context.declared_boundary_closure.bytes > 0)
+        and (.selected_load_set_context.declared_boundary_closure.words < .selected_load_set_context.declared_budget_words)
         and (.selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.selectors_resolved == 1)
         and (.selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.words > 0)
         and (.selected_load_set_context.worker_instruction_closure.words ==
           (.selected_load_set_context.declared_boundary_closure.words
            + .selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.words))
+        and (.selected_load_set_context.worker_instruction_closure.bytes ==
+          (.selected_load_set_context.declared_boundary_closure.bytes
+           + .selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.bytes))
       ' "$reviewer_load_set_report" >/dev/null \
     && jq -e '
         .selected_load_set_context.name == "entry"
@@ -448,6 +453,88 @@ if HOME="$report_home" \
     fi
 else
     fail "static load-set context did not preserve declared closure or report worker schema additions separately"
+fi
+
+test_start "context-declared: UTF-8 in root and selected source spans preserves exact byte accounting"
+utf8_baseline_tree="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-utf8-baseline.XXXXXX")"
+utf8_candidate_tree="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-utf8-candidate.XXXXXX")"
+utf8_baseline_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-utf8-baseline-report.XXXXXX")"
+utf8_candidate_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-utf8-candidate-report.XXXXXX")"
+utf8_report_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-utf8-error.XXXXXX")"
+p0p4_register_cleanup \
+    "$utf8_baseline_tree" "$utf8_candidate_tree" "$utf8_baseline_report" \
+    "$utf8_candidate_report" "$utf8_report_error"
+for fixture_tree in "$utf8_baseline_tree" "$utf8_candidate_tree"; do
+    mkdir -p "$fixture_tree/contracts"
+    cat >"$fixture_tree/SKILL.md" <<'EOF'
+---
+name: assistant-verification
+description: "UTF-8 byte accounting fixture"
+---
+# Verification
+ROOT_MARKER
+EOF
+    cat >"$fixture_tree/contracts/index.yaml" <<'EOF'
+schema_version: "1.0"
+contract: index
+skill: assistant-verification
+authoritative_contracts: []
+load_sets:
+  entry:
+    selectors:
+      - id: operation-input
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [operation]
+    budget_words: 1500
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file
+EOF
+    cat >"$fixture_tree/contracts/input.yaml" <<'EOF'
+schema_version: "1.0"
+contract: input
+fields:
+  - name: operation
+    type: string
+    description: "Used to select or assess verification"
+EOF
+done
+python3 - "$utf8_baseline_tree" "$utf8_candidate_tree" <<'PY'
+from pathlib import Path
+import sys
+
+for tree, root_marker, selected_comment in (
+    (Path(sys.argv[1]), "Resume entry marker", "# Cafe"),
+    (Path(sys.argv[2]), "Résumé entry marker", "# Café"),
+):
+    root = tree / "SKILL.md"
+    root.write_text(root.read_text(encoding="utf-8").replace("ROOT_MARKER", root_marker), encoding="utf-8")
+    source = tree / "contracts/input.yaml"
+    content = source.read_text(encoding="utf-8")
+    anchor = "  - name: operation\n"
+    if anchor not in content:
+        raise SystemExit("selected operation field-name fixture anchor is missing")
+    source.write_text(content.replace(anchor, anchor + "    " + selected_comment + "\n", 1), encoding="utf-8")
+PY
+if HOME="$report_home" \
+    "$context_report" --agent codex --skill assistant-verification \
+        --skill-tree "$utf8_baseline_tree" --load-set entry --format json \
+        >"$utf8_baseline_report" 2>"$utf8_report_error" \
+    && HOME="$report_home" \
+    "$context_report" --agent codex --skill assistant-verification \
+        --skill-tree "$utf8_candidate_tree" --load-set entry --format json \
+        >"$utf8_candidate_report" 2>"$utf8_report_error" \
+    && jq -e --slurpfile baseline "$utf8_baseline_report" '
+        .selected_load_set_context.declared_boundary_closure.bytes
+          == ($baseline[0].selected_load_set_context.declared_boundary_closure.bytes + 3)
+        and .components.selected_skill_initial.bytes
+          == ($baseline[0].components.selected_skill_initial.bytes + 2)
+      ' "$utf8_candidate_report" >/dev/null; then
+    pass
+else
+    fail "UTF-8 selected closure did not produce valid JSON with the exact +3 source-byte delta: $(tr '\n' ' ' <"$utf8_report_error")"
 fi
 
 test_start "context-growth: nested required enum shapes increase only the transitive worker projection"
@@ -595,18 +682,25 @@ else
     fail "unsafe, missing, ambiguous, or incompatible static context inputs emitted a partial report"
 fi
 
-test_start "workflow kernel candidate meets the static promotion budget"
+test_start "workflow kernel applicability and live static boundary preserve promotion policy"
 kernel_skill="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/SKILL.md"
 kernel_manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
 if HOME="$report_home" \
     "$context_report" --agent codex --skill assistant-workflow \
         --skill-overlay "$kernel_skill" --format json >"$overlay_report" 2>"$report_error" \
     && jq -e --slurpfile baseline "$report_output" --slurpfile candidate "$overlay_report" '
-        .status == "candidate"
-        and .promotion_gates.selected_initial_words_max == 1050
+        .promotion_gates.selected_initial_words_max == 1050
         and .promotion_gates.selected_entry_words_max == 3000
         and .promotion_gates.standing_context_growth_allowed == false
-        and .static_measurement.baseline_selected_initial_words == $baseline[0].components.selected_skill_initial.words
+        and (if .status == "historical_comparison" then
+          .historical_applicability.classification == "historical_comparison"
+          and .historical_applicability.original_source_report_provenance == "unavailable"
+          and .historical_applicability.current_promotion_evidence == false
+          and (.promotion_gates | length) == 9
+          and (.smoke_cases | length) == 2 and .smoke_repeats == 1
+          and (.pilot_cases | length) == 8 and .pilot_repeats == 3
+        else .status == "candidate" and (
+          .static_measurement.baseline_selected_initial_words == $baseline[0].components.selected_skill_initial.words
         and .static_measurement.candidate_selected_initial_words == $candidate[0].components.selected_skill_initial.words
         and .static_measurement.selected_initial_word_delta == ($candidate[0].components.selected_skill_initial.words - $baseline[0].components.selected_skill_initial.words)
         and .static_measurement.baseline_total_initial_words == $baseline[0].totals.initial_words
@@ -614,6 +708,9 @@ if HOME="$report_home" \
         and .static_measurement.baseline_selected_entry_words == $baseline[0].components.selected_skill_entry_boundary.words
         and .static_measurement.candidate_selected_entry_words == $candidate[0].components.selected_skill_entry_boundary.words
         and .static_measurement.selected_entry_word_delta == ($candidate[0].components.selected_skill_entry_boundary.words - $baseline[0].components.selected_skill_entry_boundary.words)
+        ) end)
+        and $candidate[0].components.selected_skill_initial.words <= .promotion_gates.selected_initial_words_max
+        and $candidate[0].components.selected_skill_entry_boundary.words <= .promotion_gates.selected_entry_words_max
         and .static_measurement.candidate_selected_initial_words <= .promotion_gates.selected_initial_words_max
         and .static_measurement.candidate_selected_entry_words <= .promotion_gates.selected_entry_words_max
         and .static_measurement.standing_context_growth == 0
