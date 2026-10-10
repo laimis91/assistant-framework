@@ -361,6 +361,9 @@ write_workflow_eval_responses() {
                 isolated-independent-slices-integrate-before-review)
                     jq -n '{execution_policy:{source_writer_policy:"isolated_A_B_overlap_permitted",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"fixture-runtime-isolation-A-B-v1",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
                     ;;
+                build-phase-verifies-selected-check-before-advancing)
+                    jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria."}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
+                    ;;
                 verification-reuse-current-scenario-matrix|verification-reuse-preserves-independent-review)
                     write_verification_reuse_response "$case_id" "$response_path" "$required_summary"
                     ;;
@@ -2641,7 +2644,15 @@ retained_state_route_terms=(
     "uncertainty_shape=bounded"
 )
 
-for file in "$workflow_dir/SKILL.md" "$progressive_ref"; do
+for term in \
+    'route-clear state is `pending`/`consumed`' \
+    'sequence readiness is `active`/`closed`' \
+    'Retained artifacts remain active after bounded shape'; do
+    if ! p0p4_contains_text "$workflow_dir/SKILL.md" "$term"; then
+        retained_state_missing+=("SKILL.md missing compact retained-state routing term $term")
+    fi
+done
+for file in "$progressive_ref"; do
     for term in "${retained_state_route_terms[@]}"; do
         if ! p0p4_contains_text "$file" "$term"; then
             retained_state_missing+=("${file#$FRAMEWORK_DIR/} missing retained-state routing term $term")
@@ -2996,7 +3007,6 @@ for term in \
 done
 
 for file in \
-    "$workflow_dir/SKILL.md" \
     "$progressive_ref" \
     "$requirement_map_ref" \
     "$journal_template" \
@@ -3012,7 +3022,16 @@ for file in \
     done
 done
 
-for file in "$workflow_dir/SKILL.md" "$progressive_ref"; do
+for term in \
+    'retention is `terminally_archived`' \
+    'Durable markers still require validation with missing/invalid retention or `not_applicable`/retained state; fail closed' \
+    'Terminal archival needs a typed `progressive_terminal_archival` tombstone and final evidence' \
+    'completed alone is insufficient and archive cannot revert'; do
+    if ! p0p4_contains_text "$workflow_dir/SKILL.md" "$term"; then
+        archival_retention_missing+=("SKILL.md missing compact fail-closed retention guidance $term")
+    fi
+done
+for file in "$progressive_ref"; do
     for term in \
         "durable markers load validation regardless of whether progressive_artifact_retention_state is missing, not_applicable, or retained" \
         "progressive_artifact_retention_state=terminally_archived"; do

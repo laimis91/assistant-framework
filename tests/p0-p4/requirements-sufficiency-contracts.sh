@@ -392,11 +392,11 @@ if ruby -ryaml -e '
   generated_discover = generated[/^\*\*Requirements sufficiency.*?(?=^\d+\.)/m]
   step5 = phases.lines.find { |line| line.start_with?("5. Preserve applicable authoritative existing behavior") }
   root_requirements = [
-    "before Plan/plan_mode=none dependent work",
-    "establish sufficient intent and material behavior",
-    "preserve authoritative behavior; auto-apply source-backed technical defaults",
-    "for new material product choices, ask concrete questions and obtain explicit user answers",
-    "Plan approval alone cannot settle unstated choices"
+    "enter Discover requirements check",
+    "Explicit user or repository artifact schemas override workflow-internal shapes",
+    "Apply source-backed defaults and ask precise questions for material product choices",
+    "Plan approval cannot settle intent",
+    "assistant-clarify owns prompt-level ambiguity"
   ]
   discover_requirements = [
     "ready work needs a sufficient intended outcome and material product behavior",

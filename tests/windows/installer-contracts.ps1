@@ -1445,7 +1445,7 @@ requires:
             [Environment]::SetEnvironmentVariable('HOME', $singleHome, 'Process')
             $single = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow')
             Assert-Equal 0 $single.ExitCode "Single-skill install failed: $($single.Output)"
-            Assert-Equal @('assistant-review', 'assistant-workflow') (Get-InstalledSkillNames -SkillsRoot (Join-Path $singleHome '.claude\skills')) 'Selected workflow install omitted or copied outside its canonical review producer'
+            Assert-Equal @('assistant-review', 'assistant-verification', 'assistant-workflow') (Get-InstalledSkillNames -SkillsRoot (Join-Path $singleHome '.claude\skills')) 'Selected workflow install omitted or copied outside its canonical bundled dependencies'
         }
     }
 
@@ -2204,6 +2204,7 @@ requires:
                 Assert-True ([System.IO.File]::Exists($installedSkill)) "$skill selective installation omitted its installed SKILL.md"
                 if ($skill -eq 'assistant-debugging') {
                     Assert-True ([System.IO.File]::Exists((Join-Path $skillProfile '.agents\skills\assistant-review\SKILL.md'))) 'assistant-debugging selective installation omitted its canonical assistant-review producer'
+                    Assert-True ([System.IO.File]::Exists((Join-Path $skillProfile '.agents\skills\assistant-verification\SKILL.md'))) 'assistant-debugging selective installation omitted its canonical assistant-verification producer'
                 }
                 else {
                     Assert-False ([System.IO.Directory]::Exists((Join-Path $skillProfile '.agents\skills\assistant-debugging'))) 'assistant-review selective installation copied an unrelated consumer'

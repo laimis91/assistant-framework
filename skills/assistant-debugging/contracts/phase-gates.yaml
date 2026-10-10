@@ -1,4 +1,4 @@
-schema_version: "1.1"
+schema_version: "2.0"
 contract: phase-gates
 skill: assistant-debugging
 
@@ -64,6 +64,9 @@ gates:
     checkpoint_end: "--- PHASE: FIX COMPLETE ---"
     condition: "when can_modify_code is true and a fix or mitigation is attempted"
     entry_assertions:
+      - id: FX_VERIFICATION_DECISION
+        check: "Before any source/test mutation or mutation dispatch, resolve verification_decision through the existing assistant-verification Analysis owner and carry it unchanged; active TDD is exactly verification_decision.tdd_choice.mode and requires meaningful RED before production edits."
+        on_fail: "Stop before mutation; select or refresh the decision through assistant-verification and establish valid RED when TDD is active."
       - id: FX_CHANGE_IMPACT_APPLICABILITY
         check: "Before any source/test mutation or mutation dispatch, record change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
         on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
@@ -76,8 +79,8 @@ gates:
         check: "Each changed file maps to the confirmed cause, mitigation, or regression test"
         on_fail: "Remove unrelated changes or document approved scope expansion"
       - id: FX2
-        check: "Behavior changes include a regression test when feasible"
-        on_fail: "Add a regression test or record why a test is not feasible and what alternative verification was used"
+        check: "The fix preserves the original failure path and completes every selected and binding check; automated regression tests are required only when selected."
+        on_fail: "Resolve missing coverage through assistant-verification or perform the selected check; report real blockers as residual risk without inventing test infeasibility."
       - id: FX3
         check: "Fix is the smallest durable change and does not rely on temporary diagnostics"
         on_fail: "Remove temporary logging/debug changes or justify their retention"

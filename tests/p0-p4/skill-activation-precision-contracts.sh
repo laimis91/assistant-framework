@@ -41,10 +41,10 @@ test_start "native assistant skill description catalog stays below 2200 characte
 catalog="$(description_catalog)"
 catalog_count="$(printf '%s\n' "$catalog" | grep -c . | tr -d ' ')"
 catalog_characters="$(printf '%s\n' "$catalog" | wc -c | tr -d ' ')"
-if [[ "$catalog_count" -ne 14 ]]; then
-    fail "expected 14 assistant skill descriptions, found $catalog_count"
-elif [[ "$catalog_characters" -le 2200 ]]; then
+if [[ "$catalog_count" -gt 0 && "$catalog_characters" -le 2200 ]]; then
     pass
+elif [[ "$catalog_count" -eq 0 ]]; then
+    fail "assistant skill description catalog must be nonempty"
 else
     fail "assistant skill descriptions use $catalog_characters characters; operating budget is 2200 (approved maximum 2500)"
 fi

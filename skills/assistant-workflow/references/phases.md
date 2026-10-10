@@ -165,6 +165,8 @@ A slice is not a layer, folder, module, broad feature bucket, setup step, or bro
 
 When decomposition is needed because the task has multiple coherent slices, a Pack-backed boundary, or unresolved cross-slice acceptance risk, produce bounded slice boundaries from the context map, Requirement Acceptance Map, risk tier, required gate packs, Context Budget note, and the Architecture Decision Pack when it applies. Every slice names the requirement ids it advances. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise perform the same direct design work with equivalent criteria and evidence. The Architect consumes the Pack rather than recreating its facts, and each affected slice carries the Pack reference. Task size can signal possible decomposition, but never creates an Architect role by itself. When editing framework skills, contracts, evals, runtime integrations, or workflow patterns, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
 
+Before Architect dispatch and the Decomposition Plan Review (DC2), resolve the canonical task decision through the existing `assistant-verification` Analysis owner. For each proposed slice, confirm that its selected CheckSpecs cover the slice's acceptance criteria and risks; if coverage must change, return through the same Analysis owner and reconcile one task-level decision before DC2. Carry that decision unchanged into every slice and set `tdd_applies` equal to `verification_decision.tdd_choice.mode`; Architect does not choose or rewrite it. If any slice lacks resolved coverage, return before Plan. Plan approval remains required before Build.
+
 Print: `>> Dispatching Architect → strict slice decomposition` (when `subagent_execution_mode=delegated`)
 Print: `>> Direct fallback Architect responsibility → strict slice decomposition` (when `subagent_execution_mode=direct_fallback`)
 
@@ -194,7 +196,9 @@ Print: `>> Direct fallback Architect responsibility → strict slice decompositi
 - **Files to test:** [exact test paths or verification targets]
 - **Enabling changes included:** [setup, contracts, wiring, or "none"]
 - **Depends on:** [slice ids, or "none"]
-- **Verification command:** `["executable", "arg1", "arg2"]` (canonical argv; one literal argument per item, no shell parsing)
+- **Verification decision:** [unchanged canonical decision and selected CheckSpecs]
+- **TDD applies:** [verification_decision.tdd_choice.mode]
+- **Selected verification:** [exact argv/cwd for command checks; otherwise the concrete CheckSpec procedure and observable result; no dummy command]
 - **Expected success signal:** [specific passing output, file, or review signal]
 - **Evidence to record:** [ledger/eval/test/review artifacts]
 - **Deviation rollback rule:** [what to do if scope/files/behavior differ]
@@ -236,7 +240,8 @@ evidence ref and readiness implications directly to Preparation Completion;
 do not create a Plan checkpoint, task-packet/execution refs, or
 `plan_document`. For `plan_mode=none` with `execution_intent != prepare_only`,
 Discover carries the obvious file scope, constraints, acceptance check, and
-verification argv into its exit transition, which atomically sets
+canonical verification decision with any selected argv/cwd or concrete
+non-command procedure into its exit transition, which atomically sets
 `handoff_binding_state=downstream_bound` with compact inline
 task-packet/execution and inline review-scope refs before any Build action.
 
@@ -257,7 +262,7 @@ Print: `>> Direct fallback Architect responsibility` (when `execution_intent != 
 For `prepare_only`, an explicitly requested readiness Plan is inline and never waits. When architecture applies, retain unresolved Pack questions in `feature_preparation_result.open_decisions` and readiness context; optional Plan never waits. For `existing_system`, record the exact unchanged feature-preparation evidence ref, readiness implications, open decisions, and recommended next implementation state. For `not_applicable`, record `preparation_basis=not_applicable` instead and omit the feature-evidence ref. Readiness plans omit Artifact Contracts, executable implementation steps/task packets, and Done/Harness artifacts. They do not load implementation packet or harness planning requirements. Load `references/plans/prepare-only.md`; missing or unknown view loads authoritative `references/plan-template.md`.
 
 For `execution_intent != prepare_only`, Artifact Contracts, implementation steps/task packets, and Done/Harness guidance apply. Before writing that plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. Carry forward the exact Triage values separately: `qa_evaluation_mode`, `harness_capable`, `build_execution_lane`, and `workflow_state_mode`. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and put its typed reference, semantic type commitments/primitive exceptions, quality verification, compatibility strategy, and reviewer scope into the plan and affected task packets. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then load `references/plans/<size>.md`; missing or unknown view loads authoritative `references/plan-template.md`:
-- `inline`: compact small plan (goal, files, risks, tests); do not wait.
+- `inline`: compact small plan (goal, files, risks, unchanged verification decision and selected checks); do not wait.
 - `approval_required` medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra).
 - `approval_required` large/mega: full plan (all sections including Security and Operability).
 
@@ -277,10 +282,10 @@ For `execution_intent != prepare_only`:
 12. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
    - Migrations/rewrites: `references/prompts/refactor-safety.md` plus any applicable migration or parity checklist
-   - New code: `references/prompts/test-strategy.md`
+   - Automated tests: `references/prompts/test-strategy.md` only when selected by `assistant-verification`
    - DB changes: `references/prompts/migration.md`
    - Unknown-cause bugfix: use `assistant-debugging` first; only transition into TDD when reproduction/root-cause evidence can define a meaningful regression test.
-   - TDD mode: use `assistant-tdd` skill (or `references/prompts/tdd-enforcement.md` if skill not installed)
+   - TDD mode: use `assistant-tdd` only when `verification_decision.tdd_choice.mode=true` (or the fallback prompt if the skill is not installed)
    - **SOLID (plan phase):** Review `references/prompts/solid-principles.md` graduated enforcement table to fill SOLID design notes in the plan template's Architecture section (medium+ tasks).
 
 ### Approval gate
@@ -338,7 +343,7 @@ Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay 
 
 Load `references/build-worker-protocol.md` for source-changing Build work. It
 owns delegated/direct fallback execution, Code Writer and Builder/Tester
-evidence, the TDD sandwich, Code Writer unexpected blockers, and per-slice
+evidence, selected verification, conditional TDD, Code Writer unexpected blockers, and per-slice
 verification. It also owns the ordinary bounded repair state with three total
 same-scope attempts and a two-attempt no-progress limit. Silent fallback cannot
 complete.
@@ -357,7 +362,8 @@ shared or unknown workspace. Independently executable source-changing packets
 may overlap only with runtime-proven isolated workspaces; dependent packets wait
 for every `depends_on` prerequisite to be `VERIFIED`. Print `>> Slice
 [S]/[total]: [slice_id] [name]`. In `bounded_executor`, the bounded executor
-owns edit, RED, GREEN, and focused verification. In `separated_workers`, run
+owns selected implementation and verification; RED/GREEN/REFACTOR apply only
+when the canonical decision activates TDD. In `separated_workers`, run
 Code Writer then Builder/Tester. Verify each acceptance criterion, record
 lane-matched slice ledger evidence, and mark the slice `VERIFIED` before a
 dependent packet starts.
@@ -365,18 +371,34 @@ dependent packet starts.
 For `controller_intensity=light`, implementation may run inline/direct. Use the
 plan-step loop with `workflow_state_mode=inline`,
 `subagent_policy_state=not_required`, and
-`subagent_execution_mode=not_applicable`; record relevant automated
-build/test/validation evidence and skip Code Writer, Builder/Tester, Code
+`subagent_execution_mode=not_applicable`; record selected automated or
+non-command verification evidence and skip Code Writer, Builder/Tester, Code
 Reviewer/Reviewer dispatch evidence. Skip task journal, slice ledger, metrics,
 and manual verification ceremony unless an independent mode explicitly requires one.
 
 For bugfixes with unknown cause, complete `assistant-debugging` first or record
 a concrete blocked/inconclusive debugging result. Do not patch until
-reproduction/root-cause evidence identifies a fix target or mitigation. Tests
-stay alongside code, not after.
+reproduction/root-cause evidence identifies a fix target or mitigation. Follow
+the selected verification method; if TDD is active, carry meaningful RED, and
+otherwise do not fabricate it.
 
-After all slices are integrated, full-scope validation is required before
-fresh Review. Cross-slice validation applies only
+Resolve build and test applicability from the current due CheckSpecs and
+resolved binding constraints, using each check's claim, oracle, and concrete
+procedure. Do not infer applicability from file type, command presence, method,
+or technique alone; missing or unresolved applicability is a gap. Keep
+`build_result` required: `not_applicable` means no due selected or binding build
+check applies and no build was executed; `not_run` means a required build could
+not run and requires `NEEDS_CONTEXT` or `BLOCKED`; `passed` requires current
+observed or admissibly reused success, and an executed failure is `failed` and
+blocks completion. Keep `test_summary` required; zero counts mean no tests ran,
+not that a selected or binding test passed. Every due selected and binding
+check needs a current result. When a selected check has no command, an empty
+`verification.commands` list is valid only with concrete procedure and observed
+result evidence.
+
+After all slices are integrated, run the selected checks and binding project
+checks over the completed scope before fresh Review; do not add an unselected
+full suite. Cross-slice validation applies only
 when slice_manifest contains more than one item; when it contains one item,
 record cross-slice validation as not_applicable using the one-item manifest and
 single_slice_rationale. Single-slice full-scope validation still covers
@@ -402,7 +424,7 @@ path.
 
 Print: `>> Build complete — all [N] steps implemented`
 Print: `>> Running final current validation (execute or evidence-bound reuse)`
-Print: `>> Build: [passed/failed] | Tests: [N passed, M failed]`
+Print: `>> Build: [passed/failed/not_run/not_applicable] | Tests: [N passed, M failed, K skipped] (zero counts mean no tests ran)`
 
 Print: `--- PHASE: BUILD COMPLETE ---`
 
@@ -418,6 +440,11 @@ lane as a fresh self-review without worker or independent-review dispatch
 evidence. Expanded impact instead records canonical `assistant-review` final-summary and delegation-path refs, without changing light Build. Standard/strict work uses Stage 1 Spec Review and Stage 2 independent
 Code Quality Review through `assistant-review`; Stage 3 QA Evaluation runs only
 when `qa_evaluation_mode=required`.
+
+Before any review lane, pass the unchanged `verification_decision`, current
+`evidence_assessment`, actual selected-check results, and omitted-check
+rationales alongside scope and changed files. Preserve unresolved evidence gaps;
+review cannot upgrade them to sufficient or replace validation.
 
 For standard/strict work, run the stages in order:
 

@@ -259,7 +259,7 @@ if ruby -ryaml -e '
     work_status.fetch("enum_values").include?("source_conflict_resolution") &&
     work_status.fetch("validation").include?("product_question requires behavior_status=materially_unknown") &&
     test_results["required"] == "conditional" &&
-    test_results["condition"] == "execution_intent != prepare_only and (runnable tests exist or task changes behavior)" &&
+    test_results["condition"] == "(execution_intent != prepare_only) and (one or more selected checks with method=automated_test were actually executed or admissibly reused)" &&
     pack_ref && pack_ref["condition"] == "feature_preparation_scope == existing_system" &&
     discover_gate && discover_gate["condition"] == "execution_intent == implement_only or feature_preparation_scope == existing_system or approved_feature_preparation_harness_obligation is present or approved_feature_preparation_qa_acceptance_obligation is present" &&
     discover_gate.fetch("check").include?("approved_feature_preparation_evidence_ref") &&
@@ -271,7 +271,7 @@ if ruby -ryaml -e '
     preparation_names.include?("approved_feature_preparation_harness_obligation") &&
     preparation_names.include?("approved_feature_preparation_qa_acceptance_obligation") &&
     skill.include?("approved_feature_preparation_result") &&
-    skill.include?("typed `not_applicable` source binding before Decompose, Plan, or Build") &&
+    skill.include?("Before Decompose, Plan, or Build, retain `approved_feature_preparation_result` unchanged plus its evidence ref or typed `not_applicable` source binding") &&
     invariant_names.include?("INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY") &&
     scoped_handoffs &&
     [architect_step_ref, code_writer_ref, builder_ref].all? { |field| field && field["condition"] == "feature_preparation_scope == existing_system" } &&
@@ -567,8 +567,8 @@ if ruby -ryaml -rjson -e '
     plan_mode.fetch("on_fail").include?("execution_intent == prepare_only") &&
     plan_mode.fetch("on_fail").include?("set none unless the user explicitly requested a readiness Plan, then set inline") &&
     plan_mode.fetch("on_fail").include?("execution_intent != prepare_only") &&
-    skill.include?("`prepare_only`: `inline` only for explicitly requested readiness planning; otherwise `none`") &&
-    skill.include?("For `execution_intent != prepare_only`, `approval_required` applies to medium+") &&
+    skill.include?("In `prepare_only`, use `inline` only for explicitly requested readiness planning; otherwise `none`") &&
+    skill.include?("for `execution_intent != prepare_only`, `approval_required` applies to medium+") &&
     controller.match?(/`prepare_only` at any size may retain `plan_mode=none`\s+unless an optional readiness plan is specifically requested/) &&
     controller.include?("`prepare_only`: use `plan_mode=inline` only when an optional readiness plan") &&
     controller.match?(/For `execution_intent != prepare_only`, use\s+`plan_mode=approval_required` for medium+/) &&
@@ -681,7 +681,7 @@ if ruby -ryaml -e '
   artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
   valid = output.fetch("completion_tiers").fetch("preparation_only").fetch("conditional_artifacts").include?("task_journal") &&
     artifacts.fetch("task_journal").fetch("condition").include?("workflow_state_mode == journal") &&
-    skill.include?("`references/artifact-first-output-contract.md` before Plan only when `execution_intent != prepare_only`") &&
+    skill.include?("before Plan use `references/artifact-first-output-contract.md` only outside `prepare_only`") &&
     phases.include?("**Run condition:** `execution_intent != prepare_only`.") &&
     plan.include?("For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits.") &&
     plan.include?("It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests.") &&
@@ -709,11 +709,11 @@ if ruby -e '
   valid = phases.include?("For `execution_intent=prepare_only`, record the optional readiness plan") &&
     phases.include?("For `execution_intent != prepare_only` and `plan_mode=approval_required`, print:") &&
     !phases.include?("For `plan_mode=approval_required`, print: `>> WAITING: Plan approval required`") &&
-    skill.include?("| Plan | `plan_mode != none`; optional prepare_only readiness |") &&
-    skill.include?("| Design | UI only; `execution_intent != prepare_only` |") &&
-    skill.include?("| Build | `execution_intent != prepare_only` |") &&
-    skill.include?("| Review | `execution_intent != prepare_only` |") &&
-    skill.include?("| Document | `execution_intent != prepare_only` |") &&
+    skill.include?("| Plan | `plan_mode != none`; optional readiness |") &&
+    skill.include?("| Design | UI only; not `prepare_only` |") &&
+    skill.include?("| Build | Not `prepare_only` |") &&
+    skill.include?("| Review | Not `prepare_only` |") &&
+    skill.include?("| Document | Not `prepare_only` |") &&
     !skill.include?("| Build | All |")
   exit valid ? 0 : 1
 ' "$workflow_dir/references/phases.md" "$workflow_dir/SKILL.md"; then

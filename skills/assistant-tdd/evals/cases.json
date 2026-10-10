@@ -22,7 +22,7 @@
       "id": "bugfix-starts-with-red-evidence",
       "title": "Bugfix starts with RED evidence",
       "category": "red_gate_enforcement",
-      "purpose": "Checks that a bug fix begins with one failing test, verifies the right failure reason, and blocks production code until RED evidence exists.",
+      "purpose": "Checks that active TDD begins with one meaningful failing assertion, which may extend an existing test, and records right-reason RED before production changes.",
       "prompt": "Use TDD to fix the bug where the skill eval runner accepts duplicate case ids.",
       "setup_context": [
         "The assistant-tdd skill instructions are active.",
@@ -31,7 +31,7 @@
       ],
       "expected_behavior": [
         "Activates Red-Green-Refactor and records TDD as active.",
-        "Starts with RED by writing exactly one failing behavior test.",
+        "Starts with RED by adding or extending one meaningful behavior assertion.",
         "Runs the test and verifies that it fails for the right reason.",
         "Captures RED evidence including test file, test name, command run, failure summary, and why it proves the missing behavior.",
         "Blocks production implementation until the failing test evidence exists.",
@@ -39,7 +39,7 @@
       ],
       "pass_criteria": [
         "The response names RED as the first phase.",
-        "The response requires one failing test before production code.",
+        "The response requires one meaningful failing assertion before production code.",
         "The response requires the failure to be for the right reason.",
         "The response lists the RED evidence needed before GREEN.",
         "The response refuses to write production code before RED evidence."
@@ -53,7 +53,7 @@
       "machine_expectations": {
         "required_substrings": [
           "RED",
-          "one failing test",
+          "one meaningful failing assertion",
           "right reason",
           "RED evidence",
           "test file",
@@ -66,14 +66,26 @@
           "Tests can come after",
           "Syntax error is enough",
           "Multiple behaviors in one RED"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "cycle_log",
+              0,
+              "red",
+              "verified_failing"
+            ],
+            "expected": true
+          }
         ]
       }
     },
     {
-      "id": "green-refactor-runs-all-tests",
-      "title": "GREEN and REFACTOR run all tests",
+      "id": "green-refactor-runs-selected-regressions",
+      "title": "GREEN and REFACTOR run selected regressions",
       "category": "green_refactor_verification",
-      "purpose": "Checks that GREEN implements the simplest code, then runs targeted and full tests, and that REFACTOR remains behavior-neutral with all tests green.",
+      "purpose": "Checks that GREEN and REFACTOR run the selected target, relevant regressions, and binding suites without requiring unselected full-suite tests.",
       "prompt": "The RED test is failing for the expected missing duplicate-id validation. Continue the TDD cycle.",
       "setup_context": [
         "The assistant-tdd skill instructions are active.",
@@ -84,20 +96,20 @@
         "Moves to GREEN only because RED evidence is present.",
         "Implements the simplest production change needed to pass the failing test.",
         "Runs the previously failing test and confirms it now passes.",
-        "Runs all other tests to detect regressions.",
+        "Runs selected regression checks and binding project suites.",
         "Uses REFACTOR only for behavior-neutral cleanup.",
-        "Runs all tests again after REFACTOR and starts the next behavior with a new RED cycle."
+        "Runs selected checks and binding regressions after REFACTOR and starts the next behavior with a new RED cycle."
       ],
       "pass_criteria": [
         "The response gates GREEN on prior RED evidence.",
         "The response limits implementation to the simplest passing code.",
-        "The response runs targeted and all tests in GREEN.",
+        "The response runs targeted checks and selected regressions in GREEN.",
         "The response keeps REFACTOR behavior-neutral.",
-        "The response runs all tests after REFACTOR."
+        "The response runs selected checks and binding regressions after REFACTOR."
       ],
       "fail_signals": [
         "Adds extra behavior during GREEN.",
-        "Skips the full regression suite after GREEN.",
+        "Skips a selected regression or binding suite.",
         "Adds new behavior during REFACTOR.",
         "Starts the next behavior without a new RED cycle."
       ],
@@ -106,7 +118,7 @@
           "GREEN",
           "simplest",
           "previously failing test",
-          "all tests",
+          "selected regressions and binding suites",
           "REFACTOR",
           "behavior-neutral",
           "regressions",
@@ -114,9 +126,31 @@
         ],
         "forbidden_substrings": [
           "Add extra behavior",
-          "Skip all tests",
+          "Skip selected regressions",
           "New behavior during REFACTOR",
           "No new RED needed"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "cycle_log",
+              0,
+              "green",
+              "all_tests_pass"
+            ],
+            "expected": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "cycle_log",
+              0,
+              "refactor",
+              "all_tests_pass"
+            ],
+            "expected": true
+          }
         ]
       }
     },

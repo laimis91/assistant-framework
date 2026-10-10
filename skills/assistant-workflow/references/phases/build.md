@@ -50,7 +50,7 @@ Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay 
 
 Load `references/build-worker-protocol.md` for source-changing Build work. It
 owns delegated/direct fallback execution, Code Writer and Builder/Tester
-evidence, the TDD sandwich, Code Writer unexpected blockers, and per-slice
+evidence, selected verification, conditional TDD, Code Writer unexpected blockers, and per-slice
 verification. It also owns the ordinary bounded repair state with three total
 same-scope attempts and a two-attempt no-progress limit. Silent fallback cannot
 complete.
@@ -69,7 +69,8 @@ shared or unknown workspace. Independently executable source-changing packets
 may overlap only with runtime-proven isolated workspaces; dependent packets wait
 for every `depends_on` prerequisite to be `VERIFIED`. Print `>> Slice
 [S]/[total]: [slice_id] [name]`. In `bounded_executor`, the bounded executor
-owns edit, RED, GREEN, and focused verification. In `separated_workers`, run
+owns selected implementation and verification; RED/GREEN/REFACTOR apply only
+when the canonical decision activates TDD. In `separated_workers`, run
 Code Writer then Builder/Tester. Verify each acceptance criterion, record
 lane-matched slice ledger evidence, and mark the slice `VERIFIED` before a
 dependent packet starts.
@@ -77,18 +78,34 @@ dependent packet starts.
 For `controller_intensity=light`, implementation may run inline/direct. Use the
 plan-step loop with `workflow_state_mode=inline`,
 `subagent_policy_state=not_required`, and
-`subagent_execution_mode=not_applicable`; record relevant automated
-build/test/validation evidence and skip Code Writer, Builder/Tester, Code
+`subagent_execution_mode=not_applicable`; record selected automated or
+non-command verification evidence and skip Code Writer, Builder/Tester, Code
 Reviewer/Reviewer dispatch evidence. Skip task journal, slice ledger, metrics,
 and manual verification ceremony unless an independent mode explicitly requires one.
 
 For bugfixes with unknown cause, complete `assistant-debugging` first or record
 a concrete blocked/inconclusive debugging result. Do not patch until
-reproduction/root-cause evidence identifies a fix target or mitigation. Tests
-stay alongside code, not after.
+reproduction/root-cause evidence identifies a fix target or mitigation. Follow
+the selected verification method; if TDD is active, carry meaningful RED, and
+otherwise do not fabricate it.
 
-After all slices are integrated, full-scope validation is required before
-fresh Review. Cross-slice validation applies only
+Resolve build and test applicability from the current due CheckSpecs and
+resolved binding constraints, using each check's claim, oracle, and concrete
+procedure. Do not infer applicability from file type, command presence, method,
+or technique alone; missing or unresolved applicability is a gap. Keep
+`build_result` required: `not_applicable` means no due selected or binding build
+check applies and no build was executed; `not_run` means a required build could
+not run and requires `NEEDS_CONTEXT` or `BLOCKED`; `passed` requires current
+observed or admissibly reused success, and an executed failure is `failed` and
+blocks completion. Keep `test_summary` required; zero counts mean no tests ran,
+not that a selected or binding test passed. Every due selected and binding
+check needs a current result. When a selected check has no command, an empty
+`verification.commands` list is valid only with concrete procedure and observed
+result evidence.
+
+After all slices are integrated, run the selected checks and binding project
+checks over the completed scope before fresh Review; do not add an unselected
+full suite. Cross-slice validation applies only
 when slice_manifest contains more than one item; when it contains one item,
 record cross-slice validation as not_applicable using the one-item manifest and
 single_slice_rationale. Single-slice full-scope validation still covers
@@ -114,6 +131,6 @@ path.
 
 Print: `>> Build complete — all [N] steps implemented`
 Print: `>> Running final current validation (execute or evidence-bound reuse)`
-Print: `>> Build: [passed/failed] | Tests: [N passed, M failed]`
+Print: `>> Build: [passed/failed/not_run/not_applicable] | Tests: [N passed, M failed, K skipped] (zero counts mean no tests ran)`
 
 Print: `--- PHASE: BUILD COMPLETE ---`

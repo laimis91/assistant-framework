@@ -3,6 +3,33 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+test_start "Codex and Claude implementation/verifier profiles preserve selected checks and conditional TDD"
+tdd_profile_failures=()
+for file in \
+    agents/codex/code-writer.toml \
+    agents/claude/code-writer.md; do
+    for term in \
+        "Preserve the canonical" \
+        "When TDD is false" \
+        "selected checks" \
+        "binding"; do
+        if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
+            tdd_profile_failures+=("$file missing $term")
+        fi
+    done
+done
+for file in agents/codex/builder-tester.toml agents/claude/builder-tester.md; do
+    for term in \
+        "When TDD is active" \
+        "when false," \
+        "selected checks and binding project suites"; do
+        if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
+            tdd_profile_failures+=("$file missing $term")
+        fi
+    done
+done
+if [[ "${#tdd_profile_failures[@]}" -eq 0 ]]; then pass; else fail "worker profile TDD/verification policy diverged: ${tdd_profile_failures[*]}"; fi
+
 test_start "Claude and Codex core prompts include worker status packets"
 missing_prompt_packet_terms=()
 for file in \
@@ -165,8 +192,9 @@ for term in \
     "deliverable type" \
     "exact files" \
     "acceptance criteria" \
-    "test/TDD expectation" \
-    "verification command" \
+    "carried verification_decision and current evidence_assessment" \
+    "conditional TDD expectation" \
+    "exact argv/cwd or concrete selected-check procedure" \
     "expected success signal" \
     "evidence to record" \
     "deviation/rollback rule"; do
@@ -189,8 +217,9 @@ for term in \
     "deliverable type" \
     "exact files" \
     "acceptance criteria" \
-    "test/TDD expectation" \
-    "verification command" \
+    "carried verification_decision and current evidence_assessment" \
+    "conditional TDD expectation" \
+    "exact argv/cwd or concrete selected-check procedure" \
     "expected success signal" \
     "evidence to record" \
     "deviation/rollback rule"; do

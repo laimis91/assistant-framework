@@ -1,7 +1,7 @@
 # TDD Input Contract
 # Resolve these fields when TDD mode activates.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: input
 skill: assistant-tdd
 
@@ -25,6 +25,12 @@ fields:
       User said 'TDD', 'tests first', 'red green refactor' → user_request.
       Plan includes 'TDD: active' in constraints → plan_constraint.
       Project instructions or conventions (AGENTS.md, CLAUDE.md, README, CONTRIBUTING.md, or equivalent) require tests-first → project_convention.
+
+  - name: verification_decision
+    type: object
+    required: false
+    description: "The canonical assistant-verification decision carried unchanged when TDD is composed with workflow."
+    validation: "When present, it conforms to assistant-verification/contracts/output.yaml#verification_decision and tdd_choice.mode is true; use its selected checks and scope without broadening them. Standalone TDD may resolve behavior checks from current context when no verifier decision is available."
 
   - name: behaviors
     type: object[]

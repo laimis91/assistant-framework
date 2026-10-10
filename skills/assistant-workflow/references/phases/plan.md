@@ -40,7 +40,8 @@ evidence ref and readiness implications directly to Preparation Completion;
 do not create a Plan checkpoint, task-packet/execution refs, or
 `plan_document`. For `plan_mode=none` with `execution_intent != prepare_only`,
 Discover carries the obvious file scope, constraints, acceptance check, and
-verification argv into its exit transition, which atomically sets
+canonical verification decision with any selected argv/cwd or concrete
+non-command procedure into its exit transition, which atomically sets
 `handoff_binding_state=downstream_bound` with compact inline
 task-packet/execution and inline review-scope refs before any Build action.
 
@@ -61,7 +62,7 @@ Print: `>> Direct fallback Architect responsibility` (when `execution_intent != 
 For `prepare_only`, an explicitly requested readiness Plan is inline and never waits. When architecture applies, retain unresolved Pack questions in `feature_preparation_result.open_decisions` and readiness context; optional Plan never waits. For `existing_system`, record the exact unchanged feature-preparation evidence ref, readiness implications, open decisions, and recommended next implementation state. For `not_applicable`, record `preparation_basis=not_applicable` instead and omit the feature-evidence ref. Readiness plans omit Artifact Contracts, executable implementation steps/task packets, and Done/Harness artifacts. They do not load implementation packet or harness planning requirements. Load `references/plans/prepare-only.md`; missing or unknown view loads authoritative `references/plan-template.md`.
 
 For `execution_intent != prepare_only`, Artifact Contracts, implementation steps/task packets, and Done/Harness guidance apply. Before writing that plan, load `references/artifact-first-output-contract.md` and define the Artifact Contract: artifact type, required files/deliverables, output format/schema, acceptance criteria, verification command or method, expected success signal, owner/consumer, and non-goals. Carry forward the exact Triage values separately: `qa_evaluation_mode`, `harness_capable`, `build_execution_lane`, and `workflow_state_mode`. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and put its typed reference, semantic type commitments/primitive exceptions, quality verification, compatibility strategy, and reviewer scope into the plan and affected task packets. Apply `references/workflow-controller.md` for shared routing/default decisions. When `harness_capable=true`, load `references/harness-controller.md` plus `references/plan-harness-appendix.md`, then add compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets. Then load `references/plans/<size>.md`; missing or unknown view loads authoritative `references/plan-template.md`:
-- `inline`: compact small plan (goal, files, risks, tests); do not wait.
+- `inline`: compact small plan (goal, files, risks, unchanged verification decision and selected checks); do not wait.
 - `approval_required` medium: standard plan (drop Security/Operability unless the task touches auth, PII, payments, or infra).
 - `approval_required` large/mega: full plan (all sections including Security and Operability).
 
@@ -81,10 +82,10 @@ For `execution_intent != prepare_only`:
 12. Load prompt packs only when applicable:
    - Refactors: `references/prompts/refactor-safety.md`
    - Migrations/rewrites: `references/prompts/refactor-safety.md` plus any applicable migration or parity checklist
-   - New code: `references/prompts/test-strategy.md`
+   - Automated tests: `references/prompts/test-strategy.md` only when selected by `assistant-verification`
    - DB changes: `references/prompts/migration.md`
    - Unknown-cause bugfix: use `assistant-debugging` first; only transition into TDD when reproduction/root-cause evidence can define a meaningful regression test.
-   - TDD mode: use `assistant-tdd` skill (or `references/prompts/tdd-enforcement.md` if skill not installed)
+   - TDD mode: use `assistant-tdd` only when `verification_decision.tdd_choice.mode=true` (or the fallback prompt if the skill is not installed)
    - **SOLID (plan phase):** Review `references/prompts/solid-principles.md` graduated enforcement table to fill SOLID design notes in the plan template's Architecture section (medium+ tasks).
 
 ### Approval gate

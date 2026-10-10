@@ -1,0 +1,191 @@
+schema_version: "1.0"
+contract: output
+skill: assistant-verification
+
+artifacts:
+  - name: verification_decision
+    type: object
+    required: conditional
+    condition: "operation is select or select_and_assess, or a carried decision is being assessed"
+    description: "Bounded approach for the named change; selecting checks and TDD are independent decisions"
+    validation: "Do not broaden the work scope, waive a binding constraint, or imply that a planned check was executed."
+    on_fail: "Return to SELECT and correct policy, check, or TDD semantics; if the approach is blocked, name the precise material gap."
+    object_fields:
+      - name: scope
+        type: string
+        required: true
+        description: "Named outcome and acceptance scope from work_scope; do not broaden it"
+      - name: policy_basis
+        type: object
+        required: true
+        description: "Binding constraints and explicitly applied preferences"
+        object_fields:
+          - name: binding_constraints
+            type: object[]
+            required: true
+            description: "Binding policy retained with source identity"
+            object_fields:
+              - name: kind
+                type: enum
+                required: true
+                enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]
+              - name: value
+                type: string
+                required: true
+              - name: source_ref
+                type: string
+                required: true
+          - name: preferences_applied
+            type: string[]
+            required: true
+            description: "Explicit user or project preferences used as preferences, not promoted to mandates"
+          - name: capability_limits
+            type: string[]
+            required: true
+            description: "Material available-tool, access, or environment limits"
+      - name: test_change
+        type: enum
+        required: true
+        enum_values: [none, extend_existing, add_new, mixed]
+        description: "Planned test assertion changes; not a demand for new test files"
+      - name: checks
+        type: object[]
+        required: true
+        description: "Smallest actionable set addressing distinct material claims; blocked selection may return an empty array with an explicit gap"
+        object_fields:
+          - name: check_id
+            type: string
+            required: true
+            description: "Identifier stable within this decision; reuse an existing obligation id when available"
+          - name: claim_or_risk
+            type: string
+            required: true
+            description: "Concrete behavior, invariant, or quality claim linked to acceptance criteria"
+          - name: action
+            type: enum
+            required: true
+            enum_values: [reuse, extend, add, run, inspect]
+            description: "What the existing executor should do; distinguish reuse of a check design from reuse of its old result"
+          - name: method
+            type: enum
+            required: true
+            enum_values: [automated_test, static_validation, manual_observation, artifact_inspection, behavioral_eval, benchmark_or_fault_probe]
+            description: "Kind of observation selected for the claim"
+          - name: test_scope
+            type: enum
+            required: conditional
+            condition: "method is automated_test"
+            enum_values: [unit, integration, e2e]
+            description: "Automated test boundary; omit for non-test methods"
+            on_missing: fail
+          - name: technique
+            type: enum
+            required: true
+            enum_values: [example, property, mutation, characterization, schema_or_lint, render_or_compile, exploratory, task_eval, performance_or_resilience]
+            description: "Oracle technique; separate from test_scope"
+          - name: check_ref_or_method
+            type: object
+            required: true
+            description: "Existing check reference or a concrete procedure with prerequisites, exclusions, expected success, and meaningful failure"
+            object_fields:
+              - name: reference_or_procedure
+                type: string
+                required: true
+                description: "Existing command/source ref or direct steps an executor can carry out"
+              - name: prerequisites
+                type: string[]
+                required: true
+              - name: exclusions
+                type: string[]
+                required: true
+              - name: expected_success
+                type: string
+                required: true
+                description: "Observable result that supports this claim"
+              - name: meaningful_failure
+                type: string
+                required: true
+                description: "Plausible wrong result or failure the oracle distinguishes"
+          - name: rationale
+            type: string
+            required: true
+            description: "Why this observes the claim at acceptable cost and how it adds distinct evidence"
+          - name: method_refs
+            type: string[]
+            required: true
+            description: "Direct references to the selected method guidance loaded by this decision; empty when no method reference applies"
+      - name: tdd_choice
+        type: object
+        required: true
+        description: "TDD decision, separate from test scope and technique"
+        validation: "user_requirement, project_requirement, and selected_technique imply mode=true; not_selected implies mode=false."
+        object_fields:
+          - name: mode
+            type: boolean
+            required: true
+            description: "Whether meaningful RED–GREEN–REFACTOR is active"
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [user_requirement, project_requirement, selected_technique, not_selected]
+          - name: rationale
+            type: string
+            required: true
+            description: "Requirement source or why a stable, useful RED oracle is or is not appropriate"
+      - name: omitted_checks_and_rationale
+        type: string[]
+        required: true
+        description: "Significant duplication or irrelevant work rejected; not every imaginable technique"
+      - name: stop_rule
+        type: string
+        required: true
+        description: "Evidence needed to stop; expansion requires a new justified gap, risk, change, failure, request, or mandate"
+
+  - name: evidence_assessment
+    type: object
+    required: true
+    description: "What the supplied evidence establishes for the named work scope"
+    validation: "Sufficient requires current, resolved evidence refs that support the claims and all binding obligations; no missing evidence may be treated as a pass."
+    on_fail: "Return to ASSESS, classify each missing, stale, failed, partial, skipped, or unavailable result as a gap, or identify the exact material blocker."
+    object_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [planned, sufficient, insufficient, blocked]
+        description: "planned for selection without results; sufficient only for supported scope; insufficient for evidence gaps; blocked for unavailable capability or unresolved material dependency"
+      - name: scope_and_evidence_refs
+        type: object[]
+        required: true
+        description: "Scope and actual result refs considered; planned selection has no invented result refs"
+        validation: "Use only actual evidence refs. A sufficient assessment has at least one supporting ref for every material claim."
+        object_fields:
+          - name: evidence_ref
+            type: string
+            required: true
+          - name: claim_kind
+            type: enum
+            required: true
+            enum_values: [structural_validity, native_activation, task_behavior, comparative_value, other]
+            description: "Use only claim kinds relevant to this change"
+          - name: claim_scope
+            type: string[]
+            required: true
+          - name: result_state
+            type: enum
+            required: true
+            enum_values: [passed, failed, skipped, partial, unavailable]
+          - name: freshness
+            type: enum
+            required: true
+            enum_values: [current, stale, unknown, not_applicable]
+          - name: exclusions
+            type: string[]
+            required: true
+      - name: gaps_and_limitations
+        type: string[]
+        required: true
+        description: "Material gaps, unsupported boundaries, and explicit exclusions; empty only when none remain within scope"
+      - name: next_action
+        type: string
+        required: true
+        description: "Compact recommendation for the existing owner, or none_needed; workflow owns execution, repair, escalation, and acceptance"

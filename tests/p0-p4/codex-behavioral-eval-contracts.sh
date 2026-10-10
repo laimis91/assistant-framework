@@ -67,6 +67,165 @@ test_mode_octal() {
     esac
 }
 
+test_start "supervisor cleanup confirms absence or fails within its deadline without releasing protected state"
+if python3 - "$runner" <<'PY'
+import ast
+import io
+from pathlib import Path
+import signal
+import subprocess
+import sys
+from types import SimpleNamespace
+
+source = Path(sys.argv[1]).read_text()
+start = source.index("run_codex_supervisor() {\n")
+start = source.index("<<'PY'\n", start) + len("<<'PY'\n")
+module = ast.parse(source[start:source.index("\nPY\n}", start)])
+functions = ast.Module(body=[n for n in module.body if isinstance(n, ast.FunctionDef)], type_ignores=[])
+
+class Clock:
+    def __init__(self, hold):
+        self.elapsed, self.limit = 0.0, hold + 2.0
+        self.observe = lambda: None
+    def monotonic(self):
+        return self.elapsed
+    def sleep(self, seconds):
+        self.elapsed += seconds
+        assert self.elapsed <= self.limit, "cleanup exceeded its confirmation budget"
+        self.observe()
+
+class Group:
+    def __init__(self, mode):
+        self.mode, self.gone, self.markers = mode, mode == "absent", []
+    def killpg(self, pgid, number):
+        assert pgid == 123456
+        if self.mode == "permission":
+            raise PermissionError("synthetic permission failure")
+        if self.mode == "io-error":
+            raise OSError("synthetic cleanup error")
+        if self.gone:
+            raise ProcessLookupError("synthetic absence")
+        if number == signal.SIGKILL and self.mode == "killed":
+            self.gone = True
+    def mkdir(self, path, mode):
+        self.markers.append(path)
+
+class Child:
+    pid = 123456
+    def __init__(self, reaped):
+        self.reaped = reaped
+    def poll(self):
+        return 0 if self.reaped else None
+    def wait(self, timeout):
+        if not self.reaped:
+            raise subprocess.TimeoutExpired("synthetic child", timeout)
+        return 0
+
+for mode, reaped, child_present, hold, result, expected in [
+    ("absent", True, True, 0, 17, 17),
+    ("killed", True, True, 0, 124, 124),
+    ("permission", True, True, 0, 0, 125),
+    ("present", True, True, 0, 0, 125),
+    ("absent", False, True, 0, 0, 125),
+    ("absent", True, False, 0, 127, 125),
+    ("io-error", True, True, 0, 0, 125),
+    ("absent", True, True, 7, 143, 143),
+]:
+    clock, group, handlers = Clock(hold), Group(mode), {}
+    scope = dict(os=group, time=clock, subprocess=subprocess, sys=SimpleNamespace(stderr=io.StringIO()),
+                 signal=SimpleNamespace(SIGINT=signal.SIGINT, SIGTERM=signal.SIGTERM,
+                     SIGKILL=signal.SIGKILL, SIG_IGN=signal.SIG_IGN,
+                     signal=lambda number, handler: handlers.update({number: handler})),
+                 child=Child(reaped) if child_present else None, post_group_hold_seconds=hold,
+                 cleanup_confirmed=False, done_dir="synthetic-done")
+    exec(compile(functions, "supervisor-functions", "exec"), scope)
+    handlers.update({signal.SIGINT: scope["interrupted"], signal.SIGTERM: scope["interrupted"]})
+    def observe_cleanup():
+        for number, handler in tuple(handlers.items()):
+            if callable(handler):
+                handler(number, None)
+        scope["mark_supervisor_done"]()
+        assert not group.markers, "confirmation published before cleanup/hold completed"
+    clock.observe = observe_cleanup
+    if mode == "permission":
+        assert scope["process_group_exists"](123456), "EPERM was misclassified as absence"
+    try:
+        scope["finish"](result)
+    except SystemExit as error:
+        assert error.code == expected, (mode, error.code, expected)
+    else:
+        raise AssertionError("supervisor did not exit")
+    scope["mark_supervisor_done"]()
+    assert bool(group.markers) == (expected != 125), (mode, group.markers)
+    assert clock.elapsed <= hold + 1.6
+    if hold:
+        assert clock.elapsed >= hold + 0.05
+
+def shell_function(name):
+    start = source.index(name + "() {\n")
+    return source[start:source.index("\n}\n", start) + 3]
+
+# Execute the actual Bash handoff functions with in-memory cleanup/signal stubs.
+# No process IDs are probed and no files are removed by these controls.
+helpers = "\n".join(shell_function(name) for name in
+                    ("confirm_supervisor_cleanup", "terminate_active_child", "cleanup_all"))
+stubs = r"""
+ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=true
+ACTIVE_CHILD_SUPERVISOR_DONE_DIR=/nonexistent-synthetic-supervisor-done
+PROTECTED_STATE_REQUIRES_EXPLICIT_RECOVERY=false
+ACTIVE_CHILD_GRACE_SECONDS=5
+ACTIVE_NODE_PROBE_DIR= WORK_ROOT=
+kill() { return 1; }
+wait() { return "${MOCK_WAIT_EXIT:-125}"; }
+cleanup_raw_root() { echo raw-released; }
+release_output_lease() { echo lease-released; }
+"""
+for pid in ("", "synthetic"):
+    script = helpers + stubs + "\nACTIVE_CHILD_PID=" + pid + r"""
+if cleanup_all; then exit 90; fi
+[[ "$PROTECTED_STATE_REQUIRES_EXPLICIT_RECOVERY" == true ]]
+"""
+    checked = subprocess.run(["bash", "-eu", "-c", script], capture_output=True, text=True, timeout=2)
+    assert checked.returncode == 0 and not checked.stdout, checked
+
+start = source.index('    if wait "$ACTIVE_CHILD_PID"; then exit_code=0; else exit_code=$?; fi')
+handoff = source[start:source.index('    rm -f "$prompt_file"', start)]
+script = helpers + stubs + r"""
+ACTIVE_CHILD_PID=synthetic
+exit_code=0 timed_out=false
+die() {
+    [[ "$PROTECTED_STATE_REQUIRES_EXPLICIT_RECOVERY" == true ]]
+    [[ "$ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE" == true ]]
+    exit 97
+}
+""" + handoff + "\nexit 91\n"
+for result in (0, 124, 125):
+    checked = subprocess.run(["bash", "-eu", "-c", "MOCK_WAIT_EXIT=" + str(result) + "\n" + script],
+                             capture_output=True, text=True, timeout=2)
+    assert checked.returncode == 97 and not checked.stdout, checked
+
+for result in (0, 17, 124):
+    script = helpers + stubs + "\nMOCK_WAIT_EXIT=" + str(result) + r"""
+ACTIVE_CHILD_PID=synthetic
+ACTIVE_CHILD_SUPERVISOR_DONE_DIR=/
+exit_code=0 timed_out=false
+die() { exit 97; }
+""" + handoff + r"""
+[[ "$ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE" == false && -z "$ACTIVE_CHILD_PID" ]]
+[[ "$exit_code" -eq "$MOCK_WAIT_EXIT" ]]
+[[ "$PROTECTED_STATE_REQUIRES_EXPLICIT_RECOVERY" == false ]]
+if [[ "$MOCK_WAIT_EXIT" -eq 124 ]]; then [[ "$timed_out" == true ]]; fi
+"""
+    checked = subprocess.run(["bash", "-eu", "-c", script], capture_output=True, text=True, timeout=2)
+    assert checked.returncode == 0 and not checked.stdout, checked
+print("cleanup classification, deadline, marker and Bash retention controls passed")
+PY
+then
+    pass
+else
+    fail "supervisor cleanup classified unknown state as absent, exceeded its deadline, or released protected state"
+fi
+
 fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-behavioral-eval-test.XXXXXX")"
 p0p4_register_cleanup "$fixture_root"
 baseline="$fixture_root/baseline"
@@ -80,7 +239,30 @@ export FAKE_CANDIDATE_SKILL_SHA256="$(sed -e 's|{agent_state_dir}|.codex|g' "$ca
 mkdir -p "$baseline/evals" "$candidate/evals"
 printf '%s\n' '{"secret":"baseline grader anchor"}' >"$baseline/evals/cases.json"
 printf '%s\n' '{"secret":"candidate grader anchor"}' >"$candidate/evals/cases.json"
-cp "$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json" "$candidate/manifest.json"
+# Keep the checked-in kernel manifest as historical fixture input; derive the shared
+# positive candidate manifest from measurements of these exact temporary skill files.
+historical_kernel_manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
+cp "$historical_kernel_manifest" "$fixture_root/historical-kernel-manifest.json"
+baseline_context_report="$fixture_root/baseline-context-report.json"
+candidate_context_report="$fixture_root/candidate-context-report.json"
+"$FRAMEWORK_DIR/tools/context-budget-report.sh" --agent codex --skill assistant-workflow \
+    --skill-overlay "$baseline/SKILL.md" --format json >"$baseline_context_report"
+"$FRAMEWORK_DIR/tools/context-budget-report.sh" --agent codex --skill assistant-workflow \
+    --skill-overlay "$candidate/SKILL.md" --format json >"$candidate_context_report"
+jq --slurpfile baseline "$baseline_context_report" --slurpfile candidate "$candidate_context_report" '
+  .static_measurement = {
+    baseline_selected_initial_words: $baseline[0].components.selected_skill_initial.words,
+    candidate_selected_initial_words: $candidate[0].components.selected_skill_initial.words,
+    selected_initial_word_delta: ($candidate[0].components.selected_skill_initial.words - $baseline[0].components.selected_skill_initial.words),
+    baseline_total_initial_words: $baseline[0].totals.initial_words,
+    candidate_total_initial_words: $candidate[0].totals.initial_words,
+    baseline_selected_entry_words: $baseline[0].components.selected_skill_entry_boundary.words,
+    candidate_selected_entry_words: $candidate[0].components.selected_skill_entry_boundary.words,
+    selected_entry_word_delta: ($candidate[0].components.selected_skill_entry_boundary.words - $baseline[0].components.selected_skill_entry_boundary.words),
+    standing_context_growth: (($candidate[0].totals.initial_words - $candidate[0].components.selected_skill_initial.words) - ($baseline[0].totals.initial_words - $baseline[0].components.selected_skill_initial.words)),
+    measured_with: "tools/context-budget-report.sh --skill-overlay"
+  }
+' "$fixture_root/historical-kernel-manifest.json" >"$candidate/manifest.json"
 
 fake_codex="$fixture_root/fake-codex"
 cat >"$fake_codex" <<'FAKE'
@@ -1632,6 +1814,26 @@ else
     fail "duplicate case rejection was late or unactionable"
 fi
 
+test_start "frozen historical manifest is rejected against fresh fixture measurements"
+historical_manifest_candidate="$fixture_root/historical-manifest-candidate"
+historical_manifest_output="$fixture_root/historical-manifest-output"
+historical_manifest_error="$fixture_root/historical-manifest-error.txt"
+cp -R "$candidate" "$historical_manifest_candidate"
+cp "$fixture_root/historical-kernel-manifest.json" "$historical_manifest_candidate/manifest.json"
+rm -f "$capture"/*
+if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$historical_manifest_candidate" \
+    --cases small-fix-stays-lightweight --repeats 1 --output "$historical_manifest_output" \
+    --codex-bin "$fake_codex" >/dev/null 2>"$historical_manifest_error"; then
+    fail "runner accepted the immutable historical manifest as current measurement evidence"
+elif grep -Fq 'Candidate manifest does not match fresh context-budget evidence' "$historical_manifest_error" \
+    && [[ ! -e "$capture/call-0.args" ]] \
+    && [[ ! -e "$historical_manifest_output/run-plan.json" ]]; then
+    pass
+else
+    fail "historical manifest rejection was not tied to fresh measurements before run planning"
+fi
+
 test_start "candidate manifest rejects stale or over-budget static measurements"
 static_budget_candidate="$fixture_root/static-budget-candidate"
 static_budget_output="$fixture_root/static-budget-output"
@@ -2104,15 +2306,19 @@ fi
 
 test_start "finalizer bounds a hanging current catalog recheck"
 bounded_finalizer_plan="$fixture_root/bounded-finalizer-plan.json"
-jq '.model_catalog_timeout_seconds = 1' "$trusted_output/run-plan.json" >"$bounded_finalizer_plan"
-finalizer_hang_started_at="$(date +%s)"
-if ! (export PATH="$trusted_bin:$PATH" FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CATALOG_MODE=hang
-    source "$semantic_finalizer"
-    trusted_execution_profile_passes "$bounded_finalizer_plan" "$trusted_output/traces") \
-    && [[ "$(( $(date +%s) - finalizer_hang_started_at ))" -le 8 ]]; then
-    pass
+if [[ -f "$trusted_output/run-plan.json" ]] \
+    && jq '.model_catalog_timeout_seconds = 1' "$trusted_output/run-plan.json" >"$bounded_finalizer_plan"; then
+    finalizer_hang_started_at="$(date +%s)"
+    if ! (export PATH="$trusted_bin:$PATH" FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CATALOG_MODE=hang
+        source "$semantic_finalizer"
+        trusted_execution_profile_passes "$bounded_finalizer_plan" "$trusted_output/traces") \
+        && [[ "$(( $(date +%s) - finalizer_hang_started_at ))" -le 8 ]]; then
+        pass
+    else
+        fail "finalizer catalog attestation could hang without a bounded failure"
+    fi
 else
-    fail "finalizer catalog attestation could hang without a bounded failure"
+    fail "finalizer bounded catalog recheck could not load its trusted run-plan prerequisite"
 fi
 
 test_start "catalog attestation streams selected evidence without raw catalog temp files"
@@ -2212,6 +2418,8 @@ FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true FAKE_CO
     --codex-bin "$fake_codex" >/dev/null 2>&1 &
 owned_runner_pid=$!
 owned_invoked=false
+owned_runner_exited=not_observed
+owned_child_alive=not_observed
 # Plan materialization and fsync-backed admission may exceed five wall-clock
 # seconds on a busy host; wait for the actual fake Codex boundary.
 for _ in {1..600}; do
@@ -2243,6 +2451,7 @@ fi
 
 timeout_output="$fixture_root/timeout-output"
 rm -f "$capture"/*
+timeout_branch_result=not_run
 if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true FAKE_CODEX_SPAWN_SIGNAL_IGNORING_GRANDCHILD=true \
     "$runner" --execute --model test-model --run-timeout-seconds 1 \
     --baseline-variant "$baseline" --candidate-variant "$hostile_candidate" \
@@ -2250,15 +2459,32 @@ if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CODEX_BLOCK_AFTER_INVOCATION=true FA
     --codex-bin "$fake_codex" >/dev/null 2>&1 \
     || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable"
       and .error.code == "execution_timed_out")' "$timeout_output/traces/"*.json >/dev/null 2>&1 \
-    || find "$capture" -maxdepth 1 \( -name 'call-*.pid' -o -name 'call-*.grandchild.pid' \) -exec sh -c '
-        for file do kill -0 "$(cat "$file")" 2>/dev/null && exit 1; done
-      ' sh {} +; then
+    || ! find "$capture" -maxdepth 1 -type f \( -name 'call-*.pid' -o -name 'call-*.grandchild.pid' \) -print0 | (
+        marker_count=0
+        while :; do
+            file=''
+            if IFS= read -r -d '' file; then
+                marker_count=$((marker_count + 1))
+                if ! pid="$(cat "$file" 2>/dev/null)"; then exit 1; fi
+                [[ "$pid" =~ ^([2-9]|[1-9][0-9]+)$ ]] || exit 1
+                kill -0 "$pid" 2>/dev/null && exit 1
+            else
+                read_status=$?
+                [[ "$read_status" -eq 1 && -z "$file" ]] || exit 1
+                break
+            fi
+        done
+        (( marker_count > 0 ))
+      ); then
     lifecycle_ok=false
+    timeout_branch_result=failed
+else
+    timeout_branch_result=passed
 fi
 if [[ "$lifecycle_ok" == true ]]; then
     pass
 else
-    fail "runner left Codex alive or did not classify and stop bounded timeouts"
+    fail "runner left Codex alive or did not classify and stop bounded timeouts (owned_invoked=$owned_invoked owned_runner_exited=$owned_runner_exited owned_child_alive=$owned_child_alive timeout_branch_result=$timeout_branch_result)"
 fi
 
 test_start "supervisor reaps signal-ignoring descendants after leader success and failure before lease release"
@@ -5170,10 +5396,10 @@ cp -R "$laundering_output" "$laundering_missing_output"
 jq 'del(.pairs[0].candidate.findings[0].review_summary)' \
     "$laundering_missing_output/semantic-review-packet.json" >"$laundering_missing_packet"
 mv "$laundering_missing_packet" "$laundering_missing_output/semantic-review-packet.json"
-if ! "$semantic_finalizer" --results "$laundering_missing_output" --write-verdict-template "$fixture_root/missing-summary-template.json" >/dev/null 2>&1; then
+if ! "$semantic_finalizer" --results "$laundering_missing_output" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$fixture_root/missing-summary-template.json" >/dev/null 2>&1; then
     laundering_missing_blocked=true
 fi
-if "$semantic_finalizer" --results "$laundering_output" --write-verdict-template "$laundering_template" >/dev/null \
+if "$semantic_finalizer" --results "$laundering_output" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$laundering_template" >/dev/null \
     && jq '
       .reviewer.kind = "human"
       | .reviewer.attestation = "reviewed_all_candidate_findings_against_synthetic_fixture"
@@ -5226,6 +5452,7 @@ jq '.pairs[0].candidate.findings[0].review_summary = "Discount\u001bcontrol"' \
 mv "$control_tampered_packet" "$control_tampered_output/semantic-review-packet.json"
 if [[ "$control_chars_ok" != true ]] \
     || "$semantic_finalizer" --results "$control_tampered_output" \
+        --baseline-variant "$baseline" --candidate-variant "$candidate" \
         --write-verdict-template "$fixture_root/control-summary-template.json" >/dev/null 2>&1 \
     || ! grep -Fq '\\u0020-\\u002E' "$semantic_packet_schema" \
     || ! grep -Fq '\\u005D-\\u007E' "$semantic_packet_schema"; then
@@ -5492,7 +5719,7 @@ cp -R "$semantic_output" "$fixture_drift_results"
 jq '.scope.synthetic_fixture_sha256 = ("0" * 64)' \
     "$fixture_drift_results/semantic-review-packet.json" >"$fixture_drift_packet"
 mv "$fixture_drift_packet" "$fixture_drift_results/semantic-review-packet.json"
-if "$semantic_finalizer" --results "$fixture_drift_results" --write-verdict-template "$fixture_drift_template" >/dev/null 2>&1 \
+if "$semantic_finalizer" --results "$fixture_drift_results" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$fixture_drift_template" >/dev/null 2>&1 \
     && jq '
       .reviewer.kind = "human"
       | .reviewer.attestation = "reviewed_all_candidate_findings_against_synthetic_fixture"
@@ -5582,7 +5809,7 @@ test_start "pending human review timestamp cannot finalize"
 pending_timestamp_template="$fixture_root/pending-timestamp-template.json"
 pending_timestamp_verdict="$fixture_root/pending-timestamp-verdict.json"
 impossible_timestamp_verdict="$fixture_root/impossible-timestamp-verdict.json"
-if "$semantic_finalizer" --results "$semantic_output" --write-verdict-template "$pending_timestamp_template" >/dev/null \
+if "$semantic_finalizer" --results "$semantic_output" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$pending_timestamp_template" >/dev/null \
     && jq -e '.reviewed_at == "pending"' "$pending_timestamp_template" >/dev/null \
     && jq '
       .reviewer.kind = "human"
@@ -5617,7 +5844,7 @@ smoke_verdict_template="$fixture_root/smoke-verdict-template.json"
 smoke_unattested_verdict="$fixture_root/smoke-unattested-verdict.json"
 smoke_verdict="$fixture_root/smoke-verdict.json"
 if [[ -x "$semantic_finalizer" ]] \
-    && "$semantic_finalizer" --results "$semantic_output" --write-verdict-template "$smoke_verdict_template" >/dev/null \
+    && "$semantic_finalizer" --results "$semantic_output" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$smoke_verdict_template" >/dev/null \
     && jq '
       .pair_verdicts[].candidate_findings[].verdict = "supported"
       | .pair_verdicts[].candidate_findings[].reason_code = "supported_by_synthetic_fixture"
@@ -5676,7 +5903,7 @@ rebound_comparison_sha="$(test_sha256_stream <"$rebound_results/comparison.json"
 jq --arg sha "$rebound_comparison_sha" '.bindings.comparison_sha256 = $sha' \
     "$rebound_results/semantic-review-packet.json" >"$rebound_packet"
 mv "$rebound_packet" "$rebound_results/semantic-review-packet.json"
-if "$semantic_finalizer" --results "$rebound_results" --write-verdict-template "$rebound_template" >/dev/null \
+if "$semantic_finalizer" --results "$rebound_results" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$rebound_template" >/dev/null \
     && jq '
       .reviewer.kind = "human"
       | .reviewer.attestation = "reviewed_all_candidate_findings_against_synthetic_fixture"
@@ -5708,7 +5935,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
     --repeats 3 \
     --output "$pilot_output" \
     --codex-bin "$fake_codex" --activation-observations "$manual_activation_observation" >/dev/null \
-    && "$semantic_finalizer" --results "$pilot_output" --write-verdict-template "$pilot_template" >/dev/null \
+    && "$semantic_finalizer" --results "$pilot_output" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$pilot_template" >/dev/null \
     && jq '
       .reviewer.kind = "human"
       | .reviewer.attestation = "reviewed_all_candidate_findings_against_synthetic_fixture"
@@ -5759,7 +5986,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
     --cases "$pilot_cases" --repeats 3 --output "$static_activation_pilot_output" \
     --codex-bin "$fake_codex" \
     --activation-observations "$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json" >/dev/null \
-    && "$semantic_finalizer" --results "$static_activation_pilot_output" --write-verdict-template "$static_activation_template" >/dev/null \
+    && "$semantic_finalizer" --results "$static_activation_pilot_output" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$static_activation_template" >/dev/null \
     && jq '
       .reviewer.kind = "human"
       | .reviewer.attestation = "reviewed_all_candidate_findings_against_synthetic_fixture"
@@ -5942,7 +6169,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CANDIDATE_SMALL_FAILURE=true "$runner"
     && jq --arg sha "$rebound_failed_comparison_sha" '.bindings.comparison_sha256 = $sha' \
         "$failed_pilot_output/semantic-review-packet.json" >"$failed_pilot_packet" \
     && mv "$failed_pilot_packet" "$failed_pilot_output/semantic-review-packet.json" \
-    && "$semantic_finalizer" --results "$failed_pilot_output" --write-verdict-template "$failed_pilot_template" >/dev/null \
+    && "$semantic_finalizer" --results "$failed_pilot_output" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$failed_pilot_template" >/dev/null \
     && jq '
       .reviewer.kind = "human"
       | .reviewer.attestation = "reviewed_all_candidate_findings_against_synthetic_fixture"

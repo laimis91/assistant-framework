@@ -45,7 +45,7 @@ fi
 
 test_start "phase gates accept bounded executor evidence without fake Builder dispatch"
 if p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "build_execution_lane == bounded_executor" \
-    && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "focused RED, GREEN, and verification evidence" \
+    && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "implementation, selected-check results, and changed-file evidence" \
     && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "Builder/Tester is required only when build_execution_lane == separated_workers"; then
     pass
 else
@@ -54,8 +54,8 @@ fi
 
 test_start "all build and recovery surfaces obey the selected execution lane"
 if ! grep -Fq 'run the Code Writer -> Builder/Tester loop' "$workflow/references/phases.md" \
-    && p0p4_contains_text "$workflow/references/phases.md" "bounded executor owns edit, RED, GREEN, and focused verification" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" 'Dispatch Builder/Tester only when `build_execution_lane=separated_workers`' \
+    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "the bounded executor adds or extends" \
+    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "Builder/Tester owns RED only when TDD is active" \
     && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "route verification through the selected build_execution_lane" \
     && ! grep -Fq 'return to Builder/Tester RED evidence' "$workflow/references/build-worker-protocol.md" \
     && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "Repair evidence according to build_execution_lane" \
@@ -66,7 +66,7 @@ else
 fi
 
 test_start "required roles are lane aware instead of unconditional"
-if p0p4_contains_text "$workflow/contracts/input.yaml" "bounded_executor requires one edit/test executor plus independent Code Reviewer responsibility" \
+if p0p4_contains_text "$workflow/contracts/input.yaml" "bounded_executor requires one implementation and selected-verification owner plus independent Code Reviewer responsibility" \
     && p0p4_contains_text "$workflow/contracts/input.yaml" "separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities" \
     && ! grep -Fq 'Standard/strict development work that changes project artifacts includes Code Writer, Builder/Tester, and Code Reviewer responsibilities.' "$workflow/contracts/input.yaml"; then
     pass
@@ -84,7 +84,7 @@ else
 fi
 
 test_start "TDD supports one bounded owner without weakening RED"
-if p0p4_contains_text "$tdd/SKILL.md" "bounded executor owns RED, GREEN, focused verification, and refactor safety" \
+if p0p4_contains_text "$tdd/SKILL.md" "one bounded executor owns RED, GREEN, focused verification, and refactor safety" \
     && p0p4_contains_text "$tdd/SKILL.md" "production code still starts only after valid RED evidence" \
     && p0p4_contains_text "$tdd/contracts/input.yaml" "enum_values: [bounded_executor, separated_workers]"; then
     pass
@@ -94,11 +94,11 @@ fi
 
 test_start "Codex writer is a bounded edit test executor when selected"
 if p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "bounded_executor" \
-    && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "write focused tests" \
-    && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "run focused verification"; then
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "own the selected implementation and verification" \
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "When TDD is false, no RED is required and none should be fabricated."; then
     pass
 else
-    fail "Codex writer prompt still forbids the ordinary-medium edit/test loop"
+    fail "Codex writer prompt lacks selected execution ownership or inactive-TDD guard"
 fi
 
 test_start "Builder Tester prompt is conditional and remains production read-only"

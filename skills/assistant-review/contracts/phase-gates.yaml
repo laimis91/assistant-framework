@@ -2,7 +2,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "7.2"
+schema_version: "8.0"
 contract: phase-gates
 skill: assistant-review
 
@@ -67,14 +67,14 @@ gates:
         on_fail: "In mode=review-fix, validate FIX_STEP entry_assertions before repair or mutation dispatch, then repair only an authorized in-scope mismatch and repeat to PASS. In mode=audit, record the mismatch, freeze the read-only batch, dispatch every required pass, wait for the response barrier, and never mutate source."
 
       - id: E9
-        check: "Workflow-composed review consumes carried spec_review_pass_ref and carried current build/test evidence before Reviewer dispatch"
+        check: "Workflow-composed review consumes Spec PASS and, when required, current evidence_ref bound to the canonical decision, assessment, due selected/binding results, exclusions, and source. no_build_scope is allowed only when no fix is required/occurred and no due selected/binding build/test check applies."
         condition: "review_preparation_mode == workflow_composed"
-        on_fail: "Block dispatch and request the carried Spec Review PASS and current build/test evidence refs from the composing workflow."
+        on_fail: "Block dispatch and request the carried Spec Review PASS and current bound verification evidence, or the permitted no_build_scope reason, from the composing workflow."
 
       - id: E10
-        check: "A persisted 6.0, 7.0, or 7.1 review packet carries its matching invalidation/migration record and cannot contribute CLEAN or ISSUES_FIXED until a fresh 7.2 batch is rebuilt. Complete historic closure tuples, including existing 7.1-or-later provenance, remain unchanged; partial v6/7.0 tuples are normalized before closure dispatch."
+        check: "A persisted 6.0, 7.0, 7.1, or 7.2 review packet carries its matching invalidation/migration record and cannot contribute CLEAN or ISSUES_FIXED until a fresh 8.0 batch is rebuilt. Complete historic closure tuples, including existing 7.1-or-later provenance, remain unchanged; partial v6/7.0 tuples are normalized before closure dispatch."
         condition: "a persisted review packet is supplied"
-        on_fail: "Invalidate the persisted result/delegation/snapshot/Pack/QA/plan/coverage refs, preserve raw history and complete closure tuples, normalize only missing v6/7.0 closure identity fields before dispatch, and rebuild from a fresh 7.2 snapshot."
+        on_fail: "Invalidate the persisted result/delegation/snapshot/Pack/QA/plan/coverage refs, preserve raw history and complete closure tuples, normalize only missing v6/7.0 closure identity fields before dispatch, and rebuild from a fresh 8.0 snapshot."
 
   # ─────────────────────────────────────────────
   # REVIEW step — per round
@@ -104,12 +104,12 @@ gates:
         on_fail: "Do not collapse to one self-review. Create two isolated direct-fallback records and aggregate only after both terminal responses."
 
       - id: RS2
-        check: "Reviewer or direct-fallback review received fresh_reviewer_context with selected dispatch_context_ref, bounded worker_return_schema_selector: Worker loads named handoff return_fields recursively from active skill root, proves worker_return_schema equals the referenced schema, or fails closed before response, review_preparation_mode, sanitized pre_batch_criteria_ref proving latest Spec Review PASS or retained audit FAIL without finding detail, required build_test_verification_ref, per-pass assignment/obligations, quality_principles_required, round, closure ledger only when applicable, finding_filter_policy, reuse_search_instruction requiring a fresh independent capability search, review-principles, review-rubric when required, only triggered checklist sections, and for risk_selected_specialist security the Code Reviewer assistant-security checklist/perspective while the Reviewer return schema remains authoritative"
+        check: "Reviewer or direct-fallback review received fresh_reviewer_context with selected dispatch_context_ref, bounded worker_return_schema_selector: Worker loads named handoff return_fields recursively from active skill root, proves worker_return_schema equals the referenced schema, or fails closed before response, review_preparation_mode, sanitized pre_batch_criteria_ref proving latest Spec Review PASS or retained audit FAIL without finding detail, required build_test_verification_ref with current bound evidence or an allowed not_applicable reason, per-pass assignment/obligations, quality_principles_required, round, closure ledger only when applicable, finding_filter_policy, reuse_search_instruction requiring a fresh independent capability search, review-principles, review-rubric when required, only triggered checklist sections, and for risk_selected_specialist security the Code Reviewer assistant-security checklist/perspective while the Reviewer return schema remains authoritative"
         on_fail: "Resolve reviewer_context only at pass start, rebuild the bounded bundle from dispatch_context_bundles, exclude untriggered checklist sections, and use pass_repair_guard for one allowed transient/schema repair before terminal incomplete coverage."
 
       - id: RS2A
-        check: "build_test_verification_ref contains current real passed build/test evidence whenever source fix/build is in scope; not_applicable is one of audit_only, read_only, or no_build_scope only when no source fix/build is in scope and is invalid after any source fix"
-        on_fail: "Block Reviewer dispatch. Run current build/tests when fix/build is in scope or after a source fix; otherwise record exactly one allowed explicit not_applicable reason."
+        check: "Workflow-composed evidence_ref binds the canonical decision, current assessment, all due selected/binding results, exclusions, and source. Require it with passed results for due checks and after every source fix; fixes invalidate the batch and forbid not_applicable. no_build_scope requires no required/occurred fix and no due build/test. Standalone review-fix requires build/tests."
+        on_fail: "Block Reviewer dispatch. Resolve the carried selection and binding constraints, run or reuse current successful evidence for every due check, and require a current evidence_ref after fixes; use no_build_scope only under its exact workflow-composed condition."
 
       - id: RS2B
         check: "The declared reviewer_context boundary closure is strictly below 5653 words and excludes orchestrator_to_reviewer.return_fields"
@@ -275,10 +275,12 @@ gates:
 
       - id: V1
         check: "Build was run and passed (exit code 0)"
+        condition: "review_preparation_mode == standalone or the current due selected CheckSpec's claim, oracle, or procedure, or a resolved binding constraint, requires a build"
         on_fail: "Fix build errors before incrementing round"
 
       - id: V2
         check: "Tests were run and all pass (0 failures)"
+        condition: "review_preparation_mode == standalone or the current due selected CheckSpec's claim, oracle, or procedure, or a resolved binding constraint, requires an automated test"
         on_fail: "Fix failing tests before incrementing round"
 
       - id: V3
@@ -287,7 +289,7 @@ gates:
         on_fail: "Run complexity analysis and flag methods exceeding threshold"
 
       - id: V4
-        check: "After any source fix, the current batch is invalidated and build_test_verification_ref is refreshed with current real passed build/test evidence before every pass in the next frozen-snapshot batch; not_applicable is absent"
+        check: "After any source fix, invalidate the current batch and refresh build_test_verification_ref.evidence_ref to current passed selected/binding verification with canonical decision, assessment, results, exclusions, and source binding before every pass in the next frozen-snapshot batch; not_applicable is absent"
         on_fail: "Run current build/tests, record the passed evidence ref, freeze a new snapshot/batch, and block the next review round until the fresh evidence is available."
 
   # ─────────────────────────────────────────────

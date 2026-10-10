@@ -33,11 +33,20 @@ Rules for safe and effective AI-assisted development. These apply throughout all
 - Run the code — don't trust it works just because it looks right
 
 ### Tests
-- AI-generated tests must test behaviour, not implementation details
-- Tests must be able to fail (verify by breaking the code and confirming the test catches it)
-- Test names must clearly describe what they verify
-- Avoid AI generating tests that simply assert the current output is correct (tautological tests)
-- Human must define expected behaviour; AI can scaffold the test structure
+- Add or run tests only when selected by the canonical verification decision;
+  selected manual or structural methods remain valid alternatives.
+- Expected behavior comes from authoritative requirements, accepted criteria,
+  current contracts, or source evidence. The agent may derive a test oracle
+  from those sources; human authorship is not required. Resolve conflicts or
+  material unknowns before treating an expectation as settled.
+- Each selected test must distinguish the expected behavior from at least one
+  plausible wrong outcome; phrase-only and tautological assertions do not
+  provide evidence.
+- Use a targeted mutation only when a concrete oracle concern remains, and
+  record the concern and result. Do not break production code as a blanket test
+  of every assertion.
+- Test names must clearly state what they verify. Prefer Arrange-Act-Assert
+  when it makes the behavior easier to assess.
 - Prefer Arrange-Act-Assert pattern for clarity
 
 ### Documentation

@@ -275,6 +275,222 @@
       }
     },
     {
+      "id": "build-phase-verifies-selected-check-before-advancing",
+      "title": "Build verifies the selected check before advancing each slice",
+      "category": "slice_verification",
+      "purpose": "Checks that Build executes the unchanged per-slice verification decision and records actual results before advancing, without inventing tests or RED.",
+      "prompt": "Approved. Build the eval coverage plan now.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "A medium task decomposition and plan have already been approved.",
+        "The approved slices include fixtures, contract tests, and docs.",
+        "The approved verification_decision is unchanged: tdd_choice.mode is false, check id is inspect-rendered-artifact, and its method is artifact_inspection with no command.",
+        "The approved CheckSpec to carry unchanged is: {\"check_id\":\"inspect-rendered-artifact\",\"claim_or_risk\":\"The selected artifact contains the expected content.\",\"action\":\"inspect\",\"method\":\"artifact_inspection\",\"technique\":\"exploratory\",\"check_ref_or_method\":{\"reference_or_procedure\":\"Open the produced artifact and compare the rendered content with the approved acceptance criteria.\",\"prerequisites\":[\"The artifact is produced.\"],\"exclusions\":[\"Does not imply an automated test ran.\"],\"expected_success\":\"The rendered artifact matches the approved criteria.\",\"meaningful_failure\":\"The artifact is empty, stale, or materially differs from the acceptance criteria.\"},\"rationale\":\"Directly observes the selected artifact claim without inventing a test command.\",\"method_refs\":[]}"
+      ],
+      "expected_behavior": [
+        "Processes one slice at a time and preserves the carried verification_decision.",
+        "Uses each slice CheckSpec method; a concrete non-command procedure is valid when no command is selected.",
+        "Records the observed result and criteria checked before advancing.",
+        "Requires RED only when the canonical TDD choice is active; false TDD does not manufacture RED.",
+        "Flags plan deviations explicitly and leaves Review for the post-Build review loop."
+      ],
+      "pass_criteria": [
+        "The response preserves the supplied approved CheckSpec unchanged in both decisions and identifies it in the observed result.",
+        "The response records actual selected-check results before advancing each slice.",
+        "No verification_command is invented for a CheckSpec with a non-command procedure.",
+        "RED evidence is conditional on the canonical TDD choice.",
+        "The response preserves Review as a later phase."
+      ],
+      "fail_signals": [
+        "Replaces both carried decisions with the same unapproved check or changes its procedure/oracle.",
+        "Replaces the selected procedure with an unselected test command.",
+        "Advances without recording the selected check result.",
+        "Invents RED evidence when TDD is false.",
+        "Changes files outside the approved slice without recording deviation.",
+        "Declares workflow complete immediately after Build."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "verification_decision",
+          "CheckSpec",
+          "procedure",
+          "result",
+          "criteria",
+          "slice S2",
+          "slice S3"
+        ],
+        "forbidden_substrings": [
+          "invented RED",
+          "test command required",
+          "Workflow complete after build",
+          "Review is unnecessary"
+        ],
+        "structured_json_assertions": [
+          {
+            "id": "approved_check_fields_are_unchanged",
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "rationale",
+              "method_refs"
+            ],
+            "expected_objects": [
+              {
+                "check_id": "inspect-rendered-artifact",
+                "claim_or_risk": "The selected artifact contains the expected content.",
+                "action": "inspect",
+                "method": "artifact_inspection",
+                "technique": "exploratory",
+                "rationale": "Directly observes the selected artifact claim without inventing a test command.",
+                "method_refs": []
+              }
+            ]
+          },
+          {
+            "id": "tdd_is_false",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "operator": "equals",
+            "expected": false
+          },
+          {
+            "id": "slice_packet_preserves_tdd_choice",
+            "path": [
+              "slice_manifest",
+              0,
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "operator": "equals",
+            "expected": false
+          },
+          {
+            "id": "no_command_for_noncommand_check",
+            "path": [
+              "slice_manifest",
+              0,
+              "verification_command"
+            ],
+            "operator": "path_absent"
+          },
+          {
+            "id": "no_tests_claimed",
+            "path": [
+              "test_results"
+            ],
+            "operator": "path_absent"
+          },
+          {
+            "id": "actual_check_recorded",
+            "path": [
+              "validation_results",
+              0,
+              "result"
+            ],
+            "operator": "equals",
+            "expected": "passed"
+          },
+          {
+            "operator": "equals_path",
+            "path": [
+              "slice_manifest",
+              0,
+              "verification_decision"
+            ],
+            "other_path": [
+              "verification_decision"
+            ]
+          },
+          {
+            "id": "result_identifies_approved_check",
+            "path": [
+              "validation_results",
+              0,
+              "command_or_check"
+            ],
+            "operator": "equals",
+            "expected": "inspect-rendered-artifact"
+          },
+          {
+            "id": "approved_reference_or_procedure",
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "Open the produced artifact and compare the rendered content with the approved acceptance criteria."
+          },
+          {
+            "id": "approved_prerequisites",
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "The artifact is produced."
+            ]
+          },
+          {
+            "id": "approved_exclusions",
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not imply an automated test ran."
+            ]
+          },
+          {
+            "id": "approved_expected_success",
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "The rendered artifact matches the approved criteria."
+          },
+          {
+            "id": "approved_meaningful_failure",
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "The artifact is empty, stale, or materially differs from the acceptance criteria."
+          }
+        ]
+      }
+    },
+    {
       "id": "verification-reuse-current-scenario-matrix",
       "title": "Current verification scenario matrix",
       "category": "current_verification_reuse",
@@ -982,49 +1198,114 @@
       "id": "unknown-cause-bugfix-routes-through-debugging-before-tdd",
       "title": "Unknown-cause bugfix routes through debugging before TDD",
       "category": "debugging_tdd_routing",
-      "purpose": "Checks that workflow uses assistant-debugging for unknown-cause bugfixes before entering assistant-tdd or patching code.",
+      "purpose": "Checks debugging-first routing and preservation of the explicit user TDD requirement once reproduction and a meaningful regression oracle are available.",
       "prompt": "Fix the intermittent checkout total bug. I do not know why it happens yet, but use TDD once you can reproduce it.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
-        "The task is a bugfix and the root cause is not known.",
-        "No reproduction command or failing regression test has been supplied yet."
+        "At task entry, this is a bugfix and the root cause is not known.",
+        "At task entry, no reproduction command or failing regression test has been supplied.",
+        "Evaluate the route through the successful debugging handoff: replaying checkout-42 with subtotal 1000 cents and a 100-cent promotion produces 800 instead of 900 because the promotion is applied twice; competing hypotheses have been checked.",
+        "The supplied replay is the meaningful regression oracle; no repair or RED test has run yet. Preserve the initial debugging-first route and select the requested TDD cycle after this handoff.",
+        "The binding tuple is required_tdd/true with source_ref fixture:unknown-cause-bugfix-routes-through-debugging-before-tdd#user-request."
       ],
       "expected_behavior": [
         "Triages the task as a bugfix with debugging_mode root_cause_unknown.",
-        "Loads or routes through assistant-debugging before implementation or assistant-tdd.",
-        "Requires reproduction or a concrete blocker plus competing hypotheses before patching.",
-        "Transitions to assistant-tdd only after debugging evidence can define a meaningful RED regression test.",
+        "Routes through assistant-debugging before implementation and records reproduction or a concrete blocker with competing hypotheses.",
+        "After the successful reproduction/root-cause handoff, assistant-verification retains the explicit user TDD mandate and selects tdd_choice.mode=true with basis=user_requirement.",
+        "Defines meaningful RED from checkout-42 before production repair; if reproduction is unavailable in real work, retain the mandate and report the blocker rather than waive it.",
         "Keeps review expectations tied to reproduction/root-cause evidence."
       ],
       "pass_criteria": [
-        "The response includes assistant-debugging before assistant-tdd.",
-        "The response records debugging_mode or equivalent root-cause unknown status.",
-        "The response requires reproduction, hypotheses, and disconfirming evidence before code changes.",
-        "The response says TDD starts only after a meaningful regression test can be written from debugging evidence."
+        "The response includes assistant-debugging before assistant-verification and any TDD cycle.",
+        "The response records root-cause-unknown status and reproduction/hypothesis evidence.",
+        "The canonical decision retains the binding user requirement and activates TDD after the supplied successful reproduction.",
+        "Records a ready TDD transition based on the replay oracle without claiming RED already ran."
       ],
       "fail_signals": [
-        "Starts patching code before reproduction or debugging evidence.",
-        "Enters TDD immediately despite not knowing what regression test should fail.",
+        "Starts patching before reproduction/debugging evidence.",
+        "Enters TDD immediately before the verifier decision.",
+        "Fabricates RED when the canonical mode is false.",
         "Claims root cause without hypotheses or disconfirming evidence.",
-        "Treats assistant-debugging as optional for unknown-cause bugfixes."
+        "Selects false/not_selected TDD after successful reproduction despite the explicit user requirement."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "Triage",
-          "bugfix",
-          "debugging_mode",
           "assistant-debugging",
+          "assistant-verification",
+          "debugging_mode",
           "reproduction",
           "hypotheses",
-          "disconfirming evidence",
-          "assistant-tdd",
-          "regression test"
+          "tdd_choice.mode",
+          "selected checks"
         ],
         "forbidden_substrings": [
           "patch first",
           "TDD immediately",
-          "root cause is obvious",
+          "fabricate RED",
           "debugging is optional"
+        ],
+        "ordered_substrings": [
+          [
+            "assistant-debugging",
+            "assistant-verification",
+            "assistant-tdd"
+          ]
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "debugging_result",
+              "status"
+            ],
+            "expected": "root_cause_found"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "debugging_result",
+              "transition_to_tdd"
+            ],
+            "expected": "ready"
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ],
+            "expected_objects": [
+              {
+                "kind": "required_tdd",
+                "value": "true",
+                "source_ref": "fixture:unknown-cause-bugfix-routes-through-debugging-before-tdd#user-request"
+              }
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "expected": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "basis"
+            ],
+            "expected": "user_requirement"
+          }
         ]
       }
     },
@@ -2628,8 +2909,8 @@
           {"operator":"equals","path":["canonical_final_summary","ref"],"expected":"journal#final-summary"},
           {"operator":"equals","path":["review_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#final_summary"},
           {"operator":"equals_path","path":["review_result","canonical_contract"],"other_path":["canonical_final_summary","contract"]},
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
-          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
+          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals_path","path":["review_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
           {"operator":"equals_path","path":["review_result","final_review_snapshot_id"],"other_path":["canonical_final_summary","artifact","final_review_snapshot_id"]},
           {"operator":"equals_path","path":["canonical_final_summary","artifact","final_review_snapshot_id"],"other_path":["current_final_batch","review_snapshot_id"]},
@@ -2719,8 +3000,8 @@
           {"operator":"equals","path":["canonical_final_summary","ref"],"expected":"journal#final-summary"},
           {"operator":"equals","path":["fresh_review_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#final_summary"},
           {"operator":"equals_path","path":["fresh_review_result","canonical_contract"],"other_path":["canonical_final_summary","contract"]},
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
-          {"operator":"equals","path":["fresh_review_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
+          {"operator":"equals","path":["fresh_review_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals_path","path":["fresh_review_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
           {"operator":"equals_path","path":["fresh_review_result","final_review_snapshot_id"],"other_path":["canonical_final_summary","artifact","final_review_snapshot_id"]},
           {"operator":"equals_path","path":["canonical_final_summary","artifact","final_review_snapshot_id"],"other_path":["current_final_batch","review_snapshot_id"]},
@@ -2803,8 +3084,8 @@
           {"operator":"equals","path":["canonical_final_summary","ref"],"expected":"journal#final-summary"},
           {"operator":"equals","path":["review_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#final_summary"},
           {"operator":"equals_path","path":["review_result","canonical_contract"],"other_path":["canonical_final_summary","contract"]},
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
-          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
+          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals_path","path":["review_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
           {"operator":"equals_path","path":["review_result","final_review_snapshot_id"],"other_path":["canonical_final_summary","artifact","final_review_snapshot_id"]},
           {"operator":"equals_path","path":["canonical_final_summary","artifact","final_review_snapshot_id"],"other_path":["current_final_batch","review_snapshot_id"]},
@@ -2901,8 +3182,8 @@
           {"operator":"equals","path":["canonical_final_summary","ref"],"expected":"journal#final-summary"},
           {"operator":"equals","path":["review_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#final_summary"},
           {"operator":"equals_path","path":["review_result","canonical_contract"],"other_path":["canonical_final_summary","contract"]},
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
-          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
+          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals_path","path":["review_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
           {"operator":"equals_path","path":["review_result","final_review_snapshot_id"],"other_path":["canonical_final_summary","artifact","final_review_snapshot_id"]},
           {"operator":"equals_path","path":["canonical_final_summary","artifact","final_review_snapshot_id"],"other_path":["current_final_batch","review_snapshot_id"]},
@@ -2965,16 +3246,16 @@
           {"operator":"path_absent","path":["canonical_final_summary","artifact","final_snapshot_identity_ref"]},
           {"operator":"path_absent","path":["canonical_final_summary","artifact","approved_feature_preparation_qa_acceptance_obligation_result_ref"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","rounds"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
           {"operator":"nonempty_array","path":["canonical_qa_result","artifact","score_progression"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_items_nonempty_fields","path":["canonical_qa_result","artifact","evidence"],"fields":["source","detail"]},
@@ -2995,7 +3276,7 @@
           {"operator":"equals_path","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"other_path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected":1},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":0},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -3051,8 +3332,8 @@
           {"operator":"equals","path":["canonical_final_summary","ref"],"expected":"journal#final-summary"},
           {"operator":"equals","path":["review_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#final_summary"},
           {"operator":"equals_path","path":["review_result","canonical_contract"],"other_path":["canonical_final_summary","contract"]},
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
-          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
+          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals_path","path":["review_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
           {"operator":"equals_path","path":["review_result","final_review_snapshot_id"],"other_path":["canonical_final_summary","artifact","final_review_snapshot_id"]},
           {"operator":"equals_path","path":["canonical_final_summary","artifact","final_review_snapshot_id"],"other_path":["current_final_batch","review_snapshot_id"]},
@@ -3113,16 +3394,16 @@
           {"operator":"path_absent","path":["canonical_final_summary","artifact","final_snapshot_identity_ref"]},
           {"operator":"path_absent","path":["canonical_final_summary","artifact","approved_feature_preparation_qa_acceptance_obligation_result_ref"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","rounds"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
           {"operator":"nonempty_array","path":["canonical_qa_result","artifact","score_progression"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_items_nonempty_fields","path":["canonical_qa_result","artifact","evidence"],"fields":["source","detail"]},
@@ -3142,7 +3423,7 @@
           {"operator":"equals_path","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"other_path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected":1},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":1},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -4958,8 +5239,8 @@
           {"operator":"equals_path","path":["review_result","canonical_result_ref"],"other_path":["canonical_final_summary","ref"]},
           {"operator":"nonempty_string","path":["review_result","canonical_result_ref"]},
           {"operator":"equals","path":["review_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#final_summary"},
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
-          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
+          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals_path","path":["review_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
           {"operator":"equals_path","path":["review_result","final_review_snapshot_id"],"other_path":["canonical_final_summary","artifact","final_review_snapshot_id"]},
           {"operator":"equals_path","path":["canonical_final_summary","artifact","final_review_snapshot_id"],"other_path":["current_final_batch","review_snapshot_id"]},
@@ -4981,7 +5262,7 @@
           {"operator":"equals","path":["review_result","delegation_contract"],"expected":"assistant-review/contracts/output.yaml#review_delegation_path"},
           {"operator":"equals","path":["review_result","validation_status"],"expected":"validated"},
           {"operator":"nonempty_string","path":["qa_evaluation_result","delegation_path_ref"]},
-          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals","path":["qa_evaluation_result","delegation_contract"],"expected":"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path"},
           {"operator":"equals","path":["qa_evaluation_result","validation_status"],"expected":"validated"},
           {"operator":"equals_path","path":["qa_evaluation_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
@@ -5038,16 +5319,16 @@
           {"operator":"path_absent","path":["canonical_final_summary","artifact","final_snapshot_identity_ref"]},
           {"operator":"path_absent","path":["canonical_final_summary","artifact","approved_feature_preparation_qa_acceptance_obligation_result_ref"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","rounds"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
           {"operator":"nonempty_array","path":["canonical_qa_result","artifact","score_progression"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_items_nonempty_fields","path":["canonical_qa_result","artifact","evidence"],"fields":["source","detail"]},
@@ -5070,7 +5351,7 @@
           {"operator":"equals_path","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"other_path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected":1},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":0},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -5183,8 +5464,8 @@
           {"operator":"equals_path","path":["review_result","canonical_result_ref"],"other_path":["canonical_final_summary","ref"]},
           {"operator":"nonempty_string","path":["review_result","canonical_result_ref"]},
           {"operator":"equals","path":["review_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#final_summary"},
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
-          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
+          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals_path","path":["review_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
           {"operator":"equals_path","path":["review_result","final_review_snapshot_id"],"other_path":["canonical_final_summary","artifact","final_review_snapshot_id"]},
           {"operator":"equals_path","path":["canonical_final_summary","artifact","final_review_snapshot_id"],"other_path":["current_final_batch","review_snapshot_id"]},
@@ -5206,7 +5487,7 @@
           {"operator":"equals","path":["review_result","delegation_contract"],"expected":"assistant-review/contracts/output.yaml#review_delegation_path"},
           {"operator":"equals","path":["review_result","validation_status"],"expected":"validated"},
           {"operator":"nonempty_string","path":["qa_evaluation_result","delegation_path_ref"]},
-          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals","path":["qa_evaluation_result","delegation_contract"],"expected":"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path"},
           {"operator":"equals","path":["qa_evaluation_result","validation_status"],"expected":"validated"},
           {"operator":"equals_path","path":["qa_evaluation_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
@@ -5261,16 +5542,16 @@
           {"operator":"path_absent","path":["canonical_final_summary","artifact","final_snapshot_identity_ref"]},
           {"operator":"path_absent","path":["canonical_final_summary","artifact","approved_feature_preparation_qa_acceptance_obligation_result_ref"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","rounds"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
           {"operator":"nonempty_array","path":["canonical_qa_result","artifact","score_progression"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_items_nonempty_fields","path":["canonical_qa_result","artifact","evidence"],"fields":["source","detail"]},
@@ -5293,7 +5574,7 @@
           {"operator":"equals_path","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"other_path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected":1},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":0},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -5389,7 +5670,7 @@
         "required_substrings": ["rejection_recovery", "changed", "build_validation_ref", "rehash_evidence_ref", "fresh_review_result_ref"],
         "forbidden_substrings": ["reuse stale review"],
         "structured_json_assertions": [
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","final_verdict"],"expected":"rejected"},
           {"operator":"nonempty_string","path":["prior_canonical_qa_result","ref"]},
           {"operator":"equals","path":["prior_canonical_qa_result","contract"],"expected":"assistant-review/contracts/output.yaml#qa_evaluation_result"},
@@ -5417,7 +5698,7 @@
           {"operator":"equals","path":["fresh_canonical_final_summary","artifact","coverage_complete"],"expected":true},
           {"operator":"nonempty_string","path":["qa_evaluation_result","canonical_result_ref"]},
           {"operator":"equals","path":["qa_evaluation_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#qa_evaluation_result"},
-          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"nonempty_string","path":["qa_evaluation_result","delegation_path_ref"]},
           {"operator":"equals","path":["qa_evaluation_result","delegation_contract"],"expected":"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path"},
           {"operator":"equals","path":["qa_evaluation_result","validation_status"],"expected":"validated"},
@@ -5436,16 +5717,16 @@
           {"operator":"path_absent","path":["fresh_canonical_final_summary","artifact","final_snapshot_identity_ref"]},
           {"operator":"path_absent","path":["fresh_canonical_final_summary","artifact","approved_feature_preparation_qa_acceptance_obligation_result_ref"]},
           {"operator":"one_of","path":["prior_canonical_qa_result","artifact","rounds"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
           {"operator":"nonempty_array","path":["prior_canonical_qa_result","artifact","score_progression"]},
           {"operator":"one_of","path":["prior_canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["prior_canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["prior_canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_items_nonempty_fields","path":["prior_canonical_qa_result","artifact","evidence"],"fields":["source","detail"]},
@@ -5467,7 +5748,7 @@
           {"operator":"equals_path","path":["prior_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"other_path":["prior_canonical_qa_result","artifact","qa_scorecard","weighted_score"]},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","score_progression",0,"round"],"expected":1},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":1},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -5479,13 +5760,13 @@
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected":3.1},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected":3.1},
           {"operator":"equals","path":["current_canonical_qa_result","artifact","rounds"],"expected":1},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -5501,8 +5782,8 @@
           {"operator":"equals","path":["current_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected":5},
           {"operator":"equals","path":["current_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":0},
           {"operator":"one_of","path":["current_canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["current_canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["current_canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_field_values_exact","path":["current_canonical_qa_result","artifact","evidence"],"field":"source","expected_values":["focused lifecycle validation"]},
@@ -5558,7 +5839,7 @@
         "required_substrings": ["rejection_recovery", "equal", "digest_equality_evidence_ref", "rehash_evidence_ref", "qa_resume_authorized"],
         "forbidden_substrings": ["build_validation_ref", "fresh_review_result_ref", "fresh_review_snapshot_identity", "fresh_review_coverage_complete"],
         "structured_json_assertions": [
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","final_verdict"],"expected":"rejected"},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","result"],"expected":"HAS_REMAINING_ITEMS"},
           {"operator":"nonempty_string","path":["prior_canonical_qa_result","ref"]},
@@ -5583,19 +5864,19 @@
           {"operator":"path_absent","path":["fresh_canonical_final_summary"]},
           {"operator":"path_absent","path":["current_final_batch"]},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","rounds"],"expected":1},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
           {"operator":"array_field_values_exact","path":["prior_canonical_qa_result","artifact","score_progression"],"field":"drift_status","expected_values":["NEUTRAL"]},
           {"operator":"equals_path","path":["prior_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"other_path":["prior_canonical_qa_result","artifact","qa_scorecard","weighted_score"]},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","score_progression",0,"round"],"expected":1},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":1},
           {"operator":"one_of","path":["prior_canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["prior_canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["prior_canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_field_values_exact","path":["prior_canonical_qa_result","artifact","evidence"],"field":"source","expected_values":["focused lifecycle validation"]},
@@ -5604,7 +5885,7 @@
           {"operator":"path_absent","path":["prior_canonical_qa_result","artifact","canonical_contract"]},
           {"operator":"path_absent","path":["prior_canonical_qa_result","artifact","final_snapshot_identity_ref"]},
           {"operator":"path_absent","path":["prior_canonical_qa_result","artifact","approved_feature_preparation_qa_acceptance_obligation_result_ref"]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -5616,13 +5897,13 @@
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected":3.1},
           {"operator":"equals","path":["prior_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected":3.1},
           {"operator":"equals","path":["current_canonical_qa_result","artifact","rounds"],"expected":1},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["current_canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -5638,8 +5919,8 @@
           {"operator":"equals","path":["current_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected":5},
           {"operator":"equals","path":["current_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":0},
           {"operator":"one_of","path":["current_canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["current_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["current_canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["current_canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["current_canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_field_values_exact","path":["current_canonical_qa_result","artifact","evidence"],"field":"source","expected_values":["focused lifecycle validation"]},
@@ -5700,8 +5981,8 @@
           {"operator":"equals","path":["canonical_final_summary","artifact","evidence_bounded_claim"],"expected":"No material findings within the reviewed scope and available evidence"},
           {"operator":"equals_path","path":["review_result","canonical_result_ref"],"other_path":["canonical_final_summary","ref"]},
           {"operator":"nonempty_string","path":["review_result","canonical_result_ref"]},
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
-          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
+          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals_path","path":["review_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
           {"operator":"equals_path","path":["review_result","final_review_snapshot_id"],"other_path":["canonical_final_summary","artifact","final_review_snapshot_id"]},
           {"operator":"equals_path","path":["canonical_final_summary","artifact","final_review_snapshot_id"],"other_path":["current_final_batch","review_snapshot_id"]},
@@ -5723,7 +6004,7 @@
           {"operator":"equals","path":["review_result","validation_status"],"expected":"validated"},
           {"operator":"nonempty_string","path":["qa_evaluation_result","delegation_path_ref"]},
           {"operator":"equals","path":["qa_evaluation_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#qa_evaluation_result"},
-          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals","path":["qa_evaluation_result","delegation_contract"],"expected":"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path"},
           {"operator":"equals","path":["qa_evaluation_result","validation_status"],"expected":"validated"},
           {"operator":"equals_path","path":["qa_evaluation_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
@@ -5762,16 +6043,16 @@
           {"operator":"path_absent","path":["canonical_final_summary","artifact","final_snapshot_identity_ref"]},
           {"operator":"path_absent","path":["canonical_final_summary","artifact","approved_feature_preparation_qa_acceptance_obligation_result_ref"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","rounds"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
           {"operator":"nonempty_array","path":["canonical_qa_result","artifact","score_progression"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_items_nonempty_fields","path":["canonical_qa_result","artifact","evidence"],"fields":["source","detail"]},
@@ -5794,7 +6075,7 @@
           {"operator":"equals_path","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"other_path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected":1},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":0},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -5908,8 +6189,8 @@
           {"operator":"equals","path":["canonical_final_summary","artifact","evidence_bounded_claim"],"expected":"No material findings within the reviewed scope and available evidence"},
           {"operator":"equals_path","path":["review_result","canonical_result_ref"],"other_path":["canonical_final_summary","ref"]},
           {"operator":"nonempty_string","path":["review_result","canonical_result_ref"]},
-          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"7.2"},
-          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["current_assistant_review_contract","schema_version"],"expected":"8.0"},
+          {"operator":"equals","path":["review_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals_path","path":["review_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
           {"operator":"equals_path","path":["review_result","final_review_snapshot_id"],"other_path":["canonical_final_summary","artifact","final_review_snapshot_id"]},
           {"operator":"equals_path","path":["canonical_final_summary","artifact","final_review_snapshot_id"],"other_path":["current_final_batch","review_snapshot_id"]},
@@ -5931,7 +6212,7 @@
           {"operator":"equals","path":["review_result","validation_status"],"expected":"validated"},
           {"operator":"nonempty_string","path":["qa_evaluation_result","delegation_path_ref"]},
           {"operator":"equals","path":["qa_evaluation_result","canonical_contract"],"expected":"assistant-review/contracts/output.yaml#qa_evaluation_result"},
-          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["qa_evaluation_result","producer_schema_version"],"expected":"8.0"},
           {"operator":"equals","path":["qa_evaluation_result","delegation_contract"],"expected":"assistant-review/contracts/output.yaml#qa_evaluation_delegation_path"},
           {"operator":"equals","path":["qa_evaluation_result","validation_status"],"expected":"validated"},
           {"operator":"equals_path","path":["qa_evaluation_result","producer_schema_version"],"other_path":["current_assistant_review_contract","schema_version"]},
@@ -5970,16 +6251,16 @@
           {"operator":"path_absent","path":["canonical_final_summary","artifact","final_snapshot_identity_ref"]},
           {"operator":"path_absent","path":["canonical_final_summary","artifact","approved_feature_preparation_qa_acceptance_obligation_result_ref"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","rounds"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","acceptance_coverage"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","evidence_strength"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","domain_quality"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","final_readiness"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"],"expected_type":"number"},
           {"operator":"nonempty_array","path":["canonical_qa_result","artifact","score_progression"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected_values":[1,2,3,4,5,6,7,8,9,10]},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"expected_type":"number"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected_type":"number"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","score_progression",0,"delta"]},
           {"operator":"one_of","path":["canonical_qa_result","artifact","score_progression",0,"drift_status"],"expected_values":["GENUINE","SUSPICIOUS","DRIFT","REGRESSION","STAGNATION","NEUTRAL","NOT_APPLICABLE"]},
           {"operator":"array_items_nonempty_fields","path":["canonical_qa_result","artifact","evidence"],"fields":["source","detail"]},
@@ -6001,7 +6282,7 @@
           {"operator":"equals_path","path":["canonical_qa_result","artifact","score_progression",0,"weighted_score"],"other_path":["canonical_qa_result","artifact","qa_scorecard","weighted_score"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"round"],"expected":1},
           {"operator":"equals","path":["canonical_qa_result","artifact","score_progression",0,"failed_acceptance_count"],"expected":1},
-          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"7.2","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
+          {"operator":"required_when_equals","when_path":["current_assistant_review_contract","schema_version"],"value":"8.0","path":["canonical_qa_result","artifact","qa_scorecard","rationale"],"expected_type":"object"},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","acceptance_coverage"]},
           {"operator":"nonempty_string","path":["canonical_qa_result","artifact","qa_scorecard","rationale","evidence_strength"]},
           {"operator":"equals","path":["canonical_qa_result","artifact","qa_scorecard","rationale","domain_quality"],"expected":"not_applicable: no scoped domain rubric applies."},
@@ -6142,19 +6423,19 @@
       "id": "stale-assistant-review-version-invalidates-persisted-results",
       "title": "Assistant-review producer version mismatch invalidates persisted refs",
       "category": "resume_integrity",
-      "purpose": "Prevents incompatible persisted 7.1 review/QA wrappers from resuming after the authoritative producer version moves to 7.2.",
+      "purpose": "Prevents incompatible persisted 7.1 review/QA wrappers from resuming after the authoritative producer version moves to 8.0.",
       "prompt": "Reconcile this persisted workflow after the assistant-review producer schema changed. Return one valid JSON object.",
-      "setup_context": ["Persisted review and QA wrappers record producer_schema_version=7.1.", "skills/assistant-review/contracts/index.yaml#schema_version is 7.2."],
+      "setup_context": ["Persisted review and QA wrappers record producer_schema_version=7.1.", "skills/assistant-review/contracts/index.yaml#schema_version is 8.0."],
       "expected_behavior": ["Classifies state stale, invalidates all affected refs, and selects rerun_review_and_qa."],
       "pass_criteria": ["No stale result, delegation, snapshot, Pack, or QA ref remains resumable."],
-      "fail_signals": ["Treats the incompatible 7.1 wrapper as current under 7.2."],
+      "fail_signals": ["Treats the incompatible 7.1 wrapper as current under 8.0."],
       "machine_expectations": {
-        "required_substrings": ["producer_schema_version", "7.1", "7.2", "invalidated", "rerun_review_and_qa"],
+        "required_substrings": ["producer_schema_version", "7.1", "8.0", "invalidated", "rerun_review_and_qa"],
         "forbidden_substrings": ["packet shapes are compatible by assumption"],
         "structured_json_assertions": [
           {"operator":"equals","path":["task_state_reconciliation","classification"],"expected":"stale"},
           {"operator":"equals","path":["task_state_reconciliation","assistant_review_packet_compatibility","persisted_producer_schema_versions"],"expected":["7.1"]},
-          {"operator":"equals","path":["task_state_reconciliation","assistant_review_packet_compatibility","current_producer_schema_version"],"expected":"7.2"},
+          {"operator":"equals","path":["task_state_reconciliation","assistant_review_packet_compatibility","current_producer_schema_version"],"expected":"8.0"},
           {"operator":"equals","path":["task_state_reconciliation","assistant_review_packet_compatibility","status"],"expected":"invalidated"},
           {"operator":"equals","path":["task_state_reconciliation","assistant_review_packet_compatibility","invalidated_refs"],"expected":["review_result.canonical_result_ref","review_result.delegation_path_ref","review_result.final_snapshot_identity_ref","review_result.architecture_decision_pack_review_ref","qa_evaluation_result.canonical_result_ref","qa_evaluation_result.delegation_path_ref","qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result_ref"]},
           {"operator":"equals","path":["task_state_reconciliation","assistant_review_packet_compatibility","rebuild_route"],"expected":"rerun_review_and_qa"},
@@ -6227,6 +6508,75 @@
           {"operator":"path_absent","path":["review_result"]},
           {"operator":"path_absent","path":["final_handoff"]},
           {"operator":"path_absent","path":["artifact_reference_ledger"]}
+        ]
+      }
+    },
+    {
+      "id": "light-completion-retains-canonical-verification-outputs",
+      "title": "Light completion returns both canonical verification outputs",
+      "category": "light_completion",
+      "purpose": "Checks that a small low-risk workflow keeps its unchanged verification decision and current evidence assessment visible through inline completion.",
+      "prompt": "Complete this approved small, low-risk documentation-only change after Build and fresh review. Return one valid JSON object with the canonical completion outputs.",
+      "setup_context": [
+        "The task is small, low-risk, documentation-only, and controller_intensity=light; no task journal, metrics, or manual verification was triggered.",
+        "Before Build, assistant-verification visibly returned the unchanged canonical verification_decision: {\"scope\":\"Correct the README install command spelling.\",\"policy_basis\":{\"binding_constraints\":[],\"preferences_applied\":[],\"capability_limits\":[]},\"test_change\":\"none\",\"checks\":[{\"check_id\":\"readme-install-command\",\"claim_or_risk\":\"The README install command uses an option supported by install.sh.\",\"action\":\"inspect\",\"method\":\"automated_test\",\"test_scope\":\"unit\",\"technique\":\"schema_or_lint\",\"check_ref_or_method\":{\"reference_or_procedure\":\"Run the focused documentation-contract test that checks the README install command against install.sh.\",\"prerequisites\":[\"Updated README.md, install.sh, and the focused documentation-contract test are available.\"],\"exclusions\":[\"Does not execute the installer or prove native activation.\"],\"expected_success\":\"The test confirms the documented option is supported by install.sh.\",\"meaningful_failure\":\"The README command includes an option the installer does not accept.\"},\"rationale\":\"The focused test directly checks the changed documentation claim.\",\"method_refs\":[\"skills/assistant-verification/references/methods/unit.md\"]}],\"tdd_choice\":{\"mode\":false,\"basis\":\"not_selected\",\"rationale\":\"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle.\"},\"omitted_checks_and_rationale\":[\"Installer execution is outside the selected documentation-only claim.\"],\"stop_rule\":\"Stop when the command comparison passes and the fresh light review passes.\"}",
+        "The selected static check passed with current evidence ref check:readme-install-command:17. The current canonical evidence_assessment is {\"status\":\"sufficient\",\"scope_and_evidence_refs\":[{\"evidence_ref\":\"check:readme-install-command:17\",\"claim_kind\":\"structural_validity\",\"claim_scope\":[\"README documents an install.sh-supported option.\"],\"result_state\":\"passed\",\"freshness\":\"current\",\"exclusions\":[\"Does not prove installer execution or native activation.\"]}],\"gaps_and_limitations\":[],\"next_action\":\"none_needed\"}.",
+        "Fresh review after validation passed and names the changed README scope, selected-check result, current evidence_assessment, and unchanged verification_decision."
+      ],
+      "expected_behavior": [
+        "Returns the canonical verification_decision visibly before Build and carries it unchanged through completion.",
+        "At completion, returns one inline JSON object containing both existing output keys, verification_decision and evidence_assessment.",
+        "Preserves the current evidence ref and assessment status within the approved documentation-only scope.",
+        "Uses the light completion lane without requiring a journal or exact phase markers."
+      ],
+      "pass_criteria": [
+        "The completion JSON contains both full canonical verification output objects.",
+        "The selected CheckSpec and TddChoice remain unchanged and the evidence assessment retains the current passed ref.",
+        "The result reports a fresh review pass after validation."
+      ],
+      "fail_signals": [
+        "Omits either canonical output object or replaces one with prose-only wording.",
+        "Changes the selected CheckSpec, TddChoice, or current evidence reference.",
+        "Promotes the light task into an untriggered journal, strict phase-marker, or manual-verification gate."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["verification_decision", "evidence_assessment", "Build", "light", "current"],
+        "forbidden_substrings": ["The user must approve every light completion."],
+        "structured_json_assertions": [
+          {
+            "id": "verification_decision_is_present_with_canonical_keys",
+            "operator": "object_keys_exact",
+            "path": ["verification_decision"],
+            "fields": ["scope", "policy_basis", "test_change", "checks", "tdd_choice", "omitted_checks_and_rationale", "stop_rule"]
+          },
+          {
+            "id": "selected_checkspec_is_preserved",
+            "operator": "array_object_values_exact",
+            "path": ["verification_decision", "checks"],
+            "fields": ["check_id", "claim_or_risk", "action", "method", "test_scope", "technique", "rationale", "method_refs"],
+            "expected_objects": [{"check_id":"readme-install-command","claim_or_risk":"The README install command uses an option supported by install.sh.","action":"inspect","method":"automated_test","test_scope":"unit","technique":"schema_or_lint","rationale":"The focused test directly checks the changed documentation claim.","method_refs":["skills/assistant-verification/references/methods/unit.md"]}]
+          },
+          {
+            "id": "selected_check_procedure_is_preserved",
+            "operator": "object_keys_exact",
+            "path": ["verification_decision", "checks", 0, "check_ref_or_method"],
+            "fields": ["reference_or_procedure", "prerequisites", "exclusions", "expected_success", "meaningful_failure"]
+          },
+          {"id":"selected_check_procedure","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","reference_or_procedure"],"expected":"Run the focused documentation-contract test that checks the README install command against install.sh."},
+          {"id":"selected_check_prerequisites","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","prerequisites"],"expected":["Updated README.md, install.sh, and the focused documentation-contract test are available."]},
+          {"id":"selected_check_exclusions","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","exclusions"],"expected":["Does not execute the installer or prove native activation."]},
+          {"id":"selected_check_expected_success","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","expected_success"],"expected":"The test confirms the documented option is supported by install.sh."},
+          {"id":"selected_check_meaningful_failure","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","meaningful_failure"],"expected":"The README command includes an option the installer does not accept."},
+          {"id":"tdd_choice_is_preserved","operator":"object_keys_exact","path":["verification_decision","tdd_choice"],"fields":["mode","basis","rationale"]},
+          {"id":"tdd_mode_is_false","operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":false},
+          {"id":"tdd_basis_is_not_selected","operator":"equals","path":["verification_decision","tdd_choice","basis"],"expected":"not_selected"},
+          {"id":"tdd_rationale_is_preserved","operator":"equals","path":["verification_decision","tdd_choice","rationale"],"expected":"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
+          {"id":"decision_scope_is_preserved","operator":"equals","path":["verification_decision","scope"],"expected":"Correct the README install command spelling."},
+          {"id":"evidence_assessment_is_present_with_canonical_keys","operator":"object_keys_exact","path":["evidence_assessment"],"fields":["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"id":"assessment_status_is_sufficient","operator":"equals","path":["evidence_assessment","status"],"expected":"sufficient"},
+          {"id":"current_evidence_ref_is_preserved","operator":"array_object_values_exact","path":["evidence_assessment","scope_and_evidence_refs"],"fields":["evidence_ref","claim_kind","claim_scope","result_state","freshness","exclusions"],"expected_objects":[{"evidence_ref":"check:readme-install-command:17","claim_kind":"structural_validity","claim_scope":["README documents an install.sh-supported option."],"result_state":"passed","freshness":"current","exclusions":["Does not prove installer execution or native activation."]}]},
+          {"id":"assessment_has_no_material_gaps","operator":"empty_array","path":["evidence_assessment","gaps_and_limitations"]},
+          {"id":"no_additional_action_is_needed","operator":"equals","path":["evidence_assessment","next_action"],"expected":"none_needed"}
         ]
       }
     }

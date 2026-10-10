@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 14 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, and purpose-driven context (Telos).
+A Personal AI Assistant framework for developers. 15 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
 
 ## What it does
 
@@ -18,6 +18,7 @@ A Personal AI Assistant framework for developers. 14 first-class `assistant-*` s
 12. **Review Automation** — Evidence-bounded review/fix/re-review with calibrated scores and finite rounds
 13. **Skill Creation** — Scaffolds V1 skills with contracts, phase gates, and handoffs
 14. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
+15. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
 
 ## Installation
 
@@ -279,6 +280,11 @@ Purpose context framework based on [Daniel Miessler's Telos Method](https://gith
 
 Triggers on: telos, my purpose, why am I doing this, what matters most, my mission, update telos
 
+### assistant-verification
+Selects proportional verification scope, methods, and TDD applicability, then assesses observed evidence and limitations. It guides verification without running checks; canonical contracts define its policy and typed outputs, while method references load on demand.
+
+Triggers on: verify a change, choose tests, test strategy, assess evidence, are these checks enough
+
 ## Tools
 
 ### Cognitive Complexity
@@ -328,7 +334,7 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
-The default eval inventory is 14 first-class `assistant-*` skills with fixtures
+The default eval inventory is 15 first-class `assistant-*` skills with fixtures
 and excludes local-only `unity-*` skills unless `--include-local` is passed.
 Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at

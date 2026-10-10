@@ -43,15 +43,18 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Files:
   - Create: [exact paths or "none"]
   - Modify: [exact paths or "none"]
-  - Test: [exact test paths or "none"]
+- Test: [exact selected test paths or "none"]
 - Enabling changes included:
   - [setup, contracts, wiring, or "none"]
 - Depends on: [slice ids or "none"]
-- TDD / RED step:
-  - tdd_applies: [true/false]
-  - TDD default: true for behavior changes, bugfixes with RED-ready evidence, and interface-affecting refactors; false only with explicit exception reason
-  - RED command: [command or "N/A"]
-  - Expected failure: [specific failing test/assertion or "N/A"]
+- Verification / TDD decision:
+  - verification_decision: [canonical ref; preserve selected scope, CheckSpec entries, exclusions, and rationale unchanged]
+  - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
+  - selected_checks: [ids and method-specific evidence]
+  - tdd_applies: [exact projection of verification_decision.tdd_choice.mode]
+  - RED evidence: [required only when tdd_applies=true; otherwise N/A, with no fabricated RED]
+  - RED argv and cwd or manual procedure: [required only when TDD selects an automated test; concrete procedure when applicable]
+  - Expected failure: [specific intended behavior assertion; never syntax/import/environment failure]
   - Architecture test obligations: [N/A unless tdd_applies=true and an Architecture Decision Pack applies; otherwise stable obligation_id, Pack ref, kind, behavior, verification]
 - Implementation notes / constraints:
   - implementation_notes:
@@ -66,11 +69,14 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - decision_rationale: [why this is the bounded existing-capability decision]
   - divergence_control: [required for intentional_duplicate]
 - Verification:
-  - verification_command: ["executable", "arg1", "arg2"]
-  - argv rule: [one literal argument per item; execute directly without shell parsing]
-  - Expected success signal: [exit code 0, passing test name, output marker, etc.]
+  - verification_decision: [canonical typed ref, unchanged]
+  - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
+  - selected_check_refs: [the applicable CheckSpec ids]
+  - command argv and cwd: [one literal argument per item; include only for command-based selected checks]
+  - non-command procedure: [concrete steps and observable result for selected checks without a command]
+  - Expected success signal: [the selected check's discriminating oracle/evidence]
 - Evidence to record:
-  - [test result, eval fixture, changed file, review note, or artifact proof]
+  - [selected-check result, eval fixture, changed file, review note, or artifact proof]
 - Loop / Experiment Routing:
   - controller_intensity: [light | standard | strict; standard keeps ordinary medium+ non-harness work out of harness/QA defaults]
   - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise ref]
@@ -111,7 +117,10 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 - files_to_test:
 - enabling_changes_included:
 - depends_on:
-- verification_command: ["executable", "arg1", "arg2"]
+- verification_decision: [unchanged canonical decision and selected CheckSpecs]
+- evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
+- tdd_applies: [verification_decision.tdd_choice.mode]
+- verification_command: [literal argv only when the selected check uses a command; otherwise omit and use its concrete CheckSpec procedure]
 - expected_success_signal:
 - evidence_to_record:
 - deviation_rollback_rule:

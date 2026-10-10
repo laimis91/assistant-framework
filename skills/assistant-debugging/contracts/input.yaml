@@ -1,4 +1,4 @@
-schema_version: "1.1"
+schema_version: "2.0"
 contract: input
 skill: assistant-debugging
 
@@ -61,6 +61,14 @@ fields:
     default: true
     on_missing: skip
     validation: "False when user asked only for investigation, explanation, or audit"
+
+  - name: verification_decision
+    type: object
+    required: conditional
+    condition: "can_modify_code == true and a fix or mitigation is planned"
+    description: "Canonical assistant-verification decision used before any fix or mitigation mutation."
+    validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve its selected CheckSpecs and TddChoice unchanged through FIX and VERIFY."
+    on_missing: fail
 
   - name: change_impact_applicability
     type: object

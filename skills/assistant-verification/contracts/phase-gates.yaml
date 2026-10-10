@@ -1,0 +1,102 @@
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-verification
+
+gates:
+  - phase: CAPTURE
+    checkpoint_start: "--- PHASE: CAPTURE ---"
+    checkpoint_end: "--- PHASE: CAPTURE COMPLETE ---"
+    exit_assertions:
+      - id: C1
+        check: "The named outcome, changed behavior or content, acceptance criteria, affected boundaries, and credible failure consequences are understood."
+        on_fail: "Inspect the task and discoverable source context; ask only for an unknowable material outcome."
+
+  - phase: SELECT
+    checkpoint_start: "--- PHASE: SELECT ---"
+    checkpoint_end: "--- PHASE: SELECT COMPLETE ---"
+    condition: "operation is select or select_and_assess"
+    exit_assertions:
+      - id: S0
+        check: "Before choosing checks, inspect applicable policy, current coverage, and available results."
+        on_fail: "Load the relevant instructions and owning suites; record requirements, prohibitions, preferences, capabilities, and coverage separately."
+      - id: S1
+        check: "Every selected check addresses a material claim or credible failure mode and has a meaningful success and failure oracle."
+        on_fail: "Name the observable claim, plausible wrong result, prerequisites, exclusions, and expected result, or remove the unsupported check."
+      - id: S2
+        check: "The selection reuses or extends relevant coverage before adding checks; each additional check contributes distinct evidence at acceptable cost."
+        on_fail: "Remove duplicated work or explain the uncovered claim that warrants an additional layer."
+      - id: S3
+        check: "Test scope, technique, and TDD are decided independently; scope restrictions, required checks, and explicit TDD requirements are honored."
+        on_fail: "Reconcile the actual policy kind and source; a required scope is not exclusive, and another method is not a TDD waiver."
+      - id: S4
+        check: "Selected method details are loaded on demand and the decision names direct method refs when relevant."
+        on_fail: "Load the applicable references/methods resource before relying on that method; do not preload all methods."
+      - id: S5
+        check: "TDD is active only when required or selected for a meaningful stable RED oracle; an unknown-cause bug reaches assistant-debugging before regression selection."
+        on_fail: "Keep TDD optional unless binding policy requires it; preserve meaningful RED if active and never manufacture a failing test."
+
+  - phase: ASSESS
+    checkpoint_start: "--- PHASE: ASSESS ---"
+    checkpoint_end: "--- PHASE: ASSESS COMPLETE ---"
+    condition: "operation is assess or select_and_assess, or a selection-only request includes actual results"
+    exit_assertions:
+      - id: A1
+        check: "Assessment resolves actual result refs and distinguishes attempted, passed, failed, skipped, partial, unavailable, stale, and unknown evidence."
+        on_fail: "Resolve the source or report its exact gap; command start, retry-only success, and artifact existence alone are not passing evidence."
+      - id: A2
+        check: "Every material claim is supported within the evidence scope, current identity, conditions, exclusions, and result freshness."
+        on_fail: "Mark the claim insufficient or blocked as applicable and name the missing observation."
+      - id: A3
+        check: "Structural validity, native activation, task behavior, and comparative value are distinguished when relevant, without requiring all four for every change."
+        on_fail: "Bound each claim to observed evidence; do not treat a structural proxy or unobserved boundary as behavior."
+      - id: A4
+        check: "A requested assessment with missing results does not become planned or selection-only; planned applies only when selection was requested without results."
+        on_fail: "Return insufficient or blocked with the missing evidence and next action."
+
+  - phase: RETURN
+    checkpoint_start: "--- PHASE: RETURN ---"
+    checkpoint_end: "--- PHASE: RETURN COMPLETE ---"
+    exit_assertions:
+      - id: R1
+        check: "The applicable verification_decision and evidence_assessment agree on scope, selected work, actual results, gaps, and status."
+        on_fail: "Correct conflicting fields and retain every material unresolved gap."
+      - id: R2
+        check: "Sufficient includes resolved supporting evidence refs for every material claim and binding check, and does not imply review or approval."
+        on_fail: "Lower the status or resolve the missing evidence; state the boundaries of any sufficient claim."
+      - id: R3
+        check: "The next action returns to an existing execution, debugging, domain, review, or workflow owner."
+        on_fail: "Name the current owner and hand back a bounded recommendation without dispatching or executing work."
+
+invariants:
+  - id: OWN1
+    check: "This skill selects and assesses only; it does not execute, dispatch, mutate, repair, retry, or create state."
+    scope: all_phases
+    on_fail: "Return execution, state, and repair to assistant-workflow and its current owner."
+  - id: OWN2
+    check: "assistant-tdd owns active RED–GREEN–REFACTOR; assistant-debugging owns unknown-cause reproduction; domain skills own domain rules."
+    scope: all_phases
+    on_fail: "Return to the existing specialist; preserve meaningful RED and never fabricate history."
+  - id: OWN3
+    check: "Assessment does not replace independent review, conditional QA, workflow completion, or delivery approval."
+    scope: all_phases
+    on_fail: "State verification sufficiency only within scope; return to the applicable owner."
+  - id: POLICY1
+    check: "Binding requirements and prohibitions outrank preferences and cost; restrictions differ from required scopes."
+    scope: all_phases
+    on_fail: "Resolve or return the conflict source and consequence; do not waive it."
+  - id: POLICY2
+    check: "No decision relies on test counts, coverage targets, layer ratios, test-line goals, or default TDD."
+    scope: all_phases
+    on_fail: "Ground each check in a material claim, fault, evidence, policy, and cost."
+  - id: EVIDENCE1
+    check: "Missing, stale, failed, skipped, partial, unavailable, or retry-only evidence is not sufficient."
+    scope: all_phases
+    on_fail: "Name the gap and keep assessment insufficient or blocked."
+  - id: EVIDENCE2
+    check: "Claims stay within observed scope, identity, conditions, artifact/action, and telemetry."
+    scope: all_phases
+    on_fail: "Narrow the claim or name the smallest missing observation."
+  - id: LOAD1
+    check: "Load only selected methods; missing or invalid selectors use canonical fallback."
+    scope: all_phases
+    on_fail: "Load the method or full authoritative contract; do not bypass rules."

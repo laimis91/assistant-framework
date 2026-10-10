@@ -1,0 +1,4504 @@
+{
+  "schema_version": "2.0",
+  "skill": "assistant-verification",
+  "suite_id": "assistant-verification-selection-and-assessment",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "title": "assistant-verification Selection And Evidence Eval Fixtures",
+  "description": "Provider-neutral fixtures for proportionate selection, policy distinctions, TDD choice, and evidence assessment.",
+  "recommended_use": [
+    "Run with assistant-verification instructions loaded and request its named verification_decision and evidence_assessment outputs.",
+    "Judge the decision against changed behavior, binding policy, actual coverage, and the concrete success and wrong-outcome observations.",
+    "Use structured assertions as discriminating controls; phrase matches alone do not establish policy correctness or successful behavior."
+  ],
+  "activation_cases": [
+    {
+      "user_request": "Choose proportionate checks for adding these two documents to the menu, taking the current loader coverage into account.",
+      "should_activate": true
+    },
+    {
+      "user_request": "Assess whether the results and artifact from this migration support the stated compatibility claim.",
+      "should_activate": true
+    },
+    {
+      "user_request": "Run the existing route test command and report its exit status.",
+      "should_activate": false
+    },
+    {
+      "user_request": "Use TDD to implement this calculation.",
+      "should_activate": false
+    }
+  ],
+  "cases": [
+    {
+      "id": "qrg-content-change-reuses-behavioral-coverage",
+      "title": "Menu content change reuses existing loader coverage",
+      "category": "proportionate_selection",
+      "purpose": "Checks that mutable menu entries do not cause a duplicate inventory test when the generic loading and opening behavior already has relevant evidence.",
+      "prompt": "Choose verification for adding two named PDF help documents to the menu. The loader and opener are unchanged. Existing tests use arbitrary menu entries and verify that an entry opens a document. The project has no instruction requiring new tests. Return a JSON object with verification_decision and evidence_assessment.",
+      "setup_context": [
+        "The assistant-verification instructions are active.",
+        "The source list is mutable and the requested labels and paths are specified in the task.",
+        "Existing loader/opening coverage is current and relevant; the two new paths have not yet been checked for correct content or opening.",
+        "No user or project testing-scope or TDD preference is stated.",
+        "fixture:qrg-content-change-reuses-behavioral-coverage#response-slots: CheckSpec index 0=content, index 1=menu-open, index 2=generic-loader; menu-labels is a separate label-only distractor.",
+        "fixture:qrg-content-change-reuses-behavioral-coverage#content catalog: {\"claim\":\"Readable content in each requested PDF matches the topic represented by its supplied menu label.\",\"procedure\":\"Open each requested PDF, inspect its readable content, and compare that content with the supplied topic and menu label.\",\"prerequisites\":[\"Both PDFs are available locally.\"],\"exclusions\":[\"Does not establish that each menu entry opens its document.\"],\"expected_success\":\"Each PDF contains readable material for its declared topic and menu label.\",\"meaningful_failure\":\"A PDF is empty, unreadable, or describes a different topic from its supplied menu label.\"}",
+        "fixture:qrg-content-change-reuses-behavioral-coverage#menu-open catalog: {\"claim\":\"Each new menu entry opens its intended requested PDF.\",\"procedure\":\"Launch the updated application, select each new entry through the intended UI, and compare the opened document identity with its requested PDF.\",\"prerequisites\":[\"Application can be launched with the updated menu.\"],\"exclusions\":[\"Does not create persistent assertions for mutable filenames.\"],\"expected_success\":\"Selecting each new entry opens its intended PDF.\",\"meaningful_failure\":\"An entry is missing, fails to open, or opens a different PDF.\"}",
+        "fixture:qrg-content-change-reuses-behavioral-coverage#generic-loader catalog: {\"claim\":\"Generic arbitrary-entry loading and opening still works.\",\"procedure\":\"Run or reuse the current generic arbitrary-entry loader/opener unit test with an arbitrary menu entry and inspect whether the supplied document opens.\",\"prerequisites\":[\"Current loader unit test is available.\"],\"exclusions\":[\"Does not verify either requested PDF content or its specific menu association.\"],\"expected_success\":\"The generic arbitrary-entry loader/opener test passes.\",\"meaningful_failure\":\"An arbitrary menu entry cannot open its supplied document.\"}",
+        "fixture:qrg-content-change-reuses-behavioral-coverage#menu-labels catalog: {\"claim\":\"The two new menu labels and their order match the requested entries.\",\"procedure\":\"Inspect the visible menu labels and their order without selecting an entry or opening a document.\",\"prerequisites\":[\"Application can be launched with the updated menu.\"],\"exclusions\":[\"No document is selected and no opening behavior is checked.\"],\"expected_success\":\"Both labels are present in the requested order.\",\"meaningful_failure\":\"A label is missing, misspelled, or out of order.\"}"
+      ],
+      "expected_behavior": [
+        "Selects a concrete inspection of the requested document content and a direct check that the documents open through the intended menu boundary.",
+        "Reuses the relevant generic loader/opening check without creating permanent assertions that merely mirror the two filenames.",
+        "Reports selection-only evidence as planned and does not claim the documents were opened.",
+        "Keeps TDD false because no binding requirement or useful stable RED cycle was selected."
+      ],
+      "pass_criteria": [
+        "test_change is none unless the selected procedure explicitly extends an existing test for a distinct uncovered claim.",
+        "The decision states the actual content/opening observation and the limit of the existing generic test.",
+        "The assessment status is planned and contains no fabricated result reference."
+      ],
+      "fail_signals": [
+        "Adds one permanent filename assertion for each menu entry without a contractual inventory invariant.",
+        "Claims the documents opened based only on the existing generic test result.",
+        "Reports sufficient without observing the actual documents."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "verification_decision",
+          "evidence_assessment",
+          "content",
+          "open"
+        ],
+        "forbidden_substrings": [
+          "both files opened successfully",
+          "two new filename tests are required"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "one_of",
+            "path": [
+              "verification_decision",
+              "test_change"
+            ],
+            "expected_values": [
+              "none",
+              "extend_existing"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "planned"
+          },
+          {
+            "operator": "nonempty_array",
+            "path": [
+              "verification_decision",
+              "checks"
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "method",
+            "expected_values": [
+              "artifact_inspection",
+              "manual_observation",
+              "automated_test"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "action",
+            "expected_values": [
+              "inspect",
+              "inspect",
+              "reuse"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision"
+            ],
+            "fields": [
+              "scope",
+              "policy_basis",
+              "test_change",
+              "checks",
+              "tdd_choice",
+              "omitted_checks_and_rationale",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "scope"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis"
+            ],
+            "fields": [
+              "binding_constraints",
+              "preferences_applied",
+              "capability_limits"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "test_change"
+            ],
+            "expected": "none"
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "check_id",
+            "expected_values": [
+              "help-document-content",
+              "menu-open-behavior",
+              "generic-menu-opening"
+            ]
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "action",
+              "method",
+              "technique"
+            ],
+            "expected_objects": [
+              {
+                "check_id": "help-document-content",
+                "action": "inspect",
+                "method": "artifact_inspection",
+                "technique": "exploratory"
+              },
+              {
+                "check_id": "menu-open-behavior",
+                "action": "inspect",
+                "method": "manual_observation",
+                "technique": "exploratory"
+              },
+              {
+                "check_id": "generic-menu-opening",
+                "action": "reuse",
+                "method": "automated_test",
+                "technique": "characterization"
+              }
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_id"
+            ],
+            "expected": "help-document-content"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "claim_or_risk"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#content.claim"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "action"
+            ],
+            "expected": "inspect"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method"
+            ],
+            "expected": "artifact_inspection"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "technique"
+            ],
+            "expected": "exploratory"
+          },
+          {
+            "operator": "path_absent",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#content.procedure"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#content.success"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#content.failure"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "Both PDFs are available locally."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not establish that each menu entry opens its document."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "expected": [
+              "skills/assistant-verification/references/methods/artifact-validation.md"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_id"
+            ],
+            "expected": "menu-open-behavior"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "claim_or_risk"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#menu-open.claim"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "action"
+            ],
+            "expected": "inspect"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method"
+            ],
+            "expected": "manual_observation"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "technique"
+            ],
+            "expected": "exploratory"
+          },
+          {
+            "operator": "path_absent",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "test_scope"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#menu-open.procedure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#menu-open.success"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "expected_success"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#menu-open.failure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "Application can be launched with the updated menu."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not create persistent assertions for mutable filenames."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method_refs"
+            ],
+            "expected": [
+              "skills/assistant-verification/references/methods/end-to-end.md"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method_refs"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_id"
+            ],
+            "expected": "generic-menu-opening"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "claim_or_risk"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#generic-loader.claim"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "action"
+            ],
+            "expected": "reuse"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "method"
+            ],
+            "expected": "automated_test"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "technique"
+            ],
+            "expected": "characterization"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "test_scope"
+            ],
+            "expected": "unit"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "test_scope"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#generic-loader.procedure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#generic-loader.success"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "expected_success"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "fixture:qrg-content-change-reuses-behavioral-coverage#generic-loader.failure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "Current loader unit test is available."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not verify either requested PDF content or its specific menu association."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "method_refs"
+            ],
+            "expected": [
+              "skills/assistant-verification/references/methods/unit.md"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              2,
+              "method_refs"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "tdd_choice"
+            ],
+            "fields": [
+              "mode",
+              "basis",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "basis"
+            ],
+            "expected": "not_selected"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "expected": [
+              "No permanent filename-specific assertion is added because the menu list is mutable and generic loader coverage exists."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ],
+            "expected": "Stop after content inspection, both menu-opening observations, and the existing generic test pass; expand only for a new material gap."
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "expected": [
+              "The two PDF contents and actual menu-opening paths have not yet been observed."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "loader-path-change-adds-a-behavioral-oracle",
+      "title": "Path-resolution change gets a regression oracle",
+      "category": "changed_behavior_selection",
+      "purpose": "Distinguishes static content additions from a task that also changes the menu's path-resolution behavior.",
+      "prompt": "Choose verification for adding two menu entries while changing how relative PDF paths are resolved. No existing test covers the new relative-path rule. The existing loader test can be extended with a temporary nested menu and a document at the expected resolved path. Return a JSON object with verification_decision and evidence_assessment.",
+      "setup_context": [
+        "The assistant-verification instructions are active.",
+        "The relative-path behavior is a material code change with a deterministic local oracle.",
+        "Existing generic menu behavior is relevant but does not cover the changed resolver.",
+        "No binding TDD requirement or scope restriction applies.",
+        "fixture:loader-path-change-adds-a-behavioral-oracle#response-slots: CheckSpec index 0=nested-menu-relative-path.",
+        "fixture:loader-path-change-adds-a-behavioral-oracle#nested-menu-relative-path catalog: {\"claim\":\"The updated resolver locates a document relative to the menu file that names it.\",\"procedure\":\"Extend the existing loader unit test with a nested menu file, a PDF at the expected menu-relative location, and a decoy at the plausible working-directory-relative location; assert that the loader selects the expected PDF.\",\"prerequisites\":[\"A temporary nested menu fixture can be created.\",\"The loader can be called with a path relative to the nested menu.\"],\"exclusions\":[\"Does not verify either help PDF's content or a named menu entry's UI association.\"],\"expected_success\":\"The loader resolves and opens the PDF at the nested menu's specified relative path.\",\"meaningful_failure\":\"The loader resolves from the process working directory or selects the decoy document.\"}"
+      ],
+      "expected_behavior": [
+        "Selects extending the existing focused loader test for the changed relative-path behavior.",
+        "Names a passing resolved path and a plausible wrong path as the success and failure oracle.",
+        "Does not use the static menu-entry rationale to excuse the path-resolution regression.",
+        "Keeps TDD separate and does not claim RED has already occurred."
+      ],
+      "pass_criteria": [
+        "The selected check is an automated unit-scope test that exercises the resolver with a nested menu and distinguishes the wrong resolution.",
+        "test_change reports extending existing coverage.",
+        "Selection-only results remain planned."
+      ],
+      "fail_signals": [
+        "Recommends only checking that the two entries are present.",
+        "Adds a broad end-to-end suite despite the focused resolver oracle covering the changed claim.",
+        "Claims a RED result without an executed result."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "relative path",
+          "resolved",
+          "wrong"
+        ],
+        "forbidden_substrings": [
+          "content-only change",
+          "RED already passed"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "test_change"
+            ],
+            "expected": "extend_existing"
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "test_scope",
+            "expected_values": [
+              "unit"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "action",
+            "expected_values": [
+              "extend"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "planned"
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision"
+            ],
+            "fields": [
+              "scope",
+              "policy_basis",
+              "test_change",
+              "checks",
+              "tdd_choice",
+              "omitted_checks_and_rationale",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "scope"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis"
+            ],
+            "fields": [
+              "binding_constraints",
+              "preferences_applied",
+              "capability_limits"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ]
+          },
+          {
+            "operator": "nonempty_array",
+            "path": [
+              "verification_decision",
+              "checks"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "check_id",
+            "expected_values": [
+              "nested-menu-relative-path"
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "action",
+              "method",
+              "technique"
+            ],
+            "expected_objects": [
+              {
+                "check_id": "nested-menu-relative-path",
+                "action": "extend",
+                "method": "automated_test",
+                "technique": "example"
+              }
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "test_scope",
+              "check_ref_or_method",
+              "rationale",
+              "method_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_id"
+            ],
+            "expected": "nested-menu-relative-path"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "claim_or_risk"
+            ],
+            "expected": "fixture:loader-path-change-adds-a-behavioral-oracle#nested-menu-relative-path.claim"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "action"
+            ],
+            "expected": "extend"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method"
+            ],
+            "expected": "automated_test"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "technique"
+            ],
+            "expected": "example"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ],
+            "expected": "unit"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "fixture:loader-path-change-adds-a-behavioral-oracle#nested-menu-relative-path.procedure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "fixture:loader-path-change-adds-a-behavioral-oracle#nested-menu-relative-path.success"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "fixture:loader-path-change-adds-a-behavioral-oracle#nested-menu-relative-path.failure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "A temporary nested menu fixture can be created.",
+              "The loader can be called with a path relative to the nested menu."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not verify either help PDF's content or a named menu entry's UI association."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "expected": [
+              "skills/assistant-verification/references/methods/unit.md"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "tdd_choice"
+            ],
+            "fields": [
+              "mode",
+              "basis",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "basis"
+            ],
+            "expected": "not_selected"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "expected": [
+              "No broad end-to-end suite is selected because the focused loader oracle covers the changed relative-path claim."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ],
+            "expected": "Stop when the nested-menu test selects the expected menu-relative PDF and rejects the plausible wrong path."
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "expected": [
+              "The changed nested-menu relative-path behavior has not yet been exercised."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "unit-only-policy-excludes-other-automated-scopes",
+      "title": "Unit-only policy is an exclusive restriction",
+      "category": "binding_scope_policy",
+      "purpose": "Checks that an explicitly exclusive unit-only project rule constrains automated test selection.",
+      "prompt": "Choose checks for a changed authorization predicate with a deterministic local oracle. Project instructions say automated tests must be unit-only and explicitly prohibit integration and end-to-end tests; no other test is mandated. Return a JSON object with verification_decision and evidence_assessment.",
+      "setup_context": [
+        "The assistant-verification instructions are active.",
+        "The project rule is binding and explicitly exclusive, not a preference.",
+        "The behavior is security-relevant even though the change is localized.",
+        "No current test asserts the changed allow/deny boundary.",
+        "fixture:unit-only-policy-excludes-other-automated-scopes#response-slots: CheckSpec index 0=allow-deny; allow-only is a full-shape allow-only distractor.",
+        "fixture:unit-only-policy-excludes-other-automated-scopes#project-policy: exact binding tuples are required_scope/unit, prohibited_scope/integration, and prohibited_scope/e2e; each source_ref is fixture:unit-only-policy-excludes-other-automated-scopes#project-policy.",
+        "The stable local allow/deny oracle independently supports TDD mode=true with basis selected_technique; unit-only scope policy itself does not mandate TDD.",
+        "fixture:unit-only-policy-excludes-other-automated-scopes#allow-deny catalog: {\"claim\":\"The local predicate allows the authenticated owner of document-1 and denies an authenticated non-owner.\",\"procedure\":\"Call the changed local predicate with an authenticated owner and an authenticated non-owner for document-1; assert owner=true and non-owner=false.\",\"prerequisites\":[\"Authenticated owner and authenticated non-owner subjects for document-1 are available as deterministic local fixtures.\",\"The changed authorization predicate can be called directly.\"],\"exclusions\":[\"Does not exercise authorization through a real service, API, or persistence boundary.\"],\"expected_success\":\"Owner is allowed and non-owner is denied by the local predicate.\",\"meaningful_failure\":\"The non-owner is allowed or the owner is denied by the local predicate.\"}",
+        "fixture:unit-only-policy-excludes-other-automated-scopes#allow-only catalog: {\"claim\":\"The local predicate allows the authenticated owner of document-1.\",\"procedure\":\"Call the changed local predicate with only the authenticated owner subject for document-1 and assert true.\",\"prerequisites\":[\"An authenticated owner subject for document-1 is available as a deterministic local fixture.\",\"The changed authorization predicate can be called directly.\"],\"exclusions\":[\"Does not exercise authorization through a real service, API, or persistence boundary.\"],\"expected_success\":\"The owner is allowed by the local predicate.\",\"meaningful_failure\":\"The owner is denied by the local predicate.\"}"
+      ],
+      "expected_behavior": [
+        "Selects a focused unit test for both an allowed case and a plausible unauthorized case.",
+        "Does not choose integration or end-to-end automated tests under the explicit prohibition.",
+        "Records any important real-service boundary that remains unverified without waiving the policy."
+      ],
+      "pass_criteria": [
+        "All selected automated test scopes are unit.",
+        "The oracle rejects an unauthorized outcome as well as accepting the intended case.",
+        "The assessment is planned until the selected check is actually run."
+      ],
+      "fail_signals": [
+        "Treats a unit-only rule as a preference and selects integration or end-to-end tests.",
+        "Treats the prohibition as evidence that no verification is needed.",
+        "Tests only the authorized path and misses the material denial claim."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "binding",
+          "unauthorized",
+          "unit"
+        ],
+        "forbidden_substrings": [
+          "unit-only is only a preference",
+          "no verification is needed"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "test_scope",
+            "expected_values": [
+              "unit"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "planned"
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision"
+            ],
+            "fields": [
+              "scope",
+              "policy_basis",
+              "test_change",
+              "checks",
+              "tdd_choice",
+              "omitted_checks_and_rationale",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "scope"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis"
+            ],
+            "fields": [
+              "binding_constraints",
+              "preferences_applied",
+              "capability_limits"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "expected": [
+              "Real-service authorization behavior remains unverified by this unit check."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ],
+            "expected_objects": [
+              {
+                "kind": "required_scope",
+                "value": "unit",
+                "source_ref": "fixture:unit-only-policy-excludes-other-automated-scopes#project-policy"
+              },
+              {
+                "kind": "prohibited_scope",
+                "value": "integration",
+                "source_ref": "fixture:unit-only-policy-excludes-other-automated-scopes#project-policy"
+              },
+              {
+                "kind": "prohibited_scope",
+                "value": "e2e",
+                "source_ref": "fixture:unit-only-policy-excludes-other-automated-scopes#project-policy"
+              }
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints",
+              0
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints",
+              1
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints",
+              2
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "test_change"
+            ],
+            "expected": "add_new"
+          },
+          {
+            "operator": "nonempty_array",
+            "path": [
+              "verification_decision",
+              "checks"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "check_id",
+            "expected_values": [
+              "authorization-allow-deny"
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "action",
+              "method",
+              "technique"
+            ],
+            "expected_objects": [
+              {
+                "check_id": "authorization-allow-deny",
+                "action": "add",
+                "method": "automated_test",
+                "technique": "example"
+              }
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "test_scope",
+              "check_ref_or_method",
+              "rationale",
+              "method_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_id"
+            ],
+            "expected": "authorization-allow-deny"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "claim_or_risk"
+            ],
+            "expected": "fixture:unit-only-policy-excludes-other-automated-scopes#allow-deny.claim"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "action"
+            ],
+            "expected": "add"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method"
+            ],
+            "expected": "automated_test"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "technique"
+            ],
+            "expected": "example"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ],
+            "expected": "unit"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "fixture:unit-only-policy-excludes-other-automated-scopes#allow-deny.procedure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "fixture:unit-only-policy-excludes-other-automated-scopes#allow-deny.success"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "fixture:unit-only-policy-excludes-other-automated-scopes#allow-deny.failure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "Authenticated owner and authenticated non-owner subjects for document-1 are available as deterministic local fixtures.",
+              "The changed authorization predicate can be called directly."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not exercise authorization through a real service, API, or persistence boundary."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "expected": [
+              "skills/assistant-verification/references/methods/unit.md"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "tdd_choice"
+            ],
+            "fields": [
+              "mode",
+              "basis",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "expected": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "basis"
+            ],
+            "expected": "selected_technique"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "expected": [
+              "Integration and end-to-end checks are excluded by the binding project policy; the real-service boundary remains a stated limitation."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ],
+            "expected": "Stop when the owner is allowed and the non-owner is denied by the local predicate; expand only for a new in-scope gap."
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "expected": [
+              "Real-service authorization behavior has not been observed."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "required-unit-check-does-not-prohibit-integration",
+      "title": "A required unit suite allows a distinct integration check",
+      "category": "binding_scope_policy",
+      "purpose": "Distinguishes a mandatory unit suite from a unit-only restriction when a real component boundary changes.",
+      "prompt": "Select verification for a change to the JSON serialization contract between the API and its storage adapter. Project policy requires the unit suite but does not prohibit other scopes. Existing unit tests cover the domain value but not the serialized boundary. The repository has an isolated integration fixture for API-to-adapter round trips. Return a JSON object with verification_decision and evidence_assessment.",
+      "setup_context": [
+        "The assistant-verification instructions are active.",
+        "Unit tests are binding; there is no unit-only restriction.",
+        "The serialization boundary is changed and not covered by existing unit assertions.",
+        "The integration fixture is available and isolates its data.",
+        "fixture:required-unit-check-does-not-prohibit-integration#response-slots: CheckSpec index 0=domain-value unit suite, index 1=API-to-storage round trip.",
+        "fixture:required-unit-check-does-not-prohibit-integration#project-policy: the only binding tuple is required_scope/unit with source_ref fixture:required-unit-check-does-not-prohibit-integration#project-policy; there is no scope prohibition.",
+        "The unit suite covers the domain value, while the isolated integration fixture observes the distinct serialized API-to-adapter boundary.",
+        "fixture:required-unit-check-does-not-prohibit-integration#domain-value catalog: {\"claim\":\"The domain value preserves its declared JSON contract fields independently of serialization.\",\"procedure\":\"Run the existing domain-value unit suite and confirm its field-name and value assertions pass.\",\"prerequisites\":[\"The existing domain-value unit suite is available.\"],\"exclusions\":[\"Does not observe JSON serialization or an API-to-adapter storage round trip.\"],\"expected_success\":\"Existing domain-value assertions pass for the declared fields and values.\",\"meaningful_failure\":\"A domain-value assertion fails for a required field name or value.\"}",
+        "fixture:required-unit-check-does-not-prohibit-integration#api-storage-round-trip catalog: {\"claim\":\"API-to-storage JSON serialization preserves contract values across the adapter boundary.\",\"procedure\":\"Extend the isolated integration fixture to send a representative value through the API serializer and adapter, read it back, and compare the complete JSON field names and values.\",\"prerequisites\":[\"The isolated API-to-adapter integration fixture is available.\",\"The representative JSON contract value is defined.\"],\"exclusions\":[\"Does not establish unrelated end-to-end user journeys or production storage availability.\"],\"expected_success\":\"The readback preserves every expected JSON field name and value from the representative contract.\",\"meaningful_failure\":\"A field is lost, renamed, malformed, or changed across the API-to-storage round trip.\"}"
+      ],
+      "expected_behavior": [
+        "Retains the required unit suite.",
+        "Adds or runs the relevant integration check because it observes the changed serialization boundary.",
+        "Does not interpret required unit scope as either an integration prohibition or a mandate for unrelated end-to-end tests."
+      ],
+      "pass_criteria": [
+        "The selected scopes include unit and integration.",
+        "The integration oracle checks a representative serialized round trip and distinguishes a malformed or lost value.",
+        "No unrelated scope is added without a distinct claim."
+      ],
+      "fail_signals": [
+        "Selects only unit tests because unit scope is required.",
+        "Adds end-to-end tests without an uncovered user-journey claim.",
+        "Reports the existing domain-value unit tests as coverage of serialization."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "unit",
+          "integration",
+          "serialization"
+        ],
+        "forbidden_substrings": [
+          "integration is prohibited",
+          "unit test proves serialization"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "test_scope",
+            "expected_values": [
+              "unit",
+              "integration"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "planned"
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision"
+            ],
+            "fields": [
+              "scope",
+              "policy_basis",
+              "test_change",
+              "checks",
+              "tdd_choice",
+              "omitted_checks_and_rationale",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "scope"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis"
+            ],
+            "fields": [
+              "binding_constraints",
+              "preferences_applied",
+              "capability_limits"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ],
+            "expected_objects": [
+              {
+                "kind": "required_scope",
+                "value": "unit",
+                "source_ref": "fixture:required-unit-check-does-not-prohibit-integration#project-policy"
+              }
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints",
+              0
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "test_change"
+            ],
+            "expected": "extend_existing"
+          },
+          {
+            "operator": "nonempty_array",
+            "path": [
+              "verification_decision",
+              "checks"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "check_id",
+            "expected_values": [
+              "domain-value-unit-suite",
+              "api-storage-round-trip"
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "action",
+              "method",
+              "technique"
+            ],
+            "expected_objects": [
+              {
+                "check_id": "domain-value-unit-suite",
+                "action": "run",
+                "method": "automated_test",
+                "technique": "characterization"
+              },
+              {
+                "check_id": "api-storage-round-trip",
+                "action": "extend",
+                "method": "automated_test",
+                "technique": "example"
+              }
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "test_scope",
+              "check_ref_or_method",
+              "rationale",
+              "method_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_id"
+            ],
+            "expected": "domain-value-unit-suite"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "claim_or_risk"
+            ],
+            "expected": "fixture:required-unit-check-does-not-prohibit-integration#domain-value.claim"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "action"
+            ],
+            "expected": "run"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method"
+            ],
+            "expected": "automated_test"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "technique"
+            ],
+            "expected": "characterization"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ],
+            "expected": "unit"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "fixture:required-unit-check-does-not-prohibit-integration#domain-value.procedure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "fixture:required-unit-check-does-not-prohibit-integration#domain-value.success"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "fixture:required-unit-check-does-not-prohibit-integration#domain-value.failure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "The existing domain-value unit suite is available."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not observe JSON serialization or an API-to-adapter storage round trip."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "expected": [
+              "skills/assistant-verification/references/methods/unit.md"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              1
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "test_scope",
+              "check_ref_or_method",
+              "rationale",
+              "method_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_id"
+            ],
+            "expected": "api-storage-round-trip"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "claim_or_risk"
+            ],
+            "expected": "fixture:required-unit-check-does-not-prohibit-integration#api-storage-round-trip.claim"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "action"
+            ],
+            "expected": "extend"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method"
+            ],
+            "expected": "automated_test"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "technique"
+            ],
+            "expected": "example"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "test_scope"
+            ],
+            "expected": "integration"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "test_scope"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "fixture:required-unit-check-does-not-prohibit-integration#api-storage-round-trip.procedure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "fixture:required-unit-check-does-not-prohibit-integration#api-storage-round-trip.success"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "expected_success"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "fixture:required-unit-check-does-not-prohibit-integration#api-storage-round-trip.failure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "The isolated API-to-adapter integration fixture is available.",
+              "The representative JSON contract value is defined."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not establish unrelated end-to-end user journeys or production storage availability."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method_refs"
+            ],
+            "expected": [
+              "skills/assistant-verification/references/methods/integration.md"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method_refs"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "tdd_choice"
+            ],
+            "fields": [
+              "mode",
+              "basis",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "basis"
+            ],
+            "expected": "not_selected"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "expected": [
+              "No end-to-end journey is selected because it would add no distinct claim beyond the isolated adapter-boundary check."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ],
+            "expected": "Stop when the required unit suite and isolated round-trip check pass; expand only for a distinct material gap."
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "expected": [
+              "The selected domain-value unit suite and API-to-storage round trip have not yet been run."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "explicit-tdd-request-keeps-meaningful-red",
+      "title": "Explicit TDD request stays active",
+      "category": "tdd_policy",
+      "purpose": "Checks that an explicit user requirement for TDD is not overridden by cost, low-risk, or scope preferences.",
+      "prompt": "I explicitly require TDD for this deterministic calculation change. Choose the verification approach. The incorrect boundary result is known, and a focused unit assertion can fail before the production change. Return a JSON object with verification_decision and evidence_assessment.",
+      "setup_context": [
+        "The assistant-verification instructions are active.",
+        "The user's TDD request is binding.",
+        "No RED test has been written or run yet.",
+        "The assistant-verification skill must select, not execute, the cycle.",
+        "fixture:explicit-tdd-request-keeps-meaningful-red#response-slots: CheckSpec index 0=calculation-boundary.",
+        "fixture:explicit-tdd-request-keeps-meaningful-red#user-request: binding required_tdd tuple has value true and source_ref fixture:explicit-tdd-request-keeps-meaningful-red#user-request.",
+        "fixture:explicit-tdd-request-keeps-meaningful-red#calculation-boundary catalog: {\"claim\":\"The deterministic calculation follows the truncating 10-percent rule at the integer-cent boundary.\",\"procedure\":\"Add a focused unit assertion for a 199-cent input at 10 percent; run it before production edits to observe the known wrong result, then rerun after the fix.\",\"prerequisites\":[\"The calculation operates on integer cents and truncates 10 percent toward zero.\",\"A focused unit test can run before production edits.\"],\"exclusions\":[\"Does not require unrelated full-suite execution.\"],\"expected_success\":\"After implementation, the 199-cent input returns 19 cents.\",\"meaningful_failure\":\"Before the fix, the known boundary result is 20 cents instead of 19.\"}"
+      ],
+      "expected_behavior": [
+        "Sets TDD mode true with user_requirement as its basis.",
+        "Selects a meaningful focused oracle and directs the existing owner to run RED before production.",
+        "Does not claim a test failed or passed before execution."
+      ],
+      "pass_criteria": [
+        "TDD is active because of the explicit user requirement.",
+        "The selected unit oracle distinguishes the known incorrect result.",
+        "The assessment remains planned and makes no historical RED claim."
+      ],
+      "fail_signals": [
+        "Turns off TDD because the change is small, low risk, or already understood.",
+        "Claims an unexecuted test is RED.",
+        "Adds a full-suite requirement unrelated to the claim."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "user_requirement",
+          "RED",
+          "unit"
+        ],
+        "forbidden_substrings": [
+          "low risk overrides TDD",
+          "RED passed before the test was run"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "expected": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "basis"
+            ],
+            "expected": "user_requirement"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "planned"
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision"
+            ],
+            "fields": [
+              "scope",
+              "policy_basis",
+              "test_change",
+              "checks",
+              "tdd_choice",
+              "omitted_checks_and_rationale",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "scope"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis"
+            ],
+            "fields": [
+              "binding_constraints",
+              "preferences_applied",
+              "capability_limits"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ],
+            "expected_objects": [
+              {
+                "kind": "required_tdd",
+                "value": "true",
+                "source_ref": "fixture:explicit-tdd-request-keeps-meaningful-red#user-request"
+              }
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints",
+              0
+            ],
+            "fields": [
+              "kind",
+              "value",
+              "source_ref"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "test_change"
+            ],
+            "expected": "add_new"
+          },
+          {
+            "operator": "nonempty_array",
+            "path": [
+              "verification_decision",
+              "checks"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "check_id",
+            "expected_values": [
+              "calculation-boundary"
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "action",
+              "method",
+              "technique"
+            ],
+            "expected_objects": [
+              {
+                "check_id": "calculation-boundary",
+                "action": "add",
+                "method": "automated_test",
+                "technique": "example"
+              }
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "test_scope",
+              "check_ref_or_method",
+              "rationale",
+              "method_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_id"
+            ],
+            "expected": "calculation-boundary"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "claim_or_risk"
+            ],
+            "expected": "fixture:explicit-tdd-request-keeps-meaningful-red#calculation-boundary.claim"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "action"
+            ],
+            "expected": "add"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method"
+            ],
+            "expected": "automated_test"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "technique"
+            ],
+            "expected": "example"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ],
+            "expected": "unit"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "fixture:explicit-tdd-request-keeps-meaningful-red#calculation-boundary.procedure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "fixture:explicit-tdd-request-keeps-meaningful-red#calculation-boundary.success"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "fixture:explicit-tdd-request-keeps-meaningful-red#calculation-boundary.failure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "The calculation operates on integer cents and truncates 10 percent toward zero.",
+              "A focused unit test can run before production edits."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not require unrelated full-suite execution."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "expected": [
+              "skills/assistant-verification/references/methods/unit.md"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "tdd_choice"
+            ],
+            "fields": [
+              "mode",
+              "basis",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "expected": [
+              "No unrelated full-suite run is required to establish the focused boundary oracle."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ],
+            "expected": "Stop when the 199-cent boundary fails meaningfully before implementation and passes after the calculation fix."
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "expected": [
+              "The focused calculation test has not yet been written or run."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "unknown-cause-bug-routes-through-debugging",
+      "title": "Unknown-cause bug is debugged before regression selection",
+      "category": "debugging-and-tdd-boundary",
+      "purpose": "Checks that a stable regression oracle is not fabricated before the unknown failure is reproduced and isolated.",
+      "prompt": "A user reports that a saved document sometimes reopens with stale content. The failure has not been reproduced and the cause is unknown. Choose the next verification step and whether TDD is selected now. Return a JSON object with verification_decision and evidence_assessment.",
+      "setup_context": [
+        "The assistant-verification instructions are active.",
+        "No debugging reproduction or root-cause evidence is available.",
+        "assistant-debugging owns unknown-cause reproduction and isolation.",
+        "No binding TDD requirement is stated.",
+        "fixture:unknown-cause-bug-routes-through-debugging#response-slots: CheckSpec index 0=reproduce-and-isolate.",
+        "fixture:unknown-cause-bug-routes-through-debugging#reproduce-and-isolate catalog: {\"claim\":\"The intermittent stale-content-on-reopen report has a reproducible observation and an isolated boundary before regression selection.\",\"procedure\":\"Use assistant-debugging to attempt reproduction, record the actual reopen steps and observed content, and isolate the responsible boundary before selecting a regression check.\",\"prerequisites\":[\"A representative saved document and its ordinary reopen path are available.\"],\"exclusions\":[\"Does not define or claim a regression oracle or RED result before reproduction and isolation.\"],\"expected_success\":\"Stale content is reproduced with concrete steps and a bounded isolation result identifies the responsible boundary.\",\"meaningful_failure\":\"The stale-content result cannot be reproduced or the responsible boundary remains unknown.\"}"
+      ],
+      "expected_behavior": [
+        "Directs the existing workflow to assistant-debugging to reproduce and isolate the failure before defining a regression oracle.",
+        "Does not manufacture a failing RED test for a behavior that has not been established.",
+        "Leaves TDD not selected until debugging supplies evidence for a useful stable regression cycle."
+      ],
+      "pass_criteria": [
+        "The next action names assistant-debugging and the evidence it must return.",
+        "TDD mode is false with basis not_selected, with a rationale that does not treat this as a blanket TDD waiver.",
+        "No unobserved failure is reported as reproduced."
+      ],
+      "fail_signals": [
+        "Writes a speculative regression test and claims it is RED.",
+        "Skips debugging solely to make progress.",
+        "Treats not_selected as a permanent exception to a later binding TDD requirement."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "assistant-debugging",
+          "reproduce",
+          "not_selected"
+        ],
+        "forbidden_substrings": [
+          "verified RED for the reported bug",
+          "TDD can never apply to this bug"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "basis"
+            ],
+            "expected": "not_selected"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "planned"
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision"
+            ],
+            "fields": [
+              "scope",
+              "policy_basis",
+              "test_change",
+              "checks",
+              "tdd_choice",
+              "omitted_checks_and_rationale",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "scope"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis"
+            ],
+            "fields": [
+              "binding_constraints",
+              "preferences_applied",
+              "capability_limits"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "test_change"
+            ],
+            "expected": "none"
+          },
+          {
+            "operator": "nonempty_array",
+            "path": [
+              "verification_decision",
+              "checks"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "field": "check_id",
+            "expected_values": [
+              "reproduce-and-isolate"
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "verification_decision",
+              "checks"
+            ],
+            "fields": [
+              "check_id",
+              "action",
+              "method",
+              "technique"
+            ],
+            "expected_objects": [
+              {
+                "check_id": "reproduce-and-isolate",
+                "action": "inspect",
+                "method": "manual_observation",
+                "technique": "exploratory"
+              }
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_id"
+            ],
+            "expected": "reproduce-and-isolate"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "claim_or_risk"
+            ],
+            "expected": "fixture:unknown-cause-bug-routes-through-debugging#reproduce-and-isolate.claim"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "action"
+            ],
+            "expected": "inspect"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method"
+            ],
+            "expected": "manual_observation"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "technique"
+            ],
+            "expected": "exploratory"
+          },
+          {
+            "operator": "path_absent",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "test_scope"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ],
+            "expected": "fixture:unknown-cause-bug-routes-through-debugging#reproduce-and-isolate.procedure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "fixture:unknown-cause-bug-routes-through-debugging#reproduce-and-isolate.success"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "fixture:unknown-cause-bug-routes-through-debugging#reproduce-and-isolate.failure"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "expected": [
+              "A representative saved document and its ordinary reopen path are available."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "expected": [
+              "Does not define or claim a regression oracle or RED result before reproduction and isolation."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "expected": []
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "tdd_choice"
+            ],
+            "fields": [
+              "mode",
+              "basis",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "expected": [
+              "No speculative regression test or RED claim is selected before the failure is reproduced and isolated."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ],
+            "expected": "Stop after reproduction/isolation evidence determines whether a stable regression oracle can be selected."
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "expected": [
+              "The intermittent stale-content failure has not been reproduced or isolated."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "phrase-compliant-empty-artifact-and-stale-pass-remain-insufficient",
+      "title": "Phrase-compliant wrong outcome is rejected",
+      "category": "evidence_quality_wrong_outcome",
+      "purpose": "Provides a concrete false-positive control: all expected response phrases are present, but the actual artifact is empty and the prior pass is stale.",
+      "prompt": "Assess whether this evidence supports the claim that the generated guide is complete and usable. The submitted response says all required sections are present, all links work, and the artifact was verified; a phrase-only grader would pass it. The actual generated HTML file is present but has zero bytes, and the current browser capture is blank. The schema check passed on an earlier source revision whose digest differs from the current one. Return a JSON object with evidence_assessment and name any carried decision only if it is actually being assessed.",
+      "setup_context": [
+        "The assistant-verification instructions are active.",
+        "The named acceptance claim requires useful rendered guide content and working links.",
+        "Evidence ref schema-check-old is passed but stale and covers structural validity only.",
+        "Evidence ref current-html-inspection is failed and current; it records a zero-byte file and blank browser capture.",
+        "The candidate response contains the phrases all required sections are present, all links work, and artifact verified, but those statements contradict the observed artifact.",
+        "Correlated evidence tuple 1: evidence_ref schema-check-old; claim_kind structural_validity; claim_scope is required guide structure and link fields on the earlier source revision; result_state passed; freshness stale; exclusion is that it cannot establish useful rendered content or working links.",
+        "Correlated evidence tuple 2: evidence_ref current-html-inspection; claim_kind other for direct artifact usability; claim_scope is current generated HTML artifact content and browser render; result_state failed; freshness current; exclusions record the observed zero-byte file and blank browser capture.",
+        "No carried verification_decision is being assessed; return evidence_assessment only."
+      ],
+      "expected_behavior": [
+        "Resolves the actual artifact observation and the old schema-check identity rather than accepting candidate phrases.",
+        "Returns insufficient because the current artifact is empty and the earlier pass is stale and structurally scoped.",
+        "Names the missing useful content and successful link/render observation as gaps.",
+        "Does not call the result blocked when the evidence is available and directly demonstrates a failure."
+      ],
+      "pass_criteria": [
+        "The assessment status is insufficient.",
+        "The assessment retains the stale passed structural result and current failed artifact inspection with their distinct scopes.",
+        "The gaps identify empty content and the absence of a successful current render/link observation."
+      ],
+      "fail_signals": [
+        "Returns sufficient because the candidate response contains expected phrases.",
+        "Treats the stale schema result as current or as proof of useful content.",
+        "Treats artifact existence as successful completion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "zero bytes",
+          "stale",
+          "insufficient"
+        ],
+        "forbidden_substrings": [
+          "all required sections are present, therefore sufficient",
+          "artifact exists, therefore usable"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "insufficient"
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ],
+            "field": "result_state",
+            "expected_values": [
+              "passed",
+              "failed"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ],
+            "field": "freshness",
+            "expected_values": [
+              "stale",
+              "current"
+            ]
+          },
+          {
+            "operator": "nonempty_array",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ]
+          },
+          {
+            "operator": "path_absent",
+            "path": [
+              "verification_decision"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "claim_scope",
+              "result_state",
+              "freshness",
+              "exclusions"
+            ],
+            "expected_objects": [
+              {
+                "evidence_ref": "schema-check-old",
+                "claim_kind": "structural_validity",
+                "claim_scope": [
+                  "Required guide structure and link fields on the earlier source revision identified by schema-check-old."
+                ],
+                "result_state": "passed",
+                "freshness": "stale",
+                "exclusions": [
+                  "The source revision is stale and the schema check does not establish useful rendered content or working links."
+                ]
+              },
+              {
+                "evidence_ref": "current-html-inspection",
+                "claim_kind": "other",
+                "claim_scope": [
+                  "Current generated HTML artifact content and browser render for guide usability."
+                ],
+                "result_state": "failed",
+                "freshness": "current",
+                "exclusions": [
+                  "The observed zero-byte file and blank browser capture provide no successful content or link-render evidence."
+                ]
+              }
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ],
+            "field": "evidence_ref",
+            "expected_values": [
+              "schema-check-old",
+              "current-html-inspection"
+            ]
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ],
+            "field": "claim_kind",
+            "expected_values": [
+              "structural_validity",
+              "other"
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "result_state",
+              "freshness"
+            ]
+          },
+          {
+            "operator": "array_items_nonempty_array_fields",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ],
+            "fields": [
+              "claim_scope",
+              "exclusions"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              0
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "claim_scope",
+              "result_state",
+              "freshness",
+              "exclusions"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              1
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "claim_scope",
+              "result_state",
+              "freshness",
+              "exclusions"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "expected": [
+              "The actual generated HTML is zero bytes, so useful guide content is absent.",
+              "The current browser capture is blank; no successful rendered guide or working-link observation is available."
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": false
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

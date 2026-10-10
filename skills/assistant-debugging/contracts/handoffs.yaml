@@ -1,7 +1,7 @@
 # Debugging handoff contracts
 # Handoffs are optional; direct execution is valid when subagents are unavailable or policy-disallowed.
 
-schema_version: "1.1"
+schema_version: "2.0"
 contract: handoffs
 skill: assistant-debugging
 
@@ -72,6 +72,16 @@ handoffs:
         type: string
         required: true
         description: "Confirmed cause or explicitly labeled mitigation target"
+      - name: verification_decision
+        type: object
+        required: true
+        description: "Canonical assistant-verification decision resolved before mutation."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and is carried unchanged from debugging input."
+      - name: tdd_applies
+        type: boolean
+        required: true
+        description: "Whether meaningful RED is active for this fix."
+        validation: "Equals verification_decision.tdd_choice.mode."
       - name: reproduction_evidence
         type: object
         required: true
@@ -93,5 +103,15 @@ handoffs:
       - name: verification_run
         type: object[]
         required: true
-        description: "Checks run by the fixer and their results"
+        description: "Selected and binding checks run by the fixer, with the original failure path and their results"
+      - name: verification_decision
+        type: object
+        required: true
+        description: "The canonical decision returned unchanged from context."
+        validation: "Equals context_fields.verification_decision exactly; do not revise CheckSpecs or TddChoice during FIX."
+      - name: tdd_applies
+        type: boolean
+        required: true
+        description: "TDD projection returned unchanged from context."
+        validation: "Equals context_fields.tdd_applies and verification_decision.tdd_choice.mode."
     on_missing_field: "Ask Fixer to supply missing field before accepting the fix, or inspect the diff directly and record the gap"

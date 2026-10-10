@@ -31,23 +31,21 @@ write_tdd_eval_responses() {
 tdd_forbidden_response_is_rejected() {
     local forbidden="$1"
     local case_id="tdd-covers-carried-architecture-obligations"
-    local case_count
     local eval_dir
     local eval_output
 
-    case_count="$(jq '.cases | length' "$tdd_evals")"
     eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-tdd-negative.XXXXXX")"
     eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-tdd-negative-output.XXXXXX")"
     p0p4_register_cleanup "$eval_dir" "$eval_output"
     write_tdd_eval_responses "$eval_dir"
     printf '%s\n' "$forbidden" >>"$eval_dir/assistant-tdd/$case_id.txt"
 
-    if "$tdd_eval_runner" --responses "$eval_dir" --skill assistant-tdd >"$eval_output" 2>&1; then
+    if "$tdd_eval_runner" --responses "$eval_dir" --skill assistant-tdd --case "$case_id" >"$eval_output" 2>&1; then
         return 1
     fi
 
     grep -Fq $'FAIL\tassistant-tdd\t'"$case_id" "$eval_output" \
-        && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
+        && grep -Fq "Summary: total=1 passed=0 failed=1" "$eval_output" \
         && grep -Fq "missing_required_substrings=0" "$eval_output" \
         && grep -Fq "forbidden_substring_hits=1" "$eval_output"
 }
@@ -72,15 +70,19 @@ for term in \
 done
 if [[ ${#tdd_missing[@]} -eq 0 ]]; then pass; else fail "TDD obligation identity/coverage contract gaps: ${tdd_missing[*]}"; fi
 
-test_start "Code Writer prompts require RED evidence before TDD production changes"
+test_start "Code Writer prompts assign RED ownership by active TDD lane in both projections"
 missing_code_writer_terms=()
 for file in \
     agents/codex/code-writer.toml \
     agents/claude/code-writer.md; do
     for term in \
-        "In TDD-active tasks, require RED evidence in the task packet/handoff before changing production code" \
-        'If missing, return `NEEDS_CONTEXT` and make no production changes' \
-        "The selected lane is authoritative: bounded_executor owns the focused"; do
+        'When `tdd_choice.mode` is true, require valid meaningful RED before' \
+        'In `bounded_executor`, run the task packet' \
+        'planned RED' \
+        'after dispatch and confirm the expected failure; in `separated_workers`,' \
+        'require valid incoming Builder/Tester RED evidence.' \
+        'When TDD is false, no RED is required and none should be' \
+        'fabricated.'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_code_writer_terms+=("$file: $term")
         fi
@@ -98,8 +100,10 @@ for file in \
     agents/codex/builder-tester.toml \
     agents/claude/builder-tester.md; do
     for term in \
-        "In TDD-active tasks, own RED: write one failing behavior test first, run it, verify it fails for the intended reason, and report RED evidence." \
-        "After Code Writer GREEN changes, run the targeted test, relevant suite, and regression checks; request Code Writer fixes for production failures." \
+        "When TDD is active, own meaningful RED" \
+        "when false, do not invent a RED step." \
+        "Run selected checks and binding project suites, not an unselected full suite." \
+        "request Code Writer fixes for production failures." \
         '**TDD evidence**: `RED: {test, command, failure, right-reason}` and `GREEN verification: {targeted, suite, regressions}` when TDD is active'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_builder_tester_terms+=("$file: $term")
@@ -116,11 +120,12 @@ test_start "workflow build worker protocol preserves RED GREEN verification in b
 missing_tdd_phase_terms=()
 build_worker_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"
 for term in \
-    "## TDD Sandwich" \
+    "## Conditional TDD Boundary" \
     "bounded_executor" \
-    "valid RED evidence must exist before production code" \
+    "valid meaningful RED evidence must exist before production code" \
+    "When false, selected checks remain required but RED is not manufactured." \
     "separated_workers" \
-    "Builder/Tester owns RED, Code Writer owns GREEN"; do
+    "Builder/Tester owns RED only when TDD is active"; do
     if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_tdd_phase_terms+=("$term")
     fi
@@ -134,40 +139,67 @@ else
     fail "build-worker-protocol.md missing TDD sandwich ownership terms: ${missing_tdd_phase_terms[*]}"
 fi
 
-test_start "workflow defaults TDD active for behavior-changing work"
-missing_tdd_default_terms=()
+test_start "workflow carries one canonical TDD choice and permits adequate non-test evidence"
 workflow_input="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"
-workflow_plan="$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
-workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
+workflow_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
+workflow_root="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+workflow_tdd_failures=()
+if ! ruby -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |f| f["name"] == "tdd_mode" }
+  decision = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").find { |f| f["name"] == "verification_decision" }
+  gates = YAML.load_file(ARGV.fetch(2)).fetch("invariants").find { |f| f["id"] == "INV_TDD_PROJECTION" }
+  valid = input["default"] == false && input.fetch("validation").include?("Must equal verification_decision.tdd_choice.mode") &&
+    input.fetch("infer_from").include?("Copy verification_decision.tdd_choice.mode unchanged") &&
+    decision.fetch("validation").include?("assistant-verification/contracts/output.yaml#verification_decision") &&
+    gates.fetch("check").include?("false TDD uses the selected checks without fabricated RED")
+  exit(valid ? 0 : 1)
+' "$workflow_input" "$workflow_output" "$workflow_gates"; then
+    workflow_tdd_failures+=("workflow tdd_mode is not a false-default projection of the canonical decision")
+fi
 for file_and_term in \
-    "$workflow_input::Defaults true for behavior changes, bugfixes with enough reproduction/root-cause evidence to write a RED test, and interface-affecting refactors" \
-    "$workflow_input::unknown-cause bugfix -> run assistant-debugging first, then infer true once failure mechanism is understood" \
-    "$workflow_input::non-behavior docs/config/spike/prototype/generated-code/layout-only work -> false with recorded reason" \
-    "$workflow_input::False is allowed only with an explicit not-feasible or non-behavior exception reason" \
-    "$workflow_plan::tdd_applies: [true/false]" \
-    "$workflow_plan::TDD default: true for behavior changes, bugfixes with RED-ready evidence, and interface-affecting refactors; false only with explicit exception reason" \
-    "$build_worker_ref::Workflow sets TDD active by default for behavior changes, bugfixes with RED-ready reproduction/root-cause evidence, and interface-affecting refactors" \
-    "$build_worker_ref::When \`tdd_mode=true\` or \`tdd_applies=true\`, preserve the behavior boundary" \
-    "$workflow_skill::Behavior changes default tests-first or carry explicit validation in the same Build step."; do
+    "$build_worker_ref::When false, selected checks remain required but RED is not manufactured." \
+    "$build_worker_ref::both lanes: valid meaningful RED evidence must exist before production code." \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/test-strategy.md::If tests are not selected, record the selected method and its concrete procedure in the plan." \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/tdd-enforcement.md::User or project requirements must be resolved into that decision before applying this cycle."; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if ! p0p4_contains_text "$file" "$term"; then
-        missing_tdd_default_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
+    if ! p0p4_contains_text "$file" "$term"; then workflow_tdd_failures+=("${file#$FRAMEWORK_DIR/}: $term"); fi
 done
-if [[ "${#missing_tdd_default_terms[@]}" -eq 0 ]]; then
+if [[ "${#workflow_tdd_failures[@]}" -eq 0 ]]; then pass; else fail "workflow TDD projection or false-mode policy drifted: ${workflow_tdd_failures[*]}"; fi
+
+test_start "workflow Stop Rules permit sufficient selected non-test evidence"
+workflow_stop_rule_allows_non_test() {
+    local file="$1"
+    local stop_rules
+    stop_rules="$(awk '
+        /^## Stop Rules$/ { in_section = 1; print; next }
+        in_section && /^## / { exit }
+        in_section { print }
+    ' "$file")"
+    grep -Fq "missing required output evidence" <<<"$stop_rules" \
+        && grep -Fq "completed selected and binding checks and applicable review" <<<"$stop_rules" \
+        && ! grep -Fq "a build, tests, and review" <<<"$stop_rules"
+}
+workflow_stop_rule_wrong="$(mktemp)"
+p0p4_register_cleanup "$workflow_stop_rule_wrong"
+sed 's/completed selected and binding checks and applicable review/a build, tests, and review/' \
+    "$workflow_root" >"$workflow_stop_rule_wrong"
+if workflow_stop_rule_allows_non_test "$workflow_root" \
+    && ! workflow_stop_rule_allows_non_test "$workflow_stop_rule_wrong"; then
     pass
 else
-    fail "workflow TDD default activation guard failed: ${missing_tdd_default_terms[*]}"
+    fail "workflow Stop Rules did not distinguish selected non-test evidence from the retired blanket test requirement"
 fi
 
-test_start "TDD skill documents orchestrated ownership and required RED evidence"
+test_start "TDD skill gates meaningful RED only for active TDD and allows assertion extension"
 missing_tdd_skill_terms=()
 for term in \
-    "bounded executor owns RED, GREEN, focused verification, and refactor safety" \
+    "When workflow delegates, ownership follows" \
+    "one bounded executor owns RED, GREEN, focused verification, and refactor safety" \
     "Builder/Tester owns RED, Code Writer owns GREEN" \
-    "Builder/Tester owns verification/refactor-safety" \
     "Required RED evidence before production implementation:" \
+    "add or extend one behavior assertion" \
     "Test file and test name" \
     "Why the failure proves the intended missing behaviour" \
     'If TDD is active and RED evidence is missing, the selected production owner' \
@@ -187,8 +219,8 @@ handoffs_file="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
 missing_tdd_handoff_terms=()
 stale_code_writer_tdd_wording="CodeWriter must write failing test BEFORE production code"
 for term in \
-    "CodeWriter must receive BuilderTester RED evidence before production changes" \
-    "return NEEDS_CONTEXT if RED evidence is missing"; do
+    "Incoming BuilderTester RED evidence required before production edits only in separated_workers" \
+    "No active TDD lane may proceed without valid RED evidence."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_tdd_handoff_terms+=("$term")
     fi
@@ -207,12 +239,21 @@ missing_codewriter_red_evidence_terms=()
 for field in \
     tdd_applies \
     implementation_notes \
-    verification_command \
     expected_success_signal; do
     if ! codewriter_current_task_packet_field_required "$handoffs_file" "$field"; then
         missing_codewriter_red_evidence_terms+=("current_task_packet.$field required")
     fi
 done
+if ! ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  writer = handoffs.find { |h| h["name"] == "orchestrator_to_code_writer" }
+  packet = writer.fetch("context_fields").find { |f| f["name"] == "current_task_packet" }
+  command = packet.fetch("object_fields").find { |f| f["name"] == "verification_command" }
+  valid = command["required"] == "conditional" && command.fetch("condition").include?("selected CheckSpec has a command")
+  exit(valid ? 0 : 1)
+' "$handoffs_file"; then
+    missing_codewriter_red_evidence_terms+=("verification_command must be conditional on command-bearing selected CheckSpec")
+fi
 for field in \
     test_file \
     test_name \
@@ -224,10 +265,10 @@ for field in \
     fi
 done
 for term in \
-    "condition: \"required when tdd_applies is true or tdd_mode is true\"" \
-    "BuilderTester RED evidence received by CodeWriter before implementation" \
-    "CodeWriter does not own RED" \
-    "return NEEDS_CONTEXT if this evidence is missing while TDD is active"; do
+    "condition: \"tdd_applies is true and build_execution_lane == separated_workers\"" \
+    "Incoming BuilderTester RED evidence required before production edits only in separated_workers" \
+    "In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits" \
+    "No active TDD lane may proceed without valid RED evidence."; do
     if ! codewriter_red_evidence_has_line "$handoffs_file" "$term"; then
         missing_codewriter_red_evidence_terms+=("$term")
     fi
@@ -239,6 +280,49 @@ if [[ "${#missing_codewriter_red_evidence_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "CodeWriter current_task_packet must require BuilderTester RED evidence details only when TDD is active: ${missing_codewriter_red_evidence_terms[*]}"
+fi
+
+test_start "incoming RED evidence is required only for active separated_workers and bounded_executor owns RED"
+if ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  writer = handoffs.find { |h| h["name"] == "orchestrator_to_code_writer" }
+  packet = writer.fetch("context_fields").find { |f| f["name"] == "current_task_packet" }
+  red = packet.fetch("object_fields").find { |f| f["name"] == "red_evidence" }
+  lane = writer.fetch("context_fields").find { |f| f["name"] == "build_execution_lane" }
+  applies = packet.fetch("object_fields").find { |f| f["name"] == "tdd_applies" }
+  planned_red_fields = %w[red_command red_cwd expected_red_failure].map do |name|
+    packet.fetch("object_fields").find { |field| field["name"] == name }
+  end
+  evidence_fields = %w[test_file test_name command failure_summary right_reason]
+  actual_evidence_fields = red.fetch("object_fields").map { |field| field["name"] }
+  condition = red.fetch("condition")
+  expected_condition = "tdd_applies is true and build_execution_lane == separated_workers"
+  condition_matches_contract = ->(expr) { expr == expected_condition }
+  applies_to = lambda do |expr, execution_lane, tdd|
+    (!expr.include?("tdd_applies is true") || tdd) &&
+      (!expr.include?("build_execution_lane == separated_workers") || execution_lane == "separated_workers")
+  end
+  valid_shape = red["required"] == "conditional" &&
+    condition == "tdd_applies is true and build_execution_lane == separated_workers" &&
+    lane.fetch("enum_values").include?("bounded_executor") &&
+    applies.fetch("required") == true &&
+    planned_red_fields.all? { |field| field["required"] == "conditional" && field["condition"] == "tdd_applies is true" } &&
+    (evidence_fields - actual_evidence_fields).empty? &&
+    red.fetch("description").include?("In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits")
+  lane_cases = [
+    applies_to.call(condition, "separated_workers", true),
+    !applies_to.call(condition, "bounded_executor", true),
+    !applies_to.call(condition, "separated_workers", false),
+    !applies_to.call(condition, "bounded_executor", false)
+  ].all?
+  wrong_condition = "tdd_applies is true"
+  wrong_condition_would_block_bounded = applies_to.call(wrong_condition, "bounded_executor", true)
+  wrong_condition_rejected = !condition_matches_contract.call(wrong_condition)
+  exit(valid_shape && lane_cases && wrong_condition_would_block_bounded && wrong_condition_rejected ? 0 : 1)
+' "$handoffs_file"; then
+    pass
+else
+    fail "CodeWriter incoming RED policy did not distinguish separated_workers from bounded_executor active-TDD ownership"
 fi
 
 test_start "workflow task packets carry TDD Architecture Decision Pack obligations with exact-once coverage"

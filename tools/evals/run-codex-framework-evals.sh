@@ -45,6 +45,7 @@ CONTEXT_BUDGET_EVIDENCE_HASH=""
 RUN_PLAN_HASH=""
 ACTIVE_CHILD_PID=""
 ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=false
+ACTIVE_CHILD_SUPERVISOR_DONE_DIR=""
 ACTIVE_NODE_PROBE_DIR=""
 ACTIVE_CHILD_GRACE_SECONDS=5
 PROTECTED_STATE_REQUIRES_EXPLICIT_RECOVERY=false
@@ -967,9 +968,17 @@ cleanup_raw_root() {
     fi
 }
 
+confirm_supervisor_cleanup() {
+    if [[ "$ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE" == true && ! -d "$ACTIVE_CHILD_SUPERVISOR_DONE_DIR" ]]; then
+        PROTECTED_STATE_REQUIRES_EXPLICIT_RECOVERY=true
+        return 1
+    fi
+    return 0
+}
+
 terminate_active_child() {
     local pid="${ACTIVE_CHILD_PID:-}" remaining
-    [[ -n "$pid" ]] || return 0
+    [[ -n "$pid" ]] || { confirm_supervisor_cleanup; return $?; }
     if kill -0 "$pid" 2>/dev/null; then
         # Once the supervisor launch begins, its signal handler owns the Codex
         # process lifecycle. Mark that boundary before the background launch so
@@ -993,8 +1002,10 @@ terminate_active_child() {
         fi
     fi
     wait "$pid" 2>/dev/null || true
+    confirm_supervisor_cleanup || return 1
     ACTIVE_CHILD_PID=""
     ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=false
+    ACTIVE_CHILD_SUPERVISOR_DONE_DIR=""
 }
 
 cleanup_all() {
@@ -3495,9 +3506,12 @@ import time
 
 ready_dir, done_dir, timeout_text, prompt_path, jsonl_path, stderr_path, final_path, workspace, codex_bin, model, post_group_hold_text = sys.argv[1:]
 child = None
+cleanup_confirmed = False
 post_group_hold_seconds = int(post_group_hold_text)
 
 def mark_supervisor_done():
+    if not cleanup_confirmed:
+        return
     try:
         os.mkdir(done_dir, 0o700)
     except OSError:
@@ -3508,8 +3522,11 @@ atexit.register(mark_supervisor_done)
 def process_group_exists(pgid):
     try:
         os.killpg(pgid, 0)
-    except (ProcessLookupError, PermissionError):
+    except ProcessLookupError:
         return False
+    except PermissionError:
+        # Permission failure cannot confirm that the group is absent.
+        return True
     return True
 
 def signal_process_group(pgid, signal_number):
@@ -3522,7 +3539,7 @@ def signal_process_group(pgid, signal_number):
 def stop_child():
     global child
     if child is None:
-        return
+        return False
     pgid = child.pid
     # poll() reaps an already-exited direct leader before using its former PGID
     # as the descendant boundary. Without this, a zombie leader can keep the
@@ -3534,25 +3551,42 @@ def stop_child():
         child.poll()
         time.sleep(0.02)
     signal_process_group(pgid, signal.SIGKILL)
-    # The supervisor is the group owner boundary. Do not return to Bash (which
-    # may release the output lease and raw workspace) while descendants remain.
-    while process_group_exists(pgid):
+    # Bound confirmation; a missing done marker keeps Bash's lease/raw state.
+    deadline = time.monotonic() + 1.0
+    while process_group_exists(pgid) and time.monotonic() < deadline:
         child.poll()
         time.sleep(0.02)
+    if process_group_exists(pgid):
+        return False
     try:
         child.wait(timeout=0)
     except subprocess.TimeoutExpired:
-        pass
+        return False
     # A killed orphan can briefly remain visible to a caller's kill(0) probe
     # while the platform reaps it. Keep the lease boundary until that handoff
     # has had one scheduler tick after the group itself is gone.
     time.sleep(0.05)
+    return True
 
-def interrupted(_signum, _frame):
-    stop_child()
+def finish(exit_code):
+    global cleanup_confirmed
+    # Repeated signals must not restart cleanup or shorten the hold.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    try:
+        confirmed = stop_child()
+    except OSError:
+        confirmed = False
+    if not confirmed:
+        print("Supervisor could not confirm descendant shutdown.", file=sys.stderr)
+        raise SystemExit(125)
     if post_group_hold_seconds:
         time.sleep(post_group_hold_seconds)
-    raise SystemExit(143)
+    cleanup_confirmed = True
+    raise SystemExit(exit_code)
+
+def interrupted(_signum, _frame):
+    finish(143)
 
 signal.signal(signal.SIGINT, interrupted)
 signal.signal(signal.SIGTERM, interrupted)
@@ -3569,19 +3603,12 @@ try:
         try:
             result = child.wait(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
-            stop_child()
-            if post_group_hold_seconds:
-                time.sleep(post_group_hold_seconds)
-            raise SystemExit(124)
-        stop_child()
-        if post_group_hold_seconds:
-            time.sleep(post_group_hold_seconds)
-        raise SystemExit(result)
+            finish(124)
+        finish(result)
 except SystemExit:
     raise
 except OSError:
-    stop_child()
-    raise SystemExit(127)
+    finish(127)
 PY
 }
 
@@ -3668,6 +3695,7 @@ execute_one_run() {
         [[ "$post_group_hold_seconds" =~ ^[6-9]$|^[12][0-9]$|^30$ ]] \
             || die "FRAMEWORK_EVAL_TEST_SUPERVISOR_POST_GROUP_HOLD_SECONDS must be an integer from 6 to 30."
     fi
+    ACTIVE_CHILD_SUPERVISOR_DONE_DIR="$supervisor_done"
     ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=true
     run_codex_supervisor "$supervisor_ready" "$supervisor_done" "$effective_timeout" "$prompt_file" "$jsonl" "$stderr_file" "$final_output" "$workspace" "$post_group_hold_seconds" &
     ACTIVE_CHILD_PID=$!
@@ -3681,8 +3709,11 @@ execute_one_run() {
         sleep 0.1
     done
     if wait "$ACTIVE_CHILD_PID"; then exit_code=0; else exit_code=$?; fi
+    confirm_supervisor_cleanup \
+        || die "Supervisor cleanup is unconfirmed; protected state retained for explicit recovery."
     ACTIVE_CHILD_PID=""
     ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=false
+    ACTIVE_CHILD_SUPERVISOR_DONE_DIR=""
     [[ "$exit_code" -eq 124 ]] && timed_out=true
     rm -f "$prompt_file"
     ended_at="$(date +%s)"
