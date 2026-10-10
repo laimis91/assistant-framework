@@ -355,6 +355,64 @@ write_workflow_eval_responses() {
         required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$fixture" | paste -sd ' ' -)"
         if jq -e --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture" >/dev/null; then
             case "$case_id" in
+                unknown-cause-bugfix-routes-through-debugging-before-tdd)
+                    jq -n --arg summary "$required_summary assistant-tdd" '{
+                      summary:$summary,
+                      debugging_result:{status:"root_cause_found",reproduction_status:"yes",hypotheses_count:3,root_cause:"The promotion is applied twice when checkout-42 is replayed.",confidence:"high",transition_to_tdd:"ready",residual_risks:[]},
+                      verification_decision:{
+                        scope:"Fix the reproduced duplicate checkout promotion with the requested TDD cycle.",
+                        policy_basis:{binding_constraints:[{kind:"required_tdd",value:"true",source_ref:"fixture:unknown-cause-bugfix-routes-through-debugging-before-tdd#user-request"}],preferences_applied:[],capability_limits:[]},
+                        test_change:"add_new",
+                        checks:[{check_id:"checkout-promotion-once",claim_or_risk:"The 100-cent promotion is applied once to the 1000-cent subtotal.",action:"add",method:"automated_test",test_scope:"unit",technique:"example",check_ref_or_method:{reference_or_procedure:"Write and run checkout-42 before repair, asserting a 900-cent total instead of the reproduced 800-cent total.",prerequisites:["The checkout-42 replay reproduces duplicate promotion application."],exclusions:["Does not establish the external payment-service boundary."],expected_success:"The total is 900 cents after the repair.",meaningful_failure:"Before repair the assertion fails because the total is 800 cents."},rationale:"The supplied replay provides a meaningful regression oracle for the requested TDD cycle.",method_refs:["skills/assistant-verification/references/methods/unit.md"]}],
+                        tdd_choice:{mode:true,basis:"user_requirement",rationale:"The explicit user TDD mandate remains binding after successful reproduction."},
+                        omitted_checks_and_rationale:["No unrelated full suite is selected."],
+                        stop_rule:"Run meaningful RED before repair, then the selected GREEN check and applicable review."
+                      }
+                    }' >"$response_path"
+                    ;;
+                light-completion-retains-canonical-verification-outputs)
+                    jq -n --arg summary "$required_summary" '{
+                      summary:$summary,
+                      verification_decision:{
+                        scope:"Correct the README install command spelling.",
+                        policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},
+                        test_change:"none",
+                        checks:[{
+                          check_id:"readme-install-command",
+                          claim_or_risk:"The README install command uses an option supported by install.sh.",
+                          action:"inspect",
+                          method:"automated_test",
+                          test_scope:"unit",
+                          technique:"schema_or_lint",
+                          check_ref_or_method:{
+                            reference_or_procedure:"Run the focused documentation-contract test that checks the README install command against install.sh.",
+                            prerequisites:["Updated README.md, install.sh, and the focused documentation-contract test are available."],
+                            exclusions:["Does not execute the installer or prove native activation."],
+                            expected_success:"The test confirms the documented option is supported by install.sh.",
+                            meaningful_failure:"The README command includes an option the installer does not accept."
+                          },
+                          rationale:"The focused test directly checks the changed documentation claim.",
+                          method_refs:["skills/assistant-verification/references/methods/unit.md"]
+                        }],
+                        tdd_choice:{mode:false,basis:"not_selected",rationale:"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
+                        omitted_checks_and_rationale:["Installer execution is outside the selected documentation-only claim."],
+                        stop_rule:"Stop when the command comparison passes and the fresh light review passes."
+                      },
+                      evidence_assessment:{
+                        status:"sufficient",
+                        scope_and_evidence_refs:[{
+                          evidence_ref:"check:readme-install-command:17",
+                          claim_kind:"structural_validity",
+                          claim_scope:["README documents an install.sh-supported option."],
+                          result_state:"passed",
+                          freshness:"current",
+                          exclusions:["Does not prove installer execution or native activation."]
+                        }],
+                        gaps_and_limitations:[],
+                        next_action:"none_needed"
+                      }
+                    }' >"$response_path"
+                    ;;
                 native-slice-execution-uses-dependencies-not-runner-topology)
                     jq -n '{execution_policy:{source_writer_policy:"sequential_shared_or_unknown",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"not_available",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
                     ;;

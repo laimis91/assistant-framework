@@ -290,7 +290,7 @@ gates:
 
       - id: V4
         check: "After any source fix, invalidate the current batch and refresh build_test_verification_ref.evidence_ref to current passed selected/binding verification with canonical decision, assessment, results, exclusions, and source binding before every pass in the next frozen-snapshot batch; not_applicable is absent"
-        on_fail: "Run current build/tests, record the passed evidence ref, freeze a new snapshot/batch, and block the next review round until the fresh evidence is available."
+        on_fail: "After any source fix, invalidate the current batch; run or reuse current successful results for each due selected or resolved-binding check, running build/tests only when required. Refresh build_test_verification_ref.evidence_ref with the canonical decision, assessment, results, exclusions, and source binding, then freeze a new snapshot/batch and block the next review round until fresh evidence is available."
 
   # ─────────────────────────────────────────────
   # QA EVALUATION step — after code review/build evidence

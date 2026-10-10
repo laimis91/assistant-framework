@@ -29,17 +29,16 @@ Move repository work from request to a verified outcome through the applicable w
 
 ## Constraints
 
-Honor user/repository schemas exactly: preserve paths, keys, types, ids, and literals. Use source-backed defaults; ask about material product choices Plan approval cannot settle. assistant-clarify handles prompt ambiguity; workflow asks answerable, evidence-backed questions. Skip Plan only when eligible.
+Explicit user or repository artifact schemas override workflow-internal shapes; preserve exact paths, keys, types, ids, and supplied literals. Apply source-backed defaults and ask precise questions for material product choices; Plan approval cannot settle intent. assistant-clarify owns prompt-level ambiguity; workflow owns answerable, evidence-backed questions and defaults. Skip Plan only when eligible.
 
-Progressive Discover does not execute; mutating prerequisites require a separate approved workflow and returned evidence before gates continue. Tie scope changes to correctness, security, safety, or verification. Installs, uploads, external calls, or sharing proprietary content with third parties need explicit approval. Prefer repo-native commands; for external services, installs, or sensitive data, load `references/ai-usage-policy.md`.
+Progressive Discover's no-execution boundary applies; mutating prerequisites require a separate approved workflow and returned evidence before gates continue. Tie scope changes to correctness, security, safety, or verification. Installs, uploads, external calls, or sharing proprietary content with third parties need explicit approval. Prefer repo-native commands; for external services, installs, or sensitive data, load `references/ai-usage-policy.md`.
 
 ## Contracts
 
-Read `contracts/index.yaml`; load the current selector and validate against canonical
-content at enforcement. Reuse an already-loaded exact canonical selector section while
-source/task identity and context remain faithful; recheck its gates and load only missing
-or new selectors. Reread if source/task identity changes, context is missing/compacted,
-or resolution is unresolved. The index never replaces canonical contracts.
+Read `contracts/index.yaml`; load progressively; do not load every contract. Load current selector; validate against canonical content at enforcement. Reuse an already-loaded exact canonical selector section while source/task identity and context
+remain faithful; recheck its gates and load only missing or new selectors. Reread on source/task
+identity change, missing/compacted context, or unresolved resolution. Index never replaces
+canonical contracts.
 
 - `entry`: load entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is its only entry reference.
 - `architecture_design`: load `references/architecture-decision-pack.md` when `architecture_design_mode != not_applicable`; use the typed Pack before Decompose/Plan and retain its reference through Review.
@@ -71,9 +70,9 @@ When required, use this exact format:
 
 ## Refactor Guidance
 
-Refactor only for concrete correctness, security, unsafe change-surface, ownership,
-brittle-testing, or extension-seam risk. Tie scope expansion to that risk; avoid generic
-style. Make the smallest durable fix; keep cleanup scoped unless requested.
+- Justify it with a concrete risk only: correctness, security, unsafe change surface, ownership, brittle testing, or extension seam.
+- Tie incidental or scope-expanding refactors to concrete risk.
+- Choose the smallest useful, durable fix; keep cleanup scoped.
 
 ## Triage
 

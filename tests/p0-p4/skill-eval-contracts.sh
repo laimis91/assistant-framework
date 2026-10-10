@@ -600,6 +600,49 @@ p0p4_write_skill_eval_responses() {
                           }
                         }' >"$response_path"
                         ;;
+                    light-completion-retains-canonical-verification-outputs)
+                        jq -n --arg summary "$required_summary" '{
+                          summary:$summary,
+                          verification_decision:{
+                            scope:"Correct the README install command spelling.",
+                            policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},
+                            test_change:"none",
+                            checks:[{
+                              check_id:"readme-install-command",
+                              claim_or_risk:"The README install command uses an option supported by install.sh.",
+                              action:"inspect",
+                              method:"automated_test",
+                              test_scope:"unit",
+                              technique:"schema_or_lint",
+                              check_ref_or_method:{
+                                reference_or_procedure:"Run the focused documentation-contract test that checks the README install command against install.sh.",
+                                prerequisites:["Updated README.md, install.sh, and the focused documentation-contract test are available."],
+                                exclusions:["Does not execute the installer or prove native activation."],
+                                expected_success:"The test confirms the documented option is supported by install.sh.",
+                                meaningful_failure:"The README command includes an option the installer does not accept."
+                              },
+                              rationale:"The focused test directly checks the changed documentation claim.",
+                              method_refs:["skills/assistant-verification/references/methods/unit.md"]
+                            }],
+                            tdd_choice:{mode:false,basis:"not_selected",rationale:"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
+                            omitted_checks_and_rationale:["Installer execution is outside the selected documentation-only claim."],
+                            stop_rule:"Stop when the command comparison passes and the fresh light review passes."
+                          },
+                          evidence_assessment:{
+                            status:"sufficient",
+                            scope_and_evidence_refs:[{
+                              evidence_ref:"check:readme-install-command:17",
+                              claim_kind:"structural_validity",
+                              claim_scope:["README documents an install.sh-supported option."],
+                              result_state:"passed",
+                              freshness:"current",
+                              exclusions:["Does not prove installer execution or native activation."]
+                            }],
+                            gaps_and_limitations:[],
+                            next_action:"none_needed"
+                          }
+                        }' >"$response_path"
+                        ;;
                     build-phase-verifies-selected-check-before-advancing)
                         jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria."}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
                         ;;
