@@ -378,10 +378,14 @@ end
           exit 1
         end
         declared_fields = target_field.fetch("object_fields").map { |field| field["name"] }.sort
-        unless fields.sort == declared_fields
-          undeclared_fields = fields - declared_fields
+        required_fields = target_field.fetch("object_fields").select do |field|
+          field["required"] == true && !field["condition"].is_a?(String)
+        end.map { |field| field["name"] }
+        undeclared_fields = fields - declared_fields
+        missing_required_fields = required_fields - fields
+        unless undeclared_fields.empty? && missing_required_fields.empty?
           if undeclared_fields.empty?
-            warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] object_keys_exact fields must exactly match the declared object schema: #{path.to_json}"
+            warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] object_keys_exact fields must include every unconditional required field: #{missing_required_fields.to_json}"
           else
             warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] undeclared assertion path fields: #{undeclared_fields.to_json}"
           end

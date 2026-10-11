@@ -50,6 +50,101 @@ tdd_forbidden_response_is_rejected() {
         && grep -Fq "forbidden_substring_hits=1" "$eval_output"
 }
 
+test_start "required_tdd false binds a not-selected choice and verifier selection keeps truthful provenance"
+if ! ruby -ryaml -e '
+  verification_input = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |field| field["name"] == "verification_policy" }
+    .fetch("object_fields").find { |field| field["name"] == "binding_constraints" }
+    .fetch("object_fields").find { |field| field["name"] == "value" }
+  verification_output = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").find { |artifact| artifact["name"] == "verification_decision" }
+  tdd_input = YAML.load_file(ARGV.fetch(2)).fetch("fields")
+  activation = tdd_input.find { |field| field["name"] == "activation_reason" }
+  decision = tdd_input.find { |field| field["name"] == "verification_decision" }
+  ids = tdd_input.find { |field| field["name"] == "selected_check_ids" }
+  policy = verification_input.fetch("validation")
+  choice = verification_output.fetch("validation") + " " + verification_output.fetch("object_fields").find { |field| field["name"] == "tdd_choice" }.fetch("validation")
+  selection_validation = [activation["description"], activation["infer_from"], activation["validation"], decision["validation"], ids["validation"]].compact.join(" ").downcase
+  valid = policy.include?("required_tdd is exactly true or false") && policy.include?("conflicting required_tdd values") &&
+    choice.include?("required_tdd=false") && choice.include?("mode=false") && choice.include?("not_selected") &&
+    activation.fetch("enum_values").include?("verification_selection") &&
+    decision["required"] == "conditional" && decision.fetch("condition").include?("activation_reason == verification_selection") &&
+    ids["required"] == "conditional" && ids.fetch("condition").include?("activation_reason == verification_selection") && ids["on_missing"] == "fail" &&
+    selection_validation.include?("selected_technique") && selection_validation.include?("intersect") &&
+    selection_validation.include?("invent") && selection_validation.include?("user_request") &&
+    selection_validation.include?("project_convention") && selection_validation.include?("plan_constraint")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-verification/contracts/input.yaml" \
+  "$FRAMEWORK_DIR/skills/assistant-verification/contracts/output.yaml" \
+  "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/input.yaml"; then
+    fail "required_tdd false or verifier-selected TDD activation lacks a complete truthful binding contract"
+else
+    pass
+fi
+
+test_start "assistant-tdd derives verification_selection only from the current selected technique and preserves user provenance"
+activation_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-tdd-verification-activation.XXXXXX")"
+p0p4_register_cleanup "$activation_root"
+activation_skill="$activation_root/assistant-tdd"
+mkdir -p "$activation_root"
+cp -R "$FRAMEWORK_DIR/skills/assistant-tdd" "$activation_skill"
+activation_case="bugfix-starts-with-red-evidence"
+jq --arg id "$activation_case" '
+  (.cases[] | select(.id == $id)) |= (
+    .prompt = "Apply TDD to behavior-check using the unchanged canonical verifier decision; no user request or plan asks for TDD."
+    | .setup_context = ["The assistant-tdd skill instructions are active.","The unchanged verification_decision has tdd_choice.basis=selected_technique and applicable_check_ids=[behavior-check].","The current packet selected_check_ids=[behavior-check].","No user, plan, or project instruction independently requires TDD."]
+    | .expected_behavior = ["Uses verifier selection as the activation provenance only because the current selected check intersects the canonical applicable IDs.","Preserves the verifier decision unchanged and does not invent user or plan provenance."]
+    | .pass_criteria = ["The response identifies activation_reason=verification_selection and the exact basis/intersection."]
+    | .fail_signals = ["Attributes activation to a user request or plan constraint that does not exist."]
+    | .machine_expectations = {required_substrings:["\"activation_reason\":\"verification_selection\"","\"basis\":\"selected_technique\"","\"selected_check_ids\":[\"behavior-check\"]","\"applicable_check_ids\":[\"behavior-check\"]","verification_decision"],forbidden_substrings:["\"activation_reason\":\"user_request\"","\"activation_reason\":\"plan_constraint\""]}
+  )
+' "$activation_skill/evals/cases.json" >"$activation_root/activation-case.json"
+mv "$activation_root/activation-case.json" "$activation_skill/evals/cases.json"
+mkdir -p "$activation_root/positive/assistant-tdd" "$activation_root/user-fault/assistant-tdd" "$activation_root/plan-fault/assistant-tdd" \
+    "$activation_root/missing-decision/assistant-tdd" "$activation_root/missing-selected-ids/assistant-tdd"
+cat >"$activation_root/positive/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"verification_selection","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}},"selected_check_ids":["behavior-check"]}
+EOF
+cat >"$activation_root/user-fault/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"user_request","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}},"selected_check_ids":["behavior-check"]}
+EOF
+cat >"$activation_root/plan-fault/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"plan_constraint","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}},"selected_check_ids":["behavior-check"]}
+EOF
+cat >"$activation_root/missing-decision/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"verification_selection","selected_check_ids":["behavior-check"],"applicable_check_ids":["behavior-check"]}
+EOF
+cat >"$activation_root/missing-selected-ids/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"verification_selection","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}}}
+EOF
+activation_grade_failures=()
+if ! "$tdd_eval_runner" --responses "$activation_root/positive" --skill "$activation_skill" --case "$activation_case" >"$activation_root/positive.output" 2>&1 \
+    || ! grep -Fq $'PASS\tassistant-tdd\t'"$activation_case" "$activation_root/positive.output"; then
+    activation_grade_failures+=("canonical selected-technique activation did not pass")
+fi
+for fault in user-fault plan-fault missing-decision missing-selected-ids; do
+    if "$tdd_eval_runner" --responses "$activation_root/$fault" --skill "$activation_skill" --case "$activation_case" >"$activation_root/$fault.output" 2>&1 \
+        || ! grep -Fq $'FAIL\tassistant-tdd\t'"$activation_case" "$activation_root/$fault.output"; then
+        activation_grade_failures+=("selected-technique activation accepted $fault")
+    fi
+done
+
+jq --arg id "$activation_case" '
+  (.cases[] | select(.id == $id)) |= (
+    .prompt = "Use TDD to fix the bug where the skill eval runner accepts duplicate case ids."
+    | .setup_context = ["The assistant-tdd skill instructions are active.","The user explicitly requested TDD.","No failing regression test has been written yet."]
+    | .machine_expectations = {required_substrings:["activation_reason=user_request","The user explicitly requested TDD"],forbidden_substrings:["activation_reason=verification_selection","activation_reason=plan_constraint"]}
+  )
+' "$activation_skill/evals/cases.json" >"$activation_root/user-case.json"
+mv "$activation_root/user-case.json" "$activation_skill/evals/cases.json"
+mkdir -p "$activation_root/user-positive/assistant-tdd"
+cat >"$activation_root/user-positive/assistant-tdd/$activation_case.txt" <<'EOF'
+activation_reason=user_request. The user explicitly requested TDD.
+EOF
+if ! "$tdd_eval_runner" --responses "$activation_root/user-positive" --skill "$activation_skill" --case "$activation_case" >"$activation_root/user-positive.output" 2>&1 \
+    || ! grep -Fq $'PASS\tassistant-tdd\t'"$activation_case" "$activation_root/user-positive.output"; then
+    activation_grade_failures+=("real user TDD provenance companion did not pass")
+fi
+if [[ ${#activation_grade_failures[@]} -eq 0 ]]; then pass; else fail "verification activation controls failed: ${activation_grade_failures[*]}"; fi
+
 test_start "TDD obligation coverage binds every stable obligation id exactly once"
 tdd_missing=()
 obligations_block="$(contract_field_block "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/input.yaml" architecture_test_obligations)"
@@ -256,7 +351,7 @@ if ! ruby -ryaml -e '
   writer = handoffs.find { |h| h["name"] == "orchestrator_to_code_writer" }
   packet = writer.fetch("context_fields").find { |f| f["name"] == "current_task_packet" }
   command = packet.fetch("object_fields").find { |f| f["name"] == "verification_command" }
-  valid = command["required"] == "conditional" && command.fetch("condition").include?("selected CheckSpec has a command")
+  valid = command["required"] == "conditional" && command.fetch("condition").include?("exactly one matching command-based CheckSpec")
   exit(valid ? 0 : 1)
 ' "$handoffs_file"; then
     missing_codewriter_red_evidence_terms+=("verification_command must be conditional on command-bearing selected CheckSpec")

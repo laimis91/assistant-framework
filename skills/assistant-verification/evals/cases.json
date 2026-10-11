@@ -2311,14 +2311,15 @@
       "title": "A required unit suite allows a distinct integration check",
       "category": "binding_scope_policy",
       "purpose": "Distinguishes a mandatory unit suite from a unit-only restriction when a real component boundary changes.",
-      "prompt": "Select verification for a change to the JSON serialization contract between the API and its storage adapter. Project policy requires the unit suite but does not prohibit other scopes. Existing unit tests cover the domain value but not the serialized boundary. The repository has an isolated integration fixture for API-to-adapter round trips. Return a JSON object with verification_decision and evidence_assessment.",
+      "prompt": "Select verification for a change to the JSON serialization contract between the API and its storage adapter. Project policy requires the unit suite, does not prohibit other scopes, and explicitly says TDD is not required. Existing unit tests cover the domain value but not the serialized boundary. The repository has an isolated integration fixture for API-to-adapter round trips. Return a JSON object with verification_decision and evidence_assessment.",
       "setup_context": [
         "The assistant-verification instructions are active.",
         "Unit tests are binding; there is no unit-only restriction.",
+        "The same project policy binds required_tdd=false for this change; the selected unit and integration checks still have meaningful test procedures.",
         "The serialization boundary is changed and not covered by existing unit assertions.",
         "The integration fixture is available and isolates its data.",
         "fixture:required-unit-check-does-not-prohibit-integration#response-slots: CheckSpec index 0=domain-value unit suite, index 1=API-to-storage round trip.",
-        "fixture:required-unit-check-does-not-prohibit-integration#project-policy: the only binding tuple is required_scope/unit with source_ref fixture:required-unit-check-does-not-prohibit-integration#project-policy; there is no scope prohibition.",
+        "fixture:required-unit-check-does-not-prohibit-integration#project-policy: binding tuples are required_scope/unit and required_tdd/false, both with source_ref fixture:required-unit-check-does-not-prohibit-integration#project-policy; there is no scope prohibition.",
         "The unit suite covers the domain value, while the isolated integration fixture observes the distinct serialized API-to-adapter boundary.",
         "fixture:required-unit-check-does-not-prohibit-integration#domain-value catalog: {\"claim\":\"The domain value preserves its declared JSON contract fields independently of serialization.\",\"procedure\":\"Run the existing domain-value unit suite and confirm its field-name and value assertions pass.\",\"prerequisites\":[\"The existing domain-value unit suite is available.\"],\"exclusions\":[\"Does not observe JSON serialization or an API-to-adapter storage round trip.\"],\"expected_success\":\"Existing domain-value assertions pass for the declared fields and values.\",\"meaningful_failure\":\"A domain-value assertion fails for a required field name or value.\"}",
         "fixture:required-unit-check-does-not-prohibit-integration#api-storage-round-trip catalog: {\"claim\":\"API-to-storage JSON serialization preserves contract values across the adapter boundary.\",\"procedure\":\"Extend the isolated integration fixture to send a representative value through the API serializer and adapter, read it back, and compare the complete JSON field names and values.\",\"prerequisites\":[\"The isolated API-to-adapter integration fixture is available.\",\"The representative JSON contract value is defined.\"],\"exclusions\":[\"Does not establish unrelated end-to-end user journeys or production storage availability.\"],\"expected_success\":\"The readback preserves every expected JSON field name and value from the representative contract.\",\"meaningful_failure\":\"A field is lost, renamed, malformed, or changed across the API-to-storage round trip.\"}"
@@ -2331,6 +2332,7 @@
       "pass_criteria": [
         "The selected scopes include unit and integration.",
         "The integration oracle checks a representative serialized round trip and distinguishes a malformed or lost value.",
+        "The exact required_tdd=false source is retained and keeps TDD off even though meaningful oracles exist.",
         "No unrelated scope is added without a distinct claim."
       ],
       "fail_signals": [
@@ -2342,7 +2344,8 @@
         "required_substrings": [
           "unit",
           "integration",
-          "serialization"
+          "serialization",
+          "required_tdd=false"
         ],
         "forbidden_substrings": [
           "integration is prohibited",
@@ -2451,13 +2454,18 @@
               "value",
               "source_ref"
             ],
-            "expected_objects": [
-              {
-                "kind": "required_scope",
-                "value": "unit",
-                "source_ref": "fixture:required-unit-check-does-not-prohibit-integration#project-policy"
-              }
-            ]
+          "expected_objects": [
+            {
+              "kind": "required_scope",
+              "value": "unit",
+              "source_ref": "fixture:required-unit-check-does-not-prohibit-integration#project-policy"
+            },
+            {
+              "kind": "required_tdd",
+              "value": "false",
+              "source_ref": "fixture:required-unit-check-does-not-prohibit-integration#project-policy"
+            }
+          ]
           },
           {
             "operator": "array_items_nonempty_fields",
@@ -4619,6 +4627,23 @@
             "path": ["verification_decision", "checks", 0, "check_ref_or_method", "reference_or_procedure"],
             "expected": "Run python -m coverage report --include='src/parser/*' --fail-under=85 and retain the package-scoped measurement."
           },
+          {
+            "id": "coverage_command_is_typed_with_explicit_cwd",
+            "operator": "object_keys_exact",
+            "path": ["verification_decision", "checks", 0, "command"],
+            "fields": ["argv", "cwd"]
+          },
+          {
+            "id": "coverage_command_keeps_literal_arguments",
+            "operator": "equals",
+            "path": ["verification_decision", "checks", 0, "command", "argv"],
+            "expected": ["python", "-m", "coverage", "report", "--include=src/parser/*", "--fail-under=85"]
+          },
+          {
+            "id": "coverage_command_cwd_is_explicit",
+            "operator": "nonempty_string",
+            "path": ["verification_decision", "checks", 0, "command", "cwd"]
+          },
           {"id":"command_is_not_claimed_as_run","operator":"equals","path":["evidence_assessment","status"],"expected":"planned"}
         ]
       }
@@ -4674,6 +4699,12 @@
           {"id":"api_procedure_exclusions_are_exact","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","exclusions"],"expected":["Does not replace the isolated calculation unit test."]},
           {"id":"api_expected_success_is_exact","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","expected_success"],"expected":"The API round trip preserves the expected checkout amount."},
           {"id":"api_meaningful_failure_is_exact","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","meaningful_failure"],"expected":"The request-to-storage round trip changes the expected amount."},
+          {"id":"unit_command_has_explicit_argv_and_cwd","operator":"object_keys_exact","path":["verification_decision","checks",0,"command"],"fields":["argv","cwd"]},
+          {"id":"unit_command_is_bound_to_unit_check","operator":"equals","path":["verification_decision","checks",0,"command","argv"],"expected":["pytest","tests/unit/test_checkout.py"]},
+          {"id":"unit_command_keeps_its_own_cwd","operator":"equals","path":["verification_decision","checks",0,"command","cwd"],"expected":"services/checkout"},
+          {"id":"api_command_has_explicit_argv_and_cwd","operator":"object_keys_exact","path":["verification_decision","checks",1,"command"],"fields":["argv","cwd"]},
+          {"id":"api_command_is_bound_to_api_check","operator":"equals","path":["verification_decision","checks",1,"command","argv"],"expected":["pytest","tests/integration/test_checkout_api.py"]},
+          {"id":"api_command_keeps_its_own_cwd","operator":"equals","path":["verification_decision","checks",1,"command","cwd"],"expected":"services/api"},
           {
             "id": "each_result_binds_the_exact_check_identity",
             "operator": "array_object_values_exact",

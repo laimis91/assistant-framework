@@ -18,25 +18,25 @@ fields:
   - name: activation_reason
     type: enum
     required: true
-    enum_values: [user_request, plan_constraint, project_convention]
-    description: "Why TDD is active — determines strictness of enforcement"
+    enum_values: [user_request, plan_constraint, project_convention, verification_selection]
+    description: "The source that activates TDD"
+    validation: "verification_selection requires an unchanged selected_technique decision and current applicable-ID intersection; preserve actual provenance."
     on_missing: infer
     infer_from: >
-      User said 'TDD', 'tests first', 'red green refactor' → user_request.
-      Plan includes 'TDD: active' in constraints → plan_constraint.
-      Project instructions or conventions (AGENTS.md, CLAUDE.md, README, CONTRIBUTING.md, or equivalent) require tests-first → project_convention.
+      User TDD → user_request; approved-plan TDD → plan_constraint; project tests-first → project_convention. Otherwise verification_selection requires unchanged selected_technique and intersecting current/applicable IDs; never invent a source.
 
   - name: verification_decision
     type: object
-    required: false
-    description: "The canonical assistant-verification decision carried unchanged when TDD is composed with workflow."
-    validation: "When present, it conforms to assistant-verification/contracts/output.yaml#verification_decision; the current increment's selected_check_ids must intersect tdd_choice.applicable_check_ids and each behavior stays within those checks. Task-global mode alone does not activate TDD for this increment. Standalone TDD may resolve behavior checks from current context when no verifier decision is available."
+    required: conditional
+    condition: "activation_reason == verification_selection"
+    description: "Canonical verifier decision carried unchanged when TDD is composed."
+    validation: "Keep unchanged; current IDs intersect applicable IDs and behaviors stay within them. verification_selection requires selected_technique plus that intersection and real provenance. Task-global mode alone does not activate TDD; standalone TDD may resolve checks without a decision."
 
   - name: selected_check_ids
     type: string[]
     required: conditional
-    condition: "verification_decision is present"
-    description: "Selected CheckSpec IDs due for the current TDD increment"
+    condition: "verification_decision is present or activation_reason == verification_selection"
+    description: "Current increment's due selected checks"
     validation: "Ordered unique IDs resolving exactly once in verification_decision.checks; at least one intersects tdd_choice.applicable_check_ids."
     on_missing: fail
 

@@ -29,7 +29,7 @@ No separate plan document needed. Include directly in your response:
 - Output format/schema: [format]
 - Acceptance criteria: [binary checks]
 - Verification decision: [canonical typed decision, unchanged]
-- Selected verification checks: [check id, method, exact argv/cwd or concrete procedure, expected evidence]
+- Selected verification checks: [check id, method, exact per-CheckSpec command.argv and command.cwd or concrete non-command procedure, expected evidence]
 - Expected success signal: [exact pass signal]
 - Owner/consumer: [who uses it]
 - Non-goals/exclusions: [what not to produce]

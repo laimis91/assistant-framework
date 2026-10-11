@@ -54,6 +54,9 @@ the phase boundary:
   Preserve the task decision unchanged; task-global TDD mode does not impose a
   RED cycle on unrelated packet checks.
 
+- Use `verification_selection` only for unchanged `selected_technique` with a
+  current ID intersection. Preserve actual source; invent none.
+
 - In `bounded_executor`, one bounded executor owns RED, GREEN, focused verification, and refactor safety; production code still starts only after valid RED evidence is recorded.
 - In `separated_workers`, Builder/Tester owns RED, Code Writer owns GREEN, and
   Builder/Tester owns verification/refactor-safety. Use this lane for explicit

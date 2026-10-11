@@ -11,7 +11,7 @@ for term in \
     "- verification_decision: [unchanged canonical decision and selected CheckSpecs]" \
     "- evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]" \
     "- tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]" \
-    "- verification_command: [literal argv only when the selected check uses a command; otherwise omit and use its concrete CheckSpec procedure]" \
+    "- verification_command: [legacy singular literal argv projection only when selected_check_ids resolves exactly one matching command-based CheckSpec; otherwise omit and use each check's canonical command or concrete non-command procedure]" \
     "## Task packets"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"; then
         missing_packet_terms+=("$term")
@@ -39,7 +39,7 @@ for term in \
     "- id: P9" \
     "For medium+ end-to-end/implement-only tasks: implementation work is represented as executable task packets using plan-template.md" \
     "- id: P10" \
-    "A command-based selected CheckSpec carries direct argv and cwd; otherwise its concrete procedure remains in the canonical CheckSpec." \
+    "Each command-based check retains its literal command.argv and explicit command.cwd by check_id; the singular verification_command compatibility projection is present only when selected_check_ids resolves exactly one command-based check. Otherwise omit it and keep each concrete non-command procedure. Missing or ambiguous context requires refresh or a blocked packet; never flatten commands, infer cwd, reconstruct shell text, or misattribute a command." \
     "- id: P11" \
     "deviation/rollback rule" \
     "- id: B12" \
@@ -179,19 +179,49 @@ if ! ruby -ryaml -e '
   manifest = output.fetch("artifacts").find { |artifact| artifact["name"] == "slice_manifest" }
   command = manifest.fetch("object_fields").find { |field| field["name"] == "verification_command" }
   valid = command["type"] == "string[]" && command["required"] == "conditional" && command["min_items"] == 1 &&
-    command.fetch("condition").include?("selected CheckSpec has a command") &&
-    command.fetch("description").include?("otherwise use its concrete procedure") &&
-    command.fetch("validation").include?("execute item 0 directly") &&
+    command.fetch("condition").include?("exactly one matching command-based CheckSpec") &&
+    command.fetch("description").include?("Omit for zero or multiple matching commands") &&
+    command.fetch("validation").include?("Execute item 0 directly") &&
     command.fetch("validation").include?("literal argument") &&
-    command.fetch("validation").include?("no shell-form command string")
+    command.fetch("validation").include?("never flatten") && command.fetch("validation").include?("default cwd")
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
     fail "slice verification_command must be present for command-based CheckSpecs while allowing concrete non-command procedures"
-elif ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "either executes the slice verification argv directly or reuses a completed passing verification" \
+elif ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "only a compatibility projection when the selected IDs resolve exactly one" \
     || ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "When executing argv, item 0 is the executable and each remaining item is one literal argument; never reconstruct a shell command"; then
     fail "Build protocol does not execute the slice verification argv using the schema contract"
 elif rg -n -i 'run-agents\.sh|check-integration\.sh|worktree' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" >/tmp/p0p4-native-verification-runner.out; then
     fail "native verification contract still depends on retired runner mechanics; see /tmp/p0p4-native-verification-runner.out"
+else
+    pass
+fi
+
+test_start "canonical commands retain CheckSpec identity and task packets never flatten or default cwd"
+if ! ruby -ryaml -e '
+  verification = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").find { |artifact| artifact["name"] == "verification_decision" }
+  check = verification.fetch("object_fields").find { |field| field["name"] == "checks" }
+  command = check && check.fetch("object_fields").find { |field| field["name"] == "command" }
+  command_fields = (command && command.fetch("object_fields", []).to_h { |field| [field.fetch("name"), field] }) || {}
+  workflow = YAML.load_file(ARGV.fetch(1)).fetch("artifacts")
+  manifest = workflow.find { |artifact| artifact["name"] == "slice_manifest" }
+  legacy = manifest && manifest.fetch("object_fields").find { |field| field["name"] == "verification_command" }
+  results = workflow.find { |artifact| artifact["name"] == "validation_results" }
+  executed = results && results.fetch("object_fields").find { |field| field["name"] == "executed_command" }
+  executed_fields = (executed && executed.fetch("object_fields", []).to_h { |field| [field.fetch("name"), field] }) || {}
+  valid = command && legacy && executed && command["required"] == "conditional" && command.fetch("condition").include?("this CheckSpec has a command to execute") &&
+    command_fields.keys.sort == %w[argv cwd] && command_fields.fetch("argv")["type"] == "string[]" &&
+    command_fields.fetch("argv")["min_items"] == 1 && command_fields.fetch("cwd")["type"] == "string" &&
+    command_fields.fetch("cwd")["required"] == true && command.fetch("validation").include?("literal") &&
+    legacy["required"] == "conditional" && legacy.fetch("condition").include?("exactly one matching") &&
+    legacy.fetch("description").include?("Omit for zero or multiple matching commands") && legacy.fetch("validation").include?("unchanged verification_decision") &&
+    legacy.fetch("validation").include?("never flatten") && legacy.fetch("validation").include?("default cwd") &&
+    executed["required"] == "conditional" && executed_fields.keys.sort == %w[argv check_id cwd] &&
+    executed.fetch("validation").include?("selected_check_ids") && executed.fetch("validation").include?("CheckSpec.command.argv") &&
+    executed.fetch("validation").include?("CheckSpec.command.cwd")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-verification/contracts/output.yaml" \
+  "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
+    fail "canonical command context or exact-one task-packet compatibility contract is incomplete"
 else
     pass
 fi
@@ -1012,7 +1042,7 @@ if ! ruby -ryaml -e '
   a = h.find { |x| x["name"] == "orchestrator_to_architect" }.fetch("return_fields").find { |x| x["name"] == "implementation_steps" }
   fields = a.fetch("object_fields")
   command = fields.find { |x| x["name"] == "verification_command" }
-  valid = command["required"] == "conditional" && command.fetch("condition").include?("selected CheckSpec has a command") && fields.count { |x| x["name"] == "tdd_applies" } == 1
+  valid = command["required"] == "conditional" && command.fetch("condition").include?("exactly one matching command-based CheckSpec") && fields.count { |x| x["name"] == "tdd_applies" } == 1
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
     fail "Architect command is conditional and task packet has one canonical TDD projection"

@@ -8,7 +8,7 @@ artifacts:
     required: conditional
     condition: "(operation is select or select_and_assess) and an actionable selection can honor every binding constraint, or a carried decision is being assessed"
     description: "Bounded approach for the named change; selecting checks and TDD are independent decisions"
-    validation: "Do not broaden the work scope, waive a binding constraint, or imply that a planned check was executed. Preserve a mandated coverage metric, scope, threshold, and source through its required_check tuple and a concrete enforcing CheckSpec; if unsupported, report the exact policy gap. Never invent a universal/default target. If a binding all-deliverable TDD mandate includes a deliverable without a meaningful RED oracle, omit an actionable decision and return evidence_assessment.status=blocked with that precise policy conflict."
+    validation: "Do not broaden scope, waive a binding constraint, or imply a planned check ran. Preserve each mandate's source and rationale. Bind mandated coverage scope, threshold, and source through required_check plus an enforcing CheckSpec, or report the gap. Never invent a default target. required_tdd is exactly true or false: false forces mode=false, basis=not_selected, applicable_check_ids=[] regardless of RED oracles; conflicting true/false tuples block with both sources; required true without a meaningful RED oracle blocks."
     on_fail: "Return to SELECT and correct policy, check, or TDD semantics; if no actionable approach can honor a mandate, return a blocked assessment with the precise material gap and do not emit a false-TDD decision."
     object_fields:
       - name: scope
@@ -114,11 +114,27 @@ artifacts:
             type: string[]
             required: true
             description: "Direct references to the selected method guidance loaded by this decision; empty when no method reference applies"
+          - name: command
+            type: object
+            required: conditional
+            condition: "this CheckSpec has a command to execute"
+            description: "Literal direct-execution context for this CheckSpec, associated by its parent check_id. Omit for non-command procedures."
+            validation: "When present, argv is a non-empty array of literal string arguments with argv[0] as the executable, and cwd is explicitly supplied. No shell-form command, flattened commands, reconstructed shell text, or implicit/default working directory."
+            object_fields:
+              - name: argv
+                type: string[]
+                required: true
+                min_items: 1
+                description: "Executable followed by one literal argument per item"
+              - name: cwd
+                type: string
+                required: true
+                description: "Explicit working directory for this command"
       - name: tdd_choice
         type: object
         required: true
         description: "TDD decision, separate from test scope and technique"
-        validation: "For an actionable decision, user_requirement, project_requirement, and selected_technique imply mode=true with a non-empty applicable_check_ids array; not_selected implies mode=false with an empty array. Applicable IDs are unique and resolve to selected checks with a meaningful RED oracle. If a binding all-deliverable mandate cannot be honored because any required deliverable lacks such an oracle, do not emit an actionable decision; return a blocked assessment and preserve the mandate."
+        validation: "user_requirement, project_requirement, and selected_technique require mode=true with non-empty applicable IDs; not_selected requires mode=false and []. required_tdd=false overrides RED oracles: preserve its source and rationale and require false/not_selected/[]. Conflicting true/false tuples block. Applicable IDs uniquely resolve to selected checks with meaningful RED; required true without that oracle blocks."
         object_fields:
           - name: mode
             type: boolean

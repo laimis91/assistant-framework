@@ -482,14 +482,17 @@ p0p4_write_assistant_verification_response() {
             {
               verification_decision: decision(
                 "Preserve the required unit coverage and add the distinct API-to-storage serialization boundary check.";
-                [{kind: "required_scope", value: "unit", source_ref: catalog("project-policy")}];
+                [
+                  {kind: "required_scope", value: "unit", source_ref: catalog("project-policy")},
+                  {kind: "required_tdd", value: "false", source_ref: catalog("project-policy")}
+                ];
                 [];
                 "extend_existing";
                 [
                   check("domain-value-unit-suite"; ref("domain-value"; "claim"); "run"; "automated_test"; "unit"; "characterization"; ref("domain-value"; "procedure"); ["The existing domain-value unit suite is available."]; ["Does not observe JSON serialization or an API-to-adapter storage round trip."]; ref("domain-value"; "success"); ref("domain-value"; "failure"); "Retains the mandated unit suite for the independent domain-value claim."; ["skills/assistant-verification/references/methods/unit.md"]),
                   check("api-storage-round-trip"; ref("api-storage-round-trip"; "claim"); "extend"; "automated_test"; "integration"; "example"; ref("api-storage-round-trip"; "procedure"); ["The isolated API-to-adapter integration fixture is available.", "The representative JSON contract value is defined."]; ["Does not establish unrelated end-to-end user journeys or production storage availability."]; ref("api-storage-round-trip"; "success"); ref("api-storage-round-trip"; "failure"); "The isolated round trip observes field preservation across the changed serialization boundary."; ["skills/assistant-verification/references/methods/integration.md"])
                 ];
-                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "No TDD requirement is stated; the required unit suite and distinct integration boundary are selected as verification scopes."};
+                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "The binding project required_tdd=false tuple keeps TDD off despite meaningful unit and integration oracles."};
                 ["No end-to-end journey is selected because it would add no distinct claim beyond the isolated adapter-boundary check."];
                 "Stop when the required unit suite and isolated round-trip check pass; expand only for a distinct material gap."
               ),
@@ -530,7 +533,7 @@ p0p4_write_assistant_verification_response() {
                 [{kind:"required_check",value:"At least 85% line coverage for the changed parser package, measured by coverage.py; fail below 85%.",source_ref:"testing-policy.md#parser-coverage"}];
                 [];
                 "none";
-                [check("parser-coverage-threshold"; "The changed parser package meets the mandated 85% line coverage threshold."; "run"; "static_validation"; null; "schema_or_lint"; "Run python -m coverage report --include=\u0027src/parser/*\u0027 --fail-under=85 and retain the package-scoped measurement."; ["The changed parser package and coverage.py are available."]; ["Does not establish unrelated runtime behavior or repository-wide coverage."]; "The package-scoped report meets the source-mandated 85% threshold."; "The package report is below 85% or measures a broader scope."; "Runs the exact source-mandated metric and threshold."; [])];
+                [check("parser-coverage-threshold"; "The changed parser package meets the mandated 85% line coverage threshold."; "run"; "static_validation"; null; "schema_or_lint"; "Run python -m coverage report --include=\u0027src/parser/*\u0027 --fail-under=85 and retain the package-scoped measurement."; ["The changed parser package and coverage.py are available."]; ["Does not establish unrelated runtime behavior or repository-wide coverage."]; "The package-scoped report meets the source-mandated 85% threshold."; "The package report is below 85% or measures a broader scope."; "Runs the exact source-mandated metric and threshold."; []) + {command:{argv:["python", "-m", "coverage", "report", "--include=src/parser/*", "--fail-under=85"], cwd:"/workspace/parser-project"}}];
                 {mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected coverage check has no meaningful RED cycle."};
                 ["No broader default or repository-wide coverage target is selected."];
                 "Stop after the source-mandated package report passes or report the exact policy gap."
@@ -545,8 +548,8 @@ p0p4_write_assistant_verification_response() {
                 [];
                 "none";
                 [
-                  check("checkout-total-unit"; "The checkout amount is calculated correctly."; "run"; "automated_test"; "unit"; "example"; "Run the checkout amount calculation unit test with integer-cent boundary values."; ["The unit test result is current."]; ["Does not observe the API-to-storage boundary."]; "The calculation unit test passes for the selected boundary values."; "The calculated amount differs from the expected integer-cent result."; "Observes the isolated calculation procedure."; ["skills/assistant-verification/references/methods/unit.md"]),
-                  check("checkout-total-api"; "The checkout amount is calculated correctly."; "run"; "automated_test"; "integration"; "example"; "Run the checkout API-to-storage round trip and inspect the persisted amount."; ["The isolated API-to-storage fixture is available."]; ["Does not replace the isolated calculation unit test."]; "The API round trip preserves the expected checkout amount."; "The request-to-storage round trip changes the expected amount."; "Observes the separate integration procedure despite shared claim wording."; ["skills/assistant-verification/references/methods/integration.md"])
+                  check("checkout-total-unit"; "The checkout amount is calculated correctly."; "run"; "automated_test"; "unit"; "example"; "Run the checkout amount calculation unit test with integer-cent boundary values."; ["The unit test result is current."]; ["Does not observe the API-to-storage boundary."]; "The calculation unit test passes for the selected boundary values."; "The calculated amount differs from the expected integer-cent result."; "Observes the isolated calculation procedure."; ["skills/assistant-verification/references/methods/unit.md"]) + {command:{argv:["pytest", "tests/unit/test_checkout.py"], cwd:"services/checkout"}},
+                  check("checkout-total-api"; "The checkout amount is calculated correctly."; "run"; "automated_test"; "integration"; "example"; "Run the checkout API-to-storage round trip and inspect the persisted amount."; ["The isolated API-to-storage fixture is available."]; ["Does not replace the isolated calculation unit test."]; "The API round trip preserves the expected checkout amount."; "The request-to-storage round trip changes the expected amount."; "Observes the separate integration procedure despite shared claim wording."; ["skills/assistant-verification/references/methods/integration.md"]) + {command:{argv:["pytest", "tests/integration/test_checkout_api.py"], cwd:"services/api"}}
                 ];
                 {mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected checks do not require a meaningful RED cycle."};
                 [];
@@ -2064,6 +2067,80 @@ else
     fail "assistant-verification exact-case positive grading gaps: ${verification_positive_failures[*]}"
 fi
 
+test_start "assistant-verification enforces required TDD true false and conflicting mandates"
+tdd_policy_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-tdd-policy.XXXXXX")"
+p0p4_register_cleanup "$tdd_policy_root"
+false_policy_case="required-unit-check-does-not-prohibit-integration"
+true_policy_case="explicit-tdd-request-keeps-meaningful-red"
+policy_grade_failures=()
+if ! p0p4_write_skill_eval_responses "$tdd_policy_root/false-positive" "" "" "" assistant-verification "$false_policy_case"; then
+    policy_grade_failures+=("false-policy positive response factory failed")
+else
+    mkdir -p "$tdd_policy_root/false-correct/assistant-verification"
+    cp "$tdd_policy_root/false-positive/assistant-verification/$false_policy_case.txt" \
+        "$tdd_policy_root/false-correct/assistant-verification/$false_policy_case.txt"
+    mkdir -p "$tdd_policy_root/false-enabled/assistant-verification" "$tdd_policy_root/false-unbound/assistant-verification"
+    jq '.verification_decision.tdd_choice = {mode:true,applicable_check_ids:["domain-value-unit-suite"],basis:"selected_technique",rationale:"A meaningful RED oracle overrides the policy."}' \
+        "$tdd_policy_root/false-correct/assistant-verification/$false_policy_case.txt" \
+        >"$tdd_policy_root/false-enabled/assistant-verification/$false_policy_case.txt"
+    jq '.verification_decision.policy_basis.binding_constraints |= map(select(.kind != "required_tdd"))' \
+        "$tdd_policy_root/false-correct/assistant-verification/$false_policy_case.txt" \
+        >"$tdd_policy_root/false-unbound/assistant-verification/$false_policy_case.txt"
+    if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/false-correct" assistant-verification "$false_policy_case" PASS "$tdd_policy_root/false-positive.output"; then
+        policy_grade_failures+=("required_tdd=false positive did not pass")
+    fi
+    for mutation in false-enabled false-unbound; do
+        if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/$mutation" assistant-verification "$false_policy_case" FAIL "$tdd_policy_root/$mutation.output"; then
+            policy_grade_failures+=("required_tdd=false accepted $mutation")
+        fi
+    done
+fi
+if ! p0p4_write_skill_eval_responses "$tdd_policy_root/true-positive" "" "" "" assistant-verification "$true_policy_case"; then
+    policy_grade_failures+=("true-policy positive response factory failed")
+else
+    mkdir -p "$tdd_policy_root/true-disabled/assistant-verification"
+    jq '.verification_decision.tdd_choice = {mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected oracle should be run without TDD."}' \
+        "$tdd_policy_root/true-positive/assistant-verification/$true_policy_case.txt" \
+        >"$tdd_policy_root/true-disabled/assistant-verification/$true_policy_case.txt"
+    if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/true-positive" assistant-verification "$true_policy_case" PASS "$tdd_policy_root/true-positive.output"; then
+        policy_grade_failures+=("required_tdd=true positive did not pass")
+    fi
+    if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/true-disabled" assistant-verification "$true_policy_case" FAIL "$tdd_policy_root/true-disabled.output"; then
+        policy_grade_failures+=("required_tdd=true accepted a disabled TDD choice")
+    fi
+fi
+
+conflict_skill="$tdd_policy_root/assistant-verification"
+mkdir -p "$tdd_policy_root"
+cp -R "$FRAMEWORK_DIR/skills/assistant-verification" "$conflict_skill"
+jq --arg id "$false_policy_case" '
+  (.cases[] | select(.id == $id)) |= (
+    .prompt = "The project and user provide conflicting required_tdd=true and required_tdd=false mandates for this change. Return no actionable verification decision and a blocked evidence assessment."
+    | .setup_context += ["Conflicting binding tuples: required_tdd=true from fixture:user-policy and required_tdd=false from fixture:project-policy."]
+    | .expected_behavior = ["Blocks actionable selection until the conflicting mandates are resolved."]
+    | .pass_criteria = ["The assessment is blocked and no actionable decision is emitted."]
+    | .fail_signals = ["Chooses either TDD mode despite the conflict."]
+    | .machine_expectations = {required_substrings:["required_tdd=true","required_tdd=false","conflict","blocked"],forbidden_substrings:["verification_decision"],structured_json_assertions:[{operator:"equals",path:["evidence_assessment","status"],expected:"blocked"}]}
+  )
+' "$conflict_skill/evals/cases.json" >"$tdd_policy_root/conflict-cases.json"
+mv "$tdd_policy_root/conflict-cases.json" "$conflict_skill/evals/cases.json"
+mkdir -p "$tdd_policy_root/conflict-positive/assistant-verification" "$tdd_policy_root/conflict-actionable/assistant-verification"
+cat >"$tdd_policy_root/conflict-positive/assistant-verification/$false_policy_case.txt" <<'EOF'
+{"summary":"Conflicting required_tdd=true and required_tdd=false sources block actionable selection.","evidence_assessment":{"status":"blocked","scope_and_evidence_refs":[],"gaps_and_limitations":["The user and project binding sources conflict and must be resolved."],"next_action":"Resolve the conflicting mandates before selecting verification."}}
+EOF
+cat >"$tdd_policy_root/conflict-actionable/assistant-verification/$false_policy_case.txt" <<'EOF'
+{"summary":"required_tdd=true wins the conflict.","verification_decision":{"tdd_choice":{"mode":true,"basis":"user_requirement","applicable_check_ids":["domain-value-unit-suite"]}},"evidence_assessment":{"status":"planned"}}
+EOF
+if ! "$skill_eval_runner" --responses "$tdd_policy_root/conflict-positive" --skill "$conflict_skill" --case "$false_policy_case" >"$tdd_policy_root/conflict-positive.output" 2>&1 \
+    || ! grep -Fq $'PASS\tassistant-verification\t'"$false_policy_case" "$tdd_policy_root/conflict-positive.output"; then
+    policy_grade_failures+=("conflicting required_tdd mandates did not grade as blocked")
+fi
+if "$skill_eval_runner" --responses "$tdd_policy_root/conflict-actionable" --skill "$conflict_skill" --case "$false_policy_case" >"$tdd_policy_root/conflict-actionable.output" 2>&1 \
+    || ! grep -Fq $'FAIL\tassistant-verification\t'"$false_policy_case" "$tdd_policy_root/conflict-actionable.output"; then
+    policy_grade_failures+=("conflicting required_tdd mandates accepted an actionable decision")
+fi
+if [[ "${#policy_grade_failures[@]}" -eq 0 ]]; then pass; else fail "required TDD mandate controls failed: ${policy_grade_failures[*]}"; fi
+
 test_start "assistant-verification preserves source coverage enforcement and exact evidence identity"
 verification_binding_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-verification-binding.XXXXXX")"
 p0p4_register_cleanup "$verification_binding_root"
@@ -2092,14 +2169,22 @@ for binding_case in binding-coverage-mandate-keeps-source-and-enforcement same-c
             done
             ;;
         same-claim-checks-require-distinct-evidence-identity)
-            mkdir -p "$verification_binding_root/crossbound/assistant-verification" "$verification_binding_root/missing-integration/assistant-verification" "$verification_binding_root/wrong-api-procedure/assistant-verification"
+            mkdir -p "$verification_binding_root/crossbound/assistant-verification" "$verification_binding_root/missing-integration/assistant-verification" "$verification_binding_root/wrong-api-procedure/assistant-verification" \
+                "$verification_binding_root/missing-cwd/assistant-verification" "$verification_binding_root/wrong-command-association/assistant-verification" \
+                "$verification_binding_root/malformed-argv/assistant-verification"
             jq '.evidence_assessment.scope_and_evidence_refs[1].selected_check_ids = ["checkout-total-unit"]' \
                 "$binding_positive" >"$verification_binding_root/crossbound/assistant-verification/$binding_case.txt"
             jq 'del(.evidence_assessment.scope_and_evidence_refs[1])' \
                 "$binding_positive" >"$verification_binding_root/missing-integration/assistant-verification/$binding_case.txt"
             jq '.verification_decision.checks[1].check_ref_or_method = .verification_decision.checks[0].check_ref_or_method' \
                 "$binding_positive" >"$verification_binding_root/wrong-api-procedure/assistant-verification/$binding_case.txt"
-            for mutation in crossbound missing-integration wrong-api-procedure; do
+            jq 'del(.verification_decision.checks[0].command.cwd)' \
+                "$binding_positive" >"$verification_binding_root/missing-cwd/assistant-verification/$binding_case.txt"
+            jq '(.verification_decision.checks[0].command) as $unit | (.verification_decision.checks[1].command) as $api | .verification_decision.checks[0].command = $api | .verification_decision.checks[1].command = $unit' \
+                "$binding_positive" >"$verification_binding_root/wrong-command-association/assistant-verification/$binding_case.txt"
+            jq '.verification_decision.checks[0].command.argv = "pytest tests/unit/test_checkout.py"' \
+                "$binding_positive" >"$verification_binding_root/malformed-argv/assistant-verification/$binding_case.txt"
+            for mutation in crossbound missing-integration wrong-api-procedure missing-cwd wrong-command-association malformed-argv; do
                 if ! p0p4_skill_eval_grade_matches "$verification_binding_root/$mutation" assistant-verification "$binding_case" FAIL "$verification_binding_root/$binding_case.$mutation.output"; then
                     binding_grade_failures+=("$binding_case accepted $mutation")
                 fi
@@ -5274,6 +5359,68 @@ for object_keys_invalid in \
     fi
     cp "$object_keys_root/base-cases.json" "$object_keys_skill/evals/cases.json"
 done
+
+object_keys_verification_skill="$object_keys_root/assistant-verification"
+object_keys_verification_responses="$object_keys_root/verification-responses"
+object_keys_verification_case="required-unit-check-does-not-prohibit-integration"
+mkdir -p "$object_keys_verification_skill/evals" "$object_keys_verification_responses/assistant-verification"
+cp "$FRAMEWORK_DIR/skills/assistant-verification/SKILL.md" "$object_keys_verification_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-verification/contracts" "$object_keys_verification_skill/contracts"
+jq --arg id "$object_keys_verification_case" '.cases |= map(select(.id == $id))' \
+    "$FRAMEWORK_DIR/skills/assistant-verification/evals/cases.json" >"$object_keys_verification_skill/evals/cases.json"
+cp "$object_keys_verification_skill/evals/cases.json" "$object_keys_root/verification-base-cases.json"
+object_keys_verification_response="$object_keys_verification_responses/assistant-verification/$object_keys_verification_case.txt"
+object_keys_verification_summary="$(jq -r --arg id "$object_keys_verification_case" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$object_keys_verification_skill/evals/cases.json" | paste -sd ' ' -)"
+p0p4_write_assistant_verification_response "$object_keys_verification_response" "$object_keys_verification_summary" "$object_keys_verification_case"
+cp "$object_keys_verification_response" "$object_keys_root/verification-valid-response.json"
+object_keys_record_control_output() {
+    if [[ -n "${P0P4_KEY_GUARD_EVIDENCE_DIR:-}" ]]; then
+        mkdir -p "$P0P4_KEY_GUARD_EVIDENCE_DIR"
+        cp "$2" "$P0P4_KEY_GUARD_EVIDENCE_DIR/$1.log"
+    fi
+}
+
+if ! "$skill_eval_runner" --validate-fixture --skill "$object_keys_verification_skill" >"$object_keys_output" 2>&1; then
+    object_keys_record_control_output "valid-conditional-omission-preflight" "$object_keys_output"
+    object_keys_failures+=("CheckSpec exact-key fixture with omitted conditional command was rejected: $(cat "$object_keys_output")")
+else
+    object_keys_record_control_output "valid-conditional-omission-preflight" "$object_keys_output"
+    if ! "$skill_eval_runner" --responses "$object_keys_verification_responses" --skill "$object_keys_verification_skill" --case "$object_keys_verification_case" >"$object_keys_output" 2>&1; then
+        object_keys_record_control_output "valid-checkspec-response" "$object_keys_output"
+        object_keys_failures+=("valid CheckSpec response with omitted conditional command failed: $(cat "$object_keys_output")")
+    else
+        object_keys_record_control_output "valid-checkspec-response" "$object_keys_output"
+    fi
+
+    jq '(.cases[0].machine_expectations.structured_json_assertions) |= map(if .operator == "object_keys_exact" and .path == ["verification_decision", "checks", 0] then .fields |= map(select(. != "check_id")) else . end)' \
+        "$object_keys_root/verification-base-cases.json" >"$object_keys_verification_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$object_keys_verification_skill" >"$object_keys_output" 2>&1; then
+        object_keys_failures+=("CheckSpec exact-key assertion missing a required field was accepted")
+    fi
+    object_keys_record_control_output "missing-required-declaration" "$object_keys_output"
+
+    jq '(.cases[0].machine_expectations.structured_json_assertions) |= map(if .operator == "object_keys_exact" and .path == ["verification_decision", "checks", 0] then .fields += ["unsafe_override"] else . end)' \
+        "$object_keys_root/verification-base-cases.json" >"$object_keys_verification_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$object_keys_verification_skill" >"$object_keys_output" 2>&1; then
+        object_keys_failures+=("CheckSpec exact-key assertion with an undeclared field was accepted")
+    fi
+    object_keys_record_control_output "undeclared-field-declaration" "$object_keys_output"
+
+    cp "$object_keys_root/verification-base-cases.json" "$object_keys_verification_skill/evals/cases.json"
+    jq '.verification_decision.checks[0].unsafe_override = true' "$object_keys_root/verification-valid-response.json" >"$object_keys_verification_response"
+    if "$skill_eval_runner" --responses "$object_keys_verification_responses" --skill "$object_keys_verification_skill" --case "$object_keys_verification_case" >"$object_keys_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9][0-9]*' "$object_keys_output"; then
+        object_keys_failures+=("CheckSpec exact-key response accepted an arbitrary extra key")
+    fi
+    object_keys_record_control_output "extra-response-key" "$object_keys_output"
+
+    jq 'del(.verification_decision.checks[0].check_id)' "$object_keys_root/verification-valid-response.json" >"$object_keys_verification_response"
+    if "$skill_eval_runner" --responses "$object_keys_verification_responses" --skill "$object_keys_verification_skill" --case "$object_keys_verification_case" >"$object_keys_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9][0-9]*' "$object_keys_output"; then
+        object_keys_failures+=("CheckSpec exact-key response accepted a missing required key")
+    fi
+    object_keys_record_control_output "missing-response-key" "$object_keys_output"
+fi
 if [[ "${#object_keys_failures[@]}" -eq 0 ]]; then
     pass
 else

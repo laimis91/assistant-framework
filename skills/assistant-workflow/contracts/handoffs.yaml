@@ -905,10 +905,11 @@ handoffs:
             description: "Slice ids that must be VERIFIED first, or empty array if independent"
           - name: verification_command
             type: string[]
-            required: false
+            required: conditional
+            condition: "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
             min_items: 1
-            description: "Optional direct-execution argv when a command is already selected; Plan binds the final decision and non-command procedure."
-            validation: "When present, item 0 is the executable and each remaining item is one literal argument; no shell-form command string, redirection, pipe, or implicit shell parsing."
+            description: "Legacy singular projection of the sole matching CheckSpec.command.argv; its explicit cwd remains in the canonical CheckSpec. Omit for zero or multiple matching commands; non-command checks use their concrete procedure."
+            validation: "When present, resolve exactly one selected CheckSpec by ID in the unchanged verification_decision and require exact equality with its literal command.argv. Execute item 0 directly and each remaining item as one literal argument; never flatten, misattribute, reconstruct shell text, or use a default cwd. Missing or ambiguous command context requires refresh or a blocked packet."
           - name: expected_success_signal
             type: string
             required: true
@@ -1241,10 +1242,11 @@ handoffs:
             description: "Slice ids that must be VERIFIED first"
           - name: verification_command
             type: string[]
-            required: false
+            required: conditional
+            condition: "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
             min_items: 1
-            description: "Optional direct-execution argv; the selected decision supplies a concrete procedure when no command applies."
-            validation: "When present, item 0 is the executable and each remaining item is one literal argument; no shell-form command string, redirection, pipe, or implicit shell parsing."
+            description: "Legacy singular projection of the sole matching CheckSpec.command.argv; its explicit cwd remains in the canonical CheckSpec. Omit for zero or multiple matching commands; non-command checks use their concrete procedure."
+            validation: "When present, resolve exactly one selected CheckSpec by ID in the unchanged verification_decision and require exact equality with its literal command.argv. Execute item 0 directly and each remaining item as one literal argument; never flatten, misattribute, reconstruct shell text, or use a default cwd. Missing or ambiguous command context requires refresh or a blocked packet."
           - name: expected_success_signal
             type: string
             required: true
@@ -1630,10 +1632,10 @@ handoffs:
           - name: verification_command
             type: string[]
             required: conditional
-            condition: "the selected CheckSpec has a command to execute"
+            condition: "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
             min_items: 1
-            description: "Exact direct-execution argv when the selected check uses a command; non-command checks use the concrete procedure in CheckSpec.check_ref_or_method."
-            validation: "When present, item 0 is the executable and remaining items are literal arguments; no shell-form command string."
+            description: "Legacy singular projection of the sole matching CheckSpec.command.argv; its explicit cwd remains in the canonical CheckSpec. Omit for zero or multiple matching commands; non-command checks use their concrete procedure."
+            validation: "When present, resolve exactly one selected CheckSpec by ID in the unchanged verification_decision and require exact equality with its literal command.argv. Execute item 0 directly and each remaining item as one literal argument; never flatten, misattribute, reconstruct shell text, or use a default cwd. Missing or ambiguous command context requires refresh or a blocked packet."
           - name: expected_success_signal
             type: string
             required: true
@@ -2169,10 +2171,10 @@ handoffs:
           - name: verification_command
             type: string[]
             required: conditional
-            condition: "the selected CheckSpec has a command to execute"
+            condition: "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
             min_items: 1
-            description: "Canonical verification argv when the selected CheckSpec uses a command; otherwise follow its concrete procedure."
-            validation: "When present, item 0 is the executable and each remaining item is one literal argument; never reconstruct a shell command."
+            description: "Legacy singular projection of the sole matching CheckSpec.command.argv; its explicit cwd remains in the canonical CheckSpec. Omit for zero or multiple matching commands; non-command checks use their concrete procedure."
+            validation: "When present, resolve exactly one selected CheckSpec by ID in the unchanged verification_decision and require exact equality with its literal command.argv. Execute item 0 directly and each remaining item as one literal argument; never flatten, misattribute, reconstruct shell text, or use a default cwd. Missing or ambiguous command context requires refresh or a blocked packet."
           - name: expected_success_signal
             type: string
             required: true
@@ -2275,12 +2277,21 @@ handoffs:
         condition: "build_execution_lane == bounded_executor and status in [DONE, DONE_WITH_CONCERNS, DEVIATED]"
         min_items: 1
         description: "Per-check verification outcomes from the bounded-executor CodeWriter lane"
-        validation: "Each row binds the exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check."
+        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a passed or failed command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result."
         object_fields:
           - {name: command_or_check, type: string, required: true}
           - {name: result, type: enum, required: true, enum_values: [passed, failed, skipped, not_applicable]}
           - {name: evidence, type: string, required: true}
           - {name: selected_check_ids, type: "string[]", required: true}
+          - name: executed_command
+            type: object
+            required: conditional
+            condition: "result is passed or failed for a command-based selected CheckSpec"
+            validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd."
+            object_fields:
+              - {name: check_id, type: string, required: true}
+              - {name: argv, type: "string[]", required: true, min_items: 1}
+              - {name: cwd, type: string, required: true}
           - name: binding_obligation_refs
             type: object[]
             required: true
@@ -2823,10 +2834,10 @@ handoffs:
           - name: verification_command
             type: string[]
             required: conditional
-            condition: "the selected CheckSpec has a command to execute"
+            condition: "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
             min_items: 1
-            description: "Canonical verification argv when the selected CheckSpec uses a command; otherwise follow its concrete procedure."
-            validation: "When present, item 0 is the executable and each remaining item is one literal argument; never reconstruct a shell command."
+            description: "Legacy singular projection of the sole matching CheckSpec.command.argv; its explicit cwd remains in the canonical CheckSpec. Omit for zero or multiple matching commands; non-command checks use their concrete procedure."
+            validation: "When present, resolve exactly one selected CheckSpec by ID in the unchanged verification_decision and require exact equality with its literal command.argv. Execute item 0 directly and each remaining item as one literal argument; never flatten, misattribute, reconstruct shell text, or use a default cwd. Missing or ambiguous command context requires refresh or a blocked packet."
           - name: expected_success_signal
             type: string
             required: true
@@ -2899,12 +2910,21 @@ handoffs:
         required: true
         min_items: 1
         description: "Per-check results preserving selected CheckSpec and applicable binding identity for the separated-workers lane"
-        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage."
+        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a passed or failed command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage."
         object_fields:
           - {name: command_or_check, type: string, required: true}
           - {name: result, type: enum, required: true, enum_values: [passed, failed, skipped, not_applicable]}
           - {name: evidence, type: string, required: true}
           - {name: selected_check_ids, type: "string[]", required: true}
+          - name: executed_command
+            type: object
+            required: conditional
+            condition: "result is passed or failed for a command-based selected CheckSpec"
+            validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd."
+            object_fields:
+              - {name: check_id, type: string, required: true}
+              - {name: argv, type: "string[]", required: true, min_items: 1}
+              - {name: cwd, type: string, required: true}
           - name: binding_obligation_refs
             type: object[]
             required: true

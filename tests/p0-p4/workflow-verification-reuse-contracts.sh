@@ -33,6 +33,8 @@ if ! ruby -ryaml -e '
   field_by_name = fields.to_h { |field| [field.fetch("name"), field] }
   binding = field_by_name.fetch("binding_obligation_refs")
   binding_fields = binding.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  executed = field_by_name.fetch("executed_command")
+  executed_fields = executed.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   required_names = fields.select { |field| field["required"] == true }.map { |field| field.fetch("name") }
   valid = required_names == %w[command_or_check result evidence selected_check_ids binding_obligation_refs] &&
     field_by_name.fetch("command_or_check").fetch("type") == "string" &&
@@ -49,7 +51,14 @@ if ! ruby -ryaml -e '
     binding_fields.fetch("kind").fetch("enum_values") == %w[required_scope prohibited_scope required_tdd required_check resource_constraint] &&
     binding_fields.fetch("value").fetch("type") == "string" &&
     binding_fields.fetch("source_ref").fetch("type") == "string" &&
-    binding_fields.values.all? { |field| field["required"] == true }
+    binding_fields.values.all? { |field| field["required"] == true } &&
+    executed["required"] == "conditional" && executed.fetch("condition").include?("command-based selected CheckSpec") &&
+    executed_fields.keys.sort == %w[argv check_id cwd] &&
+    executed_fields.fetch("check_id").fetch("type") == "string" &&
+    executed_fields.fetch("argv").fetch("type") == "string[]" && executed_fields.fetch("argv").fetch("min_items") == 1 &&
+    executed_fields.fetch("cwd").fetch("type") == "string" &&
+    executed.fetch("validation").include?("unchanged verification_decision") &&
+    executed.fetch("validation").include?("exactly equal")
   exit(valid ? 0 : 1)
 ' "$output_contract"; then missing+=("contract:validation_results required field types"); fi
 if [[ ${#missing[@]} -eq 0 ]]; then pass; else fail "missing reuse controls: ${missing[*]}"; fi

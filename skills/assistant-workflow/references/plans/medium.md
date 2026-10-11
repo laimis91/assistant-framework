@@ -50,7 +50,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Verification / TDD decision:
   - verification_decision: [canonical ref; preserve selected scope, CheckSpec entries, exclusions, and rationale unchanged]
   - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
-  - selected_checks: [ids and method-specific evidence]
+  - selected_checks: [ids and method-specific evidence; each command-based CheckSpec retains its own literal argv and explicit cwd]
   - selected_check_ids: [due check IDs assigned to this packet]
   - binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
   - tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
@@ -74,7 +74,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - verification_decision: [canonical typed ref, unchanged]
   - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
   - selected_check_refs: [the applicable CheckSpec ids]
-  - command argv and cwd: [one literal argument per item; include only for command-based selected checks]
+  - command argv and cwd: [per command-based selected CheckSpec, bound by check_id; one literal argument per item and an explicit cwd]
   - non-command procedure: [concrete steps and observable result for selected checks without a command]
   - Expected success signal: [the selected check's discriminating oracle/evidence]
 - Evidence to record:
@@ -124,7 +124,7 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 - selected_check_ids: [due CheckSpec IDs assigned to this slice]
 - binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
 - tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
-- verification_command: [literal argv only when the selected check uses a command; otherwise omit and use its concrete CheckSpec procedure]
+- verification_command: [legacy singular literal argv projection only when selected_check_ids resolves exactly one matching command-based CheckSpec; otherwise omit and use each check's canonical command or concrete non-command procedure]
 - expected_success_signal:
 - evidence_to_record:
 - deviation_rollback_rule:

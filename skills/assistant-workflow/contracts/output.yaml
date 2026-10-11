@@ -413,7 +413,7 @@ artifacts:
     type: object[]
     required: true
     condition: "always"
-    validation: "Each result carries the exact selected_check_ids and binding_obligation_refs it actually observes. Resolve IDs and exact {kind,value,source_ref} tuples against the unchanged decision and close every due selected check and applicable due/executable binding obligation with current evidence for its actual procedure/oracle; shared claim text or an ID alone is insufficient. Keep task-wide integration obligations due at their existing completion boundary. At least one applicable selected check must pass for a completed implementation unless an evidenced docs-only, no-op, discovery, or prepare-only scope has no applicable check; such a case records not_applicable with its exact rationale and never invents a pass. Every required check must pass for a sufficient assessment; otherwise retain an explicit gap. Skipped/not_applicable entries never satisfy a check. When reusing evidence, retain the original run and compare exact argv/cwd when command-based, relevant inputs, environment/toolchain, and covered claims; do not claim a new execution."
+    validation: "Each result carries the exact selected_check_ids and binding_obligation_refs it actually observes. Resolve IDs and exact {kind,value,source_ref} tuples against the unchanged decision and close every due selected check and applicable due/executable binding obligation with current evidence for its actual procedure/oracle; shared claim text or an ID alone is insufficient. For a command-based check, executed_command is required for a passed or failed command result and must resolve exactly one selected_check_id to that unchanged canonical CheckSpec's literal command.argv and explicit command.cwd. Use one result per command-based CheckSpec; never attribute one command to multiple IDs. Keep task-wide integration obligations due at their existing completion boundary. At least one applicable selected check must pass for a completed implementation unless an evidenced docs-only, no-op, discovery, or prepare-only scope has no applicable check; such a case records not_applicable with its exact rationale and never invents a pass. Every required check must pass for a sufficient assessment; otherwise retain an explicit gap. Skipped/not_applicable entries never satisfy a check. When reusing evidence, retain the original run and compare exact argv/cwd when command-based, relevant inputs, environment/toolchain, and covered claims; do not claim a new execution."
     on_fail: "Run selected checks and record actual outcomes. When docs-only, no-op, discovery, or prepare-only scope has no applicable check, record not_applicable with the exact scope rationale, never a dummy pass. A completed implementation with required evidence gaps cannot claim completion."
     object_fields:
       - name: command_or_check
@@ -438,6 +438,16 @@ artifacts:
           - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
           - {name: value, type: string, required: true}
           - {name: source_ref, type: string, required: true}
+      - name: executed_command
+        type: object
+        required: conditional
+        condition: "result is passed or failed for a command-based selected CheckSpec"
+        description: "The observed command identity for exactly one selected CheckSpec"
+        validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd. Missing or ambiguous context requires refreshing the decision or blocking the result."
+        object_fields:
+          - {name: check_id, type: string, required: true}
+          - {name: argv, type: "string[]", required: true, min_items: 1}
+          - {name: cwd, type: string, required: true}
 
   - name: evidence_assessment
     type: object
@@ -2343,9 +2353,14 @@ artifacts:
       Contains one or more smallest iterable slices in dependency order. Each
       slice has the strict slice schema, exact files, observable increment,
       acceptance criteria, canonical verification_decision, selected_check_ids,
-      binding_obligation_refs, and tdd_applies,
-      an argv command when the selected check uses one or its concrete
-      non-command procedure in the decision, expected success signal, and
+      binding_obligation_refs, and tdd_applies. Resolve each due command by its
+      selected CheckSpec ID in the unchanged decision. An optional singular
+      verification_command is only an exact-one compatibility projection; omit
+      it for zero or multiple command-based selected checks. Never flatten
+      commands, supply a default cwd, or rebuild shell text. Missing or
+      ambiguous command context requires a refreshed decision or a blocked
+      slice. Non-command checks retain their concrete procedure in the decision.
+      Include the expected success signal and
       deviation rollback rule. slice_id values are unique path-safe
       identifiers, and depends_on entries reference only declared slice_id values
       without self dependencies or circular dependencies.
@@ -2419,10 +2434,10 @@ artifacts:
       - name: verification_command
         type: string[]
         required: conditional
-        condition: "the selected CheckSpec has a command to execute"
+        condition: "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
         min_items: 1
-        description: "Portable direct-execution argv when the selected CheckSpec uses a command; otherwise use its concrete procedure."
-        validation: "When present, execute item 0 directly as the executable and pass each remaining item as one literal argument; no shell-form command string, redirection, pipe, or implicit shell parsing."
+        description: "Legacy singular projection of the sole matching CheckSpec.command.argv; its explicit cwd remains in the canonical CheckSpec. Omit for zero or multiple matching commands; non-command checks use their concrete procedure."
+        validation: "When present, resolve exactly one selected CheckSpec by ID in the unchanged verification_decision and require exact equality with its literal command.argv. Execute item 0 directly and each remaining item as one literal argument; never flatten, misattribute, reconstruct shell text, or use a default cwd. Missing or ambiguous command context requires refresh or a blocked slice."
       - name: expected_success_signal
         type: string
         required: true

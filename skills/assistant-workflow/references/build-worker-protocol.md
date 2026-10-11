@@ -117,6 +117,17 @@ binding check still needs a current result. A no-command check may return an
 empty `verification.commands` list only when `verification.evidence` names the
 concrete procedure performed and its observed result.
 
+Resolve every command-based selected check independently by its `check_id` in
+the unchanged `verification_decision`. Use that CheckSpec's literal
+`command.argv` and explicit `command.cwd`; preserve each command separately in
+the packet and result evidence. The legacy singular `verification_command` is
+only a compatibility projection when the selected IDs resolve exactly one
+command-based CheckSpec. Omit it when there are zero or multiple commands. Never
+flatten commands, infer a working directory, reconstruct shell text, or attach a
+result to a different check. Missing or ambiguous command context requires a
+refreshed decision or a blocked result; non-command checks keep their concrete
+procedure.
+
 ## Build Loop
 
 For light work, implement the carried Discover scope/criteria or the inline plan
@@ -131,7 +142,8 @@ Before starting a slice:
 
 1. Load the approved task packet for the slice, including slice_id, observable
     increment, deliverable type, files, acceptance criteria, unchanged verification
-   decision, selected checks, command argv/cwd or non-command procedure, expected
+   decision, selected checks, each command's literal argv/cwd bound by its
+   check_id or its concrete non-command procedure, expected
    success signal, evidence to record, and deviation/rollback rule.
 2. When harness-capable, confirm the task packet carries `done_contract_ref`,
    `harness_recipe_ref`, `harness_run_state_ref`, `trace_ledger_ref`,
@@ -263,8 +275,9 @@ Review phase after Build completes.
 After implementation for a slice is done, verify the slice against its
 Decompose criteria before moving on:
 
-1. In `bounded_executor`, the executor either executes the slice verification
-   argv directly or reuses a completed passing verification only after comparing
+1. In `bounded_executor`, the executor executes each due CheckSpec's
+   `command.argv` in its explicit `command.cwd` or follows its concrete
+   non-command procedure, and reuses a completed passing verification only after comparing
    exact argv and cwd, complete passing result/log, relevant
    source/test/config/dependency state, toolchain and relevant non-secret
    environment, and covered acceptance obligations. When executing argv, item 0

@@ -609,6 +609,7 @@ build_medium_implement_only_harness_handoff_response() {
                 expected_success: "VIEWING preserves all three route effects and remains read-only.",
                 meaningful_failure: "At least one route effect is missing or VIEWING enables editing."
               },
+              command: {argv: ["bash", "tests/route-behavior-contracts.sh"], cwd: "/workspace/project"},
               rationale: "The focused route test observes each approved behavior at the changed route boundary.",
               method_refs: ["skills/assistant-verification/references/methods/integration.md"]
             },
@@ -1072,6 +1073,7 @@ build_medium_implement_only_not_applicable_preparation_result_response() {
               expected_success: "The new route returns the approved read-only result.",
               meaningful_failure: "Before the implementation, the route is absent or returns a result outside the approved read-only behavior."
             },
+            command: {argv: ["bash", "tests/new-route-behavior-contracts.sh"], cwd: "/workspace/project"},
             rationale: "The focused route test directly checks the new behavior and provides a stable pre-fix RED oracle.",
             method_refs: ["skills/assistant-verification/references/methods/integration.md"]
           }],
