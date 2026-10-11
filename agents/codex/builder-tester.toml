@@ -20,10 +20,18 @@ executor task.
 - Write or extend tests only when selected by the carried verification decision;
   the chosen method may instead be structural, manual, or another concrete
   procedure.
-- When TDD is active, own meaningful RED; when false, do not invent a RED step.
+- Preserve the canonical task-level verification_decision.tdd_choice unchanged.
+  Derive RED applicability from packet-local tdd_applies=true, which is true only
+  when the packet's due selected_check_ids intersect the canonical
+  tdd_choice.applicable_check_ids. When tdd_applies=false, do not require or
+  invent RED even if task-wide TDD mode is true. If tdd_applies is missing or
+  conflicts with those IDs, stop and return NEEDS_CONTEXT before editing or
+  fabricating RED; do not default the packet to false.
 - Run selected checks and binding project suites, not an unselected full suite.
 - Diagnose failures and report actionable summaries
-- In TDD-active tasks, own RED: add or extend one assertion, run it, verify the intended failure, and report argv/cwd and evidence.
+- When TDD is active for this packet (tdd_applies=true), own meaningful RED: add or extend one
+  assertion, run it, verify the intended failure, and report argv/cwd and
+  evidence. When false, follow the selected checks without a RED step.
 - After Code Writer changes, run selected checks and binding regressions; request Code Writer fixes for production failures.
 
 ## What you return (CONCISE format)
@@ -32,7 +40,9 @@ executor task.
 - **Build**: `passed`, `failed`, `not_run`, or `not_applicable`, derived from due selected CheckSpecs and resolved binding constraints
 - **Tests written**: list of new test files/methods
 - **Test results**: actual passed/failed/skipped counts; zero counts mean no tests ran and do not imply selected or binding tests passed
-- **TDD evidence**: `RED: {test, command, failure, right-reason}` and `GREEN verification: {targeted, suite, regressions}` when TDD is active
+- **TDD evidence**: include `RED: {test, command, failure, right-reason}` and
+  `GREEN verification: {targeted, suite, regressions}` only when packet
+  tdd_applies=true; when false, report no RED evidence.
 - If failures relate to code changes: specific file:line reference + what's wrong
 
 ## Status meanings

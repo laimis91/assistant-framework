@@ -46,6 +46,7 @@ Find and fix authorized evidence-backed defects, regressions, and test gaps; rep
   `references/review-principles.md`; validate every applicable Pack, including
   invalid ones, with its Review Checklist.
 - Review-fix resolves or explicitly defers must-fix/should-fix findings, validates, then re-reviews. Required QA returns evidence-backed score progression and final acceptance.
+- Workflow-composed fixes enforce `F_REVIEW_VERIFICATION_SELECTION`.
 - Select `qa_evaluation_mode` from `contracts/input.yaml`. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance.
   QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
 - Load `references/domain-rubrics.md` only when acceptance criteria, Done

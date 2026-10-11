@@ -120,6 +120,21 @@ if ! ruby -ryaml -e '
 ' "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"; then
     review_due_evidence_failures+=("conditional evidence/no_build_scope schema no longer distinguishes due evidence from a genuine no-check case")
 fi
+for file_and_term in \
+    "$review_skill::Workflow-composed fixes enforce \`F_REVIEW_VERIFICATION_SELECTION\`" \
+    "$review_phase_gates::F_REVIEW_VERIFICATION_SELECTION" \
+    "$review_phase_gates::the composing workflow invokes assistant-verification" \
+    "$review_phase_gates::packet-local tdd_applies" \
+    "$review_phase_gates::current plan approval" \
+    "$review_loop::Before mutation, enforce \`F_REVIEW_VERIFICATION_SELECTION\`" \
+    "$review_phase_gates::Reuse an adequate decision unchanged" \
+    "$review_loop::Standalone review-fix runs build and tests"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+        review_due_evidence_failures+=("${file#$FRAMEWORK_DIR/}: missing pre-mutation selection rule $term")
+    fi
+done
 if [[ "${#review_due_evidence_failures[@]}" -eq 0 ]]; then
     pass
 else

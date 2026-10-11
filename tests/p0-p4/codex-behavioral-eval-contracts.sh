@@ -127,7 +127,7 @@ for mode, reaped, child_present, hold, result, expected in [
     ("permission", True, True, 0, 0, 125),
     ("present", True, True, 0, 0, 125),
     ("absent", False, True, 0, 0, 125),
-    ("absent", True, False, 0, 127, 125),
+    ("absent", True, False, 0, 127, 127),
     ("io-error", True, True, 0, 0, 125),
     ("absent", True, True, 7, 143, 143),
 ]:
@@ -137,7 +137,8 @@ for mode, reaped, child_present, hold, result, expected in [
                      SIGKILL=signal.SIGKILL, SIG_IGN=signal.SIG_IGN,
                      signal=lambda number, handler: handlers.update({number: handler})),
                  child=Child(reaped) if child_present else None, post_group_hold_seconds=hold,
-                 cleanup_confirmed=False, done_dir="synthetic-done")
+                 cleanup_confirmed=False, spawn_in_progress=False, interruption_pending=False,
+                 done_dir="synthetic-done")
     exec(compile(functions, "supervisor-functions", "exec"), scope)
     handlers.update({signal.SIGINT: scope["interrupted"], signal.SIGTERM: scope["interrupted"]})
     def observe_cleanup():
@@ -219,6 +220,34 @@ if [[ "$MOCK_WAIT_EXIT" -eq 124 ]]; then [[ "$timed_out" == true ]]; fi
     checked = subprocess.run(["bash", "-eu", "-c", script], capture_output=True, text=True, timeout=2)
     assert checked.returncode == 0 and not checked.stdout, checked
 print("cleanup classification, deadline, marker and Bash retention controls passed")
+# Execute the actual launch/assignment statements with an ordered fake Popen.
+# TERM/INT must wait for publication, then stop the owned group before done.
+for number in [signal.SIGINT, signal.SIGTERM]:
+    clock, group, handlers, callbacks = Clock(0), Group("killed"), {}, []
+    scope = dict(os=group, time=clock, sys=SimpleNamespace(
+        argv=["probe", "ready", "synthetic-done", "2", "prompt", "events",
+              "stderr", "final", "workspace", "missing", "no-model", "0"],
+        stderr=io.StringIO()),
+        signal=SimpleNamespace(SIGINT=signal.SIGINT, SIGTERM=signal.SIGTERM,
+            SIGKILL=signal.SIGKILL, SIG_IGN=signal.SIG_IGN,
+            signal=lambda signum, handler: handlers.update({signum: handler})),
+        atexit=SimpleNamespace(register=callbacks.append),
+        open=lambda *args: io.BytesIO())
+    def popen(*args, **kwargs):
+        handlers[number](number, None)
+        return Child(True)
+    scope["subprocess"] = SimpleNamespace(Popen=popen, TimeoutExpired=subprocess.TimeoutExpired)
+    launch = ast.Module(body=[n for n in module.body if not isinstance(n, (ast.Import, ast.ImportFrom))], type_ignores=[])
+    try:
+        exec(compile(launch, "supervisor-launch", "exec"), scope)
+    except SystemExit as error:
+        assert error.code == 143, (number, error.code)
+    for callback in callbacks:
+        callback()
+    assert group.gone, "done must not release an unpublished live process group"
+    assert scope["child"] is not None, "interruption must wait for child publication"
+    assert group.markers == ["synthetic-done"], group.markers
+
 PY
 then
     pass

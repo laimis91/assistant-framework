@@ -104,7 +104,13 @@ fi
 test_start "Builder Tester prompt is conditional and remains production read-only"
 if p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/builder-tester.toml" "separated_workers" \
     && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/builder-tester.toml" "conditional verifier" \
-    && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/builder-tester.toml" "Do NOT modify production code"; then
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/builder-tester.toml" "Do NOT modify production code" \
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/builder-tester.toml" "packet-local tdd_applies=true" \
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/claude/builder-tester.md" "packet-local tdd_applies=true" \
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/builder-tester.toml" "When tdd_applies=false, do not require or" \
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/claude/builder-tester.md" "When tdd_applies=false, do not require or" \
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/builder-tester.toml" "do not default the packet to false" \
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/claude/builder-tester.md" "do not default the packet to false"; then
     pass
 else
     fail "Builder/Tester role does not match conditional separated verification"

@@ -3506,6 +3506,8 @@ import time
 
 ready_dir, done_dir, timeout_text, prompt_path, jsonl_path, stderr_path, final_path, workspace, codex_bin, model, post_group_hold_text = sys.argv[1:]
 child = None
+spawn_in_progress = False
+interruption_pending = False
 cleanup_confirmed = False
 post_group_hold_seconds = int(post_group_hold_text)
 
@@ -3539,7 +3541,8 @@ def signal_process_group(pgid, signal_number):
 def stop_child():
     global child
     if child is None:
-        return False
+        # A pending launch is unknown; only a resolved no-child state is absent.
+        return not spawn_in_progress
     pgid = child.pid
     # poll() reaps an already-exited direct leader before using its former PGID
     # as the descendant boundary. Without this, a zombie leader can keep the
@@ -3586,6 +3589,10 @@ def finish(exit_code):
     raise SystemExit(exit_code)
 
 def interrupted(_signum, _frame):
+    global interruption_pending
+    if spawn_in_progress:
+        interruption_pending = True
+        return
     finish(143)
 
 signal.signal(signal.SIGINT, interrupted)
@@ -3593,12 +3600,18 @@ signal.signal(signal.SIGTERM, interrupted)
 try:
     timeout_seconds = int(timeout_text)
     with open(prompt_path, "rb") as prompt, open(jsonl_path, "wb") as events, open(stderr_path, "wb") as stderr:
-        child = subprocess.Popen(
-            [codex_bin, "exec", "--ephemeral", "--ignore-user-config", "-m", model,
-             "-C", workspace, "--sandbox", "workspace-write", "--json",
-             "--output-last-message", final_path, "-"],
-            stdin=prompt, stdout=events, stderr=stderr, start_new_session=True,
-        )
+        spawn_in_progress = True
+        try:
+            child = subprocess.Popen(
+                [codex_bin, "exec", "--ephemeral", "--ignore-user-config", "-m", model,
+                 "-C", workspace, "--sandbox", "workspace-write", "--json",
+                 "--output-last-message", final_path, "-"],
+                stdin=prompt, stdout=events, stderr=stderr, start_new_session=True,
+            )
+        finally:
+            spawn_in_progress = False
+        if interruption_pending:
+            finish(143)
         os.mkdir(ready_dir, 0o700)
         try:
             result = child.wait(timeout=timeout_seconds)
@@ -3608,7 +3621,7 @@ try:
 except SystemExit:
     raise
 except OSError:
-    finish(127)
+    finish(143 if interruption_pending else 127)
 PY
 }
 

@@ -414,14 +414,17 @@ for file_and_term in \
     "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml::Stay in the QA lane" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::Code Reviewer" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::QA Evaluator" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Keep QA evaluation separate from code review" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Code Reviewer continues to own code defects, security, architecture, and test-coverage review"; do
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Keep QA evaluation separate from code review"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
         distinct_terms_missing+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done
+review_ownership_pattern='Code Reviewer (still owns|continues to own) code defects, security, architecture, and test-coverage review'
+if ! grep -Eq -- "$review_ownership_pattern" "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"; then
+    distinct_terms_missing+=("skills/assistant-review/SKILL.md: Code Reviewer code-review ownership")
+fi
 if [[ "${#distinct_terms_missing[@]}" -eq 0 ]]; then
     pass
 else

@@ -33,6 +33,7 @@ while round <= 10:
 
   3. FIX / VALIDATE
      - Validate FIX_STEP entry_assertions before source/test mutation or dispatch. Only review-fix repairs authorized evidence; record closure.
+     - Before mutation, enforce `F_REVIEW_VERIFICATION_SELECTION`.
      - Standalone review-fix runs build and tests. Workflow-composed review runs every due selected check and applicable due/executable binding check; any source fix invalidates the batch and requires a current passed evidence reference before the next pass.
 
   4. NEXT ROUND
