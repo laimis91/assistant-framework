@@ -65,9 +65,13 @@ if ! ruby -ryaml -e '
   selection_validation = [activation["description"], activation["infer_from"], activation["validation"], decision["validation"], ids["validation"]].compact.join(" ").downcase
   valid = policy.include?("required_tdd is exactly true or false") && policy.include?("conflicting required_tdd values") &&
     choice.include?("required_tdd=false") && choice.include?("mode=false") && choice.include?("not_selected") &&
-    activation.fetch("enum_values").include?("verification_selection") &&
-    decision["required"] == "conditional" && decision.fetch("condition").include?("activation_reason == verification_selection") &&
-    ids["required"] == "conditional" && ids.fetch("condition").include?("activation_reason == verification_selection") && ids["on_missing"] == "fail" &&
+    activation.fetch("enum_values") == %w[user_request plan_constraint project_convention verification_selection] &&
+    decision["required"] == "conditional" && decision["on_missing"] == "fail" && decision.fetch("condition").include?("activation_reason == verification_selection") &&
+    decision.fetch("condition").include?("invoked from assistant-workflow") &&
+    ids["required"] == "conditional" && ids.fetch("condition").include?("activation_reason == verification_selection") &&
+    ids.fetch("condition").include?("invoked from assistant-workflow") && ids["on_missing"] == "fail" &&
+    decision.fetch("validation").include?("Standalone may omit") &&
+    ids.fetch("validation").downcase.include?("ordered unique") &&
     selection_validation.include?("selected_technique") && selection_validation.include?("intersect") &&
     selection_validation.include?("invent") && selection_validation.include?("user_request") &&
     selection_validation.include?("project_convention") && selection_validation.include?("plan_constraint")

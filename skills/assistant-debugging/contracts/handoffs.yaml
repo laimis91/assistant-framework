@@ -130,6 +130,16 @@ handoffs:
               - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
               - {name: value, type: string, required: true}
               - {name: source_ref, type: string, required: true}
+          - name: executed_command
+            type: object
+            required: conditional
+            condition: "result is passed or failed for a command-based selected CheckSpec"
+            description: "Observed invocation identity for exactly one selected command check"
+            validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd. Missing or ambiguous invocation blocks a passed/failed command result; non-executed outcomes retain their gap and omit this field."
+            object_fields:
+              - {name: check_id, type: string, required: true}
+              - {name: argv, type: "string[]", required: true, min_items: 1}
+              - {name: cwd, type: string, required: true}
       - name: verification_decision
         type: object
         required: true

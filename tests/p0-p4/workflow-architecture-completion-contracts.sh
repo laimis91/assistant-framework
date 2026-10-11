@@ -700,8 +700,8 @@ elif ! ruby -ryaml -e '
       field.call(contributors.fetch("object_fields"), "contributor_role")["enum_values"] == %w[agent human_or_user] &&
       %w[contribution evidence_ref].all? { |name| field.call(contributors.fetch("object_fields"), name)["required"] == true }
     command_owners = [
-      ["orchestrator_to_architect_decompose", "return_fields", "slice_manifest", false],
-      ["orchestrator_to_architect", "context_fields", "slice_manifest", false],
+      ["orchestrator_to_architect_decompose", "return_fields", "slice_manifest", "conditional"],
+      ["orchestrator_to_architect", "context_fields", "slice_manifest", "conditional"],
       ["orchestrator_to_architect", "return_fields", "implementation_steps", "conditional"],
       ["orchestrator_to_code_writer", "context_fields", "current_task_packet", "conditional"],
       ["orchestrator_to_builder_tester", "context_fields", "current_task_packet", "conditional"]
@@ -711,7 +711,7 @@ elif ! ruby -ryaml -e '
       command = field.call(container.fetch("object_fields"), "verification_command")
       exit 1 unless command["type"] == "string[]" && command["min_items"] == 1 && command["required"] == required &&
         command.fetch("validation").include?("literal argument") &&
-        (required == false || command["condition"] == "the selected CheckSpec has a command to execute")
+        command["condition"] == "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
     end
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
     fail "v12 migration loses canonical header, semantic-inspection, contributor, or argv contracts"

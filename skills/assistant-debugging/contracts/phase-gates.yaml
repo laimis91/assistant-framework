@@ -96,6 +96,10 @@ gates:
       - id: VF1
         check: "Original reproduction path passes or status is not_reproduced/blocked/inconclusive with explanation"
         on_fail: "Run original reproduction path again or downgrade the status"
+      - id: VF_COMMAND_INVOCATION
+        check: "A fixed outcome requires every due selected command-based check for the current fix increment to have a passed result whose executed_command.check_id is its sole selected_check_ids value and whose argv and cwd exactly match the unchanged CheckSpec; skipped, blocked, or missing invocations remain gaps and cannot establish fixed."
+        condition: "status == fixed"
+        on_fail: "Retain the gap and downgrade fixed until each due command check has a matching observed invocation."
       - id: VF2
         check: "Relevant regression/build/lint/manual verification is recorded with pass/fail/blocked result"
         on_fail: "Run available regression checks or record why each unavailable check is blocked"

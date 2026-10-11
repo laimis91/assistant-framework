@@ -2277,10 +2277,10 @@ handoffs:
         condition: "build_execution_lane == bounded_executor and status in [DONE, DONE_WITH_CONCERNS, DEVIATED]"
         min_items: 1
         description: "Per-check verification outcomes from the bounded-executor CodeWriter lane"
-        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a passed or failed command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result."
+        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a passed or failed command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
-          - {name: result, type: enum, required: true, enum_values: [passed, failed, skipped, not_applicable]}
+          - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable]}
           - {name: evidence, type: string, required: true}
           - {name: selected_check_ids, type: "string[]", required: true}
           - name: executed_command
@@ -2910,10 +2910,10 @@ handoffs:
         required: true
         min_items: 1
         description: "Per-check results preserving selected CheckSpec and applicable binding identity for the separated-workers lane"
-        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a passed or failed command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage."
+        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a passed or failed command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
-          - {name: result, type: enum, required: true, enum_values: [passed, failed, skipped, not_applicable]}
+          - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable]}
           - {name: evidence, type: string, required: true}
           - {name: selected_check_ids, type: "string[]", required: true}
           - name: executed_command

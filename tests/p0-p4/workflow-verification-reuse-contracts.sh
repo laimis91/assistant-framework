@@ -39,7 +39,7 @@ if ! ruby -ryaml -e '
   valid = required_names == %w[command_or_check result evidence selected_check_ids binding_obligation_refs] &&
     field_by_name.fetch("command_or_check").fetch("type") == "string" &&
     field_by_name.fetch("result").fetch("type") == "enum" &&
-    field_by_name.fetch("result").fetch("enum_values") == %w[passed failed skipped not_applicable] &&
+    field_by_name.fetch("result").fetch("enum_values") == %w[passed failed partial unavailable skipped not_applicable] &&
     field_by_name.fetch("evidence").fetch("type") == "string" &&
     field_by_name.fetch("selected_check_ids").fetch("type") == "string[]" &&
     field_by_name.fetch("selected_check_ids")["required"] == true &&
@@ -62,6 +62,50 @@ if ! ruby -ryaml -e '
   exit(valid ? 0 : 1)
 ' "$output_contract"; then missing+=("contract:validation_results required field types"); fi
 if [[ ${#missing[@]} -eq 0 ]]; then pass; else fail "missing reuse controls: ${missing[*]}"; fi
+
+test_start "debugging and workflow command results bind one exact invocation and preserve insufficient gaps"
+if ! ruby -ryaml -e '
+  root = ARGV.fetch(0)
+  load_yaml = ->(path) { YAML.load_file(File.join(root, path)) }
+  workflow_output = load_yaml.call("skills/assistant-workflow/contracts/output.yaml")
+  workflow_handoffs = load_yaml.call("skills/assistant-workflow/contracts/handoffs.yaml")
+  debug_output = load_yaml.call("skills/assistant-debugging/contracts/output.yaml")
+  debug_handoffs = load_yaml.call("skills/assistant-debugging/contracts/handoffs.yaml")
+  debug_gates = load_yaml.call("skills/assistant-debugging/contracts/phase-gates.yaml")
+  field = ->(fields, name) { fields.find { |entry| entry["name"] == name } || raise("missing #{name}") }
+  debug_result = field.call(debug_output.fetch("artifacts").find { |a| a["name"] == "verification" }.fetch("object_fields"), "executed_command")
+  fix = debug_handoffs.fetch("handoffs").find { |h| h["name"] == "debugging_fix" }
+  run = field.call(fix.fetch("return_fields").find { |f| f["name"] == "verification_run" }.fetch("object_fields"), "executed_command")
+  gate = debug_gates.fetch("gates").find { |g| g["phase"] == "VERIFY" }.fetch("exit_assertions").find { |a| a["id"] == "VF_COMMAND_INVOCATION" }
+  schema_ok = [debug_result, run].all? do |command|
+    command["type"] == "object" && command["required"] == "conditional" &&
+      command.fetch("condition").include?("command-based selected CheckSpec") &&
+      command.fetch("validation").include?("sole selected_check_ids") &&
+      command.fetch("validation").include?("CheckSpec.command.argv") &&
+      command.fetch("validation").include?("CheckSpec.command.cwd") &&
+      command.fetch("object_fields").to_h { |f| [f.fetch("name"), f] }.then { |f|
+        f.keys.sort == %w[argv check_id cwd] && f["argv"]["type"] == "string[]" && f["argv"]["min_items"] == 1 && f["cwd"]["required"] == true
+      }
+  end
+  results = workflow_output.fetch("artifacts").find { |a| a["name"] == "validation_results" }
+  worker_results = %w[orchestrator_to_code_writer orchestrator_to_builder_tester].map do |name|
+    h = workflow_handoffs.fetch("handoffs").find { |entry| entry["name"] == name }
+    fields = h.fetch("return_fields")
+    field.call(fields, "validation_results")
+  end
+  allowed = %w[passed failed partial unavailable skipped not_applicable]
+  gap_text = results.fetch("validation") + " " + results.fetch("on_fail")
+  handoff_ok = worker_results.all? { |r| r.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed && r.fetch("validation").include?("Partial and unavailable are explicit gaps") }
+  assessment = workflow_output.fetch("artifacts").find { |a| a["name"] == "evidence_assessment" }.fetch("validation")
+  valid = schema_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
+    results.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed &&
+    gap_text.include?("Partial and unavailable are explicit evidence gaps") && handoff_ok && assessment.include?("partial") && assessment.include?("unavailable") && assessment.include?("never sufficient")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR"; then
+    fail "command invocation identity or partial/unavailable evidence gaps are incomplete"
+else
+    pass
+fi
 
 expected_matrix="$(for index in "${!matrix_ids[@]}"; do jq -n --arg id "${matrix_ids[$index]}" --arg action "${matrix_actions[$index]}" '{id:$id,action:$action}'; done | jq -s .)"
 expected_review="$(for id in "${review_ids[@]}"; do jq -n --arg id "$id" '{id:$id,action:"reuse"}'; done | jq -s .)"

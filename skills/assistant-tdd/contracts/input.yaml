@@ -28,14 +28,15 @@ fields:
   - name: verification_decision
     type: object
     required: conditional
-    condition: "activation_reason == verification_selection"
+    condition: "invoked from assistant-workflow or activation_reason == verification_selection"
     description: "Canonical verifier decision carried unchanged when TDD is composed."
-    validation: "Keep unchanged; current IDs intersect applicable IDs and behaviors stay within them. verification_selection requires selected_technique plus that intersection and real provenance. Task-global mode alone does not activate TDD; standalone TDD may resolve checks without a decision."
+    validation: "Unchanged; all workflow activations require it. verification_selection requires selected_technique, truthful provenance. IDs intersect applicable checks; behaviors stay scoped. Standalone may omit; global mode alone can't activate TDD."
+    on_missing: fail
 
   - name: selected_check_ids
     type: string[]
     required: conditional
-    condition: "verification_decision is present or activation_reason == verification_selection"
+    condition: "verification_decision is present or invoked from assistant-workflow or activation_reason == verification_selection"
     description: "Current increment's due selected checks"
     validation: "Ordered unique IDs resolving exactly once in verification_decision.checks; at least one intersects tdd_choice.applicable_check_ids."
     on_missing: fail
