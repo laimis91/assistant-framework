@@ -588,23 +588,6 @@ if [[ "${BASH_SOURCE[0]}" == "$0" && "${1:-}" == --fixtures-only ]]; then
     exit 0
 fi
 
-test_start "progressive light-completion factory grades the canonical verification output"
-progressive_light_root="$(mktemp -d "${TMPDIR:-/tmp}/progressive-light-completion.XXXXXX")"
-p0p4_register_cleanup "$progressive_light_root"
-progressive_light_case="light-completion-retains-canonical-verification-outputs"
-progressive_light_fixture="$progressive_light_root/cases.json"
-jq --arg id "$progressive_light_case" '.cases |= map(select(.id == $id))' \
-    "$workflow_dir/evals/cases.json" >"$progressive_light_fixture"
-write_workflow_eval_responses "$progressive_light_root/responses" "$progressive_light_fixture"
-if run_workflow_eval "$progressive_light_root/responses" "$progressive_light_root/grade.out" "$progressive_light_case" \
-    && grep -Fq $'PASS\tassistant-workflow\t'"$progressive_light_case" "$progressive_light_root/grade.out" \
-    && grep -Fq 'structured_json_assertion_failures=0' "$progressive_light_root/grade.out"; then
-    pass
-else
-    fail "progressive-discovery light-completion response did not match the canonical current case"
-fi
-
-
 test_start "progressive-discovery filtered workflow eval removes unmatched review authority"
 progressive_filter_root="$(mktemp -d "${TMPDIR:-/tmp}/progressive-discovery-eval-filter.XXXXXX")"
 p0p4_register_cleanup "$progressive_filter_root"
@@ -2006,6 +1989,7 @@ done < <(jq -r '.cases[] | select((.category // "") | contains("clarification"))
 
 if [[ "${#state_eval_missing[@]}" -eq 0 ]] \
     && [[ "$state_compliant_status" -eq 0 ]] \
+    && grep -Fq $'PASS\tassistant-workflow\tlight-completion-retains-canonical-verification-outputs' "$state_compliant_output" \
     && grep -Fq "Summary: total=$workflow_case_count passed=$workflow_expected_pass_count failed=0 unavailable=$workflow_clarification_case_count" "$state_compliant_output" \
     && [[ "$state_fake_status" -eq 0 ]] \
     && grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolved-then-blocked-recovery' "$state_fake_output" \

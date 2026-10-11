@@ -60,7 +60,7 @@ Find and fix authorized evidence-backed defects, regressions, and test gaps; rep
   or also implement and verify fixes?" Do not review/mutate until answered.
 - Keep QA evaluation separate from code review: QA owns acceptance, Done
   Contract, verification, scoped quality, progression, and final result.
-  Code Reviewer continues to own code defects, security, architecture, and test-coverage review.
+  Code Reviewer still owns code defects, security, architecture, and test-coverage review.
 
 ## Entry
 
@@ -149,7 +149,8 @@ Return reviewed scope, rounds/result, evidence-backed findings/fixes, verificati
 ## Stop Rules
 
 - Audit mode stops after one review batch. Report terminal findings without edits.
-- Review-fix runs round 1, authorized fixes/validation, then a fresh round 2; mutation requires a new snapshot and complete coverage.
+- Review-fix runs round 1, authorized fixes/validation, then a fresh round 2
+  (max 10 rounds); mutation requires a new snapshot and complete coverage.
 - Before round 3+, require `additional_round_reason` backed by changed files,
   unresolved finding, validation failure, regression/drift, or changed
   hypothesis; score alone is insufficient. round 10 is terminal; never start 11.
