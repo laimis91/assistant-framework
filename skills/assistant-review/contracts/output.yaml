@@ -1127,18 +1127,18 @@ artifacts:
     type: object
     required: true
     condition: "mode == review-fix"
-    description: "Build and test results after all fixes applied"
-    validation: "Standalone review-fix must show successful build and test results after its fixes. Workflow-composed review requires a current evidence ref when any due selected or binding build/test check applies or a source fix is required or occurred; not_applicable build_result is permitted only when no due selected or binding build check applies and no build was executed. test_summary is required when current due selected CheckSpecs or resolved binding constraints include automated tests, regardless of build_result."
+    description: "Verification evidence after all fixes applied"
+    validation: "Standalone review-fix must show successful build and test results after its fixes. Workflow-composed review requires a current evidence ref when any due selected check or applicable due/executable binding check applies, or a source fix is required or occurred; not_applicable build_result is permitted only when no due selected or applicable due/executable binding build check applies and no build was executed. test_summary is required when a due selected check or applicable due/executable binding obligation requires an automated test."
     object_fields:
       - name: build_result
         type: enum
         required: true
         enum_values: [passed, failed, not_applicable]
-        description: "For workflow-composed review, use not_applicable only when no due selected or binding build check applies and no build was executed. An executed failure is failed; required checks must pass before completion."
+        description: "For workflow-composed review, use not_applicable only when no due selected or applicable due/executable binding build check applies and no build was executed. An executed failure is failed; required checks must pass before completion."
       - name: test_summary
         type: object
         required: conditional
-        condition: "review_preparation_mode == standalone and mode == review-fix, or the current due selected CheckSpec's claim, oracle, or procedure, or a resolved binding constraint, requires an automated test"
+        condition: "review_preparation_mode == standalone and mode == review-fix, or a due selected check or applicable due/executable binding obligation requires an automated test"
         description: "Actual selected/binding test counts. Every due required test check needs current passed results; failed or skipped required tests block completion. Zero counts mean no tests were executed, not that tests passed."
         object_fields:
           - name: passed

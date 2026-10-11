@@ -954,8 +954,18 @@
             "fields": [
               "mode",
               "basis",
-              "rationale"
+              "rationale",
+              "applicable_check_ids"
             ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "applicable_check_ids"
+            ],
+            "expected": []
           },
           {
             "operator": "equals",
@@ -1521,8 +1531,18 @@
             "fields": [
               "mode",
               "basis",
-              "rationale"
+              "rationale",
+              "applicable_check_ids"
             ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "applicable_check_ids"
+            ],
+            "expected": []
           },
           {
             "operator": "equals",
@@ -2167,8 +2187,18 @@
             "fields": [
               "mode",
               "basis",
-              "rationale"
+              "rationale",
+              "applicable_check_ids"
             ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "applicable_check_ids"
+            ],
+            "expected": ["authorization-allow-deny"]
           },
           {
             "operator": "equals",
@@ -3027,8 +3057,18 @@
             "fields": [
               "mode",
               "basis",
-              "rationale"
+              "rationale",
+              "applicable_check_ids"
             ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "applicable_check_ids"
+            ],
+            "expected": []
           },
           {
             "operator": "equals",
@@ -3638,8 +3678,18 @@
             "fields": [
               "mode",
               "basis",
-              "rationale"
+              "rationale",
+              "applicable_check_ids"
             ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "applicable_check_ids"
+            ],
+            "expected": ["calculation-boundary"]
           },
           {
             "operator": "nonempty_string",
@@ -4159,8 +4209,18 @@
             "fields": [
               "mode",
               "basis",
-              "rationale"
+              "rationale",
+              "applicable_check_ids"
             ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "applicable_check_ids"
+            ],
+            "expected": []
           },
           {
             "operator": "nonempty_string",
@@ -4360,6 +4420,8 @@
               "evidence_ref",
               "claim_kind",
               "claim_scope",
+          "selected_check_ids",
+          "binding_obligation_refs",
               "result_state",
               "freshness",
               "exclusions"
@@ -4371,6 +4433,8 @@
                 "claim_scope": [
                   "Required guide structure and link fields on the earlier source revision identified by schema-check-old."
                 ],
+            "selected_check_ids": [],
+            "binding_obligation_refs": [],
                 "result_state": "passed",
                 "freshness": "stale",
                 "exclusions": [
@@ -4383,6 +4447,8 @@
                 "claim_scope": [
                   "Current generated HTML artifact content and browser render for guide usability."
                 ],
+            "selected_check_ids": [],
+            "binding_obligation_refs": [],
                 "result_state": "failed",
                 "freshness": "current",
                 "exclusions": [
@@ -4450,6 +4516,8 @@
               "evidence_ref",
               "claim_kind",
               "claim_scope",
+          "selected_check_ids",
+          "binding_obligation_refs",
               "result_state",
               "freshness",
               "exclusions"
@@ -4466,6 +4534,8 @@
               "evidence_ref",
               "claim_kind",
               "claim_scope",
+          "selected_check_ids",
+          "binding_obligation_refs",
               "result_state",
               "freshness",
               "exclusions"
@@ -4497,6 +4567,124 @@
               "next_action"
             ]
           }
+        ]
+      }
+    },
+    {
+      "id": "binding-coverage-mandate-keeps-source-and-enforcement",
+      "title": "Explicit coverage mandate keeps its source scope and threshold",
+      "category": "binding_policy",
+      "purpose": "Checks that a concrete source-backed coverage threshold selects an enforcing check without inventing a broader target.",
+      "prompt": "Choose verification for the changed parser package. Return one JSON object with verification_decision and evidence_assessment.",
+      "setup_context": [
+        "The active project policy at testing-policy.md#parser-coverage requires at least 85% line coverage for the changed parser package, measured by coverage.py; it fails below 85%.",
+        "CI exposes the concrete command `python -m coverage report --include='src/parser/*' --fail-under=85`.",
+        "No broader repository-wide threshold is mandated, and this coverage command has not yet been run."
+      ],
+      "expected_behavior": [
+        "Preserves the mandated metric, package scope, threshold, and source in a required_check binding tuple.",
+        "Selects the existing concrete command as the enforcing check and reports it as planned rather than executed.",
+        "Does not invent a repository-wide or default percentage."
+      ],
+      "pass_criteria": [
+        "The exact required_check tuple and command procedure are present.",
+        "The assessment remains planned because the command has not run."
+      ],
+      "fail_signals": [
+        "Drops or changes the source threshold or package scope.",
+        "Names a coverage target without a concrete enforcing check.",
+        "Claims the coverage command passed."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["85%", "parser", "planned"],
+        "forbidden_substrings": ["repository-wide default coverage target"],
+        "structured_json_assertions": [
+          {
+            "id": "source_coverage_mandate_is_preserved",
+            "operator": "array_object_values_exact",
+            "path": ["verification_decision", "policy_basis", "binding_constraints"],
+            "fields": ["kind", "value", "source_ref"],
+            "expected_objects": [{"kind":"required_check","value":"At least 85% line coverage for the changed parser package, measured by coverage.py; fail below 85%.","source_ref":"testing-policy.md#parser-coverage"}]
+          },
+          {
+            "id": "mandate_has_a_concrete_enforcing_check",
+            "operator": "array_object_values_exact",
+            "path": ["verification_decision", "checks"],
+            "fields": ["check_id", "action", "method", "technique", "claim_or_risk"],
+            "expected_objects": [{"check_id":"parser-coverage-threshold","action":"run","method":"static_validation","technique":"schema_or_lint","claim_or_risk":"The changed parser package meets the mandated 85% line coverage threshold."}]
+          },
+          {
+            "id": "enforcement_procedure_is_exact",
+            "operator": "equals",
+            "path": ["verification_decision", "checks", 0, "check_ref_or_method", "reference_or_procedure"],
+            "expected": "Run python -m coverage report --include='src/parser/*' --fail-under=85 and retain the package-scoped measurement."
+          },
+          {"id":"command_is_not_claimed_as_run","operator":"equals","path":["evidence_assessment","status"],"expected":"planned"}
+        ]
+      }
+    },
+    {
+      "id": "same-claim-checks-require-distinct-evidence-identity",
+      "title": "Same-claim unit and integration checks keep separate evidence bindings",
+      "category": "evidence_identity",
+      "purpose": "Checks that evidence for one due check cannot close a different check solely because both claims use the same wording.",
+      "prompt": "Assess current results for the checkout amount claim. The selected unit and API integration checks have identical claim text but distinct procedures and both are due. Return verification_decision and evidence_assessment.",
+      "setup_context": [
+        "Both checkout-total-unit and checkout-total-api are selected, due, and have current passing results.",
+        "The unit result observes integer-cent calculation in isolation; the API result observes the request-to-storage round trip.",
+        "The results are separate refs unit-run-42 and api-run-42. No binding policy tuple applies."
+      ],
+      "expected_behavior": [
+        "Preserves both distinct check IDs even though claim_or_risk text matches.",
+        "Binds each current result to only the check procedure it actually observed.",
+        "Returns sufficient only after both due IDs are individually closed."
+      ],
+      "pass_criteria": [
+        "Both exact check IDs and separate current result refs appear in the assessment.",
+        "Each evidence row names the matching selected_check_id and has an empty binding tuple list."
+      ],
+      "fail_signals": [
+        "One check disappears behind the shared claim text.",
+        "A result is attributed to a procedure it did not observe.",
+        "Sufficient is claimed with either due check unclosed."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["checkout-total-unit", "checkout-total-api", "sufficient"],
+        "forbidden_substrings": ["the shared claim text closes both checks without separate evidence"],
+        "structured_json_assertions": [
+          {
+            "id": "both_due_checks_remain_distinct",
+            "operator": "array_object_values_exact",
+            "path": ["verification_decision", "checks"],
+            "fields": ["check_id", "claim_or_risk", "method", "test_scope"],
+            "expected_objects": [
+              {"check_id":"checkout-total-unit","claim_or_risk":"The checkout amount is calculated correctly.","method":"automated_test","test_scope":"unit"},
+              {"check_id":"checkout-total-api","claim_or_risk":"The checkout amount is calculated correctly.","method":"automated_test","test_scope":"integration"}
+            ]
+          },
+          {"id":"unit_procedure_oracle_has_exact_fields","operator":"object_keys_exact","path":["verification_decision","checks",0,"check_ref_or_method"],"fields":["reference_or_procedure","prerequisites","exclusions","expected_success","meaningful_failure"]},
+          {"id":"unit_procedure_is_exact","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","reference_or_procedure"],"expected":"Run the checkout amount calculation unit test with integer-cent boundary values."},
+          {"id":"unit_procedure_prerequisites_are_exact","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","prerequisites"],"expected":["The unit test result is current."]},
+          {"id":"unit_procedure_exclusions_are_exact","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","exclusions"],"expected":["Does not observe the API-to-storage boundary."]},
+          {"id":"unit_expected_success_is_exact","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","expected_success"],"expected":"The calculation unit test passes for the selected boundary values."},
+          {"id":"unit_meaningful_failure_is_exact","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","meaningful_failure"],"expected":"The calculated amount differs from the expected integer-cent result."},
+          {"id":"api_procedure_oracle_has_exact_fields","operator":"object_keys_exact","path":["verification_decision","checks",1,"check_ref_or_method"],"fields":["reference_or_procedure","prerequisites","exclusions","expected_success","meaningful_failure"]},
+          {"id":"api_procedure_is_exact","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","reference_or_procedure"],"expected":"Run the checkout API-to-storage round trip and inspect the persisted amount."},
+          {"id":"api_procedure_prerequisites_are_exact","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","prerequisites"],"expected":["The isolated API-to-storage fixture is available."]},
+          {"id":"api_procedure_exclusions_are_exact","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","exclusions"],"expected":["Does not replace the isolated calculation unit test."]},
+          {"id":"api_expected_success_is_exact","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","expected_success"],"expected":"The API round trip preserves the expected checkout amount."},
+          {"id":"api_meaningful_failure_is_exact","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","meaningful_failure"],"expected":"The request-to-storage round trip changes the expected amount."},
+          {
+            "id": "each_result_binds_the_exact_check_identity",
+            "operator": "array_object_values_exact",
+            "path": ["evidence_assessment", "scope_and_evidence_refs"],
+            "fields": ["evidence_ref", "selected_check_ids", "binding_obligation_refs", "result_state", "freshness"],
+            "expected_objects": [
+              {"evidence_ref":"unit-run-42","selected_check_ids":["checkout-total-unit"],"binding_obligation_refs":[],"result_state":"passed","freshness":"current"},
+              {"evidence_ref":"api-run-42","selected_check_ids":["checkout-total-api"],"binding_obligation_refs":[],"result_state":"passed","freshness":"current"}
+            ]
+          },
+          {"id":"both_checks_are_closed","operator":"equals","path":["evidence_assessment","status"],"expected":"sufficient"}
         ]
       }
     }

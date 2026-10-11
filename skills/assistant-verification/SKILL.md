@@ -11,7 +11,7 @@ Read contracts/index.yaml first and load matching selectors. Canonical Analysis 
 
 ## Goal
 
-For a named change, choose credible verification for material claims or assess supplied evidence. Return verification_decision and evidence_assessment in the existing task context; create no task-state file.
+For a named change, choose credible verification for material claims or assess supplied evidence. Return the canonical evidence_assessment and include verification_decision only for an actionable selection or a carried decision; create no task-state file.
 
 ## Success Criteria
 
@@ -22,7 +22,7 @@ For a named change, choose credible verification for material claims or assess s
 ## Constraints
 
 - Resolve binding requirements, preferences, and capabilities without waiving mandates. Select scope, technique, and TDD independently: restrictions exclude automated scopes; requirements alone do not.
-- No universal counts, ratios, coverage targets, or default TDD; zero new tests needs adequate current/direct evidence.
+- Do not invent universal/default counts, ratios, coverage targets, or default TDD. Preserve an explicit binding metric, scope, threshold, and source through a concrete `required_check` and enforcing CheckSpec, or report the policy gap. Zero new tests still needs adequate current/direct evidence.
 - Never execute, dispatch, repair, edit, retry, create controllers/ledgers, or replace domain validation, workflow completion, TDD, debugging, independent review, or conditional QA.
 
 ## Phases
@@ -43,11 +43,15 @@ Use references/selection.md for policy, coverage, cost, and stop rules; referenc
 
 ## Output
 
-Before Build, visibly return the full `verification_decision` with CheckSpecs/TddChoice
-unchanged. After results, return full `evidence_assessment` with actual refs, status,
-gaps, and exclusions. Without results, use `planned` and no refs. Workflow carries both
-existing keys inline through completion. Missing, failed, stale, partial, skipped, or
-unavailable evidence is insufficient.
+Return `verification_decision` only for an actionable selection or a carried decision.
+Before Build, visibly return the full actionable decision with CheckSpecs/TddChoice
+unchanged. If a binding mandate cannot be represented, omit the actionable decision,
+return `evidence_assessment.status=blocked` with the exact conflict, and prevent Build.
+Selection-only without results is `planned` with no refs; a requested assessment with
+missing or inadequate evidence is `insufficient` or `blocked`, never `planned`. After
+results, return actual refs, status, gaps, and exclusions. Workflow carries applicable
+keys inline through completion. Missing, failed, stale, partial, skipped, or unavailable
+evidence is insufficient or blocked as appropriate.
 
 ## Stop Rules
 

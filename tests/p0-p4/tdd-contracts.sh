@@ -76,13 +76,16 @@ for file in \
     agents/codex/code-writer.toml \
     agents/claude/code-writer.md; do
     for term in \
-        'When `tdd_choice.mode` is true, require valid meaningful RED before' \
+        'Apply TDD only when this packet' \
+        '`tdd_applies` is true, derived from the' \
+        'intersection of its due `selected_check_ids` and' \
+        '`tdd_choice.applicable_check_ids`.' \
         'In `bounded_executor`, run the task packet' \
         'planned RED' \
         'after dispatch and confirm the expected failure; in `separated_workers`,' \
         'require valid incoming Builder/Tester RED evidence.' \
-        'When TDD is false, no RED is required and none should be' \
-        'fabricated.'; do
+        'no RED is required' \
+        'none should be fabricated.'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_code_writer_terms+=("$file: $term")
         fi
@@ -120,12 +123,13 @@ test_start "workflow build worker protocol preserves RED GREEN verification in b
 missing_tdd_phase_terms=()
 build_worker_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"
 for term in \
-    "## Conditional TDD Boundary" \
-    "bounded_executor" \
-    "valid meaningful RED evidence must exist before production code" \
-    "When false, selected checks remain required but RED is not manufactured." \
-    "separated_workers" \
-    "Builder/Tester owns RED only when TDD is active"; do
+    '## Conditional TDD Boundary' \
+    'canonical `verification_decision.tdd_choice.mode` records the task-wide TDD' \
+    'Each packet derives `tdd_applies` from the intersection of its due `selected_check_ids` and' \
+    'Other packets still run their due selected checks without manufacturing RED.' \
+    'bounded_executor' \
+    'separated_workers' \
+    'Builder/Tester owns RED only when TDD is active'; do
     if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_tdd_phase_terms+=("$term")
     fi
@@ -149,17 +153,20 @@ if ! ruby -ryaml -e '
   input = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |f| f["name"] == "tdd_mode" }
   decision = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").find { |f| f["name"] == "verification_decision" }
   gates = YAML.load_file(ARGV.fetch(2)).fetch("invariants").find { |f| f["id"] == "INV_TDD_PROJECTION" }
-  valid = input["default"] == false && input.fetch("validation").include?("Must equal verification_decision.tdd_choice.mode") &&
-    input.fetch("infer_from").include?("Copy verification_decision.tdd_choice.mode unchanged") &&
+  valid = input["default"] == false && input.fetch("validation").include?("Must equal the canonical task-global mode.") &&
+    input.fetch("validation").include?("local tdd_applies intersection is non-empty") &&
+    input.fetch("infer_from").include?("Copy verification_decision.tdd_choice.mode unchanged as the task-global choice.") &&
     decision.fetch("validation").include?("assistant-verification/contracts/output.yaml#verification_decision") &&
-    gates.fetch("check").include?("false TDD uses the selected checks without fabricated RED")
+    gates.fetch("check").include?("Task-wide tdd_mode equals verification_decision.tdd_choice.mode") &&
+    gates.fetch("check").include?("Each packet\u0027s tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids") &&
+    gates.fetch("check").include?("other due checks still run without fabricated RED")
   exit(valid ? 0 : 1)
 ' "$workflow_input" "$workflow_output" "$workflow_gates"; then
     workflow_tdd_failures+=("workflow tdd_mode is not a false-default projection of the canonical decision")
 fi
 for file_and_term in \
-    "$build_worker_ref::When false, selected checks remain required but RED is not manufactured." \
-    "$build_worker_ref::both lanes: valid meaningful RED evidence must exist before production code." \
+    "$build_worker_ref::Other packets still run their due selected checks without manufacturing RED." \
+    "$build_worker_ref::only packets with \`tdd_applies=true\` require" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/test-strategy.md::If tests are not selected, record the selected method and its concrete procedure in the plan." \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/tdd-enforcement.md::User or project requirements must be resolved into that decision before applying this cycle."; do
     file="${file_and_term%%::*}"

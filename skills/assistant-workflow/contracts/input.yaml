@@ -155,11 +155,11 @@ fields:
   - name: tdd_mode
     type: boolean
     required: false
-    description: "Projection of verification_decision.tdd_choice.mode; scope and technique selection do not independently activate TDD."
+    description: "Task-global projection of verification_decision.tdd_choice.mode; each current increment derives local tdd_applies from selected_check_ids intersected with applicable_check_ids."
     default: false
     on_missing: infer
-    infer_from: "Copy verification_decision.tdd_choice.mode unchanged. Selection is required before Plan fixes checks or before Build when plan_mode=none; if no decision is available, invoke assistant-verification rather than infer TDD from task type."
-    validation: "Must equal verification_decision.tdd_choice.mode. When true, meaningful RED is required before production; when false, do not require or fabricate RED. Unknown-cause bugfixes use assistant-debugging first."
+    infer_from: "Copy verification_decision.tdd_choice.mode unchanged as the task-global choice. For each current slice/packet, derive local tdd_applies from the intersection of its selected_check_ids and verification_decision.tdd_choice.applicable_check_ids. Selection is required before Plan fixes checks or before Build when plan_mode=none; if no decision is available, invoke assistant-verification rather than infer TDD from task type."
+    validation: "Must equal the canonical task-global mode. A packet requires meaningful RED only when its local tdd_applies intersection is non-empty; task-global mode never forces RED for an unrelated packet. When false, do not fabricate RED. Unknown-cause bugfixes use assistant-debugging first."
 
   - name: debugging_mode
     type: enum

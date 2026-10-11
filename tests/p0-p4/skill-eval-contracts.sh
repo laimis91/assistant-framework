@@ -440,7 +440,7 @@ p0p4_write_assistant_verification_response() {
                   check("menu-open-behavior"; ref("menu-open"; "claim"); "inspect"; "manual_observation"; null; "exploratory"; ref("menu-open"; "procedure"); ["Application can be launched with the updated menu."]; ["Does not create persistent assertions for mutable filenames."]; ref("menu-open"; "success"); ref("menu-open"; "failure"); "Observes the new path-to-document associations directly without mirroring filenames in permanent tests."; ["skills/assistant-verification/references/methods/end-to-end.md"]),
                   check("generic-menu-opening"; ref("generic-loader"; "claim"); "reuse"; "automated_test"; "unit"; "characterization"; ref("generic-loader"; "procedure"); ["Current loader unit test is available."]; ["Does not verify either requested PDF content or its specific menu association."]; ref("generic-loader"; "success"); ref("generic-loader"; "failure"); "Reuses relevant generic behavior evidence while preserving direct checks for the new content and associations."; ["skills/assistant-verification/references/methods/unit.md"])
                 ];
-                {mode: false, basis: "not_selected", rationale: "No code behavior is changing and no stable RED cycle is selected for this content update."};
+                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "No code behavior is changing and no stable RED cycle is selected for this content update."};
                 ["No permanent filename-specific assertion is added because the menu list is mutable and generic loader coverage exists."];
                 "Stop after content inspection, both menu-opening observations, and the existing generic test pass; expand only for a new material gap."
               ),
@@ -454,7 +454,7 @@ p0p4_write_assistant_verification_response() {
                 [];
                 "extend_existing";
                 [check("nested-menu-relative-path"; ref("nested-menu-relative-path"; "claim"); "extend"; "automated_test"; "unit"; "example"; ref("nested-menu-relative-path"; "procedure"); ["A temporary nested menu fixture can be created.", "The loader can be called with a path relative to the nested menu."]; ["Does not verify either help PDF\u0027s content or a named menu entry\u0027s UI association."]; ref("nested-menu-relative-path"; "success"); ref("nested-menu-relative-path"; "failure"); "A nested fixture with an expected PDF and a working-directory decoy observes the changed resolver behavior."; ["skills/assistant-verification/references/methods/unit.md"])];
-                {mode: false, basis: "not_selected", rationale: "No binding TDD requirement applies; the focused unit check is selected as a regression oracle for the changed relative-path behavior."};
+                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "No binding TDD requirement applies; the focused unit check is selected as a regression oracle for the changed relative-path behavior."};
                 ["No broad end-to-end suite is selected because the focused loader oracle covers the changed relative-path claim."];
                 "Stop when the nested-menu test selects the expected menu-relative PDF and rejects the plausible wrong path."
               ),
@@ -472,7 +472,7 @@ p0p4_write_assistant_verification_response() {
                 ["Real-service authorization behavior remains unverified by this unit check."];
                 "add_new";
                 [check("authorization-allow-deny"; ref("allow-deny"; "claim"); "add"; "automated_test"; "unit"; "example"; ref("allow-deny"; "procedure"); ["Authenticated owner and authenticated non-owner subjects for document-1 are available as deterministic local fixtures.", "The changed authorization predicate can be called directly."]; ["Does not exercise authorization through a real service, API, or persistence boundary."]; ref("allow-deny"; "success"); ref("allow-deny"; "failure"); "Both owner allowance and non-owner denial are asserted at the changed local predicate within the binding unit-only policy."; ["skills/assistant-verification/references/methods/unit.md"])];
-                {mode: true, basis: "selected_technique", rationale: "The deterministic local predicate provides a stable allow/deny oracle, so write and run both assertions before changing the implementation."};
+                {mode: true, applicable_check_ids: ["authorization-allow-deny"], basis: "selected_technique", rationale: "The deterministic local predicate provides a stable allow/deny oracle, so write and run both assertions before changing the implementation."};
                 ["Integration and end-to-end checks are excluded by the binding project policy; the real-service boundary remains a stated limitation."];
                 "Stop when the owner is allowed and the non-owner is denied by the local predicate; expand only for a new in-scope gap."
               ),
@@ -489,7 +489,7 @@ p0p4_write_assistant_verification_response() {
                   check("domain-value-unit-suite"; ref("domain-value"; "claim"); "run"; "automated_test"; "unit"; "characterization"; ref("domain-value"; "procedure"); ["The existing domain-value unit suite is available."]; ["Does not observe JSON serialization or an API-to-adapter storage round trip."]; ref("domain-value"; "success"); ref("domain-value"; "failure"); "Retains the mandated unit suite for the independent domain-value claim."; ["skills/assistant-verification/references/methods/unit.md"]),
                   check("api-storage-round-trip"; ref("api-storage-round-trip"; "claim"); "extend"; "automated_test"; "integration"; "example"; ref("api-storage-round-trip"; "procedure"); ["The isolated API-to-adapter integration fixture is available.", "The representative JSON contract value is defined."]; ["Does not establish unrelated end-to-end user journeys or production storage availability."]; ref("api-storage-round-trip"; "success"); ref("api-storage-round-trip"; "failure"); "The isolated round trip observes field preservation across the changed serialization boundary."; ["skills/assistant-verification/references/methods/integration.md"])
                 ];
-                {mode: false, basis: "not_selected", rationale: "No TDD requirement is stated; the required unit suite and distinct integration boundary are selected as verification scopes."};
+                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "No TDD requirement is stated; the required unit suite and distinct integration boundary are selected as verification scopes."};
                 ["No end-to-end journey is selected because it would add no distinct claim beyond the isolated adapter-boundary check."];
                 "Stop when the required unit suite and isolated round-trip check pass; expand only for a distinct material gap."
               ),
@@ -503,7 +503,7 @@ p0p4_write_assistant_verification_response() {
                 [];
                 "add_new";
                 [check("calculation-boundary"; ref("calculation-boundary"; "claim"); "add"; "automated_test"; "unit"; "example"; ref("calculation-boundary"; "procedure"); ["The calculation operates on integer cents and truncates 10 percent toward zero.", "A focused unit test can run before production edits."]; ["Does not require unrelated full-suite execution."]; ref("calculation-boundary"; "success"); ref("calculation-boundary"; "failure"); "The focused 199-cent example supplies the requested stable RED oracle."; ["skills/assistant-verification/references/methods/unit.md"])];
-                {mode: true, basis: "user_requirement", rationale: "The user\u0027s explicit TDD requirement is binding, and the 199-cent boundary gives the focused assertion a stable meaningful RED outcome."};
+                {mode: true, applicable_check_ids: ["calculation-boundary"], basis: "user_requirement", rationale: "The user\u0027s explicit TDD requirement is binding, and the 199-cent boundary gives the focused assertion a stable meaningful RED outcome."};
                 ["No unrelated full-suite run is required to establish the focused boundary oracle."];
                 "Stop when the 199-cent boundary fails meaningfully before implementation and passes after the calculation fix."
               ),
@@ -517,11 +517,50 @@ p0p4_write_assistant_verification_response() {
                 [];
                 "none";
                 [check("reproduce-and-isolate"; ref("reproduce-and-isolate"; "claim"); "inspect"; "manual_observation"; null; "exploratory"; ref("reproduce-and-isolate"; "procedure"); ["A representative saved document and its ordinary reopen path are available."]; ["Does not define or claim a regression oracle or RED result before reproduction and isolation."]; ref("reproduce-and-isolate"; "success"); ref("reproduce-and-isolate"; "failure"); "Reproduction and isolation establish the failure boundary before a stable regression oracle is selected."; [])];
-                {mode: false, basis: "not_selected", rationale: "No stable regression oracle is available until assistant-debugging reproduces and isolates the reported failure."};
+                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "No stable regression oracle is available until assistant-debugging reproduces and isolates the reported failure."};
                 ["No speculative regression test or RED claim is selected before the failure is reproduced and isolated."];
                 "Stop after reproduction/isolation evidence determines whether a stable regression oracle can be selected."
               ),
               evidence_assessment: planned_assessment(["The intermittent stale-content failure has not been reproduced or isolated."]; "Use assistant-debugging to reproduce and isolate the report before selecting regression coverage.")
+            }
+          elif $case_id == "binding-coverage-mandate-keeps-source-and-enforcement" then
+            {
+              verification_decision: decision(
+                "Preserve the parser package\u0027s source-mandated 85% line coverage threshold.";
+                [{kind:"required_check",value:"At least 85% line coverage for the changed parser package, measured by coverage.py; fail below 85%.",source_ref:"testing-policy.md#parser-coverage"}];
+                [];
+                "none";
+                [check("parser-coverage-threshold"; "The changed parser package meets the mandated 85% line coverage threshold."; "run"; "static_validation"; null; "schema_or_lint"; "Run python -m coverage report --include=\u0027src/parser/*\u0027 --fail-under=85 and retain the package-scoped measurement."; ["The changed parser package and coverage.py are available."]; ["Does not establish unrelated runtime behavior or repository-wide coverage."]; "The package-scoped report meets the source-mandated 85% threshold."; "The package report is below 85% or measures a broader scope."; "Runs the exact source-mandated metric and threshold."; [])];
+                {mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected coverage check has no meaningful RED cycle."};
+                ["No broader default or repository-wide coverage target is selected."];
+                "Stop after the source-mandated package report passes or report the exact policy gap."
+              ),
+              evidence_assessment: planned_assessment(["The mandated package coverage command has not yet run."]; "Run the selected package-scoped coverage command and retain its current measurement.")
+            }
+          elif $case_id == "same-claim-checks-require-distinct-evidence-identity" then
+            {
+              verification_decision: decision(
+                "Assess the checkout amount through its separate unit and API integration boundaries.";
+                [];
+                [];
+                "none";
+                [
+                  check("checkout-total-unit"; "The checkout amount is calculated correctly."; "run"; "automated_test"; "unit"; "example"; "Run the checkout amount calculation unit test with integer-cent boundary values."; ["The unit test result is current."]; ["Does not observe the API-to-storage boundary."]; "The calculation unit test passes for the selected boundary values."; "The calculated amount differs from the expected integer-cent result."; "Observes the isolated calculation procedure."; ["skills/assistant-verification/references/methods/unit.md"]),
+                  check("checkout-total-api"; "The checkout amount is calculated correctly."; "run"; "automated_test"; "integration"; "example"; "Run the checkout API-to-storage round trip and inspect the persisted amount."; ["The isolated API-to-storage fixture is available."]; ["Does not replace the isolated calculation unit test."]; "The API round trip preserves the expected checkout amount."; "The request-to-storage round trip changes the expected amount."; "Observes the separate integration procedure despite shared claim wording."; ["skills/assistant-verification/references/methods/integration.md"])
+                ];
+                {mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected checks do not require a meaningful RED cycle."};
+                [];
+                "Close both selected check IDs with their own current result refs."
+              ),
+              evidence_assessment: {
+                status:"sufficient",
+                scope_and_evidence_refs:[
+                  {evidence_ref:"unit-run-42",claim_kind:"task_behavior",claim_scope:["The checkout amount is calculated correctly."],selected_check_ids:["checkout-total-unit"],binding_obligation_refs:[],result_state:"passed",freshness:"current",exclusions:["Does not observe the API-to-storage boundary."]},
+                  {evidence_ref:"api-run-42",claim_kind:"task_behavior",claim_scope:["The checkout amount is calculated correctly."],selected_check_ids:["checkout-total-api"],binding_obligation_refs:[],result_state:"passed",freshness:"current",exclusions:["Does not replace the isolated calculation unit test."]}
+                ],
+                gaps_and_limitations:[],
+                next_action:"none_needed"
+              }
             }
           elif $case_id == "phrase-compliant-empty-artifact-and-stale-pass-remain-insufficient" then
             {
@@ -532,6 +571,8 @@ p0p4_write_assistant_verification_response() {
                     evidence_ref: "schema-check-old",
                     claim_kind: "structural_validity",
                     claim_scope: ["Required guide structure and link fields on the earlier source revision identified by schema-check-old."],
+                    selected_check_ids: [],
+                    binding_obligation_refs: [],
                     result_state: "passed",
                     freshness: "stale",
                     exclusions: ["The source revision is stale and the schema check does not establish useful rendered content or working links."]
@@ -540,6 +581,8 @@ p0p4_write_assistant_verification_response() {
                     evidence_ref: "current-html-inspection",
                     claim_kind: "other",
                     claim_scope: ["Current generated HTML artifact content and browser render for guide usability."],
+                    selected_check_ids: [],
+                    binding_obligation_refs: [],
                     result_state: "failed",
                     freshness: "current",
                     exclusions: ["The observed zero-byte file and blank browser capture provide no successful content or link-render evidence."]
@@ -594,7 +637,7 @@ p0p4_write_skill_eval_responses() {
                             policy_basis:{binding_constraints:[{kind:"required_tdd",value:"true",source_ref:"fixture:unknown-cause-bugfix-routes-through-debugging-before-tdd#user-request"}],preferences_applied:[],capability_limits:[]},
                             test_change:"add_new",
                             checks:[{check_id:"checkout-promotion-once",claim_or_risk:"The 100-cent promotion is applied once to the 1000-cent subtotal.",action:"add",method:"automated_test",test_scope:"unit",technique:"example",check_ref_or_method:{reference_or_procedure:"Write and run checkout-42 before repair, asserting a 900-cent total instead of the reproduced 800-cent total.",prerequisites:["The checkout-42 replay reproduces duplicate promotion application."],exclusions:["Does not establish the external payment-service boundary."],expected_success:"The total is 900 cents after the repair.",meaningful_failure:"Before repair the assertion fails because the total is 800 cents."},rationale:"The supplied replay provides a meaningful regression oracle for the requested TDD cycle.",method_refs:["skills/assistant-verification/references/methods/unit.md"]}],
-                            tdd_choice:{mode:true,basis:"user_requirement",rationale:"The explicit user TDD mandate remains binding after successful reproduction."},
+                            tdd_choice:{mode:true,applicable_check_ids:["checkout-promotion-once"],basis:"user_requirement",rationale:"The explicit user TDD mandate remains binding after successful reproduction."},
                             omitted_checks_and_rationale:["No unrelated full suite is selected."],
                             stop_rule:"Run meaningful RED before repair, then the selected GREEN check and applicable review."
                           }
@@ -610,7 +653,7 @@ p0p4_write_skill_eval_responses() {
                             checks:[{
                               check_id:"readme-install-command",
                               claim_or_risk:"The README install command uses an option supported by install.sh.",
-                              action:"inspect",
+                              action:"run",
                               method:"automated_test",
                               test_scope:"unit",
                               technique:"schema_or_lint",
@@ -624,7 +667,7 @@ p0p4_write_skill_eval_responses() {
                               rationale:"The focused test directly checks the changed documentation claim.",
                               method_refs:["skills/assistant-verification/references/methods/unit.md"]
                             }],
-                            tdd_choice:{mode:false,basis:"not_selected",rationale:"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
+                            tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
                             omitted_checks_and_rationale:["Installer execution is outside the selected documentation-only claim."],
                             stop_rule:"Stop when the command comparison passes and the fresh light review passes."
                           },
@@ -632,6 +675,8 @@ p0p4_write_skill_eval_responses() {
                             status:"sufficient",
                             scope_and_evidence_refs:[{
                               evidence_ref:"check:readme-install-command:17",
+                              selected_check_ids:["readme-install-command"],
+                              binding_obligation_refs:[],
                               claim_kind:"structural_validity",
                               claim_scope:["README documents an install.sh-supported option."],
                               result_state:"passed",
@@ -643,8 +688,11 @@ p0p4_write_skill_eval_responses() {
                           }
                         }' >"$response_path"
                         ;;
+                    build-derives-tdd-from-selected-slice-checks)
+                        write_tdd_slice_projection_response "$response_path" "$required_summary"
+                        ;;
                     build-phase-verifies-selected-check-before-advancing)
-                        jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria."}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
+                        jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria.",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[]}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
                         ;;
                     native-slice-execution-uses-dependencies-not-runner-topology)
                         jq -n '{execution_policy:{source_writer_policy:"sequential_shared_or_unknown",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"not_available",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
@@ -981,7 +1029,9 @@ p0p4_write_skill_eval_responses() {
                     assistant-verification:required-unit-check-does-not-prohibit-integration|\
                     assistant-verification:explicit-tdd-request-keeps-meaningful-red|\
                     assistant-verification:unknown-cause-bug-routes-through-debugging|\
-                    assistant-verification:phrase-compliant-empty-artifact-and-stale-pass-remain-insufficient)
+                    assistant-verification:phrase-compliant-empty-artifact-and-stale-pass-remain-insufficient|\
+                    assistant-verification:binding-coverage-mandate-keeps-source-and-enforcement|\
+                    assistant-verification:same-claim-checks-require-distinct-evidence-identity)
                         p0p4_write_assistant_verification_response "$response_path" "$required_summary" "$id" || return 1
                         ;;
                     assistant-thinking:feature-preparation-candidates-require-evidence)
@@ -1995,7 +2045,9 @@ for verification_positive_case in \
     required-unit-check-does-not-prohibit-integration \
     explicit-tdd-request-keeps-meaningful-red \
     unknown-cause-bug-routes-through-debugging \
-    phrase-compliant-empty-artifact-and-stale-pass-remain-insufficient; do
+    phrase-compliant-empty-artifact-and-stale-pass-remain-insufficient \
+    binding-coverage-mandate-keeps-source-and-enforcement \
+    same-claim-checks-require-distinct-evidence-identity; do
     if ! p0p4_write_skill_eval_responses "$verification_positive_root/responses" "" "" "" \
         assistant-verification "$verification_positive_case"; then
         verification_positive_failures+=("$verification_positive_case response factory failed")
@@ -2010,6 +2062,55 @@ if [[ "${#verification_positive_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-verification exact-case positive grading gaps: ${verification_positive_failures[*]}"
+fi
+
+test_start "assistant-verification preserves source coverage enforcement and exact evidence identity"
+verification_binding_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-verification-binding.XXXXXX")"
+p0p4_register_cleanup "$verification_binding_root"
+binding_grade_failures=()
+for binding_case in binding-coverage-mandate-keeps-source-and-enforcement same-claim-checks-require-distinct-evidence-identity; do
+    if ! p0p4_write_skill_eval_responses "$verification_binding_root/factory" "" "" "" assistant-verification "$binding_case"; then
+        binding_grade_failures+=("$binding_case fixture factory failed")
+        continue
+    fi
+    binding_positive="$verification_binding_root/factory/assistant-verification/$binding_case.txt"
+    mkdir -p "$verification_binding_root/positive/assistant-verification"
+    cp "$binding_positive" "$verification_binding_root/positive/assistant-verification/$binding_case.txt"
+    if ! p0p4_skill_eval_grade_matches "$verification_binding_root/positive" assistant-verification "$binding_case" PASS "$verification_binding_root/$binding_case.positive.output"; then
+        binding_grade_failures+=("$binding_case complete response did not pass")
+    fi
+    case "$binding_case" in
+        binding-coverage-mandate-keeps-source-and-enforcement)
+            mkdir -p "$verification_binding_root/wrong-threshold/assistant-verification" "$verification_binding_root/no-enforcer/assistant-verification"
+            jq '.verification_decision.policy_basis.binding_constraints[0].value = "At least 80% line coverage for the changed parser package, measured by coverage.py; fail below 80%."' \
+                "$binding_positive" >"$verification_binding_root/wrong-threshold/assistant-verification/$binding_case.txt"
+            jq 'del(.verification_decision.checks[0])' "$binding_positive" >"$verification_binding_root/no-enforcer/assistant-verification/$binding_case.txt"
+            for mutation in wrong-threshold no-enforcer; do
+                if ! p0p4_skill_eval_grade_matches "$verification_binding_root/$mutation" assistant-verification "$binding_case" FAIL "$verification_binding_root/$binding_case.$mutation.output"; then
+                    binding_grade_failures+=("$binding_case accepted $mutation")
+                fi
+            done
+            ;;
+        same-claim-checks-require-distinct-evidence-identity)
+            mkdir -p "$verification_binding_root/crossbound/assistant-verification" "$verification_binding_root/missing-integration/assistant-verification" "$verification_binding_root/wrong-api-procedure/assistant-verification"
+            jq '.evidence_assessment.scope_and_evidence_refs[1].selected_check_ids = ["checkout-total-unit"]' \
+                "$binding_positive" >"$verification_binding_root/crossbound/assistant-verification/$binding_case.txt"
+            jq 'del(.evidence_assessment.scope_and_evidence_refs[1])' \
+                "$binding_positive" >"$verification_binding_root/missing-integration/assistant-verification/$binding_case.txt"
+            jq '.verification_decision.checks[1].check_ref_or_method = .verification_decision.checks[0].check_ref_or_method' \
+                "$binding_positive" >"$verification_binding_root/wrong-api-procedure/assistant-verification/$binding_case.txt"
+            for mutation in crossbound missing-integration wrong-api-procedure; do
+                if ! p0p4_skill_eval_grade_matches "$verification_binding_root/$mutation" assistant-verification "$binding_case" FAIL "$verification_binding_root/$binding_case.$mutation.output"; then
+                    binding_grade_failures+=("$binding_case accepted $mutation")
+                fi
+            done
+            ;;
+    esac
+done
+if [[ "${#binding_grade_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-verification binding/evidence grading gaps: ${binding_grade_failures[*]}"
 fi
 
 test_start "workflow reproduced bugfix retains the explicit user TDD mandate"
@@ -2039,6 +2140,44 @@ if [[ "${#bugfix_grade_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow bugfix TDD grading gaps: ${bugfix_grade_failures[*]}"
+fi
+
+test_start "workflow TDD applicability follows selected check IDs within each slice"
+slice_tdd_grade_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-slice-tdd.XXXXXX")"
+p0p4_register_cleanup "$slice_tdd_grade_root"
+slice_tdd_case="build-derives-tdd-from-selected-slice-checks"
+if ! p0p4_write_skill_eval_responses "$slice_tdd_grade_root/factory" "" "" "" assistant-workflow "$slice_tdd_case"; then
+    fail "workflow local-TDD fixture factory did not build the selected case"
+    finish
+    exit 1
+fi
+mkdir -p "$slice_tdd_grade_root/wrong-local-projection/assistant-workflow" "$slice_tdd_grade_root/wrong-applicability/assistant-workflow" "$slice_tdd_grade_root/missing-defining-checks/assistant-workflow"
+jq '.slice_manifest[0].tdd_applies = false | .slice_manifest[1].tdd_applies = true' \
+    "$slice_tdd_grade_root/factory/assistant-workflow/$slice_tdd_case.txt" \
+    >"$slice_tdd_grade_root/wrong-local-projection/assistant-workflow/$slice_tdd_case.txt"
+jq '.slice_manifest[1].verification_decision.tdd_choice.applicable_check_ids = ["docs-content-inspection"]' \
+    "$slice_tdd_grade_root/factory/assistant-workflow/$slice_tdd_case.txt" \
+    >"$slice_tdd_grade_root/wrong-applicability/assistant-workflow/$slice_tdd_case.txt"
+jq '.verification_decision.checks = [] | .slice_manifest[0].verification_decision.checks = [] | .slice_manifest[1].verification_decision.checks = []' \
+    "$slice_tdd_grade_root/factory/assistant-workflow/$slice_tdd_case.txt" \
+    >"$slice_tdd_grade_root/missing-defining-checks/assistant-workflow/$slice_tdd_case.txt"
+slice_tdd_grade_failures=()
+if ! p0p4_skill_eval_grade_matches "$slice_tdd_grade_root/factory" assistant-workflow "$slice_tdd_case" PASS "$slice_tdd_grade_root/positive.output"; then
+    slice_tdd_grade_failures+=("calc TDD plus docs inspection fixture did not pass")
+fi
+if ! p0p4_skill_eval_grade_matches "$slice_tdd_grade_root/wrong-local-projection" assistant-workflow "$slice_tdd_case" FAIL "$slice_tdd_grade_root/mutated.output"; then
+    slice_tdd_grade_failures+=("swapping local TDD applicability was not rejected")
+fi
+if ! p0p4_skill_eval_grade_matches "$slice_tdd_grade_root/wrong-applicability" assistant-workflow "$slice_tdd_case" FAIL "$slice_tdd_grade_root/wrong-applicability.output"; then
+    slice_tdd_grade_failures+=("changed slice applicability decision was not rejected")
+fi
+if ! p0p4_skill_eval_grade_matches "$slice_tdd_grade_root/missing-defining-checks" assistant-workflow "$slice_tdd_case" FAIL "$slice_tdd_grade_root/missing-defining-checks.output"; then
+    slice_tdd_grade_failures+=("missing defining checks copied across all decisions were not rejected")
+fi
+if [[ "${#slice_tdd_grade_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow per-slice TDD grading gaps: ${slice_tdd_grade_failures[*]}"
 fi
 
 test_start "workflow slice decision control accepts adequate non-test evidence and rejects fabricated TDD"
@@ -2863,50 +3002,11 @@ test_start "light completion requires both canonical verification outputs"
 light_completion_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-light-completion.XXXXXX")"
 p0p4_register_cleanup "$light_completion_root"
 light_completion_case="light-completion-retains-canonical-verification-outputs"
-light_completion_fixture="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
-light_completion_summary="$(jq -r --arg id "$light_completion_case" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$light_completion_fixture" | paste -sd ' ' -)"
-mkdir -p "$light_completion_root/correct/assistant-workflow"
-jq -n --arg summary "$light_completion_summary" '{
-    summary: $summary,
-    verification_decision: {
-      scope: "Correct the README install command spelling.",
-      policy_basis: {binding_constraints: [], preferences_applied: [], capability_limits: []},
-      test_change: "none",
-      checks: [{
-        check_id: "readme-install-command",
-        claim_or_risk: "The README install command uses an option supported by install.sh.",
-        action: "inspect",
-        method: "automated_test",
-        test_scope: "unit",
-        technique: "schema_or_lint",
-        check_ref_or_method: {
-          reference_or_procedure: "Run the focused documentation-contract test that checks the README install command against install.sh.",
-          prerequisites: ["Updated README.md, install.sh, and the focused documentation-contract test are available."],
-          exclusions: ["Does not execute the installer or prove native activation."],
-          expected_success: "The test confirms the documented option is supported by install.sh.",
-          meaningful_failure: "The README command includes an option the installer does not accept."
-        },
-        rationale: "The focused test directly checks the changed documentation claim.",
-        method_refs: ["skills/assistant-verification/references/methods/unit.md"]
-      }],
-      tdd_choice: {mode: false, basis: "not_selected", rationale: "The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
-      omitted_checks_and_rationale: ["Installer execution is outside the selected documentation-only claim."],
-      stop_rule: "Stop when the command comparison passes and the fresh light review passes."
-    },
-    evidence_assessment: {
-      status: "sufficient",
-      scope_and_evidence_refs: [{
-        evidence_ref: "check:readme-install-command:17",
-        claim_kind: "structural_validity",
-        claim_scope: ["README documents an install.sh-supported option."],
-        result_state: "passed",
-        freshness: "current",
-        exclusions: ["Does not prove installer execution or native activation."]
-      }],
-      gaps_and_limitations: [],
-      next_action: "none_needed"
-    }
-  }' >"$light_completion_root/correct/assistant-workflow/$light_completion_case.txt"
+if ! p0p4_write_skill_eval_responses "$light_completion_root/correct" "" "" "" assistant-workflow "$light_completion_case"; then
+    fail "primary light-completion response factory did not build the selected case"
+    finish
+    exit 1
+fi
 light_completion_failures=()
 if ! "$skill_eval_runner" --responses "$light_completion_root/correct" --skill assistant-workflow --case "$light_completion_case" >"$light_completion_root/correct.output" 2>&1 \
     || ! grep -Fq $'PASS\tassistant-workflow\t'"$light_completion_case" "$light_completion_root/correct.output" \
@@ -2924,6 +3024,15 @@ for missing_output in verification_decision evidence_assessment; do
         light_completion_failures+=("missing $missing_output was not rejected structurally while its name remained in the summary")
     fi
 done
+mkdir -p "$light_completion_root/automated-test-as-inspect/assistant-workflow"
+jq '.verification_decision.checks[0].action = "inspect"' \
+    "$light_completion_root/correct/assistant-workflow/$light_completion_case.txt" \
+    >"$light_completion_root/automated-test-as-inspect/assistant-workflow/$light_completion_case.txt"
+if "$skill_eval_runner" --responses "$light_completion_root/automated-test-as-inspect" --skill assistant-workflow --case "$light_completion_case" >"$light_completion_root/automated-test-as-inspect.output" 2>&1 \
+    || ! grep -Fq $'FAIL\tassistant-workflow\t'"$light_completion_case" "$light_completion_root/automated-test-as-inspect.output" \
+    || ! grep -Eq 'structured_json_assertion_failures=[1-9][0-9]*' "$light_completion_root/automated-test-as-inspect.output"; then
+    light_completion_failures+=("automated-test CheckSpec action inspect was not rejected")
+fi
 if [[ "${#light_completion_failures[@]}" -eq 0 ]]; then
     pass
 else
@@ -4466,6 +4575,54 @@ if [[ ${#approved_preparation_result_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "approved preparation result copies were not exactly graded: ${approved_preparation_result_failures[*]}"
+fi
+
+test_start "actual grader rejects missing or rewritten executable verification packet carriers"
+implementation_packet_failures=()
+for implementation_packet_case in \
+    "medium-implement-only-consumes-preparation-harness-obligation build_medium_implement_only_harness_handoff_response true" \
+    "ordinary-implement-only-carries-not-applicable-preparation-result build_medium_implement_only_not_applicable_preparation_result_response false"; do
+    implementation_packet_case_id="${implementation_packet_case%% *}"
+    implementation_packet_rest="${implementation_packet_case#* }"
+    implementation_packet_builder="${implementation_packet_rest%% *}"
+    implementation_packet_wrong_tdd="${implementation_packet_rest##* }"
+    if ! run_isolated_workflow_routing_mutations \
+        "$implementation_packet_case_id" \
+        "$implementation_packet_builder" \
+        'del(.implementation_steps[0].verification_decision)' \
+        '.implementation_steps[0].verification_decision.scope = "rewritten packet decision"' \
+        'del(.implementation_steps[0].selected_check_ids)' \
+        '.implementation_steps[0].selected_check_ids = ["unselected-check"]' \
+        'del(.implementation_steps[0].binding_obligation_refs)' \
+        '.implementation_steps[0].binding_obligation_refs = [{kind:"required_check",value:"rewritten binding",source_ref:"rewritten"}]' \
+        'del(.implementation_steps[0].evidence_assessment)' \
+        '.implementation_steps[0].evidence_assessment.status = "sufficient"' \
+        ".implementation_steps[0].tdd_applies = $implementation_packet_wrong_tdd"; then
+        implementation_packet_failures+=("$implementation_packet_case_id:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+    fi
+done
+if ! run_isolated_workflow_routing_mutations \
+    "medium-implement-only-consumes-preparation-harness-obligation" \
+    "build_medium_implement_only_harness_handoff_response" \
+    'del(.slice_manifest[0].verification_decision)' \
+    'del(.slice_manifest[0].selected_check_ids)' \
+    'del(.slice_manifest[0].binding_obligation_refs)' \
+    'del(.slice_manifest[0].tdd_applies)' \
+    'del(.validation_results[0].selected_check_ids)' \
+    'del(.validation_results[0].binding_obligation_refs)' \
+    '.slice_manifest[0].tdd_applies = true'; then
+    implementation_packet_failures+=("harness-companion:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+fi
+if ! run_isolated_workflow_routing_mutations \
+    "medium-implement-only-consumes-preparation-qa-obligation" \
+    "build_medium_implement_only_qa_handoff_response" \
+    '.slice_manifest[0].binding_obligation_refs = [{kind:"required_check",value:"Run the explicitly requested QA/acceptance evaluation.",source_ref:"prep/medium-feature"}]'; then
+    implementation_packet_failures+=("qa-companion:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+fi
+if [[ ${#implementation_packet_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "executable packet or companion decision, selection, binding, assessment, local-TDD, incidental-result, or future-QA allocation mutations were accepted: ${implementation_packet_failures[*]}"
 fi
 
 test_start "assistant-workflow fixture binds every implement-only preparation result to a bounded immutable authority"

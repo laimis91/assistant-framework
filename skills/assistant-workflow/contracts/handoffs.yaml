@@ -640,10 +640,10 @@ handoffs:
         required: true
         description: "Canonical assistant-verification decision supplied before Decompose so DC2 does not defer selection to Plan."
         validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve its CheckSpecs and TddChoice unchanged in each slice."
-      - name: tdd_applies
+      - name: tdd_mode
         type: boolean
         required: true
-        description: "Projection of the canonical task verification decision."
+        description: "Task-global projection of the canonical TddChoice."
         validation: "Equals verification_decision.tdd_choice.mode."
       - name: architecture_design_mode
         type: enum
@@ -864,11 +864,25 @@ handoffs:
             required: true
             description: "Canonical decision supplied by the existing assistant-verification Analysis owner and carried into this slice before DC2."
             validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and equals context_fields.verification_decision; carry unchanged and do not select or rewrite it in Architect."
+          - name: selected_check_ids
+            type: string[]
+            required: true
+            description: "Selected CheckSpec IDs due for this slice; each resolves exactly once in the unchanged decision"
+            validation: "An ordered unique subset covering the slice acceptance criteria and risks; task-wide integration checks remain due at their existing completion boundary."
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            description: "Exact applicable binding tuples due for this slice"
+            validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; allocate applicable obligations to their owner or keep them at their existing task-wide boundary."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
           - name: tdd_applies
             type: boolean
             required: true
-            description: "Slice projection of the canonical TDD choice."
-            validation: "Equals verification_decision.tdd_choice.mode and context_fields.tdd_applies."
+            description: "Slice-local projection of selected checks with meaningful RED oracles."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; the task decision remains unchanged."
           - name: files_to_create
             type: string[]
             required: true
@@ -1190,11 +1204,25 @@ handoffs:
             required: true
             description: "The unchanged canonical assistant-verification producer artifact for this approved slice."
             validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and equals the top-level Plan decision."
+          - name: selected_check_ids
+            type: string[]
+            required: true
+            description: "Selected CheckSpec IDs due for this implementation step"
+            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering this step's acceptance criteria and risks."
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            description: "Exact applicable binding tuples due for this implementation step"
+            validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; task-wide obligations remain due at their existing completion boundary."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
           - name: tdd_applies
             type: boolean
             required: true
             description: "Whether this slice participates in the active TDD choice."
-            validation: "Equals verification_decision.tdd_choice.mode; false never creates RED duties."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; false never creates RED duties."
           - name: files_to_create
             type: string[]
             required: true
@@ -1571,6 +1599,20 @@ handoffs:
             required: true
             description: "Canonical assistant-verification decision consumed by this task packet."
             validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and preserves its selected scope and CheckSpec entries unchanged."
+          - name: selected_check_ids
+            type: string[]
+            required: true
+            description: "Selected CheckSpec IDs due for this task packet"
+            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering the packet acceptance criteria and risks."
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            description: "Exact applicable binding tuples due for this task packet"
+            validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; task-wide obligations remain due at their existing completion boundary."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
           - name: evidence_assessment
             type: object
             required: true
@@ -1580,7 +1622,7 @@ handoffs:
             type: boolean
             required: true
             description: "Whether meaningful RED is active for this task packet."
-            validation: "Equals verification_decision.tdd_choice.mode."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the decision unchanged."
           - name: implementation_notes
             type: string[]
             required: true
@@ -2047,12 +2089,27 @@ handoffs:
           - name: tdd_applies
             type: boolean
             required: true
-            validation: "Equals verification_decision.tdd_choice.mode."
+            description: "Whether selected checks for this task packet require meaningful RED."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false."
           - name: verification_decision
             type: object
             required: true
             description: "Canonical assistant-verification decision carried unchanged from Plan."
             validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision."
+          - name: selected_check_ids
+            type: string[]
+            required: true
+            description: "Selected CheckSpec IDs due for this task packet"
+            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering this packet's acceptance criteria and risks."
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            description: "Exact applicable binding tuples due for this task packet"
+            validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; task-wide obligations remain due at their existing completion boundary."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
           - name: evidence_assessment
             type: object
             required: true
@@ -2140,8 +2197,8 @@ handoffs:
       - name: tdd_mode
         type: boolean
         required: true
-        description: "Exact projection of current_task_packet.verification_decision.tdd_choice.mode; RED is required only when true."
-        validation: "Equals current_task_packet.verification_decision.tdd_choice.mode and every affected current_task_packet.tdd_applies."
+        description: "Task-global projection of the current task packet's TddChoice. Packet-local RED follows current_task_packet.tdd_applies."
+        validation: "Equals current_task_packet.verification_decision.tdd_choice.mode; do not require RED for a packet whose selected_check_ids do not intersect applicable_check_ids."
       - name: build_repair_state
         type: object
         required: conditional
@@ -2212,6 +2269,25 @@ handoffs:
           - name: detail
             type: string
             required: true
+      - name: validation_results
+        type: object[]
+        required: conditional
+        condition: "build_execution_lane == bounded_executor and status in [DONE, DONE_WITH_CONCERNS, DEVIATED]"
+        min_items: 1
+        description: "Per-check verification outcomes from the bounded-executor CodeWriter lane"
+        validation: "Each row binds the exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check."
+        object_fields:
+          - {name: command_or_check, type: string, required: true}
+          - {name: result, type: enum, required: true, enum_values: [passed, failed, skipped, not_applicable]}
+          - {name: evidence, type: string, required: true}
+          - {name: selected_check_ids, type: "string[]", required: true}
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
       - name: architecture_obligation_coverage
         type: object[]
         required: conditional
@@ -2365,7 +2441,7 @@ handoffs:
       - name: tdd_mode
         type: boolean
         required: true
-        description: "Exact projection of the selected task packet TddChoice."
+        description: "Task-global projection of the selected task packet TddChoice; packet-local RED follows current_task_packet.tdd_applies."
         validation: "Equals current_task_packet.verification_decision.tdd_choice.mode."
       - name: changed_files
         type: string[]
@@ -2725,8 +2801,22 @@ handoffs:
           - name: tdd_applies
             type: boolean
             required: true
-            description: "Whether this verification packet is in an active TDD cycle"
-            validation: "Equals verification_decision.tdd_choice.mode."
+            description: "Whether this verification packet selects checks with meaningful RED oracles"
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false."
+          - name: selected_check_ids
+            type: string[]
+            required: true
+            description: "Selected CheckSpec IDs due for this verification packet"
+            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering this packet's acceptance criteria and risks."
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            description: "Exact applicable binding tuples due for this verification packet"
+            validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; task-wide obligations remain due at their existing completion boundary."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
           - name: evidence_to_record
             type: string[]
             required: true
@@ -2804,6 +2894,24 @@ handoffs:
             required: true
             min_items: 1
             description: "Concise result evidence, not raw logs. When commands is empty for a no-command check, identify the concrete procedure performed and its observed result; an empty command list alone is not evidence."
+      - name: validation_results
+        type: object[]
+        required: true
+        min_items: 1
+        description: "Per-check results preserving selected CheckSpec and applicable binding identity for the separated-workers lane"
+        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage."
+        object_fields:
+          - {name: command_or_check, type: string, required: true}
+          - {name: result, type: enum, required: true, enum_values: [passed, failed, skipped, not_applicable]}
+          - {name: evidence, type: string, required: true}
+          - {name: selected_check_ids, type: "string[]", required: true}
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
       - name: architecture_obligation_coverage
         type: object[]
         required: conditional

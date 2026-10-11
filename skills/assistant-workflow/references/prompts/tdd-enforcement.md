@@ -2,7 +2,7 @@
 
 > **Fallback prompt pack.** If the `assistant-tdd` skill is installed, use it instead — it is more complete (includes bug fix pattern, review cycle integration, and additional rationalizations).
 
-Load this only when the canonical `verification_decision.tdd_choice.mode` is true. User or project requirements must be resolved into that decision before applying this cycle.
+Load this only when the current packet's `tdd_applies` is true, derived from the intersection of its due `selected_check_ids` and the canonical `verification_decision.tdd_choice.applicable_check_ids`. Preserve the task-wide `tdd_mode` and canonical decision unchanged. User or project requirements must be resolved into that decision before applying this cycle.
 
 ## The Iron Law
 

@@ -218,26 +218,35 @@ if ! ruby -ryaml -e '
   build_verification = output.fetch("artifacts").find { |item| item.fetch("name") == "build_verification" }
   build_fields = build_verification.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   test_summary = build_fields.fetch("test_summary")
+  evidence_condition = ref_fields.fetch("evidence_ref").fetch("condition")
+  no_build_condition = ref_fields.fetch("not_applicable").fetch("condition")
+  build_validation = build_verification.fetch("validation")
+  test_condition = test_summary.fetch("condition")
   valid = verification_ref.fetch("required") == true &&
     ref_fields.fetch("evidence_ref").fetch("required") == "conditional" &&
-    ref_fields.fetch("evidence_ref").fetch("condition").include?("required/occurred source fix") &&
-    verification_ref.fetch("validation").include?("every source fix require current passed evidence") &&
+    evidence_condition.include?("due selected check") &&
+    evidence_condition.include?("applicable due/executable binding check") &&
+    evidence_condition.include?("required/occurred source fix") &&
+    verification_ref.fetch("validation").include?("every due selected check and applicable due/executable binding result") &&
+    verification_ref.fetch("validation").include?("Each due check and every source fix require current passed evidence") &&
     verification_ref.fetch("validation").include?("a fix invalidates the batch and forbids not_applicable") &&
     verification_ref.fetch("validation").include?("Standalone review-fix requires build/tests") &&
-    ref_fields.fetch("not_applicable").fetch("condition").include?("no required/occurred source fix or due selected/binding build/test check") &&
+    no_build_condition.include?("no required/occurred source fix") &&
+    no_build_condition.include?("no due selected or applicable due/executable binding check") &&
     ref_fields.fetch("not_applicable").fetch("enum_values").include?("no_build_scope") &&
-    e9.include?("current evidence_ref bound to the canonical decision, assessment, due selected/binding results, exclusions, and source") &&
-    e9.include?("no_build_scope is allowed only when no fix is required/occurred and no due selected/binding build/test check applies") &&
+    e9.include?("current evidence_ref bound to the canonical decision, assessment, every due selected check and applicable due/executable binding result, exclusions, and source") &&
+    e9.include?("no_build_scope is allowed only when no fix is required/occurred and no due selected or applicable due/executable binding check applies") &&
     rs2a.include?("after every source fix") && rs2a.include?("fixes invalidate the batch and forbid not_applicable") &&
     rs2a.include?("Standalone review-fix requires build/tests") &&
     build_verification.fetch("condition") == "mode == review-fix" &&
-    build_verification.fetch("validation").include?("Standalone review-fix must show successful build and test results after its fixes") &&
-    build_verification.fetch("validation").include?("Workflow-composed review requires a current evidence ref when any due selected or binding build/test check applies or a source fix is required or occurred") &&
-    build_verification.fetch("validation").include?("not_applicable build_result is permitted only when no due selected or binding build check applies and no build was executed") &&
+    build_validation.include?("Standalone review-fix must show successful build and test results after its fixes") &&
+    build_validation.include?("Workflow-composed review requires a current evidence ref when any due selected check or applicable due/executable binding check applies, or a source fix is required or occurred") &&
+    build_validation.include?("not_applicable build_result is permitted only when no due selected or applicable due/executable binding build check applies and no build was executed") &&
     build_fields.fetch("build_result").fetch("enum_values").include?("not_applicable") &&
     test_summary.fetch("required") == "conditional" &&
-    test_summary.fetch("condition").include?("resolved binding constraint, requires an automated test") &&
-    build_verification.fetch("validation").include?("regardless of build_result") &&
+    test_condition.include?("due selected check") &&
+    test_condition.include?("applicable due/executable binding obligation requires an automated test") &&
+    build_validation.include?("test_summary is required when") &&
     test_summary.fetch("description").include?("Zero counts mean no tests were executed, not that tests passed")
   exit valid ? 0 : 1
 ' "$review_handoffs" "$review_output" "$review_gates"; then

@@ -136,19 +136,19 @@ handoffs:
         type: object
         required: true
         description: "Current selected/binding verification evidence or a permitted no-check reason"
-        validation: "Workflow-composed evidence_ref resolves to the carried verification_decision, current evidence_assessment, all due selected/binding results, exclusions, and source binding. Due selected/binding checks and every source fix require current passed evidence; a fix invalidates the batch and forbids not_applicable. Standalone review-fix requires build/tests. no_build_scope is allowed only when no fix is required/occurred and no due selected/binding build/test applies."
+        validation: "Workflow-composed evidence_ref resolves to the carried verification_decision, current evidence_assessment, every due selected check and applicable due/executable binding result, exclusions, and source binding. Each due check and every source fix require current passed evidence; a fix invalidates the batch and forbids not_applicable. Standalone review-fix requires build/tests. no_build_scope is allowed only when no fix is required/occurred and no due selected or applicable due/executable binding check applies."
         object_fields:
           - name: evidence_ref
             type: string
             required: conditional
-            condition: "standalone review-fix, due selected/binding build/test check, or required/occurred source fix"
+            condition: "standalone review-fix, due selected check or applicable due/executable binding check, or required/occurred source fix"
             description: "Current passed evidence bound to the decision, assessment, results, exclusions, and source"
           - name: not_applicable
             type: enum
             required: conditional
-            condition: "evidence_ref absent and (mode == audit with audit_only/read_only, or workflow_composed review-fix with no required/occurred source fix or due selected/binding build/test check)"
+            condition: "evidence_ref absent and (mode == audit with audit_only/read_only, or workflow_composed review-fix with no required/occurred source fix and no due selected or applicable due/executable binding check)"
             enum_values: [audit_only, read_only, no_build_scope]
-            description: "audit_only/read_only is for audit; no_build_scope is only for workflow-composed review-fix with no required/occurred fix or due selected/binding build/test check. Invalid after a fix."
+            description: "audit_only/read_only is for audit; no_build_scope is only for workflow-composed review-fix with no required/occurred fix and no due selected or applicable due/executable binding check. Invalid after a fix."
 
       - name: review_material_snapshot
         type: object

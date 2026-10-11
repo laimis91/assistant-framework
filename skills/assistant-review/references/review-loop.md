@@ -13,7 +13,7 @@ PREPARE
     in-scope authority selects review-fix. If unresolved, ask
     exactly: "Should I only report findings, or also implement and verify fixes?"
   - Standalone Spec Review on scope. Validate FIX_STEP entry_assertions before repair or mutation dispatch. On mismatch, run only in review-fix mode to repair evidence-backed must-fix and should-fix items. In audit, retain and stay read-only. Dispatch every planned read-only Reviewer pass with sanitized criteria; never expose the mismatch details to discovery siblings. Return it to the composing workflow for planning or approval when it changes scope, risk, or acceptance.
-  - Workflow consumes Spec PASS and current selected/binding verification evidence when due. In workflow-composed review, `no_build_scope` is allowed only when no fix is required or occurred and no due selected/binding build or test check exists; after any fix, a current passed `evidence_ref` is mandatory and `not_applicable` is invalid. Standalone review-fix retains mandatory build and tests.
+  - Workflow consumes Spec PASS and current evidence for every due selected check and applicable due/executable binding check. In workflow-composed review, `no_build_scope` is allowed only when no fix is required or occurred and no such check is due; after any fix, a current passed `evidence_ref` is mandatory and `not_applicable` is invalid. Standalone review-fix retains mandatory build and tests.
 
 while round <= 10:
   Round 3+ requires a recorded `additional_round_reason` with new evidence.
@@ -33,7 +33,7 @@ while round <= 10:
 
   3. FIX / VALIDATE
      - Validate FIX_STEP entry_assertions before source/test mutation or dispatch. Only review-fix repairs authorized evidence; record closure.
-     - Standalone review-fix runs build and tests. Workflow-composed review runs every due selected/binding check; any source fix invalidates the batch and requires a current passed evidence reference before the next pass.
+     - Standalone review-fix runs build and tests. Workflow-composed review runs every due selected check and applicable due/executable binding check; any source fix invalidates the batch and requires a current passed evidence reference before the next pass.
 
   4. NEXT ROUND
      - After round 1 fixes, start fresh round 2. Round 3+ needs new evidence. The round counts started review batches, not individual perspective passes, including incomplete or invalidated batches; round 10 is terminal after its started batch.

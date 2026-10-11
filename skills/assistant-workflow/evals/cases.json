@@ -284,7 +284,7 @@
         "The assistant-workflow skill instructions are active.",
         "A medium task decomposition and plan have already been approved.",
         "The approved slices include fixtures, contract tests, and docs.",
-        "The approved verification_decision is unchanged: tdd_choice.mode is false, check id is inspect-rendered-artifact, and its method is artifact_inspection with no command.",
+        "The approved verification_decision is unchanged: tdd_choice.mode is false, applicable_check_ids is [], selected_check_ids contains inspect-rendered-artifact, and its method is artifact_inspection with no command.",
         "The approved CheckSpec to carry unchanged is: {\"check_id\":\"inspect-rendered-artifact\",\"claim_or_risk\":\"The selected artifact contains the expected content.\",\"action\":\"inspect\",\"method\":\"artifact_inspection\",\"technique\":\"exploratory\",\"check_ref_or_method\":{\"reference_or_procedure\":\"Open the produced artifact and compare the rendered content with the approved acceptance criteria.\",\"prerequisites\":[\"The artifact is produced.\"],\"exclusions\":[\"Does not imply an automated test ran.\"],\"expected_success\":\"The rendered artifact matches the approved criteria.\",\"meaningful_failure\":\"The artifact is empty, stale, or materially differs from the acceptance criteria.\"},\"rationale\":\"Directly observes the selected artifact claim without inventing a test command.\",\"method_refs\":[]}"
       ],
       "expected_behavior": [
@@ -1211,7 +1211,7 @@
       "expected_behavior": [
         "Triages the task as a bugfix with debugging_mode root_cause_unknown.",
         "Routes through assistant-debugging before implementation and records reproduction or a concrete blocker with competing hypotheses.",
-        "After the successful reproduction/root-cause handoff, assistant-verification retains the explicit user TDD mandate and selects tdd_choice.mode=true with basis=user_requirement.",
+        "After successful reproduction/root-cause handoff, assistant-verification retains the explicit user TDD mandate and selects tdd_choice.mode=true with basis=user_requirement and applicable_check_ids naming the selected meaningful regression CheckSpec; if none is supportable, it reports the exact policy conflict without fabricating a check ID.",
         "Defines meaningful RED from checkout-42 before production repair; if reproduction is unavailable in real work, retain the mandate and report the blocker rather than waive it.",
         "Keeps review expectations tied to reproduction/root-cause evidence."
       ],
@@ -4276,7 +4276,29 @@
           {"operator": "equals", "path": ["phase_checkpoints"], "expected": ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]},
           {"operator": "path_absent", "path": ["feature_preparation_result"]},
           {"operator": "path_absent", "path": ["changed_files"]},
-          {"operator": "path_absent", "path": ["test_results"]}
+          {"operator": "path_absent", "path": ["test_results"]},
+          {"operator":"equals_path","path":["verification_decision"],"other_path":["implementation_steps",0,"verification_decision"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","checks"],"fields":["check_id","action","method","technique"],"expected_objects":[{"check_id":"viewing-route-effects","action":"run","method":"automated_test","technique":"example"},{"check_id":"trace-replay-harness","action":"run","method":"behavioral_eval","technique":"task_eval"}]},
+          {"operator":"equals","path":["implementation_steps",0,"selected_check_ids"],"expected":["viewing-route-effects","trace-replay-harness"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","policy_basis","binding_constraints"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_check","value":"Run the explicitly requested trace/replay harness during future implementation.","source_ref":"prep/medium-feature"}]},
+          {"operator":"equals_path","path":["implementation_steps",0,"binding_obligation_refs"],"other_path":["verification_decision","policy_basis","binding_constraints"]},
+          {"operator":"equals_path","path":["evidence_assessment"],"other_path":["implementation_steps",0,"evidence_assessment"]},
+          {"operator":"equals","path":["evidence_assessment","status"],"expected":"planned"},
+          {"operator":"empty_array","path":["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator":"equals","path":["evidence_assessment","gaps_and_limitations"],"expected":["The focused route check and deferred trace/replay harness have not run for this implementation."]},
+          {"operator":"equals","path":["evidence_assessment","next_action"],"expected":"Run both selected checks after Build and refresh this assessment from their actual results before Review."},
+          {"operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":false},
+          {"operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":[]},
+          {"operator":"equals","path":["implementation_steps",0,"tdd_applies"],"expected":false},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","reference_or_procedure"],"expected":"Run the selected trace/replay harness after Build and record its result under journal/implementation-transition#verification."},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","expected_success"],"expected":"The trace/replay harness reports the approved route behavior."},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","meaningful_failure"],"expected":"The harness fails or observes route behavior outside the approved scope."},
+          {"operator":"equals_path","path":["slice_manifest",0,"verification_decision"],"other_path":["verification_decision"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"selected_check_ids"],"other_path":["implementation_steps",0,"selected_check_ids"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"binding_obligation_refs"],"other_path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"tdd_applies"],"other_path":["implementation_steps",0,"tdd_applies"]},
+          {"operator":"equals","path":["validation_results",0,"selected_check_ids"],"expected":[]},
+          {"operator":"equals","path":["validation_results",0,"binding_obligation_refs"],"expected":[]}
         ]
       }
     },
@@ -4390,7 +4412,29 @@
           {"operator": "equals", "path": ["phase_checkpoints"], "expected": ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]},
           {"operator": "path_absent", "path": ["feature_preparation_result"]},
           {"operator": "path_absent", "path": ["changed_files"]},
-          {"operator": "path_absent", "path": ["test_results"]}
+          {"operator": "path_absent", "path": ["test_results"]},
+          {"operator":"equals_path","path":["verification_decision"],"other_path":["implementation_steps",0,"verification_decision"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","checks"],"fields":["check_id","action","method","technique"],"expected_objects":[{"check_id":"viewing-route-effects","action":"run","method":"automated_test","technique":"example"},{"check_id":"trace-replay-harness","action":"run","method":"behavioral_eval","technique":"task_eval"}]},
+          {"operator":"equals","path":["implementation_steps",0,"selected_check_ids"],"expected":["viewing-route-effects","trace-replay-harness"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","policy_basis","binding_constraints"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_check","value":"Run the explicitly requested trace/replay harness during future implementation.","source_ref":"prep/medium-feature"}]},
+          {"operator":"equals_path","path":["implementation_steps",0,"binding_obligation_refs"],"other_path":["verification_decision","policy_basis","binding_constraints"]},
+          {"operator":"equals_path","path":["evidence_assessment"],"other_path":["implementation_steps",0,"evidence_assessment"]},
+          {"operator":"equals","path":["evidence_assessment","status"],"expected":"planned"},
+          {"operator":"empty_array","path":["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator":"equals","path":["evidence_assessment","gaps_and_limitations"],"expected":["The focused route check and deferred trace/replay harness have not run for this implementation."]},
+          {"operator":"equals","path":["evidence_assessment","next_action"],"expected":"Run both selected checks after Build and refresh this assessment from their actual results before Review."},
+          {"operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":false},
+          {"operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":[]},
+          {"operator":"equals","path":["implementation_steps",0,"tdd_applies"],"expected":false},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","reference_or_procedure"],"expected":"Run the selected trace/replay harness after Build and record its result under journal/implementation-transition#verification."},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","expected_success"],"expected":"The trace/replay harness reports the approved route behavior."},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","meaningful_failure"],"expected":"The harness fails or observes route behavior outside the approved scope."},
+          {"operator":"equals_path","path":["slice_manifest",0,"verification_decision"],"other_path":["verification_decision"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"selected_check_ids"],"other_path":["implementation_steps",0,"selected_check_ids"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"binding_obligation_refs"],"other_path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"tdd_applies"],"other_path":["implementation_steps",0,"tdd_applies"]},
+          {"operator":"equals","path":["validation_results",0,"selected_check_ids"],"expected":[]},
+          {"operator":"equals","path":["validation_results",0,"binding_obligation_refs"],"expected":[]}
         ]
       }
     },
@@ -4503,7 +4547,29 @@
           {"operator": "equals", "path": ["phase_checkpoints"], "expected": ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]},
           {"operator": "path_absent", "path": ["feature_preparation_result"]},
           {"operator": "path_absent", "path": ["changed_files"]},
-          {"operator": "path_absent", "path": ["test_results"]}
+          {"operator": "path_absent", "path": ["test_results"]},
+          {"operator":"equals_path","path":["verification_decision"],"other_path":["implementation_steps",0,"verification_decision"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","checks"],"fields":["check_id","action","method","technique"],"expected_objects":[{"check_id":"viewing-route-effects","action":"run","method":"automated_test","technique":"example"},{"check_id":"trace-replay-harness","action":"run","method":"behavioral_eval","technique":"task_eval"}]},
+          {"operator":"equals","path":["implementation_steps",0,"selected_check_ids"],"expected":["viewing-route-effects","trace-replay-harness"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","policy_basis","binding_constraints"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_check","value":"Run the explicitly requested trace/replay harness during future implementation.","source_ref":"preparation/not-applicable"}]},
+          {"operator":"equals_path","path":["implementation_steps",0,"binding_obligation_refs"],"other_path":["verification_decision","policy_basis","binding_constraints"]},
+          {"operator":"equals_path","path":["evidence_assessment"],"other_path":["implementation_steps",0,"evidence_assessment"]},
+          {"operator":"equals","path":["evidence_assessment","status"],"expected":"planned"},
+          {"operator":"empty_array","path":["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator":"equals","path":["evidence_assessment","gaps_and_limitations"],"expected":["The focused route check and deferred trace/replay harness have not run for this implementation."]},
+          {"operator":"equals","path":["evidence_assessment","next_action"],"expected":"Run both selected checks after Build and refresh this assessment from their actual results before Review."},
+          {"operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":false},
+          {"operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":[]},
+          {"operator":"equals","path":["implementation_steps",0,"tdd_applies"],"expected":false},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","reference_or_procedure"],"expected":"Run the selected trace/replay harness after Build and record its result under journal/implementation-transition#verification."},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","expected_success"],"expected":"The trace/replay harness reports the approved route behavior."},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","meaningful_failure"],"expected":"The harness fails or observes route behavior outside the approved scope."},
+          {"operator":"equals_path","path":["slice_manifest",0,"verification_decision"],"other_path":["verification_decision"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"selected_check_ids"],"other_path":["implementation_steps",0,"selected_check_ids"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"binding_obligation_refs"],"other_path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"tdd_applies"],"other_path":["implementation_steps",0,"tdd_applies"]},
+          {"operator":"equals","path":["validation_results",0,"selected_check_ids"],"expected":[]},
+          {"operator":"equals","path":["validation_results",0,"binding_obligation_refs"],"expected":[]}
         ]
       }
     },
@@ -4549,7 +4615,28 @@
           {"operator":"equals_path","path":["approved_feature_preparation_qa_acceptance_obligation"],"other_path":["implementation_steps",0,"feature_preparation_qa_acceptance_obligation"]},
           {"operator":"path_absent","path":["implementation_steps",0,"feature_preparation_qa_acceptance_obligation","source_preparation_basis"]},
           {"operator":"path_absent","path":["approved_feature_preparation_harness_obligation"]},
-          {"operator":"path_absent","path":["implementation_steps",0,"feature_preparation_harness_obligation"]}
+          {"operator":"path_absent","path":["implementation_steps",0,"feature_preparation_harness_obligation"]},
+          {"operator":"equals_path","path":["verification_decision"],"other_path":["implementation_steps",0,"verification_decision"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","checks"],"fields":["check_id","action","method","technique"],"expected_objects":[{"check_id":"viewing-route-effects","action":"run","method":"automated_test","technique":"example"},{"check_id":"post-review-qa-acceptance","action":"run","method":"behavioral_eval","technique":"task_eval"}]},
+          {"operator":"equals","path":["implementation_steps",0,"selected_check_ids"],"expected":["viewing-route-effects"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","policy_basis","binding_constraints"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_check","value":"Run the explicitly requested QA/acceptance evaluation.","source_ref":"prep/medium-feature"}]},
+          {"operator":"empty_array","path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["evidence_assessment"],"other_path":["implementation_steps",0,"evidence_assessment"]},
+          {"operator":"equals","path":["evidence_assessment","status"],"expected":"planned"},
+          {"operator":"empty_array","path":["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator":"equals","path":["evidence_assessment","gaps_and_limitations"],"expected":["The route check has not run, and post-review QA remains due after Build and Code Reviewer evidence."]},
+          {"operator":"equals","path":["evidence_assessment","next_action"],"expected":"Run the route check after Build, then run the QA Evaluator after Code Reviewer evidence and refresh this assessment from actual results."},
+          {"operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":false},
+          {"operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":[]},
+          {"operator":"equals","path":["implementation_steps",0,"tdd_applies"],"expected":false},
+          {"operator":"equals","path":["implementation_steps",0,"test_criteria"],"expected":["The focused route behavior test proves all preserved effects and read-only scope."]},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","prerequisites"],"expected":["Build evidence and current independent Code Reviewer evidence are available."]},
+          {"operator":"equals_path","path":["slice_manifest",0,"verification_decision"],"other_path":["verification_decision"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"selected_check_ids"],"other_path":["implementation_steps",0,"selected_check_ids"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"binding_obligation_refs"],"other_path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"tdd_applies"],"other_path":["implementation_steps",0,"tdd_applies"]},
+          {"operator":"equals","path":["validation_results",0,"selected_check_ids"],"expected":[]},
+          {"operator":"equals","path":["validation_results",0,"binding_obligation_refs"],"expected":[]}
         ]
       }
     },
@@ -4598,7 +4685,28 @@
           {"operator":"equals","path":["implementation_steps",0,"feature_preparation_qa_acceptance_obligation","source_preparation_basis"],"expected":"not_applicable"},
           {"operator":"path_absent","path":["implementation_steps",0,"feature_preparation_qa_acceptance_obligation","source_feature_preparation_evidence_ref"]},
           {"operator":"path_absent","path":["approved_feature_preparation_harness_obligation"]},
-          {"operator":"path_absent","path":["implementation_steps",0,"feature_preparation_harness_obligation"]}
+          {"operator":"path_absent","path":["implementation_steps",0,"feature_preparation_harness_obligation"]},
+          {"operator":"equals_path","path":["verification_decision"],"other_path":["implementation_steps",0,"verification_decision"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","checks"],"fields":["check_id","action","method","technique"],"expected_objects":[{"check_id":"viewing-route-effects","action":"run","method":"automated_test","technique":"example"},{"check_id":"post-review-qa-acceptance","action":"run","method":"behavioral_eval","technique":"task_eval"}]},
+          {"operator":"equals","path":["implementation_steps",0,"selected_check_ids"],"expected":["viewing-route-effects"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","policy_basis","binding_constraints"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_check","value":"Run the explicitly requested QA/acceptance evaluation.","source_ref":"preparation/not-applicable"}]},
+          {"operator":"empty_array","path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["evidence_assessment"],"other_path":["implementation_steps",0,"evidence_assessment"]},
+          {"operator":"equals","path":["evidence_assessment","status"],"expected":"planned"},
+          {"operator":"empty_array","path":["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator":"equals","path":["evidence_assessment","gaps_and_limitations"],"expected":["The route check has not run, and post-review QA remains due after Build and Code Reviewer evidence."]},
+          {"operator":"equals","path":["evidence_assessment","next_action"],"expected":"Run the route check after Build, then run the QA Evaluator after Code Reviewer evidence and refresh this assessment from actual results."},
+          {"operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":false},
+          {"operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":[]},
+          {"operator":"equals","path":["implementation_steps",0,"tdd_applies"],"expected":false},
+          {"operator":"equals","path":["implementation_steps",0,"test_criteria"],"expected":["The focused route behavior test proves all preserved effects and read-only scope."]},
+          {"operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","prerequisites"],"expected":["Build evidence and current independent Code Reviewer evidence are available."]},
+          {"operator":"equals_path","path":["slice_manifest",0,"verification_decision"],"other_path":["verification_decision"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"selected_check_ids"],"other_path":["implementation_steps",0,"selected_check_ids"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"binding_obligation_refs"],"other_path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["slice_manifest",0,"tdd_applies"],"other_path":["implementation_steps",0,"tdd_applies"]},
+          {"operator":"equals","path":["validation_results",0,"selected_check_ids"],"expected":[]},
+          {"operator":"equals","path":["validation_results",0,"binding_obligation_refs"],"expected":[]}
         ]
       }
     },
@@ -5030,7 +5138,23 @@
           {"operator":"equals","path":["completion_policy","controller_intensity"],"expected":"standard"},
           {"operator":"equals","path":["completion_policy","build_execution_lane"],"expected":"bounded_executor"},
           {"operator":"path_absent","path":["approved_feature_preparation_harness_obligation"]},
-          {"operator":"path_absent","path":["approved_feature_preparation_qa_acceptance_obligation"]}
+          {"operator":"path_absent","path":["approved_feature_preparation_qa_acceptance_obligation"]},
+          {"operator":"equals_path","path":["verification_decision"],"other_path":["implementation_steps",0,"verification_decision"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","checks"],"fields":["check_id","action","method","test_scope","technique"],"expected_objects":[{"check_id":"new-route-behavior","action":"add","method":"automated_test","test_scope":"integration","technique":"example"}]},
+          {"operator":"equals","path":["implementation_steps",0,"selected_check_ids"],"expected":["new-route-behavior"]},
+          {"operator":"empty_array","path":["verification_decision","policy_basis","binding_constraints"]},
+          {"operator":"empty_array","path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["evidence_assessment"],"other_path":["implementation_steps",0,"evidence_assessment"]},
+          {"operator":"equals","path":["evidence_assessment","status"],"expected":"planned"},
+          {"operator":"empty_array","path":["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator":"equals","path":["evidence_assessment","gaps_and_limitations"],"expected":["No RED or post-implementation result exists yet for new-route-behavior."]},
+          {"operator":"equals","path":["evidence_assessment","next_action"],"expected":"Run the selected test to capture meaningful RED before implementation, then refresh this assessment from the actual result."},
+          {"operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":true},
+          {"operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":["new-route-behavior"]},
+          {"operator":"equals","path":["implementation_steps",0,"tdd_applies"],"expected":true},
+          {"operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","reference_or_procedure"],"expected":"Run bash tests/new-route-behavior-contracts.sh; before the route implementation, the focused test must fail because the new route does not return the approved read-only result."},
+          {"operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","expected_success"],"expected":"The new route returns the approved read-only result."},
+          {"operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","meaningful_failure"],"expected":"Before the implementation, the route is absent or returns a result outside the approved read-only behavior."}
         ]
       }
     },
@@ -5064,7 +5188,23 @@
           {"operator":"equals","path":["triage_result","harness_capable"],"expected":false},
           {"operator":"path_absent","path":["approved_feature_preparation_evidence_ref"]},
           {"operator":"path_absent","path":["approved_feature_preparation_harness_obligation"]},
-          {"operator":"path_absent","path":["approved_feature_preparation_qa_acceptance_obligation"]}
+          {"operator":"path_absent","path":["approved_feature_preparation_qa_acceptance_obligation"]},
+          {"operator":"equals_path","path":["verification_decision"],"other_path":["implementation_steps",0,"verification_decision"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","checks"],"fields":["check_id","action","method","test_scope","technique"],"expected_objects":[{"check_id":"new-route-behavior","action":"add","method":"automated_test","test_scope":"integration","technique":"example"}]},
+          {"operator":"equals","path":["implementation_steps",0,"selected_check_ids"],"expected":["new-route-behavior"]},
+          {"operator":"empty_array","path":["verification_decision","policy_basis","binding_constraints"]},
+          {"operator":"empty_array","path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["evidence_assessment"],"other_path":["implementation_steps",0,"evidence_assessment"]},
+          {"operator":"equals","path":["evidence_assessment","status"],"expected":"planned"},
+          {"operator":"empty_array","path":["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator":"equals","path":["evidence_assessment","gaps_and_limitations"],"expected":["No RED or post-implementation result exists yet for new-route-behavior."]},
+          {"operator":"equals","path":["evidence_assessment","next_action"],"expected":"Run the selected test to capture meaningful RED before implementation, then refresh this assessment from the actual result."},
+          {"operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":true},
+          {"operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":["new-route-behavior"]},
+          {"operator":"equals","path":["implementation_steps",0,"tdd_applies"],"expected":true},
+          {"operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","reference_or_procedure"],"expected":"Run bash tests/new-route-behavior-contracts.sh; before the route implementation, the focused test must fail because the new route does not return the approved read-only result."},
+          {"operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","expected_success"],"expected":"The new route returns the approved read-only result."},
+          {"operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","meaningful_failure"],"expected":"Before the implementation, the route is absent or returns a result outside the approved read-only behavior."}
         ]
       }
     },
@@ -5099,7 +5239,23 @@
           {"operator":"equals","path":["triage_result","qa_evaluation_mode"],"expected":"not_required"},
           {"operator":"equals","path":["triage_result","harness_capable"],"expected":false},
           {"operator":"path_absent","path":["approved_feature_preparation_harness_obligation"]},
-          {"operator":"path_absent","path":["approved_feature_preparation_qa_acceptance_obligation"]}
+          {"operator":"path_absent","path":["approved_feature_preparation_qa_acceptance_obligation"]},
+          {"operator":"equals_path","path":["verification_decision"],"other_path":["implementation_steps",0,"verification_decision"]},
+          {"operator":"array_object_values_exact","path":["verification_decision","checks"],"fields":["check_id","action","method","test_scope","technique"],"expected_objects":[{"check_id":"new-route-behavior","action":"add","method":"automated_test","test_scope":"integration","technique":"example"}]},
+          {"operator":"equals","path":["implementation_steps",0,"selected_check_ids"],"expected":["new-route-behavior"]},
+          {"operator":"empty_array","path":["verification_decision","policy_basis","binding_constraints"]},
+          {"operator":"empty_array","path":["implementation_steps",0,"binding_obligation_refs"]},
+          {"operator":"equals_path","path":["evidence_assessment"],"other_path":["implementation_steps",0,"evidence_assessment"]},
+          {"operator":"equals","path":["evidence_assessment","status"],"expected":"planned"},
+          {"operator":"empty_array","path":["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator":"equals","path":["evidence_assessment","gaps_and_limitations"],"expected":["No RED or post-implementation result exists yet for new-route-behavior."]},
+          {"operator":"equals","path":["evidence_assessment","next_action"],"expected":"Run the selected test to capture meaningful RED before implementation, then refresh this assessment from the actual result."},
+          {"operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":true},
+          {"operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":["new-route-behavior"]},
+          {"operator":"equals","path":["implementation_steps",0,"tdd_applies"],"expected":true},
+          {"operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","reference_or_procedure"],"expected":"Run bash tests/new-route-behavior-contracts.sh; before the route implementation, the focused test must fail because the new route does not return the approved read-only result."},
+          {"operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","expected_success"],"expected":"The new route returns the approved read-only result."},
+          {"operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","meaningful_failure"],"expected":"Before the implementation, the route is absent or returns a result outside the approved read-only behavior."}
         ]
       }
     },
@@ -6519,8 +6675,8 @@
       "prompt": "Complete this approved small, low-risk documentation-only change after Build and fresh review. Return one valid JSON object with the canonical completion outputs.",
       "setup_context": [
         "The task is small, low-risk, documentation-only, and controller_intensity=light; no task journal, metrics, or manual verification was triggered.",
-        "Before Build, assistant-verification visibly returned the unchanged canonical verification_decision: {\"scope\":\"Correct the README install command spelling.\",\"policy_basis\":{\"binding_constraints\":[],\"preferences_applied\":[],\"capability_limits\":[]},\"test_change\":\"none\",\"checks\":[{\"check_id\":\"readme-install-command\",\"claim_or_risk\":\"The README install command uses an option supported by install.sh.\",\"action\":\"inspect\",\"method\":\"automated_test\",\"test_scope\":\"unit\",\"technique\":\"schema_or_lint\",\"check_ref_or_method\":{\"reference_or_procedure\":\"Run the focused documentation-contract test that checks the README install command against install.sh.\",\"prerequisites\":[\"Updated README.md, install.sh, and the focused documentation-contract test are available.\"],\"exclusions\":[\"Does not execute the installer or prove native activation.\"],\"expected_success\":\"The test confirms the documented option is supported by install.sh.\",\"meaningful_failure\":\"The README command includes an option the installer does not accept.\"},\"rationale\":\"The focused test directly checks the changed documentation claim.\",\"method_refs\":[\"skills/assistant-verification/references/methods/unit.md\"]}],\"tdd_choice\":{\"mode\":false,\"basis\":\"not_selected\",\"rationale\":\"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle.\"},\"omitted_checks_and_rationale\":[\"Installer execution is outside the selected documentation-only claim.\"],\"stop_rule\":\"Stop when the command comparison passes and the fresh light review passes.\"}",
-        "The selected static check passed with current evidence ref check:readme-install-command:17. The current canonical evidence_assessment is {\"status\":\"sufficient\",\"scope_and_evidence_refs\":[{\"evidence_ref\":\"check:readme-install-command:17\",\"claim_kind\":\"structural_validity\",\"claim_scope\":[\"README documents an install.sh-supported option.\"],\"result_state\":\"passed\",\"freshness\":\"current\",\"exclusions\":[\"Does not prove installer execution or native activation.\"]}],\"gaps_and_limitations\":[],\"next_action\":\"none_needed\"}.",
+        "Before Build, assistant-verification visibly returned the unchanged canonical verification_decision: {\"scope\":\"Correct the README install command spelling.\",\"policy_basis\":{\"binding_constraints\":[],\"preferences_applied\":[],\"capability_limits\":[]},\"test_change\":\"none\",\"checks\":[{\"check_id\":\"readme-install-command\",\"claim_or_risk\":\"The README install command uses an option supported by install.sh.\",\"action\":\"run\",\"method\":\"automated_test\",\"test_scope\":\"unit\",\"technique\":\"schema_or_lint\",\"check_ref_or_method\":{\"reference_or_procedure\":\"Run the focused documentation-contract test that checks the README install command against install.sh.\",\"prerequisites\":[\"Updated README.md, install.sh, and the focused documentation-contract test are available.\"],\"exclusions\":[\"Does not execute the installer or prove native activation.\"],\"expected_success\":\"The test confirms the documented option is supported by install.sh.\",\"meaningful_failure\":\"The README command includes an option the installer does not accept.\"},\"rationale\":\"The focused test directly checks the changed documentation claim.\",\"method_refs\":[\"skills/assistant-verification/references/methods/unit.md\"]}],\"tdd_choice\":{\"mode\":false,\"applicable_check_ids\":[],\"basis\":\"not_selected\",\"rationale\":\"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle.\"},\"omitted_checks_and_rationale\":[\"Installer execution is outside the selected documentation-only claim.\"],\"stop_rule\":\"Stop when the command comparison passes and the fresh light review passes.\"}",
+        "The selected static check passed with current evidence ref check:readme-install-command:17. The current canonical evidence_assessment is {\"status\":\"sufficient\",\"scope_and_evidence_refs\":[{\"selected_check_ids\":[\"readme-install-command\"],\"binding_obligation_refs\":[],\"evidence_ref\":\"check:readme-install-command:17\",\"claim_kind\":\"structural_validity\",\"claim_scope\":[\"README documents an install.sh-supported option.\"],\"result_state\":\"passed\",\"freshness\":\"current\",\"exclusions\":[\"Does not prove installer execution or native activation.\"]}],\"gaps_and_limitations\":[],\"next_action\":\"none_needed\"}.",
         "Fresh review after validation passed and names the changed README scope, selected-check result, current evidence_assessment, and unchanged verification_decision."
       ],
       "expected_behavior": [
@@ -6554,7 +6710,7 @@
             "operator": "array_object_values_exact",
             "path": ["verification_decision", "checks"],
             "fields": ["check_id", "claim_or_risk", "action", "method", "test_scope", "technique", "rationale", "method_refs"],
-            "expected_objects": [{"check_id":"readme-install-command","claim_or_risk":"The README install command uses an option supported by install.sh.","action":"inspect","method":"automated_test","test_scope":"unit","technique":"schema_or_lint","rationale":"The focused test directly checks the changed documentation claim.","method_refs":["skills/assistant-verification/references/methods/unit.md"]}]
+            "expected_objects": [{"check_id":"readme-install-command","claim_or_risk":"The README install command uses an option supported by install.sh.","action":"run","method":"automated_test","test_scope":"unit","technique":"schema_or_lint","rationale":"The focused test directly checks the changed documentation claim.","method_refs":["skills/assistant-verification/references/methods/unit.md"]}]
           },
           {
             "id": "selected_check_procedure_is_preserved",
@@ -6567,16 +6723,69 @@
           {"id":"selected_check_exclusions","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","exclusions"],"expected":["Does not execute the installer or prove native activation."]},
           {"id":"selected_check_expected_success","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","expected_success"],"expected":"The test confirms the documented option is supported by install.sh."},
           {"id":"selected_check_meaningful_failure","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","meaningful_failure"],"expected":"The README command includes an option the installer does not accept."},
-          {"id":"tdd_choice_is_preserved","operator":"object_keys_exact","path":["verification_decision","tdd_choice"],"fields":["mode","basis","rationale"]},
-          {"id":"tdd_mode_is_false","operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":false},
+          {"id":"tdd_choice_is_preserved","operator":"object_keys_exact","path":["verification_decision","tdd_choice"],"fields":["mode","applicable_check_ids","basis","rationale"]},
+          {"id":"tdd_mode_is_false","operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":false},{"id":"tdd_applicable_ids_are_empty","operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":[]},
           {"id":"tdd_basis_is_not_selected","operator":"equals","path":["verification_decision","tdd_choice","basis"],"expected":"not_selected"},
           {"id":"tdd_rationale_is_preserved","operator":"equals","path":["verification_decision","tdd_choice","rationale"],"expected":"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
           {"id":"decision_scope_is_preserved","operator":"equals","path":["verification_decision","scope"],"expected":"Correct the README install command spelling."},
           {"id":"evidence_assessment_is_present_with_canonical_keys","operator":"object_keys_exact","path":["evidence_assessment"],"fields":["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
           {"id":"assessment_status_is_sufficient","operator":"equals","path":["evidence_assessment","status"],"expected":"sufficient"},
-          {"id":"current_evidence_ref_is_preserved","operator":"array_object_values_exact","path":["evidence_assessment","scope_and_evidence_refs"],"fields":["evidence_ref","claim_kind","claim_scope","result_state","freshness","exclusions"],"expected_objects":[{"evidence_ref":"check:readme-install-command:17","claim_kind":"structural_validity","claim_scope":["README documents an install.sh-supported option."],"result_state":"passed","freshness":"current","exclusions":["Does not prove installer execution or native activation."]}]},
+          {"id":"current_evidence_ref_is_preserved","operator":"array_object_values_exact","path":["evidence_assessment","scope_and_evidence_refs"],"fields":["selected_check_ids","binding_obligation_refs","evidence_ref","claim_kind","claim_scope","result_state","freshness","exclusions"],"expected_objects":[{"selected_check_ids":["readme-install-command"],"binding_obligation_refs":[],"evidence_ref":"check:readme-install-command:17","claim_kind":"structural_validity","claim_scope":["README documents an install.sh-supported option."],"result_state":"passed","freshness":"current","exclusions":["Does not prove installer execution or native activation."]}]},
           {"id":"assessment_has_no_material_gaps","operator":"empty_array","path":["evidence_assessment","gaps_and_limitations"]},
           {"id":"no_additional_action_is_needed","operator":"equals","path":["evidence_assessment","next_action"],"expected":"none_needed"}
+        ]
+      }
+    },
+    {
+      "id": "build-derives-tdd-from-selected-slice-checks",
+      "title": "Build applies TDD only to selected checks in each slice",
+      "category": "slice_verification",
+      "purpose": "Checks that task-global TDD remains active while only the slice selecting an applicable check receives local TDD.",
+      "prompt": "The approved plan has two slices. Build them while preserving the task-level decision and applying TDD only where the selected check IDs intersect the applicable IDs.",
+      "setup_context": [
+        "The canonical task decision has tdd_choice.mode=true and applicable_check_ids=[calculation-boundary].",
+        "The calculation slice selects calculation-boundary and requires meaningful RED before its repair.",
+        "The documentation slice selects docs-content-inspection, a due non-TDD inspection check."
+      ],
+      "expected_behavior": [
+        "Preserves the task-global TDD decision unchanged in both slice packets.",
+        "Sets calculation-slice tdd_applies=true because its selected IDs intersect applicable_check_ids.",
+        "Sets documentation-slice tdd_applies=false while still requiring its selected inspection check.",
+        "Does not equate every slice's local TDD flag with task-global mode."
+      ],
+      "pass_criteria": [
+        "The task decision remains mode=true with applicable_check_ids containing only calculation-boundary.",
+        "The calculation slice is locally TDD-active and the documentation slice is not.",
+        "Both slices retain their distinct selected_check_ids."
+      ],
+      "fail_signals": [
+        "Copies task-global mode directly to every slice's tdd_applies.",
+        "Drops, duplicates, or cross-attributes either selected check ID.",
+        "Treats the documentation inspection as exempt from its selected check because TDD does not apply."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["calculation-boundary", "docs-content-inspection", "tdd_applies", "intersection"],
+        "forbidden_substrings": ["every slice must use tdd_applies=true"],
+        "structured_json_assertions": [
+          {"id":"task_global_tdd_remains_active","operator":"equals","path":["verification_decision","tdd_choice","mode"],"expected":true},
+          {"id":"only_calculation_check_is_tdd_applicable","operator":"equals","path":["verification_decision","tdd_choice","applicable_check_ids"],"expected":["calculation-boundary"]},
+          {"id":"calculation_slice_intersects_applicable_check","operator":"equals","path":["slice_manifest",0,"selected_check_ids"],"expected":["calculation-boundary"]},
+          {"id":"calculation_slice_uses_tdd","operator":"equals","path":["slice_manifest",0,"tdd_applies"],"expected":true},
+          {"id":"documentation_slice_keeps_due_inspection_without_tdd","operator":"equals","path":["slice_manifest",1,"selected_check_ids"],"expected":["docs-content-inspection"]},
+          {"id":"documentation_slice_does_not_inherit_global_tdd","operator":"equals","path":["slice_manifest",1,"tdd_applies"],"expected":false},
+          {"id":"global_choice_is_carried_in_calc_packet","operator":"equals_path","path":["slice_manifest",0,"verification_decision"],"other_path":["verification_decision"]},
+          {"id":"global_choice_is_carried_in_docs_packet","operator":"equals_path","path":["slice_manifest",1,"verification_decision"],"other_path":["verification_decision"]},
+          {"id":"selected_ids_resolve_to_unique_defining_checks","operator":"array_object_values_exact","path":["verification_decision","checks"],"fields":["check_id"],"expected_objects":[{"check_id":"calculation-boundary"},{"check_id":"docs-content-inspection"}]},
+          {"id":"calculation_check_is_added","operator":"equals","path":["verification_decision","checks",0,"action"],"expected":"add"},
+          {"id":"calculation_check_uses_automated_test","operator":"equals","path":["verification_decision","checks",0,"method"],"expected":"automated_test"},
+          {"id":"calculation_check_is_unit_scoped","operator":"equals","path":["verification_decision","checks",0,"test_scope"],"expected":"unit"},
+          {"id":"calculation_check_preserves_meaningful_red_procedure","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","reference_or_procedure"],"expected":"Write and run the 199-cent calculation boundary test before the production fix."},
+          {"id":"calculation_check_preserves_red_oracle","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","expected_success"],"expected":"The calculation returns 19 cents for 10 percent of 199 cents."},
+          {"id":"calculation_check_preserves_meaningful_failure","operator":"equals","path":["verification_decision","checks",0,"check_ref_or_method","meaningful_failure"],"expected":"Before the fix, the 199-cent case returns a value other than 19 cents."},
+          {"id":"documentation_check_preserves_inspection_method","operator":"equals","path":["verification_decision","checks",1,"method"],"expected":"artifact_inspection"},
+          {"id":"documentation_check_preserves_observation_procedure","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","reference_or_procedure"],"expected":"Inspect the updated documentation against the accepted calculation behavior."},
+          {"id":"documentation_check_preserves_success_oracle","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","expected_success"],"expected":"The documented example matches the accepted calculation behavior."},
+          {"id":"documentation_check_preserves_failure_oracle","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","meaningful_failure"],"expected":"The documentation example or explanation contradicts the calculation behavior."}
         ]
       }
     }

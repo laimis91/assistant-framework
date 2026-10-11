@@ -30,7 +30,15 @@ fields:
     type: object
     required: false
     description: "The canonical assistant-verification decision carried unchanged when TDD is composed with workflow."
-    validation: "When present, it conforms to assistant-verification/contracts/output.yaml#verification_decision and tdd_choice.mode is true; use its selected checks and scope without broadening them. Standalone TDD may resolve behavior checks from current context when no verifier decision is available."
+    validation: "When present, it conforms to assistant-verification/contracts/output.yaml#verification_decision; the current increment's selected_check_ids must intersect tdd_choice.applicable_check_ids and each behavior stays within those checks. Task-global mode alone does not activate TDD for this increment. Standalone TDD may resolve behavior checks from current context when no verifier decision is available."
+
+  - name: selected_check_ids
+    type: string[]
+    required: conditional
+    condition: "verification_decision is present"
+    description: "Selected CheckSpec IDs due for the current TDD increment"
+    validation: "Ordered unique IDs resolving exactly once in verification_decision.checks; at least one intersects tdd_choice.applicable_check_ids."
+    on_missing: fail
 
   - name: behaviors
     type: object[]

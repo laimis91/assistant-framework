@@ -32,8 +32,8 @@ gates:
         check: "Selected method details are loaded on demand and the decision names direct method refs when relevant."
         on_fail: "Load the applicable references/methods resource before relying on that method; do not preload all methods."
       - id: S5
-        check: "TDD is active only when required or selected for a meaningful stable RED oracle; an unknown-cause bug reaches assistant-debugging before regression selection."
-        on_fail: "Keep TDD optional unless binding policy requires it; preserve meaningful RED if active and never manufacture a failing test."
+        check: "TDD is active only for selected checks with a meaningful stable RED oracle; an unknown-cause bug reaches assistant-debugging before regression selection. A binding all-deliverable mandate remains intact; if any required deliverable lacks meaningful RED, actionable selection is blocked rather than waived or fabricated."
+        on_fail: "Keep TDD optional unless binding policy requires it; preserve meaningful RED if active, never manufacture a failing test, and return a blocked assessment with the exact policy conflict when the mandate cannot be honored."
 
   - phase: ASSESS
     checkpoint_start: "--- PHASE: ASSESS ---"
@@ -44,8 +44,8 @@ gates:
         check: "Assessment resolves actual result refs and distinguishes attempted, passed, failed, skipped, partial, unavailable, stale, and unknown evidence."
         on_fail: "Resolve the source or report its exact gap; command start, retry-only success, and artifact existence alone are not passing evidence."
       - id: A2
-        check: "Every material claim is supported within the evidence scope, current identity, conditions, exclusions, and result freshness."
-        on_fail: "Mark the claim insufficient or blocked as applicable and name the missing observation."
+        check: "Every material claim and, when a canonical decision resolves, every due selected CheckSpec ID and each applicable due/executable binding tuple is supported by current evidence for the actual procedure/oracle observed; do not invent execution checks for unrelated policy constraints solely to fill evidence arrays; shared claim text alone does not close another identity."
+        on_fail: "Mark the claim insufficient or blocked as applicable and name the unresolved check, binding tuple, or missing observation."
       - id: A3
         check: "Structural validity, native activation, task behavior, and comparative value are distinguished when relevant, without requiring all four for every change."
         on_fail: "Bound each claim to observed evidence; do not treat a structural proxy or unobserved boundary as behavior."
@@ -61,8 +61,8 @@ gates:
         check: "The applicable verification_decision and evidence_assessment agree on scope, selected work, actual results, gaps, and status."
         on_fail: "Correct conflicting fields and retain every material unresolved gap."
       - id: R2
-        check: "Sufficient includes resolved supporting evidence refs for every material claim and binding check, and does not imply review or approval."
-        on_fail: "Lower the status or resolve the missing evidence; state the boundaries of any sufficient claim."
+        check: "Sufficient includes resolved current evidence for every material claim and closes every due selected ID and each applicable due/executable binding tuple through the procedure/oracle actually observed; without a resolved decision it cannot claim selected-check closure. It does not imply review or approval."
+        on_fail: "Lower the status or resolve the missing evidence; state the boundaries of any sufficient claim and whether selected-check closure was available."
       - id: R3
         check: "The next action returns to an existing execution, debugging, domain, review, or workflow owner."
         on_fail: "Name the current owner and hand back a bounded recommendation without dispatching or executing work."
@@ -85,9 +85,9 @@ invariants:
     scope: all_phases
     on_fail: "Resolve or return the conflict source and consequence; do not waive it."
   - id: POLICY2
-    check: "No decision relies on test counts, coverage targets, layer ratios, test-line goals, or default TDD."
+    check: "No decision invents universal/default test counts, coverage targets, layer ratios, test-line goals, or default TDD; an explicit binding metric and threshold retain their exact scope and source and are represented by a concrete enforcing required_check when supported."
     scope: all_phases
-    on_fail: "Ground each check in a material claim, fault, evidence, policy, and cost."
+    on_fail: "Preserve the source-backed mandate and select its concrete CheckSpec enforcement, or report the precise policy gap; ground other checks in a material claim, fault, evidence, and cost."
   - id: EVIDENCE1
     check: "Missing, stale, failed, skipped, partial, unavailable, or retry-only evidence is not sufficient."
     scope: all_phases

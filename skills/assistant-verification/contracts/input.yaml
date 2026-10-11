@@ -68,8 +68,8 @@ fields:
           - name: value
             type: string
             required: true
-            description: "Constrained scope, exact existing check ref, required TDD value, or resource limit"
-            validation: "Scope values are unit, integration, or e2e; required_tdd is true; required_check points to an existing check or command."
+            description: "Constrained scope, exact check or enforcement procedure, required TDD value, or resource limit, preserving the source wording"
+            validation: "Scope values are unit, integration, or e2e; required_tdd is true; required_check identifies the mandated check or an existing concrete measurement/enforcement procedure. Preserve a mandated metric, scope, threshold, and source exactly; report a gap when they cannot be represented."
           - name: source_ref
             type: string
             required: true
@@ -131,7 +131,7 @@ fields:
     required: false
     default: []
     description: "Actual supplied results and their claim scope; do not copy logs or create a new run-state format"
-    validation: "Assessment uses current identity, freshness, coverage, result state, exclusions, and any original/current comparison refs."
+    validation: "Assessment uses current identity, freshness, exact selected-check and binding-obligation identities, result state, exclusions, and any original/current comparison refs. Each identity is supported by the resolved procedure or oracle actually observed by this result; shared claim text alone does not bind another check."
     object_fields:
       - name: evidence_ref
         type: string
@@ -141,6 +141,25 @@ fields:
         type: string[]
         required: true
         description: "Exact claims this evidence purports to support"
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Exact IDs of selected CheckSpecs whose procedures this result actually observes; empty when none"
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact binding policy tuples this result actually enforces; empty when none"
+        object_fields:
+          - name: kind
+            type: enum
+            required: true
+            enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]
+          - name: value
+            type: string
+            required: true
+          - name: source_ref
+            type: string
+            required: true
       - name: result_state
         type: enum
         required: true

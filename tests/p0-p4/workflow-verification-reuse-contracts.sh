@@ -22,17 +22,34 @@ test_start "current verification reuse keeps conservative invalidation and revie
 missing=()
 for term in "exact argv and cwd" "complete passing result/log" "source/test/config/dependency" "toolchain and relevant non-secret environment" "covered acceptance obligations" "Unknown identity, freshness, or coverage requires rerun" "mutable external state" "user explicitly requests a fresh run" "source changes after a fix"; do normalized_contains "$worker_protocol" "$term" || missing+=("protocol:$term"); done
 for term in "references/build-worker-protocol.md" "reuse only full matching identity/coverage evidence" "new integration coverage" "final current validation" "independent code review" "final review snapshot"; do normalized_contains "$phases" "$term" || missing+=("phases:$term"); done
-for term in "When reusing evidence, retain the original run and compare exact argv/cwd when command-based, relevant inputs, environment/toolchain, and covered claims" "do not claim a new execution"; do normalized_contains "$output_contract" "$term" || missing+=("contract:$term"); done
+for term in \
+  "Each result carries the exact selected_check_ids and binding_obligation_refs it actually observes" \
+  "Resolve IDs and exact {kind,value,source_ref} tuples against the unchanged decision" \
+  "When reusing evidence, retain the original run and compare exact argv/cwd when command-based, relevant inputs, environment/toolchain, and covered claims" \
+  "do not claim a new execution"; do normalized_contains "$output_contract" "$term" || missing+=("contract:$term"); done
 if ! ruby -ryaml -e '
   artifact = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").find { |entry| entry.fetch("name") == "validation_results" }
   fields = artifact.fetch("object_fields")
   field_by_name = fields.to_h { |field| [field.fetch("name"), field] }
+  binding = field_by_name.fetch("binding_obligation_refs")
+  binding_fields = binding.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   required_names = fields.select { |field| field["required"] == true }.map { |field| field.fetch("name") }
-  valid = required_names == %w[command_or_check result evidence] &&
+  valid = required_names == %w[command_or_check result evidence selected_check_ids binding_obligation_refs] &&
     field_by_name.fetch("command_or_check").fetch("type") == "string" &&
     field_by_name.fetch("result").fetch("type") == "enum" &&
     field_by_name.fetch("result").fetch("enum_values") == %w[passed failed skipped not_applicable] &&
-    field_by_name.fetch("evidence").fetch("type") == "string"
+    field_by_name.fetch("evidence").fetch("type") == "string" &&
+    field_by_name.fetch("selected_check_ids").fetch("type") == "string[]" &&
+    field_by_name.fetch("selected_check_ids")["required"] == true &&
+    field_by_name.fetch("selected_check_ids").fetch("description").include?("Exact selected CheckSpec IDs this result actually observes") &&
+    binding.fetch("type") == "object[]" && binding["required"] == true &&
+    binding.fetch("description").include?("Exact applicable binding tuples this result actually enforces") &&
+    binding_fields.keys.sort == %w[kind source_ref value] &&
+    binding_fields.fetch("kind").fetch("type") == "enum" &&
+    binding_fields.fetch("kind").fetch("enum_values") == %w[required_scope prohibited_scope required_tdd required_check resource_constraint] &&
+    binding_fields.fetch("value").fetch("type") == "string" &&
+    binding_fields.fetch("source_ref").fetch("type") == "string" &&
+    binding_fields.values.all? { |field| field["required"] == true }
   exit(valid ? 0 : 1)
 ' "$output_contract"; then missing+=("contract:validation_results required field types"); fi
 if [[ ${#missing[@]} -eq 0 ]]; then pass; else fail "missing reuse controls: ${missing[*]}"; fi

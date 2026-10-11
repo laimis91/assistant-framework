@@ -41,7 +41,7 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [verification_decision]
+        names: [verification_decision, selected_check_ids, binding_obligation_refs]
       - id: debugging-fix-verification-gate
         path: contracts/phase-gates.yaml
         section: gates

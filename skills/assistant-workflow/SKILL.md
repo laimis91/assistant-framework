@@ -49,8 +49,10 @@ canonical contracts.
 - `verification`: run `assistant-verification` before Plan fixes checks or no-plan Build.
   Show unchanged `verification_decision` before Build and both `verification_decision`
   and `evidence_assessment` at completion, including light. Carry the decision and
-  `tdd_choice.mode` unchanged into packet/lane; assess actual evidence before
-  review/completion.
+  task-wide `tdd_mode` unchanged into packet/lane; carry due `selected_check_ids`
+  and exact binding tuple refs. Derive packet-local `tdd_applies` from the
+  intersection with `tdd_choice.applicable_check_ids`; assess actual evidence
+  before review/completion.
 - `current_phase`: load active `contracts/phase-gates.yaml` at transition. `selected_handoff`: load `contracts/handoffs.yaml` before dispatch and return. `completion`: load `contracts/output.yaml` before final exit.
 
 Selectors resolve by unique id plus canonical path, section, key, and explicit names; runtime `name_from` resolves only declared `allowed_names`. Missing or invalid selectors use `load_full_authoritative_file`; validate the full named canonical contract and record recovery.

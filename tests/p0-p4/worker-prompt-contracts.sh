@@ -10,7 +10,9 @@ for file in \
     agents/claude/code-writer.md; do
     for term in \
         "Preserve the canonical" \
-        "When TDD is false" \
+        '`tdd_applies` is true' \
+        "intersection" \
+        'task-wide `tdd_mode`' \
         "selected checks" \
         "binding"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
@@ -85,7 +87,8 @@ for file in \
     agents/claude/code-reviewer.md; do
     for term in \
         "canonical code reviewer" \
-        "code defects, security, architecture, test coverage, and structural code issues" \
+        "selected verification methods" \
+        "absence of tests alone is not a finding" \
         "Start with a status packet:" \
         '`status`: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, or `BLOCKED`' \
         '`evidence`: review material, files, searches, or checks supporting the verdict' \

@@ -362,8 +362,8 @@ artifacts:
     type: object
     required: conditional
     condition: "execution_intent != prepare_only"
-    description: "The unchanged decision produced by assistant-verification before Plan fixes checks or before Build in a no-plan lane."
-    validation: "Conforms to assistant-verification/contracts/output.yaml#verification_decision, including its recursively typed CheckSpec and TddChoice. Preserve the selected scope and decision unchanged in task packets and Build handoffs; tdd_mode and tdd_applies equal tdd_choice.mode."
+    description: "Canonical assistant-verification decision selected before Plan or no-plan Build."
+    validation: "Conforms to assistant-verification/contracts/output.yaml#verification_decision. Preserve unchanged through packets and Build handoffs. Task-global tdd_mode equals tdd_choice.mode; increment tdd_applies iff selected_check_ids intersects tdd_choice.applicable_check_ids."
     on_fail: "Invoke assistant-verification, resolve binding conflicts, and carry its canonical decision before Plan exits or Build begins."
 
   - name: test_results
@@ -413,7 +413,7 @@ artifacts:
     type: object[]
     required: true
     condition: "always"
-    validation: "Record results for selected checks and binding project checks. At least one applicable selected check must pass for a completed implementation unless an evidenced docs-only, no-op, discovery, or prepare-only scope has no applicable check; such a case records not_applicable with its exact rationale and never invents a pass. Every required check must pass for a sufficient assessment; otherwise retain an explicit gap. Skipped/not_applicable entries never satisfy a check. When reusing evidence, retain the original run and compare exact argv/cwd when command-based, relevant inputs, environment/toolchain, and covered claims; do not claim a new execution."
+    validation: "Each result carries the exact selected_check_ids and binding_obligation_refs it actually observes. Resolve IDs and exact {kind,value,source_ref} tuples against the unchanged decision and close every due selected check and applicable due/executable binding obligation with current evidence for its actual procedure/oracle; shared claim text or an ID alone is insufficient. Keep task-wide integration obligations due at their existing completion boundary. At least one applicable selected check must pass for a completed implementation unless an evidenced docs-only, no-op, discovery, or prepare-only scope has no applicable check; such a case records not_applicable with its exact rationale and never invents a pass. Every required check must pass for a sufficient assessment; otherwise retain an explicit gap. Skipped/not_applicable entries never satisfy a check. When reusing evidence, retain the original run and compare exact argv/cwd when command-based, relevant inputs, environment/toolchain, and covered claims; do not claim a new execution."
     on_fail: "Run selected checks and record actual outcomes. When docs-only, no-op, discovery, or prepare-only scope has no applicable check, record not_applicable with the exact scope rationale, never a dummy pass. A completed implementation with required evidence gaps cannot claim completion."
     object_fields:
       - name: command_or_check
@@ -426,13 +426,25 @@ artifacts:
       - name: evidence
         type: string
         required: true
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Exact selected CheckSpec IDs this result actually observes; empty when none"
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact applicable binding tuples this result actually enforces; empty when none"
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
 
   - name: evidence_assessment
     type: object
     required: conditional
     condition: "execution_intent != prepare_only"
-    description: "The unchanged assistant-verification assessment of actual selected-check evidence and remaining gaps."
-    validation: "Conforms to assistant-verification/contracts/output.yaml#evidence_assessment. Sufficient requires current resolved refs supporting every material claim and binding obligation; planned, insufficient, blocked, failed, stale, partial, skipped, or unavailable evidence cannot be treated as sufficient. Carry it into Review and completion."
+    description: "Canonical assistant-verification assessment of selected-check evidence and gaps."
+    validation: "Conforms to assistant-verification/contracts/output.yaml#evidence_assessment; sufficient requires current resolved refs for all material claims and due checks/obligations. Planned, insufficient, blocked, failed, stale, partial, skipped, or unavailable evidence is never sufficient. Carry into Review/completion."
     on_fail: "Assess actual validation/test results before Review; record every material gap and do not claim sufficient while any required evidence is missing."
 
   - name: fresh_review_result
@@ -2330,7 +2342,8 @@ artifacts:
     validation: >
       Contains one or more smallest iterable slices in dependency order. Each
       slice has the strict slice schema, exact files, observable increment,
-      acceptance criteria, canonical verification_decision and tdd_applies,
+      acceptance criteria, canonical verification_decision, selected_check_ids,
+      binding_obligation_refs, and tdd_applies,
       an argv command when the selected check uses one or its concrete
       non-command procedure in the decision, expected success signal, and
       deviation rollback rule. slice_id values are unique path-safe
@@ -2367,11 +2380,25 @@ artifacts:
         required: true
         description: "The unchanged canonical assistant-verification decision selected before Plan fixes verification obligations."
         validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision."
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Selected CheckSpec IDs due for this slice; each resolves exactly once in the unchanged decision"
+        validation: "An ordered unique subset of the decision's checks that covers this slice's acceptance criteria and risks. Task-wide integration checks remain due at their existing completion boundary."
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact applicable binding tuples due for this slice"
+        validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; allocate each applicable due tuple to its owning slice or retain it at its existing task-wide boundary."
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
       - name: tdd_applies
         type: boolean
         required: true
         description: "Whether this slice participates in the selected TDD choice."
-        validation: "Equals verification_decision.tdd_choice.mode."
+        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the task-global decision unchanged."
       - name: files_to_create
         type: string[]
         required: true
@@ -2440,6 +2467,18 @@ artifacts:
         type: boolean
         required: true
         validation: "Equals the slice_manifest and task packet value."
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Exact selected checks whose results are summarized for this slice"
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact applicable binding tuples whose results are summarized for this slice"
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
       - name: red_status
         type: string
         required: conditional

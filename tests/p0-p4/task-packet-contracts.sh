@@ -10,7 +10,7 @@ for term in \
     "- slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]" \
     "- verification_decision: [unchanged canonical decision and selected CheckSpecs]" \
     "- evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]" \
-    "- tdd_applies: [verification_decision.tdd_choice.mode]" \
+    "- tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]" \
     "- verification_command: [literal argv only when the selected check uses a command; otherwise omit and use its concrete CheckSpec procedure]" \
     "## Task packets"; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"; then

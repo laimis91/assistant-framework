@@ -91,6 +91,73 @@ else
     fail "review verification evidence policy drifted: ${review_verification_projection_failures[*]}"
 fi
 
+test_start "assistant-review requires current evidence for due test and non-test checks"
+review_due_evidence_failures=()
+if ! ruby -ryaml -e '
+  document = YAML.load_file(ARGV.fetch(0))
+  walk = lambda do |value|
+    case value
+    when Hash
+      return value if value["name"] == "build_test_verification_ref"
+      value.each_value { |child| found = walk.call(child); return found if found }
+    when Array
+      value.each { |child| found = walk.call(child); return found if found }
+    end
+    nil
+  end
+  ref = walk.call(document) or abort("build_test_verification_ref missing")
+  fields = ref.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  evidence = fields.fetch("evidence_ref")
+  no_scope = fields.fetch("not_applicable")
+  evidence_condition = evidence.fetch("condition")
+  no_scope_condition = no_scope.fetch("condition")
+  valid = evidence.fetch("required") == "conditional" &&
+    evidence_condition.include?("due selected check") && evidence_condition.include?("applicable due/executable binding check") &&
+    no_scope.fetch("required") == "conditional" && no_scope.fetch("enum_values").include?("no_build_scope") &&
+    no_scope_condition.include?("no required/occurred source fix") && no_scope_condition.include?("no due selected or applicable due/executable binding check") &&
+    ref.fetch("validation").include?("Each due check and every source fix require current passed evidence")
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"; then
+    review_due_evidence_failures+=("conditional evidence/no_build_scope schema no longer distinguishes due evidence from a genuine no-check case")
+fi
+if [[ "${#review_due_evidence_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review due-evidence binding gaps: ${review_due_evidence_failures[*]}"
+fi
+
+test_start "reviewer prompts score selected verification methods through the shared rubric"
+review_prompt_failures=()
+claude_review_prompts=(agents/claude/reviewer.md agents/claude/code-reviewer.md)
+codex_review_prompts=(agents/codex/reviewer.toml agents/codex/code-reviewer.toml)
+for prompt in "${claude_review_prompts[@]}" "${codex_review_prompts[@]}"; do
+    for term in "selected verification methods" "test quality when tests were selected" "absence of tests alone is not a finding"; do
+        if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$prompt"; then
+            review_prompt_failures+=("$prompt missing method-neutral rule: $term")
+        fi
+    done
+done
+for prompt in "${claude_review_prompts[@]}"; do
+    if ! grep -Fq '0.15' "$FRAMEWORK_DIR/$prompt" \
+        || ! grep -Fq 'quality and relevance of evidence from selected verification methods' "$FRAMEWORK_DIR/$prompt" \
+        || ! grep -Fq 'test_coverage: 3.0' "$FRAMEWORK_DIR/$prompt"; then
+        review_prompt_failures+=("$prompt missing Claude selected-evidence projection at weight 0.15 with the canonical output key")
+    fi
+done
+for prompt in "${codex_review_prompts[@]}"; do
+    if ! grep -Fq "shared review rubric and canonical return contract" "$FRAMEWORK_DIR/$prompt"; then
+        review_prompt_failures+=("$prompt does not point to the shared scoring contract")
+    fi
+    if grep -Eq '^[[:space:]]*(rubric_scores:|test_coverage: [0-9])' "$FRAMEWORK_DIR/$prompt"; then
+        review_prompt_failures+=("$prompt duplicates a Codex-local scoring schema")
+    fi
+done
+if [[ "${#review_prompt_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "reviewer method-neutral scoring prompt gaps: ${review_prompt_failures[*]}"
+fi
+
 test_start "assistant-review applies mandatory review checklists from reference"
 review_checklist_failures=()
 
@@ -432,7 +499,8 @@ review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
 
 for file_and_term in \
     "$review_skill::Audit mode stops after one review batch." \
-    "$review_skill::initial review batch, fixes and validation, then one fresh re-review batch" \
+    "$review_skill::After entry, load \`references/review-loop.md\` before the first REVIEW step." \
+    "$review_skill::Review-fix resolves or explicitly defers must-fix/should-fix findings, validates, then re-reviews." \
     "$review_loop::Audit mode exits after one started batch reaches terminal accounting, complete or incomplete" \
     "$review_loop::The normal review-fix path is round 1 review batch, fixes and validation, then one fresh round 2 re-review batch." \
     "$review_loop::references/review-batch.md" \

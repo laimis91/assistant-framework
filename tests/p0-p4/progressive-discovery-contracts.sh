@@ -364,7 +364,7 @@ write_workflow_eval_responses() {
                         policy_basis:{binding_constraints:[{kind:"required_tdd",value:"true",source_ref:"fixture:unknown-cause-bugfix-routes-through-debugging-before-tdd#user-request"}],preferences_applied:[],capability_limits:[]},
                         test_change:"add_new",
                         checks:[{check_id:"checkout-promotion-once",claim_or_risk:"The 100-cent promotion is applied once to the 1000-cent subtotal.",action:"add",method:"automated_test",test_scope:"unit",technique:"example",check_ref_or_method:{reference_or_procedure:"Write and run checkout-42 before repair, asserting a 900-cent total instead of the reproduced 800-cent total.",prerequisites:["The checkout-42 replay reproduces duplicate promotion application."],exclusions:["Does not establish the external payment-service boundary."],expected_success:"The total is 900 cents after the repair.",meaningful_failure:"Before repair the assertion fails because the total is 800 cents."},rationale:"The supplied replay provides a meaningful regression oracle for the requested TDD cycle.",method_refs:["skills/assistant-verification/references/methods/unit.md"]}],
-                        tdd_choice:{mode:true,basis:"user_requirement",rationale:"The explicit user TDD mandate remains binding after successful reproduction."},
+                        tdd_choice:{mode:true,applicable_check_ids:["checkout-promotion-once"],basis:"user_requirement",rationale:"The explicit user TDD mandate remains binding after successful reproduction."},
                         omitted_checks_and_rationale:["No unrelated full suite is selected."],
                         stop_rule:"Run meaningful RED before repair, then the selected GREEN check and applicable review."
                       }
@@ -380,7 +380,7 @@ write_workflow_eval_responses() {
                         checks:[{
                           check_id:"readme-install-command",
                           claim_or_risk:"The README install command uses an option supported by install.sh.",
-                          action:"inspect",
+                          action:"run",
                           method:"automated_test",
                           test_scope:"unit",
                           technique:"schema_or_lint",
@@ -394,7 +394,7 @@ write_workflow_eval_responses() {
                           rationale:"The focused test directly checks the changed documentation claim.",
                           method_refs:["skills/assistant-verification/references/methods/unit.md"]
                         }],
-                        tdd_choice:{mode:false,basis:"not_selected",rationale:"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
+                        tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
                         omitted_checks_and_rationale:["Installer execution is outside the selected documentation-only claim."],
                         stop_rule:"Stop when the command comparison passes and the fresh light review passes."
                       },
@@ -402,6 +402,8 @@ write_workflow_eval_responses() {
                         status:"sufficient",
                         scope_and_evidence_refs:[{
                           evidence_ref:"check:readme-install-command:17",
+                          selected_check_ids:["readme-install-command"],
+                          binding_obligation_refs:[],
                           claim_kind:"structural_validity",
                           claim_scope:["README documents an install.sh-supported option."],
                           result_state:"passed",
@@ -419,8 +421,11 @@ write_workflow_eval_responses() {
                 isolated-independent-slices-integrate-before-review)
                     jq -n '{execution_policy:{source_writer_policy:"isolated_A_B_overlap_permitted",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"fixture-runtime-isolation-A-B-v1",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
                     ;;
+                build-derives-tdd-from-selected-slice-checks)
+                    write_tdd_slice_projection_response "$response_path" "$required_summary"
+                    ;;
                 build-phase-verifies-selected-check-before-advancing)
-                    jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria."}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
+                    jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria.",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[]}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
                     ;;
                 verification-reuse-current-scenario-matrix|verification-reuse-preserves-independent-review)
                     write_verification_reuse_response "$case_id" "$response_path" "$required_summary"
@@ -582,6 +587,23 @@ if [[ "${BASH_SOURCE[0]}" == "$0" && "${1:-}" == --fixtures-only ]]; then
     finish
     exit 0
 fi
+
+test_start "progressive light-completion factory grades the canonical verification output"
+progressive_light_root="$(mktemp -d "${TMPDIR:-/tmp}/progressive-light-completion.XXXXXX")"
+p0p4_register_cleanup "$progressive_light_root"
+progressive_light_case="light-completion-retains-canonical-verification-outputs"
+progressive_light_fixture="$progressive_light_root/cases.json"
+jq --arg id "$progressive_light_case" '.cases |= map(select(.id == $id))' \
+    "$workflow_dir/evals/cases.json" >"$progressive_light_fixture"
+write_workflow_eval_responses "$progressive_light_root/responses" "$progressive_light_fixture"
+if run_workflow_eval "$progressive_light_root/responses" "$progressive_light_root/grade.out" "$progressive_light_case" \
+    && grep -Fq $'PASS\tassistant-workflow\t'"$progressive_light_case" "$progressive_light_root/grade.out" \
+    && grep -Fq 'structured_json_assertion_failures=0' "$progressive_light_root/grade.out"; then
+    pass
+else
+    fail "progressive-discovery light-completion response did not match the canonical current case"
+fi
+
 
 test_start "progressive-discovery filtered workflow eval removes unmatched review authority"
 progressive_filter_root="$(mktemp -d "${TMPDIR:-/tmp}/progressive-discovery-eval-filter.XXXXXX")"

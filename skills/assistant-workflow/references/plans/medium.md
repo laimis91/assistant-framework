@@ -51,7 +51,9 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - verification_decision: [canonical ref; preserve selected scope, CheckSpec entries, exclusions, and rationale unchanged]
   - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
   - selected_checks: [ids and method-specific evidence]
-  - tdd_applies: [exact projection of verification_decision.tdd_choice.mode]
+  - selected_check_ids: [due check IDs assigned to this packet]
+  - binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
+  - tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
   - RED evidence: [required only when tdd_applies=true; otherwise N/A, with no fabricated RED]
   - RED argv and cwd or manual procedure: [required only when TDD selects an automated test; concrete procedure when applicable]
   - Expected failure: [specific intended behavior assertion; never syntax/import/environment failure]
@@ -119,7 +121,9 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 - depends_on:
 - verification_decision: [unchanged canonical decision and selected CheckSpecs]
 - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
-- tdd_applies: [verification_decision.tdd_choice.mode]
+- selected_check_ids: [due CheckSpec IDs assigned to this slice]
+- binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
+- tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
 - verification_command: [literal argv only when the selected check uses a command; otherwise omit and use its concrete CheckSpec procedure]
 - expected_success_signal:
 - evidence_to_record:

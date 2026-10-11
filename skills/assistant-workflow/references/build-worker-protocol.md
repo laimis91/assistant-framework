@@ -30,8 +30,8 @@ Select `build_execution_lane` before dispatch:
 
 - `bounded_executor` is the default for ordinary medium standard-risk work.
   One Code Writer/bounded executor owns implementation and selected checks;
-  RED/GREEN/REFACTOR applies only when `verification_decision.tdd_choice.mode`
-  is true. Independent review is dispatched only
+  RED/GREEN/REFACTOR applies only to packets whose `tdd_applies` is true.
+  Independent review is dispatched only
   after Build enters Review.
 - `separated_workers` is used for high or critical risk, broad or noisy
   verification, environment-heavy validation, an explicit independent TDD
@@ -189,14 +189,17 @@ moving on.
 
 ## Conditional TDD Boundary
 
-The canonical `verification_decision.tdd_choice.mode` selects TDD independently
-from verification scope and method. Task type alone never activates TDD. For
-unknown-cause bugfixes, complete debugging first; enter RED only if the resulting
-decision activates TDD and a meaningful assertion can fail for the intended reason.
+The canonical `verification_decision.tdd_choice.mode` records the task-wide TDD
+decision independently from verification scope and method. Each packet derives
+`tdd_applies` from the intersection of its due `selected_check_ids` and
+`tdd_choice.applicable_check_ids`. Task type alone never activates TDD. For
+unknown-cause bugfixes, complete debugging first; enter RED only for applicable
+selected checks and when a meaningful assertion can fail for the intended reason.
 
-When `tdd_mode=true` or `tdd_applies=true`, preserve the behavior boundary in
-both lanes: valid meaningful RED evidence must exist before production code.
-When false, selected checks remain required but RED is not manufactured.
+When task-wide `tdd_mode=true`, only packets with `tdd_applies=true` require
+valid meaningful RED before production code. Other packets still run their due
+selected checks without manufacturing RED. When task-wide TDD is false, no
+packet applies TDD.
 
 When the task packet carries an Architecture Decision Pack, carry its typed
 `architecture_test_obligations` into the selected Build owner handoff. The

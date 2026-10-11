@@ -6,10 +6,10 @@ artifacts:
   - name: verification_decision
     type: object
     required: conditional
-    condition: "operation is select or select_and_assess, or a carried decision is being assessed"
+    condition: "(operation is select or select_and_assess) and an actionable selection can honor every binding constraint, or a carried decision is being assessed"
     description: "Bounded approach for the named change; selecting checks and TDD are independent decisions"
-    validation: "Do not broaden the work scope, waive a binding constraint, or imply that a planned check was executed."
-    on_fail: "Return to SELECT and correct policy, check, or TDD semantics; if the approach is blocked, name the precise material gap."
+    validation: "Do not broaden the work scope, waive a binding constraint, or imply that a planned check was executed. Preserve a mandated coverage metric, scope, threshold, and source through its required_check tuple and a concrete enforcing CheckSpec; if unsupported, report the exact policy gap. Never invent a universal/default target. If a binding all-deliverable TDD mandate includes a deliverable without a meaningful RED oracle, omit an actionable decision and return evidence_assessment.status=blocked with that precise policy conflict."
+    on_fail: "Return to SELECT and correct policy, check, or TDD semantics; if no actionable approach can honor a mandate, return a blocked assessment with the precise material gap and do not emit a false-TDD decision."
     object_fields:
       - name: scope
         type: string
@@ -51,7 +51,7 @@ artifacts:
       - name: checks
         type: object[]
         required: true
-        description: "Smallest actionable set addressing distinct material claims; blocked selection may return an empty array with an explicit gap"
+        description: "Smallest actionable set addressing distinct material claims; empty only when no checks are due. A blocked policy conflict omits verification_decision rather than returning an invalid actionable decision."
         object_fields:
           - name: check_id
             type: string
@@ -118,12 +118,17 @@ artifacts:
         type: object
         required: true
         description: "TDD decision, separate from test scope and technique"
-        validation: "user_requirement, project_requirement, and selected_technique imply mode=true; not_selected implies mode=false."
+        validation: "For an actionable decision, user_requirement, project_requirement, and selected_technique imply mode=true with a non-empty applicable_check_ids array; not_selected implies mode=false with an empty array. Applicable IDs are unique and resolve to selected checks with a meaningful RED oracle. If a binding all-deliverable mandate cannot be honored because any required deliverable lacks such an oracle, do not emit an actionable decision; return a blocked assessment and preserve the mandate."
         object_fields:
           - name: mode
             type: boolean
             required: true
             description: "Whether meaningful RED–GREEN–REFACTOR is active"
+          - name: applicable_check_ids
+            type: string[]
+            required: true
+            description: "Unique selected CheckSpec IDs for which the TDD choice has a meaningful RED oracle"
+            validation: "Each ID resolves exactly once in checks; non-empty iff mode is true; empty iff mode is false. A binding all-deliverable TDD mandate with any required deliverable lacking a meaningful RED oracle blocks actionable selection; do not omit that deliverable, set mode=false, or fabricate an ID or RED."
           - name: basis
             type: enum
             required: true
@@ -145,7 +150,7 @@ artifacts:
     type: object
     required: true
     description: "What the supplied evidence establishes for the named work scope"
-    validation: "Sufficient requires current, resolved evidence refs that support the claims and all binding obligations; no missing evidence may be treated as a pass."
+    validation: "Sufficient requires current, resolved evidence refs that support the claims and close every due selected CheckSpec ID and each applicable due/executable binding_obligation_refs tuple from a resolved canonical decision. Do not invent execution checks for unrelated policy constraints solely to populate evidence arrays. Each binding names the actual procedure/oracle observed; claim text or ID alone is insufficient. Resolve a carried decision only through an existing work_scope.source_refs reference. Without a resolved decision, an assessment may be sufficient for its explicitly evidenced scope but must state that selected-check closure is unknown and cannot claim it is complete."
     on_fail: "Return to ASSESS, classify each missing, stale, failed, partial, skipped, or unavailable result as a gap, or identify the exact material blocker."
     object_fields:
       - name: status
@@ -157,7 +162,7 @@ artifacts:
         type: object[]
         required: true
         description: "Scope and actual result refs considered; planned selection has no invented result refs"
-        validation: "Use only actual evidence refs. A sufficient assessment has at least one supporting ref for every material claim."
+        validation: "Use only actual evidence refs. A sufficient assessment has supporting evidence for every material claim and closes each due selected check ID and applicable due/executable binding tuple named below against the resolved decision and actual observed procedure/oracle. Use empty identity arrays only when that result supports none."
         object_fields:
           - name: evidence_ref
             type: string
@@ -170,6 +175,25 @@ artifacts:
           - name: claim_scope
             type: string[]
             required: true
+          - name: selected_check_ids
+            type: string[]
+            required: true
+            description: "Resolved selected CheckSpec IDs whose procedure this evidence actually observes"
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            description: "Exact required policy tuples this evidence actually enforces"
+            object_fields:
+              - name: kind
+                type: enum
+                required: true
+                enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]
+              - name: value
+                type: string
+                required: true
+              - name: source_ref
+                type: string
+                required: true
           - name: result_state
             type: enum
             required: true

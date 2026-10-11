@@ -49,6 +49,11 @@ When workflow delegates, ownership follows `execution_lane` and the carried
 `verification_decision` without weakening
 the phase boundary:
 
+- For a composed task, run RED only for the current increment's selected check
+  IDs that intersect `verification_decision.tdd_choice.applicable_check_ids`.
+  Preserve the task decision unchanged; task-global TDD mode does not impose a
+  RED cycle on unrelated packet checks.
+
 - In `bounded_executor`, one bounded executor owns RED, GREEN, focused verification, and refactor safety; production code still starts only after valid RED evidence is recorded.
 - In `separated_workers`, Builder/Tester owns RED, Code Writer owns GREEN, and
   Builder/Tester owns verification/refactor-safety. Use this lane for explicit

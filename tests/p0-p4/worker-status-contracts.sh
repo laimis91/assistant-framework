@@ -272,23 +272,30 @@ else
     fail "Architect test_plan schema does not bind applicability to the selected automated-test decision"
 fi
 
-test_start "Decompose slice schema binds verification and TDD fields to the canonical context"
+test_start "Decompose slices preserve task TDD choice and derive local applicability from selected checks"
 if ruby -ryaml -e '
   handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
   decompose = handoffs.find { |h| h["name"] == "orchestrator_to_architect_decompose" }
   field = ->(fields, name) { fields.find { |f| f["name"] == name } || raise("missing #{name}") }
   context_decision = field.call(decompose.fetch("context_fields"), "verification_decision")
-  context_tdd = field.call(decompose.fetch("context_fields"), "tdd_applies")
+  context_tdd_mode = field.call(decompose.fetch("context_fields"), "tdd_mode")
   return_fields = decompose.fetch("return_fields")
   manifest = field.call(return_fields, "slice_manifest")
   slice_fields = manifest.fetch("object_fields")
   slice_decision = field.call(slice_fields, "verification_decision")
+  selected_ids = field.call(slice_fields, "selected_check_ids")
+  binding_refs = field.call(slice_fields, "binding_obligation_refs")
   slice_tdd = field.call(slice_fields, "tdd_applies")
-  valid_schema = context_decision["required"] == true && context_tdd["required"] == true &&
+  binding_names = binding_refs.fetch("object_fields").map { |item| item.fetch("name") }
+  valid_schema = context_decision["required"] == true && context_tdd_mode["required"] == true &&
+    context_tdd_mode.fetch("validation").include?("Equals verification_decision.tdd_choice.mode") &&
     manifest["required"] == true && manifest["type"] == "object[]" &&
-    slice_decision["required"] == true && slice_tdd["required"] == true &&
+    slice_decision["required"] == true && selected_ids["required"] == true && binding_refs["required"] == true && slice_tdd["required"] == true &&
     slice_decision.fetch("validation").include?("equals context_fields.verification_decision") &&
-    slice_tdd.fetch("validation").include?("Equals verification_decision.tdd_choice.mode and context_fields.tdd_applies")
+    selected_ids.fetch("validation").include?("An ordered unique subset") &&
+    binding_refs.fetch("validation").include?("Each {kind,value,source_ref} exactly equals a canonical policy tuple") &&
+    %w[kind value source_ref].all? { |name| binding_names.count(name) == 1 } &&
+    slice_tdd.fetch("validation").include?("True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids")
   exit(valid_schema ? 0 : 1)
 ' "$handoffs_file"; then
     pass
@@ -356,6 +363,45 @@ if [[ "${#missing_code_writer_status_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "Code Writer status packet schema/prompts missing terms: ${missing_code_writer_status_terms[*]}"
+fi
+
+test_start "CodeWriter verification results are bounded-lane conditional and preserve exact identity fields"
+if ruby -ryaml -e '
+    handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs").to_h { |item| [item.fetch("name"), item] }
+    find_field = ->(fields, name) { fields.find { |item| item["name"] == name } || raise("missing #{name}") }
+    writer_results = find_field.call(handoffs.fetch("orchestrator_to_code_writer").fetch("return_fields"), "validation_results")
+    tester_results = find_field.call(handoffs.fetch("orchestrator_to_builder_tester").fetch("return_fields"), "validation_results")
+    expected_condition = "build_execution_lane == bounded_executor and status in [DONE, DONE_WITH_CONCERNS, DEVIATED]"
+    raise "CodeWriter result condition or cardinality changed" unless writer_results["required"] == "conditional" && writer_results["condition"] == expected_condition && writer_results["min_items"] == 1
+    predicate = ->(lane, status) do
+      writer_results.fetch("condition").split(" and ").all? do |term|
+        if (match = term.match(/\Abuild_execution_lane == (.+)\z/))
+          lane == match[1]
+        elsif (match = term.match(/\Astatus in \[([^\]]+)\]\z/))
+          match[1].split(", ").include?(status)
+        else
+          false
+        end
+      end
+    end
+    raise "bounded DONE should require CodeWriter verification" unless predicate.call("bounded_executor", "DONE")
+    raise "separated implementation DONE must precede BuilderTester verification" if predicate.call("separated_workers", "DONE")
+    raise "blocked returns must not require completed verification" if predicate.call("bounded_executor", "BLOCKED")
+    raise "BuilderTester result carrier must remain required" unless tester_results["required"] == true && tester_results["min_items"] == 1
+    [writer_results, tester_results].each do |results|
+      fields = results.fetch("object_fields")
+      ids = find_field.call(fields, "selected_check_ids")
+      tuples = find_field.call(fields, "binding_obligation_refs")
+      raise "selected IDs must be a required string array" unless ids["type"] == "string[]" && ids["required"] == true
+      raise "binding tuples must be a required object array" unless tuples["type"] == "object[]" && tuples["required"] == true
+      tuple_fields = tuples.fetch("object_fields")
+      raise "binding tuple fields changed" unless tuple_fields.map { |item| item.fetch("name") }.sort == %w[kind source_ref value]
+      raise "binding tuple fields must retain required typed values" unless tuple_fields.all? { |item| item["required"] == true } && tuple_fields.to_h { |item| [item.fetch("name"), item.fetch("type")] } == {"kind"=>"enum", "value"=>"string", "source_ref"=>"string"}
+    end
+  ' "$handoffs_file"; then
+    pass
+else
+    fail "CodeWriter/BuilderTester validation result lane or identity schema is inconsistent"
 fi
 
 test_start "Builder Tester status packet keeps selected-check and no-build outcomes distinct"

@@ -18,8 +18,9 @@ Reviewer bundles.
 Migration note: assistant-review contracts are v8.0. Persisted 6.0/7.0/7.1/7.2 batch packets are invalidated and rebuilt from a fresh 8.0 snapshot before CLEAN.
 Preserve recoverable selected design, rationale, and viable alternatives/dispositions.
 Workflow-composed `no_build_scope` is allowed only when no fix is required or
-occurred and no due selected/binding build or test check exists; after a fix,
-current passed evidence is mandatory. Standalone review-fix still requires
+occurred and no due selected or applicable due/executable binding check exists;
+every due check needs current passed evidence. After a fix, current passed
+evidence is mandatory. Standalone review-fix still requires
 successful build and tests.
 Apply `subagent_trigger_scope`; opt-out, unavailability, or policy blocks use
 direct fallback. Reviewer returns and final summaries require non-empty
@@ -57,10 +58,9 @@ Find and fix authorized evidence-backed defects, regressions, and test gaps; rep
   review-fix; carried approval permits bounded in-scope fixes. If audit versus
   editing is materially unresolved, ask exactly: "Should I only report findings,
   or also implement and verify fixes?" Do not review/mutate until answered.
-- Frame refactor findings as concrete risk using clean-code evidence lenses.
 - Keep QA evaluation separate from code review: QA owns acceptance, Done
   Contract, verification, scoped quality, progression, and final result.
-  Code Reviewer continues to own code defects, security, architecture, and test-coverage review. Code Reviewer still owns code defects.
+  Code Reviewer continues to own code defects, security, architecture, and test-coverage review.
 
 ## Entry
 
@@ -149,7 +149,7 @@ Return reviewed scope, rounds/result, evidence-backed findings/fixes, verificati
 ## Stop Rules
 
 - Audit mode stops after one review batch. Report terminal findings without edits.
-- The normal review-fix path (max 10 rounds) is an initial review batch, fixes and validation, then one fresh re-review batch; mutation requires a new snapshot and complete coverage.
+- Review-fix runs round 1, authorized fixes/validation, then a fresh round 2; mutation requires a new snapshot and complete coverage.
 - Before round 3+, require `additional_round_reason` backed by changed files,
   unresolved finding, validation failure, regression/drift, or changed
   hypothesis; score alone is insufficient. round 10 is terminal; never start 11.

@@ -67,7 +67,7 @@ gates:
         on_fail: "In mode=review-fix, validate FIX_STEP entry_assertions before repair or mutation dispatch, then repair only an authorized in-scope mismatch and repeat to PASS. In mode=audit, record the mismatch, freeze the read-only batch, dispatch every required pass, wait for the response barrier, and never mutate source."
 
       - id: E9
-        check: "Workflow-composed review consumes Spec PASS and, when required, current evidence_ref bound to the canonical decision, assessment, due selected/binding results, exclusions, and source. no_build_scope is allowed only when no fix is required/occurred and no due selected/binding build/test check applies."
+        check: "Workflow-composed review consumes Spec PASS and, when required, current evidence_ref bound to the canonical decision, assessment, every due selected check and applicable due/executable binding result, exclusions, and source. no_build_scope is allowed only when no fix is required/occurred and no due selected or applicable due/executable binding check applies."
         condition: "review_preparation_mode == workflow_composed"
         on_fail: "Block dispatch and request the carried Spec Review PASS and current bound verification evidence, or the permitted no_build_scope reason, from the composing workflow."
 
@@ -108,8 +108,8 @@ gates:
         on_fail: "Resolve reviewer_context only at pass start, rebuild the bounded bundle from dispatch_context_bundles, exclude untriggered checklist sections, and use pass_repair_guard for one allowed transient/schema repair before terminal incomplete coverage."
 
       - id: RS2A
-        check: "Workflow-composed evidence_ref binds the canonical decision, current assessment, all due selected/binding results, exclusions, and source. Require it with passed results for due checks and after every source fix; fixes invalidate the batch and forbid not_applicable. no_build_scope requires no required/occurred fix and no due build/test. Standalone review-fix requires build/tests."
-        on_fail: "Block Reviewer dispatch. Resolve the carried selection and binding constraints, run or reuse current successful evidence for every due check, and require a current evidence_ref after fixes; use no_build_scope only under its exact workflow-composed condition."
+        check: "Workflow-composed evidence_ref binds the canonical decision, current assessment, every due selected check and applicable due/executable binding result, exclusions, and source. Require it with passed results for due checks and after every source fix; fixes invalidate the batch and forbid not_applicable. no_build_scope requires no required/occurred fix and no due selected or applicable due/executable binding check. Standalone review-fix requires build/tests."
+        on_fail: "Block Reviewer dispatch. Resolve the carried selection and applicable binding constraints, run or reuse current successful evidence for every due check, and require a current evidence_ref after fixes; use no_build_scope only under its exact workflow-composed condition."
 
       - id: RS2B
         check: "The declared reviewer_context boundary closure is strictly below 5653 words and excludes orchestrator_to_reviewer.return_fields"

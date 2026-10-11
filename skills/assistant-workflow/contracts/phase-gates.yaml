@@ -265,7 +265,7 @@ gates:
         on_fail: "Dispatch Architect to produce a strict slice manifest or add a single-slice rationale when one verified slice is the smallest correct decomposition"
 
       - id: DC2
-        check: "Each slice has slice_id, name, observable_increment, deliverable_type, acceptance_criteria, unchanged verification_decision, tdd_applies equal to verification_decision.tdd_choice.mode, files_to_create, files_to_modify, files_to_test, enabling_changes_included, depends_on, expected_success_signal, evidence_to_record, and deviation_rollback_rule. A command-based selected CheckSpec carries direct argv and cwd; otherwise its concrete procedure remains in the canonical CheckSpec."
+        check: "Each slice has slice_id, name, observable_increment, deliverable_type, acceptance_criteria, unchanged verification_decision, selected_check_ids as its due subset, exact applicable due binding_obligation_refs, and tdd_applies true only when selected_check_ids intersects tdd_choice.applicable_check_ids, plus files_to_create, files_to_modify, files_to_test, enabling_changes_included, depends_on, expected_success_signal, evidence_to_record, and deviation_rollback_rule. A command-based selected CheckSpec carries direct argv and cwd; otherwise its concrete procedure remains in the canonical CheckSpec."
         on_fail: "Rewrite the Decompose output into the strict slice schema before entering Plan"
 
       - id: DC_SLICE_IDENTITY
@@ -351,7 +351,7 @@ gates:
         on_fail: "Load references/verified-skill-distillation.md and obtain verifier approval before skill/constraint/eval promotion"
 
       - id: P_VERIFICATION_SELECTION
-        check: "Before Plan fixes verification obligations, assistant-verification selected a current verification_decision; its tdd_choice.mode is projected unchanged to tdd_mode and each affected packet's tdd_applies. Binding policy conflicts and material capability gaps are resolved or retained as explicit blockers."
+        check: "Before Plan fixes verification obligations, assistant-verification selected a current verification_decision; its tdd_choice.mode is projected unchanged to task-wide tdd_mode. Each packet carries its due selected_check_ids and exact applicable due binding_obligation_refs; packet-local tdd_applies is true only when selected_check_ids intersects tdd_choice.applicable_check_ids. Binding policy conflicts and material capability gaps are resolved or retained as explicit blockers."
         condition: "execution_intent != prepare_only"
         on_fail: "Run assistant-verification before finalizing Plan; resolve binding conflicts, keep scope/technique/TDD independent, and carry the canonical decision unchanged."
 
@@ -484,7 +484,7 @@ gates:
         on_fail: "Stop Build; return to Discover for explicit answers or controlling-source resolution."
 
       - id: B_VERIFICATION_SELECTION
-        check: "A current verification_decision is carried into the task packet before any Build action; tdd_mode equals its tdd_choice.mode, and each slice's tdd_applies preserves that mode without adding unconditional RED."
+        check: "A current verification_decision is carried into the task packet before any Build action; task-wide tdd_mode equals its tdd_choice.mode. Each packet carries its due selected_check_ids and exact applicable due binding_obligation_refs; tdd_applies is true only when selected_check_ids intersects tdd_choice.applicable_check_ids."
         condition: "execution_intent != prepare_only"
         on_fail: "Stop before mutation; run or refresh assistant-verification, bind its decision to the packet, and project TDD only from tdd_choice.mode."
 
@@ -527,8 +527,8 @@ gates:
         on_fail: "Resolve applicability and run or reuse current successful build evidence. Do not enter Review with a failed, missing, stale, or unresolved required build."
 
       - id: B3
-        check: "Every selected check due in Build and every binding project check has a current observed or admissibly reused result recorded in the existing result carriers; skipped, failed, partial, stale, and unavailable outcomes remain gaps. Missing or unresolved build/test applicability is also a gap."
-        on_fail: "Complete the selected checks or preserve their exact gaps; do not substitute an unselected full suite or a planned command for result evidence."
+        check: "Every selected check due in Build and every applicable due/executable binding obligation has a current observed or admissibly reused result recorded in the existing result carriers, bound to its selected_check_id or exact {kind,value,source_ref} tuple and the actual supporting procedure/oracle; skipped, failed, partial, stale, and unavailable outcomes remain gaps. Missing or unresolved applicability is also a gap."
+        on_fail: "Complete applicable due checks or preserve their exact gaps; do not invent execution checks for unrelated policy constraints, substitute an unselected full suite, or use a planned command as result evidence."
 
       - id: B3A
         check: "Unknown-cause bugfixes completed assistant-debugging or recorded a concrete debugging blocker before implementation; no random patching occurred before reproduction/root-cause evidence"
@@ -564,7 +564,7 @@ gates:
         on_fail: "Run selected verification criteria for each slice, record method-appropriate results in the configured task journal or equivalent carried-forward state, and resolve failing or missing criteria before proceeding to Review."
 
       - id: B_SUBAGENT_EVIDENCE
-        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's implementation, selected-check results, and changed-file evidence, with RED/GREEN evidence only when verification_decision.tdd_choice.mode=true; build_execution_lane == separated_workers records Code Writer implementation and Builder/Tester selected-check results, with RED evidence only when TDD is active"
+        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's implementation, selected-check results, and changed-file evidence, with RED/GREEN evidence only for packets whose tdd_applies=true; build_execution_lane == separated_workers records Code Writer implementation and Builder/Tester selected-check results, with RED evidence only for packets whose tdd_applies=true"
         condition: "controller_intensity in [standard, strict]"
         on_fail: "Update the selected-lane implementation and selected-check result portion of the Agent Dispatch Log before leaving Build, adding RED/GREEN only when the canonical TDD choice is active. Light work may instead record inline/direct validation."
 
@@ -868,13 +868,13 @@ invariants:
     on_fail: "Return to assistant-verification, refresh selection against current scope and policy, and bind its unchanged decision before dependent work."
 
   - id: INV_VERIFICATION_RESULTS
-    check: "EvidenceAssessment uses actual result refs for each material selected claim and binding obligation. Only current, resolved passing evidence can support sufficient; planned, failed, stale, partial, skipped, unavailable, or missing evidence remains a gap. Reused results retain original-run identity and current comparison, including argv/cwd when command-based."
+    check: "EvidenceAssessment uses actual result refs for every due selected check and applicable due/executable binding obligation, bound by selected_check_id or the exact {kind,value,source_ref} tuple and supported by the current procedure/oracle. Only current, resolved passing evidence can support sufficient; planned, failed, stale, partial, skipped, unavailable, or missing evidence remains a gap. Reused results retain original-run identity and current comparison, including argv/cwd when command-based."
     condition: "execution_intent != prepare_only"
     scope: all_phases
     on_fail: "Record the precise result/gap in existing test_results or validation_results, then reassess before Review or completion."
 
   - id: INV_TDD_PROJECTION
-    check: "tdd_mode equals verification_decision.tdd_choice.mode and each packet tdd_applies preserves that choice. RED evidence is required before production only when TDD is active; false TDD uses the selected checks without fabricated RED."
+    check: "Task-wide tdd_mode equals verification_decision.tdd_choice.mode. Each packet's tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids. RED evidence is required before production only for those applicable packet checks; other due checks still run without fabricated RED."
     condition: "execution_intent != prepare_only"
     scope: all_phases
     on_fail: "Repair the decision projection. If active TDD lacks valid right-reason RED, stop production; otherwise remove unconditional RED demands without discarding selected evidence."

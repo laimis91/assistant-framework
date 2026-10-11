@@ -581,6 +581,73 @@ build_medium_implement_only_harness_handoff_response() {
     local summary="$2"
 
     jq -n --arg summary "$summary" '
+      def verification_decision:
+        {
+          scope: "Adapt the approved VIEWING route behavior and honor its deferred trace/replay obligation.",
+          policy_basis: {
+            binding_constraints: [{
+              kind: "required_check",
+              value: "Run the explicitly requested trace/replay harness during future implementation.",
+              source_ref: "prep/medium-feature"
+            }],
+            preferences_applied: [],
+            capability_limits: []
+          },
+          test_change: "extend_existing",
+          checks: [
+            {
+              check_id: "viewing-route-effects",
+              claim_or_risk: "VIEWING preserves route selection, highlight, and viewport focus without enabling editing.",
+              action: "run",
+              method: "automated_test",
+              test_scope: "integration",
+              technique: "example",
+              check_ref_or_method: {
+                reference_or_procedure: "Run the focused route behavior test for selection, highlight, viewport focus, and read-only VIEWING.",
+                prerequisites: ["The approved route change and focused route behavior test are available."],
+                exclusions: ["Does not claim native activation or run the deferred trace/replay harness."],
+                expected_success: "VIEWING preserves all three route effects and remains read-only.",
+                meaningful_failure: "At least one route effect is missing or VIEWING enables editing."
+              },
+              rationale: "The focused route test observes each approved behavior at the changed route boundary.",
+              method_refs: ["skills/assistant-verification/references/methods/integration.md"]
+            },
+            {
+              check_id: "trace-replay-harness",
+              claim_or_risk: "The explicitly requested trace/replay harness accepts the implemented route behavior.",
+              action: "run",
+              method: "behavioral_eval",
+              technique: "task_eval",
+              check_ref_or_method: {
+                reference_or_procedure: "Run the selected trace/replay harness after Build and record its result under journal/implementation-transition#verification.",
+                prerequisites: ["The approved pre-Build Harness Recipe and runtime artifact refs are accepted."],
+                exclusions: ["Harness selection and pre-Build readiness do not count as a harness run."],
+                expected_success: "The trace/replay harness reports the approved route behavior.",
+                meaningful_failure: "The harness fails or observes route behavior outside the approved scope."
+              },
+              rationale: "This executes the explicitly requested deferred harness obligation and observes runtime traces beyond the focused route test.",
+              method_refs: ["skills/assistant-verification/references/methods/behavioral-evals.md"]
+            }
+          ],
+          tdd_choice: {
+            mode: false,
+            applicable_check_ids: [],
+            basis: "not_selected",
+            rationale: "The approved packet has no active TDD selection; neither due check receives a fabricated RED requirement."
+          },
+          omitted_checks_and_rationale: ["A broader route suite is omitted because the focused route check and required trace/replay harness cover the approved claims."],
+          stop_rule: "Stop after both selected checks pass and refresh the assessment from their actual results; return to Plan if the approved route or harness obligation changes."
+        };
+      def evidence_assessment:
+        {
+          status: "planned",
+          scope_and_evidence_refs: [],
+          gaps_and_limitations: ["The focused route check and deferred trace/replay harness have not run for this implementation."],
+          next_action: "Run both selected checks after Build and refresh this assessment from their actual results before Review."
+        };
+      def selected_check_ids: ["viewing-route-effects", "trace-replay-harness"];
+      def tdd_applies($selected_ids; $decision):
+        any($selected_ids[]; . as $id | ($decision.tdd_choice.applicable_check_ids | index($id)) != null);
       def approved_obligation:
         {
           requested_scope: "Run the explicitly requested trace/replay harness during future implementation.",
@@ -617,6 +684,9 @@ build_medium_implement_only_harness_handoff_response() {
         approved_feature_preparation_evidence_ref: "prep/medium-feature",
         approved_feature_preparation_result: approved_result,
         approved_feature_preparation_harness_obligation: approved_obligation,
+        verification_decision: verification_decision,
+        evidence_assessment: evidence_assessment,
+        tdd_mode: (verification_decision | .tdd_choice.mode),
         completion_policy: {
           controller_intensity: "strict",
           build_execution_lane: "bounded_executor",
@@ -687,6 +757,10 @@ build_medium_implement_only_harness_handoff_response() {
           observable_increment: "VIEWING selects, highlights, and focuses while remaining read-only.",
           deliverable_type: "behavior",
           acceptance_criteria: ["VIEWING applies selection, highlight, and viewport focus without enabling editing."],
+          verification_decision: verification_decision,
+          selected_check_ids: selected_check_ids,
+          binding_obligation_refs: (verification_decision | .policy_basis.binding_constraints),
+          tdd_applies: tdd_applies(selected_check_ids; verification_decision),
           files_to_create: [],
           files_to_modify: ["src/route.ts"],
           files_to_test: ["test/route_test.ts"],
@@ -749,13 +823,17 @@ build_medium_implement_only_harness_handoff_response() {
           files_to_test: ["test/route_test.ts"],
           enabling_changes_included: ["none"],
           depends_on: [],
-          tdd_applies: false,
+          verification_decision: verification_decision,
+          selected_check_ids: selected_check_ids,
+          binding_obligation_refs: (verification_decision | .policy_basis.binding_constraints),
+          evidence_assessment: evidence_assessment,
+          tdd_applies: tdd_applies(selected_check_ids; verification_decision),
           acceptance_criteria: ["VIEWING applies selection, highlight, and viewport focus without enabling editing."],
           reuse_search: {applicability:"not_applicable",applicability_reason:"The approved existing route path is the required extension point."},
           done_contract_ref: "plan/implementation-transition#done-contract",
           harness_recipe_ref: "plan/implementation-transition#harness-recipe",
           artifact_refs: artifact_refs,
-          test_criteria: ["The focused route behavior test proves all preserved effects and read-only scope."],
+          test_criteria: ["The focused route behavior test proves all preserved effects and read-only scope.", "The deferred trace/replay harness reports the approved route behavior."],
           implementation_notes: ["Preserve ACTIVE behavior and consume prep/medium-feature unchanged."],
           verification_command: ["bash", "tests/route-behavior-contracts.sh"],
           expected_success_signal: "Focused route behavior verification passes.",
@@ -784,7 +862,7 @@ build_medium_implement_only_harness_handoff_response() {
           trace_ledger_ref: "journal/implementation-transition#trace-ledger",
           recovery_pointer: "plan/implementation-transition#task-packet"
         },
-        validation_results: [{command_or_check:"canonical pre-Build harness gate",result:"passed",evidence:"Done Contract, Harness Recipe, executable packet, and runtime refs are valid; Build not started."}],
+        validation_results: [{command_or_check:"canonical pre-Build harness gate",result:"passed",evidence:"Done Contract, Harness Recipe, executable packet, and runtime refs are valid; Build not started.",selected_check_ids:[],binding_obligation_refs:[]}],
         phase_checkpoints: ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]
       }
     ' >"$response_path"
@@ -802,6 +880,9 @@ build_medium_implement_only_not_applicable_harness_handoff_response() {
         | del(.approved_feature_preparation_result.feature_preparation_evidence_ref, .triage_result.approved_feature_preparation_result.feature_preparation_evidence_ref, .implementation_steps[0].approved_feature_preparation_result.feature_preparation_evidence_ref)
         | del(.approved_feature_preparation_harness_obligation.source_feature_preparation_evidence_ref)
         | .approved_feature_preparation_harness_obligation.source_preparation_basis = "not_applicable"
+        | .verification_decision.policy_basis.binding_constraints[0].source_ref = "preparation/not-applicable"
+        | .implementation_steps[0].verification_decision = .verification_decision
+        | .implementation_steps[0].binding_obligation_refs = .verification_decision.policy_basis.binding_constraints
         | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "Feature: binary acceptance", "Feature: new behavior tested", "Feature: contract/config/telemetry/docs impacts checked", "approved not_applicable preparation basis", "Done Contract", "Harness Recipe", "Harness runtime artifact refs"]
         | del(.implementation_steps[0].feature_preparation_evidence_ref)
         | del(.implementation_steps[0].feature_preparation_harness_obligation.source_feature_preparation_evidence_ref)
@@ -810,6 +891,14 @@ build_medium_implement_only_not_applicable_harness_handoff_response() {
         | .requirement_acceptance_map.entries[0].evidence_ref = "preparation/not-applicable"
         | .implementation_steps[0].implementation_notes = ["Use the approved not_applicable preparation basis and do not invent an existing-system evidence ref."]
         | .replay_packet.pinned_context[0] = "approved preparation basis: not_applicable"
+        | .verification_decision as $decision
+        | .implementation_steps[0].selected_check_ids as $selected_ids
+        | .implementation_steps[0].binding_obligation_refs as $binding_refs
+        | .implementation_steps[0].tdd_applies as $slice_tdd_applies
+        | .slice_manifest[0].verification_decision = $decision
+        | .slice_manifest[0].selected_check_ids = $selected_ids
+        | .slice_manifest[0].binding_obligation_refs = $binding_refs
+        | .slice_manifest[0].tdd_applies = $slice_tdd_applies
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
 }
@@ -821,12 +910,85 @@ build_medium_implement_only_qa_handoff_response() {
 
     build_medium_implement_only_harness_handoff_response "$response_path" "$summary"
     jq '
+        def verification_decision:
+          {
+            scope: "Implement the approved VIEWING route behavior and complete QA acceptance after independent review.",
+            policy_basis: {
+              binding_constraints: [{
+                kind: "required_check",
+                value: "Run the explicitly requested QA/acceptance evaluation.",
+                source_ref: "prep/medium-feature"
+              }],
+              preferences_applied: [],
+              capability_limits: []
+            },
+            test_change: "extend_existing",
+            checks: [
+              {
+                check_id: "viewing-route-effects",
+                claim_or_risk: "VIEWING preserves route selection, highlight, and viewport focus without enabling editing.",
+                action: "run",
+                method: "automated_test",
+                test_scope: "integration",
+                technique: "example",
+                check_ref_or_method: {
+                  reference_or_procedure: "Run the focused route behavior test for selection, highlight, viewport focus, and read-only VIEWING.",
+                  prerequisites: ["The approved route change and focused route behavior test are available."],
+                  exclusions: ["Does not claim native activation or substitute for post-review QA acceptance."],
+                  expected_success: "VIEWING preserves all three route effects and remains read-only.",
+                  meaningful_failure: "At least one route effect is missing or VIEWING enables editing."
+                },
+                rationale: "The focused route test observes each approved behavior at the changed route boundary.",
+                method_refs: ["skills/assistant-verification/references/methods/integration.md"]
+              },
+              {
+                check_id: "post-review-qa-acceptance",
+                claim_or_risk: "The independent QA Evaluator accepts the approved route behavior after Build and Code Reviewer evidence.",
+                action: "run",
+                method: "behavioral_eval",
+                technique: "task_eval",
+                check_ref_or_method: {
+                  reference_or_procedure: "Run the QA Evaluator after Build and Code Reviewer evidence using the approved binary acceptance criteria.",
+                  prerequisites: ["Build evidence and current independent Code Reviewer evidence are available."],
+                  exclusions: ["Do not run or claim QA acceptance before Build and Code Reviewer evidence."],
+                  expected_success: "The QA Evaluator accepts the approved route behavior against its binary criteria.",
+                  meaningful_failure: "The QA Evaluator finds an unmet acceptance criterion or cannot complete the required evaluation."
+                },
+                rationale: "This retains the separately requested QA/acceptance obligation at its existing post-review boundary.",
+                method_refs: ["skills/assistant-verification/references/methods/behavioral-evals.md"]
+              }
+            ],
+            tdd_choice: {
+              mode: false,
+              applicable_check_ids: [],
+              basis: "not_selected",
+              rationale: "The approved route check is due for verification, while TDD is not selected for this packet and no RED is fabricated."
+            },
+            omitted_checks_and_rationale: ["The deferred QA check is not executed before Build and independent review."],
+            stop_rule: "Run the route check after Build, then complete QA only after current Code Reviewer evidence; return to Plan if either approved obligation changes."
+          };
+        def evidence_assessment:
+          {
+            status: "planned",
+            scope_and_evidence_refs: [],
+            gaps_and_limitations: ["The route check has not run, and post-review QA remains due after Build and Code Reviewer evidence."],
+            next_action: "Run the route check after Build, then run the QA Evaluator after Code Reviewer evidence and refresh this assessment from actual results."
+          };
+        def selected_check_ids: ["viewing-route-effects"];
+        def tdd_applies($selected_ids; $decision):
+          any($selected_ids[]; . as $id | ($decision.tdd_choice.applicable_check_ids | index($id)) != null);
         def qa_obligation: {
           requested_scope: "Run the explicitly requested QA/acceptance evaluation.",
           execution_prerequisite: "Run after Build and Code Reviewer evidence in the approved implementation workflow.",
           source_feature_preparation_evidence_ref: "prep/medium-feature"
         };
-        .approved_feature_preparation_qa_acceptance_obligation = qa_obligation
+        verification_decision as $decision
+        | evidence_assessment as $assessment
+        | selected_check_ids as $selected_ids
+        | .verification_decision = $decision
+        | .evidence_assessment = $assessment
+        | .tdd_mode = $decision.tdd_choice.mode
+        | .approved_feature_preparation_qa_acceptance_obligation = qa_obligation
         | .implementation_steps[0].feature_preparation_qa_acceptance_obligation = qa_obligation
         | .approved_feature_preparation_result.future_qa_acceptance_obligation = {requested_scope: "Run the explicitly requested QA/acceptance evaluation.", execution_prerequisite: "Run after Build and Code Reviewer evidence in the approved implementation workflow."}
         | .triage_result.approved_feature_preparation_result.future_qa_acceptance_obligation = .approved_feature_preparation_result.future_qa_acceptance_obligation
@@ -841,7 +1003,19 @@ build_medium_implement_only_qa_handoff_response() {
         | .plan_document = "Approved implementation plan plan/implementation-transition: execute the single viewing-route-effects packet, then run Code Reviewer and QA Evaluator evidence; Build not started."
         | .artifact_reference_ledger |= map(select(.artifact_id == "task-packet" or .artifact_id == "verification-evidence"))
         | .implementation_steps[0].artifact_refs = .artifact_reference_ledger
-        | .validation_results = [{command_or_check:"approved deferred QA routing",result:"passed",evidence:"QA obligation is source-bound and routed after Build and Code Reviewer evidence."}]
+        | .implementation_steps[0].verification_decision = $decision
+        | .implementation_steps[0].selected_check_ids = $selected_ids
+        | .implementation_steps[0].binding_obligation_refs = []
+        | .implementation_steps[0].evidence_assessment = $assessment
+        | .implementation_steps[0].tdd_applies = tdd_applies($selected_ids; $decision)
+        | .implementation_steps[0].test_criteria = ["The focused route behavior test proves all preserved effects and read-only scope."]
+        | .implementation_steps[0].binding_obligation_refs as $binding_refs
+        | .implementation_steps[0].tdd_applies as $slice_tdd_applies
+        | .slice_manifest[0].verification_decision = $decision
+        | .slice_manifest[0].selected_check_ids = $selected_ids
+        | .slice_manifest[0].binding_obligation_refs = $binding_refs
+        | .slice_manifest[0].tdd_applies = $slice_tdd_applies
+        | .validation_results = [{command_or_check:"approved deferred QA routing",result:"passed",evidence:"QA obligation is source-bound and routed after Build and Code Reviewer evidence.",selected_check_ids:[],binding_obligation_refs:[]}]
         | .phase_checkpoints = ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
@@ -858,7 +1032,17 @@ build_medium_implement_only_not_applicable_qa_handoff_response() {
         | del(.approved_feature_preparation_evidence_ref, .approved_feature_preparation_result.feature_preparation_evidence_ref, .triage_result.approved_feature_preparation_result.feature_preparation_evidence_ref, .implementation_steps[0].approved_feature_preparation_result.feature_preparation_evidence_ref, .approved_feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_evidence_ref, .implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_feature_preparation_evidence_ref)
         | .approved_feature_preparation_qa_acceptance_obligation.source_preparation_basis = "not_applicable"
         | .implementation_steps[0].feature_preparation_qa_acceptance_obligation.source_preparation_basis = "not_applicable"
+        | .verification_decision.policy_basis.binding_constraints[0].source_ref = "preparation/not-applicable"
+        | .implementation_steps[0].verification_decision = .verification_decision
         | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "approved not_applicable preparation basis", "post-Build Code Reviewer evidence", "QA Evaluator acceptance evidence"]
+        | .verification_decision as $decision
+        | .implementation_steps[0].selected_check_ids as $selected_ids
+        | .implementation_steps[0].binding_obligation_refs as $binding_refs
+        | .implementation_steps[0].tdd_applies as $slice_tdd_applies
+        | .slice_manifest[0].verification_decision = $decision
+        | .slice_manifest[0].selected_check_ids = $selected_ids
+        | .slice_manifest[0].binding_obligation_refs = $binding_refs
+        | .slice_manifest[0].tdd_applies = $slice_tdd_applies
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
 }
@@ -869,6 +1053,47 @@ build_medium_implement_only_not_applicable_preparation_result_response() {
     local include_readiness="${3:-false}"
 
     jq -n --arg summary "$summary" --argjson include_readiness "$include_readiness" '
+      def verification_decision:
+        {
+          scope: "Create the approved new read-only route behavior.",
+          policy_basis: {binding_constraints: [], preferences_applied: [], capability_limits: []},
+          test_change: "add_new",
+          checks: [{
+            check_id: "new-route-behavior",
+            claim_or_risk: "The new route returns the approved read-only result.",
+            action: "add",
+            method: "automated_test",
+            test_scope: "integration",
+            technique: "example",
+            check_ref_or_method: {
+              reference_or_procedure: "Run bash tests/new-route-behavior-contracts.sh; before the route implementation, the focused test must fail because the new route does not return the approved read-only result.",
+              prerequisites: ["The approved route acceptance criterion and focused behavior test are available."],
+              exclusions: ["Does not require broader route or repository suites."],
+              expected_success: "The new route returns the approved read-only result.",
+              meaningful_failure: "Before the implementation, the route is absent or returns a result outside the approved read-only behavior."
+            },
+            rationale: "The focused route test directly checks the new behavior and provides a stable pre-fix RED oracle.",
+            method_refs: ["skills/assistant-verification/references/methods/integration.md"]
+          }],
+          tdd_choice: {
+            mode: true,
+            applicable_check_ids: ["new-route-behavior"],
+            basis: "selected_technique",
+            rationale: "The selected route behavior test has a stable, meaningful RED oracle for this implementation increment."
+          },
+          omitted_checks_and_rationale: ["Broader route and repository suites are omitted because the focused route behavior check covers the approved acceptance criterion."],
+          stop_rule: "Capture the focused RED before the implementation, then stop when the selected route check passes and fresh review confirms the approved scope."
+        };
+      def evidence_assessment:
+        {
+          status: "planned",
+          scope_and_evidence_refs: [],
+          gaps_and_limitations: ["No RED or post-implementation result exists yet for new-route-behavior."],
+          next_action: "Run the selected test to capture meaningful RED before implementation, then refresh this assessment from the actual result."
+        };
+      def selected_check_ids: ["new-route-behavior"];
+      def tdd_applies($selected_ids; $decision):
+        any($selected_ids[]; . as $id | ($decision.tdd_choice.applicable_check_ids | index($id)) != null);
       def approved_result:
         {
           execution_status: "not_started",
@@ -892,6 +1117,9 @@ build_medium_implement_only_not_applicable_preparation_result_response() {
         execution_intent: "implement_only",
         feature_preparation_scope: "not_applicable",
         approved_feature_preparation_result: approved_result,
+        verification_decision: verification_decision,
+        evidence_assessment: evidence_assessment,
+        tdd_mode: (verification_decision | .tdd_choice.mode),
         completion_policy: {
           controller_intensity: "standard",
           build_execution_lane: "bounded_executor",
@@ -947,7 +1175,11 @@ build_medium_implement_only_not_applicable_preparation_result_response() {
           files_to_test: ["test/new-route_test.ts"],
           enabling_changes_included: ["none"],
           depends_on: [],
-          tdd_applies: true,
+          verification_decision: verification_decision,
+          selected_check_ids: selected_check_ids,
+          binding_obligation_refs: (verification_decision | .policy_basis.binding_constraints),
+          evidence_assessment: evidence_assessment,
+          tdd_applies: tdd_applies(selected_check_ids; verification_decision),
           acceptance_criteria: ["The new route returns the approved read-only result."],
           reuse_search: {applicability:"not_applicable", applicability_reason:"The approved preparation result establishes a new bounded route."},
           test_criteria: ["Run the focused new-route behavior test."],

@@ -85,7 +85,7 @@ For `execution_intent != prepare_only`:
    - Automated tests: `references/prompts/test-strategy.md` only when selected by `assistant-verification`
    - DB changes: `references/prompts/migration.md`
    - Unknown-cause bugfix: use `assistant-debugging` first; only transition into TDD when reproduction/root-cause evidence can define a meaningful regression test.
-   - TDD mode: use `assistant-tdd` only when `verification_decision.tdd_choice.mode=true` (or the fallback prompt if the skill is not installed)
+   - TDD mode: use `assistant-tdd` only when the current packet's `tdd_applies=true` (or the fallback prompt if the skill is not installed); preserve the task-wide `tdd_mode` unchanged.
    - **SOLID (plan phase):** Review `references/prompts/solid-principles.md` graduated enforcement table to fill SOLID design notes in the plan template's Architecture section (medium+ tasks).
 
 ### Approval gate

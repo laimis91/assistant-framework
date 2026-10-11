@@ -165,7 +165,7 @@ A slice is not a layer, folder, module, broad feature bucket, setup step, or bro
 
 When decomposition is needed because the task has multiple coherent slices, a Pack-backed boundary, or unresolved cross-slice acceptance risk, produce bounded slice boundaries from the context map, Requirement Acceptance Map, risk tier, required gate packs, Context Budget note, and the Architecture Decision Pack when it applies. Every slice names the requirement ids it advances. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise perform the same direct design work with equivalent criteria and evidence. The Architect consumes the Pack rather than recreating its facts, and each affected slice carries the Pack reference. Task size can signal possible decomposition, but never creates an Architect role by itself. When editing framework skills, contracts, evals, runtime integrations, or workflow patterns, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
 
-Before Architect dispatch and the Decomposition Plan Review (DC2), resolve the canonical task decision through the existing `assistant-verification` Analysis owner. For each proposed slice, confirm that its selected CheckSpecs cover the slice's acceptance criteria and risks; if coverage must change, return through the same Analysis owner and reconcile one task-level decision before DC2. Carry that decision unchanged into every slice and set `tdd_applies` equal to `verification_decision.tdd_choice.mode`; Architect does not choose or rewrite it. If any slice lacks resolved coverage, return before Plan. Plan approval remains required before Build.
+Before Architect dispatch and the Decomposition Plan Review (DC2), resolve the canonical task decision through the existing `assistant-verification` Analysis owner. For each proposed slice, confirm that its selected CheckSpecs cover the slice's acceptance criteria and risks; if coverage must change, return through the same Analysis owner and reconcile one task-level decision before DC2. Carry the decision and selected check identities unchanged into every slice. Each slice's `selected_check_ids` is its due subset; `tdd_applies` is true only when that subset intersects `tdd_choice.applicable_check_ids`. The task-wide `tdd_mode` remains the canonical `tdd_choice.mode`; Architect does not choose or rewrite either value. If any slice lacks resolved coverage, return before Plan. Plan approval remains required before Build.
 
 Print: `>> Dispatching Architect → strict slice decomposition` (when `subagent_execution_mode=delegated`)
 Print: `>> Direct fallback Architect responsibility → strict slice decomposition` (when `subagent_execution_mode=direct_fallback`)
@@ -197,7 +197,9 @@ Print: `>> Direct fallback Architect responsibility → strict slice decompositi
 - **Enabling changes included:** [setup, contracts, wiring, or "none"]
 - **Depends on:** [slice ids, or "none"]
 - **Verification decision:** [unchanged canonical decision and selected CheckSpecs]
-- **TDD applies:** [verification_decision.tdd_choice.mode]
+- **Selected check IDs:** [the due subset for this slice]
+- **Binding obligation refs:** [exact applicable due tuples `{kind,value,source_ref}`]
+- **TDD applies:** [whether selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
 - **Selected verification:** [exact argv/cwd for command checks; otherwise the concrete CheckSpec procedure and observable result; no dummy command]
 - **Expected success signal:** [specific passing output, file, or review signal]
 - **Evidence to record:** [ledger/eval/test/review artifacts]
@@ -285,7 +287,7 @@ For `execution_intent != prepare_only`:
    - Automated tests: `references/prompts/test-strategy.md` only when selected by `assistant-verification`
    - DB changes: `references/prompts/migration.md`
    - Unknown-cause bugfix: use `assistant-debugging` first; only transition into TDD when reproduction/root-cause evidence can define a meaningful regression test.
-   - TDD mode: use `assistant-tdd` only when `verification_decision.tdd_choice.mode=true` (or the fallback prompt if the skill is not installed)
+   - TDD mode: use `assistant-tdd` only when the current packet's `tdd_applies=true` (or the fallback prompt if the skill is not installed); preserve the task-wide `tdd_mode` unchanged.
    - **SOLID (plan phase):** Review `references/prompts/solid-principles.md` graduated enforcement table to fill SOLID design notes in the plan template's Architecture section (medium+ tasks).
 
 ### Approval gate

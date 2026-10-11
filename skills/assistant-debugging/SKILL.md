@@ -86,7 +86,8 @@ debugging does not depend on assistant-workflow being installed.
 For an unknown-cause failure, use `assistant-debugging` before verification
 selection. Once the mechanism is understood, resolve the check scope and TDD
 choice through `assistant-verification`. Hand RED-ready evidence to
-`assistant-tdd` only when `verification_decision.tdd_choice.mode=true`;
+`assistant-tdd` only when the current fix's `selected_check_ids` intersect
+`verification_decision.tdd_choice.applicable_check_ids`;
 otherwise follow the selected checks without fabricating RED. Use
 `assistant-review` after non-trivial or risky fixes.
 

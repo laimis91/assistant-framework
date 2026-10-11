@@ -54,7 +54,9 @@ This strict slice packet is the authoritative packet and executable contract for
 - feature_preparation_qa_acceptance_obligation: [required exact approved object when the preparation result contains future_qa_acceptance_obligation; include requested_scope, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
 - verification_decision: [canonical assistant-verification/contracts/output.yaml#verification_decision object, unchanged; preserve selected scope, CheckSpec entries, exclusions, rationales, and TddChoice]
 - evidence_assessment: [current canonical assistant-verification/contracts/output.yaml#evidence_assessment object; reassess from actual selected-check results before Review]
-- tdd_applies: [exact projection of verification_decision.tdd_choice.mode]
+- selected_check_ids: [due CheckSpec IDs assigned to this packet]
+- binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
+- tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
 - acceptance_criteria:
   - [ ] [binary pass/fail criterion]
 - selected_check_procedure: [for each CheckSpec, exact argv and cwd if command-based; otherwise concrete procedure and observable result; do not invent a command]
