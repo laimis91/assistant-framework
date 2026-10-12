@@ -57,16 +57,28 @@ for term in \
     "worker_status_protocol:" \
     "CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns include a compact status packet" \
     "status is required on CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns." \
-    "evidence is required for CodeMapper, Explorer, Architect, and CodeWriter returns with DONE, DONE_WITH_CONCERNS, DEVIATED, or FAILED_VERIFICATION." \
+    "evidence is required for CodeMapper, Explorer, Architect, and CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED." \
+    "evidence is required for CodeWriter returns with FAILED_VERIFICATION." \
     "verification.evidence is required for BuilderTester returns." \
     "deviation_details is required for Architect and CodeWriter returns with DEVIATED." \
     "CodeMapper and Explorer status values are limited to DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, and BLOCKED." \
-    "Architect and CodeWriter status values also include DEVIATED." \
+    "Architect status values also include DEVIATED." \
+    "CodeWriter status values also include DEVIATED and FAILED_VERIFICATION; CodeWriter uses FAILED_VERIFICATION only for a failed bounded_executor check." \
     "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION." \
-    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED; they may be omitted or empty for NEEDS_CONTEXT/BLOCKED returns before file changes occur." \
+    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and for DEVIATED or FAILED_VERIFICATION only when implementation files were actually changed; they may be omitted or empty for pre-action DEVIATED and other returns before file changes occur." \
+    "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result." \
     "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_worker_status_terms+=("$term")
+    fi
+done
+slice_brief_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"
+for term in \
+    '| `FAILED_VERIFICATION` | A due required CheckSpec failed after execution in `bounded_executor`; retain its per-check failure evidence and any real outputs. This takes precedence over completion and deviation statuses. A meaningful expected RED is stage evidence, not an ordinary verification failure. | Orchestrator reviews the failure evidence before recovery |' \
+    'An unattempted `DEVIATED` return may omit `changed_files`, `files_changed`, `artifact_refs`, and `validation_results`. Do not invent these outputs; retain concrete evidence of the actual deviation.' \
+    '## Slice Status: [DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED | DEVIATED | FAILED_VERIFICATION]'; do
+    if ! grep -Fq -- "$term" "$slice_brief_template"; then
+        missing_worker_status_terms+=("sub-task-brief-template.md: $term")
     fi
 done
 if [[ "${#missing_worker_status_terms[@]}" -eq 0 ]]; then
@@ -338,7 +350,6 @@ for field in changed_files evidence files_changed; do
     fi
     for term in \
         "required: false" \
-        "condition: \"required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]\"" \
         "min_items: 0"; do
         if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" "$term"; then
             missing_code_writer_status_terms+=("handoff return $field: $term")
@@ -346,21 +357,34 @@ for field in changed_files evidence files_changed; do
     done
 done
 for field in changed_files files_changed; do
+    if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" \
+        'condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or (status in [DEVIATED, FAILED_VERIFICATION] and implementation files were actually changed); optional and may be empty or omitted for pre-action DEVIATED and other returns before file changes"'; then
+        missing_code_writer_status_terms+=("handoff return $field must allow truthful pre-action DEVIATED")
+    fi
+done
+if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "evidence" \
+    'condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED, FAILED_VERIFICATION]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"'; then
+    missing_code_writer_status_terms+=("CodeWriter must retain deviation and failed-verification evidence")
+fi
+for field in changed_files files_changed; do
     for term in \
         "Do not invent" \
-        "NEEDS_CONTEXT or BLOCKED"; do
+        "pre-action DEVIATED"; do
         if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_code_writer" "$field" "$term"; then
             missing_code_writer_status_terms+=("handoff return $field description: $term")
         fi
     done
 done
-if ! grep -Fq -- "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED]" "$handoffs_file"; then
+if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_code_writer" "status" \
+    "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]"; then
     missing_code_writer_status_terms+=("CodeWriter status enum values")
 fi
 for term in \
-    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED" \
-    "For DONE, DONE_WITH_CONCERNS, or DEVIATED, it must also return changed_files, evidence, files_changed, and typed artifact_refs when the task packet carried artifact_refs or harness_capable == true" \
-    "for NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries"; do
+    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS" \
+    "FAILED_VERIFICATION requires validation_results and actual failure evidence" \
+    "pre-action DEVIATED" \
+    "artifact_refs, and validation_results are required only when their corresponding files, artifacts, or checks actually exist" \
+    "For NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries"; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_code_writer_status_terms+=("$term")
     fi
@@ -369,11 +393,11 @@ for file in \
     agents/codex/code-writer.toml \
     agents/claude/code-writer.md; do
     for term in \
-        '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, or `DEVIATED`' \
+        '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '`changed_files`: files created, modified, or deleted with brief descriptions' \
         '`evidence`: concrete implementation evidence, usually file paths plus behavior changed' \
         '`validation_results`: in `bounded_executor`' \
-        'required for `DONE`, `DONE_WITH_CONCERNS`, or `DEVIATED`, and whenever verification was attempted; omit only when blocked before any check.' \
+        'required for `DONE`, `DONE_WITH_CONCERNS`, `FAILED_VERIFICATION`, and whenever verification was attempted; an unattempted `DEVIATED` return may omit it.' \
         '`binding_obligation_refs` tuples `{kind,value,source_ref}`' \
         'For a started command-based CheckSpec, include `executed_command`' \
         'its sole `check_id` and exact CheckSpec `argv` and `cwd`' \
@@ -383,7 +407,17 @@ for file in \
         '`DONE_WITH_CONCERNS`: implementation is usable but follow-up risk remains' \
         '`NEEDS_CONTEXT`: missing requirements or required RED evidence need orchestrator clarification' \
         '`BLOCKED`: environment, dependency, permission, or tool issue prevents implementation' \
-        '`DEVIATED`: implementation departed from the approved plan or requested scope'; do
+        '`DEVIATED`: implementation departed from the approved plan or requested scope' \
+        '`FAILED_VERIFICATION`: a due required check ran and failed in `bounded_executor`'; do
+        if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
+            missing_code_writer_status_terms+=("$file: $term")
+        fi
+    done
+    for term in \
+        'For pre-action `DEVIATED`, retain concrete evidence of the actual mismatch' \
+        'omit or leave empty `changed_files`, `files_changed`, `validation_results`, and `artifact_refs`' \
+        'A failed due check takes precedence as `FAILED_VERIFICATION`' \
+        'an expected meaningful RED is TDD stage evidence, not an ordinary failed verification result.'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_code_writer_status_terms+=("$file: $term")
         fi
@@ -401,20 +435,26 @@ if ruby -ryaml -e '
     find_field = ->(fields, name) { fields.find { |item| item["name"] == name } || raise("missing #{name}") }
     writer_results = find_field.call(handoffs.fetch("orchestrator_to_code_writer").fetch("return_fields"), "validation_results")
     tester_results = find_field.call(handoffs.fetch("orchestrator_to_builder_tester").fetch("return_fields"), "validation_results")
-    expected_condition = "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, DEVIATED] or verification was attempted)"
+    expected_condition = "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, FAILED_VERIFICATION] or verification was attempted)"
     raise "CodeWriter result condition or cardinality changed" unless writer_results["required"] == "conditional" && writer_results["condition"] == expected_condition && writer_results["min_items"] == 1
     predicate = ->(lane, status, attempted) do
       condition = writer_results.fetch("condition")
       lane == condition.split(" and ", 2).first.sub("build_execution_lane == ", "") &&
         (condition[/status in \[([^\]]+)\]/, 1].split(", ").include?(status) || attempted)
     end
-    raise "bounded DONE should require verification" unless predicate.call("bounded_executor", "DONE", false)
+    %w[DONE DONE_WITH_CONCERNS FAILED_VERIFICATION].each do |status|
+      raise "bounded #{status} should require verification" unless predicate.call("bounded_executor", status, false)
+    end
     raise "separated implementation must not own verification" if predicate.call("separated_workers", "DONE", true)
     raise "pre-check blockers must allow omitted results" if predicate.call("bounded_executor", "BLOCKED", false)
+    raise "unattempted DEVIATED may omit results" if predicate.call("bounded_executor", "DEVIATED", false)
+    raise "attempted DEVIATED must retain results" unless predicate.call("bounded_executor", "DEVIATED", true)
     %w[NEEDS_CONTEXT BLOCKED].each do |status|
       raise "attempted checks must survive #{status}" unless predicate.call("bounded_executor", status, true)
     end
-    raise "pre-check omission must be explicit" unless writer_results.fetch("description").include?("Omit only when blocked before any check")
+    raise "unattempted DEVIATED omission must be explicit" unless writer_results.fetch("description").include?("an unattempted DEVIATED return may omit them")
+    raise "failure precedence must be explicit" unless writer_results.fetch("validation").include?("FAILED_VERIFICATION, which takes precedence")
+    raise "expected RED must not be an ordinary verification failure" unless writer_results.fetch("validation").include?("TDD stage evidence, not a failed validation_results row")
     raise "BuilderTester result carrier must remain required" unless tester_results["required"] == true && tester_results["min_items"] == 1
     [writer_results, tester_results].each do |results|
       fields = results.fetch("object_fields")

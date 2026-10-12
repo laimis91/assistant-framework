@@ -471,7 +471,7 @@ p0p4_write_assistant_verification_response() {
                 ];
                 ["Real-service authorization behavior remains unverified by this unit check."];
                 "add_new";
-                [check("authorization-allow-deny"; ref("allow-deny"; "claim"); "add"; "automated_test"; "unit"; "example"; ref("allow-deny"; "procedure"); ["Authenticated owner and authenticated non-owner subjects for document-1 are available as deterministic local fixtures.", "The changed authorization predicate can be called directly."]; ["Does not exercise authorization through a real service, API, or persistence boundary."]; ref("allow-deny"; "success"); ref("allow-deny"; "failure"); "Both owner allowance and non-owner denial are asserted at the changed local predicate within the binding unit-only policy."; ["skills/assistant-verification/references/methods/unit.md"])];
+                [check("authorization-allow-deny"; ref("allow-deny"; "claim"); "add"; "automated_test"; "unit"; "example"; ref("allow-deny"; "procedure"); ["Authenticated owner and authenticated non-owner subjects for document-1 are available as deterministic local fixtures.", "The changed authorization predicate can be called directly."]; ["Does not exercise authorization through a real service, API, or persistence boundary."]; ref("allow-deny"; "success"); ref("allow-deny"; "failure"); "Both owner allowance and non-owner denial are asserted at the changed local predicate within the binding unit-only policy."; ["skills/assistant-verification/references/methods/unit.md"]) + {command:{argv:["pytest", "tests/test_authorization.py::test_owner_allow_non_owner_deny"], cwd:"/workspace/document-access"}}];
                 {mode: true, applicable_check_ids: ["authorization-allow-deny"], basis: "selected_technique", rationale: "The deterministic local predicate provides a stable allow/deny oracle, so write and run both assertions before changing the implementation."};
                 ["Integration and end-to-end checks are excluded by the binding project policy; the real-service boundary remains a stated limitation."];
                 "Stop when the owner is allowed and the non-owner is denied by the local predicate; expand only for a new in-scope gap."
@@ -505,7 +505,7 @@ p0p4_write_assistant_verification_response() {
                 [{kind: "required_tdd", value: "true", source_ref: catalog("user-request")}];
                 [];
                 "add_new";
-                [check("calculation-boundary"; ref("calculation-boundary"; "claim"); "add"; "automated_test"; "unit"; "example"; ref("calculation-boundary"; "procedure"); ["The calculation operates on integer cents and truncates 10 percent toward zero.", "A focused unit test can run before production edits."]; ["Does not require unrelated full-suite execution."]; ref("calculation-boundary"; "success"); ref("calculation-boundary"; "failure"); "The focused 199-cent example supplies the requested stable RED oracle."; ["skills/assistant-verification/references/methods/unit.md"])];
+                [check("calculation-boundary"; ref("calculation-boundary"; "claim"); "add"; "automated_test"; "unit"; "example"; ref("calculation-boundary"; "procedure"); ["The calculation operates on integer cents and truncates 10 percent toward zero.", "A focused unit test can run before production edits."]; ["Does not require unrelated full-suite execution."]; ref("calculation-boundary"; "success"); ref("calculation-boundary"; "failure"); "The focused 199-cent example supplies the requested stable RED oracle."; ["skills/assistant-verification/references/methods/unit.md"]) + {command:{argv:["pytest", "tests/test_calculation.py::test_199_cent_10_percent"], cwd:"/workspace/calculation-project"}}];
                 {mode: true, applicable_check_ids: ["calculation-boundary"], basis: "user_requirement", rationale: "The user\u0027s explicit TDD requirement is binding, and the 199-cent boundary gives the focused assertion a stable meaningful RED outcome."};
                 ["No unrelated full-suite run is required to establish the focused boundary oracle."];
                 "Stop when the 199-cent boundary fails meaningfully before implementation and passes after the calculation fix."
@@ -2098,7 +2098,10 @@ fi
 if ! p0p4_write_skill_eval_responses "$tdd_policy_root/true-positive" "" "" "" assistant-verification "$true_policy_case"; then
     policy_grade_failures+=("true-policy positive response factory failed")
 else
-    mkdir -p "$tdd_policy_root/true-disabled/assistant-verification"
+    mkdir -p "$tdd_policy_root/true-disabled/assistant-verification" \
+        "$tdd_policy_root/true-missing-command/assistant-verification" \
+        "$tdd_policy_root/true-wrong-argv/assistant-verification" \
+        "$tdd_policy_root/true-wrong-cwd/assistant-verification"
     jq '.verification_decision.tdd_choice = {mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected oracle should be run without TDD."}' \
         "$tdd_policy_root/true-positive/assistant-verification/$true_policy_case.txt" \
         >"$tdd_policy_root/true-disabled/assistant-verification/$true_policy_case.txt"
@@ -2108,6 +2111,21 @@ else
     if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/true-disabled" assistant-verification "$true_policy_case" FAIL "$tdd_policy_root/true-disabled.output"; then
         policy_grade_failures+=("required_tdd=true accepted a disabled TDD choice")
     fi
+    jq 'del(.verification_decision.checks[0].command)' \
+        "$tdd_policy_root/true-positive/assistant-verification/$true_policy_case.txt" \
+        >"$tdd_policy_root/true-missing-command/assistant-verification/$true_policy_case.txt"
+    jq '.verification_decision.checks[0].command.argv = ["echo", "unrelated"]' \
+        "$tdd_policy_root/true-positive/assistant-verification/$true_policy_case.txt" \
+        >"$tdd_policy_root/true-wrong-argv/assistant-verification/$true_policy_case.txt"
+    jq '.verification_decision.checks[0].command.cwd = "/workspace/unrelated"' \
+        "$tdd_policy_root/true-positive/assistant-verification/$true_policy_case.txt" \
+        >"$tdd_policy_root/true-wrong-cwd/assistant-verification/$true_policy_case.txt"
+    for command_control in true-missing-command true-wrong-argv true-wrong-cwd; do
+        if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/$command_control" assistant-verification \
+            "$true_policy_case" FAIL "$tdd_policy_root/$command_control.output"; then
+            policy_grade_failures+=("required_tdd=true accepted $command_control")
+        fi
+    done
 fi
 
 conflict_skill="$tdd_policy_root/assistant-verification"

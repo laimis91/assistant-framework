@@ -102,6 +102,9 @@ When the slice is complete, report status using one of these values:
 | `NEEDS_CONTEXT` | Blocked by missing information not in the brief | Orchestrator provides context or adjusts the brief |
 | `BLOCKED` | Cannot proceed — dependency issue, tooling failure, legacy blocker, or design conflict | Orchestrator classifies recovery and unblocks |
 | `DEVIATED` | Work cannot follow the strict slice packet exactly | Orchestrator applies the deviation rollback rule and reapproval when scope/files/behavior/risk changes |
+| `FAILED_VERIFICATION` | A due required CheckSpec failed after execution in `bounded_executor`; retain its per-check failure evidence and any real outputs. This takes precedence over completion and deviation statuses. A meaningful expected RED is stage evidence, not an ordinary verification failure. | Orchestrator reviews the failure evidence before recovery |
+
+An unattempted `DEVIATED` return may omit `changed_files`, `files_changed`, `artifact_refs`, and `validation_results`. Do not invent these outputs; retain concrete evidence of the actual deviation.
 
 Unexpected blockers must be classified. Use `blocker_type` values:
 `legacy_code_bug`, `broken_baseline`, `hidden_dependency`, `missing_contract`,
@@ -112,7 +115,7 @@ debugging, explorer, architect, candidate search, replan, or restart.
 
 **Report format:**
 ```text
-## Slice Status: [DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED | DEVIATED]
+## Slice Status: [DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED | DEVIATED | FAILED_VERIFICATION]
 
 ### Summary
 [1-3 sentences: what was accomplished]

@@ -336,7 +336,9 @@ if ! ruby -ryaml -e '
     decision.fetch("validation").include?("assistant-verification/contracts/output.yaml#verification_decision") &&
     gates.fetch("check").include?("Task-wide tdd_mode equals verification_decision.tdd_choice.mode") &&
     gates.fetch("check").include?("Each packet\u0027s tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids") &&
-    gates.fetch("check").include?("other due checks still run without fabricated RED")
+    gates.fetch("check").include?("Before production, active packets require one red_check_id") &&
+    gates.fetch("check").include?("red_command, red_cwd, and expected_red_failure exactly equal") &&
+    gates.fetch("check").include?("Other due checks still run without fabricated RED")
   exit(valid ? 0 : 1)
 ' "$workflow_input" "$workflow_output" "$workflow_gates"; then
     workflow_tdd_failures+=("workflow tdd_mode is not a false-default projection of the canonical decision")
@@ -439,9 +441,11 @@ if ! ruby -ryaml -e '
     missing_codewriter_red_evidence_terms+=("verification_command must be conditional on command-bearing selected CheckSpec")
 fi
 for field in \
+    check_id \
     test_file \
     test_name \
     command \
+    cwd \
     failure_summary \
     right_reason; do
     if ! codewriter_red_evidence_field_required "$handoffs_file" "$field"; then
@@ -472,13 +476,29 @@ if ruby -ryaml -e '
   writer = handoffs.find { |h| h["name"] == "orchestrator_to_code_writer" }
   packet = writer.fetch("context_fields").find { |f| f["name"] == "current_task_packet" }
   red = packet.fetch("object_fields").find { |f| f["name"] == "red_evidence" }
+  red_check = packet.fetch("object_fields").find { |f| f["name"] == "red_check_id" }
   lane = writer.fetch("context_fields").find { |f| f["name"] == "build_execution_lane" }
   applies = packet.fetch("object_fields").find { |f| f["name"] == "tdd_applies" }
   planned_red_fields = %w[red_command red_cwd expected_red_failure].map do |name|
     packet.fetch("object_fields").find { |field| field["name"] == name }
   end
-  evidence_fields = %w[test_file test_name command failure_summary right_reason]
+  evidence_fields = %w[check_id test_file test_name command cwd failure_summary right_reason]
   actual_evidence_fields = red.fetch("object_fields").map { |field| field["name"] }
+  evidence_by_name = red.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  planned_by_name = planned_red_fields.to_h { |field| [field.fetch("name"), field] }
+  red_check_valid = red_check["required"] == "conditional" &&
+    red_check["condition"] == "tdd_applies is true" &&
+    %w[selected_check_ids applicable_check_ids command.argv command.cwd].all? { |term| red_check.fetch("validation").include?(term) }
+  planned_bindings_valid = planned_by_name.fetch("red_command").fetch("validation").include?("command.argv") &&
+    planned_by_name.fetch("red_cwd").fetch("validation").include?("command.cwd") &&
+    planned_by_name.fetch("expected_red_failure").fetch("validation").include?("meaningful_failure") &&
+    planned_by_name.fetch("expected_red_failure").fetch("validation").include?("red_check_id")
+  incoming_bindings_valid = evidence_by_name.fetch("check_id").fetch("validation").include?("red_check_id") &&
+    evidence_by_name.fetch("command").fetch("validation").include?("red_command") &&
+    evidence_by_name.fetch("cwd").fetch("validation").include?("red_cwd") &&
+    evidence_by_name.fetch("right_reason").fetch("description").include?("observed failure") &&
+    evidence_by_name.fetch("right_reason").fetch("validation").include?("observed failure") &&
+    evidence_by_name.fetch("right_reason").fetch("validation").include?("matching expected_red_failure")
   condition = red.fetch("condition")
   expected_condition = "tdd_applies is true and build_execution_lane == separated_workers"
   condition_matches_contract = ->(expr) { expr == expected_condition }
@@ -491,6 +511,7 @@ if ruby -ryaml -e '
     lane.fetch("enum_values").include?("bounded_executor") &&
     applies.fetch("required") == true &&
     planned_red_fields.all? { |field| field["required"] == "conditional" && field["condition"] == "tdd_applies is true" } &&
+    red_check_valid && planned_bindings_valid && incoming_bindings_valid &&
     (evidence_fields - actual_evidence_fields).empty? &&
     red.fetch("description").include?("In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits")
   lane_cases = [

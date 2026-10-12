@@ -4,6 +4,7 @@ description: "Diagnose an unknown failure by reproducing and isolating before fi
 requires:
   - assistant-review
   - assistant-verification
+  - assistant-tdd
 ---
 
 # Evidence-First Debugging

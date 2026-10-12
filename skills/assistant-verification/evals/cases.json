@@ -1665,6 +1665,7 @@
         "fixture:unit-only-policy-excludes-other-automated-scopes#project-policy: exact binding tuples are required_scope/unit, prohibited_scope/integration, and prohibited_scope/e2e; each source_ref is fixture:unit-only-policy-excludes-other-automated-scopes#project-policy.",
         "The stable local allow/deny oracle independently supports TDD mode=true with basis selected_technique; unit-only scope policy itself does not mandate TDD.",
         "fixture:unit-only-policy-excludes-other-automated-scopes#allow-deny catalog: {\"claim\":\"The local predicate allows the authenticated owner of document-1 and denies an authenticated non-owner.\",\"procedure\":\"Call the changed local predicate with an authenticated owner and an authenticated non-owner for document-1; assert owner=true and non-owner=false.\",\"prerequisites\":[\"Authenticated owner and authenticated non-owner subjects for document-1 are available as deterministic local fixtures.\",\"The changed authorization predicate can be called directly.\"],\"exclusions\":[\"Does not exercise authorization through a real service, API, or persistence boundary.\"],\"expected_success\":\"Owner is allowed and non-owner is denied by the local predicate.\",\"meaningful_failure\":\"The non-owner is allowed or the owner is denied by the local predicate.\"}",
+        "fixture:unit-only-policy-excludes-other-automated-scopes#allow-deny command catalog: {\"argv\":[\"pytest\",\"tests/test_authorization.py::test_owner_allow_non_owner_deny\"],\"cwd\":\"/workspace/document-access\"}",
         "fixture:unit-only-policy-excludes-other-automated-scopes#allow-only catalog: {\"claim\":\"The local predicate allows the authenticated owner of document-1.\",\"procedure\":\"Call the changed local predicate with only the authenticated owner subject for document-1 and assert true.\",\"prerequisites\":[\"An authenticated owner subject for document-1 is available as a deterministic local fixture.\",\"The changed authorization predicate can be called directly.\"],\"exclusions\":[\"Does not exercise authorization through a real service, API, or persistence boundary.\"],\"expected_success\":\"The owner is allowed by the local predicate.\",\"meaningful_failure\":\"The owner is denied by the local predicate.\"}"
       ],
       "expected_behavior": [
@@ -1947,8 +1948,24 @@
               "test_scope",
               "check_ref_or_method",
               "rationale",
-              "method_refs"
+              "method_refs",
+              "command"
             ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": ["verification_decision", "checks", 0, "command"],
+            "fields": ["argv", "cwd"]
+          },
+          {
+            "operator": "equals",
+            "path": ["verification_decision", "checks", 0, "command", "argv"],
+            "expected": ["pytest", "tests/test_authorization.py::test_owner_allow_non_owner_deny"]
+          },
+          {
+            "operator": "equals",
+            "path": ["verification_decision", "checks", 0, "command", "cwd"],
+            "expected": "/workspace/document-access"
           },
           {
             "operator": "equals",
@@ -3197,7 +3214,8 @@
         "The assistant-verification skill must select, not execute, the cycle.",
         "fixture:explicit-tdd-request-keeps-meaningful-red#response-slots: CheckSpec index 0=calculation-boundary.",
         "fixture:explicit-tdd-request-keeps-meaningful-red#user-request: binding required_tdd tuple has value true and source_ref fixture:explicit-tdd-request-keeps-meaningful-red#user-request.",
-        "fixture:explicit-tdd-request-keeps-meaningful-red#calculation-boundary catalog: {\"claim\":\"The deterministic calculation follows the truncating 10-percent rule at the integer-cent boundary.\",\"procedure\":\"Add a focused unit assertion for a 199-cent input at 10 percent; run it before production edits to observe the known wrong result, then rerun after the fix.\",\"prerequisites\":[\"The calculation operates on integer cents and truncates 10 percent toward zero.\",\"A focused unit test can run before production edits.\"],\"exclusions\":[\"Does not require unrelated full-suite execution.\"],\"expected_success\":\"After implementation, the 199-cent input returns 19 cents.\",\"meaningful_failure\":\"Before the fix, the known boundary result is 20 cents instead of 19.\"}"
+        "fixture:explicit-tdd-request-keeps-meaningful-red#calculation-boundary catalog: {\"claim\":\"The deterministic calculation follows the truncating 10-percent rule at the integer-cent boundary.\",\"procedure\":\"Add a focused unit assertion for a 199-cent input at 10 percent; run it before production edits to observe the known wrong result, then rerun after the fix.\",\"prerequisites\":[\"The calculation operates on integer cents and truncates 10 percent toward zero.\",\"A focused unit test can run before production edits.\"],\"exclusions\":[\"Does not require unrelated full-suite execution.\"],\"expected_success\":\"After implementation, the 199-cent input returns 19 cents.\",\"meaningful_failure\":\"Before the fix, the known boundary result is 20 cents instead of 19.\"}",
+        "fixture:explicit-tdd-request-keeps-meaningful-red#calculation-boundary command catalog: {\"argv\":[\"pytest\",\"tests/test_calculation.py::test_199_cent_10_percent\"],\"cwd\":\"/workspace/calculation-project\"}"
       ],
       "expected_behavior": [
         "Sets TDD mode true with user_requirement as its basis.",
@@ -3446,8 +3464,47 @@
               "test_scope",
               "check_ref_or_method",
               "rationale",
-              "method_refs"
+              "method_refs",
+              "command"
             ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "command"
+            ],
+            "fields": [
+              "argv",
+              "cwd"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "command",
+              "argv"
+            ],
+            "expected": [
+              "pytest",
+              "tests/test_calculation.py::test_199_cent_10_percent"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "command",
+              "cwd"
+            ],
+            "expected": "/workspace/calculation-project"
           },
           {
             "operator": "equals",

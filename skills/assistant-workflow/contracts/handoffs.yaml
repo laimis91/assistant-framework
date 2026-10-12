@@ -15,7 +15,7 @@ skill: assistant-workflow
 # Worker Status Protocol
 # ─────────────────────────────────────────────
 worker_status_protocol:
-  description: "CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns include a compact status packet so the orchestrator can route Build-role results deterministically. Reviewer and QAEvaluator packet schemas are owned by assistant-review."
+  description: "CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns include a compact status packet so the orchestrator can route Build-role results deterministically. Bounded CodeWriter and BuilderTester verification failures use FAILED_VERIFICATION, which takes precedence over completion or deviation statuses. Reviewer and QAEvaluator packet schemas are owned by assistant-review."
   statuses:
     - value: DONE
       meaning: "No known concerns; requested work completed within scope."
@@ -28,18 +28,21 @@ worker_status_protocol:
     - value: DEVIATED
       meaning: "The worker had to depart from the approved plan or requested scope; deviation evidence is required."
     - value: FAILED_VERIFICATION
-      meaning: "Verification ran and failed; failure evidence is required."
+      meaning: "A bounded CodeWriter or BuilderTester ran a due required check and it failed; retain per-check failure evidence. This takes precedence over completion and deviation statuses."
   packet_rules:
     - "status is required on CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns."
-    - "evidence is required for CodeMapper, Explorer, Architect, and CodeWriter returns with DONE, DONE_WITH_CONCERNS, DEVIATED, or FAILED_VERIFICATION."
+    - "evidence is required for CodeMapper, Explorer, Architect, and CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED."
+    - "evidence is required for CodeWriter returns with FAILED_VERIFICATION."
     - "verification.evidence is required for BuilderTester returns."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
     - "blocker_type and blocker_evidence are required for CodeWriter returns with NEEDS_CONTEXT, BLOCKED, or DEVIATED when implementation hits an unexpected blocker."
     - "deviation_details is required for Architect and CodeWriter returns with DEVIATED."
     - "CodeMapper and Explorer status values are limited to DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, and BLOCKED."
-    - "Architect and CodeWriter status values also include DEVIATED."
+    - "Architect status values also include DEVIATED."
+    - "CodeWriter status values also include DEVIATED and FAILED_VERIFICATION; CodeWriter uses FAILED_VERIFICATION only for a failed bounded_executor check."
     - "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION."
-    - "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED; they may be omitted or empty for NEEDS_CONTEXT/BLOCKED returns before file changes occur."
+    - "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and for DEVIATED or FAILED_VERIFICATION only when implementation files were actually changed; they may be omitted or empty for pre-action DEVIATED and other returns before file changes occur."
+    - "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result."
     - "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence."
 
 # ─────────────────────────────────────────────
@@ -2123,23 +2126,36 @@ handoffs:
             condition: "tdd_applies is true"
             min_items: 1
             description: "Planned RED argv; bounded_executor runs it after dispatch and before production edits, while separated_workers assigns RED to BuilderTester. This field is not RED evidence."
-            validation: "When present, argv[0] is the executable and each remaining item is one literal argument."
+            validation: "When present, argv[0] is the executable and each remaining item is one literal argument; the array exactly equals the command.argv of the uniquely resolved red_check_id CheckSpec."
+          - name: red_check_id
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            description: "The sole due selected CheckSpec that requires meaningful RED for this packet."
+            validation: "Resolves exactly once in selected_check_ids and in the unchanged verification_decision.tdd_choice.applicable_check_ids; it is also a due selected CheckSpec, has command.argv and explicit command.cwd, and remains the same identity for all planned and incoming RED fields."
           - name: red_cwd
             type: string
             required: conditional
             condition: "tdd_applies is true"
             description: "Working directory for the planned RED argv."
+            validation: "Exactly equals the command.cwd of the uniquely resolved red_check_id CheckSpec."
           - name: expected_red_failure
             type: string
             required: conditional
             condition: "tdd_applies is true"
-            description: "Expected meaningful RED behavior for the selected lane; not RED evidence and not sufficient to pass the implementation gate"
+            description: "Expected meaningful RED behavior for the selected lane; exactly equals the red_check_id CheckSpec's meaningful_failure, is not RED evidence, and is not sufficient to pass the implementation gate."
+            validation: "Exactly equals meaningful_failure from the uniquely resolved red_check_id CheckSpec."
           - name: red_evidence
             type: object
             required: conditional
             condition: "tdd_applies is true and build_execution_lane == separated_workers"
             description: "Incoming BuilderTester RED evidence required before production edits only in separated_workers. In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits. No active TDD lane may proceed without valid RED evidence."
             object_fields:
+              - name: check_id
+                type: string
+                required: true
+                description: "The applicable selected CheckSpec that produced this RED evidence."
+                validation: "Exactly equals current_task_packet.red_check_id and resolves once in both selected_check_ids and applicable_check_ids."
               - name: test_file
                 type: string
                 required: true
@@ -2152,11 +2168,12 @@ handoffs:
                 type: string[]
                 required: true
                 description: "Exact argv BuilderTester ran to produce the RED failure"
-                validation: "argv[0] is the executable and each remaining item is one literal argument."
+                validation: "argv[0] is the executable and each remaining item is one literal argument; exactly equals red_command for check_id."
               - name: cwd
                 type: string
                 required: true
                 description: "Working directory used for the RED argv."
+                validation: "Exactly equals red_cwd for check_id."
               - name: failure_summary
                 type: string
                 required: true
@@ -2164,7 +2181,8 @@ handoffs:
               - name: right_reason
                 type: string
                 required: true
-                description: "Why the failure demonstrates the intended missing behavior instead of a syntax, setup, or unrelated error"
+                description: "What observed failure demonstrates that check_id produced the expected_red_failure oracle, rather than a syntax, setup, or unrelated error."
+                validation: "Explains the observed failure as the matching expected_red_failure oracle for check_id; syntax, setup, or unrelated failures do not qualify."
           - name: implementation_notes
             type: string[]
             required: true
@@ -2267,14 +2285,14 @@ handoffs:
       - name: status
         type: enum
         required: true
-        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED]
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]
         description: "Worker status packet result"
       - name: changed_files
         type: object[]
         required: false
-        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"
+        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or (status in [DEVIATED, FAILED_VERIFICATION] and implementation files were actually changed); optional and may be empty or omitted for pre-action DEVIATED and other returns before file changes"
         min_items: 0
-        description: "Files created, modified, or deleted by this worker. Do not invent entries when the worker returns NEEDS_CONTEXT or BLOCKED before changing files."
+        description: "Files actually created, modified, or deleted by this worker. Do not invent entries for a pre-action DEVIATED return or any other return before file changes."
         object_fields:
           - name: path
             type: string
@@ -2289,8 +2307,8 @@ handoffs:
       - name: evidence
         type: object[]
         required: false
-        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"
-        description: "Specific implementation evidence, such as file paths and important changed behavior. Do not invent implementation evidence when the worker returns NEEDS_CONTEXT or BLOCKED before changing files."
+        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED, FAILED_VERIFICATION]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Concrete implementation, deviation, or verification-failure evidence. For pre-action DEVIATED, cite the actual mismatch without inventing changed-file evidence."
         min_items: 0
         object_fields:
           - name: source
@@ -2302,10 +2320,10 @@ handoffs:
       - name: validation_results
         type: object[]
         required: conditional
-        condition: "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, DEVIATED] or verification was attempted)"
+        condition: "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, FAILED_VERIFICATION] or verification was attempted)"
         min_items: 1
-        description: "Per-check outcomes retained whenever bounded-executor verification was attempted, including NEEDS_CONTEXT/BLOCKED returns. Omit only when blocked before any check."
-        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
+        description: "Per-check outcomes retained whenever bounded-executor verification was attempted, including NEEDS_CONTEXT/BLOCKED returns. DONE, DONE_WITH_CONCERNS, and FAILED_VERIFICATION require results; an unattempted DEVIATED return may omit them."
+        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Any failed due required check makes bounded CodeWriter status FAILED_VERIFICATION, which takes precedence over DONE, DONE_WITH_CONCERNS, or DEVIATED; preserve all started outcomes and actual file changes. A meaningful RED whose observed failure matches expected_red_failure is TDD stage evidence, not a failed validation_results row. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
           - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]}
@@ -2388,8 +2406,8 @@ handoffs:
       - name: files_changed
         type: object[]
         required: false
-        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"
-        description: "Legacy alias for changed_files; keep populated for implementation statuses until downstream consumers migrate. Do not invent entries for NEEDS_CONTEXT or BLOCKED before file changes."
+        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or (status in [DEVIATED, FAILED_VERIFICATION] and implementation files were actually changed); optional and may be empty or omitted for pre-action DEVIATED and other returns before file changes"
+        description: "Legacy alias for changed_files; keep populated for actual implementation changes until downstream consumers migrate. Do not invent entries for pre-action DEVIATED or other returns before file changes."
         min_items: 0
         object_fields:
           - name: path
@@ -2405,9 +2423,9 @@ handoffs:
       - name: artifact_refs
         type: object[]
         required: false
-        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED] and current_task_packet.artifact_refs is present or harness_capable == true; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"
+        condition: "required with min_items: 1 when (status in [DONE, DONE_WITH_CONCERNS] or (status in [DEVIATED, FAILED_VERIFICATION] and implementation files were actually changed)) and (current_task_packet.artifact_refs is present or harness_capable == true); optional and may be empty or omitted for pre-action DEVIATED and other returns before implementation outputs exist"
         min_items: 0
-        description: "Typed Artifact Reference entries produced or updated by CodeWriter; include changed_files refs for modified files and plan_deviation refs when implementation departs from the approved task packet."
+        description: "Typed Artifact Reference entries actually produced or updated by CodeWriter; include changed_files refs only for real modified files and plan_deviation refs only when a real deviation artifact was produced. Do not fabricate refs for pre-action DEVIATED."
         object_fields:
           - name: artifact_id
             type: string
@@ -2457,7 +2475,7 @@ handoffs:
         required: false
         description: "What the plan assumed vs. what was found"
         condition: "when deviation_detected is true or status is DEVIATED"
-    on_missing_field: "CodeWriter must always return status and deviation_detected at minimum. For DONE, DONE_WITH_CONCERNS, or DEVIATED, it must also return changed_files, evidence, files_changed, and typed artifact_refs when the task packet carried artifact_refs or harness_capable == true; for NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries. When implementation hit an unexpected blocker, require blocker_type and blocker_evidence before the orchestrator routes recovery."
+    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require real changed_files, evidence, and files_changed; bounded FAILED_VERIFICATION requires validation_results and actual failure evidence, retaining file and artifact outputs only when they were produced. DEVIATED requires deviation_details and concrete evidence of the actual mismatch; changed_files, files_changed, artifact_refs, and validation_results are required only when their corresponding files, artifacts, or checks actually exist. For NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries. When implementation hit an unexpected blocker, require blocker_type and blocker_evidence before the orchestrator routes recovery."
 
   # ─────────────────────────────────────────────
   # Orchestrator → BuilderTester
