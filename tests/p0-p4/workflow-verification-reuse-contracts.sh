@@ -89,6 +89,7 @@ if ! ruby -ryaml -e '
   supplied = field.call(verifier_input.fetch("fields"), "available_evidence")
   assessor_command = field.call(supplied.fetch("object_fields"), "executed_command")
   projected = field.call(field.call(verifier_output.fetch("artifacts"), "evidence_assessment").fetch("object_fields"), "scope_and_evidence_refs")
+  projected_command = field.call(projected.fetch("object_fields"), "executed_command")
   debug_allowed = %w[passed failed partial unavailable skipped blocked]
   assessor_states_ok = [supplied, projected].all? { |carrier| (debug_allowed - field.call(carrier.fetch("object_fields"), "result_state").fetch("enum_values")).empty? }
   debug_gaps_ok = [debug_verification, debug_run].all? { |carrier| field.call(carrier.fetch("object_fields"), "result").fetch("enum_values") == debug_allowed } &&
@@ -98,7 +99,7 @@ if ! ruby -ryaml -e '
   gate = verify_gates.find { |a| a["id"] == "VF_COMMAND_INVOCATION" }
   result_gate = verify_gates.find { |a| a["id"] == "VF2" }
   gap_gate = verify_gates.find { |a| a["id"] == "VF3" }
-  schema_ok = [debug_result, run, assessor_command].all? do |command|
+  schema_ok = [debug_result, run, assessor_command, projected_command].all? do |command|
     command["type"] == "object" && command["required"] == "conditional" &&
       command.fetch("condition") == "a command-based selected CheckSpec was started, regardless of outcome" &&
       command.fetch("validation").include?("sole selected_check_ids") &&
