@@ -169,8 +169,8 @@ artifacts:
       - name: result
         type: enum
         required: true
-        enum_values: [passed, failed, skipped, blocked]
-        description: "Verification result"
+        enum_values: [passed, failed, partial, unavailable, skipped, blocked]
+        description: "Observed result; partial and unavailable retain their evidence and remain explicit gaps"
       - name: evidence
         type: string
         required: true
@@ -203,4 +203,4 @@ artifacts:
     required: true
     description: "Remaining uncertainty, skipped checks, blocked diagnostics, or follow-up risks"
     validation: "Use an empty list only when the original failure path and every selected and binding check passed"
-    on_fail: "List residual uncertainty, including any selected check that is missing, failed, skipped, or blocked"
+    on_fail: "List residual uncertainty, including any selected check that is missing, failed, partial, unavailable, skipped, or blocked"

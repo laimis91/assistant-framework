@@ -30,23 +30,23 @@ fields:
     required: conditional
     condition: "invoked from assistant-workflow or activation_reason == verification_selection"
     description: "Canonical verifier decision carried unchanged when TDD is composed."
-    validation: "Unchanged; all workflow activations require it. verification_selection requires selected_technique, truthful provenance. IDs intersect applicable checks; behaviors stay scoped. Standalone may omit; global mode alone can't activate TDD."
+    validation: "Unchanged for all workflow activations; verification_selection requires truthful selected_technique provenance. Standalone may omit; global mode alone cannot activate TDD."
     on_missing: fail
 
   - name: selected_check_ids
     type: string[]
     required: conditional
     condition: "verification_decision is present or invoked from assistant-workflow or activation_reason == verification_selection"
-    description: "Current increment's due selected checks"
+    description: "Due increment checks"
     validation: "Ordered unique IDs resolving exactly once in verification_decision.checks; at least one intersects tdd_choice.applicable_check_ids."
     on_missing: fail
 
   - name: behaviors
     type: object[]
     required: true
-    description: "List of behaviors to implement via Red-Green-Refactor"
+    description: "Behaviors for Red-Green-Refactor"
     min_items: 1
-    validation: "Each behavior maps to one TDD cycle. Complex behaviors must be split."
+    validation: "One cycle per behavior; split complex behaviors. With verification_decision, admit only behaviors wholly covered by current selected/applicable CheckSpec procedures/oracles; reject excluded or mixed-scope behaviors before RED."
     object_fields:
       - name: description
         type: string

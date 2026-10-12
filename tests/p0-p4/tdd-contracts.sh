@@ -60,6 +60,7 @@ if ! ruby -ryaml -e '
   activation = tdd_input.find { |field| field["name"] == "activation_reason" }
   decision = tdd_input.find { |field| field["name"] == "verification_decision" }
   ids = tdd_input.find { |field| field["name"] == "selected_check_ids" }
+  behaviors = tdd_input.find { |field| field["name"] == "behaviors" }.fetch("validation")
   policy = verification_input.fetch("validation")
   choice = verification_output.fetch("validation") + " " + verification_output.fetch("object_fields").find { |field| field["name"] == "tdd_choice" }.fetch("validation")
   selection_validation = [activation["description"], activation["infer_from"], activation["validation"], decision["validation"], ids["validation"]].compact.join(" ").downcase
@@ -71,6 +72,9 @@ if ! ruby -ryaml -e '
     ids["required"] == "conditional" && ids.fetch("condition").include?("activation_reason == verification_selection") &&
     ids.fetch("condition").include?("invoked from assistant-workflow") && ids["on_missing"] == "fail" &&
     decision.fetch("validation").include?("Standalone may omit") &&
+    behaviors.include?("With verification_decision") &&
+    behaviors.include?("only behaviors wholly covered by current selected/applicable CheckSpec procedures/oracles") &&
+    behaviors.include?("reject excluded or mixed-scope behaviors before RED") &&
     ids.fetch("validation").downcase.include?("ordered unique") &&
     selection_validation.include?("selected_technique") && selection_validation.include?("intersect") &&
     selection_validation.include?("invent") && selection_validation.include?("user_request") &&

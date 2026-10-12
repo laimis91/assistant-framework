@@ -101,11 +101,11 @@ gates:
         condition: "status == fixed"
         on_fail: "Retain the gap and downgrade fixed until each due command check has a matching observed invocation."
       - id: VF2
-        check: "Relevant regression/build/lint/manual verification is recorded with pass/fail/blocked result"
-        on_fail: "Run available regression checks or record why each unavailable check is blocked"
+        check: "Relevant regression/build/lint/manual verification preserves the observed passed/failed/partial/unavailable/skipped/blocked result and supporting evidence"
+        on_fail: "Run due available checks; retain partial/unavailable observations and their reasons as explicit evidence gaps"
       - id: VF3
-        check: "Skipped or blocked checks are listed as residual risks and not counted as proof"
-        on_fail: "Move skipped/blocked checks into residual_risks and adjust confidence"
+        check: "Partial, unavailable, skipped, or blocked checks are listed as residual risks and not counted as proof"
+        on_fail: "Record each evidence gap in residual_risks and adjust confidence; never count it as passed"
 
 invariants:
   - id: INV_CHANGE_IMPACT
