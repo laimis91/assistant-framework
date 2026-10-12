@@ -296,6 +296,30 @@ if ruby -ryaml -e '
     binding_refs.fetch("validation").include?("Each {kind,value,source_ref} exactly equals a canonical policy tuple") &&
     %w[kind value source_ref].all? { |name| binding_names.count(name) == 1 } &&
     slice_tdd.fetch("validation").include?("True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids")
+  inline_fields = {"verification_decision" => "object", "selected_check_ids" => "string[]", "binding_obligation_refs" => "object[]", "tdd_applies" => "boolean"}
+  valid_schema &&= %w[orchestrator_to_code_writer orchestrator_to_builder_tester].all? do |name|
+    context = handoffs.find { |h| h["name"] == name }.fetch("context_fields")
+    packet = field.call(context, "current_task_packet")
+    mode = field.call(context, "tdd_mode")
+    inline = inline_fields.all? do |key, type|
+      carried = field.call(context, key)
+      carried["type"] == type && carried["required"] == "conditional" &&
+        carried["condition"] == "current_task_packet is absent" &&
+        carried.fetch("validation").include?("when current_task_packet is present")
+    end
+    local_tdd = field.call(context, "tdd_applies").fetch("validation")
+    tuples = field.call(context, "binding_obligation_refs").fetch("object_fields")
+    packet["required"] == "conditional" && inline &&
+      local_tdd.include?("True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids") &&
+      tuples.map { |f| f.fetch("name") } == %w[kind value source_ref] &&
+      tuples.all? { |f| f["required"] == true } &&
+      mode.fetch("validation").include?("when current_task_packet is present") &&
+      mode.fetch("validation").include?("otherwise equals verification_decision.tdd_choice.mode")
+  end
+  root = File.expand_path("../../..", File.dirname(ARGV.fetch(0)))
+  valid_schema &&= %w[agents/codex/code-writer.toml agents/claude/code-writer.md agents/codex/builder-tester.toml agents/claude/builder-tester.md].all? do |path|
+    File.read(File.join(root, path)).include?("from current_task_packet when present, otherwise")
+  end
   exit(valid_schema ? 0 : 1)
 ' "$handoffs_file"; then
     pass

@@ -2196,11 +2196,39 @@ handoffs:
         type: string[]
         required: true
         description: "Boundaries that must not be crossed"
+      - name: verification_decision
+        type: object
+        required: conditional
+        condition: "current_task_packet is absent"
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve unchanged; when current_task_packet is present, equals its verification_decision."
+        on_missing: fail
+      - name: selected_check_ids
+        type: string[]
+        required: conditional
+        condition: "current_task_packet is absent"
+        validation: "An ordered unique subset resolving exactly once in verification_decision and covering this step's acceptance criteria and risks; when current_task_packet is present, equals its selected_check_ids."
+        on_missing: fail
+      - name: binding_obligation_refs
+        type: object[]
+        required: conditional
+        condition: "current_task_packet is absent"
+        validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple due for this step; task-wide obligations retain their completion boundary; when current_task_packet is present, equals its binding_obligation_refs."
+        on_missing: fail
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
+      - name: tdd_applies
+        type: boolean
+        required: conditional
+        condition: "current_task_packet is absent"
+        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; when current_task_packet is present, equals its tdd_applies."
+        on_missing: fail
       - name: tdd_mode
         type: boolean
         required: true
-        description: "Task-global projection of the current task packet's TddChoice. Packet-local RED follows current_task_packet.tdd_applies."
-        validation: "Equals current_task_packet.verification_decision.tdd_choice.mode; do not require RED for a packet whose selected_check_ids do not intersect applicable_check_ids."
+        description: "Task-global TddChoice projection; local RED follows the carried tdd_applies."
+        validation: "Equals current_task_packet.verification_decision.tdd_choice.mode when current_task_packet is present; otherwise equals verification_decision.tdd_choice.mode. Never infer local RED from task-wide mode."
       - name: build_repair_state
         type: object
         required: conditional
@@ -2277,7 +2305,7 @@ handoffs:
         condition: "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, DEVIATED] or verification was attempted)"
         min_items: 1
         description: "Per-check outcomes retained whenever bounded-executor verification was attempted, including NEEDS_CONTEXT/BLOCKED returns. Omit only when blocked before any check."
-        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a passed or failed command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency."
+        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
           - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable]}
@@ -2286,7 +2314,7 @@ handoffs:
           - name: executed_command
             type: object
             required: conditional
-            condition: "result is passed or failed for a command-based selected CheckSpec"
+            condition: "a command-based selected CheckSpec was started, regardless of outcome"
             validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd."
             object_fields:
               - {name: check_id, type: string, required: true}
@@ -2449,11 +2477,39 @@ handoffs:
         required: true
         enum_values: [separated_workers]
         description: "BuilderTester is dispatched only for the separated verification lane"
+      - name: verification_decision
+        type: object
+        required: conditional
+        condition: "current_task_packet is absent"
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve unchanged; when current_task_packet is present, equals its verification_decision."
+        on_missing: fail
+      - name: selected_check_ids
+        type: string[]
+        required: conditional
+        condition: "current_task_packet is absent"
+        validation: "An ordered unique subset resolving exactly once in verification_decision and covering this step's acceptance criteria and risks; when current_task_packet is present, equals its selected_check_ids."
+        on_missing: fail
+      - name: binding_obligation_refs
+        type: object[]
+        required: conditional
+        condition: "current_task_packet is absent"
+        validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple due for this step; task-wide obligations retain their completion boundary; when current_task_packet is present, equals its binding_obligation_refs."
+        on_missing: fail
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
+      - name: tdd_applies
+        type: boolean
+        required: conditional
+        condition: "current_task_packet is absent"
+        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; when current_task_packet is present, equals its tdd_applies."
+        on_missing: fail
       - name: tdd_mode
         type: boolean
         required: true
-        description: "Task-global projection of the selected task packet TddChoice; packet-local RED follows current_task_packet.tdd_applies."
-        validation: "Equals current_task_packet.verification_decision.tdd_choice.mode."
+        description: "Task-global TddChoice projection; local RED follows the carried tdd_applies."
+        validation: "Equals current_task_packet.verification_decision.tdd_choice.mode when current_task_packet is present; otherwise equals verification_decision.tdd_choice.mode. Never infer local RED from task-wide mode."
       - name: changed_files
         type: string[]
         required: true
@@ -2910,7 +2966,7 @@ handoffs:
         required: true
         min_items: 1
         description: "Per-check results preserving selected CheckSpec and applicable binding identity for the separated-workers lane"
-        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a passed or failed command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency."
+        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
           - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable]}
@@ -2919,7 +2975,7 @@ handoffs:
           - name: executed_command
             type: object
             required: conditional
-            condition: "result is passed or failed for a command-based selected CheckSpec"
+            condition: "a command-based selected CheckSpec was started, regardless of outcome"
             validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd."
             object_fields:
               - {name: check_id, type: string, required: true}

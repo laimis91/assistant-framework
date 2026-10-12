@@ -63,13 +63,23 @@ if ! ruby -ryaml -e '
   behaviors = tdd_input.find { |field| field["name"] == "behaviors" }.fetch("validation")
   policy = verification_input.fetch("validation")
   checks = verification_output.fetch("object_fields").find { |f| f["name"] == "checks" }
+  test_change = verification_output.fetch("object_fields").find { |f| f["name"] == "test_change" }.fetch("validation", "")
+  test_change_ok = [
+    "selected checks with method == automated_test",
+    "none iff neither extend nor add is selected",
+    "extend_existing iff extend is selected and add is not",
+    "add_new iff add is selected and extend is not",
+    "mixed iff both extend and add are selected",
+    "reuse, run, and inspect do not change test assertions",
+    "non-test checks do not affect this summary"
+  ].all? { |rule| test_change.include?(rule) }
   tdd_choice = verification_output.fetch("object_fields").find { |f| f["name"] == "tdd_choice" }
   applicable = tdd_choice.fetch("object_fields").find { |f| f["name"] == "applicable_check_ids" }.fetch("validation")
   choice = verification_output.fetch("validation") + " " + tdd_choice.fetch("validation")
   selection_validation = [activation["description"], activation["infer_from"], activation["validation"], decision["validation"], ids["validation"]].compact.join(" ").downcase
   coverage = YAML.load_file(ARGV.fetch(3)).fetch("artifacts").find { |f| f["name"] == "coverage_summary" }
     .fetch("object_fields").find { |f| f["name"] == "total_tests_run" }
-  valid = coverage["type"] == "int" && coverage["required"] == true &&
+  valid = test_change_ok && coverage["type"] == "int" && coverage["required"] == true &&
     coverage.fetch("validation", "").include?("> 0 at completion") &&
     policy.include?("required_tdd is exactly true or false") && policy.include?("conflicting required_tdd values") &&
     choice.include?("required_tdd=false") && choice.include?("mode=false") && choice.include?("not_selected") &&
@@ -193,7 +203,7 @@ for file in \
         '`tdd_applies` is true, derived from the' \
         'intersection of its due `selected_check_ids` and' \
         '`tdd_choice.applicable_check_ids`.' \
-        'In `bounded_executor`, run the task packet' \
+        'In `bounded_executor`, run the carried planned RED' \
         'planned RED' \
         'after dispatch and confirm the expected failure; in `separated_workers`,' \
         'require valid incoming Builder/Tester RED evidence.' \

@@ -163,7 +163,7 @@ fields:
       - name: executed_command
         type: object
         required: conditional
-        condition: "result_state is passed or failed for a command-based selected CheckSpec"
+        condition: "a command-based selected CheckSpec was started, regardless of outcome"
         description: "Observed invocation carried from the existing result"
         validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged decision from work_scope.source_refs; argv and cwd exactly equal CheckSpec.command.argv and CheckSpec.command.cwd. Missing or mismatched identity cannot close a due check."
         object_fields:

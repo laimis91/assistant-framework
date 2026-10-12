@@ -159,7 +159,7 @@ artifacts:
     type: object[]
     required: true
     description: "Commands, tests, inspections, or manual checks used to verify outcome"
-    validation: "Each row carries exact selected_check_ids and binding_obligation_refs whose current procedures/oracles it actually observes. Close every due check and applicable due/executable tuple; shared claim text or ID alone does not bind another check. For a passed or failed command-based selected CheckSpec, executed_command binds its sole selected_check_id to the unchanged CheckSpec's exact argv and cwd. Skipped, blocked, or otherwise non-executed checks remain explicit gaps. Include the original failure path when available; a test is required only when selected. Preserve method-specific evidence and gaps."
+    validation: "Each row carries exact selected_check_ids and binding_obligation_refs whose current procedures/oracles it actually observes. Close every due check and applicable due/executable tuple; shared claim text or ID alone does not bind another check. For a started command-based selected CheckSpec, executed_command binds its sole selected_check_id to the unchanged CheckSpec's exact argv and cwd. Skipped, blocked, or otherwise non-executed checks remain explicit gaps. Include the original failure path when available; a test is required only when selected. Preserve method-specific evidence and gaps."
     on_fail: "Run missing selected or binding checks, or record the exact blocker; do not replace an unselected test with a false infeasibility claim or count skipped checks as proof."
     object_fields:
       - name: command_or_check
@@ -190,9 +190,9 @@ artifacts:
       - name: executed_command
         type: object
         required: conditional
-        condition: "result is passed or failed for a command-based selected CheckSpec"
+        condition: "a command-based selected CheckSpec was started, regardless of outcome"
         description: "Observed invocation identity for exactly one selected command check"
-        validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd. Missing or ambiguous invocation blocks a passed/failed command result; non-executed outcomes retain their gap and omit this field."
+        validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd. Missing or ambiguous invocation invalidates executed command evidence; checks never started retain their gap and omit this field."
         object_fields:
           - {name: check_id, type: string, required: true}
           - {name: argv, type: "string[]", required: true, min_items: 1}

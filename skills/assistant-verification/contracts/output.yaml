@@ -7,7 +7,7 @@ artifacts:
     type: object
     required: conditional
     condition: "(operation is select or select_and_assess) and an actionable selection can honor every binding constraint, or a carried decision is being assessed"
-    description: "Bounded approach for the named change; selecting checks and TDD are independent decisions"
+    description: "Bounded approach; check selection and TDD are independent."
     validation: "Do not broaden scope, waive a binding constraint, or imply a planned check ran. Preserve each mandate's source and rationale. Bind mandated coverage scope, threshold, and source through required_check plus an enforcing CheckSpec, or report the gap. Never invent a default target. required_tdd is exactly true or false: false forces mode=false, basis=not_selected, applicable_check_ids=[] regardless of RED oracles; conflicting true/false tuples block with both sources; required true without a meaningful RED oracle blocks."
     on_fail: "Return to SELECT and correct policy, check, or TDD semantics; if no actionable approach can honor a mandate, return a blocked assessment with the precise material gap and do not emit a false-TDD decision."
     object_fields:
@@ -18,7 +18,7 @@ artifacts:
       - name: policy_basis
         type: object
         required: true
-        description: "Binding constraints and explicitly applied preferences"
+        description: "Binding constraints and applied preferences"
         object_fields:
           - name: binding_constraints
             type: object[]
@@ -38,7 +38,7 @@ artifacts:
           - name: preferences_applied
             type: string[]
             required: true
-            description: "Explicit user or project preferences used as preferences, not promoted to mandates"
+            description: "Explicit user/project preferences, not mandates."
           - name: capability_limits
             type: string[]
             required: true
@@ -47,31 +47,32 @@ artifacts:
         type: enum
         required: true
         enum_values: [none, extend_existing, add_new, mixed]
-        description: "Planned test assertion changes; not a demand for new test files"
+        description: "Planned assertion changes, not new test files."
+        validation: "Consider only selected checks with method == automated_test: none iff neither extend nor add is selected; extend_existing iff extend is selected and add is not; add_new iff add is selected and extend is not; mixed iff both extend and add are selected. reuse, run, and inspect do not change test assertions; non-test checks do not affect this summary."
       - name: checks
         type: object[]
         required: true
-        description: "Smallest actionable set addressing distinct material claims; empty only when no checks are due. A blocked policy conflict omits verification_decision rather than returning an invalid actionable decision."
+        description: "Smallest actionable set for distinct claims; empty only when none are due. On blocked policy conflict, omit verification_decision."
         validation: "check_id: nonblank and unique within checks, regardless of tdd_choice.mode; references resolve uniquely."
         object_fields:
           - name: check_id
             type: string
             required: true
-            description: "Identifier stable within this decision; reuse an existing obligation id when available"
+            description: "Stable within this decision; reuse an obligation ID when available."
           - name: claim_or_risk
             type: string
             required: true
-            description: "Concrete behavior, invariant, or quality claim linked to acceptance criteria"
+            description: "Behavior, invariant, or quality claim linked to criteria."
           - name: action
             type: enum
             required: true
             enum_values: [reuse, extend, add, run, inspect]
-            description: "What the existing executor should do; distinguish reuse of a check design from reuse of its old result"
+            description: "Executor action; distinguish check-design reuse from old-result reuse."
           - name: method
             type: enum
             required: true
             enum_values: [automated_test, static_validation, manual_observation, artifact_inspection, behavioral_eval, benchmark_or_fault_probe]
-            description: "Kind of observation selected for the claim"
+            description: "Observation type for this claim."
           - name: test_scope
             type: enum
             required: conditional
@@ -87,12 +88,12 @@ artifacts:
           - name: check_ref_or_method
             type: object
             required: true
-            description: "Existing check reference or a concrete procedure with prerequisites, exclusions, expected success, and meaningful failure"
+            description: "Check ref or procedure with prerequisites, exclusions, success, and failure."
             object_fields:
               - name: reference_or_procedure
                 type: string
                 required: true
-                description: "Existing command/source ref or direct steps an executor can carry out"
+                description: "Existing command/source ref or executable steps."
               - name: prerequisites
                 type: string[]
                 required: true
@@ -102,39 +103,39 @@ artifacts:
               - name: expected_success
                 type: string
                 required: true
-                description: "Observable result that supports this claim"
+                description: "Observable support for this claim."
               - name: meaningful_failure
                 type: string
                 required: true
-                description: "Plausible wrong result or failure the oracle distinguishes"
+                description: "Wrong result or failure this oracle distinguishes."
           - name: rationale
             type: string
             required: true
-            description: "Why this observes the claim at acceptable cost and how it adds distinct evidence"
+            description: "Why it observes the claim at acceptable cost and adds distinct evidence."
           - name: method_refs
             type: string[]
             required: true
-            description: "Direct references to the selected method guidance loaded by this decision; empty when no method reference applies"
+            description: "Loaded method refs; empty when none apply."
           - name: command
             type: object
             required: conditional
             condition: "this CheckSpec has a command to execute"
-            description: "Literal direct-execution context for this CheckSpec, associated by its parent check_id. Omit for non-command procedures."
+            description: "Literal argv/cwd linked by parent check_id; omit for non-command procedures."
             validation: "When present, argv is a non-empty array of literal string arguments with argv[0] as the executable, and cwd is explicitly supplied. No shell-form command, flattened commands, reconstructed shell text, or implicit/default working directory."
             object_fields:
               - name: argv
                 type: string[]
                 required: true
                 min_items: 1
-                description: "Executable followed by one literal argument per item"
+                description: "Executable and one literal argument per item."
               - name: cwd
                 type: string
                 required: true
-                description: "Explicit working directory for this command"
+                description: "Explicit command working directory."
       - name: tdd_choice
         type: object
         required: true
-        description: "TDD decision, separate from test scope and technique"
+        description: "TDD choice, separate from test scope and technique."
         validation: "user_requirement, project_requirement, and selected_technique require mode=true with non-empty applicable IDs; not_selected requires mode=false and []. required_tdd=false overrides RED oracles: preserve its source and rationale and require false/not_selected/[]. Conflicting true/false tuples block. Applicable IDs uniquely resolve to selected automated_test checks with executable meaningful RED; required true without that compatible oracle blocks."
         object_fields:
           - name: mode
@@ -144,7 +145,7 @@ artifacts:
           - name: applicable_check_ids
             type: string[]
             required: true
-            description: "Unique selected CheckSpec IDs for which the TDD choice has a meaningful RED oracle"
+            description: "Unique selected CheckSpec IDs with meaningful RED oracles."
             validation: "Each ID resolves exactly once in checks to method == automated_test with executable meaningful RED; non-empty iff mode is true; empty iff mode is false. A binding all-deliverable TDD mandate with any required deliverable lacking a meaningful RED oracle blocks actionable selection; do not omit that deliverable, set mode=false, or fabricate an ID or RED."
           - name: basis
             type: enum
@@ -153,11 +154,11 @@ artifacts:
           - name: rationale
             type: string
             required: true
-            description: "Requirement source or why a stable, useful RED oracle is or is not appropriate"
+            description: "Requirement source or why a stable useful RED oracle fits or does not."
       - name: omitted_checks_and_rationale
         type: string[]
         required: true
-        description: "Significant duplication or irrelevant work rejected; not every imaginable technique"
+        description: "Significant duplication or irrelevant work rejected."
       - name: stop_rule
         type: string
         required: true
@@ -167,7 +168,7 @@ artifacts:
     type: object
     required: true
     description: "What the supplied evidence establishes for the named work scope"
-    validation: "Sufficient requires current, resolved evidence refs that support the claims and close every due selected CheckSpec ID and each applicable due/executable binding_obligation_refs tuple from a resolved canonical decision. Do not invent execution checks for unrelated policy constraints solely to populate evidence arrays. Each binding names the actual procedure/oracle observed; claim text or ID alone is insufficient. Command-based passed/failed evidence preserves executed_command with exact CheckSpec argv/cwd; missing or mismatched identity cannot close a due check. Resolve a carried decision only through an existing work_scope.source_refs reference. Without a resolved decision, an assessment may be sufficient for its explicitly evidenced scope but must state that selected-check closure is unknown and cannot claim it is complete."
+    validation: "Sufficient requires current, resolved evidence refs that support the claims and close every due selected CheckSpec ID and each applicable due/executable binding_obligation_refs tuple from a resolved canonical decision. Do not invent execution checks for unrelated policy constraints solely to populate evidence arrays. Each binding names the actual procedure/oracle observed; claim text or ID alone is insufficient. Started command evidence, including partial outcomes, preserves executed_command with exact CheckSpec argv/cwd; missing or mismatched identity cannot close a due check. Resolve a carried decision only through an existing work_scope.source_refs reference. Without a resolved decision, an assessment may be sufficient for its explicitly evidenced scope but must state that selected-check closure is unknown and cannot claim it is complete."
     on_fail: "Return to ASSESS, classify each missing, stale, failed, partial, skipped, unavailable, or blocked result as a gap, or identify the exact material blocker."
     object_fields:
       - name: status

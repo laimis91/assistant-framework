@@ -175,18 +175,23 @@ if ruby -ryaml -e '
   selected_only = lambda do |assertion, methods, original_path_preserved, selected_checks_pass|
     wording = assertion.fetch("check")
     preserves_original = wording.include?("preserves the original failure path")
-    completes_selected = wording.include?("every selected and binding check")
+    preserves_selected = wording.include?("every selected and binding obligation for VERIFY")
+    pending_allowed = wording.include?("Retain completed results and pending checks")
     tests_only_when_selected = wording.include?("automated regression tests are required only when selected")
-    original_path_preserved && selected_checks_pass && preserves_original && completes_selected &&
-      tests_only_when_selected && (!methods.include?("automated_test") || selected_checks_pass)
+    original_path_preserved && preserves_original && preserves_selected && pending_allowed && tests_only_when_selected
   end
   valid_non_test = selected_only.call(fx2, ["manual_observation"], true, true)
   valid_selected_test = selected_only.call(fx2, ["automated_test"], true, true)
+  valid_pending_checks = selected_only.call(fx2, ["manual_observation"], true, false)
+  verify_gate = gates.fetch("gates").find { |g| g["phase"] == "VERIFY" }
+  vf2 = verify_gate.fetch("exit_assertions").find { |a| a["id"] == "VF2" }.fetch("check")
+  verify_completes_due = vf2.include?("Every due selected and binding check runs") &&
+    vf2.include?("a fixed outcome requires passing evidence for every due check")
   wrong_missing_original_path_rejected = !selected_only.call(fx2, ["manual_observation"], false, true)
   old_policy = Marshal.load(Marshal.dump(fx2))
   old_policy["check"] = "The fix preserves the original failure path; an automated regression test is required whenever one is feasible."
   feasible_but_unselected_test_rejected = !selected_only.call(old_policy, ["manual_observation"], true, true)
-  exit(selector && valid_non_test && valid_selected_test && wrong_missing_original_path_rejected && feasible_but_unselected_test_rejected ? 0 : 1)
+  exit(selector && valid_non_test && valid_selected_test && valid_pending_checks && verify_completes_due && wrong_missing_original_path_rejected && feasible_but_unselected_test_rejected ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-debugging/contracts/index.yaml" \
     "$FRAMEWORK_DIR/skills/assistant-debugging/contracts/phase-gates.yaml"; then
     pass

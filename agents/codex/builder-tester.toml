@@ -21,6 +21,7 @@ executor task.
   the chosen method may instead be structural, manual, or another concrete
   procedure.
 - Preserve the canonical task-level verification_decision.tdd_choice unchanged.
+  Resolve verification_decision, selected_check_ids, binding_obligation_refs, and tdd_applies from current_task_packet when present, otherwise inline handoff context.
   Derive RED applicability from packet-local tdd_applies=true, which is true only
   when the packet's due selected_check_ids intersect the canonical
   tdd_choice.applicable_check_ids. When tdd_applies=false, do not require or

@@ -52,7 +52,7 @@ if ! ruby -ryaml -e '
     binding_fields.fetch("value").fetch("type") == "string" &&
     binding_fields.fetch("source_ref").fetch("type") == "string" &&
     binding_fields.values.all? { |field| field["required"] == true } &&
-    executed["required"] == "conditional" && executed.fetch("condition").include?("command-based selected CheckSpec") &&
+    executed["required"] == "conditional" && executed.fetch("condition") == "a command-based selected CheckSpec was started, regardless of outcome" &&
     executed_fields.keys.sort == %w[argv check_id cwd] &&
     executed_fields.fetch("check_id").fetch("type") == "string" &&
     executed_fields.fetch("argv").fetch("type") == "string[]" && executed_fields.fetch("argv").fetch("min_items") == 1 &&
@@ -100,7 +100,7 @@ if ! ruby -ryaml -e '
   gap_gate = verify_gates.find { |a| a["id"] == "VF3" }
   schema_ok = [debug_result, run, assessor_command].all? do |command|
     command["type"] == "object" && command["required"] == "conditional" &&
-      command.fetch("condition").include?("command-based selected CheckSpec") &&
+      command.fetch("condition") == "a command-based selected CheckSpec was started, regardless of outcome" &&
       command.fetch("validation").include?("sole selected_check_ids") &&
       command.fetch("validation").include?("CheckSpec.command.argv") &&
       command.fetch("validation").include?("CheckSpec.command.cwd") &&
@@ -114,6 +114,7 @@ if ! ruby -ryaml -e '
     fields = h.fetch("return_fields")
     field.call(fields, "validation_results")
   end
+  invocation_conditions_ok = ([results] + worker_results).all? { |r| field.call(r.fetch("object_fields"), "executed_command").fetch("condition") == "a command-based selected CheckSpec was started, regardless of outcome" }
   allowed = %w[passed failed partial unavailable skipped not_applicable]
   gap_text = results.fetch("validation") + " " + results.fetch("on_fail")
   handoff_ok = worker_results.all? { |r| r.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed && r.fetch("validation").include?("Partial and unavailable are explicit gaps") }
@@ -144,7 +145,7 @@ if ! ruby -ryaml -e '
     !fix_gate.fetch("check").include?("completes every selected and binding check") &&
     fix_gate.fetch("on_fail").include?("before entering VERIFY") &&
     result_gate.fetch("check").include?("a fixed outcome requires passing evidence for every due check")
-  valid = blocked_selection_ok && verify_order_ok && schema_ok && assessor_states_ok && completion_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
+  valid = invocation_conditions_ok && blocked_selection_ok && verify_order_ok && schema_ok && assessor_states_ok && completion_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
     results.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed &&
     gap_text.include?("Partial and unavailable are explicit evidence gaps") && handoff_ok && assessment.include?("partial") && assessment.include?("unavailable") && assessment.include?("never sufficient")
   exit(valid ? 0 : 1)
