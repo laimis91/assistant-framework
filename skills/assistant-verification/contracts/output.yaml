@@ -136,7 +136,7 @@ artifacts:
         type: object
         required: true
         description: "TDD choice, separate from test scope and technique."
-        validation: "user_requirement, project_requirement, and selected_technique require mode=true with non-empty applicable IDs; not_selected requires mode=false and []. required_tdd=false overrides RED oracles: preserve its source and rationale and require false/not_selected/[]. Conflicting true/false tuples block. Applicable IDs uniquely resolve to selected automated_test checks with executable meaningful RED; required true without that compatible oracle blocks."
+        validation: "user_requirement, project_requirement, or selected_technique requires mode=true with IDs; not_selected requires false/[]. required_tdd=false overrides RED, preserving source/rationale and forcing false/not_selected/[]. Conflicting values block. Applicable IDs resolve uniquely to selected automated_test checks with action add/extend and executable meaningful RED. run/reuse/inspect remain selected non-TDD checks. Required true without compatible add/extend meaningful RED blocks."
         object_fields:
           - name: mode
             type: boolean
@@ -146,7 +146,7 @@ artifacts:
             type: string[]
             required: true
             description: "Unique selected CheckSpec IDs with meaningful RED oracles."
-            validation: "Each ID resolves exactly once in checks to method == automated_test with executable meaningful RED; non-empty iff mode is true; empty iff mode is false. A binding all-deliverable TDD mandate with any required deliverable lacking a meaningful RED oracle blocks actionable selection; do not omit that deliverable, set mode=false, or fabricate an ID or RED."
+            validation: "Each ID resolves exactly once in checks to method == automated_test with action in [add, extend] and executable meaningful RED; non-empty iff mode=true, empty iff false. run/reuse/inspect cannot be TDD-applicable. A binding all-deliverable TDD mandate with any required deliverable lacking a compatible add/extend meaningful RED oracle blocks actionable selection; do not omit it, disable TDD, or fabricate an ID/RED."
           - name: basis
             type: enum
             required: true
@@ -168,7 +168,7 @@ artifacts:
     type: object
     required: true
     description: "What the supplied evidence establishes for the named work scope"
-    validation: "Sufficient requires current, resolved evidence refs that support the claims and close every due selected CheckSpec ID and each applicable due/executable binding_obligation_refs tuple from a resolved canonical decision. Do not invent execution checks for unrelated policy constraints solely to populate evidence arrays. Each binding names the actual procedure/oracle observed; claim text or ID alone is insufficient. Started command evidence, including partial outcomes, preserves executed_command with exact CheckSpec argv/cwd; missing or mismatched identity cannot close a due check. Resolve a carried decision only through an existing work_scope.source_refs reference. Without a resolved decision, an assessment may be sufficient for its explicitly evidenced scope but must state that selected-check closure is unknown and cannot claim it is complete."
+    validation: "Sufficient requires current, resolved evidence refs that support the claims and close every due selected CheckSpec ID and each applicable due/executable binding_obligation_refs tuple from a resolved canonical decision. Do not invent execution checks for unrelated policy constraints solely to populate evidence arrays. Each binding names the actual procedure/oracle observed; claim text or ID alone is insufficient. Every started command-based selected CheckSpec, including partial, unavailable, or failed outcomes, preserves executed_command with exact CheckSpec argv/cwd; missing or mismatched identity is a gap, and partial or unavailable results cannot close a due check. Omit executed_command when no command started. Resolve a carried decision only through an existing work_scope.source_refs reference. Without a resolved decision, an assessment may be sufficient for its explicitly evidenced scope but must state that selected-check closure is unknown and cannot claim it is complete."
     on_fail: "Return to ASSESS, classify each missing, stale, failed, partial, skipped, unavailable, or blocked result as a gap, or identify the exact material blocker."
     object_fields:
       - name: status
@@ -217,7 +217,7 @@ artifacts:
             required: conditional
             condition: "a command-based selected CheckSpec was started, regardless of outcome"
             description: "Observed invocation carried from the existing result"
-            validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged decision from work_scope.source_refs; argv and cwd exactly equal CheckSpec.command.argv and CheckSpec.command.cwd. Missing or mismatched identity cannot close a due check."
+            validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged decision from work_scope.source_refs; argv and cwd exactly equal CheckSpec.command.argv and CheckSpec.command.cwd. Missing or mismatched identity is a gap; partial or unavailable results cannot close a due check. Omit executed_command when no command started."
             object_fields:
               - {name: check_id, type: string, required: true}
               - {name: argv, type: "string[]", required: true, min_items: 1}

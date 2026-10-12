@@ -84,7 +84,11 @@ if ! ruby -ryaml -e '
     policy.include?("required_tdd is exactly true or false") && policy.include?("conflicting required_tdd values") &&
     choice.include?("required_tdd=false") && choice.include?("mode=false") && choice.include?("not_selected") &&
     checks.fetch("validation", "").include?("nonblank and unique within checks, regardless of tdd_choice.mode") &&
-    applicable.include?("method == automated_test") && applicable.include?("executable meaningful RED") &&
+    applicable.include?("method == automated_test") && applicable.include?("action in [add, extend]") &&
+    applicable.include?("executable meaningful RED") && applicable.include?("run/reuse/inspect") &&
+    applicable.include?("cannot be TDD-applicable") && applicable.include?("compatible add/extend meaningful RED oracle blocks") &&
+    tdd_choice.fetch("validation").include?("action add/extend") &&
+    tdd_choice.fetch("validation").include?("Required true without compatible add/extend meaningful RED blocks") &&
     activation.fetch("enum_values") == %w[user_request plan_constraint project_convention verification_selection] &&
     decision["required"] == "conditional" && decision["on_missing"] == "fail" && decision.fetch("condition").include?("activation_reason == verification_selection") &&
     decision.fetch("condition").include?("invoked from assistant-workflow") &&
@@ -98,6 +102,40 @@ if ! ruby -ryaml -e '
     selection_validation.include?("selected_technique") && selection_validation.include?("intersect") &&
     selection_validation.include?("invent") && selection_validation.include?("user_request") &&
     selection_validation.include?("project_convention") && selection_validation.include?("plan_constraint")
+  cycle_log = YAML.load_file(ARGV.fetch(3)).fetch("artifacts").find { |f| f["name"] == "cycle_log" }
+  phases = %w[red green refactor].map { |name| cycle_log.fetch("object_fields").find { |f| f["name"] == name } }
+  results_ok = phases.all? do |phase|
+    results = phase.fetch("object_fields").find { |f| f["name"] == "command_results" }
+    result_fields = results.fetch("object_fields").to_h { |f| [f.fetch("name"), f] }
+    results["required"] == true && results["min_items"] == 1 &&
+      result_fields.keys.sort == %w[argv check_id cwd freshness result target] &&
+      result_fields.fetch("argv").fetch("type") == "string[]" && result_fields.fetch("argv").fetch("min_items") == 1 &&
+      result_fields.fetch("cwd").fetch("type") == "string" &&
+      result_fields.fetch("result").fetch("enum_values") == %w[passed failed partial unavailable] &&
+      result_fields.fetch("freshness").fetch("enum_values") == %w[current stale unknown] &&
+      result_fields.fetch("check_id")["required"] == "conditional" &&
+      result_fields.fetch("check_id").fetch("validation").include?("never invent an ID") &&
+      results.fetch("validation").include?("omit it for standalone TDD without a verification decision")
+  end
+  red = phases[0].fetch("object_fields").find { |f| f["name"] == "verified_failing" }.fetch("validation")
+  green_fields = phases[1].fetch("object_fields")
+  green_test = green_fields.find { |f| f["name"] == "test_passes" }.fetch("validation")
+  all_passes = phases[1..].all? do |phase|
+    validation = phase.fetch("object_fields").find { |f| f["name"] == "all_tests_pass" }.fetch("validation")
+    validation.include?("current RED test target") && validation.include?("every due selected TDD check") &&
+      validation.include?("relevant due selected automated regression check") &&
+      validation.include?("applicable due/executable binding suite") &&
+      validation.include?("freshness=current") && validation.include?("result=passed") &&
+      validation.include?("exact check_id/argv/cwd") && validation.include?("missing or mismatched identity") &&
+      validation.include?("failed, partial, or unavailable result blocks true") &&
+      validation.include?("Include the target even in standalone TDD")
+  end
+  results_ok &&= red.include?("current command_results") && red.include?("result is failed") &&
+    green_test.include?("freshness=current") && green_test.include?("result=passed") && all_passes &&
+    cycle_log.fetch("validation").include?("Older cycle logs without invocation identity") &&
+    cycle_log.fetch("validation").include?("cannot establish current selected-check closure") &&
+    cycle_log.fetch("validation").include?("never reconstruct or invent")
+  valid &&= results_ok
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-verification/contracts/input.yaml" \
   "$FRAMEWORK_DIR/skills/assistant-verification/contracts/output.yaml" \

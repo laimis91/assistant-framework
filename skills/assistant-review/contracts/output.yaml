@@ -1128,8 +1128,15 @@ artifacts:
     required: true
     condition: "mode == review-fix"
     description: "Verification evidence after all fixes applied"
-    validation: "Standalone review-fix must show successful build and test results after its fixes. Workflow-composed review requires a current evidence ref when any due selected check or applicable due/executable binding check applies, or a source fix is required or occurred; not_applicable build_result is permitted only when no due selected or applicable due/executable binding build check applies and no build was executed. test_summary is required when a due selected check or applicable due/executable binding obligation requires an automated test."
+    validation: "Standalone review-fix must show successful build and test results after its fixes. Workflow-composed review requires evidence_ref equal to build_test_verification_ref.evidence_ref when any due selected check or applicable due/executable binding check applies, or a source fix is required or occurred; not_applicable build_result is permitted only when no due selected or applicable due/executable binding build check applies and no build was executed. test_summary is required when a due selected check or applicable due/executable binding obligation requires an automated test."
     object_fields:
+      - name: evidence_ref
+        type: string
+        required: conditional
+        condition: "review_preparation_mode == workflow_composed and (a due selected check or applicable due/executable binding check applies, or a source fix is required or occurred)"
+        description: "Current verification evidence ref carried from build_test_verification_ref.evidence_ref."
+        validation: "Equals build_test_verification_ref.evidence_ref unchanged. It carries current selected/binding verification evidence for workflow-composed review and is omitted for standalone review-fix."
+        on_missing: fail
       - name: build_result
         type: enum
         required: true

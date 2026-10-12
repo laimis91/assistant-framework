@@ -44,8 +44,8 @@ gates:
         check: "Assessment resolves actual result refs and distinguishes attempted, passed, failed, skipped, partial, unavailable, blocked, stale, and unknown evidence."
         on_fail: "Resolve the source or report its exact gap; command start, retry-only success, and artifact existence alone are not passing evidence."
       - id: A2
-        check: "Every material claim and, when a canonical decision resolves, every due selected CheckSpec ID and each applicable due/executable binding tuple is supported by current evidence for the actual procedure/oracle observed; do not invent execution checks for unrelated policy constraints solely to fill evidence arrays; shared claim text alone does not close another identity. Command-based passed/failed results preserve executed_command matching exact CheckSpec argv/cwd; missing or mismatched identity is a gap."
-        on_fail: "Mark the claim insufficient or blocked as applicable and name the unresolved check, binding tuple, or missing observation."
+        check: "Every material claim and, when a canonical decision resolves, every due selected CheckSpec ID and each applicable due/executable binding tuple is supported by current evidence for the actual procedure/oracle observed; do not invent execution checks for unrelated policy constraints solely to fill evidence arrays; shared claim text alone does not close another identity. Every started command-based selected CheckSpec, regardless of outcome, preserves executed_command matching exact CheckSpec argv/cwd; missing or mismatched identity is a gap, and partial or unavailable results never close a due check. If no command started, omit executed_command."
+        on_fail: "Mark the claim insufficient or blocked as applicable and name the unresolved check, binding tuple, missing invocation identity, or missing observation."
       - id: A3
         check: "Structural validity, native activation, task behavior, and comparative value are distinguished when relevant, without requiring all four for every change."
         on_fail: "Bound each claim to observed evidence; do not treat a structural proxy or unobserved boundary as behavior."

@@ -86,10 +86,18 @@ if ! ruby -ryaml -e '
   run = field.call(debug_run.fetch("object_fields"), "executed_command")
   verifier_input = load_yaml.call("skills/assistant-verification/contracts/input.yaml")
   verifier_output = load_yaml.call("skills/assistant-verification/contracts/output.yaml")
+  verifier_gates = load_yaml.call("skills/assistant-verification/contracts/phase-gates.yaml")
+  review_output = load_yaml.call("skills/assistant-review/contracts/output.yaml")
   supplied = field.call(verifier_input.fetch("fields"), "available_evidence")
   assessor_command = field.call(supplied.fetch("object_fields"), "executed_command")
   projected = field.call(field.call(verifier_output.fetch("artifacts"), "evidence_assessment").fetch("object_fields"), "scope_and_evidence_refs")
   projected_command = field.call(projected.fetch("object_fields"), "executed_command")
+  assessment_artifact = field.call(verifier_output.fetch("artifacts"), "evidence_assessment")
+  assessment_validation = assessment_artifact.fetch("validation")
+  assess_gate = verifier_gates.fetch("gates").find { |g| g["phase"] == "ASSESS" }.fetch("exit_assertions").find { |a| a["id"] == "A2" }
+  review_build = field.call(review_output.fetch("artifacts"), "build_verification")
+  review_evidence_ref = field.call(review_build.fetch("object_fields"), "evidence_ref")
+  review_ref_validation = review_evidence_ref.fetch("validation")
   debug_allowed = %w[passed failed partial unavailable skipped blocked]
   assessor_states_ok = [supplied, projected].all? { |carrier| (debug_allowed - field.call(carrier.fetch("object_fields"), "result_state").fetch("enum_values")).empty? }
   debug_gaps_ok = [debug_verification, debug_run].all? { |carrier| field.call(carrier.fetch("object_fields"), "result").fetch("enum_values") == debug_allowed } &&
@@ -134,6 +142,21 @@ if ! ruby -ryaml -e '
     assessment.include?("otherwise return remaining_items/blocked") &&
     completion_gate.fetch("check").include?("including light") &&
     completion_gate.fetch("check").include?("evidence_assessment.status == sufficient")
+  assessor_started_outcome_ok = assess_gate.fetch("check").include?("Every started command-based selected CheckSpec, regardless of outcome") &&
+    assess_gate.fetch("check").include?("partial or unavailable results never close a due check") &&
+    assess_gate.fetch("check").include?("If no command started, omit executed_command") &&
+    assess_gate.fetch("on_fail").include?("missing invocation identity") &&
+    assessment_validation.include?("including partial, unavailable, or failed outcomes") &&
+    assessment_validation.include?("missing or mismatched identity is a gap") &&
+    assessment_validation.include?("partial or unavailable results cannot close a due check") &&
+    assessment_validation.include?("Omit executed_command when no command started")
+  review_ref_ok = review_evidence_ref["type"] == "string" &&
+    review_evidence_ref["required"] == "conditional" &&
+    review_evidence_ref.fetch("condition") == "review_preparation_mode == workflow_composed and (a due selected check or applicable due/executable binding check applies, or a source fix is required or occurred)" &&
+    review_evidence_ref["on_missing"] == "fail" &&
+    review_ref_validation.include?("Equals build_test_verification_ref.evidence_ref unchanged") &&
+    review_ref_validation.include?("omitted for standalone review-fix") &&
+    review_build.fetch("validation").include?("evidence_ref equal to build_test_verification_ref.evidence_ref")
   decision = field.call(workflow_output.fetch("artifacts"), "verification_decision")
   workflow_invariants = load_yaml.call("skills/assistant-workflow/contracts/phase-gates.yaml").fetch("invariants")
   selection = workflow_invariants.find { |entry| entry["id"] == "INV_VERIFICATION_SELECTION" }
@@ -146,7 +169,7 @@ if ! ruby -ryaml -e '
     !fix_gate.fetch("check").include?("completes every selected and binding check") &&
     fix_gate.fetch("on_fail").include?("before entering VERIFY") &&
     result_gate.fetch("check").include?("a fixed outcome requires passing evidence for every due check")
-  valid = invocation_conditions_ok && blocked_selection_ok && verify_order_ok && schema_ok && assessor_states_ok && completion_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
+  valid = invocation_conditions_ok && blocked_selection_ok && verify_order_ok && schema_ok && assessor_states_ok && completion_ok && assessor_started_outcome_ok && review_ref_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
     results.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed &&
     gap_text.include?("Partial and unavailable are explicit evidence gaps") && handoff_ok && assessment.include?("partial") && assessment.include?("unavailable") && assessment.include?("never sufficient")
   exit(valid ? 0 : 1)
