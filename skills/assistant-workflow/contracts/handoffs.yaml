@@ -2326,6 +2326,21 @@ handoffs:
         required: true
         enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]
         description: "Worker status packet result"
+        validation: "For active bounded_executor TDD, DONE and DONE_WITH_CONCERNS require this return's matching typed red_evidence before production edits. Preserve an observed valid RED and actual file changes when another due check makes the final status FAILED_VERIFICATION; without valid RED, keep the honest blocker or failure status."
+      - name: red_evidence
+        type: object
+        required: conditional
+        condition: "tdd_applies is true and build_execution_lane == bounded_executor and valid matching authorizing RED was observed"
+        description: "The exact current failed invocation that authorized bounded-executor production edits. It remains separate from final validation_results, even if another due failure determines status."
+        validation: "When present, preserve the observed check_id, test_file, test_name, exact red_command argv and red_cwd, failure summary, and right_reason matching expected_red_failure. Omit when RED was not started, passed unexpectedly, failed for setup or another reason, or is otherwise invalid; never invent evidence."
+        object_fields:
+          - {name: check_id, type: string, required: true, validation: "Exactly equals current_task_packet.red_check_id or inline red_check_id and resolves in the selected/applicable intersection."}
+          - {name: test_file, type: string, required: true}
+          - {name: test_name, type: string, required: true}
+          - {name: command, type: "string[]", required: true, min_items: 1, validation: "Exactly equals the carried red_command argv."}
+          - {name: cwd, type: string, required: true, validation: "Exactly equals the carried red_cwd."}
+          - {name: failure_summary, type: string, required: true, description: "Concise observed failed-test evidence, not raw logs."}
+          - {name: right_reason, type: string, required: true, validation: "Explains why this exact failed test demonstrates expected_red_failure; syntax, setup, and unrelated failures do not qualify."}
       - name: changed_files
         type: object[]
         required: false
@@ -2362,7 +2377,7 @@ handoffs:
         condition: "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, FAILED_VERIFICATION] or verification was attempted)"
         min_items: 1
         description: "Per-check outcomes retained whenever bounded-executor verification was attempted, including NEEDS_CONTEXT/BLOCKED returns. DONE, DONE_WITH_CONCERNS, and FAILED_VERIFICATION require results; an unattempted DEVIATED return may omit them."
-        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Any failed due required check makes bounded CodeWriter status FAILED_VERIFICATION, which takes precedence over DONE, DONE_WITH_CONCERNS, or DEVIATED; preserve all started outcomes and actual file changes. A meaningful RED whose observed failure matches expected_red_failure is TDD stage evidence, not a failed validation_results row. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
+        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Any failed due required check makes bounded CodeWriter status FAILED_VERIFICATION, which takes precedence over DONE, DONE_WITH_CONCERNS, or DEVIATED; preserve all started outcomes and actual file changes. A meaningful RED whose observed failure matches expected_red_failure is retained in red_evidence as TDD stage evidence, not as a failed validation_results row. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
           - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]}
@@ -2514,7 +2529,7 @@ handoffs:
         required: false
         description: "What the plan assumed vs. what was found"
         condition: "when deviation_detected is true or status is DEVIATED"
-    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require real changed_files, evidence, and files_changed; bounded FAILED_VERIFICATION requires validation_results and actual failure evidence, retaining file and artifact outputs only when they were produced. DEVIATED requires deviation_details and concrete evidence of the actual mismatch; changed_files, files_changed, artifact_refs, and validation_results are required only when their corresponding files, artifacts, or checks actually exist. For NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries. When implementation hit an unexpected blocker, require blocker_type and blocker_evidence before the orchestrator routes recovery."
+    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require real changed_files, evidence, and files_changed; active bounded_executor TDD additionally requires the matching typed red_evidence. Bounded FAILED_VERIFICATION requires validation_results and actual failure evidence, retaining observed red_evidence, file, and artifact outputs only when they were produced. DEVIATED requires deviation_details and concrete evidence of the actual mismatch; changed_files, files_changed, artifact_refs, and validation_results are required only when their corresponding files, artifacts, or checks actually exist. For NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries. When implementation hit an unexpected blocker, require blocker_type and blocker_evidence before the orchestrator routes recovery."
 
   # ─────────────────────────────────────────────
   # Orchestrator → BuilderTester
@@ -3070,6 +3085,16 @@ handoffs:
           - {name: cwd, type: string, required: true, validation: "Exactly equals the carried red_cwd."}
           - {name: failure_summary, type: string, required: true, description: "Concise observed failed-test evidence, not raw logs."}
           - {name: right_reason, type: string, required: true, validation: "Explains why this exact failed test demonstrates expected_red_failure; syntax, setup, and unrelated failures do not qualify."}
+      - name: changed_files
+        type: object[]
+        required: false
+        condition: "required with min_items: 1 whenever BuilderTester actually created, modified, or deleted files, including a RED test addition or extension, regardless of status; optional and may be empty or omitted only when no files were actually changed"
+        min_items: 0
+        description: "Actual BuilderTester file mutations, including tests added or extended for pre_production_red. Preserve them after later verification failures; never invent changes for unstarted work."
+        object_fields:
+          - {name: path, type: string, required: true}
+          - {name: change_type, type: enum, required: true, enum_values: [created, modified, deleted]}
+          - {name: description, type: string, required: true}
       - name: verification
         type: object
         required: true

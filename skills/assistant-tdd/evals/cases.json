@@ -28,6 +28,7 @@
       "setup_context": [
         "The assistant-tdd skill instructions are active.",
         "The user explicitly requested TDD.",
+        "The repository root is the current working directory (`.`). For RED, GREEN, and REFACTOR, record the focused target invocation first: argv `[\"ruby\", \"-Itest\", \"tests/eval_runner_test.rb\", \"--name\", \"test_reject_duplicate_case_ids\"]`, cwd `.`, target `tests/eval_runner_test.rb`, test file `tests/eval_runner_test.rb`, and test name `reject_duplicate_case_ids`. Additional honest command-result rows may follow.",
         "No failing regression test has been written yet."
       ],
       "expected_behavior": [
@@ -78,6 +79,121 @@
               "verified_failing"
             ],
             "expected": true
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "target"],
+            "expected": "tests/eval_runner_test.rb"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "test_file"],
+            "expected": "tests/eval_runner_test.rb"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "test_name"],
+            "expected": "reject_duplicate_case_ids"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "argv"],
+            "expected": ["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "cwd"],
+            "expected": "."
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "result"],
+            "expected": "failed"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "freshness"],
+            "expected": "current"
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["cycle_log", 0, "red", "command_results"],
+            "fields": ["target", "cwd", "result", "freshness"]
+          },
+          {
+            "operator": "array_items_nonempty_array_fields",
+            "path": ["cycle_log", 0, "red", "command_results"],
+            "fields": ["argv"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "target"],
+            "expected": "tests/eval_runner_test.rb"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "argv"],
+            "expected": ["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "cwd"],
+            "expected": "."
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "result"],
+            "expected": "passed"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "freshness"],
+            "expected": "current"
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["cycle_log", 0, "green", "command_results"],
+            "fields": ["target", "cwd", "result", "freshness"]
+          },
+          {
+            "operator": "array_items_nonempty_array_fields",
+            "path": ["cycle_log", 0, "green", "command_results"],
+            "fields": ["argv"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "target"],
+            "expected": "tests/eval_runner_test.rb"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "argv"],
+            "expected": ["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "cwd"],
+            "expected": "."
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "result"],
+            "expected": "passed"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "freshness"],
+            "expected": "current"
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["cycle_log", 0, "refactor", "command_results"],
+            "fields": ["target", "cwd", "result", "freshness"]
+          },
+          {
+            "operator": "array_items_nonempty_array_fields",
+            "path": ["cycle_log", 0, "refactor", "command_results"],
+            "fields": ["argv"]
           }
         ]
       }
@@ -91,6 +207,7 @@
       "setup_context": [
         "The assistant-tdd skill instructions are active.",
         "A valid RED test has already failed for the intended missing behavior.",
+        "The repository root is the current working directory (`.`). For RED, GREEN, and REFACTOR, record the focused target invocation first: argv `[\"ruby\", \"-Itest\", \"tests/eval_runner_test.rb\", \"--name\", \"test_reject_duplicate_case_ids\"]`, cwd `.`, target `tests/eval_runner_test.rb`, test file `tests/eval_runner_test.rb`, and test name `reject_duplicate_case_ids`. Additional honest command-result rows may follow.",
         "Production implementation has not yet started."
       ],
       "expected_behavior": [
@@ -151,6 +268,121 @@
               "all_tests_pass"
             ],
             "expected": true
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "target"],
+            "expected": "tests/eval_runner_test.rb"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "test_file"],
+            "expected": "tests/eval_runner_test.rb"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "test_name"],
+            "expected": "reject_duplicate_case_ids"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "argv"],
+            "expected": ["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "cwd"],
+            "expected": "."
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "result"],
+            "expected": "failed"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "red", "command_results", 0, "freshness"],
+            "expected": "current"
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["cycle_log", 0, "red", "command_results"],
+            "fields": ["target", "cwd", "result", "freshness"]
+          },
+          {
+            "operator": "array_items_nonempty_array_fields",
+            "path": ["cycle_log", 0, "red", "command_results"],
+            "fields": ["argv"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "target"],
+            "expected": "tests/eval_runner_test.rb"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "argv"],
+            "expected": ["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "cwd"],
+            "expected": "."
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "result"],
+            "expected": "passed"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "green", "command_results", 0, "freshness"],
+            "expected": "current"
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["cycle_log", 0, "green", "command_results"],
+            "fields": ["target", "cwd", "result", "freshness"]
+          },
+          {
+            "operator": "array_items_nonempty_array_fields",
+            "path": ["cycle_log", 0, "green", "command_results"],
+            "fields": ["argv"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "target"],
+            "expected": "tests/eval_runner_test.rb"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "argv"],
+            "expected": ["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"]
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "cwd"],
+            "expected": "."
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "result"],
+            "expected": "passed"
+          },
+          {
+            "operator": "equals",
+            "path": ["cycle_log", 0, "refactor", "command_results", 0, "freshness"],
+            "expected": "current"
+          },
+          {
+            "operator": "array_items_nonempty_fields",
+            "path": ["cycle_log", 0, "refactor", "command_results"],
+            "fields": ["target", "cwd", "result", "freshness"]
+          },
+          {
+            "operator": "array_items_nonempty_array_fields",
+            "path": ["cycle_log", 0, "refactor", "command_results"],
+            "fields": ["argv"]
           }
         ]
       }

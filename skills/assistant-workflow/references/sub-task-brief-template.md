@@ -106,6 +106,12 @@ When the slice is complete, report status using one of these values:
 
 For active `separated_workers` TDD, Builder/Tester returns `verification_stage=pre_production_red` and the exact typed failed RED before Code Writer; Code Writer forwards that evidence unchanged to Builder/Tester `final_verification`. A matching RED may finish only its pre-production stage with aggregate `partial`, explicit pending GREEN rows, and actual failed counts. It does not satisfy final Build verification or permit Review. Inactive TDD remains Code Writer then Builder/Tester final verification.
 
+Keep each worker's actual `changed_files` in its dispatch result, including
+Builder/Tester test files added or extended for RED and any changes made before
+a later failure. The final workflow `changed_files` and Review scope union the
+actual Builder/Tester and Code Writer changes; preserve which worker produced
+each change and do not credit Builder/Tester files to Code Writer.
+
 An unattempted `DEVIATED` return may omit `changed_files`, `files_changed`, `artifact_refs`, and `validation_results`. Do not invent these outputs; retain concrete evidence of the actual deviation.
 
 Unexpected blockers must be classified. Use `blocker_type` values:

@@ -167,6 +167,14 @@ In direct fallback, perform the same selected-lane responsibilities and record
 equivalent evidence. When TDD is active, establish meaningful RED before
 production edits; otherwise follow the selected checks without adding a RED step.
 
+For `separated_workers`, retain each worker's actual `changed_files` in its
+dispatch result, including Builder/Tester test-file changes made for RED even
+when that worker later returns a failure. Union the actual Builder/Tester and
+Code Writer file mutations into final workflow `changed_files` and the Review
+scope, while keeping each mutation attributed to its producing worker. Omit
+entries only when the work did not change a file; never invent or reassign a
+worker's changes.
+
 If implementation or verification fails and the cause is unclear, return to
 `assistant-debugging` before another patch attempt. If the next fix is clear,
 route verification through the selected build_execution_lane: the bounded

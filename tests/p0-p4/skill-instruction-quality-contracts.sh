@@ -381,8 +381,8 @@ done
 
 tdd_skill="$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md"
 for term in \
-    "Builder/Tester owns RED" \
-    "Code Writer owns GREEN" \
+    'Builder/Tester returns `pre_production_red`' \
+    'Code Writer consumes that evidence unchanged and owns GREEN' \
     "Required RED evidence before production implementation:"; do
     if ! p0p4_section_has_term "$tdd_skill" "## Ownership" "$term"; then
         missing_paired_guidance+=("assistant-tdd Ownership: $term")

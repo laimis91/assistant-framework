@@ -55,7 +55,9 @@ fi
 test_start "all build and recovery surfaces obey the selected execution lane"
 if ! grep -Fq 'run the Code Writer -> Builder/Tester loop' "$workflow/references/phases.md" \
     && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "the bounded executor adds or extends" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "Builder/Tester owns RED only when TDD is active" \
+    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "Builder/Tester returns one typed" \
+    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "Code Writer owns production changes" \
+    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "pre_production_red" \
     && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "route verification through the selected build_execution_lane" \
     && ! grep -Fq 'return to Builder/Tester RED evidence' "$workflow/references/build-worker-protocol.md" \
     && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "Repair evidence according to build_execution_lane" \
@@ -85,7 +87,7 @@ fi
 
 test_start "TDD supports one bounded owner without weakening RED"
 if p0p4_contains_text "$tdd/SKILL.md" "one bounded executor owns RED, GREEN, focused verification, and refactor safety" \
-    && p0p4_contains_text "$tdd/SKILL.md" "production code still starts only after valid RED evidence" \
+    && p0p4_contains_text "$tdd/SKILL.md" "production starts only after valid RED" \
     && p0p4_contains_text "$tdd/contracts/input.yaml" "enum_values: [bounded_executor, separated_workers]"; then
     pass
 else

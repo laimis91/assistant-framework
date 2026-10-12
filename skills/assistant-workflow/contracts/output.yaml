@@ -305,7 +305,7 @@ artifacts:
     type: object[]
     required: conditional
     condition: "execution_intent != prepare_only"
-    validation: "At least 1 entry unless task was determined unnecessary during Discovery. preparation-only work must omit this artifact rather than fabricating a change."
+    validation: "At least 1 entry unless task was determined unnecessary during Discovery. For separated_workers, union actual BuilderTester and CodeWriter changed_files into this final artifact and the review scope, preserving worker ownership in dispatch evidence and never attributing BuilderTester changes to CodeWriter. Keep actual mutations even when a worker later fails; preparation-only work and work with no actual file changes must not fabricate entries."
     on_fail: "List changed files, record that Discovery determined no change was necessary, or use prepare_only completion without a changed-files claim"
     object_fields:
       - name: path

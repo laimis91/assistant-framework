@@ -89,6 +89,24 @@ if ! ruby -ryaml -e '
   context = tester.fetch("context_fields")
   packet = find.call(context, "current_task_packet").fetch("object_fields")
   returned = tester.fetch("return_fields")
+  changed_files = find.call(returned, "changed_files")
+  changed_file_fields = changed_files.fetch("object_fields").map { |field| field.fetch("name") }
+  changed_files_valid = changed_files["type"] == "object[]" && changed_files["required"] == false &&
+    changed_files["min_items"] == 0 && changed_file_fields == %w[path change_type description] &&
+    changed_files.fetch("condition").include?("whenever BuilderTester actually created, modified, or deleted files") &&
+    changed_files.fetch("condition").include?("including a RED test addition or extension") &&
+    changed_files.fetch("condition").include?("regardless of status") &&
+    changed_files.fetch("description").include?("Preserve them after later verification failures") &&
+    changed_files.fetch("description").include?("never invent changes for unstarted work")
+  workflow_dir = File.expand_path("..", File.dirname(ARGV.fetch(0)))
+  workflow_output = YAML.load_file(File.join(File.dirname(ARGV.fetch(0)), "output.yaml")).fetch("artifacts")
+    .find { |field| field["name"] == "changed_files" }.fetch("validation")
+  worker_protocol = File.read(File.join(workflow_dir, "references", "build-worker-protocol.md"))
+  changed_files_union_valid = workflow_output.include?("union actual BuilderTester and CodeWriter changed_files into this final artifact and the review scope") &&
+    workflow_output.include?("never attributing BuilderTester changes to CodeWriter") &&
+    worker_protocol.include?("Union the actual Builder/Tester and") &&
+    worker_protocol.include?("file mutations into final workflow `changed_files`") &&
+    worker_protocol.include?("keeping each mutation attributed to its producing worker")
   stage_in = find.call(context, "verification_stage")
   stage_out = find.call(returned, "verification_stage")
   red = find.call(returned, "red_evidence")
@@ -97,7 +115,8 @@ if ! ruby -ryaml -e '
   aggregate = find.call(find.call(returned, "verification").fetch("object_fields"), "result").fetch("validation")
   build = find.call(returned, "build_result").fetch("description")
   failures = find.call(returned, "test_summary").fetch("description")
-  valid = stage_in["required"] == "conditional" && stage_in["condition"] == "tdd_applies is true" &&
+  valid = changed_files_valid && changed_files_union_valid &&
+    stage_in["required"] == "conditional" && stage_in["condition"] == "tdd_applies is true" &&
     stage_out["condition"] == "tdd_applies is true" &&
     (stage_in["enum_values"] & %w[pre_production_red final_verification]) == %w[pre_production_red final_verification] &&
     stage_out.fetch("validation").include?("Equals the dispatch stage") &&
@@ -452,7 +471,8 @@ for file in \
         'For pre-action `DEVIATED`, retain concrete evidence of the actual mismatch' \
         'omit or leave empty `changed_files`, `files_changed`, `validation_results`, and `artifact_refs`' \
         'A failed due check takes precedence as `FAILED_VERIFICATION`' \
-        'an expected meaningful RED is TDD stage evidence, not an ordinary failed verification result.'; do
+        'an expected meaningful RED is TDD stage evidence, not an ordinary failed verification result.' \
+        'Successful active bounded-TDD returns require it; retain it if another due check fails'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_code_writer_status_terms+=("$file: $term")
         fi
@@ -489,7 +509,7 @@ if ruby -ryaml -e '
     end
     raise "unattempted DEVIATED omission must be explicit" unless writer_results.fetch("description").include?("an unattempted DEVIATED return may omit them")
     raise "failure precedence must be explicit" unless writer_results.fetch("validation").include?("FAILED_VERIFICATION, which takes precedence")
-    raise "expected RED must not be an ordinary verification failure" unless writer_results.fetch("validation").include?("TDD stage evidence, not a failed validation_results row")
+    raise "expected RED must not be an ordinary verification failure" unless writer_results.fetch("validation").include?("TDD stage evidence, not as a failed validation_results row")
     raise "BuilderTester result carrier must remain required" unless tester_results["required"] == true && tester_results["min_items"] == 1
     [writer_results, tester_results].each do |results|
       fields = results.fetch("object_fields")
@@ -570,6 +590,7 @@ for file in \
         '**Status**: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '**Verification**: commands/checks run plus concise success signals or failure messages' \
         '`validation_results`: non-empty per-check rows for every due selected check and applicable binding obligation, even when blocked; each row includes `command_or_check`, `result`, `evidence`, exact `selected_check_ids`, and exact `binding_obligation_refs` tuples `{kind, value, source_ref}`.' \
+        '`changed_files`: return each actual created, modified, or deleted file as `{path, change_type, description}`, including RED test additions or extensions. Preserve those changes even when later verification fails; omit or leave empty only when no file changed.' \
         'Use `result` values `passed`, `failed`, `partial`, `unavailable`, `skipped`, `not_applicable`, or `blocked`; blocked is a distinct gap and never closes a due check or establishes sufficiency.' \
         'For a started command-based selected CheckSpec, include `executed_command` with `check_id` as the sole selected ID and exact `argv` and `cwd`; omit it when the command did not start.' \
         'Only when no command or no-command procedure has started, a due command check that cannot start leaves `verification.commands` empty and aggregate `verification.result` `not_run` with status `NEEDS_CONTEXT` or `BLOCKED`. Otherwise preserve every started command and actual per-check outcome, then derive aggregate/status from all due evidence using canonical precedence; `failed`/`FAILED_VERIFICATION` takes precedence. Always retain each `blocked` row with its check ID and blocker evidence.' \

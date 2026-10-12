@@ -465,10 +465,27 @@ done
 if ! ruby -ryaml -e '
   handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
   writer = handoffs.find { |h| h["name"] == "orchestrator_to_code_writer" }
+  writer_return = writer.fetch("return_fields")
+  bounded_red_return = writer_return.find { |field| field["name"] == "red_evidence" }
+  bounded_red_fields = bounded_red_return.fetch("object_fields").map { |field| field["name"] }
+  writer_status = writer_return.find { |field| field["name"] == "status" }
+  writer_validation = writer_return.find { |field| field["name"] == "validation_results" }.fetch("validation")
+  bounded_red_valid = bounded_red_return["type"] == "object" &&
+    bounded_red_return["required"] == "conditional" &&
+    bounded_red_return["condition"] == "tdd_applies is true and build_execution_lane == bounded_executor and valid matching authorizing RED was observed" &&
+    bounded_red_fields == %w[check_id test_file test_name command cwd failure_summary right_reason] &&
+    bounded_red_return.fetch("validation").include?("Omit when RED was not started") &&
+    bounded_red_return.fetch("validation").include?("never invent evidence") &&
+    bounded_red_return.fetch("object_fields").find { |field| field["name"] == "command" }.fetch("validation").include?("red_command argv") &&
+    bounded_red_return.fetch("object_fields").find { |field| field["name"] == "cwd" }.fetch("validation").include?("red_cwd") &&
+    bounded_red_return.fetch("object_fields").find { |field| field["name"] == "right_reason" }.fetch("validation").include?("expected_red_failure") &&
+    writer_status.fetch("validation").include?("DONE and DONE_WITH_CONCERNS require this return") &&
+    writer_validation.include?("retained in red_evidence as TDD stage evidence, not as a failed validation_results row") &&
+    writer.fetch("on_missing_field").include?("active bounded_executor TDD additionally requires the matching typed red_evidence")
   packet = writer.fetch("context_fields").find { |f| f["name"] == "current_task_packet" }
   command = packet.fetch("object_fields").find { |f| f["name"] == "verification_command" }
   valid = command["required"] == "conditional" && command.fetch("condition").include?("exactly one matching command-based CheckSpec")
-  exit(valid ? 0 : 1)
+  exit(valid && bounded_red_valid ? 0 : 1)
 ' "$handoffs_file"; then
     missing_codewriter_red_evidence_terms+=("verification_command must be conditional on command-bearing selected CheckSpec")
 fi
