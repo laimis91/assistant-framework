@@ -52,6 +52,7 @@ artifacts:
         type: object[]
         required: true
         description: "Smallest actionable set addressing distinct material claims; empty only when no checks are due. A blocked policy conflict omits verification_decision rather than returning an invalid actionable decision."
+        validation: "check_id: nonblank and unique within checks, regardless of tdd_choice.mode; references resolve uniquely."
         object_fields:
           - name: check_id
             type: string
@@ -134,7 +135,7 @@ artifacts:
         type: object
         required: true
         description: "TDD decision, separate from test scope and technique"
-        validation: "user_requirement, project_requirement, and selected_technique require mode=true with non-empty applicable IDs; not_selected requires mode=false and []. required_tdd=false overrides RED oracles: preserve its source and rationale and require false/not_selected/[]. Conflicting true/false tuples block. Applicable IDs uniquely resolve to selected checks with meaningful RED; required true without that oracle blocks."
+        validation: "user_requirement, project_requirement, and selected_technique require mode=true with non-empty applicable IDs; not_selected requires mode=false and []. required_tdd=false overrides RED oracles: preserve its source and rationale and require false/not_selected/[]. Conflicting true/false tuples block. Applicable IDs uniquely resolve to selected automated_test checks with executable meaningful RED; required true without that compatible oracle blocks."
         object_fields:
           - name: mode
             type: boolean
@@ -144,7 +145,7 @@ artifacts:
             type: string[]
             required: true
             description: "Unique selected CheckSpec IDs for which the TDD choice has a meaningful RED oracle"
-            validation: "Each ID resolves exactly once in checks; non-empty iff mode is true; empty iff mode is false. A binding all-deliverable TDD mandate with any required deliverable lacking a meaningful RED oracle blocks actionable selection; do not omit that deliverable, set mode=false, or fabricate an ID or RED."
+            validation: "Each ID resolves exactly once in checks to method == automated_test with executable meaningful RED; non-empty iff mode is true; empty iff mode is false. A binding all-deliverable TDD mandate with any required deliverable lacking a meaningful RED oracle blocks actionable selection; do not omit that deliverable, set mode=false, or fabricate an ID or RED."
           - name: basis
             type: enum
             required: true

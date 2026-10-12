@@ -2898,8 +2898,8 @@ handoffs:
           - name: result
             type: enum
             required: true
-            enum_values: [passed, failed, not_run]
-            validation: "passed requires current observed or admissibly reused passing results for every due selected and binding check; failed records an executed failure; not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED."
+            enum_values: [passed, failed, partial, unavailable, not_run, not_applicable]
+            validation: "passed requires current observed or admissibly reused passing results for every due selected and binding check; failed records an executed failure and takes precedence. partial records incomplete or mixed evidence, including skipped due checks; unavailable retains unavailable due-check evidence; neither satisfies a due check. not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED. not_applicable requires that no due selected or binding check applies, with its rationale; never substitute it for a due check."
           - name: evidence
             type: string[]
             required: true

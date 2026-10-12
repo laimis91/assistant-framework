@@ -32,7 +32,7 @@ gates:
         check: "Selected method details are loaded on demand and the decision names direct method refs when relevant."
         on_fail: "Load the applicable references/methods resource before relying on that method; do not preload all methods."
       - id: S5
-        check: "TDD is active only for selected checks with a meaningful stable RED oracle; an unknown-cause bug reaches assistant-debugging before regression selection. A binding all-deliverable mandate remains intact; if any required deliverable lacks meaningful RED, actionable selection is blocked rather than waived or fabricated."
+        check: "TDD is active only for selected automated_test checks with an executable meaningful stable RED oracle; an unknown-cause bug reaches assistant-debugging before regression selection. A binding all-deliverable mandate remains intact; if any required deliverable lacks compatible executable automated-test RED, actionable selection is blocked rather than waived or fabricated."
         on_fail: "Keep TDD optional unless binding policy requires it; preserve meaningful RED if active, never manufacture a failing test, and return a blocked assessment with the exact policy conflict when the mandate cannot be honored."
 
   - phase: ASSESS

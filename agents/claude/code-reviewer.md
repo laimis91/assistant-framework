@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Canonical read-only code reviewer for defects, security, architecture, test coverage, and structural code issues. Use after build and tests pass. The legacy reviewer role remains a compatibility route.
+description: Canonical read-only code reviewer for defects, security, architecture, test coverage, and structural code issues. Use after build and selected verification evidence is available. The legacy reviewer role remains a compatibility route.
 tools: Read, Grep, Glob, LS
 model: opus
 ---

@@ -55,7 +55,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
   - tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
   - RED evidence: [required only when tdd_applies=true; otherwise N/A, with no fabricated RED]
-  - RED argv and cwd or manual procedure: [required only when TDD selects an automated test; concrete procedure when applicable]
+  - RED test execution: [required only when tdd_applies=true; executable automated-test CheckSpec, literal argv/cwd when command-based or concrete automated procedure, and intended failure; otherwise N/A]
   - Expected failure: [specific intended behavior assertion; never syntax/import/environment failure]
   - Architecture test obligations: [N/A unless tdd_applies=true and an Architecture Decision Pack applies; otherwise stable obligation_id, Pack ref, kind, behavior, verification]
 - Implementation notes / constraints:

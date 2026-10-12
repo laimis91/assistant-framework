@@ -111,11 +111,16 @@ if ! ruby -ryaml -e '
   allowed = %w[passed failed partial unavailable skipped not_applicable]
   gap_text = results.fetch("validation") + " " + results.fetch("on_fail")
   handoff_ok = worker_results.all? { |r| r.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed && r.fetch("validation").include?("Partial and unavailable are explicit gaps") }
+  builder = workflow_handoffs.fetch("handoffs").find { |h| h["name"] == "orchestrator_to_builder_tester" }
+  aggregate = field.call(field.call(builder.fetch("return_fields"), "verification").fetch("object_fields"), "result")
+  aggregate_ok = aggregate.fetch("enum_values") == %w[passed failed partial unavailable not_run not_applicable] &&
+    aggregate.fetch("validation").include?("neither satisfies a due check") &&
+    aggregate.fetch("validation").include?("no due selected or binding check applies")
   assessment = workflow_output.fetch("artifacts").find { |a| a["name"] == "evidence_assessment" }.fetch("validation")
   verify_gaps_ok = debug_allowed.all? { |state| result_gate.fetch("check").include?(state) } &&
     !result_gate.fetch("on_fail").include?("each unavailable check is blocked") &&
     %w[Partial unavailable skipped blocked].all? { |state| gap_gate.fetch("check").include?(state) }
-  valid = schema_ok && debug_gaps_ok && verify_gaps_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
+  valid = schema_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
     results.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed &&
     gap_text.include?("Partial and unavailable are explicit evidence gaps") && handoff_ok && assessment.include?("partial") && assessment.include?("unavailable") && assessment.include?("never sufficient")
   exit(valid ? 0 : 1)

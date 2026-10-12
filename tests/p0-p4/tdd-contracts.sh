@@ -50,7 +50,7 @@ tdd_forbidden_response_is_rejected() {
         && grep -Fq "forbidden_substring_hits=1" "$eval_output"
 }
 
-test_start "required_tdd false binds a not-selected choice and verifier selection keeps truthful provenance"
+test_start "verifier decisions keep unique IDs, executable TDD, and truthful provenance"
 if ! ruby -ryaml -e '
   verification_input = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |field| field["name"] == "verification_policy" }
     .fetch("object_fields").find { |field| field["name"] == "binding_constraints" }
@@ -62,10 +62,15 @@ if ! ruby -ryaml -e '
   ids = tdd_input.find { |field| field["name"] == "selected_check_ids" }
   behaviors = tdd_input.find { |field| field["name"] == "behaviors" }.fetch("validation")
   policy = verification_input.fetch("validation")
-  choice = verification_output.fetch("validation") + " " + verification_output.fetch("object_fields").find { |field| field["name"] == "tdd_choice" }.fetch("validation")
+  checks = verification_output.fetch("object_fields").find { |f| f["name"] == "checks" }
+  tdd_choice = verification_output.fetch("object_fields").find { |f| f["name"] == "tdd_choice" }
+  applicable = tdd_choice.fetch("object_fields").find { |f| f["name"] == "applicable_check_ids" }.fetch("validation")
+  choice = verification_output.fetch("validation") + " " + tdd_choice.fetch("validation")
   selection_validation = [activation["description"], activation["infer_from"], activation["validation"], decision["validation"], ids["validation"]].compact.join(" ").downcase
   valid = policy.include?("required_tdd is exactly true or false") && policy.include?("conflicting required_tdd values") &&
     choice.include?("required_tdd=false") && choice.include?("mode=false") && choice.include?("not_selected") &&
+    checks.fetch("validation", "").include?("nonblank and unique within checks, regardless of tdd_choice.mode") &&
+    applicable.include?("method == automated_test") && applicable.include?("executable meaningful RED") &&
     activation.fetch("enum_values") == %w[user_request plan_constraint project_convention verification_selection] &&
     decision["required"] == "conditional" && decision["on_missing"] == "fail" && decision.fetch("condition").include?("activation_reason == verification_selection") &&
     decision.fetch("condition").include?("invoked from assistant-workflow") &&
