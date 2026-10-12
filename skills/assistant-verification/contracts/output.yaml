@@ -213,7 +213,8 @@ artifacts:
           - name: result_state
             type: enum
             required: true
-            enum_values: [passed, failed, skipped, partial, unavailable]
+            enum_values: [passed, failed, skipped, partial, unavailable, not_applicable]
+            description: "not_applicable preserves the no-applicable-check rationale and never satisfies a due check"
           - name: freshness
             type: enum
             required: true

@@ -59,6 +59,12 @@ if ! ruby -ryaml -e '
     executed_fields.fetch("cwd").fetch("type") == "string" &&
     executed.fetch("validation").include?("unchanged verification_decision") &&
     executed.fetch("validation").include?("exactly equal")
+  root = File.expand_path("../..", File.dirname(ARGV.fetch(0)))
+  input = YAML.load_file(File.join(root, "assistant-verification/contracts/input.yaml"))
+  output = YAML.load_file(File.join(root, "assistant-verification/contracts/output.yaml"))
+  supplied = input.fetch("fields").find { |f| f["name"] == "available_evidence" }.fetch("object_fields").find { |f| f["name"] == "result_state" }
+  projected = output.fetch("artifacts").find { |f| f["name"] == "evidence_assessment" }.fetch("object_fields").find { |f| f["name"] == "scope_and_evidence_refs" }.fetch("object_fields").find { |f| f["name"] == "result_state" }
+  valid &&= [supplied, projected].all? { |f| (field_by_name.fetch("result").fetch("enum_values") - f.fetch("enum_values")).empty? && f.fetch("description").include?("never satisfies a due check") }
   exit(valid ? 0 : 1)
 ' "$output_contract"; then missing+=("contract:validation_results required field types"); fi
 if [[ ${#missing[@]} -eq 0 ]]; then pass; else fail "missing reuse controls: ${missing[*]}"; fi
