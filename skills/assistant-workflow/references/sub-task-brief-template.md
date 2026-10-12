@@ -102,7 +102,9 @@ When the slice is complete, report status using one of these values:
 | `NEEDS_CONTEXT` | Blocked by missing information not in the brief | Orchestrator provides context or adjusts the brief |
 | `BLOCKED` | Cannot proceed — dependency issue, tooling failure, legacy blocker, or design conflict | Orchestrator classifies recovery and unblocks |
 | `DEVIATED` | Work cannot follow the strict slice packet exactly | Orchestrator applies the deviation rollback rule and reapproval when scope/files/behavior/risk changes |
-| `FAILED_VERIFICATION` | A due required CheckSpec failed after execution in `bounded_executor`; retain its per-check failure evidence and any real outputs. This takes precedence over completion and deviation statuses. A meaningful expected RED is stage evidence, not an ordinary verification failure. | Orchestrator reviews the failure evidence before recovery |
+| `FAILED_VERIFICATION` | An ordinary due required CheckSpec failed after execution; retain its per-check failure evidence and any real outputs. This takes precedence over completion and deviation statuses. The exact matching authorizing RED in `verification_stage=pre_production_red` is stage evidence, not an ordinary verification failure. | Orchestrator reviews the failure evidence before recovery |
+
+For active `separated_workers` TDD, Builder/Tester returns `verification_stage=pre_production_red` and the exact typed failed RED before Code Writer; Code Writer forwards that evidence unchanged to Builder/Tester `final_verification`. A matching RED may finish only its pre-production stage with aggregate `partial`, explicit pending GREEN rows, and actual failed counts. It does not satisfy final Build verification or permit Review. Inactive TDD remains Code Writer then Builder/Tester final verification.
 
 An unattempted `DEVIATED` return may omit `changed_files`, `files_changed`, `artifact_refs`, and `validation_results`. Do not invent these outputs; retain concrete evidence of the actual deviation.
 

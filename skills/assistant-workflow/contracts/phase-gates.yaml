@@ -564,9 +564,9 @@ gates:
         on_fail: "Run selected verification criteria for each slice, record method-appropriate results in the configured task journal or equivalent carried-forward state, and resolve failing or missing criteria before proceeding to Review."
 
       - id: B_SUBAGENT_EVIDENCE
-        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's implementation, selected-check results, and changed-file evidence, with RED/GREEN evidence only for packets whose tdd_applies=true; build_execution_lane == separated_workers records Code Writer implementation and Builder/Tester selected-check results, with RED evidence only for packets whose tdd_applies=true"
+        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's implementation, selected-check results, and changed-file evidence, with RED/GREEN evidence only for packets whose tdd_applies=true; build_execution_lane == separated_workers records BuilderTester pre_production_red, unchanged typed RED handoff to CodeWriter, then BuilderTester final_verification when TDD applies, otherwise CodeWriter then BuilderTester final_verification. A pre_production_red DONE is stage completion only and cannot satisfy final Build evidence."
         condition: "controller_intensity in [standard, strict]"
-        on_fail: "Update the selected-lane implementation and selected-check result portion of the Agent Dispatch Log before leaving Build, adding RED/GREEN only when the canonical TDD choice is active. Light work may instead record inline/direct validation."
+        on_fail: "Update the selected-lane implementation and selected-check result portion of the Agent Dispatch Log before leaving Build, adding RED/GREEN only when the canonical TDD choice is active; do not enter Review until active separated_workers TDD has final_verification. Light work may instead record inline/direct validation."
 
       - id: B_SUBAGENT_SLICE_EVIDENCE
         check: "For medium+ delegated tasks with slices: per-slice evidence matches build_execution_lane before the slice is marked VERIFIED; Builder/Tester is required only when build_execution_lane == separated_workers"
@@ -598,9 +598,9 @@ gates:
 
       - id: B10
         severity: blocker
-        check: "When build_execution_lane == separated_workers, build/test/validation was performed by Builder/Tester subagent when delegated or directly in fallback mode with equivalent command/result evidence"
+        check: "When build_execution_lane == separated_workers, build/test/validation was performed by Builder/Tester subagent when delegated or directly in fallback mode with equivalent command/result evidence; active TDD requires BuilderTester final_verification after CodeWriter, and a pre_production_red result alone cannot enter Review"
         condition: "controller_intensity in [standard, strict] and build_execution_lane == separated_workers"
-        on_fail: "Record Builder/Tester dispatch/result evidence or Builder/Tester direct fallback evidence before Review; bounded_executor instead records focused verification in B_SUBAGENT_EVIDENCE"
+        on_fail: "Record Builder/Tester dispatch/result evidence or Builder/Tester direct fallback evidence before Review, including final_verification after CodeWriter when TDD is active; bounded_executor instead records focused verification in B_SUBAGENT_EVIDENCE"
 
       - id: B11
         severity: blocker
@@ -874,7 +874,7 @@ invariants:
     on_fail: "Record the precise result/gap in existing test_results or validation_results, then reassess before Review or completion."
 
   - id: INV_TDD_PROJECTION
-    check: "Task-wide tdd_mode equals verification_decision.tdd_choice.mode. A binding required_tdd=false forces mode=false, basis=not_selected, and empty applicable_check_ids regardless of RED-oracle availability; conflicting true/false mandates block selection. Each packet's tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids. Before production, active packets require one red_check_id that resolves exactly once in both the packet's due selected_check_ids and the unchanged applicable_check_ids; red_command, red_cwd, and expected_red_failure exactly equal that CheckSpec's command.argv, command.cwd, and meaningful_failure. In separated_workers, incoming red_evidence.check_id/command/cwd must match that same binding and right_reason must explain the observed matching oracle failure. Other due checks still run without fabricated RED."
+    check: "Task-wide tdd_mode equals verification_decision.tdd_choice.mode. A binding required_tdd=false forces mode=false, basis=not_selected, and empty applicable_check_ids regardless of RED-oracle availability; conflicting true/false mandates block selection. Each packet's tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids. Every active workflow packet must contain exactly one intersecting ID; split a packet with multiple IDs before dispatch. Before production, active packets require one red_check_id equal to that sole ID and resolving exactly once in the due selected and unchanged applicable sets; red_command, red_cwd, and expected_red_failure exactly equal that CheckSpec's command.argv, command.cwd, and meaningful_failure. In separated_workers, BuilderTester returns verification_stage=pre_production_red with typed failed red_evidence whose check_id/command/cwd/test_file/test_name/right_reason match the exact authorizing invocation and oracle; forward it unchanged to CodeWriter, then dispatch BuilderTester final_verification. Only this matching expected RED may yield stage-only DONE with aggregate partial and explicit pending GREEN rows; retain real failed counts. Any other failure keeps FAILED_VERIFICATION precedence, and pre_production_red never closes Build or permits Review. Other due checks still run without fabricated RED; inactive TDD uses CodeWriter then BuilderTester final_verification."
     condition: "execution_intent != prepare_only and verification_decision is present"
     scope: all_phases
     on_fail: "Repair the decision projection. If active TDD lacks valid right-reason RED, stop production; otherwise remove unconditional RED demands without discarding selected evidence."

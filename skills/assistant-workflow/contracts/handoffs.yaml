@@ -15,10 +15,10 @@ skill: assistant-workflow
 # Worker Status Protocol
 # ─────────────────────────────────────────────
 worker_status_protocol:
-  description: "CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns include a compact status packet so the orchestrator can route Build-role results deterministically. Bounded CodeWriter and BuilderTester verification failures use FAILED_VERIFICATION, which takes precedence over completion or deviation statuses. Reviewer and QAEvaluator packet schemas are owned by assistant-review."
+  description: "CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns include a compact status packet so the orchestrator can route Build-role results deterministically. Bounded CodeWriter and BuilderTester verification failures use FAILED_VERIFICATION, which takes precedence over completion or deviation statuses; the sole exception is BuilderTester DONE for an exact matching authorizing RED in verification_stage=pre_production_red, which is stage completion only and never final Build completion. Reviewer and QAEvaluator packet schemas are owned by assistant-review."
   statuses:
     - value: DONE
-      meaning: "No known concerns; requested work completed within scope."
+      meaning: "No known concerns; requested work or an explicitly dispatched stage completed within scope. Stage-specific DONE does not claim final Build completion."
     - value: DONE_WITH_CONCERNS
       meaning: "Usable result, but follow-up risk or trade-off exists and is recorded."
     - value: NEEDS_CONTEXT
@@ -28,7 +28,7 @@ worker_status_protocol:
     - value: DEVIATED
       meaning: "The worker had to depart from the approved plan or requested scope; deviation evidence is required."
     - value: FAILED_VERIFICATION
-      meaning: "A bounded CodeWriter or BuilderTester ran a due required check and it failed; retain per-check failure evidence. This takes precedence over completion and deviation statuses."
+      meaning: "A bounded CodeWriter or BuilderTester ran a due required check and it failed; retain per-check failure evidence. This takes precedence over completion and deviation statuses. A BuilderTester pre_production_red stage may return DONE only for its exact matching authorizing RED; that status does not mean final verification or Build completion."
   packet_rules:
     - "status is required on CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns."
     - "evidence is required for CodeMapper, Explorer, Architect, and CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED."
@@ -43,7 +43,7 @@ worker_status_protocol:
     - "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION."
     - "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and for DEVIATED or FAILED_VERIFICATION only when implementation files were actually changed; they may be omitted or empty for pre-action DEVIATED and other returns before file changes occur."
     - "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result."
-    - "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence."
+    - "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence. During active-TDD pre_production_red, exact matching authorizing RED may return DONE with aggregate partial and explicit pending GREEN rows; actual failed counts remain failed, and this stage cannot satisfy final Build or Review gates."
 
 # ─────────────────────────────────────────────
 # Typed Artifact Reference Protocol
@@ -885,7 +885,7 @@ handoffs:
             type: boolean
             required: true
             description: "Slice-local projection of selected checks with meaningful RED oracles."
-            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; the task decision remains unchanged."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; for an active slice that intersection must contain exactly one ID, otherwise split it before dispatch. Preserve the task decision unchanged."
           - name: files_to_create
             type: string[]
             required: true
@@ -1226,7 +1226,7 @@ handoffs:
             type: boolean
             required: true
             description: "Whether this slice participates in the active TDD choice."
-            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; false never creates RED duties."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; for an active implementation step that intersection must contain exactly one ID, otherwise split it before dispatch. False never creates RED duties."
           - name: files_to_create
             type: string[]
             required: true
@@ -2095,7 +2095,7 @@ handoffs:
             type: boolean
             required: true
             description: "Whether selected checks for this task packet require meaningful RED."
-            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; an active workflow packet must have exactly one intersecting ID, otherwise split the packet before dispatch."
           - name: verification_decision
             type: object
             required: true
@@ -2132,7 +2132,7 @@ handoffs:
             required: conditional
             condition: "tdd_applies is true"
             description: "The sole due selected CheckSpec that requires meaningful RED for this packet."
-            validation: "Resolves exactly once in selected_check_ids and in the unchanged verification_decision.tdd_choice.applicable_check_ids; it is also a due selected CheckSpec, has command.argv and explicit command.cwd, and remains the same identity for all planned and incoming RED fields."
+            validation: "Equals the sole ID in the intersection of selected_check_ids and the unchanged verification_decision.tdd_choice.applicable_check_ids, resolving exactly once in each; multiple IDs require packet splitting before dispatch. The CheckSpec has command.argv and explicit command.cwd, and this ID remains the same for all planned and incoming RED fields."
           - name: red_cwd
             type: string
             required: conditional
@@ -2155,7 +2155,7 @@ handoffs:
                 type: string
                 required: true
                 description: "The applicable selected CheckSpec that produced this RED evidence."
-                validation: "Exactly equals current_task_packet.red_check_id and resolves once in both selected_check_ids and applicable_check_ids."
+                validation: "Exactly equals current_task_packet.red_check_id and resolves once in both selected_check_ids and applicable_check_ids; for inline context, equals the top-level red_check_id."
               - name: test_file
                 type: string
                 required: true
@@ -2240,8 +2240,47 @@ handoffs:
         type: boolean
         required: conditional
         condition: "current_task_packet is absent"
-        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; when current_task_packet is present, equals its tdd_applies."
+        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; for an active workflow packet that intersection must contain exactly one ID, otherwise split the packet before dispatch. when current_task_packet is present, equals its tdd_applies."
         on_missing: fail
+      - name: red_check_id
+        type: string
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true"
+        validation: "Equals the sole ID in selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; multiple IDs require packet splitting, and the ID resolves once in each set and the unchanged decision."
+        on_missing: fail
+      - name: red_command
+        type: string[]
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true"
+        min_items: 1
+        validation: "Exactly equals the literal command.argv for red_check_id in the unchanged decision."
+        on_missing: fail
+      - name: red_cwd
+        type: string
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true"
+        validation: "Exactly equals the explicit command.cwd for red_check_id in the unchanged decision."
+        on_missing: fail
+      - name: expected_red_failure
+        type: string
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true"
+        validation: "Exactly equals meaningful_failure for red_check_id in the unchanged decision; this is an oracle expectation, not RED evidence."
+        on_missing: fail
+      - name: red_evidence
+        type: object
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true and build_execution_lane == separated_workers"
+        description: "Unchanged typed BuilderTester authorizing RED for inline handoff context."
+        validation: "Matches the top-level red_check_id, red_command, red_cwd, and expected_red_failure exactly; standalone/no-decision and bounded_executor contexts do not require this field."
+        object_fields:
+          - {name: check_id, type: string, required: true, validation: "Exactly equals top-level red_check_id and resolves in both selected and applicable IDs."}
+          - {name: test_file, type: string, required: true}
+          - {name: test_name, type: string, required: true}
+          - {name: command, type: "string[]", required: true, min_items: 1, validation: "Exactly equals top-level red_command."}
+          - {name: cwd, type: string, required: true, validation: "Exactly equals top-level red_cwd."}
+          - {name: failure_summary, type: string, required: true}
+          - {name: right_reason, type: string, required: true, validation: "Explains the matching expected_red_failure oracle; syntax, setup, or unrelated failures do not qualify."}
       - name: tdd_mode
         type: boolean
         required: true
@@ -2521,7 +2560,39 @@ handoffs:
         type: boolean
         required: conditional
         condition: "current_task_packet is absent"
-        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; when current_task_packet is present, equals its tdd_applies."
+        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; for an active workflow packet that intersection must contain exactly one ID, otherwise split the packet before dispatch. when current_task_packet is present, equals its tdd_applies."
+        on_missing: fail
+      - name: verification_stage
+        type: enum
+        required: conditional
+        condition: "tdd_applies is true"
+        enum_values: [pre_production_red, final_verification]
+        description: "Active-TDD BuilderTester stage; inactive-TDD dispatches and returns are final_verification."
+        validation: "The orchestrator dispatches pre_production_red before CodeWriter and final_verification after CodeWriter. Omit only when tdd_applies is false, which is equivalent to final_verification."
+      - name: red_check_id
+        type: string
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true"
+        validation: "Equals the sole ID in selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; multiple IDs require packet splitting, and the ID resolves once in each set and the unchanged decision."
+        on_missing: fail
+      - name: red_command
+        type: string[]
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true"
+        min_items: 1
+        validation: "Exactly equals the literal command.argv for red_check_id in the unchanged decision."
+        on_missing: fail
+      - name: red_cwd
+        type: string
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true"
+        validation: "Exactly equals the explicit command.cwd for red_check_id in the unchanged decision."
+        on_missing: fail
+      - name: expected_red_failure
+        type: string
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true"
+        validation: "Exactly equals meaningful_failure for red_check_id in the unchanged decision; this is an oracle expectation, not RED evidence."
         on_missing: fail
       - name: tdd_mode
         type: boolean
@@ -2530,8 +2601,9 @@ handoffs:
         validation: "Equals current_task_packet.verification_decision.tdd_choice.mode when current_task_packet is present; otherwise equals verification_decision.tdd_choice.mode. Never infer local RED from task-wide mode."
       - name: changed_files
         type: string[]
-        required: true
-        description: "Files that were just modified (from CodeWriter return)"
+        required: conditional
+        condition: "verification_stage == final_verification or tdd_applies is false"
+        description: "Files actually modified by CodeWriter; pre_production_red has no CodeWriter output and may omit this field or carry an empty list."
       - name: files_changed
         type: string[]
         required: false
@@ -2887,7 +2959,7 @@ handoffs:
             type: boolean
             required: true
             description: "Whether this verification packet selects checks with meaningful RED oracles"
-            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; an active workflow packet must have exactly one intersecting ID, otherwise split the packet before dispatch."
           - name: selected_check_ids
             type: string[]
             required: true
@@ -2915,10 +2987,27 @@ handoffs:
           - name: expected_success_signal
             type: string
             required: true
+          - name: red_check_id
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals the sole ID in selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; multiple IDs require packet splitting, and the ID resolves once in each set and the unchanged decision."
+          - name: red_command
+            type: string[]
+            required: conditional
+            condition: "tdd_applies is true"
+            min_items: 1
+            validation: "Exactly equals the literal command.argv for red_check_id in the unchanged decision."
+          - name: red_cwd
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exactly equals the explicit command.cwd for red_check_id in the unchanged decision."
           - name: expected_red_failure
             type: string
-            required: false
+            required: conditional
             condition: "tdd_applies is true"
+            validation: "Exactly equals meaningful_failure for red_check_id in the unchanged decision; this is an oracle expectation, not RED evidence."
       - name: build_repair_state
         type: object
         required: conditional
@@ -2958,7 +3047,29 @@ handoffs:
         type: enum
         required: true
         enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]
-        description: "Worker status packet result"
+        description: "Worker status packet result; pre_production_red DONE completes only the RED stage, never final Build."
+        validation: "In final_verification, DONE/DONE_WITH_CONCERNS require every due check to pass and any ordinary due failure yields FAILED_VERIFICATION. In pre_production_red, DONE is permitted only for the exact typed authorizing RED with verification.result=partial and explicit pending GREEN rows; any other failed due check yields FAILED_VERIFICATION."
+      - name: verification_stage
+        type: enum
+        required: conditional
+        condition: "tdd_applies is true"
+        enum_values: [pre_production_red, final_verification]
+        description: "Active-TDD stage returned by BuilderTester; inactive-TDD returns are final_verification."
+        validation: "Equals the dispatch stage. pre_production_red DONE is stage completion only; final Build/Review requires final_verification."
+      - name: red_evidence
+        type: object
+        required: conditional
+        condition: "verification_stage == pre_production_red and tdd_applies is true and valid matching authorizing RED was observed"
+        description: "When a valid matching authorizing RED was observed, return its exact current failed invocation for CodeWriter unchanged, even if another due failure keeps status FAILED_VERIFICATION. When no valid matching authorizing RED was observed, omit this field and preserve the honest BLOCKED, NEEDS_CONTEXT, or FAILED_VERIFICATION evidence."
+        validation: "Required only when the exact authorizing RED was observed with the planned check, argv, cwd, target test file/name, and expected_red_failure oracle. A blocked/unstarted, unexpectedly passing, setup-failed, or wrong-reason invocation does not qualify and must omit red_evidence; no other failure authorizes production edits."
+        object_fields:
+          - {name: check_id, type: string, required: true, validation: "Exactly equals current_task_packet.red_check_id or inline red_check_id and resolves in both selected and applicable IDs."}
+          - {name: test_file, type: string, required: true}
+          - {name: test_name, type: string, required: true}
+          - {name: command, type: "string[]", required: true, min_items: 1, validation: "Exactly equals the carried red_command argv."}
+          - {name: cwd, type: string, required: true, validation: "Exactly equals the carried red_cwd."}
+          - {name: failure_summary, type: string, required: true, description: "Concise observed failed-test evidence, not raw logs."}
+          - {name: right_reason, type: string, required: true, validation: "Explains why this exact failed test demonstrates expected_red_failure; syntax, setup, and unrelated failures do not qualify."}
       - name: verification
         type: object
         required: true
@@ -2973,7 +3084,7 @@ handoffs:
             type: enum
             required: true
             enum_values: [passed, failed, partial, unavailable, not_run, not_applicable]
-            validation: "passed requires current observed or admissibly reused passing results for every due selected and binding check; failed records an executed failure and takes precedence. partial records incomplete or mixed evidence, including skipped due checks; unavailable retains unavailable due-check evidence; neither satisfies a due check. not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED. not_applicable requires that no due selected or binding check applies, with its rationale; never substitute it for a due check."
+            validation: "In final_verification, passed requires current observed or admissibly reused passing results for every due selected and binding check; an executed ordinary failure records failed and takes precedence. In pre_production_red, only the exact matching authorizing RED is stage evidence: retain its actual failed row/count, but aggregate partial and list every pending GREEN check as partial or skipped with explicit pending evidence; any other due failure keeps ordinary failure precedence. partial records incomplete or mixed evidence; unavailable retains unavailable due-check evidence; neither satisfies a due check. not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED. not_applicable requires that no due selected or binding check applies, with its rationale; never substitute it for a due check."
           - name: evidence
             type: string[]
             required: true
@@ -2984,7 +3095,7 @@ handoffs:
         required: true
         min_items: 1
         description: "Per-check results preserving selected CheckSpec and applicable binding identity for the separated-workers lane"
-        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
+        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage. In pre_production_red, only the row matching the exact typed red_evidence may record the expected failed RED as stage evidence; all other due checks remain explicitly partial or skipped pending GREEN, and any other failed row yields FAILED_VERIFICATION. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
           - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]}
@@ -3074,7 +3185,7 @@ handoffs:
         type: enum
         required: true
         enum_values: [passed, failed, not_run, not_applicable]
-        description: "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints, using each check's claim, oracle, and procedure; do not infer it from file type, command presence, method, or technique alone. Unresolved applicability is a gap. Use passed only for current observed or admissibly reused successful build evidence; an executed build failure is failed and blocks completion. Use not_run only for a required build that could not start, with status NEEDS_CONTEXT or BLOCKED, or with FAILED_VERIFICATION because a different executed required check failed. Retain the unstarted build's blocked row and the other check's failed row; never label the unstarted build failed. Use not_applicable only when no due selected or binding build check applies and no build was executed."
+        description: "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints, using each check's claim, oracle, and procedure; do not infer it from file type, command presence, method, or technique alone. Unresolved applicability is a gap. Use passed only for current observed or admissibly reused successful build evidence; an executed build failure is failed and blocks completion. Use not_run for a required build that could not start with NEEDS_CONTEXT or BLOCKED, for FAILED_VERIFICATION because a different executed required check failed, or for a required build pending GREEN during a valid pre_production_red stage with verification.result=partial; this stage-only not_run never establishes final Build sufficiency. Retain all actual outcomes and pending rows; never label an unstarted build failed. Use not_applicable only when no due selected or binding build check applies and no build was executed."
       - name: build_errors
         type: string[]
         required: false
@@ -3083,7 +3194,7 @@ handoffs:
       - name: test_summary
         type: object
         required: true
-        description: "Actual test counts for selected or binding automated-test checks. Zero counts mean no tests were executed; they do not mean required tests passed. Applicability comes from due selected CheckSpecs and resolved binding constraints, not file type, command presence, method, or technique alone."
+        description: "Actual test counts for selected or binding automated-test checks. In pre_production_red, include the expected failed RED in failed; never normalize it to passed. Zero counts mean no tests were executed; they do not mean required tests passed. Applicability comes from due selected CheckSpecs and resolved binding constraints, not file type, command presence, method, or technique alone."
         object_fields:
           - name: passed
             type: int

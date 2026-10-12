@@ -120,20 +120,26 @@ if ! ruby -ryaml -e '
     selection_validation.include?("project_convention") && selection_validation.include?("plan_constraint")
   cycle_log = YAML.load_file(ARGV.fetch(3)).fetch("artifacts").find { |f| f["name"] == "cycle_log" }
   phases = %w[red green refactor].map { |name| cycle_log.fetch("object_fields").find { |f| f["name"] == name } }
-  results_ok = phases.all? do |phase|
+  results_ok = phases.each_with_index.all? do |phase, index|
     results = phase.fetch("object_fields").find { |f| f["name"] == "command_results" }
     result_fields = results.fetch("object_fields").to_h { |f| [f.fetch("name"), f] }
+    expected_fields = %w[argv check_id cwd freshness result target]
+    expected_fields += %w[test_file test_name] if index == 0
     results["required"] == true && results["min_items"] == 1 &&
-      result_fields.keys.sort == %w[argv check_id cwd freshness result target] &&
+      result_fields.keys.sort == expected_fields.sort &&
       result_fields.fetch("argv").fetch("type") == "string[]" && result_fields.fetch("argv").fetch("min_items") == 1 &&
       result_fields.fetch("cwd").fetch("type") == "string" &&
       result_fields.fetch("result").fetch("enum_values") == %w[passed failed partial unavailable] &&
       result_fields.fetch("freshness").fetch("enum_values") == %w[current stale unknown] &&
       result_fields.fetch("check_id")["required"] == "conditional" &&
-      result_fields.fetch("check_id").fetch("validation").include?("never invent an ID") &&
+      (index != 0 || result_fields.fetch("check_id").fetch("validation").include?("workflow-authorizing RED invocation")) &&
+      (index != 0 || result_fields.fetch("check_id").fetch("validation").include?("standalone/no-decision TDD may omit IDs")) &&
       results.fetch("validation").include?("omit it for standalone TDD without a verification decision")
   end
   red = phases[0].fetch("object_fields").find { |f| f["name"] == "verified_failing" }.fetch("validation")
+  red_reason = phases[0].fetch("object_fields").find { |f| f["name"] == "failure_reason" }.fetch("validation")
+  red_results = phases[0].fetch("object_fields").find { |f| f["name"] == "command_results" }
+  red_result_fields = red_results.fetch("object_fields").to_h { |f| [f.fetch("name"), f] }
   green_fields = phases[1].fetch("object_fields")
   green_test = green_fields.find { |f| f["name"] == "test_passes" }.fetch("validation")
   all_passes = phases[1..].all? do |phase|
@@ -146,7 +152,20 @@ if ! ruby -ryaml -e '
       validation.include?("failed, partial, or unavailable result blocks true") &&
       validation.include?("Include the target even in standalone TDD")
   end
-  results_ok &&= red.include?("current command_results") && red.include?("result is failed") &&
+  standalone_red_history = red.include?("at least one current command_results entry") &&
+    red.include?("Standalone/no-decision TDD may retain multiple matching current failed invocations") &&
+    !red.include?("exactly one current command_results entry")
+  workflow_red_cardinality = red_results.fetch("validation").include?("For workflow-authorizing RED, exactly one current failed invocation carries") &&
+    red_results.fetch("validation").include?("other invocations remain honest")
+  results_ok &&= standalone_red_history && workflow_red_cardinality && red.include?("result is failed") &&
+    red.include?("missing/wrong identity or oracle is not valid RED") &&
+    red.include?("standalone/no-decision TDD") &&
+    red_reason.include?("meaningful_failure oracle") &&
+    red_result_fields.fetch("target").fetch("validation").include?("same test_file and test_name") &&
+    red_result_fields.fetch("test_file")["required"] == "conditional" && red_result_fields.fetch("test_name")["required"] == "conditional" &&
+    red_result_fields.fetch("test_file")["condition"].include?("workflow-authorizing RED invocation") &&
+    red_result_fields.fetch("test_name")["condition"].include?("workflow-authorizing RED invocation") &&
+    red_results.fetch("validation").include?("matching meaningful_failure oracle") &&
     green_test.include?("freshness=current") && green_test.include?("result=passed") && all_passes &&
     cycle_log.fetch("validation").include?("Older cycle logs without invocation identity") &&
     cycle_log.fetch("validation").include?("cannot establish current selected-check closure") &&
@@ -306,13 +325,20 @@ for term in \
     'Other packets still run their due selected checks without manufacturing RED.' \
     'bounded_executor' \
     'separated_workers' \
-    'Builder/Tester owns RED only when TDD is active'; do
+    'Builder/Tester owns the' \
+    'pre_production_red' \
+    'final_verification'; do
     if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_tdd_phase_terms+=("$term")
     fi
 done
 if ! grep -Fq -- "Load \`references/build-worker-protocol.md\` for source-changing Build work" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
     missing_tdd_phase_terms+=("phases.md missing build-worker-protocol loader")
+fi
+phase_sequence_source="$(sed -n '/when the canonical decision activates TDD\. In `separated_workers`, active TDD/,+5p' "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md")"
+phase_sequence_view="$(sed -n '/when the canonical decision activates TDD\. In `separated_workers`, active TDD/,+5p' "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/build.md")"
+if [[ -z "$phase_sequence_source" || "$phase_sequence_source" != "$phase_sequence_view" ]]; then
+    missing_tdd_phase_terms+=("source/generated separated-worker TDD sequence mismatch")
 fi
 if [[ "${#missing_tdd_phase_terms[@]}" -eq 0 ]]; then
     pass
@@ -336,8 +362,13 @@ if ! ruby -ryaml -e '
     decision.fetch("validation").include?("assistant-verification/contracts/output.yaml#verification_decision") &&
     gates.fetch("check").include?("Task-wide tdd_mode equals verification_decision.tdd_choice.mode") &&
     gates.fetch("check").include?("Each packet\u0027s tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids") &&
+    gates.fetch("check").include?("Every active workflow packet must contain exactly one intersecting ID") &&
+    gates.fetch("check").include?("split a packet with multiple IDs before dispatch") &&
     gates.fetch("check").include?("Before production, active packets require one red_check_id") &&
     gates.fetch("check").include?("red_command, red_cwd, and expected_red_failure exactly equal") &&
+    gates.fetch("check").include?("verification_stage=pre_production_red") &&
+    gates.fetch("check").include?("then dispatch BuilderTester final_verification") &&
+    gates.fetch("check").include?("pre_production_red never closes Build or permits Review") &&
     gates.fetch("check").include?("Other due checks still run without fabricated RED")
   exit(valid ? 0 : 1)
 ' "$workflow_input" "$workflow_output" "$workflow_gates"; then
@@ -383,7 +414,8 @@ missing_tdd_skill_terms=()
 for term in \
     "When workflow delegates, ownership follows" \
     "one bounded executor owns RED, GREEN, focused verification, and refactor safety" \
-    "Builder/Tester owns RED, Code Writer owns GREEN" \
+    'Builder/Tester returns `pre_production_red`' \
+    'Code Writer consumes that evidence unchanged and owns GREEN' \
     "Required RED evidence before production implementation:" \
     "add or extend one behavior assertion" \
     "Test file and test name" \
@@ -479,7 +511,7 @@ if ruby -ryaml -e '
   red_check = packet.fetch("object_fields").find { |f| f["name"] == "red_check_id" }
   lane = writer.fetch("context_fields").find { |f| f["name"] == "build_execution_lane" }
   applies = packet.fetch("object_fields").find { |f| f["name"] == "tdd_applies" }
-  planned_red_fields = %w[red_command red_cwd expected_red_failure].map do |name|
+  planned_red_fields = %w[red_check_id red_command red_cwd expected_red_failure].map do |name|
     packet.fetch("object_fields").find { |field| field["name"] == name }
   end
   evidence_fields = %w[check_id test_file test_name command cwd failure_summary right_reason]
@@ -488,8 +520,10 @@ if ruby -ryaml -e '
   planned_by_name = planned_red_fields.to_h { |field| [field.fetch("name"), field] }
   red_check_valid = red_check["required"] == "conditional" &&
     red_check["condition"] == "tdd_applies is true" &&
-    %w[selected_check_ids applicable_check_ids command.argv command.cwd].all? { |term| red_check.fetch("validation").include?(term) }
-  planned_bindings_valid = planned_by_name.fetch("red_command").fetch("validation").include?("command.argv") &&
+    %w[sole ID selected_check_ids applicable_check_ids multiple IDs require packet splitting command.argv command.cwd].all? { |term| red_check.fetch("validation").include?(term) }
+  planned_bindings_valid = planned_by_name.fetch("red_check_id").fetch("validation").include?("sole ID") &&
+    planned_by_name.fetch("red_check_id").fetch("validation").include?("multiple IDs require packet splitting") &&
+    planned_by_name.fetch("red_command").fetch("validation").include?("command.argv") &&
     planned_by_name.fetch("red_cwd").fetch("validation").include?("command.cwd") &&
     planned_by_name.fetch("expected_red_failure").fetch("validation").include?("meaningful_failure") &&
     planned_by_name.fetch("expected_red_failure").fetch("validation").include?("red_check_id")
@@ -499,6 +533,42 @@ if ruby -ryaml -e '
     evidence_by_name.fetch("right_reason").fetch("description").include?("observed failure") &&
     evidence_by_name.fetch("right_reason").fetch("validation").include?("observed failure") &&
     evidence_by_name.fetch("right_reason").fetch("validation").include?("matching expected_red_failure")
+  tester = handoffs.find { |h| h["name"] == "orchestrator_to_builder_tester" }
+  tester_context = tester.fetch("context_fields")
+  tester_packet = tester_context.find { |field| field["name"] == "current_task_packet" }.fetch("object_fields")
+  tester_inline = %w[red_check_id red_command red_cwd expected_red_failure].map { |name| tester_context.find { |field| field["name"] == name } }
+  tester_packet_red = %w[red_check_id red_command red_cwd expected_red_failure].map { |name| tester_packet.find { |field| field["name"] == name } }
+  stage_input = tester_context.find { |field| field["name"] == "verification_stage" }
+  tester_return = tester.fetch("return_fields")
+  stage_return = tester_return.find { |field| field["name"] == "verification_stage" }
+  red_return = tester_return.find { |field| field["name"] == "red_evidence" }
+  tester_stage_valid = stage_input["required"] == "conditional" && stage_input["condition"] == "tdd_applies is true" &&
+    stage_input.fetch("enum_values") == %w[pre_production_red final_verification] &&
+    stage_return["condition"] == "tdd_applies is true" && stage_return.fetch("validation").include?("Equals the dispatch stage") &&
+    red_return["condition"] == "verification_stage == pre_production_red and tdd_applies is true and valid matching authorizing RED was observed" &&
+    red_return.fetch("object_fields").map { |field| field["name"] } == evidence_fields &&
+    red_return.fetch("validation").include?("expected_red_failure oracle") &&
+    tester_inline.all? { |field| field && field["required"] == "conditional" } &&
+    tester_packet_red.all? { |field| field && field["required"] == "conditional" && field["condition"] == "tdd_applies is true" }
+  tester_validation = tester_return.find { |field| field["name"] == "validation_results" }.fetch("validation")
+  stage_aggregate = tester_return.find { |field| field["name"] == "verification" }.fetch("object_fields").find { |field| field["name"] == "result" }.fetch("validation")
+  tester_rows_valid = tester_validation.include?("only the row matching the exact typed red_evidence") &&
+    tester_validation.include?("any other failed row yields FAILED_VERIFICATION") &&
+    stage_aggregate.include?("aggregate partial") && stage_aggregate.include?("any other due failure keeps ordinary failure precedence")
+  writer_context = writer.fetch("context_fields")
+  inline_tuple = %w[red_check_id red_command red_cwd expected_red_failure].map { |name| writer_context.find { |field| field["name"] == name } }
+  inline_red = writer_context.find { |field| field["name"] == "red_evidence" }
+  inline_red_valid = inline_tuple.all? do |field|
+    field && field["required"] == "conditional" &&
+      field["condition"] == "current_task_packet is absent and tdd_applies is true" && field["on_missing"] == "fail"
+  end && inline_tuple[0].fetch("validation").include?("sole ID") &&
+    inline_tuple[0].fetch("validation").include?("multiple IDs require packet splitting") &&
+    inline_tuple[1].fetch("validation").include?("command.argv") &&
+    inline_tuple[2].fetch("validation").include?("command.cwd") &&
+    inline_tuple[3].fetch("validation").include?("meaningful_failure") &&
+    inline_red["condition"] == "current_task_packet is absent and tdd_applies is true and build_execution_lane == separated_workers" &&
+    inline_red.fetch("object_fields").map { |field| field["name"] } == evidence_fields &&
+    inline_red.fetch("validation").include?("expected_red_failure")
   condition = red.fetch("condition")
   expected_condition = "tdd_applies is true and build_execution_lane == separated_workers"
   condition_matches_contract = ->(expr) { expr == expected_condition }
@@ -523,7 +593,7 @@ if ruby -ryaml -e '
   wrong_condition = "tdd_applies is true"
   wrong_condition_would_block_bounded = applies_to.call(wrong_condition, "bounded_executor", true)
   wrong_condition_rejected = !condition_matches_contract.call(wrong_condition)
-  exit(valid_shape && lane_cases && wrong_condition_would_block_bounded && wrong_condition_rejected ? 0 : 1)
+  exit(valid_shape && lane_cases && wrong_condition_would_block_bounded && wrong_condition_rejected && tester_stage_valid && tester_rows_valid && inline_red_valid ? 0 : 1)
 ' "$handoffs_file"; then
     pass
 else

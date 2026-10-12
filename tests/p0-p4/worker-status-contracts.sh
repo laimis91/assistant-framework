@@ -67,20 +67,55 @@ for term in \
     "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION." \
     "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and for DEVIATED or FAILED_VERIFICATION only when implementation files were actually changed; they may be omitted or empty for pre-action DEVIATED and other returns before file changes occur." \
     "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result." \
-    "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence."; do
+    "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence. During active-TDD pre_production_red, exact matching authorizing RED may return DONE with aggregate partial and explicit pending GREEN rows; actual failed counts remain failed, and this stage cannot satisfy final Build or Review gates."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_worker_status_terms+=("$term")
     fi
 done
 slice_brief_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"
 for term in \
-    '| `FAILED_VERIFICATION` | A due required CheckSpec failed after execution in `bounded_executor`; retain its per-check failure evidence and any real outputs. This takes precedence over completion and deviation statuses. A meaningful expected RED is stage evidence, not an ordinary verification failure. | Orchestrator reviews the failure evidence before recovery |' \
+    '| `FAILED_VERIFICATION` | An ordinary due required CheckSpec failed after execution; retain its per-check failure evidence and any real outputs. This takes precedence over completion and deviation statuses. The exact matching authorizing RED in `verification_stage=pre_production_red` is stage evidence, not an ordinary verification failure. | Orchestrator reviews the failure evidence before recovery |' \
+    'For active `separated_workers` TDD, Builder/Tester returns `verification_stage=pre_production_red`' \
     'An unattempted `DEVIATED` return may omit `changed_files`, `files_changed`, `artifact_refs`, and `validation_results`. Do not invent these outputs; retain concrete evidence of the actual deviation.' \
     '## Slice Status: [DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED | DEVIATED | FAILED_VERIFICATION]'; do
     if ! grep -Fq -- "$term" "$slice_brief_template"; then
         missing_worker_status_terms+=("sub-task-brief-template.md: $term")
     fi
 done
+if ! ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs").to_h { |item| [item.fetch("name"), item] }
+  find = ->(fields, name) { fields.find { |field| field["name"] == name } || raise("missing #{name}") }
+  tester = handoffs.fetch("orchestrator_to_builder_tester")
+  context = tester.fetch("context_fields")
+  packet = find.call(context, "current_task_packet").fetch("object_fields")
+  returned = tester.fetch("return_fields")
+  stage_in = find.call(context, "verification_stage")
+  stage_out = find.call(returned, "verification_stage")
+  red = find.call(returned, "red_evidence")
+  fields = red.fetch("object_fields").map { |field| field.fetch("name") }
+  red_validation = find.call(returned, "validation_results").fetch("validation")
+  aggregate = find.call(find.call(returned, "verification").fetch("object_fields"), "result").fetch("validation")
+  build = find.call(returned, "build_result").fetch("description")
+  failures = find.call(returned, "test_summary").fetch("description")
+  valid = stage_in["required"] == "conditional" && stage_in["condition"] == "tdd_applies is true" &&
+    stage_out["condition"] == "tdd_applies is true" &&
+    (stage_in["enum_values"] & %w[pre_production_red final_verification]) == %w[pre_production_red final_verification] &&
+    stage_out.fetch("validation").include?("Equals the dispatch stage") &&
+    red["required"] == "conditional" &&
+    red["condition"] == "verification_stage == pre_production_red and tdd_applies is true and valid matching authorizing RED was observed" &&
+    red.fetch("description").include?("When no valid matching authorizing RED was observed, omit this field") &&
+    red.fetch("description").include?("even if another due failure keeps status FAILED_VERIFICATION") &&
+    red.fetch("validation").include?("blocked/unstarted, unexpectedly passing, setup-failed, or wrong-reason invocation does not qualify") &&
+    fields == %w[check_id test_file test_name command cwd failure_summary right_reason] &&
+    red_validation.include?("exact typed red_evidence") && red_validation.include?("any other failed row yields FAILED_VERIFICATION") &&
+    aggregate.include?("aggregate partial") && aggregate.include?("any other due failure keeps ordinary failure precedence") &&
+    build.include?("valid pre_production_red stage") && build.include?("never establishes final Build sufficiency") &&
+    failures.include?("expected failed RED in failed;") &&
+    find.call(context, "current_task_packet").fetch("object_fields").find { |field| field["name"] == "red_check_id" }.fetch("validation").include?("multiple IDs require packet splitting")
+  exit(valid ? 0 : 1)
+' "$handoffs_file"; then
+    missing_worker_status_terms+=("BuilderTester stage, typed RED, or stage-only outcome contract")
+fi
 if [[ "${#missing_worker_status_terms[@]}" -eq 0 ]]; then
     pass
 else
@@ -497,7 +532,7 @@ fi
 for term in \
     "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints" \
     "do not infer it from file type, command presence, method, or technique alone" \
-    "Use not_run only for a required build that could not start, with status NEEDS_CONTEXT or BLOCKED, or with FAILED_VERIFICATION because a different executed required check failed. Retain the unstarted build's blocked row and the other check's failed row; never label the unstarted build failed." \
+    "Use not_run for a required build that could not start with NEEDS_CONTEXT or BLOCKED, for FAILED_VERIFICATION because a different executed required check failed, or for a required build pending GREEN during a valid pre_production_red stage with verification.result=partial; this stage-only not_run never establishes final Build sufficiency." \
     "Use not_applicable only when no due selected or binding build check applies and no build was executed"; do
     if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "$term"; then
         missing_builder_status_terms+=("build_result missing scoped applicability rule: $term")
@@ -540,6 +575,9 @@ for file in \
         'Only when no command or no-command procedure has started, a due command check that cannot start leaves `verification.commands` empty and aggregate `verification.result` `not_run` with status `NEEDS_CONTEXT` or `BLOCKED`. Otherwise preserve every started command and actual per-check outcome, then derive aggregate/status from all due evidence using canonical precedence; `failed`/`FAILED_VERIFICATION` takes precedence. Always retain each `blocked` row with its check ID and blocker evidence.' \
         'When no check applies, return one `not_applicable` row with empty IDs and binding refs plus the exact rationale.' \
         'For a no-command check, evidence states the concrete procedure and observed result.' \
+        '`verification_stage`: active TDD returns the dispatched `pre_production_red` or `final_verification`' \
+        '`red_evidence`: return the exact unchanged `{check_id, test_file, test_name, command, cwd, failure_summary, right_reason}` only when the valid matching authorizing RED was observed; omit when it was not observed' \
+        'Only the exact current failed invocation matching the planned check, argv, cwd, test file/name, and meaningful-failure oracle may complete' \
         '`FAILED_VERIFICATION`: an executed build, test, or other required check failed'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_builder_status_terms+=("$file: $term")

@@ -28,6 +28,19 @@ executor task.
   invent RED even if task-wide TDD mode is true. If tdd_applies is missing or
   conflicts with those IDs, stop and return NEEDS_CONTEXT before editing or
   fabricating RED; do not default the packet to false.
+- In active workflow TDD, require exactly one packet-local selected/applicable
+  CheckSpec ID and the exact planned RED tuple (`red_check_id`, `red_command`,
+  `red_cwd`, `expected_red_failure`); split packets with multiple IDs. Use the
+  dispatched `verification_stage`: `pre_production_red` runs only the
+  planned authorizing test and returns its exact typed seven-field RED evidence
+  only when the matching meaningful failure is observed. Otherwise omit
+  `red_evidence` and preserve honest BLOCKED, NEEDS_CONTEXT, or
+  FAILED_VERIFICATION rows. If that RED is observed alongside another due
+  failure, retain its evidence while FAILED_VERIFICATION keeps precedence.
+  Forward valid RED evidence unchanged through Code Writer. After Code Writer,
+  return `final_verification`. Inactive TDD is final_verification and keeps
+  Code Writer then Builder/Tester.
+- Only the exact current failed invocation matching the planned check, argv, cwd, test file/name, and meaningful-failure oracle may complete `pre_production_red` with status DONE, aggregate partial, and explicit pending GREEN rows. Keep real failed test counts/outcomes; any other due failure remains FAILED_VERIFICATION. Stage DONE is not final Build sufficiency and does not permit Review.
 - Run selected checks and binding project suites, not an unselected full suite.
 - Diagnose failures and report actionable summaries
 - When TDD is active, own meaningful RED for this packet (tdd_applies=true): add or extend one
@@ -37,6 +50,8 @@ executor task.
 
 ## What you return (CONCISE format)
 - **Status**: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`
+- `verification_stage`: active TDD returns the dispatched `pre_production_red` or `final_verification`; inactive TDD infers `final_verification`.
+- `red_evidence`: return the exact unchanged `{check_id, test_file, test_name, command, cwd, failure_summary, right_reason}` only when the valid matching authorizing RED was observed; omit when it was not observed and for final_verification, while preserving honest status and verification rows.
 - **Verification**: commands/checks run plus concise success signals or failure messages; when a selected check has no command, an empty command list requires the concrete procedure and observed result in evidence
 - `validation_results`: non-empty per-check rows for every due selected check and applicable binding obligation, even when blocked; each row includes `command_or_check`, `result`, `evidence`, exact `selected_check_ids`, and exact `binding_obligation_refs` tuples `{kind, value, source_ref}`.
 - Use `result` values `passed`, `failed`, `partial`, `unavailable`, `skipped`, `not_applicable`, or `blocked`; blocked is a distinct gap and never closes a due check or establishes sufficiency. For a started command-based selected CheckSpec, include `executed_command` with `check_id` as the sole selected ID and exact `argv` and `cwd`; omit it when the command did not start. Only when no command or no-command procedure has started, a due command check that cannot start leaves `verification.commands` empty and aggregate `verification.result` `not_run` with status `NEEDS_CONTEXT` or `BLOCKED`. Otherwise preserve every started command and actual per-check outcome, then derive aggregate/status from all due evidence using canonical precedence; `failed`/`FAILED_VERIFICATION` takes precedence. Always retain each `blocked` row with its check ID and blocker evidence. When no check applies, return one `not_applicable` row with empty IDs and binding refs plus the exact rationale. For a no-command check, evidence states the concrete procedure and observed result.
@@ -47,12 +62,12 @@ executor task.
 - If failures relate to code changes: specific file:line reference + what's wrong
 
 ## Status meanings
-- `DONE`: every due selected and binding check has current passing evidence; a build or tests need not be invented when none is due
+- `DONE`: every due selected and binding check has current passing evidence; a build or tests need not be invented when none is due. The only exception is stage-only DONE for an exact matching pre_production_red, which remains partial and cannot complete Build.
 - `DONE_WITH_CONCERNS`: every due selected and binding check has current passing evidence, with follow-up risk remaining
 - `NEEDS_CONTEXT`: missing command, target, or expected signal needs orchestrator clarification
 - `BLOCKED`: environment, dependency, permission, or tool issue prevents verification
 - `DEVIATED`: verification departed from the requested command/plan
-- `FAILED_VERIFICATION`: an executed build, test, or other required check failed; equivalent status wording: `FAILED_VERIFICATION`: build, tests, or required checks ran and failed
+- `FAILED_VERIFICATION`: an executed build, test, or other required check failed; equivalent status wording: `FAILED_VERIFICATION`: build, tests, or required checks ran and failed. The exact matching authorizing RED is exempt only in pre_production_red; every other failure retains precedence.
 
 Do NOT dump full build logs or test output. The whole point of your role is to absorb that noise and return a clean summary.
 

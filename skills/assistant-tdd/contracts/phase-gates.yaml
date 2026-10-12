@@ -21,12 +21,12 @@ gates:
         on_fail: "Add or extend one assertion for the selected behavior; do not require a new test file or unrelated tests."
 
       - id: RED2
-        check: "The test was executed and it FAILED"
-        on_fail: "Run the test. If it passes, the behavior already exists or the test is wrong — investigate."
+        check: "The test was executed and it FAILED; when authorizing workflow production edits, exactly one current failed invocation is bound to this test"
+        on_fail: "Run the test. If it passes, the behavior already exists or the test is wrong — investigate. Do not authorize workflow edits without the current invocation identity."
 
       - id: RED3
-        check: "The test failed for the RIGHT reason (not syntax error, missing import, or wrong setup)"
-        on_fail: "Fix the test infrastructure issue. The failure must demonstrate the missing behavior."
+        check: "The test failed for the RIGHT reason (not syntax error, missing import, or wrong setup); workflow-authorizing RED binds the exact selected-and-applicable CheckSpec ID, argv, cwd, target test file/name, and matching meaningful_failure oracle"
+        on_fail: "Fix the test infrastructure issue. The failure must demonstrate the missing behavior and match the selected CheckSpec oracle before production edits."
 
       - id: RED4
         check: "No production code was written during the RED phase"

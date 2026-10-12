@@ -45,32 +45,33 @@ named canonical contract; do not load every contract at entry.
 assistant-tdd owns RED-GREEN-REFACTOR correctness. Generic workflow coordinates
 task packets and role dispatch, but specialist gates are authoritative.
 
-When workflow delegates, ownership follows `execution_lane` and the carried
-`verification_decision` without weakening
-the phase boundary:
+When workflow delegates, ownership follows `execution_lane`; preserve carried
+decision and phase boundary:
 
-- For a composed task, run RED only for the current increment's selected check
-  IDs that intersect `verification_decision.tdd_choice.applicable_check_ids`.
-  Preserve the task decision unchanged; task-global TDD mode does not impose a
-  RED cycle on unrelated packet checks.
+- Run RED only for selected IDs intersecting `tdd_choice.applicable_check_ids`;
+  split active workflow packets until one ID intersects, and preserve the
+  decision unchanged.
 
-- Use `verification_selection` only for unchanged `selected_technique` with a
-  current ID intersection. Preserve actual source; invent none.
+- `verification_selection` uses unchanged `selected_technique` and current ID
+  intersection; preserve its source.
 
-- In `bounded_executor`, one bounded executor owns RED, GREEN, focused verification, and refactor safety; production code still starts only after valid RED evidence is recorded.
-- In `separated_workers`, Builder/Tester owns RED, Code Writer owns GREEN, and
-  Builder/Tester owns verification/refactor-safety. Use this lane for explicit
-  independent RED evidence, high-risk work, or broad/noisy/environment-heavy
-  verification.
+- In `bounded_executor`, one bounded executor owns RED, GREEN, focused verification, and refactor safety; production starts only after valid RED.
+- In `separated_workers`, Builder/Tester returns `pre_production_red`; Code Writer consumes that evidence unchanged and owns GREEN, then Builder/Tester returns `final_verification`. Use for independent RED, high risk, or broad/noisy/environment-heavy verification.
 
 Required RED evidence before production implementation:
 
 - Test file and test name
-- Command run
+- For authorizing RED, the sole applicable selected CheckSpec ID, exact argv/cwd,
+  and matching oracle; standalone/no-decision TDD may omit the ID.
+- Command argv/cwd (standalone/no-decision TDD may omit ID)
 - Failure summary
 - Why the failure proves the intended missing behaviour
 
-When a workflow Architecture Decision Pack applies, bring only its testable obligations into the cycle: semantic type validation, primitive-boundary conversion, public-contract compatibility, a stated quality scenario, or a design-pressure check such as early exit, ownership/disposal, bounded resources, extension registration, or representative-path behavior. Do not invent a Pack or benchmark for ordinary local behavior. A memory, performance, or extensibility claim remains an explicit unknown until a workload, budget/threshold, measurement method, and failure condition are testable.
+Keep actual RED outcomes/counts failed. Only matching authorizing RED completes
+`pre_production_red` with aggregate `partial` and pending GREEN; it is not final
+Build evidence. Run `final_verification` after Code Writer before Review.
+
+For a carried Architecture Decision Pack, test semantic type, primitive-boundary, public-compatibility, quality-scenario, and applicable design-pressure obligations (control/early exit, ownership/disposal, resources, extension registration, representative path). Do not invent Packs or benchmarks. Quality claims remain unknown until workload, budget, measurement, and failure condition are testable.
 
 If TDD is active and RED evidence is missing, the selected production owner
 must return `NEEDS_CONTEXT` and make no production changes.

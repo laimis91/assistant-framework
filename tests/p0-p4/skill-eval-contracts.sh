@@ -1683,24 +1683,24 @@ test_start "skill eval runner list includes covered skill case rows"
 default_case_count="$(p0p4_skill_eval_default_case_count)"
 if list_output="$("$skill_eval_runner" --list)" \
     && [[ "$(printf '%s\n' "$list_output" | grep -c .)" -eq "$default_case_count" ]] \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-clarify\tmulti-intent-prompt-asks-material-clarification\tambiguous_multi_intent\tMulti-intent prompt asks material clarification' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-thinking\tarchitecture-decision-selects-perspectives\ttool_selection_methodology\tArchitecture decision selects perspectives' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tmedium-task-plans-before-build\tphase_gate_approval\tMedium task plans before build' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tworkflow-trigger-routes-dev-verbs-not-raw-code\ttrigger_routing\tWorkflow trigger routes dev verbs not raw code' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tunknown-cause-bugfix-routes-through-debugging-before-tdd\tdebugging_tdd_routing\tUnknown-cause bugfix routes through debugging before TDD' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tclarification-is-material-not-capped\tclarification_admissibility\tClarification is material, not capped' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-review\treview-fix-loop-handles-findings\tautonomous_review_loop\tReview-fix loop handles findings' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tbugfix-starts-with-red-evidence\tred_gate_enforcement\tBugfix starts with RED evidence' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tunknown-cause-bugfix-waits-for-debugging-evidence\tdebugging_bridge\tUnknown-cause bugfix waits for debugging evidence' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-security\tfindings-include-severity-impact-remediation\tsecurity_report_contract\tFindings include severity impact remediation' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-debugging\tbugfix-reproduces-before-patching\treproduction_gate\tBugfix reproduces before patching' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-diagrams\tarchitecture-diagram-derived-from-code\tcode_derived_architecture\tArchitecture diagram derived from code' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-docs\tarchitecture-doc-uses-code-evidence\tcode_derived_architecture_docs\tArchitecture doc uses code evidence' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-ideate\tbrainstorm-diverges-before-ranking\tdiverge_converge_gate\tBrainstorm diverges before ranking' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-skill-creator\tnew-process-skill-designs-contracts-before-build\tcontract_design_gate\tNew process skill designs contracts before build' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-research\ttechnology-comparison-uses-standard-tier\ttier_and_synthesis\tTechnology comparison uses standard tier' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-onboard\tnew-repo-onboarding-produces-orientation\tsystematic_onboarding\tNew repo onboarding produces orientation'; then
+    && grep -Fq -- $'assistant-clarify\tmulti-intent-prompt-asks-material-clarification\tambiguous_multi_intent\tMulti-intent prompt asks material clarification' <<<"$list_output" \
+    && grep -Fq -- $'assistant-thinking\tarchitecture-decision-selects-perspectives\ttool_selection_methodology\tArchitecture decision selects perspectives' <<<"$list_output" \
+    && grep -Fq -- $'assistant-workflow\tmedium-task-plans-before-build\tphase_gate_approval\tMedium task plans before build' <<<"$list_output" \
+    && grep -Fq -- $'assistant-workflow\tworkflow-trigger-routes-dev-verbs-not-raw-code\ttrigger_routing\tWorkflow trigger routes dev verbs not raw code' <<<"$list_output" \
+    && grep -Fq -- $'assistant-workflow\tunknown-cause-bugfix-routes-through-debugging-before-tdd\tdebugging_tdd_routing\tUnknown-cause bugfix routes through debugging before TDD' <<<"$list_output" \
+    && grep -Fq -- $'assistant-workflow\tclarification-is-material-not-capped\tclarification_admissibility\tClarification is material, not capped' <<<"$list_output" \
+    && grep -Fq -- $'assistant-review\treview-fix-loop-handles-findings\tautonomous_review_loop\tReview-fix loop handles findings' <<<"$list_output" \
+    && grep -Fq -- $'assistant-tdd\tbugfix-starts-with-red-evidence\tred_gate_enforcement\tBugfix starts with RED evidence' <<<"$list_output" \
+    && grep -Fq -- $'assistant-tdd\tunknown-cause-bugfix-waits-for-debugging-evidence\tdebugging_bridge\tUnknown-cause bugfix waits for debugging evidence' <<<"$list_output" \
+    && grep -Fq -- $'assistant-security\tfindings-include-severity-impact-remediation\tsecurity_report_contract\tFindings include severity impact remediation' <<<"$list_output" \
+    && grep -Fq -- $'assistant-debugging\tbugfix-reproduces-before-patching\treproduction_gate\tBugfix reproduces before patching' <<<"$list_output" \
+    && grep -Fq -- $'assistant-diagrams\tarchitecture-diagram-derived-from-code\tcode_derived_architecture\tArchitecture diagram derived from code' <<<"$list_output" \
+    && grep -Fq -- $'assistant-docs\tarchitecture-doc-uses-code-evidence\tcode_derived_architecture_docs\tArchitecture doc uses code evidence' <<<"$list_output" \
+    && grep -Fq -- $'assistant-ideate\tbrainstorm-diverges-before-ranking\tdiverge_converge_gate\tBrainstorm diverges before ranking' <<<"$list_output" \
+    && grep -Fq -- $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' <<<"$list_output" \
+    && grep -Fq -- $'assistant-skill-creator\tnew-process-skill-designs-contracts-before-build\tcontract_design_gate\tNew process skill designs contracts before build' <<<"$list_output" \
+    && grep -Fq -- $'assistant-research\ttechnology-comparison-uses-standard-tier\ttier_and_synthesis\tTechnology comparison uses standard tier' <<<"$list_output" \
+    && grep -Fq -- $'assistant-onboard\tnew-repo-onboarding-produces-orientation\tsystematic_onboarding\tNew repo onboarding produces orientation' <<<"$list_output"; then
     pass
 else
     fail "skill eval runner --list did not include expected covered assistant case rows"

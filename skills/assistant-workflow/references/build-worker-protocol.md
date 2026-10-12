@@ -110,8 +110,12 @@ or technique alone; missing or unresolved applicability is a gap. Keep
 binding build check applies and no build was executed, `passed` only for current
 observed or admissibly reused successful build evidence, `failed` for an
 executed failure, and `not_run` when a required build could not run and the
-worker is `NEEDS_CONTEXT` or `BLOCKED`. A failed required build blocks
-completion. Keep `test_summary` required; zero counts mean no tests were
+worker is `NEEDS_CONTEXT` or `BLOCKED`, when `FAILED_VERIFICATION` results from
+a different executed required check, or when the required build is pending
+GREEN during a valid `pre_production_red` stage with
+`verification.result=partial`. Stage-only `not_run` never establishes final
+Build sufficiency. A failed required build blocks completion. Keep
+`test_summary` required; zero counts mean no tests were
 executed, not that selected or binding tests passed. Every due selected or
 binding check still needs a current result. A no-command check may return an
 empty `verification.commands` list only when `verification.evidence` names the
@@ -155,7 +159,10 @@ Before starting a slice:
 
 For each step, dispatch the selected lane owner for one task packet at a time
 per worker. The bounded executor implements and runs selected verification in
-the same context. Separated workers dispatch Code Writer, then Builder/Tester.
+the same context. Separated workers with active TDD dispatch Builder/Tester
+pre_production_red, forward its unchanged typed RED to Code Writer, then
+dispatch Builder/Tester final_verification; inactive TDD stays Code Writer,
+then Builder/Tester final_verification.
 In direct fallback, perform the same selected-lane responsibilities and record
 equivalent evidence. When TDD is active, establish meaningful RED before
 production edits; otherwise follow the selected checks without adding a RED step.
@@ -163,9 +170,11 @@ production edits; otherwise follow the selected checks without adding a RED step
 If implementation or verification fails and the cause is unclear, return to
 `assistant-debugging` before another patch attempt. If the next fix is clear,
 route verification through the selected build_execution_lane: the bounded
-executor retries and verifies its focused loop; separated workers dispatch Code
-Writer and then Builder/Tester; direct fallback performs the same selected-lane
-responsibilities.
+executor retries and verifies its focused loop; inactive-TDD separated workers
+dispatch Code Writer then Builder/Tester; direct fallback performs the same
+selected-lane responsibilities. For active separated-worker TDD, Builder/Tester owns the
+pre_production_red stage, Code Writer consumes its unchanged typed RED before
+production edits, and Builder/Tester then owns final_verification.
 
 ### Ordinary Build repair controller
 
@@ -223,8 +232,12 @@ gate rather than being inferred from a passing wrapper test.
   one assertion, records the intended failure, implements minimal GREEN, then
   runs selected checks and binding regressions; with false TDD it runs only the
   selected verification plan.
-- `separated_workers`: Builder/Tester owns RED only when TDD is active, Code
-  Writer owns production changes, and Builder/Tester runs selected verification.
+- `separated_workers`: when TDD is active, Builder/Tester returns one typed
+  authorizing RED in `pre_production_red`, Code Writer owns production changes,
+  then Builder/Tester runs `final_verification`; inactive TDD stays Code Writer
+  then Builder/Tester. Only an exact matching failed RED may return stage-only
+  DONE with aggregate partial and explicit pending GREEN rows. Retain actual
+  failed counts, and do not enter Review until final verification passes.
 
 For bugfixes, RED traces to the original reproduction/debugging evidence. A
 missing or wrong-reason RED blocks production edits in either lane.

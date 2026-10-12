@@ -12,7 +12,7 @@ artifacts:
     condition: always
     description: "Record of every Red-Green-Refactor cycle executed"
     min_items: 1
-    validation: "One entry per behavior. Every behavior from input must have a corresponding cycle. Current completed cycles record actual command_results for RED, GREEN, and REFACTOR; each invocation retains literal argv/cwd and its observed result, with selected CheckSpec identity only when a current decision supplies it. Older cycle logs without invocation identity may remain historical evidence but cannot establish current selected-check closure; never reconstruct or invent a CheckSpec ID, command, or cwd."
+    validation: "One entry per behavior. Every behavior from input must have a corresponding cycle. Current completed cycles record actual command_results for RED, GREEN, and REFACTOR; each invocation retains literal argv/cwd and its observed result. For workflow-authorizing RED, exactly one current failed invocation binds the current test_file/test_name, a check_id in selected_check_ids intersect tdd_choice.applicable_check_ids, exact CheckSpec argv/cwd, and the matching meaningful_failure oracle before production edits. Other invocations remain honest and do not authorize edits. Standalone/no-decision TDD and non-authorizing invocations may omit check_id; never reconstruct or invent an ID, command, or cwd. Older cycle logs without invocation identity may remain historical evidence but cannot establish current selected-check closure."
     object_fields:
       - name: behavior
         type: string
@@ -35,7 +35,7 @@ artifacts:
           - name: failure_reason
             type: string
             required: true
-            validation: "Must describe WHY the test failed (not syntax error or missing import)"
+            validation: "Must describe why this test's observed failure matches the current selected CheckSpec meaningful_failure oracle when it authorizes workflow production edits; syntax, setup, and unrelated failures never qualify."
           - name: debugging_trace
             type: string
             required: conditional
@@ -47,12 +47,23 @@ artifacts:
             required: true
             min_items: 1
             description: "Actual RED phase invocations, represented separately for each test target or relevant check."
-            validation: "Record each command actually run in this RED phase with its literal argv, explicit cwd, observed result, and freshness. A current selected CheckSpec ID is required when this invocation is claimed as evidence for that check; omit it for standalone TDD without a verification decision."
+            validation: "Record each command actually run in this RED phase with its literal argv, explicit cwd, observed result, and freshness. A current selected CheckSpec ID is required when this invocation is claimed as evidence for that check; omit it for standalone TDD without a verification decision. For workflow-authorizing RED, exactly one current failed invocation carries the matching meaningful_failure oracle and binds its selected/applicable ID, exact argv/cwd, and test_file/test_name; other invocations remain honest."
             object_fields:
               - name: target
                 type: string
                 required: true
                 description: "Test target, regression, or binding suite invoked in this phase."
+                validation: "For the unique authorizing RED invocation, identifies the same test_file and test_name as the enclosing red artifact."
+              - name: test_file
+                type: string
+                required: conditional
+                condition: "this is the workflow-authorizing RED invocation in a current TDD cycle with verification_decision"
+                description: "Test file targeted by this RED invocation."
+              - name: test_name
+                type: string
+                required: conditional
+                condition: "this is the workflow-authorizing RED invocation in a current TDD cycle with verification_decision"
+                description: "Specific test targeted by this RED invocation."
               - name: argv
                 type: string[]
                 required: true
@@ -75,13 +86,13 @@ artifacts:
               - name: check_id
                 type: string
                 required: conditional
-                condition: "this command result is claimed as evidence for a selected CheckSpec in the available unchanged verification_decision"
+                condition: "this command result is claimed as evidence for a selected CheckSpec in the available unchanged verification_decision or is the workflow-authorizing RED invocation"
                 description: "Current selected CheckSpec identity; omit when there is no decision or this invocation is not evidence for a selected CheckSpec."
-                validation: "Resolves exactly once to a selected CheckSpec in the unchanged verification_decision; argv and cwd exactly equal CheckSpec.command.argv and CheckSpec.command.cwd. Omit when no decision is available or this invocation is not evidence for a selected CheckSpec; never invent an ID."
+                validation: "For the unique workflow-authorizing RED invocation, resolves exactly once to a CheckSpec in selected_check_ids intersect tdd_choice.applicable_check_ids; argv/cwd exactly equal its command.argv/command.cwd, and the enclosing test_file/test_name plus failure_reason match that check's target and meaningful_failure. Other invocations may omit the ID; when supplied, it resolves once to a selected CheckSpec with exact argv/cwd. standalone/no-decision TDD may omit IDs; never invent one."
           - name: verified_failing
             type: boolean
             required: true
-            validation: "Must be true — test was run and confirmed to fail for the right reason, with a current command_results entry for test_file and test_name whose freshness is current and result is failed."
+            validation: "Must be true only when the test was run and confirmed to fail for the right reason, with at least one current command_results entry for test_file and test_name whose freshness is current and result is failed. Standalone/no-decision TDD may retain multiple matching current failed invocations; one or more substantiate RED, and every actual invocation remains in history. When authorizing workflow production edits, the command_results rule requires exactly one authorizing invocation; that invocation must carry the exact applicable selected check_id, argv, cwd, test target, and matching meaningful_failure oracle; missing/wrong identity or oracle is not valid RED, and other invocations remain honest and do not authorize edits. This does not add an ID requirement to standalone/no-decision TDD or unrelated invocations."
       - name: green
         type: object
         required: true

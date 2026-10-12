@@ -14,7 +14,11 @@ for file in \
         "intersection" \
         'task-wide `tdd_mode`' \
         "selected checks" \
-        "binding"; do
+        "binding" \
+        "intersection of due selected and unchanged applicable IDs" \
+        "Split packets" \
+        "with multiple intersecting IDs." \
+        "Standalone/no-decision TDD does not invent a CheckSpec ID."; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             tdd_profile_failures+=("$file missing $term")
         fi
@@ -24,7 +28,19 @@ for file in agents/codex/builder-tester.toml agents/claude/builder-tester.md; do
     for term in \
         "When TDD is active" \
         "when false," \
-        "selected checks and binding project suites"; do
+        "selected checks and binding project suites" \
+        "verification_stage" \
+        "pre_production_red" \
+        "final_verification" \
+        "exact typed seven-field RED evidence" \
+        "only when the matching meaningful failure is observed" \
+        "Otherwise omit" \
+        "If that RED is observed alongside another due" \
+        "while FAILED_VERIFICATION keeps precedence" \
+        "omit when it was not observed" \
+        "Forward valid RED evidence unchanged through Code Writer." \
+        "aggregate partial" \
+        "does not permit Review"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             tdd_profile_failures+=("$file missing $term")
         fi
