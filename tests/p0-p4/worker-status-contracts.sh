@@ -371,22 +371,20 @@ if ruby -ryaml -e '
     find_field = ->(fields, name) { fields.find { |item| item["name"] == name } || raise("missing #{name}") }
     writer_results = find_field.call(handoffs.fetch("orchestrator_to_code_writer").fetch("return_fields"), "validation_results")
     tester_results = find_field.call(handoffs.fetch("orchestrator_to_builder_tester").fetch("return_fields"), "validation_results")
-    expected_condition = "build_execution_lane == bounded_executor and status in [DONE, DONE_WITH_CONCERNS, DEVIATED]"
+    expected_condition = "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, DEVIATED] or verification was attempted)"
     raise "CodeWriter result condition or cardinality changed" unless writer_results["required"] == "conditional" && writer_results["condition"] == expected_condition && writer_results["min_items"] == 1
-    predicate = ->(lane, status) do
-      writer_results.fetch("condition").split(" and ").all? do |term|
-        if (match = term.match(/\Abuild_execution_lane == (.+)\z/))
-          lane == match[1]
-        elsif (match = term.match(/\Astatus in \[([^\]]+)\]\z/))
-          match[1].split(", ").include?(status)
-        else
-          false
-        end
-      end
+    predicate = ->(lane, status, attempted) do
+      condition = writer_results.fetch("condition")
+      lane == condition.split(" and ", 2).first.sub("build_execution_lane == ", "") &&
+        (condition[/status in \[([^\]]+)\]/, 1].split(", ").include?(status) || attempted)
     end
-    raise "bounded DONE should require CodeWriter verification" unless predicate.call("bounded_executor", "DONE")
-    raise "separated implementation DONE must precede BuilderTester verification" if predicate.call("separated_workers", "DONE")
-    raise "blocked returns must not require completed verification" if predicate.call("bounded_executor", "BLOCKED")
+    raise "bounded DONE should require verification" unless predicate.call("bounded_executor", "DONE", false)
+    raise "separated implementation must not own verification" if predicate.call("separated_workers", "DONE", true)
+    raise "pre-check blockers must allow omitted results" if predicate.call("bounded_executor", "BLOCKED", false)
+    %w[NEEDS_CONTEXT BLOCKED].each do |status|
+      raise "attempted checks must survive #{status}" unless predicate.call("bounded_executor", status, true)
+    end
+    raise "pre-check omission must be explicit" unless writer_results.fetch("description").include?("Omit only when blocked before any check")
     raise "BuilderTester result carrier must remain required" unless tester_results["required"] == true && tester_results["min_items"] == 1
     [writer_results, tester_results].each do |results|
       fields = results.fetch("object_fields")
@@ -433,8 +431,8 @@ if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_buil
     || ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "commands" "Empty commands do not waive a selected or binding check"; then
     missing_builder_status_terms+=("verification.commands distinguish no-command checks without waiving selected/binding checks")
 fi
-if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "enum_values: [passed, failed, not_run]"; then
-    missing_builder_status_terms+=("verification.result enum supports not_run")
+if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "enum_values: [passed, failed, partial, unavailable, not_run, not_applicable]"; then
+    missing_builder_status_terms+=("verification.result preserves complete, incomplete, and no-check outcomes")
 fi
 if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "passed requires current observed or admissibly reused passing results for every due selected and binding check" \
     || ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED"; then

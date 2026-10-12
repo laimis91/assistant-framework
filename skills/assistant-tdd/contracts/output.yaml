@@ -90,6 +90,7 @@ artifacts:
       - name: total_tests_run
         type: int
         required: true
+        validation: "> 0 at completion; count actual selected TDD and binding-suite test executions"
       - name: all_passing
         type: boolean
         required: true

@@ -2274,9 +2274,9 @@ handoffs:
       - name: validation_results
         type: object[]
         required: conditional
-        condition: "build_execution_lane == bounded_executor and status in [DONE, DONE_WITH_CONCERNS, DEVIATED]"
+        condition: "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, DEVIATED] or verification was attempted)"
         min_items: 1
-        description: "Per-check verification outcomes from the bounded-executor CodeWriter lane"
+        description: "Per-check outcomes retained whenever bounded-executor verification was attempted, including NEEDS_CONTEXT/BLOCKED returns. Omit only when blocked before any check."
         validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a passed or failed command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}

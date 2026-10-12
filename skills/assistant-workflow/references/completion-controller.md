@@ -30,7 +30,8 @@ or required-QA execution, including otherwise-small work.
 
 Small low-risk work does not require a task journal, metrics, or manual verification. With `controller_intensity=light`, keep state inline,
 run the selected checks and any binding project checks, record a fresh review pass, update docs only
-when the change needs it, and complete. Document owns the visible completion return:
+when the change needs it, and complete only with evidence_assessment.status=sufficient; otherwise
+return remaining_items or blocked with gaps and the next action. Document owns the visible completion return:
 include both existing output keys, `verification_decision` and `evidence_assessment`, in
 one inline JSON object with the unchanged selected decision and actual evidence refs,
 status, gaps, and exclusions. If an independent trigger selects

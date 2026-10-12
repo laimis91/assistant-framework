@@ -50,7 +50,7 @@ tdd_forbidden_response_is_rejected() {
         && grep -Fq "forbidden_substring_hits=1" "$eval_output"
 }
 
-test_start "verifier decisions keep unique IDs, executable TDD, and truthful provenance"
+test_start "verifier decisions keep unique IDs, executed TDD coverage, and truthful provenance"
 if ! ruby -ryaml -e '
   verification_input = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |field| field["name"] == "verification_policy" }
     .fetch("object_fields").find { |field| field["name"] == "binding_constraints" }
@@ -67,7 +67,11 @@ if ! ruby -ryaml -e '
   applicable = tdd_choice.fetch("object_fields").find { |f| f["name"] == "applicable_check_ids" }.fetch("validation")
   choice = verification_output.fetch("validation") + " " + tdd_choice.fetch("validation")
   selection_validation = [activation["description"], activation["infer_from"], activation["validation"], decision["validation"], ids["validation"]].compact.join(" ").downcase
-  valid = policy.include?("required_tdd is exactly true or false") && policy.include?("conflicting required_tdd values") &&
+  coverage = YAML.load_file(ARGV.fetch(3)).fetch("artifacts").find { |f| f["name"] == "coverage_summary" }
+    .fetch("object_fields").find { |f| f["name"] == "total_tests_run" }
+  valid = coverage["type"] == "int" && coverage["required"] == true &&
+    coverage.fetch("validation", "").include?("> 0 at completion") &&
+    policy.include?("required_tdd is exactly true or false") && policy.include?("conflicting required_tdd values") &&
     choice.include?("required_tdd=false") && choice.include?("mode=false") && choice.include?("not_selected") &&
     checks.fetch("validation", "").include?("nonblank and unique within checks, regardless of tdd_choice.mode") &&
     applicable.include?("method == automated_test") && applicable.include?("executable meaningful RED") &&
@@ -87,8 +91,9 @@ if ! ruby -ryaml -e '
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-verification/contracts/input.yaml" \
   "$FRAMEWORK_DIR/skills/assistant-verification/contracts/output.yaml" \
-  "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/input.yaml"; then
-    fail "required_tdd false or verifier-selected TDD activation lacks a complete truthful binding contract"
+  "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/input.yaml" \
+  "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml"; then
+    fail "TDD policy/provenance binding or positive executed-test count is missing"
 else
     pass
 fi

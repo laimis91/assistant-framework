@@ -160,10 +160,20 @@ fields:
           - name: source_ref
             type: string
             required: true
+      - name: executed_command
+        type: object
+        required: conditional
+        condition: "result_state is passed or failed for a command-based selected CheckSpec"
+        description: "Observed invocation carried from the existing result"
+        validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged decision from work_scope.source_refs; argv and cwd exactly equal CheckSpec.command.argv and CheckSpec.command.cwd. Missing or mismatched identity cannot close a due check."
+        object_fields:
+          - {name: check_id, type: string, required: true}
+          - {name: argv, type: "string[]", required: true, min_items: 1}
+          - {name: cwd, type: string, required: true}
       - name: result_state
         type: enum
         required: true
-        enum_values: [passed, failed, skipped, partial, unavailable, not_applicable]
+        enum_values: [passed, failed, skipped, partial, unavailable, blocked, not_applicable]
         description: "Observed result state; command start, retry, or artifact existence alone is not success. not_applicable preserves the no-applicable-check rationale and never satisfies a due check."
       - name: freshness
         type: enum

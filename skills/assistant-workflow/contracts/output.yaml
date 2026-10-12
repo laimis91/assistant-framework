@@ -454,7 +454,7 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only"
     description: "Canonical assistant-verification assessment of selected-check evidence and gaps."
-    validation: "Conforms to assistant-verification/contracts/output.yaml#evidence_assessment; sufficient requires current resolved refs for all material claims and due checks/obligations. Planned, insufficient, blocked, failed, stale, partial, skipped, or unavailable evidence is never sufficient. Carry into Review/completion."
+    validation: "Conforms to assistant-verification/contracts/output.yaml#evidence_assessment. Current resolved refs cover every material claim and due check/obligation. Planned, insufficient, blocked, failed, stale, partial, skipped, or unavailable evidence is never sufficient. Implementation completion requires status=sufficient; otherwise return remaining_items/blocked with gaps and next action."
     on_fail: "Assess actual validation/test results before Review; record every material gap and do not claim sufficient while any required evidence is missing."
 
   - name: fresh_review_result

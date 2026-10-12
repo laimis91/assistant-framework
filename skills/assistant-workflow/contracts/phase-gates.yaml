@@ -738,8 +738,8 @@ gates:
         on_fail: "Rebuild final_handoff.review_completion from the validated canonical review_result and applicable qa_evaluation_result. Do not use the clean claim; report the remaining review items, coverage gap, rejected QA, or QA blocker and its next action."
 
       - id: DOC3
-        check: "'--- WORKFLOW COMPLETE ---' is printed only after all DOCUMENT assertions pass and final_handoff.review_completion.completion_disposition is complete when final_handoff applies"
-        on_fail: "Do not print workflow complete until all Document assertions pass and the applicable final handoff disposition is complete; for remaining_items or blocked, return that explicit status and next action instead."
+        check: "'--- WORKFLOW COMPLETE ---' is printed only after all DOCUMENT assertions pass and final_handoff.review_completion.completion_disposition is complete when final_handoff applies. Any implementation completion, including light, requires evidence_assessment.status == sufficient."
+        on_fail: "Do not claim completion with planned, insufficient, or blocked evidence; return remaining_items or blocked with gaps and next action. Complete all Document assertions and the applicable final handoff disposition first."
 
       - id: DOC_FINAL_HANDOFF
         check: "final_handoff exists, exactly binds canonical review/QA completion evidence, and traces accepted requirements when required."

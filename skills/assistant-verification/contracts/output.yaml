@@ -167,8 +167,8 @@ artifacts:
     type: object
     required: true
     description: "What the supplied evidence establishes for the named work scope"
-    validation: "Sufficient requires current, resolved evidence refs that support the claims and close every due selected CheckSpec ID and each applicable due/executable binding_obligation_refs tuple from a resolved canonical decision. Do not invent execution checks for unrelated policy constraints solely to populate evidence arrays. Each binding names the actual procedure/oracle observed; claim text or ID alone is insufficient. Resolve a carried decision only through an existing work_scope.source_refs reference. Without a resolved decision, an assessment may be sufficient for its explicitly evidenced scope but must state that selected-check closure is unknown and cannot claim it is complete."
-    on_fail: "Return to ASSESS, classify each missing, stale, failed, partial, skipped, or unavailable result as a gap, or identify the exact material blocker."
+    validation: "Sufficient requires current, resolved evidence refs that support the claims and close every due selected CheckSpec ID and each applicable due/executable binding_obligation_refs tuple from a resolved canonical decision. Do not invent execution checks for unrelated policy constraints solely to populate evidence arrays. Each binding names the actual procedure/oracle observed; claim text or ID alone is insufficient. Command-based passed/failed evidence preserves executed_command with exact CheckSpec argv/cwd; missing or mismatched identity cannot close a due check. Resolve a carried decision only through an existing work_scope.source_refs reference. Without a resolved decision, an assessment may be sufficient for its explicitly evidenced scope but must state that selected-check closure is unknown and cannot claim it is complete."
+    on_fail: "Return to ASSESS, classify each missing, stale, failed, partial, skipped, unavailable, or blocked result as a gap, or identify the exact material blocker."
     object_fields:
       - name: status
         type: enum
@@ -214,7 +214,7 @@ artifacts:
           - name: result_state
             type: enum
             required: true
-            enum_values: [passed, failed, skipped, partial, unavailable, not_applicable]
+            enum_values: [passed, failed, skipped, partial, unavailable, blocked, not_applicable]
             description: "not_applicable preserves the no-applicable-check rationale and never satisfies a due check"
           - name: freshness
             type: enum
