@@ -79,8 +79,8 @@ gates:
         check: "Each changed file maps to the confirmed cause, mitigation, or regression test"
         on_fail: "Remove unrelated changes or document approved scope expansion"
       - id: FX2
-        check: "The fix preserves the original failure path and completes every selected and binding check; automated regression tests are required only when selected."
-        on_fail: "Resolve missing coverage through assistant-verification or perform the selected check; report real blockers as residual risk without inventing test infeasibility."
+        check: "The fix preserves the original failure path, unchanged verification_decision, and every selected and binding obligation for VERIFY. Retain completed results and pending checks; automated regression tests are required only when selected."
+        on_fail: "Restore the decision and pending obligations before entering VERIFY; retain material blockers without inventing test infeasibility."
       - id: FX3
         check: "Fix is the smallest durable change and does not rely on temporary diagnostics"
         on_fail: "Remove temporary logging/debug changes or justify their retention"
@@ -101,7 +101,7 @@ gates:
         condition: "status == fixed"
         on_fail: "Retain the gap and downgrade fixed until each due command check has a matching observed invocation."
       - id: VF2
-        check: "Relevant regression/build/lint/manual verification preserves the observed passed/failed/partial/unavailable/skipped/blocked result and supporting evidence"
+        check: "Every due selected and binding check runs against the fix or reuses admissible current evidence. Preserve observed passed/failed/partial/unavailable/skipped/blocked results and supporting evidence; a fixed outcome requires passing evidence for every due check."
         on_fail: "Run due available checks; retain partial/unavailable observations and their reasons as explicit evidence gaps"
       - id: VF3
         check: "Partial, unavailable, skipped, or blocked checks are listed as residual risks and not counted as proof"

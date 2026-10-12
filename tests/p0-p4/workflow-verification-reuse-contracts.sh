@@ -132,7 +132,19 @@ if ! ruby -ryaml -e '
     assessment.include?("otherwise return remaining_items/blocked") &&
     completion_gate.fetch("check").include?("including light") &&
     completion_gate.fetch("check").include?("evidence_assessment.status == sufficient")
-  valid = schema_ok && assessor_states_ok && completion_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
+  decision = field.call(workflow_output.fetch("artifacts"), "verification_decision")
+  workflow_invariants = load_yaml.call("skills/assistant-workflow/contracts/phase-gates.yaml").fetch("invariants")
+  selection = workflow_invariants.find { |entry| entry["id"] == "INV_VERIFICATION_SELECTION" }
+  projection = workflow_invariants.find { |entry| entry["id"] == "INV_TDD_PROJECTION" }
+  blocked_selection_ok = decision.fetch("condition") == "execution_intent != prepare_only and (actionable verification selection succeeded or a decision is already carried)" &&
+    [decision.fetch("validation"), selection.fetch("check")].all? { |text| text.include?("evidence_assessment.status=blocked") && text.include?("stop") && text.include?("before Plan exits or Build begins") } &&
+    projection.fetch("condition") == "execution_intent != prepare_only and verification_decision is present"
+  fix_gate = debug_gates.fetch("gates").find { |entry| entry["phase"] == "FIX" }.fetch("exit_assertions").find { |entry| entry["id"] == "FX2" }
+  verify_order_ok = fix_gate.fetch("check").include?("Retain completed results and pending checks") &&
+    !fix_gate.fetch("check").include?("completes every selected and binding check") &&
+    fix_gate.fetch("on_fail").include?("before entering VERIFY") &&
+    result_gate.fetch("check").include?("a fixed outcome requires passing evidence for every due check")
+  valid = blocked_selection_ok && verify_order_ok && schema_ok && assessor_states_ok && completion_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
     results.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed &&
     gap_text.include?("Partial and unavailable are explicit evidence gaps") && handoff_ok && assessment.include?("partial") && assessment.include?("unavailable") && assessment.include?("never sufficient")
   exit(valid ? 0 : 1)

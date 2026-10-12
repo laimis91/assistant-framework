@@ -837,12 +837,15 @@ if ruby -ryaml -e '
       completion_fields.key?("remaining_or_blocker_summary") &&
       fields.fetch("review_claim").fetch("validation").include?(exact_claim_marker) &&
       fields.fetch("review_claim").fetch("validation").include?("remaining items or blocker")
+    document = YAML.load_file(ARGV.fetch(2)).fetch("gates").find { |gate| gate["phase"] == "DOCUMENT" }
+    completion_gate = document.fetch("exit_assertions").find { |gate| gate["id"] == "DOC3" }.fetch("check")
+    valid &&= completion_gate.include?("final_handoff.review_completion.completion_disposition is complete") &&
+      completion_gate.include?("evidence_assessment.status == sufficient")
     exit valid ? 0 : 1
-' "$output_contract" "$assistant_review_output" \
+' "$output_contract" "$assistant_review_output" "$phase_gates" \
     && grep -Fq 'HAS_REMAINING_ITEMS' "$phase_gates" \
     && grep -Fq 'coverage_complete' "$phase_gates" \
     && grep -Fq 'qa_final_verdict' "$phase_gates" \
-    && grep -Fq 'Do not print workflow complete' "$phase_gates" \
     && grep -Fq 'HAS_REMAINING_ITEMS' "$workflow_dir/references/final-handoff.md" \
     && grep -Fq 'BLOCKED' "$workflow_dir/references/completion-controller.md"; then
     pass

@@ -862,7 +862,7 @@ invariants:
     on_fail: "Refresh the bounded capture and expected authority, rerun affected verification/review, or retain the result as blocked/remaining rather than complete."
 
   - id: INV_VERIFICATION_SELECTION
-    check: "Every implementation workflow selects current verification before Plan fixes obligations or before Build in the no-plan lane. The canonical verification_decision is carried unchanged; unresolved binding conflicts or material capability gaps remain blockers."
+    check: "Select verification before Plan fixes obligations or no-plan Build; binding conflicts/material capability gaps block. Without a selected or carried decision, omit it; report evidence_assessment.status=blocked and exact material gap; stop before Plan exits or Build begins."
     condition: "execution_intent != prepare_only"
     scope: all_phases
     on_fail: "Return to assistant-verification, refresh selection against current scope and policy, and bind its unchanged decision before dependent work."
@@ -875,7 +875,7 @@ invariants:
 
   - id: INV_TDD_PROJECTION
     check: "Task-wide tdd_mode equals verification_decision.tdd_choice.mode. A binding required_tdd=false forces mode=false, basis=not_selected, and empty applicable_check_ids regardless of RED-oracle availability; conflicting true/false mandates block selection. Each packet's tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids. RED evidence is required before production only for those applicable packet checks; other due checks still run without fabricated RED."
-    condition: "execution_intent != prepare_only"
+    condition: "execution_intent != prepare_only and verification_decision is present"
     scope: all_phases
     on_fail: "Repair the decision projection. If active TDD lacks valid right-reason RED, stop production; otherwise remove unconditional RED demands without discarding selected evidence."
 

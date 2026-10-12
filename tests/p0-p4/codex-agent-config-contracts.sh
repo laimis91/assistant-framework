@@ -162,6 +162,7 @@ canonical_reviewer="$agent_dir/code-reviewer.toml"
 compatibility_reviewer="$agent_dir/reviewer.toml"
 if [[ "$(toml_quoted_value model "$canonical_reviewer")" == "$(toml_quoted_value model "$compatibility_reviewer")" ]] \
     && [[ "$(toml_quoted_value model_reasoning_effort "$canonical_reviewer")" == "$(toml_quoted_value model_reasoning_effort "$compatibility_reviewer")" ]] \
+    && grep -Fq -- "Use after build and selected verification evidence is available." "$canonical_reviewer" \
     && grep -Fq -- "Review the work, not the author." "$canonical_reviewer" \
     && grep -Fq -- "Review the work, not the author." "$compatibility_reviewer"; then
     pass

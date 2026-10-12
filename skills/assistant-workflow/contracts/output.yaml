@@ -361,10 +361,10 @@ artifacts:
   - name: verification_decision
     type: object
     required: conditional
-    condition: "execution_intent != prepare_only"
-    description: "Canonical assistant-verification decision selected before Plan or no-plan Build."
-    validation: "Conforms to assistant-verification/contracts/output.yaml#verification_decision. Preserve unchanged through packets and Build handoffs. Task-global tdd_mode equals tdd_choice.mode; increment tdd_applies iff selected_check_ids intersects tdd_choice.applicable_check_ids."
-    on_fail: "Invoke assistant-verification, resolve binding conflicts, and carry its canonical decision before Plan exits or Build begins."
+    condition: "execution_intent != prepare_only and (actionable verification selection succeeded or a decision is already carried)"
+    description: "Canonical verification_decision."
+    validation: "Conforms to assistant-verification/contracts/output.yaml#verification_decision; carry unchanged through packets/Build. Apply INV_TDD_PROJECTION. If no decision, omit it; evidence_assessment.status=blocked with exact material gap; stop before Plan exits or Build begins."
+    on_fail: "Select; preserve carried decisions; never fabricate."
 
   - name: test_results
     type: object
