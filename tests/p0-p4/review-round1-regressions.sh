@@ -219,6 +219,9 @@ if ! ruby -ryaml -e '
   build_fields = build_verification.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   test_summary = build_fields.fetch("test_summary")
   evidence_condition = ref_fields.fetch("evidence_ref").fetch("condition")
+  build_evidence_ref = build_fields.fetch("evidence_ref")
+  build_evidence_condition = build_evidence_ref.fetch("condition")
+  build_evidence_validation = build_evidence_ref.fetch("validation")
   no_build_condition = ref_fields.fetch("not_applicable").fetch("condition")
   build_validation = build_verification.fetch("validation")
   test_condition = test_summary.fetch("condition")
@@ -231,6 +234,8 @@ if ! ruby -ryaml -e '
     verification_ref.fetch("validation").include?("Each due check and every source fix require current passed evidence") &&
     verification_ref.fetch("validation").include?("a fix invalidates the batch and forbids not_applicable") &&
     verification_ref.fetch("validation").include?("Standalone review-fix requires build/tests") &&
+    build_evidence_condition == "review_preparation_mode == workflow_composed and (a due selected check or applicable due/executable binding check applies, or a source fix is required or occurred)" &&
+    build_evidence_validation.include?("Equals build_test_verification_ref.evidence_ref unchanged") &&
     no_build_condition.include?("no required/occurred source fix") &&
     no_build_condition.include?("no due selected or applicable due/executable binding check") &&
     ref_fields.fetch("not_applicable").fetch("enum_values").include?("no_build_scope") &&
@@ -240,7 +245,7 @@ if ! ruby -ryaml -e '
     rs2a.include?("Standalone review-fix requires build/tests") &&
     build_verification.fetch("condition") == "mode == review-fix" &&
     build_validation.include?("Standalone review-fix must show successful build and test results after its fixes") &&
-    build_validation.include?("Workflow-composed review requires a current evidence ref when any due selected check or applicable due/executable binding check applies, or a source fix is required or occurred") &&
+    build_validation.include?("Workflow-composed review requires evidence_ref equal to build_test_verification_ref.evidence_ref when any due selected check or applicable due/executable binding check applies, or a source fix is required or occurred") &&
     build_validation.include?("not_applicable build_result is permitted only when no due selected or applicable due/executable binding build check applies and no build was executed") &&
     build_fields.fetch("build_result").fetch("enum_values").include?("not_applicable") &&
     test_summary.fetch("required") == "conditional" &&

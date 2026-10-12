@@ -372,6 +372,12 @@ for file in \
         '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, or `DEVIATED`' \
         '`changed_files`: files created, modified, or deleted with brief descriptions' \
         '`evidence`: concrete implementation evidence, usually file paths plus behavior changed' \
+        '`validation_results`: in `bounded_executor`' \
+        'required for `DONE`, `DONE_WITH_CONCERNS`, or `DEVIATED`, and whenever verification was attempted; omit only when blocked before any check.' \
+        '`binding_obligation_refs` tuples `{kind,value,source_ref}`' \
+        'For a started command-based CheckSpec, include `executed_command`' \
+        'its sole `check_id` and exact CheckSpec `argv` and `cwd`' \
+        'In `separated_workers`, Builder/Tester owns these verification result rows.' \
         "## Status meanings" \
         '`DONE`: implementation complete with no known concerns' \
         '`DONE_WITH_CONCERNS`: implementation is usable but follow-up risk remains' \

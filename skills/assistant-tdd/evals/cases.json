@@ -10,6 +10,7 @@
   "activation_cases": [
     {"user_request": "Use TDD to fix this bug.", "should_activate": true},
     {"user_request": "Write a failing regression test first.", "should_activate": true},
+    {"user_request": "Continue the workflow task; the carried verification decision selects TDD for its due check.", "should_activate": true},
     {"user_request": "Apply the known fix after the regression test already passes.", "should_activate": false}
   ],
   "recommended_use": [
@@ -159,13 +160,16 @@
       "title": "TDD covers carried architecture obligations",
       "category": "architecture_decision_pack_testing",
       "purpose": "Checks that TDD turns a carried Architecture Decision Pack into focused semantic and quality verification rather than generic wrapper tests or unsupported quality claims.",
-      "prompt": "Use TDD for an import API that replaces string record IDs with ImportRecordId and claims its batch path uses less memory.",
+      "prompt": "Implement an import API that replaces string record IDs with ImportRecordId and claims its batch path uses less memory.",
       "setup_context": [
         "The assistant-tdd skill instructions are active.",
+        "The unchanged workflow verification_decision has tdd_choice.mode=true, basis=selected_technique, and applicable_check_ids=[import-record-contract].",
+        "The current packet selected_check_ids=[import-record-contract], so TDD applies by the exact ID intersection; no user request, plan constraint, or project convention independently requires TDD.",
         "architecture_test_obligations includes stable obligation_id values for semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, and ownership_or_disposal obligations from a fresh Pack.",
         "The memory claim has a representative workload but no agreed budget or failure condition yet."
       ],
       "expected_behavior": [
+        "Uses verification_selection only because the current due selected_check_ids intersects the unchanged applicable_check_ids, preserving selected_technique provenance.",
         "Starts with focused RED tests for semantic validation/conversion and compatibility behavior.",
         "Does not treat a type wrapper that compiles as sufficient coverage.",
         "Adds focused behavior evidence for early exit and ownership/disposal when those Pack obligations apply.",
@@ -175,7 +179,8 @@
       "pass_criteria": [
         "The response mentions architecture_test_obligations and architecture_obligation_coverage.",
         "The response names semantic type, conversion or validation, compatibility, early exit, ownership or disposal, workload, budget, measurement, and failure condition.",
-        "The response preserves RED-GREEN-REFACTOR ordering."
+        "The response preserves RED-GREEN-REFACTOR ordering.",
+        "The response preserves verifier-selected TDD provenance and the current selected/applicable ID intersection."
       ],
       "fail_signals": [
         "Claims the memory improvement from an unmeasured architecture choice.",
@@ -186,6 +191,10 @@
         "required_substrings": [
           "architecture_test_obligations",
           "architecture_obligation_coverage",
+          "verification_selection",
+          "selected_check_ids",
+          "applicable_check_ids",
+          "intersect",
           "obligation_id",
           "exactly once",
           "semantic type",

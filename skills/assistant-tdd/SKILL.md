@@ -1,6 +1,6 @@
 ---
 name: assistant-tdd
-description: "Apply Red-Green-Refactor. Use when tests-first/TDD is requested or required by project conventions."
+description: "Use for tests-first TDD requests, project TDD rules, or workflow-selected TDD checks."
 ---
 
 # Test-Driven Development

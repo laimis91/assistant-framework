@@ -75,6 +75,20 @@ if ! ruby -ryaml -e '
   ].all? { |rule| test_change.include?(rule) }
   tdd_choice = verification_output.fetch("object_fields").find { |f| f["name"] == "tdd_choice" }
   applicable = tdd_choice.fetch("object_fields").find { |f| f["name"] == "applicable_check_ids" }.fetch("validation")
+  check_fields = checks.fetch("object_fields")
+  command = check_fields.find { |field| field["name"] == "command" }
+  command_fields = command.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  check_method = check_fields.find { |field| field["name"] == "check_ref_or_method" }
+  reference_or_procedure = check_method.fetch("object_fields").find { |field| field["name"] == "reference_or_procedure" }
+  command_contract = command["required"] == "conditional" &&
+    command["condition"] == "this CheckSpec has a command to execute" &&
+    command_fields.fetch("argv").fetch("type") == "string[]" &&
+    command_fields.fetch("argv").fetch("min_items") == 1 &&
+    command_fields.fetch("cwd").fetch("type") == "string" &&
+    command_fields.fetch("cwd").fetch("required") == true &&
+    command.fetch("validation").include?("literal string arguments") &&
+    command.fetch("validation").include?("cwd is explicitly supplied") &&
+    reference_or_procedure["type"] == "string" && reference_or_procedure["required"] == true
   choice = verification_output.fetch("validation") + " " + tdd_choice.fetch("validation")
   selection_validation = [activation["description"], activation["infer_from"], activation["validation"], decision["validation"], ids["validation"]].compact.join(" ").downcase
   coverage = YAML.load_file(ARGV.fetch(3)).fetch("artifacts").find { |f| f["name"] == "coverage_summary" }
@@ -85,7 +99,9 @@ if ! ruby -ryaml -e '
     choice.include?("required_tdd=false") && choice.include?("mode=false") && choice.include?("not_selected") &&
     checks.fetch("validation", "").include?("nonblank and unique within checks, regardless of tdd_choice.mode") &&
     applicable.include?("method == automated_test") && applicable.include?("action in [add, extend]") &&
+    applicable.include?("a present command") && applicable.include?("non-empty literal argv") && applicable.include?("explicit cwd per command contract") &&
     applicable.include?("executable meaningful RED") && applicable.include?("run/reuse/inspect") &&
+    command_contract &&
     applicable.include?("cannot be TDD-applicable") && applicable.include?("compatible add/extend meaningful RED oracle blocks") &&
     tdd_choice.fetch("validation").include?("action add/extend") &&
     tdd_choice.fetch("validation").include?("Required true without compatible add/extend meaningful RED blocks") &&
@@ -141,7 +157,7 @@ if ! ruby -ryaml -e '
   "$FRAMEWORK_DIR/skills/assistant-verification/contracts/output.yaml" \
   "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/input.yaml" \
   "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml"; then
-    fail "TDD policy/provenance binding or positive executed-test count is missing"
+    fail "TDD policy/provenance binding, command-backed applicability, or positive executed-test count is missing"
 else
     pass
 fi
@@ -152,10 +168,10 @@ p0p4_register_cleanup "$activation_root"
 activation_skill="$activation_root/assistant-tdd"
 mkdir -p "$activation_root"
 cp -R "$FRAMEWORK_DIR/skills/assistant-tdd" "$activation_skill"
-activation_case="bugfix-starts-with-red-evidence"
+activation_case="tdd-covers-carried-architecture-obligations"
 jq --arg id "$activation_case" '
   (.cases[] | select(.id == $id)) |= (
-    .prompt = "Apply TDD to behavior-check using the unchanged canonical verifier decision; no user request or plan asks for TDD."
+    .prompt = "Implement import-record behavior using the unchanged canonical verifier decision; no user request or plan asks for TDD."
     | .setup_context = ["The assistant-tdd skill instructions are active.","The unchanged verification_decision has tdd_choice.basis=selected_technique and applicable_check_ids=[behavior-check].","The current packet selected_check_ids=[behavior-check].","No user, plan, or project instruction independently requires TDD."]
     | .expected_behavior = ["Uses verifier selection as the activation provenance only because the current selected check intersects the canonical applicable IDs.","Preserves the verifier decision unchanged and does not invent user or plan provenance."]
     | .pass_criteria = ["The response identifies activation_reason=verification_selection and the exact basis/intersection."]

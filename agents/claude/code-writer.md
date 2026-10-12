@@ -21,6 +21,7 @@ You are a code writer. Your job is to write clean implementation code following 
 - `status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, or `DEVIATED`
 - `changed_files`: files created, modified, or deleted with brief descriptions
 - `evidence`: concrete implementation evidence, usually file paths plus behavior changed
+- `validation_results`: in `bounded_executor`, required for `DONE`, `DONE_WITH_CONCERNS`, or `DEVIATED`, and whenever verification was attempted; omit only when blocked before any check. Each row binds only its observed `selected_check_ids` and exact `binding_obligation_refs` tuples `{kind,value,source_ref}`. For a started command-based CheckSpec, include `executed_command` with its sole `check_id` and exact CheckSpec `argv` and `cwd`. In `separated_workers`, Builder/Tester owns these verification result rows.
 - `open_questions`: required when status is `NEEDS_CONTEXT` or `BLOCKED`
 - `blocker_type`: required when status is `NEEDS_CONTEXT`, `BLOCKED`, or `DEVIATED` because of an unexpected blocker
 - `blocker_evidence`: required evidence for the blocker, including file paths, command/tool symptoms, or missing contract fields

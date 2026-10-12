@@ -71,10 +71,13 @@ test_start "supervisor cleanup confirms absence or fails within its deadline wit
 if python3 - "$runner" <<'PY'
 import ast
 import io
+import os
 from pathlib import Path
+import shlex
 import signal
 import subprocess
 import sys
+import tempfile
 from types import SimpleNamespace
 
 source = Path(sys.argv[1]).read_text()
@@ -248,11 +251,189 @@ for number in [signal.SIGINT, signal.SIGTERM]:
     assert scope["child"] is not None, "interruption must wait for child publication"
     assert group.markers == ["synthetic-done"], group.markers
 
+# Exercise the outer Bash race at the real launch boundary. The DEBUG trap waits
+# until the synthetic Codex child starts, then signals this shell immediately
+# before the runner publishes $! into ACTIVE_CHILD_PID.
+execute_start = source.index("execute_one_run() {\n")
+launch_start = source.index('    ACTIVE_CHILD_SUPERVISOR_DONE_DIR="$supervisor_done"\n', execute_start)
+handoff_end = source.index('    ACTIVE_CHILD_SUPERVISOR_DONE_DIR=""\n', launch_start) + len('    ACTIVE_CHILD_SUPERVISOR_DONE_DIR=""\n')
+launch_handoff = source[launch_start:handoff_end]
+actual_functions = "\n".join(shell_function(name) for name in (
+    "release_output_lease", "cleanup_raw_root", "confirm_supervisor_cleanup",
+    "terminate_active_child", "cleanup_all", "handle_signal", "run_codex_supervisor"))
+signal_traps = "\n".join(line for line in source.splitlines() if line in (
+    "trap 'handle_signal 130' INT", "trap 'handle_signal 143' TERM"))
+assert signal_traps.count("\n") == 1, "runner signal traps changed or are missing"
+assert launch_handoff.startswith('    ACTIVE_CHILD_SUPERVISOR_DONE_DIR="$supervisor_done"')
+assert '    ACTIVE_CHILD_PID=$!\n' in launch_handoff
+
+debug_environment = r'''set -T
+trap 'case "$BASH_COMMAND" in
+  "ACTIVE_CHILD_PID=\$!")
+    if [[ ! -e "$PROBE_ROOT/injected" ]]; then
+      for ((debug_wait = 0; debug_wait < 300; debug_wait++)); do
+        [[ -f "$PROBE_ROOT/invoked" ]] && break
+        sleep 0.01
+      done
+      if [[ -f "$PROBE_ROOT/invoked" ]]; then
+        printf "%s\n" "$!" >"$PROBE_ROOT/supervisor.pid"
+        : >"$PROBE_ROOT/injected"
+        kill -s "$PROBE_SIGNAL" "$$"
+      else
+        : >"$PROBE_ROOT/missed-boundary"
+      fi
+    fi
+    ;;
+  cleanup_raw_root)
+    if [[ -d "$PROBE_DONE_DIR" ]]; then
+      : >"$PROBE_ROOT/confirmed-before-release"
+    fi
+    ;;
+esac' DEBUG
+'''
+
+def read_pid(path):
+    try:
+        value = Path(path).read_text().strip()
+        return int(value) if value else None
+    except (OSError, ValueError):
+        return None
+
+def process_exists(pid):
+    if pid is None:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+for number in [signal.SIGINT, signal.SIGTERM]:
+    with tempfile.TemporaryDirectory(prefix="codex-supervisor-prepid-") as temporary_root:
+        probe_root = Path(temporary_root)
+        raw_root = probe_root / "raw"
+        run_root = raw_root / "run"
+        lease_dir = probe_root / "output" / ".evaluation-lease"
+        run_root.mkdir(parents=True)
+        lease_dir.mkdir(parents=True)
+        (lease_dir / "owner.json").write_text('{"schema_version":"1.0","token":"synthetic-token"}\n')
+        for filename in ("prompt.txt", "events.jsonl", "stderr.txt", "final.txt"):
+            (run_root / filename).write_text("")
+        fake_codex = probe_root / "fake-codex"
+        fake_codex.write_text(r'''#!/usr/bin/env python3
+import os, signal, time
+from pathlib import Path
+root = Path(os.environ["PROBE_ROOT"])
+(root / "codex.pid").write_text(str(os.getpid()))
+def stopped(_signum, _frame):
+    (root / "term").touch()
+    raise SystemExit(0)
+signal.signal(signal.SIGTERM, stopped)
+signal.signal(signal.SIGINT, stopped)
+(root / "invoked").touch()
+while True:
+    time.sleep(0.02)
+''')
+        fake_codex.chmod(0o700)
+        debug_file = probe_root / "debug-env.sh"
+        debug_file.write_text(debug_environment)
+        shell_setup = f'''set -euo pipefail
+{actual_functions}
+contract_test_hooks_are_enabled() {{ return 1; }}
+CODEX_BIN={shlex.quote(str(fake_codex))}
+MODEL=test-model
+ACTIVE_CHILD_PID=""
+ACTIVE_CHILD_PENDING_SIGNAL_EXIT_CODE=""
+ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=false
+ACTIVE_CHILD_SUPERVISOR_DONE_DIR=""
+ACTIVE_CHILD_GRACE_SECONDS=5
+PROTECTED_STATE_REQUIRES_EXPLICIT_RECOVERY=false
+ACTIVE_NODE_PROBE_DIR=""
+WORK_ROOT=""
+RAW_ROOT={shlex.quote(str(raw_root))}
+MODE=plan
+OUTPUT_LEASE_DIR={shlex.quote(str(lease_dir))}
+OUTPUT_LEASE_TOKEN=synthetic-token
+supervisor_ready={shlex.quote(str(run_root / "supervisor-ready"))}
+supervisor_done={shlex.quote(str(run_root / "supervisor-done"))}
+effective_timeout=2
+prompt_file={shlex.quote(str(run_root / "prompt.txt"))}
+jsonl={shlex.quote(str(run_root / "events.jsonl"))}
+stderr_file={shlex.quote(str(run_root / "stderr.txt"))}
+final_output={shlex.quote(str(run_root / "final.txt"))}
+workspace={shlex.quote(str(run_root / "workspace"))}
+post_group_hold_seconds=0
+exit_code=0
+timed_out=false
+started_at=0
+ended_at=0
+latency_ms=0
+{signal_traps}
+trap cleanup_all EXIT
+{launch_handoff}
+exit 0
+'''
+        environment = os.environ.copy()
+        environment.update({
+            "BASH_ENV": str(debug_file),
+            "PROBE_ROOT": str(probe_root),
+            "PROBE_DONE_DIR": str(run_root / "supervisor-done"),
+            "PROBE_SIGNAL": "INT" if number == signal.SIGINT else "TERM",
+        })
+        shell_stdout = probe_root / "shell.stdout"
+        shell_stderr = probe_root / "shell.stderr"
+        try:
+            with shell_stdout.open("w") as stdout, shell_stderr.open("w") as stderr:
+                result = subprocess.run(["bash", "-c", shell_setup], env=environment,
+                                        stdout=stdout, stderr=stderr, timeout=5)
+            codex_pid = read_pid(probe_root / "codex.pid")
+            supervisor_pid = read_pid(probe_root / "supervisor.pid")
+            observed = {
+                "signal": environment["PROBE_SIGNAL"],
+                "returncode": result.returncode,
+                "injected_before_pid_publication": (probe_root / "injected").exists(),
+                "fake_codex_invoked": (probe_root / "invoked").exists(),
+                "fake_codex_received_term": (probe_root / "term").exists(),
+                "fake_codex_alive": process_exists(codex_pid),
+                "supervisor_alive": process_exists(supervisor_pid),
+                "confirmed_before_release": (probe_root / "confirmed-before-release").exists(),
+                "raw_state_retained": raw_root.exists(),
+                "lease_retained": lease_dir.exists(),
+                "shell_stderr": shell_stderr.read_text(errors="replace")[-800:],
+            }
+            expected_code = 128 + number
+            assert (result.returncode == expected_code
+                    and observed["injected_before_pid_publication"]
+                    and observed["fake_codex_invoked"]
+                    and observed["fake_codex_received_term"]
+                    and not observed["fake_codex_alive"]
+                    and not observed["supervisor_alive"]
+                    and observed["confirmed_before_release"]
+                    and not observed["raw_state_retained"]
+                    and not observed["lease_retained"]), observed
+        finally:
+            # A red run intentionally leaves the synthetic owner alive. Reap it
+            # here so the focused contract test never leaks processes.
+            codex_pid = read_pid(probe_root / "codex.pid")
+            supervisor_pid = read_pid(probe_root / "supervisor.pid")
+            if codex_pid is not None:
+                try:
+                    os.killpg(codex_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if supervisor_pid is not None:
+                try:
+                    os.kill(supervisor_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+
 PY
 then
     pass
 else
-    fail "supervisor cleanup classified unknown state as absent, exceeded its deadline, or released protected state"
+    fail "supervisor cleanup or pre-PID cancellation did not confirm shutdown before protected-state release"
 fi
 
 fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-behavioral-eval-test.XXXXXX")"

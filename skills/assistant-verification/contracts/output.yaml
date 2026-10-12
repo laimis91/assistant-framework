@@ -146,7 +146,7 @@ artifacts:
             type: string[]
             required: true
             description: "Unique selected CheckSpec IDs with meaningful RED oracles."
-            validation: "Each ID resolves exactly once in checks to method == automated_test with action in [add, extend] and executable meaningful RED; non-empty iff mode=true, empty iff false. run/reuse/inspect cannot be TDD-applicable. A binding all-deliverable TDD mandate with any required deliverable lacking a compatible add/extend meaningful RED oracle blocks actionable selection; do not omit it, disable TDD, or fabricate an ID/RED."
+            validation: "Each ID resolves exactly once in checks to method == automated_test with action in [add, extend], a present command (non-empty literal argv and explicit cwd per command contract), and executable meaningful RED; non-empty iff mode=true, empty iff false. run/reuse/inspect cannot be TDD-applicable. A binding all-deliverable TDD mandate with any required deliverable lacking a compatible add/extend meaningful RED oracle blocks actionable selection; that oracle must meet the command rule above. Do not omit it, disable TDD, or fabricate an ID/RED."
           - name: basis
             type: enum
             required: true

@@ -223,7 +223,7 @@ Triggers on: messy prompt, unclear prompt, figure out what I mean, help me struc
 ### assistant-tdd
 Test-Driven Development enforcement: Red-Green-Refactor cycle with verification gates. Bug fix pattern (reproduce → fix → protect). Integrates with workflow's build loop and review cycle.
 
-Triggers on: TDD, tests first, test-driven, write the test first, red green refactor
+Triggers on: TDD, tests first, test-driven, write the test first, red green refactor, or an intersecting workflow-selected TDD check
 
 ### assistant-debugging
 Evidence-first debugging: reproduce or bound the failure, rank competing hypotheses, isolate root cause, apply the smallest durable fix, and verify with original reproduction plus regression checks.

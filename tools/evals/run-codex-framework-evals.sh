@@ -44,6 +44,7 @@ CONTEXT_BUDGET_EVIDENCE_FILE=""
 CONTEXT_BUDGET_EVIDENCE_HASH=""
 RUN_PLAN_HASH=""
 ACTIVE_CHILD_PID=""
+ACTIVE_CHILD_PENDING_SIGNAL_EXIT_CODE=""
 ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=false
 ACTIVE_CHILD_SUPERVISOR_DONE_DIR=""
 ACTIVE_NODE_PROBE_DIR=""
@@ -1024,6 +1025,10 @@ cleanup_all() {
 
 handle_signal() {
     local exit_code="$1"
+    if [[ "$ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE" == true && -z "$ACTIVE_CHILD_PID" ]]; then
+        [[ -n "$ACTIVE_CHILD_PENDING_SIGNAL_EXIT_CODE" ]] || ACTIVE_CHILD_PENDING_SIGNAL_EXIT_CODE="$exit_code"
+        return
+    fi
     if ! cleanup_all; then
         # The supervisor did not confirm descendant shutdown within the grace
         # period. Disable every trap before exiting so an EXIT cleanup cannot
@@ -3712,6 +3717,9 @@ execute_one_run() {
     ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=true
     run_codex_supervisor "$supervisor_ready" "$supervisor_done" "$effective_timeout" "$prompt_file" "$jsonl" "$stderr_file" "$final_output" "$workspace" "$post_group_hold_seconds" &
     ACTIVE_CHILD_PID=$!
+    if [[ -n "$ACTIVE_CHILD_PENDING_SIGNAL_EXIT_CODE" ]]; then
+        handle_signal "$ACTIVE_CHILD_PENDING_SIGNAL_EXIT_CODE"
+    fi
     while kill -0 "$ACTIVE_CHILD_PID" 2>/dev/null && [[ ! -d "$supervisor_ready" ]]; do
         sleep 0.1
     done
@@ -3724,8 +3732,8 @@ execute_one_run() {
     if wait "$ACTIVE_CHILD_PID"; then exit_code=0; else exit_code=$?; fi
     confirm_supervisor_cleanup \
         || die "Supervisor cleanup is unconfirmed; protected state retained for explicit recovery."
-    ACTIVE_CHILD_PID=""
     ACTIVE_CHILD_SUPERVISOR_OWNS_LIFECYCLE=false
+    ACTIVE_CHILD_PID=""
     ACTIVE_CHILD_SUPERVISOR_DONE_DIR=""
     [[ "$exit_code" -eq 124 ]] && timed_out=true
     rm -f "$prompt_file"
