@@ -2305,10 +2305,10 @@ handoffs:
         condition: "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, DEVIATED] or verification was attempted)"
         min_items: 1
         description: "Per-check outcomes retained whenever bounded-executor verification was attempted, including NEEDS_CONTEXT/BLOCKED returns. Omit only when blocked before any check."
-        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency."
+        validation: "Each row binds exact selected CheckSpec IDs and applicable policy tuples to the actual current procedure/oracle observed; a shared claim or ID alone does not support another check. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
-          - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable]}
+          - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]}
           - {name: evidence, type: string, required: true}
           - {name: selected_check_ids, type: "string[]", required: true}
           - name: executed_command
@@ -2966,10 +2966,10 @@ handoffs:
         required: true
         min_items: 1
         description: "Per-check results preserving selected CheckSpec and applicable binding identity for the separated-workers lane"
-        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency."
+        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
-          - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable]}
+          - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]}
           - {name: evidence, type: string, required: true}
           - {name: selected_check_ids, type: "string[]", required: true}
           - name: executed_command
@@ -3056,7 +3056,7 @@ handoffs:
         type: enum
         required: true
         enum_values: [passed, failed, not_run, not_applicable]
-        description: "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints, using each check's claim, oracle, and procedure; do not infer it from file type, command presence, method, or technique alone. Unresolved applicability is a gap. Use passed only for current observed or admissibly reused successful build evidence; an executed build failure is failed and blocks completion. Use not_run only when a required build could not run and status is NEEDS_CONTEXT or BLOCKED. Use not_applicable only when no due selected or binding build check applies and no build was executed."
+        description: "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints, using each check's claim, oracle, and procedure; do not infer it from file type, command presence, method, or technique alone. Unresolved applicability is a gap. Use passed only for current observed or admissibly reused successful build evidence; an executed build failure is failed and blocks completion. Use not_run only for a required build that could not start, with status NEEDS_CONTEXT or BLOCKED, or with FAILED_VERIFICATION because a different executed required check failed. Retain the unstarted build's blocked row and the other check's failed row; never label the unstarted build failed. Use not_applicable only when no due selected or binding build check applies and no build was executed."
       - name: build_errors
         type: string[]
         required: false

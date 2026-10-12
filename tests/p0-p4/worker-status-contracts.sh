@@ -434,11 +434,20 @@ fi
 
 test_start "Builder Tester status packet keeps selected-check and no-build outcomes distinct"
 missing_builder_status_terms=()
-for field in status verification build_result test_summary; do
+for field in status verification validation_results build_result test_summary; do
     if ! handoff_return_field_required "$handoffs_file" "orchestrator_to_builder_tester" "$field"; then
         missing_builder_status_terms+=("handoff return $field required")
     fi
 done
+if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "min_items: 1"; then
+    missing_builder_status_terms+=("BuilderTester validation_results must remain non-empty")
+fi
+if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]"; then
+    missing_builder_status_terms+=("BuilderTester per-check result enum includes blocked")
+fi
+if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."; then
+    missing_builder_status_terms+=("blocked per-check results remain gaps")
+fi
 if ! grep -Fq -- "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]" "$handoffs_file"; then
     missing_builder_status_terms+=("BuilderTester status enum values")
 fi
@@ -448,7 +457,7 @@ fi
 for term in \
     "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints" \
     "do not infer it from file type, command presence, method, or technique alone" \
-    "Use not_run only when a required build could not run and status is NEEDS_CONTEXT or BLOCKED" \
+    "Use not_run only for a required build that could not start, with status NEEDS_CONTEXT or BLOCKED, or with FAILED_VERIFICATION because a different executed required check failed. Retain the unstarted build's blocked row and the other check's failed row; never label the unstarted build failed." \
     "Use not_applicable only when no due selected or binding build check applies and no build was executed"; do
     if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "$term"; then
         missing_builder_status_terms+=("build_result missing scoped applicability rule: $term")
@@ -485,6 +494,12 @@ for file in \
     for term in \
         '**Status**: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '**Verification**: commands/checks run plus concise success signals or failure messages' \
+        '`validation_results`: non-empty per-check rows for every due selected check and applicable binding obligation, even when blocked; each row includes `command_or_check`, `result`, `evidence`, exact `selected_check_ids`, and exact `binding_obligation_refs` tuples `{kind, value, source_ref}`.' \
+        'Use `result` values `passed`, `failed`, `partial`, `unavailable`, `skipped`, `not_applicable`, or `blocked`; blocked is a distinct gap and never closes a due check or establishes sufficiency.' \
+        'For a started command-based selected CheckSpec, include `executed_command` with `check_id` as the sole selected ID and exact `argv` and `cwd`; omit it when the command did not start.' \
+        'Only when no command or no-command procedure has started, a due command check that cannot start leaves `verification.commands` empty and aggregate `verification.result` `not_run` with status `NEEDS_CONTEXT` or `BLOCKED`. Otherwise preserve every started command and actual per-check outcome, then derive aggregate/status from all due evidence using canonical precedence; `failed`/`FAILED_VERIFICATION` takes precedence. Always retain each `blocked` row with its check ID and blocker evidence.' \
+        'When no check applies, return one `not_applicable` row with empty IDs and binding refs plus the exact rationale.' \
+        'For a no-command check, evidence states the concrete procedure and observed result.' \
         '`FAILED_VERIFICATION`: an executed build, test, or other required check failed'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_builder_status_terms+=("$file: $term")

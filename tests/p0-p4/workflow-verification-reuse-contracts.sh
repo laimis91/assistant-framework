@@ -39,7 +39,7 @@ if ! ruby -ryaml -e '
   valid = required_names == %w[command_or_check result evidence selected_check_ids binding_obligation_refs] &&
     field_by_name.fetch("command_or_check").fetch("type") == "string" &&
     field_by_name.fetch("result").fetch("type") == "enum" &&
-    field_by_name.fetch("result").fetch("enum_values") == %w[passed failed partial unavailable skipped not_applicable] &&
+    field_by_name.fetch("result").fetch("enum_values") == %w[passed failed partial unavailable skipped not_applicable blocked] &&
     field_by_name.fetch("evidence").fetch("type") == "string" &&
     field_by_name.fetch("selected_check_ids").fetch("type") == "string[]" &&
     field_by_name.fetch("selected_check_ids")["required"] == true &&
@@ -124,9 +124,10 @@ if ! ruby -ryaml -e '
     field.call(fields, "validation_results")
   end
   invocation_conditions_ok = ([results] + worker_results).all? { |r| field.call(r.fetch("object_fields"), "executed_command").fetch("condition") == "a command-based selected CheckSpec was started, regardless of outcome" }
-  allowed = %w[passed failed partial unavailable skipped not_applicable]
+  allowed = %w[passed failed partial unavailable skipped not_applicable blocked]
   gap_text = results.fetch("validation") + " " + results.fetch("on_fail")
-  handoff_ok = worker_results.all? { |r| r.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed && r.fetch("validation").include?("Partial and unavailable are explicit gaps") }
+  blocked_gap_rule = "Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
+  handoff_ok = worker_results.all? { |r| r.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed && r.fetch("validation").include?("Partial and unavailable are explicit gaps") && r.fetch("validation").include?(blocked_gap_rule) }
   builder = workflow_handoffs.fetch("handoffs").find { |h| h["name"] == "orchestrator_to_builder_tester" }
   aggregate = field.call(field.call(builder.fetch("return_fields"), "verification").fetch("object_fields"), "result")
   aggregate_ok = aggregate.fetch("enum_values") == %w[passed failed partial unavailable not_run not_applicable] &&
@@ -171,6 +172,8 @@ if ! ruby -ryaml -e '
     result_gate.fetch("check").include?("a fixed outcome requires passing evidence for every due check")
   valid = invocation_conditions_ok && blocked_selection_ok && verify_order_ok && schema_ok && assessor_states_ok && completion_ok && assessor_started_outcome_ok && review_ref_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
     results.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed &&
+    results.fetch("validation").include?("Partial and unavailable are explicit evidence gaps") &&
+    results.fetch("validation").include?("blocked is a distinct explicit gap and never closes a due check or establishes sufficiency") &&
     gap_text.include?("Partial and unavailable are explicit evidence gaps") && handoff_ok && assessment.include?("partial") && assessment.include?("unavailable") && assessment.include?("never sufficient")
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR"; then
