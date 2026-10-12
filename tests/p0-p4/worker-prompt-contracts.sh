@@ -39,7 +39,7 @@ for file in \
     agents/claude/code-writer.md; do
     for term in \
         "## What you return" \
-        '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, or `DEVIATED`' \
+        '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '`changed_files`: files created, modified, or deleted with brief descriptions' \
         '`evidence`: concrete implementation evidence, usually file paths plus behavior changed' \
         "## Status meanings"; do
