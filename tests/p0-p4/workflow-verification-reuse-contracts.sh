@@ -76,8 +76,10 @@ if ! ruby -ryaml -e '
   workflow_output = load_yaml.call("skills/assistant-workflow/contracts/output.yaml")
   workflow_handoffs = load_yaml.call("skills/assistant-workflow/contracts/handoffs.yaml")
   debug_output = load_yaml.call("skills/assistant-debugging/contracts/output.yaml")
+  debug_index = load_yaml.call("skills/assistant-debugging/contracts/index.yaml")
   debug_handoffs = load_yaml.call("skills/assistant-debugging/contracts/handoffs.yaml")
   debug_gates = load_yaml.call("skills/assistant-debugging/contracts/phase-gates.yaml")
+  tdd_output = load_yaml.call("skills/assistant-tdd/contracts/output.yaml")
   debug_skill = File.read(File.join(root, "skills/assistant-debugging/SKILL.md"))
   review_gates = load_yaml.call("skills/assistant-review/contracts/phase-gates.yaml")
   review_loop = File.read(File.join(root, "skills/assistant-review/references/review-loop.md"))
@@ -178,6 +180,25 @@ if ! ruby -ryaml -e '
   review_fix = review_gates.fetch("gates").find { |entry| entry["phase"] == "FIX_STEP" }.fetch("entry_assertions").find { |entry| entry["id"] == "F_REVIEW_VERIFICATION_SELECTION" }
   review_validate = review_gates.fetch("gates").find { |entry| entry["phase"] == "VALIDATE_STEP" }.fetch("exit_assertions").find { |entry| entry["id"] == "V4" }
   debug_fix_entry = debug_gates.fetch("gates").find { |entry| entry["phase"] == "FIX" }.fetch("entry_assertions").find { |entry| entry["id"] == "FX_VERIFICATION_DECISION" }
+  debug_cycle_ref = debug_output.fetch("artifacts").find { |artifact| artifact["name"] == "tdd_cycle_log_ref" }
+  tdd_cycle_log = tdd_output.fetch("artifacts").find { |artifact| artifact["name"] == "cycle_log" }
+  fix_output_selector = debug_index.fetch("load_sets").fetch("fix_verification").fetch("selectors").find { |selector| selector["id"] == "debugging-fix-verification-output" }
+  completion_selector = debug_index.fetch("load_sets").fetch("completion").fetch("selectors").find { |selector| selector["id"] == "debugging-completion-artifact" }
+  debug_cycle_ref_ok = debug_cycle_ref && debug_cycle_ref["type"] == "string" && debug_cycle_ref["required"] == "conditional" &&
+    debug_cycle_ref.fetch("condition").include?("selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids") &&
+    debug_cycle_ref.fetch("condition").include?("current cycle has started") &&
+    debug_cycle_ref.fetch("validation").include?("actual current cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log") &&
+    debug_cycle_ref.fetch("validation").include?("Preserve actual partial cycle_log for blocked/partial outcomes") &&
+    debug_cycle_ref.fetch("validation").include?("status == fixed") &&
+    debug_cycle_ref.fetch("validation").include?("right-reason authorizing RED") &&
+    debug_cycle_ref.fetch("validation").include?("passing GREEN and REFACTOR") &&
+    debug_cycle_ref.fetch("validation").include?("unchanged verification_decision") &&
+    debug_cycle_ref.fetch("validation").include?("selected/applicable IDs") &&
+    debug_cycle_ref.fetch("validation").include?("all due checks") &&
+    debug_cycle_ref.fetch("validation").include?("Omit when TDD is inactive or cycle unstarted") &&
+    debug_cycle_ref["on_missing"] == "fail" && tdd_cycle_log && tdd_cycle_log["type"] == "object[]" &&
+    fix_output_selector && fix_output_selector.fetch("names").include?("tdd_cycle_log_ref") &&
+    completion_selector && completion_selector.fetch("allowed_names").include?("tdd_cycle_log_ref")
   review_route_ok = review_fix.fetch("check").include?("When tdd_applies is true") &&
     %w[aggregate_finding_id source_finding_ids source_provenance verification_decision selected_check_ids binding_obligation_refs].all? { |field_name| review_fix.fetch("check").include?(field_name) } &&
     review_fix.fetch("check").include?("composing workflow") && review_fix.fetch("check").include?("Build owner") &&
@@ -198,6 +219,10 @@ if ! ruby -ryaml -e '
     debug_fix_entry.fetch("check").include?("assistant-tdd using its existing execution_lane") &&
     debug_fix_entry.fetch("on_fail").include?("Never coerce tdd_applies to false") &&
     ["cycle_log", "right-reason authorizing RED", "GREEN", "REFACTOR"].all? { |term| result_gate.fetch("check").include?(term) } &&
+    debug_cycle_ref_ok && result_gate.fetch("check").include?("tdd_cycle_log_ref") &&
+    result_gate.fetch("check").include?("When tdd_applies is true and status == fixed") &&
+    result_gate.fetch("check").include?("unchanged decision") && result_gate.fetch("check").include?("selected/applicable IDs") &&
+    result_gate.fetch("on_fail").include?("preserve actual partial cycle_log for blocked/partial") &&
     result_gate.fetch("on_fail").include?("absent or incomplete cycle evidence blocks fixed") &&
     debug_skill.include?("Only `tdd_applies=false`") && debug_skill.include?("permits the generic fix path") &&
     debug_skill.include?("When inactive, follow selected") && debug_skill.include?("without fabricating RED")

@@ -516,8 +516,9 @@ for file_and_term in \
     "$review_skill::Audit mode stops after one review batch." \
     "$review_skill::After entry, load \`references/review-loop.md\` before the first REVIEW step." \
     "$review_skill::Review-fix resolves or explicitly defers must-fix/should-fix findings, validates, then re-reviews." \
-    "$review_loop::Audit mode exits after one started batch reaches terminal accounting, complete or incomplete" \
-    "$review_loop::The normal review-fix path is round 1 review batch, fixes and validation, then one fresh round 2 re-review batch." \
+    "$review_loop::Incomplete coverage -> \`HAS_REMAINING_ITEMS\`, never CLEAN/ISSUES_FIXED" \
+    "$review_loop::Audit exits after one started terminal batch; retry exhaustion never starts another." \
+    "$review_loop::After round 1 fixes, start fresh round 2." \
     "$review_loop::references/review-batch.md" \
     "$review_loop::Round 3+ requires a recorded" \
     "$review_handoffs::- name: additional_round_reason" \

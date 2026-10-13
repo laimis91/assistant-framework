@@ -51,7 +51,7 @@ load_sets:
         path: contracts/output.yaml
         section: artifacts
         key: name
-        names: [verification_decision, verification]
+        names: [verification_decision, tdd_cycle_log_ref, verification]
     budget_words: 3500
   current_phase:
     selectors:
@@ -83,7 +83,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [status, symptom_summary, reproduction, hypotheses, fewer_hypotheses_reason, root_cause, confidence, fix_summary, verification_decision, verification, residual_risks, change_impact_applicability, change_impact_evidence]
+        allowed_names: [status, symptom_summary, reproduction, hypotheses, fewer_hypotheses_reason, root_cause, confidence, fix_summary, verification_decision, tdd_cycle_log_ref, verification, residual_risks, change_impact_applicability, change_impact_evidence]
     budget_words: 5000
 
 fallback:

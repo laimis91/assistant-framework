@@ -155,6 +155,15 @@ artifacts:
     validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and equals the decision received in debugging input; preserve every CheckSpec and TddChoice unchanged."
     on_fail: "Resolve the decision through assistant-verification before mutation; do not invent or rewrite test scope or checks."
 
+  - name: tdd_cycle_log_ref
+    type: string
+    required: conditional
+    condition: "selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids and current cycle has started"
+    description: "Reference to assistant-tdd's canonical cycle_log; do not duplicate its schema."
+    on_missing: fail
+    validation: "Resolve to the actual current cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log. Preserve actual partial cycle_log for blocked/partial outcomes. For status == fixed, validate the complete current cycle against the unchanged verification_decision and selected/applicable IDs: right-reason authorizing RED, passing GREEN and REFACTOR, and all due checks. Omit when TDD is inactive or cycle unstarted; never reconstruct phases or invocations."
+    on_fail: "Preserve an actual started partial cycle_log for blocked/partial outcomes; downgrade fixed if its current complete cycle or due checks are missing."
+
   - name: verification
     type: object[]
     required: true
