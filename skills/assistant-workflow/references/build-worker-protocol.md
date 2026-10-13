@@ -158,17 +158,17 @@ Before starting a slice:
 5. Check constraints from the task journal against the slice files and criteria.
 
 For each step, dispatch the selected lane owner for one task packet at a time
-per worker. The bounded executor implements and records actual RED, production,
+per worker. In active TDD, the bounded executor records actual RED, production,
 GREEN, REFACTOR, and separate phase invocations in one canonical cycle log.
-Separated active TDD dispatches Builder/Tester `pre_production_red`, carries its
-typed RED and `tdd_cycle_log_ref` to Code Writer for production, then uses
+Active separated TDD dispatches Builder/Tester `pre_production_red`, carries
+its typed RED and `tdd_cycle_log_ref` to Code Writer for production, then uses
 Builder/Tester `final_verification` for GREEN. Only after GREEN passes does the
 same Code Writer own REFACTOR; a second `final_verification` records separate
 REFACTOR invocations. A GREEN-only return is partial with REFACTOR pending, not
-final Build evidence. Inactive TDD stays Code Writer then Builder/Tester once.
-Direct fallback performs the same ownership sequence. Never edit before an
-observed meaningful RED, refactor before passing GREEN, or invent unstarted
-phase evidence.
+final Build evidence. Inactive TDD runs the selected checks without adding a
+RED step. Direct fallback follows the same selected lane. Never edit production
+before observed meaningful RED when that packet applies TDD, refactor before
+passing GREEN, or invent unstarted phase evidence.
 
 For `separated_workers`, retain each worker's actual `changed_files` in its
 dispatch result, including Builder/Tester test-file changes made for RED even
@@ -236,10 +236,10 @@ decision independently from verification scope and method. Each packet derives
 unknown-cause bugfixes, complete debugging first; enter RED only for applicable
 selected checks and when a meaningful assertion can fail for the intended reason.
 
-When task-wide `tdd_mode=true`, only packets with `tdd_applies=true` require
-valid meaningful RED before production code. Other packets still run their due
-selected checks without manufacturing RED. When task-wide TDD is false, no
-packet applies TDD.
+When TDD is active, establish meaningful RED before production; only packets
+with `tdd_applies=true` require it, otherwise follow the selected checks
+without adding a RED step. Other packets still run their due selected checks
+without manufacturing RED. When task-wide TDD is false, no packet applies TDD.
 
 For an active workflow TDD packet, the selected inline or separated RED owner
 records the observed authorizing invocation in the canonical assistant-tdd

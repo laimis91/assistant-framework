@@ -73,12 +73,16 @@ delegation, and review, but specialist gates are authoritative.
 4. **ISOLATE** — run the cheapest high-signal check first. Track supporting and
    disconfirming evidence until one cause predicts the symptom and fix.
 5. **FIX** — resolve the unchanged decision through `assistant-verification`
-   before mutation; add or extend a test only when selected. If TDD is active,
-   establish meaningful RED before production edits. Label uncertain emergency
-   changes as mitigations.
+   before mutation; add or extend a test only when selected. Derive
+   `tdd_applies` from the selected/applicable ID intersection. When true, route
+   through `assistant-tdd` and its existing `execution_lane`; do not dispatch
+   the generic fixer or edit before authorizing RED. Only `tdd_applies=false`
+   permits the generic fix path. Label uncertain emergency changes as
+   mitigations.
 6. **VERIFY** — run every selected and binding check against the fix, including
-   the original failure path. Preserve exclusions and unresolved gaps; do not
-   substitute an unselected full suite.
+   the original failure path. Active TDD is fixed only after the complete
+   current canonical cycle and due checks pass. Preserve exclusions and
+   unresolved gaps; do not substitute an unselected full suite.
 
 When change impact is triggered, load `references/change-impact.md`. The
 common checker is resolved from the active installation, so standalone
@@ -86,11 +90,14 @@ debugging does not depend on assistant-workflow being installed.
 
 For an unknown-cause failure, use `assistant-debugging` before verification
 selection. Once the mechanism is understood, resolve the check scope and TDD
-choice through `assistant-verification`. Hand RED-ready evidence to
-`assistant-tdd` only when the current fix's `selected_check_ids` intersect
-`verification_decision.tdd_choice.applicable_check_ids`;
-otherwise follow the selected checks without fabricating RED. Use
-`assistant-review` after non-trivial or risky fixes.
+choice through `assistant-verification`. When the current fix's
+`selected_check_ids` intersect
+`verification_decision.tdd_choice.applicable_check_ids`, carry the unchanged
+decision, IDs, bindings, reproduction, cause, and scope through
+`assistant-tdd` before mutation; it selects its existing `execution_lane`.
+`debugging_fix` is only for `tdd_applies=false`. When inactive, follow selected
+checks without fabricating RED. Use `assistant-review` after non-trivial or
+risky fixes.
 
 ## Output
 

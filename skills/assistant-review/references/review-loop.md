@@ -34,6 +34,7 @@ while round <= 10:
   3. FIX / VALIDATE
      - Validate FIX_STEP entry_assertions before source/test mutation or dispatch. Only review-fix repairs authorized evidence; record closure.
      - Before mutation, enforce `F_REVIEW_VERIFICATION_SELECTION`.
+     - For workflow-composed active TDD, return finding identities/provenance, failure/oracle, scope, unchanged decision, due selected IDs, and binding tuples to the composing workflow's Build owner; do not dispatch the review fixer. Use assistant-tdd's existing `execution_lane`, complete its current cycle and due checks, then run a fresh frozen-snapshot Review. Preserve raw history, `previously_fixed`, source IDs/provenance, round, and `score_history`; incomplete evidence remains `HAS_REMAINING_ITEMS`/blocked. Audit and inactive-TDD paths remain unchanged.
      - Standalone review-fix runs build and tests. Workflow-composed review runs every due selected check and applicable due/executable binding check; any source fix invalidates the batch and requires a current passed evidence reference before the next pass.
 
   4. NEXT ROUND

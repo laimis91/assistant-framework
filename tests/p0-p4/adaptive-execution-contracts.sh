@@ -56,11 +56,13 @@ test_start "all build and recovery surfaces obey the selected execution lane"
 if ! grep -Fq 'run the Code Writer -> Builder/Tester loop' "$workflow/references/phases.md" \
     && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "the bounded executor adds or extends" \
     && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "Builder/Tester returns one typed" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "Code Writer owns production changes" \
+    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "Code Writer owns production and records" \
     && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "pre_production_red" \
     && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "route verification through the selected build_execution_lane" \
     && ! grep -Fq 'return to Builder/Tester RED evidence' "$workflow/references/build-worker-protocol.md" \
     && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "Repair evidence according to build_execution_lane" \
+    && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "Inactive bounded_executor: CodeWriter owns selected verification" \
+    && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "separated_workers dispatches BuilderTester final_verification" \
     && ! grep -Fq 'Add per-slice Code Writer and Builder/Tester dispatch/result evidence' "$workflow/contracts/phase-gates.yaml"; then
     pass
 else
@@ -86,7 +88,7 @@ else
 fi
 
 test_start "TDD supports one bounded owner without weakening RED"
-if p0p4_contains_text "$tdd/SKILL.md" "one bounded executor owns RED, GREEN, focused verification, and refactor safety" \
+if p0p4_contains_text "$tdd/SKILL.md" "one bounded executor owns RED, production, GREEN, and REFACTOR verification" \
     && p0p4_contains_text "$tdd/SKILL.md" "production starts only after valid RED" \
     && p0p4_contains_text "$tdd/contracts/input.yaml" "enum_values: [bounded_executor, separated_workers]"; then
     pass
@@ -97,6 +99,7 @@ fi
 test_start "Codex writer is a bounded edit test executor when selected"
 if p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "bounded_executor" \
     && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "own the selected implementation and verification" \
+    && p0p4_contains_text "$FRAMEWORK_DIR/agents/claude/code-writer.md" "own the selected implementation and verification" \
     && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "When TDD is false, no RED is required and none should be fabricated."; then
     pass
 else

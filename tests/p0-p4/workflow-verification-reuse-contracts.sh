@@ -69,7 +69,7 @@ if ! ruby -ryaml -e '
 ' "$output_contract"; then missing+=("contract:validation_results required field types"); fi
 if [[ ${#missing[@]} -eq 0 ]]; then pass; else fail "missing reuse controls: ${missing[*]}"; fi
 
-test_start "debugging and workflow command results bind one exact invocation and preserve insufficient gaps"
+test_start "debugging and workflow command results bind exact invocations, preserve gaps, and route active TDD"
 if ! ruby -ryaml -e '
   root = ARGV.fetch(0)
   load_yaml = ->(path) { YAML.load_file(File.join(root, path)) }
@@ -78,10 +78,14 @@ if ! ruby -ryaml -e '
   debug_output = load_yaml.call("skills/assistant-debugging/contracts/output.yaml")
   debug_handoffs = load_yaml.call("skills/assistant-debugging/contracts/handoffs.yaml")
   debug_gates = load_yaml.call("skills/assistant-debugging/contracts/phase-gates.yaml")
+  debug_skill = File.read(File.join(root, "skills/assistant-debugging/SKILL.md"))
+  review_gates = load_yaml.call("skills/assistant-review/contracts/phase-gates.yaml")
+  review_loop = File.read(File.join(root, "skills/assistant-review/references/review-loop.md"))
   field = ->(fields, name) { fields.find { |entry| entry["name"] == name } || raise("missing #{name}") }
   debug_verification = debug_output.fetch("artifacts").find { |a| a["name"] == "verification" }
   debug_result = field.call(debug_verification.fetch("object_fields"), "executed_command")
   fix = debug_handoffs.fetch("handoffs").find { |h| h["name"] == "debugging_fix" }
+  tdd_projection = field.call(fix.fetch("context_fields"), "tdd_applies")
   debug_run = fix.fetch("return_fields").find { |f| f["name"] == "verification_run" }
   run = field.call(debug_run.fetch("object_fields"), "executed_command")
   verifier_input = load_yaml.call("skills/assistant-verification/contracts/input.yaml")
@@ -126,13 +130,14 @@ if ! ruby -ryaml -e '
   invocation_conditions_ok = ([results] + worker_results).all? { |r| field.call(r.fetch("object_fields"), "executed_command").fetch("condition") == "a command-based selected CheckSpec was started, regardless of outcome" }
   allowed = %w[passed failed partial unavailable skipped not_applicable blocked]
   gap_text = results.fetch("validation") + " " + results.fetch("on_fail")
+  partial_gap_rule = "Partial and unavailable are explicit gaps and never close a due check or establish sufficiency."
   blocked_gap_rule = "Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
-  handoff_ok = worker_results.all? { |r| r.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed && r.fetch("validation").include?("Partial and unavailable are explicit gaps") && r.fetch("validation").include?(blocked_gap_rule) }
+  handoff_ok = worker_results.all? { |r| r.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed && r.fetch("validation").include?(partial_gap_rule) && r.fetch("validation").include?(blocked_gap_rule) }
   builder = workflow_handoffs.fetch("handoffs").find { |h| h["name"] == "orchestrator_to_builder_tester" }
   aggregate = field.call(field.call(builder.fetch("return_fields"), "verification").fetch("object_fields"), "result")
   aggregate_ok = aggregate.fetch("enum_values") == %w[passed failed partial unavailable not_run not_applicable] &&
-    aggregate.fetch("validation").include?("neither satisfies a due check") &&
-    aggregate.fetch("validation").include?("no due selected or binding check applies")
+    aggregate.fetch("validation").include?("Partial, unavailable, and blocked per-check results remain gaps and never close a due selected or binding check") &&
+    aggregate.fetch("validation").include?("not_applicable requires no due selected or binding check applies")
   assessment = workflow_output.fetch("artifacts").find { |a| a["name"] == "evidence_assessment" }.fetch("validation")
   verify_gaps_ok = debug_allowed.all? { |state| result_gate.fetch("check").include?(state) } &&
     !result_gate.fetch("on_fail").include?("each unavailable check is blocked") &&
@@ -170,14 +175,40 @@ if ! ruby -ryaml -e '
     !fix_gate.fetch("check").include?("completes every selected and binding check") &&
     fix_gate.fetch("on_fail").include?("before entering VERIFY") &&
     result_gate.fetch("check").include?("a fixed outcome requires passing evidence for every due check")
-  valid = invocation_conditions_ok && blocked_selection_ok && verify_order_ok && schema_ok && assessor_states_ok && completion_ok && assessor_started_outcome_ok && review_ref_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
+  review_fix = review_gates.fetch("gates").find { |entry| entry["phase"] == "FIX_STEP" }.fetch("entry_assertions").find { |entry| entry["id"] == "F_REVIEW_VERIFICATION_SELECTION" }
+  review_validate = review_gates.fetch("gates").find { |entry| entry["phase"] == "VALIDATE_STEP" }.fetch("exit_assertions").find { |entry| entry["id"] == "V4" }
+  debug_fix_entry = debug_gates.fetch("gates").find { |entry| entry["phase"] == "FIX" }.fetch("entry_assertions").find { |entry| entry["id"] == "FX_VERIFICATION_DECISION" }
+  review_route_ok = review_fix.fetch("check").include?("When tdd_applies is true") &&
+    %w[aggregate_finding_id source_finding_ids source_provenance verification_decision selected_check_ids binding_obligation_refs].all? { |field_name| review_fix.fetch("check").include?(field_name) } &&
+    review_fix.fetch("check").include?("composing workflow") && review_fix.fetch("check").include?("Build owner") &&
+    review_fix.fetch("check").include?("do not mutate or dispatch the review fixer") &&
+    review_fix.fetch("check").include?("assistant-tdd") && review_fix.fetch("check").include?("execution_lane") &&
+    review_fix.fetch("on_fail").include?("wait for assistant-tdd completion before fresh Review") &&
+    ["cycle_log", "right-reason authorizing RED", "GREEN", "REFACTOR"].all? { |term| review_validate.fetch("check").include?(term) } &&
+    review_validate.fetch("on_fail").include?("absent or incomplete cycle_log also blocks re-review") &&
+    review_loop.downcase.include?("return finding identities/provenance") &&
+    ["previously_fixed", "source IDs/provenance", "score_history"].all? { |term| review_loop.include?(term) } &&
+    review_loop.include?("Audit and inactive-TDD paths remain unchanged")
+  debug_route_ok = tdd_projection.fetch("validation").include?("True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids") &&
+    tdd_projection.fetch("description").include?("generic debugging_fix handoff is permitted only when false") &&
+    tdd_projection.fetch("validation").include?("When true, do not dispatch this Fixer") &&
+    fix.fetch("on_missing_field").include?("Do not infer false") &&
+    fix.fetch("on_missing_field").include?("assistant-tdd") && fix.fetch("on_missing_field").include?("execution_lane") &&
+    debug_fix_entry.fetch("check").include?("Dispatch debugging_fix only when tdd_applies is false") &&
+    debug_fix_entry.fetch("check").include?("assistant-tdd using its existing execution_lane") &&
+    debug_fix_entry.fetch("on_fail").include?("Never coerce tdd_applies to false") &&
+    ["cycle_log", "right-reason authorizing RED", "GREEN", "REFACTOR"].all? { |term| result_gate.fetch("check").include?(term) } &&
+    result_gate.fetch("on_fail").include?("absent or incomplete cycle evidence blocks fixed") &&
+    debug_skill.include?("Only `tdd_applies=false`") && debug_skill.include?("permits the generic fix path") &&
+    debug_skill.include?("When inactive, follow selected") && debug_skill.include?("without fabricating RED")
+  valid = invocation_conditions_ok && blocked_selection_ok && verify_order_ok && schema_ok && assessor_states_ok && completion_ok && assessor_started_outcome_ok && review_ref_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && review_route_ok && debug_route_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
     results.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed &&
     results.fetch("validation").include?("Partial and unavailable are explicit evidence gaps") &&
     results.fetch("validation").include?("blocked is a distinct explicit gap and never closes a due check or establishes sufficiency") &&
     gap_text.include?("Partial and unavailable are explicit evidence gaps") && handoff_ok && assessment.include?("partial") && assessment.include?("unavailable") && assessment.include?("never sufficient")
   exit(valid ? 0 : 1)
 ' "$FRAMEWORK_DIR"; then
-    fail "command invocation identity or partial/unavailable evidence gaps are incomplete"
+    fail "invocation identity, evidence gaps, or active-TDD fix routing is incomplete"
 else
     pass
 fi

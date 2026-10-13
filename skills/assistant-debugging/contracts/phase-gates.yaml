@@ -65,8 +65,8 @@ gates:
     condition: "when can_modify_code is true and a fix or mitigation is attempted"
     entry_assertions:
       - id: FX_VERIFICATION_DECISION
-        check: "Before any source/test mutation or mutation dispatch, resolve verification_decision through the existing assistant-verification Analysis owner and carry it unchanged; derive this fix's tdd_applies from selected_check_ids intersecting tdd_choice.applicable_check_ids, and require meaningful RED only when the intersection is non-empty."
-        on_fail: "Stop before mutation; select or refresh the decision and current-fix IDs through assistant-verification, then establish valid RED only for applicable selected checks."
+        check: "Before any source/test mutation or mutation dispatch, resolve verification_decision through the existing assistant-verification Analysis owner and carry it unchanged; derive this fix's tdd_applies from selected_check_ids intersecting tdd_choice.applicable_check_ids. When true, route the unchanged decision, due selected IDs, exact binding tuples, reproduction, confirmed cause, and scope through assistant-tdd using its existing execution_lane; do not dispatch debugging_fix or mutate before authorizing RED. Dispatch debugging_fix only when tdd_applies is false."
+        on_fail: "Stop before mutation; select or refresh the decision and current-fix IDs through assistant-verification, then route active TDD through assistant-tdd. Never coerce tdd_applies to false; establish valid RED before active-TDD edits."
       - id: FX_CHANGE_IMPACT_APPLICABILITY
         check: "Before any source/test mutation or mutation dispatch, record change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
         on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
@@ -101,8 +101,8 @@ gates:
         condition: "status == fixed"
         on_fail: "Retain the gap and downgrade fixed until each due command check has a matching observed invocation."
       - id: VF2
-        check: "Every due selected and binding check runs against the fix or reuses admissible current evidence. Preserve observed passed/failed/partial/unavailable/skipped/blocked results and supporting evidence; a fixed outcome requires passing evidence for every due check."
-        on_fail: "Run due available checks; retain partial/unavailable observations and their reasons as explicit evidence gaps"
+        check: "Every due selected and binding check runs against the fix or reuses admissible current evidence. Preserve observed passed/failed/partial/unavailable/skipped/blocked results and supporting evidence; a fixed outcome requires passing evidence for every due check. When tdd_applies is true, fixed also requires the actual complete current assistant-tdd cycle_log for this unchanged decision and selected/applicable ID: right-reason authorizing RED, passing GREEN and REFACTOR invocations, and all due guards."
+        on_fail: "Run due available checks; retain partial/unavailable observations and their reasons as explicit evidence gaps. For active TDD, absent or incomplete cycle evidence blocks fixed."
       - id: VF3
         check: "Partial, unavailable, skipped, or blocked checks are listed as residual risks and not counted as proof"
         on_fail: "Record each evidence gap in residual_risks and adjust confidence; never count it as passed"

@@ -574,7 +574,7 @@ fi
 if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]"; then
     missing_builder_status_terms+=("BuilderTester per-check result enum includes blocked")
 fi
-if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "partial/unavailable/blocked rows remain gaps."; then
+if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "Partial and unavailable are explicit gaps and never close a due check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."; then
     missing_builder_status_terms+=("blocked per-check results remain gaps")
 fi
 if ! grep -Fq -- "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]" "$handoffs_file"; then

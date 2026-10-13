@@ -94,8 +94,8 @@ handoffs:
       - name: tdd_applies
         type: boolean
         required: true
-        description: "Whether meaningful RED is active for this fix."
-        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the task decision unchanged."
+        description: "Whether meaningful RED is active for this fix; the generic debugging_fix handoff is permitted only when false."
+        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the task decision unchanged. When true, do not dispatch this Fixer; route through assistant-tdd's existing execution_lane before mutation."
       - name: reproduction_evidence
         type: object
         required: true
@@ -151,4 +151,4 @@ handoffs:
         required: true
         description: "TDD projection returned unchanged from context."
         validation: "Equals context_fields.tdd_applies, derived from selected_check_ids intersected with verification_decision.tdd_choice.applicable_check_ids."
-    on_missing_field: "Ask Fixer to supply missing field before accepting the fix, or inspect the diff directly and record the gap"
+    on_missing_field: "Do not infer false when tdd_applies or its unchanged decision is missing or mismatched; derive it from the selected/applicable ID intersection. This generic Fixer may be dispatched only when false. When true, route the unchanged packet through assistant-tdd's existing execution_lane before mutation. For other missing fields, request the field or record the evidence gap; inspecting a diff does not authorize a TDD bypass."
