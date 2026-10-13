@@ -65,7 +65,7 @@ for term in \
     "Architect status values also include DEVIATED." \
     "CodeWriter status values also include DEVIATED and FAILED_VERIFICATION; CodeWriter uses FAILED_VERIFICATION only for a failed bounded_executor check." \
     "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION." \
-    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and for DEVIATED or FAILED_VERIFICATION only when implementation files were actually changed; they may be omitted or empty for pre-action DEVIATED and other returns before file changes occur." \
+    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and whenever the worker actually created, modified, or deleted implementation or test files regardless of terminal status. They may be omitted or empty only when no file changed; never invent entries for pre-action returns, and retain actual worker changes across retries." \
     "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result." \
     "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence. During active-TDD pre_production_red, exact matching authorizing RED may return DONE with aggregate partial and explicit pending GREEN rows; actual failed counts remain failed, and this stage cannot satisfy final Build or Review gates."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
@@ -412,18 +412,37 @@ for field in changed_files evidence files_changed; do
 done
 for field in changed_files files_changed; do
     if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" \
-        'condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or (status in [DEVIATED, FAILED_VERIFICATION] and implementation files were actually changed); optional and may be empty or omitted for pre-action DEVIATED and other returns before file changes"'; then
-        missing_code_writer_status_terms+=("handoff return $field must allow truthful pre-action DEVIATED")
+        'condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"'; then
+        missing_code_writer_status_terms+=("handoff return $field must require actual mutations for every terminal status")
     fi
 done
+if ! ruby -ryaml -e '
+  writer = YAML.load_file(ARGV.fetch(0)).fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_code_writer" }
+  fields = %w[changed_files files_changed].map do |name|
+    writer.fetch("return_fields").find { |field| field["name"] == name }
+  end
+  expected = "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"
+  statuses = %w[DONE DONE_WITH_CONCERNS NEEDS_CONTEXT BLOCKED DEVIATED FAILED_VERIFICATION]
+  success = %w[DONE DONE_WITH_CONCERNS]
+  matrix = statuses.product([false, true]).map do |status, file_changed|
+    [status, file_changed, success.include?(status) || file_changed]
+  end
+  valid = fields.all? { |field| field["required"] == false && field["min_items"] == 0 && field["condition"] == expected } &&
+    matrix.all? do |status, file_changed, required|
+      required == (success.include?(status) || file_changed)
+    end
+  exit(valid ? 0 : 1)
+' "$handoffs_file"; then
+    missing_code_writer_status_terms+=("CodeWriter changed-file status/actual-mutation condition matrix")
+fi
 if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "evidence" \
     'condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED, FAILED_VERIFICATION]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"'; then
     missing_code_writer_status_terms+=("CodeWriter must retain deviation and failed-verification evidence")
 fi
 for field in changed_files files_changed; do
     for term in \
-        "Do not invent" \
-        "pre-action DEVIATED"; do
+        "Omit only when no file changed" \
+        "never invent entries"; do
         if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_code_writer" "$field" "$term"; then
             missing_code_writer_status_terms+=("handoff return $field description: $term")
         fi
@@ -438,7 +457,8 @@ for term in \
     "FAILED_VERIFICATION requires validation_results and actual failure evidence" \
     "pre-action DEVIATED" \
     "artifact_refs, and validation_results are required only when their corresponding files, artifacts, or checks actually exist" \
-    "For NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries"; do
+    "For every terminal status, require changed_files and files_changed with every actual implementation or test file changed by this worker" \
+    "For NEEDS_CONTEXT/BLOCKED, require open_questions and retain any actual file changes without requiring fabricated artifact refs"; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_code_writer_status_terms+=("$term")
     fi
@@ -449,6 +469,9 @@ for file in \
     for term in \
         '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '`changed_files`: files created, modified, or deleted with brief descriptions' \
+        'return actual file mutations independently of terminal status, including test edits followed by `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
+        'actual changes across retries' \
+        'omit or leave empty only when this worker changed no file; never invent entries.' \
         '`evidence`: concrete implementation evidence, usually file paths plus behavior changed' \
         '`validation_results`: in `bounded_executor`' \
         'required for `DONE`, `DONE_WITH_CONCERNS`, `FAILED_VERIFICATION`, and whenever verification was attempted; an unattempted `DEVIATED` return may omit it.' \

@@ -23,14 +23,14 @@ completion_tiers:
   small:
     controller_intensity: light
     required_artifacts: [completion_policy, changed_files, verification_decision, evidence_assessment, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_applicability, change_impact_evidence]
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, tdd_cycle_log_ref, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_applicability, change_impact_evidence]
     review_gate: "fresh review after validation; Pack/expanded impact uses canonical assistant-review; full independent review only when risk promotes work"
     checkpoint_policy: "Keep state inline. Before Build visibly return the full unchanged verification_decision; at completion return one inline JSON object with both existing output keys, verification_decision and evidence_assessment, preserving selected CheckSpecs/TddChoice and actual current evidence refs, status, gaps, and exclusions. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
   small_elevated:
     condition: "execution_intent != prepare_only and size == small and (controller_intensity == strict or qa_evaluation_mode == required)"
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, verification_decision, evidence_assessment, validation_results, spec_review_result, review_result, final_handoff]
-    conditional_artifacts: [test_results, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, manual_test_steps, manual_verification_result, change_impact_applicability, change_impact_evidence]
+    conditional_artifacts: [test_results, tdd_cycle_log_ref, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, manual_test_steps, manual_verification_result, change_impact_applicability, change_impact_evidence]
     prohibited_artifacts: [fresh_review_result, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary]
     review_gate: "typed canonical review and required QA terminal state; no medium+ slice evidence"
     checkpoint_policy: "strict phase checkpoints without decomposition artifacts"
@@ -38,13 +38,13 @@ completion_tiers:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
     required_artifacts: [completion_policy, triage_result, changed_files, verification_decision, evidence_assessment, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
-    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, change_impact_applicability, change_impact_evidence]
+    conditional_artifacts: [test_results, tdd_cycle_log_ref, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, change_impact_applicability, change_impact_evidence]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, verification_decision, evidence_assessment, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
-    conditional_artifacts: [test_results, debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, feature_preparation_evidence, architecture_decision_pack, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation, change_impact_applicability, change_impact_evidence]
+    conditional_artifacts: [test_results, tdd_cycle_log_ref, debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, feature_preparation_evidence, architecture_decision_pack, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation, change_impact_applicability, change_impact_evidence]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -365,6 +365,14 @@ artifacts:
     description: "Canonical verification_decision."
     validation: "Conforms to assistant-verification/contracts/output.yaml#verification_decision; carry unchanged through packets/Build. Apply INV_TDD_PROJECTION. If no decision, omit it; evidence_assessment.status=blocked with exact material gap; stop before Plan exits or Build begins."
     on_fail: "Select; preserve carried decisions; never fabricate."
+
+  - name: tdd_cycle_log_ref
+    type: string
+    required: conditional
+    condition: "execution_intent != prepare_only and an active workflow packet with tdd_applies == true has started its RED phase"
+    description: "Canonical TDD cycle_log reference."
+    validation: "Resolves to the actual current task-journal or workflow-output cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log, not merely a planned RED tuple or passing verification row. Before production, its in-progress entry contains the observed authorizing invocation with freshness=current and result=failed, the sole selected/applicable check_id, exact CheckSpec argv/cwd, matching test_file/test_name, verified_failing=true, and failure_reason matching meaningful_failure; GREEN/REFACTOR are not required at this gate. Before Review and workflow completion, this same ref resolves to the full canonical completed cycle_log with valid current GREEN/REFACTOR and selected-check evidence. Preserve prior cycles and all actual invocation records; never reconstruct or invent them. Omit for inactive or unstarted TDD and prepare_only work."
+    on_fail: "Stop before production when the actual authorizing RED entry is missing, stale, unbound, or wrong-reason. Keep Review/completion blocked until the full canonical cycle resolves and validates."
 
   - name: test_results
     type: object

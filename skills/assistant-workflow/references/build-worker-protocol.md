@@ -184,6 +184,12 @@ selected-lane responsibilities. For active separated-worker TDD, Builder/Tester 
 pre_production_red stage, Code Writer consumes its unchanged typed RED before
 production edits, and Builder/Tester then owns final_verification.
 
+For every Code Writer return, preserve actual changed implementation or test
+files even when a later `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or
+`FAILED_VERIFICATION` status ends the attempt. Accumulate the worker's actual
+changes across retries, keep Builder/Tester ownership separate, and omit file
+entries only when that worker changed no file.
+
 ### Ordinary Build repair controller
 
 For ordinary non-harness same-scope repair, initialize and persist
@@ -229,6 +235,18 @@ When task-wide `tdd_mode=true`, only packets with `tdd_applies=true` require
 valid meaningful RED before production code. Other packets still run their due
 selected checks without manufacturing RED. When task-wide TDD is false, no
 packet applies TDD.
+
+For an active workflow TDD packet, the selected inline or separated RED owner
+records the observed authorizing invocation in the canonical assistant-tdd
+`cycle_log` and retains a `tdd_cycle_log_ref` that resolves to that in-progress
+entry before Code Writer makes any production edit. The entry must bind the
+sole selected/applicable check ID, exact CheckSpec argv and cwd, test file and
+name, current failed result, and the matching `meaningful_failure` oracle. A
+planned tuple or later passing result cannot substitute for the observed RED;
+the cycle may remain in progress without GREEN or REFACTOR at this gate. Keep
+prior cycle history and every actual invocation. Before Review and workflow
+completion, resolve the same reference to the full canonical completed cycle
+log and validate its GREEN, REFACTOR, and current selected-check evidence.
 
 When the task packet carries an Architecture Decision Pack, carry its typed
 `architecture_test_obligations` into the selected Build owner handoff. The

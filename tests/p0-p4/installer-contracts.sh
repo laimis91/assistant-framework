@@ -85,7 +85,7 @@ else
     fail "first install failed; see /tmp/p0p4-install-1.err"
 fi
 
-test_start "Codex selected workflow install keeps routing metadata and its canonical review producer"
+test_start "Codex selected workflow install keeps routing metadata and its canonical review and TDD producers"
 INSTALL_HOME_SKILL_TABLE="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_SKILL_TABLE"
 if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >/tmp/p0p4-install-single-skill-table.out 2>/tmp/p0p4-install-single-skill-table.err; then
@@ -93,8 +93,8 @@ if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent cod
     installed_skills_dir="$INSTALL_HOME_SKILL_TABLE/.codex/skills"
     assistant_skill_rows="$(count_occurrences "^| assistant-" "$agents_file")"
 
-    if [[ ! -d "$installed_skills_dir/assistant-workflow" || ! -d "$installed_skills_dir/assistant-review" ]]; then
-        fail "expected assistant-workflow and its canonical assistant-review producer to be installed"
+    if [[ ! -d "$installed_skills_dir/assistant-workflow" || ! -d "$installed_skills_dir/assistant-review" || ! -f "$installed_skills_dir/assistant-tdd/contracts/output.yaml" ]]; then
+        fail "expected assistant-workflow and its canonical assistant-review and assistant-tdd producers to be installed"
     elif [[ -d "$installed_skills_dir/assistant-docs" ]]; then
         fail "expected selected workflow install to avoid unrelated assistant-docs"
     elif [[ "$assistant_skill_rows" != "0" ]]; then

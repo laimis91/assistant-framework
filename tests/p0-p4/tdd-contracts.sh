@@ -157,6 +157,11 @@ if ! ruby -ryaml -e '
     !red.include?("exactly one current command_results entry")
   workflow_red_cardinality = red_results.fetch("validation").include?("For workflow-authorizing RED, exactly one current failed invocation carries") &&
     red_results.fetch("validation").include?("other invocations remain honest")
+  workflow_red_is_current_and_bound = red.include?("whose freshness is current and result is failed") &&
+    red.include?("exact applicable selected check_id, argv, cwd, test target, and matching meaningful_failure oracle") &&
+    red.include?("missing/wrong identity or oracle is not valid RED") &&
+    red_results.fetch("validation").include?("selected/applicable ID, exact argv/cwd, and test_file/test_name") &&
+    red_reason.include?("meaningful_failure oracle")
   results_ok &&= standalone_red_history && workflow_red_cardinality && red.include?("result is failed") &&
     red.include?("missing/wrong identity or oracle is not valid RED") &&
     red.include?("standalone/no-decision TDD") &&
@@ -166,7 +171,7 @@ if ! ruby -ryaml -e '
     red_result_fields.fetch("test_file")["condition"].include?("workflow-authorizing RED invocation") &&
     red_result_fields.fetch("test_name")["condition"].include?("workflow-authorizing RED invocation") &&
     red_results.fetch("validation").include?("matching meaningful_failure oracle") &&
-    green_test.include?("freshness=current") && green_test.include?("result=passed") && all_passes &&
+    green_test.include?("freshness=current") && green_test.include?("result=passed") && all_passes && workflow_red_is_current_and_bound &&
     cycle_log.fetch("validation").include?("Older cycle logs without invocation identity") &&
     cycle_log.fetch("validation").include?("cannot establish current selected-check closure") &&
     cycle_log.fetch("validation").include?("never reconstruct or invent")
@@ -355,7 +360,27 @@ workflow_tdd_failures=()
 if ! ruby -ryaml -e '
   input = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |f| f["name"] == "tdd_mode" }
   decision = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").find { |f| f["name"] == "verification_decision" }
+  cycle_log_ref = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").find { |f| f["name"] == "tdd_cycle_log_ref" }
   gates = YAML.load_file(ARGV.fetch(2)).fetch("invariants").find { |f| f["id"] == "INV_TDD_PROJECTION" }
+  tiers = YAML.load_file(ARGV.fetch(1)).fetch("completion_tiers")
+  executing_tiers = %w[small small_elevated medium large_critical].map { |name| tiers.fetch(name) }
+  cycle_log_ref_valid = cycle_log_ref && cycle_log_ref["type"] == "string" &&
+    cycle_log_ref["required"] == "conditional" &&
+    cycle_log_ref.fetch("condition").include?("active workflow packet with tdd_applies == true") &&
+    cycle_log_ref.fetch("condition").include?("started its RED phase") &&
+    cycle_log_ref.fetch("validation").include?("assistant-tdd/contracts/output.yaml#artifacts/cycle_log") &&
+    cycle_log_ref.fetch("validation").include?("not merely a planned RED tuple or passing verification row") &&
+    cycle_log_ref.fetch("validation").include?("observed authorizing invocation with freshness=current and result=failed") &&
+    cycle_log_ref.fetch("validation").include?("sole selected/applicable check_id") &&
+    cycle_log_ref.fetch("validation").include?("exact CheckSpec argv/cwd") &&
+    cycle_log_ref.fetch("validation").include?("failure_reason matching meaningful_failure") &&
+    cycle_log_ref.fetch("validation").include?("GREEN/REFACTOR are not required at this gate") &&
+    cycle_log_ref.fetch("validation").include?("Before Review and workflow completion") &&
+    cycle_log_ref.fetch("validation").include?("full canonical completed cycle_log") &&
+    cycle_log_ref.fetch("validation").include?("Preserve prior cycles and all actual invocation records") &&
+    cycle_log_ref.fetch("validation").include?("Omit for inactive or unstarted TDD and prepare_only work") &&
+    executing_tiers.all? { |tier| tier.fetch("conditional_artifacts").include?("tdd_cycle_log_ref") } &&
+    !tiers.fetch("preparation_only").fetch("conditional_artifacts").include?("tdd_cycle_log_ref")
   valid = input["default"] == false && input.fetch("validation").include?("Must equal the canonical task-global mode.") &&
     input.fetch("validation").include?("local tdd_applies intersection is non-empty") &&
     input.fetch("infer_from").include?("Copy verification_decision.tdd_choice.mode unchanged as the task-global choice.") &&
@@ -366,11 +391,16 @@ if ! ruby -ryaml -e '
     gates.fetch("check").include?("split a packet with multiple IDs before dispatch") &&
     gates.fetch("check").include?("Before production, active packets require one red_check_id") &&
     gates.fetch("check").include?("red_command, red_cwd, and expected_red_failure exactly equal") &&
+    gates.fetch("check").include?("actual authorizing RED in the canonical assistant-tdd cycle_log") &&
+    gates.fetch("check").include?("Before production, active inline or bounded TDD requires tdd_cycle_log_ref to the actual authorizing RED in the canonical assistant-tdd cycle_log") &&
+    gates.fetch("check").include?("Before Review and workflow completion") &&
+    gates.fetch("check").include?("that ref resolves to the full canonical completed cycle_log") &&
+    gates.fetch("on_fail").include?("missing, stale, unbound, or wrong-reason") &&
     gates.fetch("check").include?("verification_stage=pre_production_red") &&
     gates.fetch("check").include?("then dispatch BuilderTester final_verification") &&
     gates.fetch("check").include?("pre_production_red never closes Build or permits Review") &&
     gates.fetch("check").include?("Other due checks still run without fabricated RED")
-  exit(valid ? 0 : 1)
+  exit(valid && cycle_log_ref_valid ? 0 : 1)
 ' "$workflow_input" "$workflow_output" "$workflow_gates"; then
     workflow_tdd_failures+=("workflow tdd_mode is not a false-default projection of the canonical decision")
 fi

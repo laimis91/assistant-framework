@@ -41,7 +41,7 @@ worker_status_protocol:
     - "Architect status values also include DEVIATED."
     - "CodeWriter status values also include DEVIATED and FAILED_VERIFICATION; CodeWriter uses FAILED_VERIFICATION only for a failed bounded_executor check."
     - "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION."
-    - "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and for DEVIATED or FAILED_VERIFICATION only when implementation files were actually changed; they may be omitted or empty for pre-action DEVIATED and other returns before file changes occur."
+    - "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and whenever the worker actually created, modified, or deleted implementation or test files regardless of terminal status. They may be omitted or empty only when no file changed; never invent entries for pre-action returns, and retain actual worker changes across retries."
     - "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result."
     - "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence. During active-TDD pre_production_red, exact matching authorizing RED may return DONE with aggregate partial and explicit pending GREEN rows; actual failed counts remain failed, and this stage cannot satisfy final Build or Review gates."
 
@@ -2344,9 +2344,9 @@ handoffs:
       - name: changed_files
         type: object[]
         required: false
-        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or (status in [DEVIATED, FAILED_VERIFICATION] and implementation files were actually changed); optional and may be empty or omitted for pre-action DEVIATED and other returns before file changes"
+        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"
         min_items: 0
-        description: "Files actually created, modified, or deleted by this worker. Do not invent entries for a pre-action DEVIATED return or any other return before file changes."
+        description: "Files actually created, modified, or deleted by this worker. Preserve all actual changes, including test edits before a later NEEDS_CONTEXT, BLOCKED, DEVIATED, or FAILED_VERIFICATION return and across retries. Omit only when no file changed; never invent entries."
         object_fields:
           - name: path
             type: string
@@ -2460,8 +2460,8 @@ handoffs:
       - name: files_changed
         type: object[]
         required: false
-        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or (status in [DEVIATED, FAILED_VERIFICATION] and implementation files were actually changed); optional and may be empty or omitted for pre-action DEVIATED and other returns before file changes"
-        description: "Legacy alias for changed_files; keep populated for actual implementation changes until downstream consumers migrate. Do not invent entries for pre-action DEVIATED or other returns before file changes."
+        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"
+        description: "Legacy alias for changed_files; keep it equal to actual worker changes, including changes retained after NEEDS_CONTEXT, BLOCKED, DEVIATED, or FAILED_VERIFICATION and across retries. Omit only when no file changed; never invent entries."
         min_items: 0
         object_fields:
           - name: path
@@ -2529,7 +2529,7 @@ handoffs:
         required: false
         description: "What the plan assumed vs. what was found"
         condition: "when deviation_detected is true or status is DEVIATED"
-    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require real changed_files, evidence, and files_changed; active bounded_executor TDD additionally requires the matching typed red_evidence. Bounded FAILED_VERIFICATION requires validation_results and actual failure evidence, retaining observed red_evidence, file, and artifact outputs only when they were produced. DEVIATED requires deviation_details and concrete evidence of the actual mismatch; changed_files, files_changed, artifact_refs, and validation_results are required only when their corresponding files, artifacts, or checks actually exist. For NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries. When implementation hit an unexpected blocker, require blocker_type and blocker_evidence before the orchestrator routes recovery."
+    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require at least one real changed_files and files_changed entry plus evidence; active bounded_executor TDD additionally requires the matching typed red_evidence. For every terminal status, require changed_files and files_changed with every actual implementation or test file changed by this worker, including changes retained across retries; allow omission or empty arrays only when no file changed, and never fabricate entries. Bounded FAILED_VERIFICATION requires validation_results and actual failure evidence, retaining observed red_evidence and artifact outputs only when produced. DEVIATED requires deviation_details and concrete evidence of the actual mismatch; artifact_refs, and validation_results are required only when their corresponding files, artifacts, or checks actually exist. For NEEDS_CONTEXT/BLOCKED, require open_questions and retain any actual file changes without requiring fabricated artifact refs. When implementation hit an unexpected blocker, require blocker_type and blocker_evidence before the orchestrator routes recovery."
 
   # ─────────────────────────────────────────────
   # Orchestrator → BuilderTester
