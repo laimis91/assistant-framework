@@ -34,13 +34,13 @@ while round <= 10:
   3. FIX / VALIDATE
      - Validate FIX_STEP entry_assertions before source/test mutation or dispatch. Only review-fix repairs authorized evidence; record closure.
      - Before mutation, enforce `F_REVIEW_VERIFICATION_SELECTION`.
-     - For workflow-composed active TDD, return finding identities/provenance, failure/oracle, scope, unchanged decision, due selected IDs, and binding tuples to the composing workflow's Build owner; do not dispatch the review fixer. Use assistant-tdd's existing `execution_lane`, complete its current cycle and due checks, then run a fresh frozen-snapshot Review. Preserve raw history, `previously_fixed`, source IDs/provenance, round, and `score_history`; incomplete evidence remains `HAS_REMAINING_ITEMS`/blocked. Audit and inactive-TDD paths remain unchanged.
+     - For workflow-composed active TDD, return finding identities/provenance and unchanged context to Build per `F_REVIEW_VERIFICATION_SELECTION`; require completed cycle/checks before fresh Review. Preserve `previously_fixed`, source IDs/provenance, round, and `score_history`; incomplete remains `HAS_REMAINING_ITEMS`/blocked. Audit and inactive-TDD paths remain unchanged.
      - Standalone review-fix runs build and tests. Workflow-composed review runs every due selected check and applicable due/executable binding check; any source fix invalidates the batch and requires a current passed evidence reference before the next pass.
 
   4. NEXT ROUND
      - After round 1 fixes, start fresh round 2. Round 3+ needs new evidence. The round counts started review batches, not individual perspective passes, including incomplete or invalidated batches; round 10 is terminal after its started batch.
 ```
 
-The normal review-fix path is round 1 review batch, fixes and validation, then one fresh round 2 re-review batch. Audit mode exits after one started batch reaches terminal accounting, complete or incomplete; incomplete is `HAS_REMAINING_ITEMS`, never a replacement batch. Rounds count started batches, including incomplete/invalidated, not passes. With complete coverage: **No material findings within the reviewed scope and available evidence**. `CLEAN` is not proof.
+With complete coverage: **No material findings within the reviewed scope and available evidence**. `CLEAN` is not proof.
 
 When required, load `qa-evaluation-loop.md` before dispatching QAEvaluator. That reference owns the detailed QA algorithm. Rehash before QA; mutation requires validation, invalidation, and a fresh complete review batch before QA resumes, except exact snapshot digest equality. QA is the separate acceptance lane.
