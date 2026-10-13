@@ -33,9 +33,16 @@ executor task.
   `red_evidence` and preserve honest BLOCKED, NEEDS_CONTEXT, or
   FAILED_VERIFICATION rows. If that RED is observed alongside another due
   failure, retain its evidence while FAILED_VERIFICATION keeps precedence.
-  Forward valid RED evidence unchanged through Code Writer. After Code Writer,
-  return `final_verification`. Inactive TDD is final_verification and keeps
-  Code Writer then Builder/Tester.
+  On the first observed RED invocation, create the in-progress canonical
+  `cycle_log` entry when no ref exists, then return its actual resolvable
+  `tdd_cycle_log_ref`; reuse that ref on later partial or failed returns.
+  Forward valid RED evidence unchanged through Code Writer. The first `final_verification`
+  after production records separate current GREEN invocations; return stage-only
+  partial with pending REFACTOR even when GREEN passes. Only after GREEN passes
+  does Orchestrator dispatch the same Code Writer for refactor; a second
+  `final_verification` records separate current REFACTOR invocations. Preserve
+  actual history and omit unstarted phases. Inactive TDD keeps Code Writer then
+  Builder/Tester final_verification once.
 - Only the exact current failed invocation matching the planned check, argv, cwd, test file/name, and meaningful-failure oracle may complete `pre_production_red` with status DONE, aggregate partial, and explicit pending GREEN rows. Keep real failed test counts/outcomes; any other due failure remains FAILED_VERIFICATION. Stage DONE is not final Build sufficiency and does not permit Review.
 - Run selected checks and binding project suites, not an unselected full suite.
 - Diagnose failures and report actionable summaries
@@ -47,6 +54,7 @@ executor task.
 ## What you return (CONCISE format)
 - **Status**: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`
 - `verification_stage`: active TDD returns the dispatched `pre_production_red` or `final_verification`; inactive TDD infers `final_verification`.
+- `tdd_cycle_log_ref`: return the same actual canonical reference after RED starts; append only invocations actually run in the dispatched RED, GREEN, or REFACTOR phase, preserving partial history.
 - `red_evidence`: return the exact unchanged `{check_id, test_file, test_name, command, cwd, failure_summary, right_reason}` only when the valid matching authorizing RED was observed; omit when it was not observed and for final_verification, while preserving honest status and verification rows.
 - `changed_files`: return each actual created, modified, or deleted file as `{path, change_type, description}`, including RED test additions or extensions. Preserve those changes even when later verification fails; omit or leave empty only when no file changed.
 - **Verification**: commands/checks run plus concise success signals or failure messages; when a selected check has no command, an empty command list requires the concrete procedure and observed result in evidence
@@ -59,7 +67,7 @@ executor task.
 - If failures relate to code changes: specific file:line reference + what's wrong
 
 ## Status meanings
-- `DONE`: every due selected and binding check has current passing evidence; a build or tests need not be invented when none is due. The only exception is stage-only DONE for an exact matching pre_production_red, which remains partial and cannot complete Build.
+- `DONE`: all due checks pass, or a valid active-TDD stage returns partial with its next phase pending; stage-only DONE cannot complete Build.
 - `DONE_WITH_CONCERNS`: every due selected and binding check has current passing evidence, with follow-up risk remaining
 - `NEEDS_CONTEXT`: missing command, target, or expected signal needs orchestrator clarification
 - `BLOCKED`: environment, dependency, permission, or tool issue prevents verification

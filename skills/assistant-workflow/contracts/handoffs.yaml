@@ -15,7 +15,7 @@ skill: assistant-workflow
 # Worker Status Protocol
 # ─────────────────────────────────────────────
 worker_status_protocol:
-  description: "CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns include a compact status packet so the orchestrator can route Build-role results deterministically. Bounded CodeWriter and BuilderTester verification failures use FAILED_VERIFICATION, which takes precedence over completion or deviation statuses; the sole exception is BuilderTester DONE for an exact matching authorizing RED in verification_stage=pre_production_red, which is stage completion only and never final Build completion. Reviewer and QAEvaluator packet schemas are owned by assistant-review."
+  description: "CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns include a compact status packet so the orchestrator can route Build-role results deterministically. Bounded CodeWriter and BuilderTester verification failures use FAILED_VERIFICATION, which takes precedence over completion or deviation statuses; BuilderTester DONE for exact matching authorizing RED or passing GREEN with pending REFACTOR is stage completion only, never final Build completion. Reviewer and QAEvaluator packet schemas are owned by assistant-review."
   statuses:
     - value: DONE
       meaning: "No known concerns; requested work or an explicitly dispatched stage completed within scope. Stage-specific DONE does not claim final Build completion."
@@ -44,6 +44,7 @@ worker_status_protocol:
     - "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and whenever the worker actually created, modified, or deleted implementation or test files regardless of terminal status. They may be omitted or empty only when no file changed; never invent entries for pre-action returns, and retain actual worker changes across retries."
     - "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result."
     - "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence. During active-TDD pre_production_red, exact matching authorizing RED may return DONE with aggregate partial and explicit pending GREEN rows; actual failed counts remain failed, and this stage cannot satisfy final Build or Review gates."
+    - "During active-TDD first final_verification, passing current GREEN may return stage-only DONE only with aggregate partial and explicit pending REFACTOR rows; this stage cannot satisfy final Build or Review gates."
 
 # ─────────────────────────────────────────────
 # Typed Artifact Reference Protocol
@@ -2183,6 +2184,12 @@ handoffs:
                 required: true
                 description: "What observed failure demonstrates that check_id produced the expected_red_failure oracle, rather than a syntax, setup, or unrelated error."
                 validation: "Explains the observed failure as the matching expected_red_failure oracle for check_id; syntax, setup, or unrelated failures do not qualify."
+          - name: tdd_cycle_log_ref
+            type: string
+            required: conditional
+            condition: "tdd_applies is true and the canonical cycle_log has started"
+            description: "Current canonical assistant-tdd cycle_log reference carried across Build dispatches and retries."
+            validation: "Resolves to the same task-journal or workflow-output cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log. The first RED owner creates the in-progress entry when no ref exists; CodeWriter records actual production_file, then only after current GREEN passes records actual refactor.changes_made or none needed. Preserve every prior invocation and never infer a phase."
           - name: implementation_notes
             type: string[]
             required: true
@@ -2267,6 +2274,12 @@ handoffs:
         condition: "current_task_packet is absent and tdd_applies is true"
         validation: "Exactly equals meaningful_failure for red_check_id in the unchanged decision; this is an oracle expectation, not RED evidence."
         on_missing: fail
+      - name: tdd_cycle_log_ref
+        type: string
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true and the canonical cycle_log has started"
+        description: "Current canonical assistant-tdd cycle_log reference carried across CodeWriter dispatches and retries."
+        validation: "Resolves to the same current cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log. In bounded_executor, create its in-progress entry if absent when recording the actual authorizing RED. Record actual production_file; on the post-GREEN redispatch, record actual refactor.changes_made or none needed without earlier refactor edits. Preserve history and omit unstarted invocations."
       - name: red_evidence
         type: object
         required: conditional
@@ -2341,6 +2354,12 @@ handoffs:
           - {name: cwd, type: string, required: true, validation: "Exactly equals the carried red_cwd."}
           - {name: failure_summary, type: string, required: true, description: "Concise observed failed-test evidence, not raw logs."}
           - {name: right_reason, type: string, required: true, validation: "Explains why this exact failed test demonstrates expected_red_failure; syntax, setup, and unrelated failures do not qualify."}
+      - name: tdd_cycle_log_ref
+        type: string
+        required: conditional
+        condition: "tdd_applies is true and the canonical cycle_log has started"
+        description: "Actual reference to the current canonical assistant-tdd cycle_log."
+        validation: "When the authorizing RED invocation starts, create the current task-journal or workflow-output cycle_log entry conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log if no ref exists and return its actual resolvable location. Return the same ref on later partial or failed stages; omit only when no cycle_log was started. Preserve history and never reconstruct or invent phase evidence."
       - name: changed_files
         type: object[]
         required: false
@@ -2529,7 +2548,7 @@ handoffs:
         required: false
         description: "What the plan assumed vs. what was found"
         condition: "when deviation_detected is true or status is DEVIATED"
-    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require at least one real changed_files and files_changed entry plus evidence; active bounded_executor TDD additionally requires the matching typed red_evidence. For every terminal status, require changed_files and files_changed with every actual implementation or test file changed by this worker, including changes retained across retries; allow omission or empty arrays only when no file changed, and never fabricate entries. Bounded FAILED_VERIFICATION requires validation_results and actual failure evidence, retaining observed red_evidence and artifact outputs only when produced. DEVIATED requires deviation_details and concrete evidence of the actual mismatch; artifact_refs, and validation_results are required only when their corresponding files, artifacts, or checks actually exist. For NEEDS_CONTEXT/BLOCKED, require open_questions and retain any actual file changes without requiring fabricated artifact refs. When implementation hit an unexpected blocker, require blocker_type and blocker_evidence before the orchestrator routes recovery."
+    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require at least one real changed_files and files_changed entry plus evidence; active bounded_executor TDD additionally requires matching typed red_evidence. For every terminal status, retain every actual implementation or test file across retries; omit changed_files only when none changed. Return tdd_cycle_log_ref on every active-TDD return after its cycle_log starts, including partial or failed work; omit it only when RED never started. Bounded FAILED_VERIFICATION requires validation_results and actual failure evidence. DEVIATED requires deviation_details and concrete evidence; never fabricate artifacts or changes. NEEDS_CONTEXT/BLOCKED require open_questions, actual changes, and blocker evidence when unexpected."
 
   # ─────────────────────────────────────────────
   # Orchestrator → BuilderTester
@@ -2583,7 +2602,7 @@ handoffs:
         condition: "tdd_applies is true"
         enum_values: [pre_production_red, final_verification]
         description: "Active-TDD BuilderTester stage; inactive-TDD dispatches and returns are final_verification."
-        validation: "The orchestrator dispatches pre_production_red before CodeWriter and final_verification after CodeWriter. Omit only when tdd_applies is false, which is equivalent to final_verification."
+        validation: "Dispatch pre_production_red before CodeWriter. Reuse final_verification after production for GREEN and again after the post-GREEN CodeWriter refactor for REFACTOR; cycle_log progress distinguishes them. The first stage-only result cannot close Build. Omit only when tdd_applies is false."
       - name: red_check_id
         type: string
         required: conditional
@@ -2609,6 +2628,12 @@ handoffs:
         condition: "current_task_packet is absent and tdd_applies is true"
         validation: "Exactly equals meaningful_failure for red_check_id in the unchanged decision; this is an oracle expectation, not RED evidence."
         on_missing: fail
+      - name: tdd_cycle_log_ref
+        type: string
+        required: conditional
+        condition: "current_task_packet is absent and tdd_applies is true and the canonical cycle_log has started"
+        description: "Current canonical assistant-tdd cycle_log reference carried across BuilderTester dispatches and retries."
+        validation: "On the first observed RED invocation, create the current task-journal or workflow-output cycle_log entry conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log if no ref exists and return its actual resolvable location. Later dispatches resolve that same entry: the first final_verification appends separate current GREEN invocations, and the post-REFACTOR final_verification appends separate current REFACTOR invocations. Preserve history and omit unstarted work."
       - name: tdd_mode
         type: boolean
         required: true
@@ -3023,6 +3048,12 @@ handoffs:
             required: conditional
             condition: "tdd_applies is true"
             validation: "Exactly equals meaningful_failure for red_check_id in the unchanged decision; this is an oracle expectation, not RED evidence."
+          - name: tdd_cycle_log_ref
+            type: string
+            required: conditional
+            condition: "tdd_applies is true and the canonical cycle_log has started"
+            description: "Current canonical assistant-tdd cycle_log reference carried across Build dispatches and retries."
+            validation: "Resolves to the same task-journal or workflow-output cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log. The first RED owner creates its in-progress entry if absent; update it only with actual phase evidence and retain all prior cycles and invocations."
       - name: build_repair_state
         type: object
         required: conditional
@@ -3062,15 +3093,15 @@ handoffs:
         type: enum
         required: true
         enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]
-        description: "Worker status packet result; pre_production_red DONE completes only the RED stage, never final Build."
-        validation: "In final_verification, DONE/DONE_WITH_CONCERNS require every due check to pass and any ordinary due failure yields FAILED_VERIFICATION. In pre_production_red, DONE is permitted only for the exact typed authorizing RED with verification.result=partial and explicit pending GREEN rows; any other failed due check yields FAILED_VERIFICATION."
+        description: "Worker status packet result; pre_production_red and the first GREEN final_verification may complete only their stage, never final Build."
+        validation: "With active TDD, first final_verification may return stage-only DONE for passing current GREEN only with verification.result=partial and explicit pending REFACTOR rows; it cannot close Build. Final DONE/DONE_WITH_CONCERNS requires the full current cycle including passing REFACTOR. pre_production_red DONE requires exact authorizing RED, partial, and pending GREEN. Inactive TDD DONE/DONE_WITH_CONCERNS requires all due checks passing. Ordinary failures yield FAILED_VERIFICATION; no stage-only DONE closes Build or Review."
       - name: verification_stage
         type: enum
         required: conditional
         condition: "tdd_applies is true"
         enum_values: [pre_production_red, final_verification]
         description: "Active-TDD stage returned by BuilderTester; inactive-TDD returns are final_verification."
-        validation: "Equals the dispatch stage. pre_production_red DONE is stage completion only; final Build/Review requires final_verification."
+        validation: "Equals the dispatch stage. Both GREEN and REFACTOR use final_verification; the GREEN pass with REFACTOR pending is stage completion only. Build/Review requires the same ref to contain the full current canonical cycle."
       - name: red_evidence
         type: object
         required: conditional
@@ -3085,6 +3116,12 @@ handoffs:
           - {name: cwd, type: string, required: true, validation: "Exactly equals the carried red_cwd."}
           - {name: failure_summary, type: string, required: true, description: "Concise observed failed-test evidence, not raw logs."}
           - {name: right_reason, type: string, required: true, validation: "Explains why this exact failed test demonstrates expected_red_failure; syntax, setup, and unrelated failures do not qualify."}
+      - name: tdd_cycle_log_ref
+        type: string
+        required: conditional
+        condition: "tdd_applies is true and the canonical cycle_log has started"
+        description: "Actual reference to the current canonical assistant-tdd cycle_log."
+        validation: "When the authorizing RED invocation starts, create the current task-journal or workflow-output cycle_log entry conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log if no ref exists and return its actual resolvable location. Return the same ref on later partial or failed stages; omit only when no cycle_log was started. Preserve history and never reconstruct or invent phase evidence."
       - name: changed_files
         type: object[]
         required: false
@@ -3109,7 +3146,7 @@ handoffs:
             type: enum
             required: true
             enum_values: [passed, failed, partial, unavailable, not_run, not_applicable]
-            validation: "In final_verification, passed requires current observed or admissibly reused passing results for every due selected and binding check; an executed ordinary failure records failed and takes precedence. In pre_production_red, only the exact matching authorizing RED is stage evidence: retain its actual failed row/count, but aggregate partial and list every pending GREEN check as partial or skipped with explicit pending evidence; any other due failure keeps ordinary failure precedence. partial records incomplete or mixed evidence; unavailable retains unavailable due-check evidence; neither satisfies a due check. not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED. not_applicable requires that no due selected or binding check applies, with its rationale; never substitute it for a due check."
+            validation: "For active TDD, first final_verification records current GREEN but aggregates partial with explicit pending REFACTOR even when checks pass; after actual refactor.changes_made and separate current REFACTOR invocations, passing due checks may aggregate passed. Inactive TDD uses ordinary final verification. Passed requires current observed or admissibly reused passing results for every due selected and binding check. Ordinary failure takes precedence. pre_production_red retains actual failed RED counts and pending GREEN. Other partial/unavailable outcomes are gaps; not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED; not_applicable requires no due checks."
           - name: evidence
             type: string[]
             required: true
@@ -3120,7 +3157,7 @@ handoffs:
         required: true
         min_items: 1
         description: "Per-check results preserving selected CheckSpec and applicable binding identity for the separated-workers lane"
-        validation: "Each row binds exact IDs/tuples to the actual current procedure/oracle observed. For a started command-based check, executed_command is required and resolves exactly one selected ID to the unchanged canonical CheckSpec's exact argv and explicit cwd; missing or ambiguous context requires refresh or blocks the result. The rows close only the corresponding due checks and applicable obligations; shared claims do not transfer coverage. In pre_production_red, only the row matching the exact typed red_evidence may record the expected failed RED as stage evidence; all other due checks remain explicitly partial or skipped pending GREEN, and any other failed row yields FAILED_VERIFICATION. Partial and unavailable are explicit gaps and never satisfy a selected check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
+        validation: "Each row binds exact IDs/tuples to actual current procedure/oracle; started commands require exact selected CheckSpec argv/cwd. In active TDD, pre_production_red retains matching failed RED and pending GREEN; first final_verification retains current GREEN but aggregates partial with REFACTOR pending; second final_verification after CodeWriter refactor records REFACTOR and closes the cycle. Inactive TDD uses ordinary final verification. Ordinary failure yields FAILED_VERIFICATION; partial/unavailable/blocked rows remain gaps."
         object_fields:
           - {name: command_or_check, type: string, required: true}
           - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]}
@@ -3210,7 +3247,7 @@ handoffs:
         type: enum
         required: true
         enum_values: [passed, failed, not_run, not_applicable]
-        description: "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints, using each check's claim, oracle, and procedure; do not infer it from file type, command presence, method, or technique alone. Unresolved applicability is a gap. Use passed only for current observed or admissibly reused successful build evidence; an executed build failure is failed and blocks completion. Use not_run for a required build that could not start with NEEDS_CONTEXT or BLOCKED, for FAILED_VERIFICATION because a different executed required check failed, or for a required build pending GREEN during a valid pre_production_red stage with verification.result=partial; this stage-only not_run never establishes final Build sufficiency. Retain all actual outcomes and pending rows; never label an unstarted build failed. Use not_applicable only when no due selected or binding build check applies and no build was executed."
+        description: "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints; do not infer it from file type, command presence, method, or technique alone. Use passed only for current successful evidence; executed failure blocks completion. Use not_run for a blocked/unstarted required build, another executed failure, pending GREEN during a valid pre_production_red stage, or pending GREEN/REFACTOR in an active-TDD stage-only return with verification.result=partial; this never establishes final Build sufficiency. Retain actual outcomes and pending rows; never label unstarted work failed. Use not_applicable only when no due selected or binding build check applies and no build was executed."
       - name: build_errors
         type: string[]
         required: false
@@ -3245,7 +3282,7 @@ handoffs:
             type: string
             required: true
             description: "Concise error — assertion message + expected/actual, not stack trace"
-    on_missing_field: "Re-dispatch BuilderTester. status, verification, build_result, and test_summary are never optional; typed artifact_refs are required when the task packet carried artifact_refs or harness_capable == true."
+    on_missing_field: "Re-dispatch BuilderTester. status, verification, build_result, and test_summary are never optional; return tdd_cycle_log_ref after any active-TDD cycle starts, even for partial or failed work. A passing GREEN-only final_verification must retain partial plus pending REFACTOR and cannot close Build; typed artifact_refs remain required when the task packet carried them or harness_capable == true."
 
   # ─────────────────────────────────────────────
 # Reviewer and QAEvaluator worker packet schemas are owned by assistant-review.

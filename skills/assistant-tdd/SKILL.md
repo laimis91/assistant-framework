@@ -55,8 +55,8 @@ decision and phase boundary:
 - `verification_selection` uses unchanged `selected_technique` and current ID
   intersection; preserve its source.
 
-- In `bounded_executor`, one bounded executor owns RED, GREEN, focused verification, and refactor safety; production starts only after valid RED.
-- In `separated_workers`, Builder/Tester returns `pre_production_red`; Code Writer consumes that evidence unchanged and owns GREEN, then Builder/Tester returns `final_verification`. Use for independent RED, high risk, or broad/noisy/environment-heavy verification.
+- In `bounded_executor`, one bounded executor owns RED, production, GREEN, and REFACTOR verification; production starts only after valid RED.
+- Separated_workers: Builder/Tester owns RED and GREEN/REFACTOR verification; Code Writer carries RED unchanged, owns production, then refactors after current GREEN passes. Use for independent RED, high risk, or broad/noisy/environment-heavy verification.
 
 Required RED evidence before production implementation:
 

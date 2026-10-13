@@ -18,7 +18,14 @@ for file in \
         "intersection of due selected and unchanged applicable IDs" \
         "Split packets" \
         "with multiple intersecting IDs." \
-        "Standalone/no-decision TDD does not invent a CheckSpec ID."; do
+        "Standalone/no-decision TDD does not invent a CheckSpec ID." \
+        "tdd_cycle_log_ref" \
+        "create the in-progress entry if needed" \
+        "green.production_file" \
+        "Only after the ref shows current" \
+        "same Code Writer" \
+        "refactor.changes_made" \
+        "none needed"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             tdd_profile_failures+=("$file missing $term")
         fi
@@ -40,7 +47,14 @@ for file in agents/codex/builder-tester.toml agents/claude/builder-tester.md; do
         "omit when it was not observed" \
         "Forward valid RED evidence unchanged through Code Writer." \
         "aggregate partial" \
-        "does not permit Review"; do
+        "does not permit Review" \
+        "tdd_cycle_log_ref" \
+        "create the in-progress canonical" \
+        "stage-only" \
+        "pending REFACTOR" \
+        "second" \
+        "separate current REFACTOR invocations" \
+        "omit unstarted phases"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             tdd_profile_failures+=("$file missing $term")
         fi

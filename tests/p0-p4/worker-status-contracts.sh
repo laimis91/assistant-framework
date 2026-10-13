@@ -65,6 +65,7 @@ for term in \
     "Architect status values also include DEVIATED." \
     "CodeWriter status values also include DEVIATED and FAILED_VERIFICATION; CodeWriter uses FAILED_VERIFICATION only for a failed bounded_executor check." \
     "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION." \
+    "During active-TDD first final_verification, passing current GREEN may return stage-only DONE only with aggregate partial and explicit pending REFACTOR rows; this stage cannot satisfy final Build or Review gates." \
     "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and whenever the worker actually created, modified, or deleted implementation or test files regardless of terminal status. They may be omitted or empty only when no file changed; never invent entries for pre-action returns, and retain actual worker changes across retries." \
     "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result." \
     "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence. During active-TDD pre_production_red, exact matching authorizing RED may return DONE with aggregate partial and explicit pending GREEN rows; actual failed counts remain failed, and this stage cannot satisfy final Build or Review gates."; do
@@ -113,8 +114,18 @@ if ! ruby -ryaml -e '
   fields = red.fetch("object_fields").map { |field| field.fetch("name") }
   red_validation = find.call(returned, "validation_results").fetch("validation")
   aggregate = find.call(find.call(returned, "verification").fetch("object_fields"), "result").fetch("validation")
+  status_validation = find.call(returned, "status").fetch("validation")
+  stage_validation = stage_out.fetch("validation")
   build = find.call(returned, "build_result").fetch("description")
   failures = find.call(returned, "test_summary").fetch("description")
+  green_stage_only = status_validation.include?("first final_verification may return stage-only DONE") &&
+    status_validation.include?("verification.result=partial") &&
+    status_validation.include?("explicit pending REFACTOR rows") &&
+    status_validation.include?("it cannot close Build") &&
+    status_validation.include?("Final DONE/DONE_WITH_CONCERNS requires the full current cycle including passing REFACTOR") &&
+    stage_validation.include?("Both GREEN and REFACTOR use final_verification") &&
+    stage_validation.include?("GREEN pass with REFACTOR pending is stage completion only") &&
+    build.include?("pending GREEN/REFACTOR in an active-TDD stage-only return")
   valid = changed_files_valid && changed_files_union_valid &&
     stage_in["required"] == "conditional" && stage_in["condition"] == "tdd_applies is true" &&
     stage_out["condition"] == "tdd_applies is true" &&
@@ -126,9 +137,10 @@ if ! ruby -ryaml -e '
     red.fetch("description").include?("even if another due failure keeps status FAILED_VERIFICATION") &&
     red.fetch("validation").include?("blocked/unstarted, unexpectedly passing, setup-failed, or wrong-reason invocation does not qualify") &&
     fields == %w[check_id test_file test_name command cwd failure_summary right_reason] &&
-    red_validation.include?("exact typed red_evidence") && red_validation.include?("any other failed row yields FAILED_VERIFICATION") &&
-    aggregate.include?("aggregate partial") && aggregate.include?("any other due failure keeps ordinary failure precedence") &&
-    build.include?("valid pre_production_red stage") && build.include?("never establishes final Build sufficiency") &&
+    red_validation.include?("pre_production_red retains matching failed RED and pending GREEN") &&
+    red_validation.include?("Ordinary failure yields FAILED_VERIFICATION") &&
+    aggregate.include?("aggregates partial") && aggregate.include?("Ordinary failure takes precedence") && green_stage_only &&
+    build.include?("pending GREEN during a valid pre_production_red stage") && build.include?("never establishes final Build sufficiency") &&
     failures.include?("expected failed RED in failed;") &&
     find.call(context, "current_task_packet").fetch("object_fields").find { |field| field["name"] == "red_check_id" }.fetch("validation").include?("multiple IDs require packet splitting")
   exit(valid ? 0 : 1)
@@ -456,9 +468,8 @@ for term in \
     "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS" \
     "FAILED_VERIFICATION requires validation_results and actual failure evidence" \
     "pre-action DEVIATED" \
-    "artifact_refs, and validation_results are required only when their corresponding files, artifacts, or checks actually exist" \
-    "For every terminal status, require changed_files and files_changed with every actual implementation or test file changed by this worker" \
-    "For NEEDS_CONTEXT/BLOCKED, require open_questions and retain any actual file changes without requiring fabricated artifact refs"; do
+    "Return tdd_cycle_log_ref on every active-TDD return after its cycle_log starts, including partial or failed work" \
+    "NEEDS_CONTEXT/BLOCKED require open_questions, actual changes, and blocker evidence when unexpected."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_code_writer_status_terms+=("$term")
     fi
@@ -563,7 +574,7 @@ fi
 if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]"; then
     missing_builder_status_terms+=("BuilderTester per-check result enum includes blocked")
 fi
-if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."; then
+if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "partial/unavailable/blocked rows remain gaps."; then
     missing_builder_status_terms+=("blocked per-check results remain gaps")
 fi
 if ! grep -Fq -- "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]" "$handoffs_file"; then
@@ -575,8 +586,8 @@ fi
 for term in \
     "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints" \
     "do not infer it from file type, command presence, method, or technique alone" \
-    "Use not_run for a required build that could not start with NEEDS_CONTEXT or BLOCKED, for FAILED_VERIFICATION because a different executed required check failed, or for a required build pending GREEN during a valid pre_production_red stage with verification.result=partial; this stage-only not_run never establishes final Build sufficiency." \
-    "Use not_applicable only when no due selected or binding build check applies and no build was executed"; do
+    "Use not_run for a blocked/unstarted required build, another executed failure, pending GREEN during a valid pre_production_red stage, or pending GREEN/REFACTOR in an active-TDD stage-only return with verification.result=partial; this never establishes final Build sufficiency." \
+    "Use not_applicable only when no due selected or binding build check applies and no build was executed."; do
     if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "$term"; then
         missing_builder_status_terms+=("build_result missing scoped applicability rule: $term")
     fi
@@ -591,7 +602,7 @@ fi
 if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "enum_values: [passed, failed, partial, unavailable, not_run, not_applicable]"; then
     missing_builder_status_terms+=("verification.result preserves complete, incomplete, and no-check outcomes")
 fi
-if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "passed requires current observed or admissibly reused passing results for every due selected and binding check" \
+if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "Passed requires current observed or admissibly reused passing results for every due selected and binding check" \
     || ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED"; then
     missing_builder_status_terms+=("verification.result preserves due-check pass and blocker conditions")
 fi

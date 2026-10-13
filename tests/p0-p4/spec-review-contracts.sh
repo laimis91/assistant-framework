@@ -170,7 +170,6 @@ test_start "small elevated strict or required-QA work has coherent full Spec Rev
 small_elevated_contract_terms=()
 for term in \
     'required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, verification_decision, evidence_assessment, validation_results, spec_review_result, review_result, final_handoff]' \
-    'conditional_artifacts: [test_results, subagent_evidence' \
     'small strict/required-QA work selects small_elevated' \
     'Quality Review, as do medium+ tasks.'; do
     if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" && \
@@ -178,6 +177,12 @@ for term in \
         small_elevated_contract_terms+=("$term")
     fi
 done
+if ! ruby -ryaml -e '
+  artifacts = YAML.load_file(ARGV.fetch(0)).fetch("completion_tiers").fetch("small_elevated").fetch("conditional_artifacts")
+  exit(%w[test_results subagent_evidence tdd_cycle_log_ref].all? { |name| artifacts.include?(name) } ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
+    small_elevated_contract_terms+=("small_elevated conditional artifacts retain test results, worker evidence, and active TDD cycle reference")
+fi
 if ! tr '\n' ' ' < "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md" | \
     grep -Fq 'Small strict/required-QA work requires full Stage 1 Spec Review and Stage 2 Code Quality Review'; then
     small_elevated_contract_terms+=("strict/required-QA small work requires both full review stages")

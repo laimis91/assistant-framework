@@ -1445,7 +1445,7 @@ requires:
             [Environment]::SetEnvironmentVariable('HOME', $singleHome, 'Process')
             $single = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow')
             Assert-Equal 0 $single.ExitCode "Single-skill install failed: $($single.Output)"
-            Assert-Equal @('assistant-review', 'assistant-verification', 'assistant-workflow') (Get-InstalledSkillNames -SkillsRoot (Join-Path $singleHome '.claude\skills')) 'Selected workflow install omitted or copied outside its canonical bundled dependencies'
+            Assert-Equal @('assistant-review', 'assistant-tdd', 'assistant-verification', 'assistant-workflow') (Get-InstalledSkillNames -SkillsRoot (Join-Path $singleHome '.claude\skills')) 'Selected workflow install omitted or copied outside its canonical bundled dependencies'
         }
     }
 

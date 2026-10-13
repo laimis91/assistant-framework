@@ -92,9 +92,9 @@ invariants:
     on_fail: "Run the selected target and any due regression or binding checks; record skipped or unavailable checks as gaps."
 
   - id: INV3
-    check: "Each cycle follows RED → GREEN → REFACTOR order — no skipping, no reordering"
+    check: "Each cycle follows RED → GREEN → REFACTOR order — no skipping, no reordering; only start REFACTOR after current GREEN passes, and do not close a partial delegated log as complete"
     scope: all_cycles
-    on_fail: "Return to the correct phase. The sequence is not negotiable."
+    on_fail: "Return to the correct phase. Preserve actual partial phase evidence; refactor only after current GREEN passes, and require an actual matching authorizing RED plus passing GREEN and REFACTOR invocations before completion."
 
   - id: INV4
     check: "If a test passes unexpectedly in RED, the cycle stops for investigation — not silently continued"

@@ -362,7 +362,7 @@ artifacts:
     type: object
     required: conditional
     condition: "execution_intent != prepare_only and (actionable verification selection succeeded or a decision is already carried)"
-    description: "Canonical verification_decision."
+    description: "verification_decision."
     validation: "Conforms to assistant-verification/contracts/output.yaml#verification_decision; carry unchanged through packets/Build. Apply INV_TDD_PROJECTION. If no decision, omit it; evidence_assessment.status=blocked with exact material gap; stop before Plan exits or Build begins."
     on_fail: "Select; preserve carried decisions; never fabricate."
 

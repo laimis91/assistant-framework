@@ -1,6 +1,6 @@
 ---
 name: assistant-workflow
-description: "Prepare, plan, build, or resume repository task state: feature/epic/story preparation, implementation, fixes, migrations, refactors, artifacts, backlog items, and intended-change ideas."
+description: "Prepare, plan, build, or resume repository task state: feature/epic/story technical preparation, implementation, fixes, migrations, refactors, artifacts, backlog items, and intended-change ideas."
 requires:
   - assistant-review
   - assistant-verification
