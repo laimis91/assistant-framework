@@ -17,7 +17,7 @@ Before spawning any subagent, resolve:
 
 Light small low-risk localized work uses `subagent_policy_state=not_required`
 and `subagent_execution_mode=not_applicable`; it does not ask for delegation and
-instead records direct implementation, relevant automated validation/tests, and
+instead records direct implementation, selected checks and binding project verification, and
 a fresh self-review. Expanded impact keeps this Build policy; Review records canonical `assistant-review` final-summary and delegation-path refs. For standard/strict development/code-work roles, Assistant
 Framework policy treats a direct user request or applicable `AGENTS.md` or
 active-skill instruction as a delegation trigger. Infer `subagent_trigger_scope`
@@ -60,8 +60,8 @@ active skill requires subagents.
 - **Code Mapper** — Lightweight structural map: file paths, entry points, interfaces, conventions. Use only when the current boundary cannot be resolved directly; output stays compact enough to paste into the current packet.
 - **Explorer** — Deep analysis: traces execution paths, analyzes design decisions, finds hidden dependencies and coupling. Use only for an unresolved lifecycle, failure, coupling, or behavior question after a compact map.
 - **Architect** — Conditional Architecture Decision Pack/implementation blueprint work for genuine boundary, public-contract, quality-driver, or viable-alternative uncertainty. Does not write code and is not a permanent role.
-- **Code Writer / bounded executor** — Implements the packet. In `bounded_executor`, also writes focused tests and runs focused verification; never performs independent review.
-- **Builder/Tester** — Conditional separated verifier for broad/noisy/environment-heavy or high-risk work. Builds, writes tests, runs suites, and absorbs noisy output without modifying production code.
+- **Code Writer / bounded executor** — Implements the packet and follows its unchanged verification decision. RED is required only when TDD is active; never performs independent review.
+- **Builder/Tester** — Conditional separated verifier for broad/noisy/environment-heavy or high-risk work. Runs selected checks and binding suites; owns RED only when TDD is active and does not modify production code.
 - **Code Reviewer** — Canonical independent code review with confidence-based filtering. Finds bugs, security issues, architecture violations, test coverage gaps, and structural code issues. Does not edit files.
 - **Reviewer** — Compatibility route for existing handoffs that still say `Reviewer`; use only when `code-reviewer` is unavailable or a legacy prompt/handoff requires the old name.
 - **QA Evaluator** — Independent QA acceptance evaluation after build/test and code-review evidence. Checks acceptance criteria, Done Contract, verification evidence, scoped UI/visual/product/UX/docs/DX/domain quality, score progression, and final result. Does not replace Code Reviewer.
@@ -83,8 +83,8 @@ its compact validation plus fresh-review evidence instead.
 | **DECOMPOSE** | Architect | Pack or slice boundary has genuine uncertainty | Analyzes the current boundary and proposes the smallest usable slice manifest |
 | **PLAN** | Architect | `architecture_design_mode` is `required`/`review_intensive` or an ordinary plan cannot resolve a concrete boundary | Produces a bounded blueprint from current evidence |
 | **DESIGN** | Architect | UI tasks | Proposes design direction; Orchestrator creates mockup |
-| **BUILD** | Code Writer / bounded executor | Standard/strict | Owns implementation; also focused RED/GREEN/verification in bounded lane |
-| **BUILD** | Builder/Tester | `build_execution_lane=separated_workers` | Independent RED/build/test verification for triggered split work |
+| **BUILD** | Code Writer / bounded executor | Standard/strict | Owns implementation and selected verification; RED/GREEN/REFACTOR only when TDD is active |
+| **BUILD** | Builder/Tester | `build_execution_lane=separated_workers` | Independent selected-check verification; RED only when TDD is active |
 | **REVIEW** | Code Reviewer, or Reviewer compatibility | Standard/strict | Independent code review via `assistant-review` skill |
 | **REVIEW** | QA Evaluator | `qa_evaluation_mode=required` only | Independent acceptance QA via `assistant-review` QA loop |
 | **DOCUMENT** | — (Orchestrator direct) | All sizes | Documentation generation is orchestrator's synthesis work |
@@ -95,7 +95,7 @@ its compact validation plus fresh-review evidence instead.
 
 | Size | Agents used | Flow |
 |---|---|---|
-| **Small light** | None | Direct implementation, relevant automated validation/tests, and fresh self-review; expanded impact records canonical review refs; promote for risk/harness/QA |
+| **Small light** | None | Direct implementation, selected verification, and fresh self-review; expanded impact records canonical review refs; promote for risk/harness/QA |
 | **Small standard/strict** | Bounded executor → Code Reviewer, or separated workers when triggered | Sequential, minimal (no Decompose); QA only when required |
 | **Medium** | Bounded executor → Code Reviewer, plus mapping/design roles only when their concrete trigger applies | Ordinary default; add Builder/Tester only when separated_workers triggers |
 | **Large** | Current-boundary mapping/analysis/design roles as needed → Code Writer/Builder-Tester when selected → Code Reviewer → QA Evaluator when required | Full evidence path is selected by risk and uncertainty, not by role count |
@@ -104,7 +104,7 @@ its compact validation plus fresh-review evidence instead.
 ## Dispatch guidelines
 
 - **Light lane**: small low-risk localized work may keep `required_agents`
-  empty and use direct implementation, relevant automated validation/tests, and
+  empty and use direct implementation, selected checks and binding project verification, and
   fresh self-review evidence. Expanded impact keeps Build direct but records canonical review refs. `subagent_execution_mode=not_applicable` is valid
   for this lane. Security, high-risk, harness-capable, required-QA, or otherwise
   promoted work cannot use this exception.

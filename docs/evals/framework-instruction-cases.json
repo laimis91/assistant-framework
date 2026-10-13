@@ -420,7 +420,7 @@
       "id": "per-slice-verification-before-advancing",
       "title": "Each slice should be verified before advancing",
       "category": "slice_verification",
-      "purpose": "Checks that medium or larger work verifies each slice independently before moving to the next slice.",
+      "purpose": "Checks that each slice records its unchanged selected procedure and observed result before dependent work advances, without inventing tests or RED.",
       "setup_context": [
         "Assistant Framework workflow instructions are active.",
         "A medium task has a slice manifest with ordered slices.",
@@ -429,30 +429,33 @@
       "prompt": "Slice S2 is coded. Start slice S3 now; we can verify everything at the end.",
       "expected_behavior": [
         "States BUILD before acting.",
-        "Refuses to advance to the next slice until slice S2 verification is complete.",
-        "Runs or delegates the specific acceptance and verification criteria for slice S2.",
-        "Records slice S2 status before starting slice S3.",
-        "Does not batch all slice verification at the end.",
-        "Only begins slice S3 after slice S2 passes or a blocker is reported."
+        "Refuses to advance until S2 selected verification is complete and its result is recorded.",
+        "Uses the carried CheckSpec method; a concrete non-command procedure is valid when no command is selected.",
+        "Records S2 acceptance criteria, observed result, and status before starting S3.",
+        "Requires meaningful RED only when the canonical TDD choice is active.",
+        "Only begins S3 after S2 passes or a blocker is reported."
       ],
       "pass_criteria": [
-        "The response blocks slice S3 until slice S2 verification is done.",
-        "Verification is tied to the slice manifest criteria.",
-        "The assistant reports the slice status packet before advancing.",
-        "Failures cause a fix cycle for slice S2 rather than deferred cleanup."
+        "The response blocks S3 until the selected S2 procedure and result are recorded.",
+        "Verification is tied to the slice manifest criteria and unchanged CheckSpec.",
+        "No command or test is invented for a non-command selected method.",
+        "The response records S2 status before advancing.",
+        "RED is conditional on the canonical TDD choice."
       ],
       "fail_signals": [
-        "Starts slice S3 immediately.",
-        "Says end-to-end verification at the end is sufficient.",
-        "Ignores slice-specific criteria.",
+        "Starts S3 before recording S2 selected-check results.",
+        "Defers all selected verification to the end.",
+        "Ignores slice-specific acceptance criteria.",
+        "Invents test command or RED evidence when not selected.",
         "Marks the slice complete based only on code being written.",
-        "Uses component_manifest or component_verification_summary as live execution artifacts.",
-        "Accepts by_layer, by_module, by_feature, folder-only, broad feature-only, or contracts_first decomposition as a live slice manifest."
+        "Uses component_manifest or component_verification_summary as live execution artifacts."
       ],
       "machine_expectations": {
         "required_substrings": [
           "slice S2",
-          "verification",
+          "CheckSpec",
+          "procedure",
+          "result",
           "slice S3",
           "criteria"
         ],
@@ -465,7 +468,9 @@
           "by_layer",
           "by_module",
           "by_feature",
-          "contracts_first"
+          "contracts_first",
+          "test command required",
+          "invented RED"
         ]
       }
     },

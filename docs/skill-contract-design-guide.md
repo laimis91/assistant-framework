@@ -241,6 +241,11 @@ but do not replace coherent interfaces with generic property bags. Public or
 serialized type changes must declare compatibility, versioning/adapters, and
 migration or rollback handling.
 
+### Verification and TDD boundaries
+
+Carry `assistant-verification/contracts/output.yaml` unchanged: selection/assessment,
+independent scope/method/TDD, meaningful oracles, active-TDD RED.
+
 ### Architecture Decision Pack and skill surface audit
 
 Architecture design is an LLM-led, conditional workflow capability, not a
@@ -363,7 +368,7 @@ handoffs:
 | Category | Skills | Contract files | Rationale |
 |---|---|---|---|
 | **Process** (multi-phase, subagents) | workflow, review, tdd, security, research | input + output + phase-gates + handoffs | Full pipeline with transitions and declared delegation |
-| **Analysis** (structured reasoning) | thinking, ideate | input + output + phase-gates | Multi-step pipeline but no subagent delegation |
+| **Analysis** (structured reasoning) | thinking, ideate, verification | input + output + phase-gates | Multi-step pipeline but no subagent delegation |
 | **Utility** (single-purpose) | docs, diagrams, onboard, telos | input + output | Single-pass execution, no phases to gate |
 
 Infer a skill category in this order: Process first when its purpose mentions a
@@ -461,7 +466,7 @@ tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
 tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 ```
 
-The default per-skill eval inventory is 14 first-class `skills/assistant-*` skills with fixtures. Local-only `skills/unity-*` fixtures are excluded unless `--include-local` is passed: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-onboard`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, and `assistant-workflow`.
+The default per-skill eval inventory is 15 first-class `skills/assistant-*` skills with fixtures. Local-only `skills/unity-*` fixtures are excluded unless `--include-local` is passed: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-onboard`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, `assistant-verification`, and `assistant-workflow`.
 
 Each first-class schema `2.0` fixture must provide top-level `activation_cases`
 with exact `user_request` and `should_activate` fields, at least two

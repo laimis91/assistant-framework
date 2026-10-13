@@ -1,20 +1,21 @@
 ---
 name: assistant-tdd
-description: "Apply Red-Green-Refactor. Use when tests-first/TDD is requested or required by project conventions."
+description: "Use for tests-first TDD requests, project TDD rules, or workflow-selected TDD checks."
 ---
 
 # Test-Driven Development
 
 ## Goal
 
-Protect each behavior change with verified RED, minimal GREEN, and
-behavior-neutral REFACTOR evidence before production code is trusted.
+For an active TDD decision, protect each selected behavior with meaningful RED,
+minimal GREEN, and behavior-neutral REFACTOR evidence before production code is
+trusted. TDD is independent of test scope and does not activate by default.
 
 ## Success Criteria
 
-- Each behavior starts with a test that fails for the intended reason.
+- Each behavior starts with a test assertion that fails for the intended reason; extend an existing test when that is the smallest useful change.
 - Production code is limited to the smallest change that makes that test pass.
-- Targeted and relevant regression tests pass before the next cycle.
+- The target and relevant regression checks pass before the next cycle; run binding project suites when required.
 - RED/GREEN/REFACTOR evidence is recorded in the task journal or output.
 - When a workflow Architecture Decision Pack carries semantic type, primitive-boundary, public compatibility, or quality-scenario obligations, tests prove those obligations rather than merely compiling wrappers.
 
@@ -44,33 +45,45 @@ named canonical contract; do not load every contract at entry.
 assistant-tdd owns RED-GREEN-REFACTOR correctness. Generic workflow coordinates
 task packets and role dispatch, but specialist gates are authoritative.
 
-When workflow delegates, ownership follows `execution_lane` without weakening
-the phase boundary:
+When workflow delegates, ownership follows `execution_lane`; preserve carried
+decision and phase boundary:
 
-- In `bounded_executor`, one bounded executor owns RED, GREEN, focused verification, and refactor safety; production code still starts only after valid RED evidence is recorded.
-- In `separated_workers`, Builder/Tester owns RED, Code Writer owns GREEN, and
-  Builder/Tester owns verification/refactor-safety. Use this lane for explicit
-  independent RED evidence, high-risk work, or broad/noisy/environment-heavy
-  verification.
+- Run RED only for selected IDs intersecting `tdd_choice.applicable_check_ids`;
+  split active workflow packets until one ID intersects, and preserve the
+  decision unchanged.
+
+- `verification_selection` uses unchanged `selected_technique` and current ID
+  intersection; preserve its source.
+
+- In `bounded_executor`, one bounded executor owns RED, production, GREEN, and REFACTOR verification; production starts only after valid RED.
+- Separated_workers: Builder/Tester owns RED and GREEN/REFACTOR verification; Code Writer carries RED unchanged, owns production, then refactors after current GREEN passes. Use for independent RED, high risk, or broad/noisy/environment-heavy verification.
 
 Required RED evidence before production implementation:
 
 - Test file and test name
-- Command run
+- For authorizing RED, the sole applicable selected CheckSpec ID, exact argv/cwd,
+  and matching oracle; standalone/no-decision TDD may omit the ID.
+- Command argv/cwd (standalone/no-decision TDD may omit ID)
 - Failure summary
 - Why the failure proves the intended missing behaviour
 
-When a workflow Architecture Decision Pack applies, bring only its testable obligations into the cycle: semantic type validation, primitive-boundary conversion, public-contract compatibility, a stated quality scenario, or a design-pressure check such as early exit, ownership/disposal, bounded resources, extension registration, or representative-path behavior. Do not invent a Pack or benchmark for ordinary local behavior. A memory, performance, or extensibility claim remains an explicit unknown until a workload, budget/threshold, measurement method, and failure condition are testable.
+Keep actual RED outcomes/counts failed. Only matching authorizing RED completes
+`pre_production_red` with aggregate `partial` and pending GREEN; it is not final
+Build evidence. Run `final_verification` after Code Writer before Review.
+
+For a carried Architecture Decision Pack, test semantic type, primitive-boundary, public-compatibility, quality-scenario, and applicable design-pressure obligations (control/early exit, ownership/disposal, resources, extension registration, representative path). Do not invent Packs or benchmarks. Quality claims remain unknown until workload, budget, measurement, and failure condition are testable.
 
 If TDD is active and RED evidence is missing, the selected production owner
 must return `NEEDS_CONTEXT` and make no production changes.
 
 ## Cycle
 
-1. **RED** — write one behavior test, run it, and verify the right failure. If it
-   passes unexpectedly, inspect whether behavior already exists or the test is wrong.
-2. **GREEN** — write the simplest passing code, rerun the target, then relevant
-   regressions. Repair regressions before continuing.
+1. **RED** — add or extend one behavior assertion, run it, and verify the right
+   failure. If it passes unexpectedly, inspect whether behavior already exists
+   or the test is wrong; use characterization or current regression evidence
+   instead of fabricating a failure when the behavior already exists.
+2. **GREEN** — write the simplest passing code, rerun the target and relevant
+   regressions, plus any binding suite. Repair regressions before continuing.
 3. **REFACTOR** — remove duplication or improve names without new behavior; keep
    tests green after each change.
 4. Repeat for the next behavior.
@@ -89,6 +102,6 @@ targeted/regression verification, approved exceptions, and blockers.
 
 ## Stop Rules
 
-- Stop before production edits when RED is absent or invalid.
+- Stop before production edits when active TDD requires RED and its evidence is absent or invalid.
 - Stop and repair the test when RED passes or fails for the wrong reason.
 - Stop and repair regressions before the next behavior.

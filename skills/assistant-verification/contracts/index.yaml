@@ -1,0 +1,158 @@
+schema_version: "1.0"
+contract: index
+skill: assistant-verification
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+
+load_sets:
+  entry:
+    selectors:
+      - id: verification-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [operation, work_scope]
+      - id: verification-capture-gate
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        names: [CAPTURE]
+      - id: verification-shared-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [OWN1, OWN2, OWN3, POLICY1, POLICY2, EVIDENCE1, EVIDENCE2, LOAD1]
+    budget_words: 1500
+  current_phase:
+    selectors:
+      - id: verification-current-phase
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_verification_phase
+        allowed_names: [CAPTURE, SELECT, ASSESS, RETURN]
+    budget_words: 1800
+  selection:
+    references: [references/selection.md]
+    selectors:
+      - id: verification-selection-input
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [verification_policy, existing_coverage, existing_coverage_search_rationale]
+      - id: verification-selection-gate
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        names: [SELECT]
+      - id: verification-selection-output
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision]
+    budget_words: 4200
+  assessment:
+    references: [references/evidence-quality.md]
+    selectors:
+      - id: verification-assessment-input
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [operation, work_scope, verification_policy, existing_coverage, existing_coverage_search_rationale, available_evidence]
+      - id: verification-assessment-gate
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        names: [ASSESS]
+      - id: verification-assessment-output
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [evidence_assessment]
+    budget_words: 4200
+  completion:
+    selectors:
+      - id: verification-completion-output
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision, evidence_assessment]
+      - id: verification-return-gate
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        names: [RETURN]
+    budget_words: 3000
+  method_unit:
+    references: [references/methods/unit.md]
+    selectors:
+      - id: verification-method-unit-selection
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision]
+    budget_words: 1800
+  method_integration:
+    references: [references/methods/integration.md]
+    selectors:
+      - id: verification-method-integration-selection
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision]
+    budget_words: 1800
+  method_end_to_end:
+    references: [references/methods/end-to-end.md]
+    selectors:
+      - id: verification-method-end-to-end-selection
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision]
+    budget_words: 2000
+  method_artifact_validation:
+    references: [references/methods/artifact-validation.md]
+    selectors:
+      - id: verification-method-artifact-validation-selection
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision]
+    budget_words: 2000
+  method_behavioral_evals:
+    references: [references/methods/behavioral-evals.md]
+    selectors:
+      - id: verification-method-behavioral-evals-selection
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision]
+    budget_words: 2400
+  method_property_and_mutation:
+    references: [references/methods/property-and-mutation.md]
+    selectors:
+      - id: verification-method-property-and-mutation-selection
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision]
+    budget_words: 2000
+  method_performance_and_resilience:
+    references: [references/methods/performance-and-resilience.md]
+    selectors:
+      - id: verification-method-performance-and-resilience-selection
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision]
+    budget_words: 2000
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

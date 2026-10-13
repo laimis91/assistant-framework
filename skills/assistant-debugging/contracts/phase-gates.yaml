@@ -1,4 +1,4 @@
-schema_version: "1.1"
+schema_version: "2.0"
 contract: phase-gates
 skill: assistant-debugging
 
@@ -64,6 +64,9 @@ gates:
     checkpoint_end: "--- PHASE: FIX COMPLETE ---"
     condition: "when can_modify_code is true and a fix or mitigation is attempted"
     entry_assertions:
+      - id: FX_VERIFICATION_DECISION
+        check: "Before any source/test mutation or mutation dispatch, resolve verification_decision through the existing assistant-verification Analysis owner and carry it unchanged; derive this fix's tdd_applies from selected_check_ids intersecting tdd_choice.applicable_check_ids. When true, route the unchanged decision, due selected IDs, exact binding tuples, reproduction, confirmed cause, and scope through assistant-tdd using its existing execution_lane; do not dispatch debugging_fix or mutate before authorizing RED. Dispatch debugging_fix only when tdd_applies is false."
+        on_fail: "Stop before mutation; select or refresh the decision and current-fix IDs through assistant-verification, then route active TDD through assistant-tdd. Never coerce tdd_applies to false; establish valid RED before active-TDD edits."
       - id: FX_CHANGE_IMPACT_APPLICABILITY
         check: "Before any source/test mutation or mutation dispatch, record change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
         on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
@@ -76,8 +79,8 @@ gates:
         check: "Each changed file maps to the confirmed cause, mitigation, or regression test"
         on_fail: "Remove unrelated changes or document approved scope expansion"
       - id: FX2
-        check: "Behavior changes include a regression test when feasible"
-        on_fail: "Add a regression test or record why a test is not feasible and what alternative verification was used"
+        check: "The fix preserves the original failure path, unchanged verification_decision, and every selected and binding obligation for VERIFY. Retain completed results and pending checks; automated regression tests are required only when selected."
+        on_fail: "Restore the decision and pending obligations before entering VERIFY; retain material blockers without inventing test infeasibility."
       - id: FX3
         check: "Fix is the smallest durable change and does not rely on temporary diagnostics"
         on_fail: "Remove temporary logging/debug changes or justify their retention"
@@ -93,12 +96,16 @@ gates:
       - id: VF1
         check: "Original reproduction path passes or status is not_reproduced/blocked/inconclusive with explanation"
         on_fail: "Run original reproduction path again or downgrade the status"
+      - id: VF_COMMAND_INVOCATION
+        check: "A fixed outcome requires every due selected command-based check for the current fix increment to have a passed result whose executed_command.check_id is its sole selected_check_ids value and whose argv and cwd exactly match the unchanged CheckSpec; skipped, blocked, or missing invocations remain gaps and cannot establish fixed."
+        condition: "status == fixed"
+        on_fail: "Retain the gap and downgrade fixed until each due command check has a matching observed invocation."
       - id: VF2
-        check: "Relevant regression/build/lint/manual verification is recorded with pass/fail/blocked result"
-        on_fail: "Run available regression checks or record why each unavailable check is blocked"
+        check: "Every due selected and binding check runs against the fix or reuses admissible current evidence. Preserve observed passed/failed/partial/unavailable/skipped/blocked results and supporting evidence; a fixed outcome requires passing evidence for every due check. When tdd_applies is true and a cycle has started, preserve its actual tdd_cycle_log_ref even for partial/blocked outcomes. When tdd_applies is true and status == fixed, that ref must resolve the complete current assistant-tdd cycle_log against the unchanged decision and selected/applicable IDs: right-reason authorizing RED, passing GREEN and REFACTOR invocations, and all due guards."
+        on_fail: "Run due available checks; retain partial/unavailable observations and their reasons as explicit evidence gaps. For active TDD, preserve actual partial cycle_log for blocked/partial outcomes; absent or incomplete cycle evidence blocks fixed."
       - id: VF3
-        check: "Skipped or blocked checks are listed as residual risks and not counted as proof"
-        on_fail: "Move skipped/blocked checks into residual_risks and adjust confidence"
+        check: "Partial, unavailable, skipped, or blocked checks are listed as residual risks and not counted as proof"
+        on_fail: "Record each evidence gap in residual_risks and adjust confidence; never count it as passed"
 
 invariants:
   - id: INV_CHANGE_IMPACT

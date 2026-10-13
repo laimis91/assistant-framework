@@ -43,6 +43,11 @@ evidence. Expanded impact instead records canonical `assistant-review` final-sum
 Code Quality Review through `assistant-review`; Stage 3 QA Evaluation runs only
 when `qa_evaluation_mode=required`.
 
+Before any review lane, pass the unchanged `verification_decision`, current
+`evidence_assessment`, actual selected-check results, and omitted-check
+rationales alongside scope and changed files. Preserve unresolved evidence gaps;
+review cannot upgrade them to sufficient or replace validation.
+
 For standard/strict work, run the stages in order:
 
 1. Print `>> Stage 1: Spec Review`; load `references/prompts/spec-review.md`

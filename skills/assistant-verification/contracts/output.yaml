@@ -1,0 +1,244 @@
+schema_version: "1.0"
+contract: output
+skill: assistant-verification
+
+artifacts:
+  - name: verification_decision
+    type: object
+    required: conditional
+    condition: "(operation is select or select_and_assess) and an actionable selection can honor every binding constraint, or a carried decision is being assessed"
+    description: "Bounded approach; check selection and TDD are independent."
+    validation: "Do not broaden scope, waive a binding constraint, or imply a planned check ran. Preserve each mandate's source and rationale. Bind mandated coverage scope, threshold, and source through required_check plus an enforcing CheckSpec, or report the gap. Never invent a default target. required_tdd is exactly true or false: false forces mode=false, basis=not_selected, applicable_check_ids=[] regardless of RED oracles; conflicting true/false tuples block with both sources; required true without a meaningful RED oracle blocks."
+    on_fail: "Return to SELECT and correct policy, check, or TDD semantics; if no actionable approach can honor a mandate, return a blocked assessment with the precise material gap and do not emit a false-TDD decision."
+    object_fields:
+      - name: scope
+        type: string
+        required: true
+        description: "Named outcome and acceptance scope from work_scope; do not broaden it"
+      - name: policy_basis
+        type: object
+        required: true
+        description: "Binding constraints and applied preferences"
+        object_fields:
+          - name: binding_constraints
+            type: object[]
+            required: true
+            description: "Binding policy retained with source identity"
+            object_fields:
+              - name: kind
+                type: enum
+                required: true
+                enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]
+              - name: value
+                type: string
+                required: true
+              - name: source_ref
+                type: string
+                required: true
+          - name: preferences_applied
+            type: string[]
+            required: true
+            description: "Explicit user/project preferences, not mandates."
+          - name: capability_limits
+            type: string[]
+            required: true
+            description: "Material available-tool, access, or environment limits"
+      - name: test_change
+        type: enum
+        required: true
+        enum_values: [none, extend_existing, add_new, mixed]
+        description: "Planned assertion changes, not new test files."
+        validation: "Consider only selected checks with method == automated_test: none iff neither extend nor add is selected; extend_existing iff extend is selected and add is not; add_new iff add is selected and extend is not; mixed iff both extend and add are selected. reuse, run, and inspect do not change test assertions; non-test checks do not affect this summary."
+      - name: checks
+        type: object[]
+        required: true
+        description: "Smallest actionable set for distinct claims; empty only when none are due. On blocked policy conflict, omit verification_decision."
+        validation: "check_id: nonblank and unique within checks, regardless of tdd_choice.mode; references resolve uniquely."
+        object_fields:
+          - name: check_id
+            type: string
+            required: true
+            description: "Stable within this decision; reuse an obligation ID when available."
+          - name: claim_or_risk
+            type: string
+            required: true
+            description: "Behavior, invariant, or quality claim linked to criteria."
+          - name: action
+            type: enum
+            required: true
+            enum_values: [reuse, extend, add, run, inspect]
+            description: "Executor action; distinguish check-design reuse from old-result reuse."
+          - name: method
+            type: enum
+            required: true
+            enum_values: [automated_test, static_validation, manual_observation, artifact_inspection, behavioral_eval, benchmark_or_fault_probe]
+            description: "Observation type for this claim."
+          - name: test_scope
+            type: enum
+            required: conditional
+            condition: "method is automated_test"
+            enum_values: [unit, integration, e2e]
+            description: "Automated test boundary; omit for non-test methods"
+            on_missing: fail
+          - name: technique
+            type: enum
+            required: true
+            enum_values: [example, property, mutation, characterization, schema_or_lint, render_or_compile, exploratory, task_eval, performance_or_resilience]
+            description: "Oracle technique; separate from test_scope"
+          - name: check_ref_or_method
+            type: object
+            required: true
+            description: "Check ref or procedure with prerequisites, exclusions, success, and failure."
+            object_fields:
+              - name: reference_or_procedure
+                type: string
+                required: true
+                description: "Existing command/source ref or executable steps."
+              - name: prerequisites
+                type: string[]
+                required: true
+              - name: exclusions
+                type: string[]
+                required: true
+              - name: expected_success
+                type: string
+                required: true
+                description: "Observable support for this claim."
+              - name: meaningful_failure
+                type: string
+                required: true
+                description: "Wrong result or failure this oracle distinguishes."
+          - name: rationale
+            type: string
+            required: true
+            description: "Why it observes the claim at acceptable cost and adds distinct evidence."
+          - name: method_refs
+            type: string[]
+            required: true
+            description: "Loaded method refs; empty when none apply."
+          - name: command
+            type: object
+            required: conditional
+            condition: "this CheckSpec has a command to execute"
+            description: "Literal argv/cwd linked by parent check_id; omit for non-command procedures."
+            validation: "When present, argv is a non-empty array of literal string arguments with argv[0] as the executable, and cwd is explicitly supplied. No shell-form command, flattened commands, reconstructed shell text, or implicit/default working directory."
+            object_fields:
+              - name: argv
+                type: string[]
+                required: true
+                min_items: 1
+                description: "Executable and one literal argument per item."
+              - name: cwd
+                type: string
+                required: true
+                description: "Explicit command working directory."
+      - name: tdd_choice
+        type: object
+        required: true
+        description: "TDD choice, separate from test scope and technique."
+        validation: "user_requirement, project_requirement, or selected_technique requires mode=true with IDs; not_selected requires false/[]. required_tdd=false overrides RED, preserving source/rationale and forcing false/not_selected/[]. Conflicting values block. Applicable IDs resolve uniquely to selected automated_test checks with action add/extend and executable meaningful RED. run/reuse/inspect remain selected non-TDD checks. Required true without compatible add/extend meaningful RED blocks."
+        object_fields:
+          - name: mode
+            type: boolean
+            required: true
+            description: "Whether meaningful RED–GREEN–REFACTOR is active"
+          - name: applicable_check_ids
+            type: string[]
+            required: true
+            description: "Unique selected CheckSpec IDs with meaningful RED oracles."
+            validation: "Each ID resolves exactly once in checks to method == automated_test with action in [add, extend], a present command (non-empty literal argv and explicit cwd per command contract), and executable meaningful RED; non-empty iff mode=true, empty iff false. run/reuse/inspect cannot be TDD-applicable. A binding all-deliverable TDD mandate with any required deliverable lacking a compatible add/extend meaningful RED oracle blocks actionable selection; that oracle must meet the command rule above. Do not omit it, disable TDD, or fabricate an ID/RED."
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [user_requirement, project_requirement, selected_technique, not_selected]
+          - name: rationale
+            type: string
+            required: true
+            description: "Requirement source or why a stable useful RED oracle fits or does not."
+      - name: omitted_checks_and_rationale
+        type: string[]
+        required: true
+        description: "Significant duplication or irrelevant work rejected."
+      - name: stop_rule
+        type: string
+        required: true
+        description: "Evidence needed to stop; expansion requires a new justified gap, risk, change, failure, request, or mandate"
+
+  - name: evidence_assessment
+    type: object
+    required: true
+    description: "What the supplied evidence establishes for the named work scope"
+    validation: "Sufficient requires current, resolved evidence refs that support the claims and close every due selected CheckSpec ID and each applicable due/executable binding_obligation_refs tuple from a resolved canonical decision. Do not invent execution checks for unrelated policy constraints solely to populate evidence arrays. Each binding names the actual procedure/oracle observed; claim text or ID alone is insufficient. Every started command-based selected CheckSpec, including partial, unavailable, or failed outcomes, preserves executed_command with exact CheckSpec argv/cwd; missing or mismatched identity is a gap, and partial or unavailable results cannot close a due check. Omit executed_command when no command started. Resolve a carried decision only through an existing work_scope.source_refs reference. Without a resolved decision, an assessment may be sufficient for its explicitly evidenced scope but must state that selected-check closure is unknown and cannot claim it is complete."
+    on_fail: "Return to ASSESS, classify each missing, stale, failed, partial, skipped, unavailable, or blocked result as a gap, or identify the exact material blocker."
+    object_fields:
+      - name: status
+        type: enum
+        required: true
+        enum_values: [planned, sufficient, insufficient, blocked]
+        description: "planned for selection without results; sufficient only for supported scope; insufficient for evidence gaps; blocked for unavailable capability or unresolved material dependency"
+      - name: scope_and_evidence_refs
+        type: object[]
+        required: true
+        description: "Scope and actual result refs considered; planned selection has no invented result refs"
+        validation: "Use only actual evidence refs. A sufficient assessment has supporting evidence for every material claim and closes each due selected check ID and applicable due/executable binding tuple named below against the resolved decision and actual observed procedure/oracle. Use empty identity arrays only when that result supports none."
+        object_fields:
+          - name: evidence_ref
+            type: string
+            required: true
+          - name: claim_kind
+            type: enum
+            required: true
+            enum_values: [structural_validity, native_activation, task_behavior, comparative_value, other]
+            description: "Use only claim kinds relevant to this change"
+          - name: claim_scope
+            type: string[]
+            required: true
+          - name: selected_check_ids
+            type: string[]
+            required: true
+            description: "Resolved selected CheckSpec IDs whose procedure this evidence actually observes"
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            description: "Exact required policy tuples this evidence actually enforces"
+            object_fields:
+              - name: kind
+                type: enum
+                required: true
+                enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]
+              - name: value
+                type: string
+                required: true
+              - name: source_ref
+                type: string
+                required: true
+          - name: executed_command
+            type: object
+            required: conditional
+            condition: "a command-based selected CheckSpec was started, regardless of outcome"
+            description: "Observed invocation carried from the existing result"
+            validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged decision from work_scope.source_refs; argv and cwd exactly equal CheckSpec.command.argv and CheckSpec.command.cwd. Missing or mismatched identity is a gap; partial or unavailable results cannot close a due check. Omit executed_command when no command started."
+            object_fields:
+              - {name: check_id, type: string, required: true}
+              - {name: argv, type: "string[]", required: true, min_items: 1}
+              - {name: cwd, type: string, required: true}
+          - name: result_state
+            type: enum
+            required: true
+            enum_values: [passed, failed, skipped, partial, unavailable, blocked, not_applicable]
+            description: "not_applicable preserves the no-applicable-check rationale and never satisfies a due check"
+          - name: freshness
+            type: enum
+            required: true
+            enum_values: [current, stale, unknown, not_applicable]
+          - name: exclusions
+            type: string[]
+            required: true
+      - name: gaps_and_limitations
+        type: string[]
+        required: true
+        description: "Material gaps, unsupported boundaries, and explicit exclusions; empty only when none remain within scope"
+      - name: next_action
+        type: string
+        required: true
+        description: "Compact recommendation for the existing owner, or none_needed; workflow owns execution, repair, escalation, and acceptance"

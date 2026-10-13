@@ -15,7 +15,7 @@ no public behavior, data, security, harness, or QA acceptance risk:
 - `workflow_state_mode=inline`
 - `subagent_policy_state=not_required`
 - `subagent_execution_mode=not_applicable`
-- direct implementation with relevant automated validation/tests
+- direct implementation with the checks selected by `verification_decision`
 - a fresh self-review after validation
 
 Shared fanout alone does not promote this Build lane. The light lane does not require Code Writer, Builder/Tester, Code Reviewer, or
@@ -29,8 +29,9 @@ Expanded impact keeps this Build lane; Review records canonical
 Select `build_execution_lane` before dispatch:
 
 - `bounded_executor` is the default for ordinary medium standard-risk work.
-  One Code Writer/bounded executor owns the focused RED, GREEN, edit, test, and
-  refactor-safety loop during Build. Independent review is dispatched only
+  One Code Writer/bounded executor owns implementation and selected checks;
+  RED/GREEN/REFACTOR applies only to packets whose `tdd_applies` is true.
+  Independent review is dispatched only
   after Build enters Review.
 - `separated_workers` is used for high or critical risk, broad or noisy
   verification, environment-heavy validation, an explicit independent TDD
@@ -85,8 +86,8 @@ Before standard/strict Build can complete, the task journal Agent Dispatch Log
 or equivalent carried-forward state contains only the selected Build-lane
 evidence:
 
-- `bounded executor dispatch/result` plus focused RED/GREEN/verification
-  evidence when `build_execution_lane=bounded_executor`, or `Code Writer` and
+- `bounded executor dispatch/result` plus selected verification evidence and
+  RED/GREEN evidence only when TDD is active for `build_execution_lane=bounded_executor`, or `Code Writer` and
   `Builder/Tester` dispatch/results when `separated_workers`
 
 After Build, Review separately adds `Code Reviewer dispatch/result` (or legacy
@@ -99,10 +100,42 @@ fallback cannot complete.
 For medium+ delegated work, record per-slice dispatch evidence before a slice is
 marked `VERIFIED`.
 
+### Build and test applicability
+
+Resolve build and test applicability from the current due `CheckSpec`s and
+resolved binding constraints, using each check's claim, oracle, and concrete
+procedure. Do not infer applicability from file type, command presence, method,
+or technique alone; missing or unresolved applicability is a gap. Keep
+`build_result` required: use `not_applicable` only when no due selected or
+binding build check applies and no build was executed, `passed` only for current
+observed or admissibly reused successful build evidence, `failed` for an
+executed failure, and `not_run` when a required build could not run and the
+worker is `NEEDS_CONTEXT` or `BLOCKED`, when `FAILED_VERIFICATION` results from
+a different executed required check, or when the required build is pending
+GREEN during a valid `pre_production_red` stage with
+`verification.result=partial`. Stage-only `not_run` never establishes final
+Build sufficiency. A failed required build blocks completion. Keep
+`test_summary` required; zero counts mean no tests were
+executed, not that selected or binding tests passed. Every due selected or
+binding check still needs a current result. A no-command check may return an
+empty `verification.commands` list only when `verification.evidence` names the
+concrete procedure performed and its observed result.
+
+Resolve every command-based selected check independently by its `check_id` in
+the unchanged `verification_decision`. Use that CheckSpec's literal
+`command.argv` and explicit `command.cwd`; preserve each command separately in
+the packet and result evidence. The legacy singular `verification_command` is
+only a compatibility projection when the selected IDs resolve exactly one
+command-based CheckSpec. Omit it when there are zero or multiple commands. Never
+flatten commands, infer a working directory, reconstruct shell text, or attach a
+result to a different check. Missing or ambiguous command context requires a
+refreshed decision or a blocked result; non-command checks keep their concrete
+procedure.
+
 ## Build Loop
 
 For light work, implement the carried Discover scope/criteria or the inline plan
-when `plan_mode=inline`, run relevant automated validation/tests, and record the
+when `plan_mode=inline`, run selected checks and binding project checks, and record the
 changed scope plus results in the inline packet. Then perform the compact fresh
 self-review. Do not create worker or
 independent-review dispatch evidence solely to satisfy the light lane.
@@ -112,8 +145,10 @@ For medium+ tasks with slices, execute source-changing slices sequentially in a 
 Before starting a slice:
 
 1. Load the approved task packet for the slice, including slice_id, observable
-   increment, deliverable type, files, acceptance criteria, verification command,
-   expected success signal, evidence to record, and deviation/rollback rule.
+    increment, deliverable type, files, acceptance criteria, unchanged verification
+   decision, selected checks, each command's literal argv/cwd bound by its
+   check_id or its concrete non-command procedure, expected
+   success signal, evidence to record, and deviation/rollback rule.
 2. When harness-capable, confirm the task packet carries `done_contract_ref`,
    `harness_recipe_ref`, `harness_run_state_ref`, `trace_ledger_ref`,
    `replay_packet_ref`, and typed `artifact_refs`.
@@ -123,17 +158,42 @@ Before starting a slice:
 5. Check constraints from the task journal against the slice files and criteria.
 
 For each step, dispatch the selected lane owner for one task packet at a time
-per worker. The bounded executor edits and runs focused verification in the
-same context. Separated workers dispatch Code Writer, then Builder/Tester. In
-direct fallback, perform the same selected-lane responsibilities and record
-equivalent evidence. Tests stay alongside code, not after it.
+per worker. In active TDD, the bounded executor records actual RED, production,
+GREEN, REFACTOR, and separate phase invocations in one canonical cycle log.
+Active separated TDD dispatches Builder/Tester `pre_production_red`, carries
+its typed RED and `tdd_cycle_log_ref` to Code Writer for production, then uses
+Builder/Tester `final_verification` for GREEN. Only after GREEN passes does the
+same Code Writer own REFACTOR; a second `final_verification` records separate
+REFACTOR invocations. A GREEN-only return is partial with REFACTOR pending, not
+final Build evidence. Inactive TDD runs the selected checks without adding a
+RED step. Direct fallback follows the same selected lane. Never edit production
+before observed meaningful RED when that packet applies TDD, refactor before
+passing GREEN, or invent unstarted phase evidence.
+
+For `separated_workers`, retain each worker's actual `changed_files` in its
+dispatch result, including Builder/Tester test-file changes made for RED even
+when that worker later returns a failure. Union the actual Builder/Tester and
+Code Writer file mutations into final workflow `changed_files` and the Review
+scope, while keeping each mutation attributed to its producing worker. Omit
+entries only when the work did not change a file; never invent or reassign a
+worker's changes.
 
 If implementation or verification fails and the cause is unclear, return to
 `assistant-debugging` before another patch attempt. If the next fix is clear,
 route verification through the selected build_execution_lane: the bounded
-executor retries and verifies its focused loop; separated workers dispatch Code
-Writer and then Builder/Tester; direct fallback performs the same selected-lane
-responsibilities.
+executor retries and verifies its focused loop; inactive-TDD separated workers
+dispatch Code Writer then Builder/Tester; direct fallback performs the same
+selected-lane responsibilities. For active separated-worker TDD, Builder/Tester owns the
+pre_production_red stage, Code Writer consumes its unchanged typed RED before
+production edits, then Builder/Tester owns final_verification for GREEN. After
+that current GREEN passes, the same Code Writer handles REFACTOR and Builder/
+Tester runs final_verification again for a distinct REFACTOR invocation.
+
+For every Code Writer return, preserve actual changed implementation or test
+files even when a later `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or
+`FAILED_VERIFICATION` status ends the attempt. Accumulate the worker's actual
+changes across retries, keep Builder/Tester ownership separate, and omit file
+entries only when that worker changed no file.
 
 ### Ordinary Build repair controller
 
@@ -161,21 +221,37 @@ with reapproval, user input, or environment recovery through
 `pivot_restart_decision` when applicable. A changed plan version starts a new
 path only after required reapproval; it must not disguise a same-scope retry.
 
-After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code. Per-slice verification does not satisfy this integration barrier.
+After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice validation still covers the selected integration claim. Per-slice verification does not satisfy a distinct selected integration check.
 
 After each implementation step, apply the relevant SOLID check from
 `references/prompts/solid-principles.md` and fix material violations before
 moving on.
 
-## TDD Sandwich
+## Conditional TDD Boundary
 
-Workflow sets TDD active by default for behavior changes, bugfixes with
-RED-ready reproduction/root-cause evidence, and interface-affecting refactors
-unless a not-feasible exception is recorded. Unknown-cause bugfixes complete
-debugging first, then enter RED once the failure mechanism is understood.
+The canonical `verification_decision.tdd_choice.mode` records the task-wide TDD
+decision independently from verification scope and method. Each packet derives
+`tdd_applies` from the intersection of its due `selected_check_ids` and
+`tdd_choice.applicable_check_ids`. Task type alone never activates TDD. For
+unknown-cause bugfixes, complete debugging first; enter RED only for applicable
+selected checks and when a meaningful assertion can fail for the intended reason.
 
-When `tdd_mode=true` or `tdd_applies=true`, preserve the behavior boundary in
-both lanes: valid RED evidence must exist before production code.
+When TDD is active, establish meaningful RED before production; only packets
+with `tdd_applies=true` require it, otherwise follow the selected checks
+without adding a RED step. Other packets still run their due selected checks
+without manufacturing RED. When task-wide TDD is false, no packet applies TDD.
+
+For an active workflow TDD packet, the selected inline or separated RED owner
+records the observed authorizing invocation in the canonical assistant-tdd
+`cycle_log` and retains a `tdd_cycle_log_ref` that resolves to that in-progress
+entry before Code Writer makes any production edit. The entry must bind the
+sole selected/applicable check ID, exact CheckSpec argv and cwd, test file and
+name, current failed result, and the matching `meaningful_failure` oracle. A
+planned tuple or later passing result cannot substitute for the observed RED;
+the cycle may remain in progress without GREEN or REFACTOR at this gate. Keep
+prior cycle history and every actual invocation. Before Review and workflow
+completion, resolve the same reference to the full canonical completed cycle
+log and validate its GREEN, REFACTOR, and current selected-check evidence.
 
 When the task packet carries an Architecture Decision Pack, carry its typed
 `architecture_test_obligations` into the selected Build owner handoff. The
@@ -183,11 +259,21 @@ selected owner returns `architecture_obligation_coverage` with each stable
 `obligation_id` exactly once; unknown or duplicate ids fail the Build evidence
 gate rather than being inferred from a passing wrapper test.
 
-- `bounded_executor`: the bounded executor writes/runs RED, records the
-  right-reason failure, implements minimal GREEN, then runs focused and relevant
-  regression verification.
-- `separated_workers`: Builder/Tester owns RED, Code Writer owns GREEN, and
-  Builder/Tester owns verify/refactor-safety.
+- `bounded_executor`: when TDD is active, the bounded executor adds or extends
+  one assertion, records the observed intended failure and actual production
+  file, verifies GREEN, then makes refactor edits only after GREEN passes and
+  records separate REFACTOR invocations; with false TDD it runs only the
+  selected verification plan.
+- `separated_workers`: when TDD is active, Builder/Tester returns one typed
+  authorizing RED and its current log reference in `pre_production_red`, Code
+  Writer owns production and records `green.production_file`, then Builder/
+  Tester `final_verification` records actual GREEN invocations. GREEN may return
+  stage-only DONE with aggregate partial and pending REFACTOR rows; after it
+  passes, the same Code Writer owns actual refactor changes or `none needed`,
+  and Builder/Tester performs a separate REFACTOR invocation in a second
+  `final_verification`. Preserve the same reference and actual history; no
+  phase may be inferred. Inactive TDD stays Code Writer then Builder/Tester.
+  Only the complete current cycle closes Build or Review.
 
 For bugfixes, RED traces to the original reproduction/debugging evidence. A
 missing or wrong-reason RED blocks production edits in either lane.
@@ -238,8 +324,9 @@ Review phase after Build completes.
 After implementation for a slice is done, verify the slice against its
 Decompose criteria before moving on:
 
-1. In `bounded_executor`, the executor either executes the slice verification
-   argv directly or reuses a completed passing verification only after comparing
+1. In `bounded_executor`, the executor executes each due CheckSpec's
+   `command.argv` in its explicit `command.cwd` or follows its concrete
+   non-command procedure, and reuses a completed passing verification only after comparing
    exact argv and cwd, complete passing result/log, relevant
    source/test/config/dependency state, toolchain and relevant non-secret
    environment, and covered acceptance obligations. When executing argv, item 0
@@ -278,13 +365,14 @@ or unknown workspace, start another source-changing slice only after the active
 source-changing slice is fully verified; start a dependent slice only after all
 its `depends_on` prerequisites are verified.
 
-After all slices are verified and concurrent outputs are integrated, apply the
-manifest-cardinality integration rule: full-scope validation is required before
-fresh Review; cross-slice validation applies only when slice_manifest contains
-more than one item, and for one item is recorded as not_applicable using the
-one-item manifest and single_slice_rationale. Single-slice full-scope
-validation still covers integration with existing code. Per-slice evidence
-does not satisfy new integration coverage.
+After all slices are verified and concurrent outputs are integrated, run the
+selected checks and binding project checks over the completed scope before
+fresh Review; do not add an unselected full suite. Cross-slice validation
+applies only when slice_manifest contains more than one item, and for one item
+is recorded as not_applicable using the one-item manifest and
+single_slice_rationale. A selected single-slice integration check covers its
+claim; per-slice evidence does not satisfy a distinct selected integration
+check.
 If implementation reveals a plan problem, print `>> PLAN DEVIATION DETECTED`,
 record `pivot_restart_decision.reapproval_required=true` when scope/files/
 behavior/risk/verification/acceptance changes, and wait for approval before

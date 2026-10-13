@@ -32,5 +32,5 @@ Artifact Contract:
   Update `references/requirement-acceptance-map.md` first when scope changes.
 - If the artifact is a PR, include branch name, files in scope, validation commands, and review gates.
 - If the artifact is a report/dataset/chart, include format, source policy, and completeness checks.
-- If the artifact is code/config, include file paths and runnable verification.
+- If the artifact is code/config, include file paths and the selected verification command or concrete non-command procedure. Keep the canonical typed verification decision in the internal task packet, outside any closed-world external schema.
 - If no artifact is needed, record a no-op/discovery rationale and do not pretend implementation completed.

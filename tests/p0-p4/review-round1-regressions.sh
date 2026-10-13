@@ -181,6 +181,7 @@ review_root="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
 review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
 review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
 review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
 review_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
 standalone_routing_text="$(tr '\n\t' '  ' < "$review_root"; tr '\n\t' '  ' < "$review_loop"; tr '\n\t' '  ' < "$review_gates")"
 standalone_handoff_text="$(tr '\n\t' '  ' < "$review_handoffs" | tr -s '[:space:]' ' ')"
@@ -200,11 +201,61 @@ fi
 if ! printf '%s\n' "$standalone_handoff_text" | rg -qi 'enum_values.{0,240}(audit_only_or_no_build_scope|audit[_ -]?only|no[_ -]?build[_ -]?scope|read[_ -]?only[_ -]?scope)'; then
     standalone_failures+=("handoff lacks an enumerated audit/no-build/read-only not-applicable reason")
 fi
-if ! printf '%s\n' "$standalone_routing_text" | rg -qi '(source|production) fix(es|ed)?.{0,600}(subsequent|next).{0,160}review(er)? (round|dispatch).{0,600}(real|current|passed).{0,160}(build/test|build and test|test/build) evidence'; then
-    standalone_failures+=("post-fix Reviewer rounds do not require real current build/test evidence")
+if ! printf '%s\n' "$standalone_routing_text" | rg -qi 'after any source fix.{0,400}subsequent reviewer dispatch requires fresh current passed selected/binding evidence.{0,300}not_applicable admission is forbidden'; then
+    standalone_failures+=("post-fix Reviewer dispatch does not require fresh current selected/binding evidence")
 fi
-if ! printf '%s\n' "$standalone_routing_text $standalone_handoff_text" | rg -qi 'workflow[_ -]?composed.{0,700}carried.{0,300}spec review.{0,700}(build/test|build and test) evidence'; then
-    standalone_failures+=("workflow-composed review does not explicitly consume carried Spec PASS and build/test evidence")
+if ! printf '%s\n' "$standalone_routing_text" | rg -qi 'workflow-composed review consumes carried spec review pass and current passed verification for every due selected checkspec and resolved binding check'; then
+    standalone_failures+=("workflow-composed review does not consume carried Spec PASS and current selected/binding verification")
+fi
+if ! ruby -ryaml -e '
+  handoffs, output, gates = ARGV.map { |path| YAML.load_file(path) }
+  reviewer = handoffs.fetch("handoffs").find { |item| item.fetch("name") == "orchestrator_to_reviewer" }
+  verification_ref = reviewer.fetch("context_fields").find { |field| field.fetch("name") == "build_test_verification_ref" }
+  ref_fields = verification_ref.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  assertions = gates.fetch("gates").flat_map { |gate| gate.fetch("exit_assertions", []) }
+  e9 = assertions.find { |gate| gate.fetch("id") == "E9" }.fetch("check")
+  rs2a = assertions.find { |gate| gate.fetch("id") == "RS2A" }.fetch("check")
+  build_verification = output.fetch("artifacts").find { |item| item.fetch("name") == "build_verification" }
+  build_fields = build_verification.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  test_summary = build_fields.fetch("test_summary")
+  evidence_condition = ref_fields.fetch("evidence_ref").fetch("condition")
+  build_evidence_ref = build_fields.fetch("evidence_ref")
+  build_evidence_condition = build_evidence_ref.fetch("condition")
+  build_evidence_validation = build_evidence_ref.fetch("validation")
+  no_build_condition = ref_fields.fetch("not_applicable").fetch("condition")
+  build_validation = build_verification.fetch("validation")
+  test_condition = test_summary.fetch("condition")
+  valid = verification_ref.fetch("required") == true &&
+    ref_fields.fetch("evidence_ref").fetch("required") == "conditional" &&
+    evidence_condition.include?("due selected check") &&
+    evidence_condition.include?("applicable due/executable binding check") &&
+    evidence_condition.include?("required/occurred source fix") &&
+    verification_ref.fetch("validation").include?("every due selected check and applicable due/executable binding result") &&
+    verification_ref.fetch("validation").include?("Each due check and every source fix require current passed evidence") &&
+    verification_ref.fetch("validation").include?("a fix invalidates the batch and forbids not_applicable") &&
+    verification_ref.fetch("validation").include?("Standalone review-fix requires build/tests") &&
+    build_evidence_condition == "review_preparation_mode == workflow_composed and (a due selected check or applicable due/executable binding check applies, or a source fix is required or occurred)" &&
+    build_evidence_validation.include?("Equals build_test_verification_ref.evidence_ref unchanged") &&
+    no_build_condition.include?("no required/occurred source fix") &&
+    no_build_condition.include?("no due selected or applicable due/executable binding check") &&
+    ref_fields.fetch("not_applicable").fetch("enum_values").include?("no_build_scope") &&
+    e9.include?("current evidence_ref bound to the canonical decision, assessment, every due selected check and applicable due/executable binding result, exclusions, and source") &&
+    e9.include?("no_build_scope is allowed only when no fix is required/occurred and no due selected or applicable due/executable binding check applies") &&
+    rs2a.include?("after every source fix") && rs2a.include?("fixes invalidate the batch and forbid not_applicable") &&
+    rs2a.include?("Standalone review-fix requires build/tests") &&
+    build_verification.fetch("condition") == "mode == review-fix" &&
+    build_validation.include?("Standalone review-fix must show successful build and test results after its fixes") &&
+    build_validation.include?("Workflow-composed review requires evidence_ref equal to build_test_verification_ref.evidence_ref when any due selected check or applicable due/executable binding check applies, or a source fix is required or occurred") &&
+    build_validation.include?("not_applicable build_result is permitted only when no due selected or applicable due/executable binding build check applies and no build was executed") &&
+    build_fields.fetch("build_result").fetch("enum_values").include?("not_applicable") &&
+    test_summary.fetch("required") == "conditional" &&
+    test_condition.include?("due selected check") &&
+    test_condition.include?("applicable due/executable binding obligation requires an automated test") &&
+    build_validation.include?("test_summary is required when") &&
+    test_summary.fetch("description").include?("Zero counts mean no tests were executed, not that tests passed")
+  exit valid ? 0 : 1
+' "$review_handoffs" "$review_output" "$review_gates"; then
+    standalone_failures+=("composed/standalone verification evidence conditions or test-summary applicability are mis-scoped")
 fi
 if ! awk '
     $0 == "  - name: task_journal_path" { in_field = 1; next }
@@ -214,7 +265,7 @@ if ! awk '
 ' "$review_input"; then
     standalone_failures+=("task_journal_path is not optional")
 fi
-if ! printf '%s\n' "$standalone_routing_text" | rg -qi 'standalone.{0,500}(does not require|without|no required).{0,120}task journal|task journal.{0,200}(optional|not required).{0,500}standalone'; then
+if ! printf '%s\n' "$standalone_routing_text" | rg -qi 'standalone.{0,500}(does not require|without|no required).{0,120}task journal|task journal.{0,200}(optional|not required).{0,500}standalone|standalone.{0,500}task journal.{0,120}(optional|not required)'; then
     standalone_failures+=("standalone review is not explicitly journal-free")
 fi
 

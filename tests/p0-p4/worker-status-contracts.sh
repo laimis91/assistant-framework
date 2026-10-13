@@ -57,18 +57,96 @@ for term in \
     "worker_status_protocol:" \
     "CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns include a compact status packet" \
     "status is required on CodeMapper, Explorer, Architect, CodeWriter, and BuilderTester returns." \
-    "evidence is required for CodeMapper, Explorer, Architect, and CodeWriter returns with DONE, DONE_WITH_CONCERNS, DEVIATED, or FAILED_VERIFICATION." \
+    "evidence is required for CodeMapper, Explorer, Architect, and CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED." \
+    "evidence is required for CodeWriter returns with FAILED_VERIFICATION." \
     "verification.evidence is required for BuilderTester returns." \
     "deviation_details is required for Architect and CodeWriter returns with DEVIATED." \
     "CodeMapper and Explorer status values are limited to DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, and BLOCKED." \
-    "Architect and CodeWriter status values also include DEVIATED." \
+    "Architect status values also include DEVIATED." \
+    "CodeWriter status values also include DEVIATED and FAILED_VERIFICATION; CodeWriter uses FAILED_VERIFICATION only for a failed bounded_executor check." \
     "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION." \
-    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED; they may be omitted or empty for NEEDS_CONTEXT/BLOCKED returns before file changes occur." \
-    "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence."; do
+    "During active-TDD first final_verification, passing current GREEN may return stage-only DONE only with aggregate partial and explicit pending REFACTOR rows; this stage cannot satisfy final Build or Review gates." \
+    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and whenever the worker actually created, modified, or deleted implementation or test files regardless of terminal status. They may be omitted or empty only when no file changed; never invent entries for pre-action returns, and retain actual worker changes across retries." \
+    "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result." \
+    "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence. During active-TDD pre_production_red, exact matching authorizing RED may return DONE with aggregate partial and explicit pending GREEN rows; actual failed counts remain failed, and this stage cannot satisfy final Build or Review gates."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_worker_status_terms+=("$term")
     fi
 done
+slice_brief_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"
+for term in \
+    '| `FAILED_VERIFICATION` | An ordinary due required CheckSpec failed after execution; retain its per-check failure evidence and any real outputs. This takes precedence over completion and deviation statuses. The exact matching authorizing RED in `verification_stage=pre_production_red` is stage evidence, not an ordinary verification failure. | Orchestrator reviews the failure evidence before recovery |' \
+    'For active `separated_workers` TDD, Builder/Tester returns `verification_stage=pre_production_red`' \
+    'An unattempted `DEVIATED` return may omit `changed_files`, `files_changed`, `artifact_refs`, and `validation_results`. Do not invent these outputs; retain concrete evidence of the actual deviation.' \
+    '## Slice Status: [DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED | DEVIATED | FAILED_VERIFICATION]'; do
+    if ! grep -Fq -- "$term" "$slice_brief_template"; then
+        missing_worker_status_terms+=("sub-task-brief-template.md: $term")
+    fi
+done
+if ! ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs").to_h { |item| [item.fetch("name"), item] }
+  find = ->(fields, name) { fields.find { |field| field["name"] == name } || raise("missing #{name}") }
+  tester = handoffs.fetch("orchestrator_to_builder_tester")
+  context = tester.fetch("context_fields")
+  packet = find.call(context, "current_task_packet").fetch("object_fields")
+  returned = tester.fetch("return_fields")
+  changed_files = find.call(returned, "changed_files")
+  changed_file_fields = changed_files.fetch("object_fields").map { |field| field.fetch("name") }
+  changed_files_valid = changed_files["type"] == "object[]" && changed_files["required"] == false &&
+    changed_files["min_items"] == 0 && changed_file_fields == %w[path change_type description] &&
+    changed_files.fetch("condition").include?("whenever BuilderTester actually created, modified, or deleted files") &&
+    changed_files.fetch("condition").include?("including a RED test addition or extension") &&
+    changed_files.fetch("condition").include?("regardless of status") &&
+    changed_files.fetch("description").include?("Preserve them after later verification failures") &&
+    changed_files.fetch("description").include?("never invent changes for unstarted work")
+  workflow_dir = File.expand_path("..", File.dirname(ARGV.fetch(0)))
+  workflow_output = YAML.load_file(File.join(File.dirname(ARGV.fetch(0)), "output.yaml")).fetch("artifacts")
+    .find { |field| field["name"] == "changed_files" }.fetch("validation")
+  worker_protocol = File.read(File.join(workflow_dir, "references", "build-worker-protocol.md"))
+  changed_files_union_valid = workflow_output.include?("union actual BuilderTester and CodeWriter changed_files into this final artifact and the review scope") &&
+    workflow_output.include?("never attributing BuilderTester changes to CodeWriter") &&
+    worker_protocol.include?("Union the actual Builder/Tester and") &&
+    worker_protocol.include?("file mutations into final workflow `changed_files`") &&
+    worker_protocol.include?("keeping each mutation attributed to its producing worker")
+  stage_in = find.call(context, "verification_stage")
+  stage_out = find.call(returned, "verification_stage")
+  red = find.call(returned, "red_evidence")
+  fields = red.fetch("object_fields").map { |field| field.fetch("name") }
+  red_validation = find.call(returned, "validation_results").fetch("validation")
+  aggregate = find.call(find.call(returned, "verification").fetch("object_fields"), "result").fetch("validation")
+  status_validation = find.call(returned, "status").fetch("validation")
+  stage_validation = stage_out.fetch("validation")
+  build = find.call(returned, "build_result").fetch("description")
+  failures = find.call(returned, "test_summary").fetch("description")
+  green_stage_only = status_validation.include?("first final_verification may return stage-only DONE") &&
+    status_validation.include?("verification.result=partial") &&
+    status_validation.include?("explicit pending REFACTOR rows") &&
+    status_validation.include?("it cannot close Build") &&
+    status_validation.include?("Final DONE/DONE_WITH_CONCERNS requires the full current cycle including passing REFACTOR") &&
+    stage_validation.include?("Both GREEN and REFACTOR use final_verification") &&
+    stage_validation.include?("GREEN pass with REFACTOR pending is stage completion only") &&
+    build.include?("pending GREEN/REFACTOR in an active-TDD stage-only return")
+  valid = changed_files_valid && changed_files_union_valid &&
+    stage_in["required"] == "conditional" && stage_in["condition"] == "tdd_applies is true" &&
+    stage_out["condition"] == "tdd_applies is true" &&
+    (stage_in["enum_values"] & %w[pre_production_red final_verification]) == %w[pre_production_red final_verification] &&
+    stage_out.fetch("validation").include?("Equals the dispatch stage") &&
+    red["required"] == "conditional" &&
+    red["condition"] == "verification_stage == pre_production_red and tdd_applies is true and valid matching authorizing RED was observed" &&
+    red.fetch("description").include?("When no valid matching authorizing RED was observed, omit this field") &&
+    red.fetch("description").include?("even if another due failure keeps status FAILED_VERIFICATION") &&
+    red.fetch("validation").include?("blocked/unstarted, unexpectedly passing, setup-failed, or wrong-reason invocation does not qualify") &&
+    fields == %w[check_id test_file test_name command cwd failure_summary right_reason] &&
+    red_validation.include?("pre_production_red retains matching failed RED and pending GREEN") &&
+    red_validation.include?("Ordinary failure yields FAILED_VERIFICATION") &&
+    aggregate.include?("aggregates partial") && aggregate.include?("Ordinary failure takes precedence") && green_stage_only &&
+    build.include?("pending GREEN during a valid pre_production_red stage") && build.include?("never establishes final Build sufficiency") &&
+    failures.include?("expected failed RED in failed;") &&
+    find.call(context, "current_task_packet").fetch("object_fields").find { |field| field["name"] == "red_check_id" }.fetch("validation").include?("multiple IDs require packet splitting")
+  exit(valid ? 0 : 1)
+' "$handoffs_file"; then
+    missing_worker_status_terms+=("BuilderTester stage, typed RED, or stage-only outcome contract")
+fi
 if [[ "${#missing_worker_status_terms[@]}" -eq 0 ]]; then
     pass
 else
@@ -90,7 +168,6 @@ missing_typed_artifact_terms=()
 for term in \
     "artifact_reference_protocol:" \
     "required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]" \
-    "artifact_types: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]" \
     "location_ref is the typed location/ref pointer" \
     "Producer responsibility: create or update the artifact" \
     "Consumer responsibility: validate schema_or_contract and validation_status before relying on location_ref" \
@@ -114,7 +191,6 @@ for term in \
     "schema_or_contract" \
     "validation_status" \
     "ledger covers Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
-    "enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]" \
     "- name: pivot_restart_decision"; do
     if ! grep -Fq -- "$term" "$output_contract"; then
         missing_typed_artifact_terms+=("output.yaml: $term")
@@ -130,8 +206,31 @@ for artifact_contract_file in "$handoffs_file" "$output_contract"; do
         fi
     done < <(grep -F "enum_values: [done_contract" "$artifact_contract_file")
 done
-if [[ "$concrete_artifact_enum_count" -ne 6 ]]; then
-    missing_typed_artifact_terms+=("expected five handoff and one output concrete artifact_type enums; found $concrete_artifact_enum_count")
+if [[ "$concrete_artifact_enum_count" -eq 0 ]]; then
+    missing_typed_artifact_terms+=("no concrete ArtifactRef enums were checked")
+fi
+if ! ruby -ryaml -e '
+    handoffs = YAML.load_file(ARGV.fetch(0))
+    output = YAML.load_file(ARGV.fetch(1))
+    types = handoffs.fetch("artifact_reference_protocol").fetch("artifact_types")
+    exit 1 unless %w[verification_decision evidence_assessment].all? { |name| types.include?(name) }
+    field = ->(fields, name) { fields.find { |f| f["name"] == name } || raise("missing #{name}") }
+    owners = handoffs.fetch("handoffs").to_h { |h| [h.fetch("name"), h] }
+    [["orchestrator_to_architect", "return_fields", "implementation_steps"],
+     ["orchestrator_to_code_writer", "context_fields", "current_task_packet"],
+     ["orchestrator_to_builder_tester", "context_fields", "current_task_packet"]].each do |name, side, parent|
+        packet = field.call(owners.fetch(name).fetch(side), parent)
+        refs = field.call(packet.fetch("object_fields"), "artifact_refs")
+        exit 1 unless refs["type"] == "object[]" && field.call(refs.fetch("object_fields"), "artifact_type")["enum_values"] == types
+    end
+    %w[orchestrator_to_code_writer orchestrator_to_builder_tester].each do |name|
+        refs = field.call(owners.fetch(name).fetch("return_fields"), "artifact_refs")
+        exit 1 unless refs["type"] == "object[]" && field.call(refs.fetch("object_fields"), "artifact_type")["enum_values"] == types
+    end
+    ledger = field.call(output.fetch("artifacts"), "artifact_reference_ledger")
+    exit 1 unless field.call(ledger.fetch("object_fields"), "artifact_type")["enum_values"] == types
+' "$handoffs_file" "$output_contract"; then
+    missing_typed_artifact_terms+=("typed producer/consumer ArtifactRefs or verification artifact registration differs from the canonical protocol")
 fi
 for term in \
     "## Harness Appendix Routing" \
@@ -237,6 +336,75 @@ else
     fail "Architect DECOMPOSE/PLAN return schemas missing status/evidence/deviation support: ${missing_architect_schema_terms[*]}"
 fi
 
+test_start "Architect test_plan schema names the selected automated-test condition"
+if ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  architect = handoffs.find { |h| h["name"] == "orchestrator_to_architect" }
+  plan = architect.fetch("return_fields").find { |f| f["name"] == "test_plan" }
+  exit 1 unless plan && plan["required"] == "conditional" &&
+    plan["condition"] == "at least one slice\u0027s canonical verification_decision selects method == automated_test" &&
+    plan.fetch("description").include?("required only for slices with selected automated_test CheckSpecs")
+' "$handoffs_file"; then
+    pass
+else
+    fail "Architect test_plan schema does not bind applicability to the selected automated-test decision"
+fi
+
+test_start "Decompose slices preserve task TDD choice and derive local applicability from selected checks"
+if ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  decompose = handoffs.find { |h| h["name"] == "orchestrator_to_architect_decompose" }
+  field = ->(fields, name) { fields.find { |f| f["name"] == name } || raise("missing #{name}") }
+  context_decision = field.call(decompose.fetch("context_fields"), "verification_decision")
+  context_tdd_mode = field.call(decompose.fetch("context_fields"), "tdd_mode")
+  return_fields = decompose.fetch("return_fields")
+  manifest = field.call(return_fields, "slice_manifest")
+  slice_fields = manifest.fetch("object_fields")
+  slice_decision = field.call(slice_fields, "verification_decision")
+  selected_ids = field.call(slice_fields, "selected_check_ids")
+  binding_refs = field.call(slice_fields, "binding_obligation_refs")
+  slice_tdd = field.call(slice_fields, "tdd_applies")
+  binding_names = binding_refs.fetch("object_fields").map { |item| item.fetch("name") }
+  valid_schema = context_decision["required"] == true && context_tdd_mode["required"] == true &&
+    context_tdd_mode.fetch("validation").include?("Equals verification_decision.tdd_choice.mode") &&
+    manifest["required"] == true && manifest["type"] == "object[]" &&
+    slice_decision["required"] == true && selected_ids["required"] == true && binding_refs["required"] == true && slice_tdd["required"] == true &&
+    slice_decision.fetch("validation").include?("equals context_fields.verification_decision") &&
+    selected_ids.fetch("validation").include?("An ordered unique subset") &&
+    binding_refs.fetch("validation").include?("Each {kind,value,source_ref} exactly equals a canonical policy tuple") &&
+    %w[kind value source_ref].all? { |name| binding_names.count(name) == 1 } &&
+    slice_tdd.fetch("validation").include?("True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids")
+  inline_fields = {"verification_decision" => "object", "selected_check_ids" => "string[]", "binding_obligation_refs" => "object[]", "tdd_applies" => "boolean"}
+  valid_schema &&= %w[orchestrator_to_code_writer orchestrator_to_builder_tester].all? do |name|
+    context = handoffs.find { |h| h["name"] == name }.fetch("context_fields")
+    packet = field.call(context, "current_task_packet")
+    mode = field.call(context, "tdd_mode")
+    inline = inline_fields.all? do |key, type|
+      carried = field.call(context, key)
+      carried["type"] == type && carried["required"] == "conditional" &&
+        carried["condition"] == "current_task_packet is absent" &&
+        carried.fetch("validation").include?("when current_task_packet is present")
+    end
+    local_tdd = field.call(context, "tdd_applies").fetch("validation")
+    tuples = field.call(context, "binding_obligation_refs").fetch("object_fields")
+    packet["required"] == "conditional" && inline &&
+      local_tdd.include?("True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids") &&
+      tuples.map { |f| f.fetch("name") } == %w[kind value source_ref] &&
+      tuples.all? { |f| f["required"] == true } &&
+      mode.fetch("validation").include?("when current_task_packet is present") &&
+      mode.fetch("validation").include?("otherwise equals verification_decision.tdd_choice.mode")
+  end
+  root = File.expand_path("../../..", File.dirname(ARGV.fetch(0)))
+  valid_schema &&= %w[agents/codex/code-writer.toml agents/claude/code-writer.md agents/codex/builder-tester.toml agents/claude/builder-tester.md].all? do |path|
+    File.read(File.join(root, path)).include?("from current_task_packet when present, otherwise")
+  end
+  exit(valid_schema ? 0 : 1)
+' "$handoffs_file"; then
+    pass
+else
+    fail "Architect Decompose schema does not require the canonical verification/TDD projection in each slice"
+fi
+
 test_start "Code Writer status packet schema and prompts require status changed_files evidence"
 missing_code_writer_status_terms=()
 if ! handoff_return_field_required "$handoffs_file" "orchestrator_to_code_writer" "status"; then
@@ -248,7 +416,6 @@ for field in changed_files evidence files_changed; do
     fi
     for term in \
         "required: false" \
-        "condition: \"required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]\"" \
         "min_items: 0"; do
         if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" "$term"; then
             missing_code_writer_status_terms+=("handoff return $field: $term")
@@ -256,21 +423,53 @@ for field in changed_files evidence files_changed; do
     done
 done
 for field in changed_files files_changed; do
+    if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" \
+        'condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"'; then
+        missing_code_writer_status_terms+=("handoff return $field must require actual mutations for every terminal status")
+    fi
+done
+if ! ruby -ryaml -e '
+  writer = YAML.load_file(ARGV.fetch(0)).fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_code_writer" }
+  fields = %w[changed_files files_changed].map do |name|
+    writer.fetch("return_fields").find { |field| field["name"] == name }
+  end
+  expected = "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"
+  statuses = %w[DONE DONE_WITH_CONCERNS NEEDS_CONTEXT BLOCKED DEVIATED FAILED_VERIFICATION]
+  success = %w[DONE DONE_WITH_CONCERNS]
+  matrix = statuses.product([false, true]).map do |status, file_changed|
+    [status, file_changed, success.include?(status) || file_changed]
+  end
+  valid = fields.all? { |field| field["required"] == false && field["min_items"] == 0 && field["condition"] == expected } &&
+    matrix.all? do |status, file_changed, required|
+      required == (success.include?(status) || file_changed)
+    end
+  exit(valid ? 0 : 1)
+' "$handoffs_file"; then
+    missing_code_writer_status_terms+=("CodeWriter changed-file status/actual-mutation condition matrix")
+fi
+if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "evidence" \
+    'condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS, DEVIATED, FAILED_VERIFICATION]; optional and may be empty or omitted when status in [NEEDS_CONTEXT, BLOCKED]"'; then
+    missing_code_writer_status_terms+=("CodeWriter must retain deviation and failed-verification evidence")
+fi
+for field in changed_files files_changed; do
     for term in \
-        "Do not invent" \
-        "NEEDS_CONTEXT or BLOCKED"; do
+        "Omit only when no file changed" \
+        "never invent entries"; do
         if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_code_writer" "$field" "$term"; then
             missing_code_writer_status_terms+=("handoff return $field description: $term")
         fi
     done
 done
-if ! grep -Fq -- "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED]" "$handoffs_file"; then
+if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_code_writer" "status" \
+    "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]"; then
     missing_code_writer_status_terms+=("CodeWriter status enum values")
 fi
 for term in \
-    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE, DONE_WITH_CONCERNS, or DEVIATED" \
-    "For DONE, DONE_WITH_CONCERNS, or DEVIATED, it must also return changed_files, evidence, files_changed, and typed artifact_refs when the task packet carried artifact_refs or harness_capable == true" \
-    "for NEEDS_CONTEXT/BLOCKED, require open_questions and do not require fabricated changed-file or artifact-ref entries"; do
+    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS" \
+    "FAILED_VERIFICATION requires validation_results and actual failure evidence" \
+    "pre-action DEVIATED" \
+    "Return tdd_cycle_log_ref on every active-TDD return after its cycle_log starts, including partial or failed work" \
+    "NEEDS_CONTEXT/BLOCKED require open_questions, actual changes, and blocker evidence when unexpected."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_code_writer_status_terms+=("$term")
     fi
@@ -279,15 +478,35 @@ for file in \
     agents/codex/code-writer.toml \
     agents/claude/code-writer.md; do
     for term in \
-        '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, or `DEVIATED`' \
+        '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '`changed_files`: files created, modified, or deleted with brief descriptions' \
+        'return actual file mutations independently of terminal status, including test edits followed by `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
+        'actual changes across retries' \
+        'omit or leave empty only when this worker changed no file; never invent entries.' \
         '`evidence`: concrete implementation evidence, usually file paths plus behavior changed' \
+        '`validation_results`: in `bounded_executor`' \
+        'required for `DONE`, `DONE_WITH_CONCERNS`, `FAILED_VERIFICATION`, and whenever verification was attempted; an unattempted `DEVIATED` return may omit it.' \
+        '`binding_obligation_refs` tuples `{kind,value,source_ref}`' \
+        'For a started command-based CheckSpec, include `executed_command`' \
+        'its sole `check_id` and exact CheckSpec `argv` and `cwd`' \
+        'In `separated_workers`, Builder/Tester owns these verification result rows.' \
         "## Status meanings" \
         '`DONE`: implementation complete with no known concerns' \
         '`DONE_WITH_CONCERNS`: implementation is usable but follow-up risk remains' \
         '`NEEDS_CONTEXT`: missing requirements or required RED evidence need orchestrator clarification' \
         '`BLOCKED`: environment, dependency, permission, or tool issue prevents implementation' \
-        '`DEVIATED`: implementation departed from the approved plan or requested scope'; do
+        '`DEVIATED`: implementation departed from the approved plan or requested scope' \
+        '`FAILED_VERIFICATION`: a due required check ran and failed in `bounded_executor`'; do
+        if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
+            missing_code_writer_status_terms+=("$file: $term")
+        fi
+    done
+    for term in \
+        'For pre-action `DEVIATED`, retain concrete evidence of the actual mismatch' \
+        'omit or leave empty `changed_files`, `files_changed`, `validation_results`, and `artifact_refs`' \
+        'A failed due check takes precedence as `FAILED_VERIFICATION`' \
+        'an expected meaningful RED is TDD stage evidence, not an ordinary failed verification result.' \
+        'Successful active bounded-TDD returns require it; retain it if another due check fails'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_code_writer_status_terms+=("$file: $term")
         fi
@@ -299,38 +518,122 @@ else
     fail "Code Writer status packet schema/prompts missing terms: ${missing_code_writer_status_terms[*]}"
 fi
 
-test_start "Builder Tester status packet schema and prompts require status verification"
+test_start "CodeWriter verification results are bounded-lane conditional and preserve exact identity fields"
+if ruby -ryaml -e '
+    handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs").to_h { |item| [item.fetch("name"), item] }
+    find_field = ->(fields, name) { fields.find { |item| item["name"] == name } || raise("missing #{name}") }
+    writer_results = find_field.call(handoffs.fetch("orchestrator_to_code_writer").fetch("return_fields"), "validation_results")
+    tester_results = find_field.call(handoffs.fetch("orchestrator_to_builder_tester").fetch("return_fields"), "validation_results")
+    expected_condition = "build_execution_lane == bounded_executor and (status in [DONE, DONE_WITH_CONCERNS, FAILED_VERIFICATION] or verification was attempted)"
+    raise "CodeWriter result condition or cardinality changed" unless writer_results["required"] == "conditional" && writer_results["condition"] == expected_condition && writer_results["min_items"] == 1
+    predicate = ->(lane, status, attempted) do
+      condition = writer_results.fetch("condition")
+      lane == condition.split(" and ", 2).first.sub("build_execution_lane == ", "") &&
+        (condition[/status in \[([^\]]+)\]/, 1].split(", ").include?(status) || attempted)
+    end
+    %w[DONE DONE_WITH_CONCERNS FAILED_VERIFICATION].each do |status|
+      raise "bounded #{status} should require verification" unless predicate.call("bounded_executor", status, false)
+    end
+    raise "separated implementation must not own verification" if predicate.call("separated_workers", "DONE", true)
+    raise "pre-check blockers must allow omitted results" if predicate.call("bounded_executor", "BLOCKED", false)
+    raise "unattempted DEVIATED may omit results" if predicate.call("bounded_executor", "DEVIATED", false)
+    raise "attempted DEVIATED must retain results" unless predicate.call("bounded_executor", "DEVIATED", true)
+    %w[NEEDS_CONTEXT BLOCKED].each do |status|
+      raise "attempted checks must survive #{status}" unless predicate.call("bounded_executor", status, true)
+    end
+    raise "unattempted DEVIATED omission must be explicit" unless writer_results.fetch("description").include?("an unattempted DEVIATED return may omit them")
+    raise "failure precedence must be explicit" unless writer_results.fetch("validation").include?("FAILED_VERIFICATION, which takes precedence")
+    raise "expected RED must not be an ordinary verification failure" unless writer_results.fetch("validation").include?("TDD stage evidence, not as a failed validation_results row")
+    raise "BuilderTester result carrier must remain required" unless tester_results["required"] == true && tester_results["min_items"] == 1
+    [writer_results, tester_results].each do |results|
+      fields = results.fetch("object_fields")
+      ids = find_field.call(fields, "selected_check_ids")
+      tuples = find_field.call(fields, "binding_obligation_refs")
+      raise "selected IDs must be a required string array" unless ids["type"] == "string[]" && ids["required"] == true
+      raise "binding tuples must be a required object array" unless tuples["type"] == "object[]" && tuples["required"] == true
+      tuple_fields = tuples.fetch("object_fields")
+      raise "binding tuple fields changed" unless tuple_fields.map { |item| item.fetch("name") }.sort == %w[kind source_ref value]
+      raise "binding tuple fields must retain required typed values" unless tuple_fields.all? { |item| item["required"] == true } && tuple_fields.to_h { |item| [item.fetch("name"), item.fetch("type")] } == {"kind"=>"enum", "value"=>"string", "source_ref"=>"string"}
+    end
+  ' "$handoffs_file"; then
+    pass
+else
+    fail "CodeWriter/BuilderTester validation result lane or identity schema is inconsistent"
+fi
+
+test_start "Builder Tester status packet keeps selected-check and no-build outcomes distinct"
 missing_builder_status_terms=()
-for field in status verification; do
+for field in status verification validation_results build_result test_summary; do
     if ! handoff_return_field_required "$handoffs_file" "orchestrator_to_builder_tester" "$field"; then
         missing_builder_status_terms+=("handoff return $field required")
     fi
 done
+if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "min_items: 1"; then
+    missing_builder_status_terms+=("BuilderTester validation_results must remain non-empty")
+fi
+if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]"; then
+    missing_builder_status_terms+=("BuilderTester per-check result enum includes blocked")
+fi
+if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "validation_results" "Partial and unavailable are explicit gaps and never close a due check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."; then
+    missing_builder_status_terms+=("blocked per-check results remain gaps")
+fi
 if ! grep -Fq -- "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]" "$handoffs_file"; then
     missing_builder_status_terms+=("BuilderTester status enum values")
 fi
-if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "enum_values: [passed, failed, not_run]"; then
-    missing_builder_status_terms+=("build_result enum supports not_run")
+if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "enum_values: [passed, failed, not_run, not_applicable]"; then
+    missing_builder_status_terms+=("build_result enum includes not_applicable")
 fi
-if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "Use not_run only when status is NEEDS_CONTEXT or BLOCKED before verification can run"; then
-    missing_builder_status_terms+=("build_result not_run is limited to NEEDS_CONTEXT/BLOCKED")
-fi
+for term in \
+    "Derive build applicability from the concrete due selected CheckSpecs and resolved binding constraints" \
+    "do not infer it from file type, command presence, method, or technique alone" \
+    "Use not_run for a blocked/unstarted required build, another executed failure, pending GREEN during a valid pre_production_red stage, or pending GREEN/REFACTOR in an active-TDD stage-only return with verification.result=partial; this never establishes final Build sufficiency." \
+    "Use not_applicable only when no due selected or binding build check applies and no build was executed."; do
+    if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "build_result" "$term"; then
+        missing_builder_status_terms+=("build_result missing scoped applicability rule: $term")
+    fi
+done
 if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "commands" "min_items: 0"; then
     missing_builder_status_terms+=("verification.commands may be empty")
 fi
-if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "commands" "empty only when verification.result is not_run for NEEDS_CONTEXT or BLOCKED"; then
-    missing_builder_status_terms+=("verification.commands empty only for NEEDS_CONTEXT/BLOCKED not_run")
+if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "commands" "may be empty for selected checks whose concrete procedure has no command" \
+    || ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "commands" "Empty commands do not waive a selected or binding check"; then
+    missing_builder_status_terms+=("verification.commands distinguish no-command checks without waiving selected/binding checks")
 fi
-if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "enum_values: [passed, failed, not_run]"; then
-    missing_builder_status_terms+=("verification.result enum supports not_run")
+if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "enum_values: [passed, failed, partial, unavailable, not_run, not_applicable]"; then
+    missing_builder_status_terms+=("verification.result preserves complete, incomplete, and no-check outcomes")
 fi
+if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "Passed requires current observed or admissibly reused passing results for every due selected and binding check" \
+    || ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "result" "not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED"; then
+    missing_builder_status_terms+=("verification.result preserves due-check pass and blocker conditions")
+fi
+if ! handoff_return_object_field_has_line "$handoffs_file" "orchestrator_to_builder_tester" "verification" "evidence" "When commands is empty for a no-command check, identify the concrete procedure performed and its observed result"; then
+    missing_builder_status_terms+=("no-command verification requires observed procedure/result evidence")
+fi
+for term in \
+    "Actual test counts for selected or binding automated-test checks" \
+    "Zero counts mean no tests were executed; they do not mean required tests passed" \
+    "Applicability comes from due selected CheckSpecs and resolved binding constraints"; do
+    if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_builder_tester" "test_summary" "$term"; then
+        missing_builder_status_terms+=("test_summary missing scoped count rule: $term")
+    fi
+done
 for file in \
     agents/codex/builder-tester.toml \
     agents/claude/builder-tester.md; do
     for term in \
         '**Status**: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '**Verification**: commands/checks run plus concise success signals or failure messages' \
-        '`FAILED_VERIFICATION`: build, tests, or required checks ran and failed'; do
+        '`validation_results`: non-empty per-check rows for every due selected check and applicable binding obligation, even when blocked; each row includes `command_or_check`, `result`, `evidence`, exact `selected_check_ids`, and exact `binding_obligation_refs` tuples `{kind, value, source_ref}`.' \
+        '`changed_files`: return each actual created, modified, or deleted file as `{path, change_type, description}`, including RED test additions or extensions. Preserve those changes even when later verification fails; omit or leave empty only when no file changed.' \
+        'Use `result` values `passed`, `failed`, `partial`, `unavailable`, `skipped`, `not_applicable`, or `blocked`; blocked is a distinct gap and never closes a due check or establishes sufficiency.' \
+        'For a started command-based selected CheckSpec, include `executed_command` with `check_id` as the sole selected ID and exact `argv` and `cwd`; omit it when the command did not start.' \
+        'Only when no command or no-command procedure has started, a due command check that cannot start leaves `verification.commands` empty and aggregate `verification.result` `not_run` with status `NEEDS_CONTEXT` or `BLOCKED`. Otherwise preserve every started command and actual per-check outcome, then derive aggregate/status from all due evidence using canonical precedence; `failed`/`FAILED_VERIFICATION` takes precedence. Always retain each `blocked` row with its check ID and blocker evidence.' \
+        'When no check applies, return one `not_applicable` row with empty IDs and binding refs plus the exact rationale.' \
+        'For a no-command check, evidence states the concrete procedure and observed result.' \
+        '`verification_stage`: active TDD returns the dispatched `pre_production_red` or `final_verification`' \
+        '`red_evidence`: return the exact unchanged `{check_id, test_file, test_name, command, cwd, failure_summary, right_reason}` only when the valid matching authorizing RED was observed; omit when it was not observed' \
+        'Only the exact current failed invocation matching the planned check, argv, cwd, test file/name, and meaningful-failure oracle may complete' \
+        '`FAILED_VERIFICATION`: an executed build, test, or other required check failed'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_builder_status_terms+=("$file: $term")
         fi

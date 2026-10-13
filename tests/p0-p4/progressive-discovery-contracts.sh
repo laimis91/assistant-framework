@@ -355,11 +355,77 @@ write_workflow_eval_responses() {
         required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$fixture" | paste -sd ' ' -)"
         if jq -e --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture" >/dev/null; then
             case "$case_id" in
+                unknown-cause-bugfix-routes-through-debugging-before-tdd)
+                    jq -n --arg summary "$required_summary assistant-tdd" '{
+                      summary:$summary,
+                      debugging_result:{status:"root_cause_found",reproduction_status:"yes",hypotheses_count:3,root_cause:"The promotion is applied twice when checkout-42 is replayed.",confidence:"high",transition_to_tdd:"ready",residual_risks:[]},
+                      verification_decision:{
+                        scope:"Fix the reproduced duplicate checkout promotion with the requested TDD cycle.",
+                        policy_basis:{binding_constraints:[{kind:"required_tdd",value:"true",source_ref:"fixture:unknown-cause-bugfix-routes-through-debugging-before-tdd#user-request"}],preferences_applied:[],capability_limits:[]},
+                        test_change:"add_new",
+                        checks:[{check_id:"checkout-promotion-once",claim_or_risk:"The 100-cent promotion is applied once to the 1000-cent subtotal.",action:"add",method:"automated_test",test_scope:"unit",technique:"example",check_ref_or_method:{reference_or_procedure:"Write and run checkout-42 before repair, asserting a 900-cent total instead of the reproduced 800-cent total.",prerequisites:["The checkout-42 replay reproduces duplicate promotion application."],exclusions:["Does not establish the external payment-service boundary."],expected_success:"The total is 900 cents after the repair.",meaningful_failure:"Before repair the assertion fails because the total is 800 cents."},rationale:"The supplied replay provides a meaningful regression oracle for the requested TDD cycle.",method_refs:["skills/assistant-verification/references/methods/unit.md"]}],
+                        tdd_choice:{mode:true,applicable_check_ids:["checkout-promotion-once"],basis:"user_requirement",rationale:"The explicit user TDD mandate remains binding after successful reproduction."},
+                        omitted_checks_and_rationale:["No unrelated full suite is selected."],
+                        stop_rule:"Run meaningful RED before repair, then the selected GREEN check and applicable review."
+                      }
+                    }' >"$response_path"
+                    ;;
+                light-completion-retains-canonical-verification-outputs)
+                    jq -n --arg summary "$required_summary" '{
+                      summary:$summary,
+                      verification_decision:{
+                        scope:"Correct the README install command spelling.",
+                        policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},
+                        test_change:"none",
+                        checks:[{
+                          check_id:"readme-install-command",
+                          claim_or_risk:"The README install command uses an option supported by install.sh.",
+                          action:"run",
+                          method:"automated_test",
+                          test_scope:"unit",
+                          technique:"schema_or_lint",
+                          check_ref_or_method:{
+                            reference_or_procedure:"Run the focused documentation-contract test that checks the README install command against install.sh.",
+                            prerequisites:["Updated README.md, install.sh, and the focused documentation-contract test are available."],
+                            exclusions:["Does not execute the installer or prove native activation."],
+                            expected_success:"The test confirms the documented option is supported by install.sh.",
+                            meaningful_failure:"The README command includes an option the installer does not accept."
+                          },
+                          rationale:"The focused test directly checks the changed documentation claim.",
+                          method_refs:["skills/assistant-verification/references/methods/unit.md"]
+                        }],
+                        tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
+                        omitted_checks_and_rationale:["Installer execution is outside the selected documentation-only claim."],
+                        stop_rule:"Stop when the command comparison passes and the fresh light review passes."
+                      },
+                      evidence_assessment:{
+                        status:"sufficient",
+                        scope_and_evidence_refs:[{
+                          evidence_ref:"check:readme-install-command:17",
+                          selected_check_ids:["readme-install-command"],
+                          binding_obligation_refs:[],
+                          claim_kind:"structural_validity",
+                          claim_scope:["README documents an install.sh-supported option."],
+                          result_state:"passed",
+                          freshness:"current",
+                          exclusions:["Does not prove installer execution or native activation."]
+                        }],
+                        gaps_and_limitations:[],
+                        next_action:"none_needed"
+                      }
+                    }' >"$response_path"
+                    ;;
                 native-slice-execution-uses-dependencies-not-runner-topology)
                     jq -n '{execution_policy:{source_writer_policy:"sequential_shared_or_unknown",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"not_available",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
                     ;;
                 isolated-independent-slices-integrate-before-review)
                     jq -n '{execution_policy:{source_writer_policy:"isolated_A_B_overlap_permitted",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"fixture-runtime-isolation-A-B-v1",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
+                    ;;
+                build-derives-tdd-from-selected-slice-checks)
+                    write_tdd_slice_projection_response "$response_path" "$required_summary"
+                    ;;
+                build-phase-verifies-selected-check-before-advancing)
+                    jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria.",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[]}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
                     ;;
                 verification-reuse-current-scenario-matrix|verification-reuse-preserves-independent-review)
                     write_verification_reuse_response "$case_id" "$response_path" "$required_summary"
@@ -1923,6 +1989,7 @@ done < <(jq -r '.cases[] | select((.category // "") | contains("clarification"))
 
 if [[ "${#state_eval_missing[@]}" -eq 0 ]] \
     && [[ "$state_compliant_status" -eq 0 ]] \
+    && grep -Fq $'PASS\tassistant-workflow\tlight-completion-retains-canonical-verification-outputs' "$state_compliant_output" \
     && grep -Fq "Summary: total=$workflow_case_count passed=$workflow_expected_pass_count failed=0 unavailable=$workflow_clarification_case_count" "$state_compliant_output" \
     && [[ "$state_fake_status" -eq 0 ]] \
     && grep -Fq $'FAIL\tassistant-workflow\tprogressive-resolved-then-blocked-recovery' "$state_fake_output" \
@@ -2641,7 +2708,15 @@ retained_state_route_terms=(
     "uncertainty_shape=bounded"
 )
 
-for file in "$workflow_dir/SKILL.md" "$progressive_ref"; do
+for term in \
+    'route-clear state is `pending`/`consumed`' \
+    'sequence readiness is `active`/`closed`' \
+    'Retained artifacts remain active after bounded shape'; do
+    if ! p0p4_contains_text "$workflow_dir/SKILL.md" "$term"; then
+        retained_state_missing+=("SKILL.md missing compact retained-state routing term $term")
+    fi
+done
+for file in "$progressive_ref"; do
     for term in "${retained_state_route_terms[@]}"; do
         if ! p0p4_contains_text "$file" "$term"; then
             retained_state_missing+=("${file#$FRAMEWORK_DIR/} missing retained-state routing term $term")
@@ -2996,7 +3071,6 @@ for term in \
 done
 
 for file in \
-    "$workflow_dir/SKILL.md" \
     "$progressive_ref" \
     "$requirement_map_ref" \
     "$journal_template" \
@@ -3012,7 +3086,16 @@ for file in \
     done
 done
 
-for file in "$workflow_dir/SKILL.md" "$progressive_ref"; do
+for term in \
+    'retention is `terminally_archived`' \
+    'Durable markers still require validation with missing/invalid retention or `not_applicable`/retained state; fail closed' \
+    'Terminal archival needs a typed `progressive_terminal_archival` tombstone and final evidence' \
+    'completed alone is insufficient and archive cannot revert'; do
+    if ! p0p4_contains_text "$workflow_dir/SKILL.md" "$term"; then
+        archival_retention_missing+=("SKILL.md missing compact fail-closed retention guidance $term")
+    fi
+done
+for file in "$progressive_ref"; do
     for term in \
         "durable markers load validation regardless of whether progressive_artifact_retention_state is missing, not_applicable, or retained" \
         "progressive_artifact_retention_state=terminally_archived"; do

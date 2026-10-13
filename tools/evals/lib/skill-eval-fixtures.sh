@@ -13,9 +13,36 @@ skill_name = ARGV.fetch(1)
 contracts_dir = ARGV.fetch(2)
 repo_root = ARGV.fetch(3)
 
+# Resolve only the two explicitly carried verification producer artifacts.
+# Consumer requiredness stays local; nested types come from their sole owner.
+verification_producer_artifacts = nil
+expand_verification_aliases = lambda do |field|
+  next field unless field.is_a?(Hash)
+
+  expanded = field.dup
+  name = field["name"]
+  if %w[verification_decision evidence_assessment].include?(name) &&
+      field["type"] == "object" &&
+      field.fetch("validation", "").include?("assistant-verification/contracts/output.yaml##{name}")
+    verification_producer_artifacts ||= YAML.load_file(
+      File.join(repo_root, "skills", "assistant-verification", "contracts", "output.yaml")
+    ).fetch("artifacts")
+    matches = verification_producer_artifacts.select { |artifact| artifact["name"] == name }
+    unless matches.length == 1 && matches.first["type"] == "object" && matches.first["object_fields"].is_a?(Array)
+      warn "verification producer alias must resolve exactly once: #{name}"
+      exit 1
+    end
+    expanded["object_fields"] = matches.first.fetch("object_fields")
+  end
+  if expanded["object_fields"].is_a?(Array)
+    expanded["object_fields"] = expanded["object_fields"].map { |child| expand_verification_aliases.call(child) }
+  end
+  expanded
+end
+
 roots = Hash.new { |hash, key| hash[key] = [] }
 add_root = lambda do |field|
-  roots[field.fetch("name")] << field if field.is_a?(Hash) && field["name"].is_a?(String)
+  roots[field.fetch("name")] << expand_verification_aliases.call(field) if field.is_a?(Hash) && field["name"].is_a?(String)
 end
 
 load_contract_roots = lambda do |directory, include_non_output_roots|
@@ -129,7 +156,7 @@ final_snapshot_identity_schema = {
 }
 inline_eval_only_roots = {
   "assistant-workflow" => [
-    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["7.2"] }] },
+    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["8.0"] }] },
     { "name" => "current_final_batch", "type" => "object", "required" => false, "object_fields" => [{ "name" => "review_snapshot_id", "type" => "string", "required" => true }, final_snapshot_identity_schema] },
     { "name" => "harness_entry_state", "type" => "object", "required" => false },
     {
@@ -351,10 +378,14 @@ end
           exit 1
         end
         declared_fields = target_field.fetch("object_fields").map { |field| field["name"] }.sort
-        unless fields.sort == declared_fields
-          undeclared_fields = fields - declared_fields
+        required_fields = target_field.fetch("object_fields").select do |field|
+          field["required"] == true && !field["condition"].is_a?(String)
+        end.map { |field| field["name"] }
+        undeclared_fields = fields - declared_fields
+        missing_required_fields = required_fields - fields
+        unless undeclared_fields.empty? && missing_required_fields.empty?
           if undeclared_fields.empty?
-            warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] object_keys_exact fields must exactly match the declared object schema: #{path.to_json}"
+            warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] object_keys_exact fields must include every unconditional required field: #{missing_required_fields.to_json}"
           else
             warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] undeclared assertion path fields: #{undeclared_fields.to_json}"
           end

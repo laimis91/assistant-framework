@@ -432,9 +432,11 @@ projections = worker_selectors.map do |selector|
 end
 
 def append_with_boundary(content, addition)
+  content = content.b
+  addition = addition.b
   return addition if content.empty?
-  return content + addition if content.end_with?("\n")
-  content + "\n" + addition
+  return content + addition if content.end_with?("\n".b)
+  content + "\n".b + addition
 end
 
 declared_content = ""

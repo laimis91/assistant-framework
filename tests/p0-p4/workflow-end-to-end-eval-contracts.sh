@@ -266,7 +266,8 @@ fi
 test_start "README and eval guide retain exact eight-case, 48-run, 24-pair activation-gated accounting"
 if grep -Fq 'eight-case' "$readme" \
     && grep -Fq '48 calls / 24 pairs' "$readme" \
-    && grep -Fq "eight-case three-repeat pilot (${pilot_runs_expected} runs)" "$eval_readme" \
+    && grep -Fq "manifest remains historical comparison data" "$eval_readme" \
+    && grep -Fq "newly authorized exact pilot completes" "$eval_readme" \
     && grep -Fq "${pilot_runs_expected}/${pilot_runs_expected} runs and ${pilot_pairs_expected}/${pilot_pairs_expected} pairs" "$eval_readme" \
     && grep -Fq 'manual_native_observation' "$eval_readme" \
     && grep -Fq 'contract_test_fixture' "$eval_readme"; then

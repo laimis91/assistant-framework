@@ -81,8 +81,8 @@ test_start "workflow loads harness reference only for relevant medium+ work"
 missing_load_terms=()
 for term in \
     "\`references/workflow-controller.md\` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation." \
-    "Ordinary medium+ workflow tasks stay standard, non-harness, and non-QA unless explicit controller criteria apply." \
-    "Load \`references/harness-controller.md\` only for \`execution_intent != prepare_only\` with \`harness_capable=true\`."; do
+    "Ordinary medium+ work stays standard, non-harness, and non-QA unless controller criteria apply." \
+    "Load \`references/harness-controller.md\` only for non-\`prepare_only\` work with \`harness_capable=true\`."; do
     if ! grep -Fq -- "$term" "$workflow_dir/SKILL.md"; then
         missing_load_terms+=("SKILL.md: $term")
     fi

@@ -6,9 +6,9 @@ Complete this during Phase 7 (Document). The checklist scales by task size from 
 
 ### All sizes (small, medium, large, mega)
 
-- [ ] Code compiles / builds with zero errors
-- [ ] All existing tests pass
-- [ ] New code has tests (unit tests at minimum)
+- [ ] Selected or binding build checks pass
+- [ ] Selected automated tests and binding project checks pass; actual results and remaining gaps are recorded
+- [ ] Current selected verification covers the changed behavior and material risks; tests have meaningful oracles, and non-test checks have concrete procedures and results
 - [ ] Code reviewed by a human (AI review is not sufficient)
 - [ ] CHANGELOG updated (if user-facing change)
 - [ ] No hardcoded secrets, API keys, or credentials in code
@@ -41,7 +41,7 @@ Complete this during Phase 7 (Document). The checklist scales by task size from 
   - ⚠️ Human sign-off required: [SRE / Tech Lead]
 - [ ] Observability: dashboards, alerts, or runbooks updated
 - [ ] Performance: no regressions in critical paths (load test or benchmark if applicable)
-- [ ] Integration tests pass across module/service boundaries
+- [ ] Selected integration checks and binding project checks cover affected module/service boundaries
 - [ ] Runbook updated for on-call (if new service, infrastructure, or failure mode)
   - ⚠️ Human sign-off required: [SRE / Platform]
 - [ ] Deploy strategy defined (direct, canary, blue-green)
@@ -49,7 +49,7 @@ Complete this during Phase 7 (Document). The checklist scales by task size from 
 ## How to use this checklist
 
 1. During Phase 7, the AI generates this checklist pre-filled based on task size
-2. AI checks off items it can verify (tests pass, no secrets in code, docs updated)
+2. AI checks off applicable items supported by actual selected/binding evidence; carry the canonical decision and assessment, and record unassessed items explicitly
 3. AI flags items that need human action with ⚠️
 4. Present the completed checklist to the user for review
 5. Attach the checklist to the PR or release notes
@@ -63,7 +63,7 @@ Date: [YYYY-MM-DD]
 
 ✅ Verified by AI:
 - [x] Build passes
-- [x] All tests pass (N unit, M integration)
+- [x] Selected and binding checks pass [actual results; test counts only for tests executed or reused]
 - [x] No secrets in code
 - [x] CHANGELOG updated
 - ...

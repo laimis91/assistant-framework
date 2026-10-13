@@ -1,7 +1,7 @@
 # Debugging handoff contracts
 # Handoffs are optional; direct execution is valid when subagents are unavailable or policy-disallowed.
 
-schema_version: "1.1"
+schema_version: "2.0"
 contract: handoffs
 skill: assistant-debugging
 
@@ -72,6 +72,30 @@ handoffs:
         type: string
         required: true
         description: "Confirmed cause or explicitly labeled mitigation target"
+      - name: verification_decision
+        type: object
+        required: true
+        description: "Canonical assistant-verification decision resolved before mutation."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and is carried unchanged from debugging input."
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Selected CheckSpec IDs due for this fix increment"
+        validation: "Ordered unique IDs resolving exactly once in the unchanged decision."
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact applicable binding tuples due for this fix increment"
+        validation: "Each tuple exactly equals an applicable canonical policy constraint; do not create execution checks for unrelated constraints."
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
+      - name: tdd_applies
+        type: boolean
+        required: true
+        description: "Whether meaningful RED is active for this fix; the generic debugging_fix handoff is permitted only when false."
+        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the task decision unchanged. When true, do not dispatch this Fixer; route through assistant-tdd's existing execution_lane before mutation."
       - name: reproduction_evidence
         type: object
         required: true
@@ -93,5 +117,38 @@ handoffs:
       - name: verification_run
         type: object[]
         required: true
-        description: "Checks run by the fixer and their results"
-    on_missing_field: "Ask Fixer to supply missing field before accepting the fix, or inspect the diff directly and record the gap"
+        description: "Per-check results bound to selected IDs and exact applicable tuples, with the original failure path"
+        validation: "Partial and unavailable retain their evidence and remain explicit gaps; never collapse them to passed or blocked."
+        object_fields:
+          - {name: command_or_check, type: string, required: true}
+          - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, blocked]}
+          - {name: evidence, type: string, required: true}
+          - {name: selected_check_ids, type: "string[]", required: true}
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
+          - name: executed_command
+            type: object
+            required: conditional
+            condition: "a command-based selected CheckSpec was started, regardless of outcome"
+            description: "Observed invocation identity for exactly one selected command check"
+            validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd. Missing or ambiguous invocation invalidates executed command evidence; checks never started retain their gap and omit this field."
+            object_fields:
+              - {name: check_id, type: string, required: true}
+              - {name: argv, type: "string[]", required: true, min_items: 1}
+              - {name: cwd, type: string, required: true}
+      - name: verification_decision
+        type: object
+        required: true
+        description: "The canonical decision returned unchanged from context."
+        validation: "Equals context_fields.verification_decision exactly; do not revise CheckSpecs or TddChoice during FIX."
+      - name: tdd_applies
+        type: boolean
+        required: true
+        description: "TDD projection returned unchanged from context."
+        validation: "Equals context_fields.tdd_applies, derived from selected_check_ids intersected with verification_decision.tdd_choice.applicable_check_ids."
+    on_missing_field: "Do not infer false when tdd_applies or its unchanged decision is missing or mismatched; derive it from the selected/applicable ID intersection. This generic Fixer may be dispatched only when false. When true, route the unchanged packet through assistant-tdd's existing execution_lane before mutation. For other missing fields, request the field or record the evidence gap; inspecting a diff does not authorize a TDD bypass."

@@ -1,7 +1,7 @@
 # TDD Output Contract
-# Defines what a completed TDD session MUST produce.
+# Defines the canonical TDD cycle log used by delegated handoffs and completion.
 
-schema_version: "1.0"
+schema_version: "2.0"
 contract: output
 skill: assistant-tdd
 
@@ -10,9 +10,9 @@ artifacts:
     type: object[]
     required: true
     condition: always
-    description: "Record of every Red-Green-Refactor cycle executed"
+    description: "Actual phase evidence for each started Red-Green-Refactor cycle; may remain partial between delegated owners"
     min_items: 1
-    validation: "One entry per behavior. Every behavior from input must have a corresponding cycle."
+    validation: "One entry per started behavior cycle; every input behavior has an entry before TDD completion. During delegated workflow handoffs, a current in-progress entry may omit not-yet-started GREEN or REFACTOR phases, and a started phase may have zero command_results while awaiting its verification owner; preserve this partial entry without treating it as complete. TDD completion requires actual current command_results for RED, GREEN, and REFACTOR, at least one invocation per phase, and all intended pass guards. Each invocation retains literal argv/cwd and its observed result. For workflow-authorizing RED, exactly one current failed invocation binds the current test_file/test_name, a check_id in selected_check_ids intersect tdd_choice.applicable_check_ids, exact CheckSpec argv/cwd, and the matching meaningful_failure oracle before production edits. Other invocations remain honest and do not authorize edits. Standalone/no-decision TDD and non-authorizing invocations may omit check_id; never reconstruct or invent an ID, command, or cwd. Older cycle logs without invocation identity may remain historical evidence but cannot establish current selected-check closure."
     object_fields:
       - name: behavior
         type: string
@@ -35,61 +35,186 @@ artifacts:
           - name: failure_reason
             type: string
             required: true
-            validation: "Must describe WHY the test failed (not syntax error or missing import)"
+            validation: "Must describe why this test's observed failure matches the current selected CheckSpec meaningful_failure oracle when it authorizes workflow production edits; syntax, setup, and unrelated failures never qualify."
           - name: debugging_trace
             type: string
             required: conditional
             condition: "when the behavior is a bugfix"
             description: "How the RED test traces to assistant-debugging reproduction/root-cause evidence"
             validation: "Must cite original failure path or reproduction evidence for bugfix RED tests"
+          - name: command_results
+            type: object[]
+            required: true
+            min_items: 1
+            description: "Actual RED phase invocations, represented separately for each test target or relevant check."
+            validation: "Record each command actually run in this RED phase with its literal argv, explicit cwd, observed result, and freshness. A current selected CheckSpec ID is required when this invocation is claimed as evidence for that check; omit it for standalone TDD without a verification decision. For workflow-authorizing RED, exactly one current failed invocation carries the matching meaningful_failure oracle and binds its selected/applicable ID, exact argv/cwd, and test_file/test_name; other invocations remain honest."
+            object_fields:
+              - name: target
+                type: string
+                required: true
+                description: "Test target, regression, or binding suite invoked in this phase."
+                validation: "For the unique authorizing RED invocation, identifies the same test_file and test_name as the enclosing red artifact."
+              - name: test_file
+                type: string
+                required: conditional
+                condition: "this is the workflow-authorizing RED invocation in a current TDD cycle with verification_decision"
+                description: "Test file targeted by this RED invocation."
+              - name: test_name
+                type: string
+                required: conditional
+                condition: "this is the workflow-authorizing RED invocation in a current TDD cycle with verification_decision"
+                description: "Specific test targeted by this RED invocation."
+              - name: argv
+                type: string[]
+                required: true
+                min_items: 1
+                description: "Literal executable and arguments used for this invocation."
+              - name: cwd
+                type: string
+                required: true
+                description: "Explicit working directory used for this invocation."
+              - name: result
+                type: enum
+                required: true
+                enum_values: [passed, failed, partial, unavailable]
+                description: "Observed outcome of this invocation."
+              - name: freshness
+                type: enum
+                required: true
+                enum_values: [current, stale, unknown]
+                description: "Whether this invocation result is current for this cycle."
+              - name: check_id
+                type: string
+                required: conditional
+                condition: "this command result is claimed as evidence for a selected CheckSpec in the available unchanged verification_decision or is the workflow-authorizing RED invocation"
+                description: "Current selected CheckSpec identity; omit when there is no decision or this invocation is not evidence for a selected CheckSpec."
+                validation: "For the unique workflow-authorizing RED invocation, resolves exactly once to a CheckSpec in selected_check_ids intersect tdd_choice.applicable_check_ids; argv/cwd exactly equal its command.argv/command.cwd, and the enclosing test_file/test_name plus failure_reason match that check's target and meaningful_failure. Other invocations may omit the ID; when supplied, it resolves once to a selected CheckSpec with exact argv/cwd. standalone/no-decision TDD may omit IDs; never invent one."
           - name: verified_failing
             type: boolean
             required: true
-            validation: "Must be true — test was run and confirmed to fail for the right reason"
+            validation: "Must be true only when the test was run and confirmed to fail for the right reason, with at least one current command_results entry for test_file and test_name whose freshness is current and result is failed. Standalone/no-decision TDD may retain multiple matching current failed invocations; one or more substantiate RED, and every actual invocation remains in history. When authorizing workflow production edits, the command_results rule requires exactly one authorizing invocation; that invocation must carry the exact applicable selected check_id, argv, cwd, test target, and matching meaningful_failure oracle; missing/wrong identity or oracle is not valid RED, and other invocations remain honest and do not authorize edits. This does not add an ID requirement to standalone/no-decision TDD or unrelated invocations."
       - name: green
         type: object
-        required: true
-        description: "GREEN phase: make test pass with simplest code"
+        required: conditional
+        condition: "the current cycle has started GREEN after authorizing RED and production edits"
+        description: "GREEN phase: actual production file and any current verification invocations; an empty command_results list is an in-progress handoff, not passing evidence"
         object_fields:
           - name: production_file
             type: string
             required: true
+          - name: command_results
+            type: object[]
+            required: true
+            min_items: 0
+            description: "Actual GREEN phase invocations, represented separately for each target, regression, or binding suite."
+            validation: "Record only commands actually run in this GREEN phase with literal argv, explicit cwd, observed result, and freshness; an empty list means verification has not run yet and must not be interpreted as a pass. TDD completion requires at least one actual current invocation and every due guard passing. A current selected CheckSpec ID is required when this invocation is claimed as evidence for that check; omit it for standalone TDD without a verification decision."
+            object_fields:
+              - name: target
+                type: string
+                required: true
+                description: "Test target, regression, or binding suite invoked in this phase."
+              - name: argv
+                type: string[]
+                required: true
+                min_items: 1
+                description: "Literal executable and arguments used for this invocation."
+              - name: cwd
+                type: string
+                required: true
+                description: "Explicit working directory used for this invocation."
+              - name: result
+                type: enum
+                required: true
+                enum_values: [passed, failed, partial, unavailable]
+                description: "Observed outcome of this invocation."
+              - name: freshness
+                type: enum
+                required: true
+                enum_values: [current, stale, unknown]
+                description: "Whether this invocation result is current for this cycle."
+              - name: check_id
+                type: string
+                required: conditional
+                condition: "this command result is claimed as evidence for a selected CheckSpec in the available unchanged verification_decision"
+                description: "Current selected CheckSpec identity; omit when there is no decision or this invocation is not evidence for a selected CheckSpec."
+                validation: "Resolves exactly once to a selected CheckSpec in the unchanged verification_decision; argv and cwd exactly equal CheckSpec.command.argv and CheckSpec.command.cwd. Omit when no decision is available or this invocation is not evidence for a selected CheckSpec; never invent an ID."
           - name: test_passes
             type: boolean
-            required: true
-            validation: "Must be true — the previously failing test now passes"
+            required: conditional
+            condition: "at least one GREEN command_results invocation is recorded"
+            validation: "Must be true only when a current command_results entry for the RED test target has freshness=current and result=passed; omit until a GREEN invocation is recorded."
           - name: all_tests_pass
             type: boolean
-            required: true
-            validation: "Must be true — no other tests broke"
+            required: conditional
+            condition: "at least one GREEN command_results invocation is recorded"
+            validation: "Must be true only when the current RED test target, every due selected TDD check, each relevant due selected automated regression check, and each applicable due/executable binding suite have command_results with freshness=current and result=passed. For selected checks require exact check_id/argv/cwd; missing or mismatched identity, stale, failed, partial, or unavailable result blocks true. Include the target even in standalone TDD; no unselected suite is implied. Omit until a GREEN invocation is recorded."
       - name: refactor
         type: object
-        required: true
-        description: "REFACTOR phase: clean up without changing behavior"
+        required: conditional
+        condition: "current GREEN all_tests_pass is true and the owning CodeWriter has assessed REFACTOR"
+        description: "REFACTOR phase: actual changes_made (or none needed) and any current verification invocations; an empty command_results list awaits its verification owner"
         object_fields:
           - name: changes_made
             type: string
             required: true
             description: "What was refactored, or 'none needed'"
+          - name: command_results
+            type: object[]
+            required: true
+            min_items: 0
+            description: "Actual REFACTOR phase invocations, represented separately for each target, regression, or binding suite."
+            validation: "Record only commands actually run in this REFACTOR phase with literal argv, explicit cwd, observed result, and freshness; an empty list means verification has not run yet and must not be interpreted as a pass. TDD completion requires at least one actual current invocation and every due guard passing. A current selected CheckSpec ID is required when this invocation is claimed as evidence for that check; omit it for standalone TDD without a verification decision."
+            object_fields:
+              - name: target
+                type: string
+                required: true
+                description: "Test target, regression, or binding suite invoked in this phase."
+              - name: argv
+                type: string[]
+                required: true
+                min_items: 1
+                description: "Literal executable and arguments used for this invocation."
+              - name: cwd
+                type: string
+                required: true
+                description: "Explicit working directory used for this invocation."
+              - name: result
+                type: enum
+                required: true
+                enum_values: [passed, failed, partial, unavailable]
+                description: "Observed outcome of this invocation."
+              - name: freshness
+                type: enum
+                required: true
+                enum_values: [current, stale, unknown]
+                description: "Whether this invocation result is current for this cycle."
+              - name: check_id
+                type: string
+                required: conditional
+                condition: "this command result is claimed as evidence for a selected CheckSpec in the available unchanged verification_decision"
+                description: "Current selected CheckSpec identity; omit when there is no decision or this invocation is not evidence for a selected CheckSpec."
+                validation: "Resolves exactly once to a selected CheckSpec in the unchanged verification_decision; argv and cwd exactly equal CheckSpec.command.argv and CheckSpec.command.cwd. Omit when no decision is available or this invocation is not evidence for a selected CheckSpec; never invent an ID."
           - name: all_tests_pass
             type: boolean
-            required: true
-            validation: "Must be true — refactoring did not break any tests"
+            required: conditional
+            condition: "at least one REFACTOR command_results invocation is recorded"
+            validation: "Must be true only when the current RED test target, every due selected TDD check, each relevant due selected automated regression check, and each applicable due/executable binding suite have command_results with freshness=current and result=passed. For selected checks require exact check_id/argv/cwd; missing or mismatched identity, stale, failed, partial, or unavailable result blocks true. Include the target even in standalone TDD; no unselected suite is implied. Omit until a REFACTOR invocation is recorded."
 
   - name: coverage_summary
     type: object
     required: true
     condition: always
     description: "Summary of what is now tested"
-    validation: "Must report new_tests, total_tests_run, and all_passing=true at TDD completion"
+    validation: "Must report new_tests (which may be zero when an existing assertion is extended), total_tests_run, and all_passing=true for the selected TDD checks and binding suites at completion"
     object_fields:
       - name: new_tests
         type: int
         required: true
-        validation: ">= 1"
+        validation: ">= 0; zero is valid when this cycle extends an existing assertion and still records meaningful RED evidence"
       - name: total_tests_run
         type: int
         required: true
+        validation: "> 0 at completion; count actual selected TDD and binding-suite test executions"
       - name: all_passing
         type: boolean
         required: true
@@ -132,7 +257,7 @@ artifacts:
 
 # Completeness check:
 # 1. Every input behavior has a corresponding cycle_log entry
-# 2. Every cycle has verified_failing=true (RED), test_passes=true (GREEN), all_tests_pass=true (REFACTOR)
+# 2. Every active cycle has a current failed RED invocation for the intended reason, a current passing GREEN result for that test, and current passing REFACTOR results for every due selected check and applicable regression/binding suite
 # 3. No production code exists without a preceding failing test
-# 4. coverage_summary.all_passing is true
+# 4. coverage_summary.all_passing is true for selected TDD checks and binding suites, not an unselected full suite
 # 5. If architecture_test_obligations are carried, every unique obligation_id has exactly one architecture_obligation_coverage entry with evidence or an explicit blocker/unknown; no coverage id is unknown or duplicated

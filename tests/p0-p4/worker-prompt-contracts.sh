@@ -3,6 +3,65 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
+test_start "Codex and Claude implementation/verifier profiles preserve selected checks and conditional TDD"
+tdd_profile_failures=()
+for file in \
+    agents/codex/code-writer.toml \
+    agents/claude/code-writer.md; do
+    for term in \
+        "Preserve the canonical" \
+        '`tdd_applies` is true' \
+        "intersection" \
+        'task-wide `tdd_mode`' \
+        "selected checks" \
+        "binding" \
+        "intersection of due selected and unchanged applicable IDs" \
+        "Split packets" \
+        "with multiple intersecting IDs." \
+        "Standalone/no-decision TDD does not invent a CheckSpec ID." \
+        "tdd_cycle_log_ref" \
+        "create the in-progress entry if needed" \
+        "green.production_file" \
+        "Only after the ref shows current" \
+        "same Code Writer" \
+        "refactor.changes_made" \
+        "none needed"; do
+        if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
+            tdd_profile_failures+=("$file missing $term")
+        fi
+    done
+done
+for file in agents/codex/builder-tester.toml agents/claude/builder-tester.md; do
+    for term in \
+        "When TDD is active" \
+        "when false," \
+        "selected checks and binding project suites" \
+        "verification_stage" \
+        "pre_production_red" \
+        "final_verification" \
+        "exact typed seven-field RED evidence" \
+        "only when the matching meaningful failure is observed" \
+        "Otherwise omit" \
+        "If that RED is observed alongside another due" \
+        "while FAILED_VERIFICATION keeps precedence" \
+        "omit when it was not observed" \
+        "Forward valid RED evidence unchanged through Code Writer." \
+        "aggregate partial" \
+        "does not permit Review" \
+        "tdd_cycle_log_ref" \
+        "create the in-progress canonical" \
+        "stage-only" \
+        "pending REFACTOR" \
+        "second" \
+        "separate current REFACTOR invocations" \
+        "omit unstarted phases"; do
+        if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
+            tdd_profile_failures+=("$file missing $term")
+        fi
+    done
+done
+if [[ "${#tdd_profile_failures[@]}" -eq 0 ]]; then pass; else fail "worker profile TDD/verification policy diverged: ${tdd_profile_failures[*]}"; fi
+
 test_start "Claude and Codex core prompts include worker status packets"
 missing_prompt_packet_terms=()
 for file in \
@@ -10,7 +69,7 @@ for file in \
     agents/claude/code-writer.md; do
     for term in \
         "## What you return" \
-        '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, or `DEVIATED`' \
+        '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '`changed_files`: files created, modified, or deleted with brief descriptions' \
         '`evidence`: concrete implementation evidence, usually file paths plus behavior changed' \
         "## Status meanings"; do
@@ -58,7 +117,8 @@ for file in \
     agents/claude/code-reviewer.md; do
     for term in \
         "canonical code reviewer" \
-        "code defects, security, architecture, test coverage, and structural code issues" \
+        "selected verification methods" \
+        "absence of tests alone is not a finding" \
         "Start with a status packet:" \
         '`status`: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, or `BLOCKED`' \
         '`evidence`: review material, files, searches, or checks supporting the verdict' \
@@ -165,8 +225,9 @@ for term in \
     "deliverable type" \
     "exact files" \
     "acceptance criteria" \
-    "test/TDD expectation" \
-    "verification command" \
+    "carried verification_decision and current evidence_assessment" \
+    "conditional TDD expectation" \
+    "exact argv/cwd or concrete selected-check procedure" \
     "expected success signal" \
     "evidence to record" \
     "deviation/rollback rule"; do
@@ -189,8 +250,9 @@ for term in \
     "deliverable type" \
     "exact files" \
     "acceptance criteria" \
-    "test/TDD expectation" \
-    "verification command" \
+    "carried verification_decision and current evidence_assessment" \
+    "conditional TDD expectation" \
+    "exact argv/cwd or concrete selected-check procedure" \
     "expected success signal" \
     "evidence to record" \
     "deviation/rollback rule"; do

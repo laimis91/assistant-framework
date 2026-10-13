@@ -1,4 +1,4 @@
-schema_version: "1.1"
+schema_version: "2.0"
 contract: output
 skill: assistant-debugging
 
@@ -38,7 +38,7 @@ artifacts:
     required: true
     description: "Debugging outcome"
     enum_values: [fixed, root_cause_found, mitigated, not_reproduced, blocked, inconclusive]
-    validation: "Must match the evidence gathered and must not claim fixed without verification"
+    validation: "Must match the evidence gathered; fixed requires the original failure path and all selected and binding checks to pass."
     on_fail: "Downgrade status to the strongest evidence-supported outcome and explain the missing proof"
 
   - name: symptom_summary
@@ -147,12 +147,29 @@ artifacts:
         required: true
         description: "Why these changes address the cause rather than only the symptom"
 
+  - name: verification_decision
+    type: object
+    required: conditional
+    condition: "when a fix or mitigation is attempted"
+    description: "Canonical assistant-verification decision consumed before mutation."
+    validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and equals the decision received in debugging input; preserve every CheckSpec and TddChoice unchanged."
+    on_fail: "Resolve the decision through assistant-verification before mutation; do not invent or rewrite test scope or checks."
+
+  - name: tdd_cycle_log_ref
+    type: string
+    required: conditional
+    condition: "selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids and current cycle has started"
+    description: "Reference to assistant-tdd's canonical cycle_log; do not duplicate its schema."
+    on_missing: fail
+    validation: "Resolve to the actual current cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log. Preserve actual partial cycle_log for blocked/partial outcomes. For status == fixed, validate the complete current cycle against the unchanged verification_decision and selected/applicable IDs: right-reason authorizing RED, passing GREEN and REFACTOR, and all due checks. Omit when TDD is inactive or cycle unstarted; never reconstruct phases or invocations."
+    on_fail: "Preserve an actual started partial cycle_log for blocked/partial outcomes; downgrade fixed if its current complete cycle or due checks are missing."
+
   - name: verification
     type: object[]
     required: true
     description: "Commands, tests, inspections, or manual checks used to verify outcome"
-    validation: "Must include original reproduction path when available and at least one relevant regression check or explain why not feasible"
-    on_fail: "Run missing verification or record why it is blocked; do not count skipped checks as proof"
+    validation: "Each row carries exact selected_check_ids and binding_obligation_refs whose current procedures/oracles it actually observes. Close every due check and applicable due/executable tuple; shared claim text or ID alone does not bind another check. For a started command-based selected CheckSpec, executed_command binds its sole selected_check_id to the unchanged CheckSpec's exact argv and cwd. Skipped, blocked, or otherwise non-executed checks remain explicit gaps. Include the original failure path when available; a test is required only when selected. Preserve method-specific evidence and gaps."
+    on_fail: "Run missing selected or binding checks, or record the exact blocker; do not replace an unselected test with a false infeasibility claim or count skipped checks as proof."
     object_fields:
       - name: command_or_check
         type: string
@@ -161,16 +178,38 @@ artifacts:
       - name: result
         type: enum
         required: true
-        enum_values: [passed, failed, skipped, blocked]
-        description: "Verification result"
+        enum_values: [passed, failed, partial, unavailable, skipped, blocked]
+        description: "Observed result; partial and unavailable retain their evidence and remain explicit gaps"
       - name: evidence
         type: string
         required: true
         description: "Output, observation, or reason supporting the result"
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Exact selected CheckSpec IDs whose procedure this result actually observes; empty when none"
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact applicable binding tuples this result actually enforces; empty when none"
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
+      - name: executed_command
+        type: object
+        required: conditional
+        condition: "a command-based selected CheckSpec was started, regardless of outcome"
+        description: "Observed invocation identity for exactly one selected command check"
+        validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd. Missing or ambiguous invocation invalidates executed command evidence; checks never started retain their gap and omit this field."
+        object_fields:
+          - {name: check_id, type: string, required: true}
+          - {name: argv, type: "string[]", required: true, min_items: 1}
+          - {name: cwd, type: string, required: true}
 
   - name: residual_risks
     type: string[]
     required: true
     description: "Remaining uncertainty, skipped checks, blocked diagnostics, or follow-up risks"
-    validation: "Use an empty list only when reproduction, fix, and regression verification all passed"
-    on_fail: "List residual uncertainty or explain why none remains"
+    validation: "Use an empty list only when the original failure path and every selected and binding check passed"
+    on_fail: "List residual uncertainty, including any selected check that is missing, failed, partial, unavailable, skipped, or blocked"

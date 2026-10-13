@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "11.1"
+schema_version: "12.0"
 contract: output
 skill: assistant-workflow
 
@@ -22,29 +22,29 @@ completion_tiers:
     checkpoint_policy: "Returns validation_results plus the typed readiness artifact with Execution not started, exact scope, applicable evidence ref, gaps, open decisions, implications, and next step."
   small:
     controller_intensity: light
-    required_artifacts: [completion_policy, changed_files, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_applicability, change_impact_evidence]
+    required_artifacts: [completion_policy, changed_files, verification_decision, evidence_assessment, validation_results, fresh_review_result]
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, tdd_cycle_log_ref, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_applicability, change_impact_evidence]
     review_gate: "fresh review after validation; Pack/expanded impact uses canonical assistant-review; full independent review only when risk promotes work"
-    checkpoint_policy: "an inline scope/check summary is enough; include an inline plan only when plan_mode=inline. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
+    checkpoint_policy: "Keep state inline. Before Build visibly return the full unchanged verification_decision; at completion return one inline JSON object with both existing output keys, verification_decision and evidence_assessment, preserving selected CheckSpecs/TddChoice and actual current evidence refs, status, gaps, and exclusions. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
   small_elevated:
     condition: "execution_intent != prepare_only and size == small and (controller_intensity == strict or qa_evaluation_mode == required)"
     controller_intensity: strict
-    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, validation_results, spec_review_result, review_result, final_handoff]
-    conditional_artifacts: [test_results, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, manual_test_steps, manual_verification_result, change_impact_applicability, change_impact_evidence]
+    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, verification_decision, evidence_assessment, validation_results, spec_review_result, review_result, final_handoff]
+    conditional_artifacts: [test_results, tdd_cycle_log_ref, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, manual_test_steps, manual_verification_result, change_impact_applicability, change_impact_evidence]
     prohibited_artifacts: [fresh_review_result, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary]
     review_gate: "typed canonical review and required QA terminal state; no medium+ slice evidence"
     checkpoint_policy: "strict phase checkpoints without decomposition artifacts"
   medium:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
-    required_artifacts: [completion_policy, triage_result, changed_files, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
-    conditional_artifacts: [test_results, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, change_impact_applicability, change_impact_evidence]
+    required_artifacts: [completion_policy, triage_result, changed_files, verification_decision, evidence_assessment, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
+    conditional_artifacts: [test_results, tdd_cycle_log_ref, build_repair_state, plan_document, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, change_impact_applicability, change_impact_evidence]
     review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
-    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, test_results, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
-    conditional_artifacts: [debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, feature_preparation_evidence, architecture_decision_pack, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation, change_impact_applicability, change_impact_evidence]
+    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, verification_decision, evidence_assessment, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note, slice_manifest, slice_verification_summary]
+    conditional_artifacts: [test_results, tdd_cycle_log_ref, debugging_result, build_repair_state, plan_document, artifact_contract, task_state_reconciliation, pattern_retrieval_note, decomposition_plan_review, feature_preparation_evidence, architecture_decision_pack, single_slice_rationale, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation, change_impact_applicability, change_impact_evidence]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all slice criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -305,7 +305,7 @@ artifacts:
     type: object[]
     required: conditional
     condition: "execution_intent != prepare_only"
-    validation: "At least 1 entry unless task was determined unnecessary during Discovery. preparation-only work must omit this artifact rather than fabricating a change."
+    validation: "At least 1 entry unless task was determined unnecessary during Discovery. For separated_workers, union actual BuilderTester and CodeWriter changed_files into this final artifact and the review scope, preserving worker ownership in dispatch evidence and never attributing BuilderTester changes to CodeWriter. Keep actual mutations even when a worker later fails; preparation-only work and work with no actual file changes must not fabricate entries."
     on_fail: "List changed files, record that Discovery determined no change was necessary, or use prepare_only completion without a changed-files claim"
     object_fields:
       - name: path
@@ -358,12 +358,28 @@ artifacts:
         type: string[]
         required: true
 
+  - name: verification_decision
+    type: object
+    required: conditional
+    condition: "execution_intent != prepare_only and (actionable verification selection succeeded or a decision is already carried)"
+    description: "verification_decision."
+    validation: "Conforms to assistant-verification/contracts/output.yaml#verification_decision; carry unchanged through packets/Build. Apply INV_TDD_PROJECTION. If no decision, omit it; evidence_assessment.status=blocked with exact material gap; stop before Plan exits or Build begins."
+    on_fail: "Select; preserve carried decisions; never fabricate."
+
+  - name: tdd_cycle_log_ref
+    type: string
+    required: conditional
+    condition: "execution_intent != prepare_only and an active workflow packet with tdd_applies == true has started its RED phase"
+    description: "Canonical TDD cycle_log reference."
+    validation: "Resolves to the actual current task-journal or workflow-output cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log, not merely a planned RED tuple or passing verification row. Before production, its in-progress entry contains the observed authorizing invocation with freshness=current and result=failed, the sole selected/applicable check_id, exact CheckSpec argv/cwd, matching test_file/test_name, verified_failing=true, and failure_reason matching meaningful_failure; GREEN/REFACTOR are not required at this gate. Before Review and workflow completion, this same ref resolves to the full canonical completed cycle_log with valid current GREEN/REFACTOR and selected-check evidence. Preserve prior cycles and all actual invocation records; never reconstruct or invent them. Omit for inactive or unstarted TDD and prepare_only work."
+    on_fail: "Stop before production when the actual authorizing RED entry is missing, stale, unbound, or wrong-reason. Keep Review/completion blocked until the full canonical cycle resolves and validates."
+
   - name: test_results
     type: object
     required: conditional
-    condition: "execution_intent != prepare_only and (runnable tests exist or task changes behavior)"
-    validation: "passed + failed + skipped must equal total tests run. failed must be 0 at workflow completion. When TDD Architecture Decision Pack obligations apply, architecture_obligation_coverage aggregates the selected Build owner return: bounded_executor CodeWriter or separated_workers BuilderTester, with exact-once stable obligation_id coverage. Use validation_results when tests are not applicable."
-    on_fail: "Re-run tests or move non-test verification to validation_results with explicit not-applicable reason for tests"
+    condition: "(execution_intent != prepare_only) and (one or more selected checks with method=automated_test were actually executed or admissibly reused)"
+    validation: "passed + failed + skipped must equal the selected tests actually run. failed must be 0 at workflow completion; do not claim an unselected full suite. When active TDD Pack obligations apply, architecture_obligation_coverage aggregates the selected Build owner return: bounded_executor CodeWriter or separated_workers BuilderTester, with exact-once stable obligation_id coverage. Use validation_results for non-test checks."
+    on_fail: "Record actual selected test results when tests ran; use validation_results for non-test methods and state material gaps explicitly."
     object_fields:
       - name: passed
         type: int
@@ -405,8 +421,8 @@ artifacts:
     type: object[]
     required: true
     condition: "always"
-    validation: "At least one test, build, lint, typecheck, inspection, dry-run, or manual validation entry with result=passed must be recorded for completed implementation workflows. Docs-only/no-op/discovery tasks may complete without passed validation only when the reason is explicitly recorded. Skipped/not_applicable entries do not satisfy completion evidence. When reusing a passed entry, evidence records the original run and current comparison of exact argv/cwd, relevant inputs, environment/toolchain, and covered obligations; it does not claim a newly executed verification. Existing evidence remains a string or resolvable ref; no new mandatory fields are introduced."
-    on_fail: "Run an appropriate verification and record passed evidence, or record an explicit docs-only/no-op/discovery exception reason"
+    validation: "Each result carries the exact selected_check_ids and binding_obligation_refs it actually observes. Resolve IDs and exact {kind,value,source_ref} tuples against the unchanged decision and close every due selected check and applicable due/executable binding obligation with current evidence for its actual procedure/oracle; shared claim text or an ID alone is insufficient. For a command-based check, executed_command is required whenever execution started and must resolve exactly one selected_check_id to that unchanged canonical CheckSpec's literal command.argv and explicit command.cwd. Use one result per command-based CheckSpec; never attribute one command to multiple IDs. Keep task-wide integration obligations due at their existing completion boundary. At least one applicable selected check must pass for a completed implementation unless an evidenced docs-only, no-op, discovery, or prepare-only scope has no applicable check; such a case records not_applicable with its exact rationale and never invents a pass. Every required check must pass for a sufficient assessment; otherwise retain an explicit gap. Partial and unavailable are explicit evidence gaps and never establish sufficiency; blocked is a distinct explicit gap and never closes a due check or establishes sufficiency; skipped/not_applicable entries never satisfy a check. When reusing evidence, retain the original run and compare exact argv/cwd when command-based, relevant inputs, environment/toolchain, and covered claims; do not claim a new execution."
+    on_fail: "Run selected checks and record actual outcomes. When docs-only, no-op, discovery, or prepare-only scope has no applicable check, record not_applicable with the exact scope rationale, never a dummy pass. A completed implementation with required evidence gaps cannot claim completion."
     object_fields:
       - name: command_or_check
         type: string
@@ -414,17 +430,47 @@ artifacts:
       - name: result
         type: enum
         required: true
-        enum_values: [passed, failed, skipped, not_applicable]
+        enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]
       - name: evidence
         type: string
         required: true
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Exact selected CheckSpec IDs this result actually observes; empty when none"
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact applicable binding tuples this result actually enforces; empty when none"
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
+      - name: executed_command
+        type: object
+        required: conditional
+        condition: "a command-based selected CheckSpec was started, regardless of outcome"
+        description: "The observed command identity for exactly one selected CheckSpec"
+        validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd. Missing or ambiguous context requires refreshing the decision or blocking the result."
+        object_fields:
+          - {name: check_id, type: string, required: true}
+          - {name: argv, type: "string[]", required: true, min_items: 1}
+          - {name: cwd, type: string, required: true}
+
+  - name: evidence_assessment
+    type: object
+    required: conditional
+    condition: "execution_intent != prepare_only"
+    description: "Canonical assistant-verification assessment of selected-check evidence and gaps."
+    validation: "Conforms to assistant-verification/contracts/output.yaml#evidence_assessment. Current resolved refs cover every material claim and due check/obligation. Planned, insufficient, blocked, failed, stale, partial, skipped, or unavailable evidence is never sufficient. Implementation completion requires status=sufficient; otherwise return remaining_items/blocked with gaps and next action."
+    on_fail: "Assess actual validation/test results before Review; record every material gap and do not claim sufficient while any required evidence is missing."
 
   - name: fresh_review_result
     type: object
     required: conditional
     condition: "execution_intent != prepare_only and controller_intensity == light"
-    description: "Compact review performed after relevant validation with fresh attention to carried Discover scope/criteria, any applicable inline plan, changed files, and acceptance criteria."
-    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies inspected validation. When a Pack or expanded impact applies, canonical refs resolve to one validated assistant-review final_summary and exact current final batch; Pack refs remain Pack-only."
+    description: "Compact review after selected verification, with fresh attention to carried scope, decision, actual evidence, exclusions, changed files, and acceptance criteria."
+    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies inspected selected-check results plus current evidence_assessment and unchanged verification_decision. Gaps remain visible and cannot be described as sufficient. When a Pack or expanded impact applies, canonical refs resolve to one validated assistant-review final_summary and exact current final batch; Pack refs remain Pack-only."
     on_fail: "Run fresh post-validation review, fix findings, rerun validation, and record PASS evidence. For a Pack or expanded impact, bind final_snapshot_identity_ref and delegation_path_ref to the canonical final_summary before validation_status=validated."
     object_fields:
       - name: result
@@ -521,8 +567,8 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only and (controller_intensity in [standard, strict] or risk_tier in [high, critical] or qa_evaluation_mode == required)"
     description: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. Workflow consumes validated references to canonical assistant-review artifacts and does not restate their schemas."
-    validation: "canonical_result_ref resolves to a validated assistant-review final_summary produced under producer_schema_version equal to skills/assistant-review/contracts/index.yaml#schema_version; final_review_snapshot_id, final_snapshot_identity_ref, and final_snapshot_identity resolve within that same final_summary and equal its exact current final batch; delegation_path_ref resolves to its review_delegation_path. When a Pack applies, architecture_decision_pack_review_ref resolves to its canonical Pack review. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
-    on_fail: "Load and follow assistant-review, validate its final_summary, exact current final-batch final_snapshot_identity, review_delegation_path, and applicable Architecture Decision Pack review, and record stable refs plus exact canonical contracts before Review completes."
+    validation: "Before dispatch, Review receives the unchanged verification_decision, current evidence_assessment, actual selected-check results, and omitted-check rationales. canonical_result_ref resolves to a validated assistant-review final_summary produced under producer_schema_version equal to skills/assistant-review/contracts/index.yaml#schema_version; final_review_snapshot_id, final_snapshot_identity_ref, and final_snapshot_identity resolve within that same final_summary and equal its exact current final batch; delegation_path_ref resolves to its review_delegation_path. When a Pack applies, architecture_decision_pack_review_ref resolves to its canonical Pack review. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
+    on_fail: "Pass the unchanged verification_decision, current evidence_assessment, actual selected-check results, and omitted-check rationales to assistant-review; validate its final_summary, exact current final-batch final_snapshot_identity, review_delegation_path, and applicable Architecture Decision Pack review, and record stable refs plus exact canonical contracts before Review completes."
     object_fields:
       - name: canonical_result_ref
         type: string
@@ -1894,7 +1940,7 @@ artifacts:
       - name: artifact_type
         type: enum
         required: true
-        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
+        enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, verification_decision, evidence_assessment, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
         validation: "Classifies the artifact without requiring prose parsing"
         on_missing: fail
       - name: producer
@@ -2314,7 +2360,15 @@ artifacts:
     validation: >
       Contains one or more smallest iterable slices in dependency order. Each
       slice has the strict slice schema, exact files, observable increment,
-      acceptance criteria, verification command, expected success signal, and
+      acceptance criteria, canonical verification_decision, selected_check_ids,
+      binding_obligation_refs, and tdd_applies. Resolve each due command by its
+      selected CheckSpec ID in the unchanged decision. An optional singular
+      verification_command is only an exact-one compatibility projection; omit
+      it for zero or multiple command-based selected checks. Never flatten
+      commands, supply a default cwd, or rebuild shell text. Missing or
+      ambiguous command context requires a refreshed decision or a blocked
+      slice. Non-command checks retain their concrete procedure in the decision.
+      Include the expected success signal and
       deviation rollback rule. slice_id values are unique path-safe
       identifiers, and depends_on entries reference only declared slice_id values
       without self dependencies or circular dependencies.
@@ -2344,6 +2398,30 @@ artifacts:
         type: string[]
         required: true
         min_items: 1
+      - name: verification_decision
+        type: object
+        required: true
+        description: "The unchanged canonical assistant-verification decision selected before Plan fixes verification obligations."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision."
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Selected CheckSpec IDs due for this slice; each resolves exactly once in the unchanged decision"
+        validation: "An ordered unique subset of the decision's checks that covers this slice's acceptance criteria and risks. Task-wide integration checks remain due at their existing completion boundary."
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact applicable binding tuples due for this slice"
+        validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; allocate each applicable due tuple to its owning slice or retain it at its existing task-wide boundary."
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
+      - name: tdd_applies
+        type: boolean
+        required: true
+        description: "Whether this slice participates in the selected TDD choice."
+        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the task-global decision unchanged."
       - name: files_to_create
         type: string[]
         required: true
@@ -2363,10 +2441,11 @@ artifacts:
         validation: "Every dependency is the slice_id of another declared slice in this manifest; no self dependency or circular dependency is allowed; use an empty array when there are no dependencies"
       - name: verification_command
         type: string[]
-        required: true
+        required: conditional
+        condition: "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
         min_items: 1
-        description: "Portable direct-execution specification for the slice verification command"
-        validation: "Canonical argv vector: execute item 0 directly as the executable and pass each remaining item as one literal argument; no shell-form command string, redirection, pipe, or implicit shell parsing"
+        description: "Legacy singular projection of the sole matching CheckSpec.command.argv; its explicit cwd remains in the canonical CheckSpec. Omit for zero or multiple matching commands; non-command checks use their concrete procedure."
+        validation: "When present, resolve exactly one selected CheckSpec by ID in the unchanged verification_decision and require exact equality with its literal command.argv. Execute item 0 directly and each remaining item as one literal argument; never flatten, misattribute, reconstruct shell text, or use a default cwd. Missing or ambiguous command context requires refresh or a blocked slice."
       - name: expected_success_signal
         type: string
         required: true
@@ -2392,8 +2471,8 @@ artifacts:
     condition: "execution_intent != prepare_only and size in [medium, large, mega]"
     validation: >
       Contains one entry per slice from the manifest, in order, with task
-      packet id, RED status when TDD was active, implementation status,
-      verification command/result, acceptance criteria checked, self-check
+      packet id, the TDD choice and RED status only when TDD was active,
+      implementation status, selected verification procedure/result, acceptance criteria checked, self-check
       result, and final status. BLOCKED is a non-completion state; every slice
       final status must be VERIFIED before WORKFLOW COMPLETE.
     on_fail: "Run and record per-slice verification evidence until every slice final_status is VERIFIED"
@@ -2407,10 +2486,27 @@ artifacts:
       - name: task_packet_id
         type: string
         required: true
+      - name: tdd_applies
+        type: boolean
+        required: true
+        validation: "Equals the slice_manifest and task packet value."
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Exact selected checks whose results are summarized for this slice"
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact applicable binding tuples whose results are summarized for this slice"
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
       - name: red_status
         type: string
-        required: true
-        validation: "Use pass/fail when TDD was active, otherwise N/A"
+        required: conditional
+        condition: "tdd_applies is true"
+        validation: "Record the actual right-reason RED outcome; omit this field when TDD was not selected."
       - name: implementation_status
         type: enum
         required: true
@@ -2940,7 +3036,7 @@ artifacts:
     condition: "plan_mode in [inline, approval_required]"
     validation: >
       For prepare_only existing-system work, readiness-only plan text contains the exact feature-preparation evidence ref, readiness implications, open decisions, recommended next implementation state, and execution not started. For feature_preparation_scope=not_applicable, it instead records the typed not_applicable preparation basis, implications, open decisions, recommended next state, and execution not started; it must not fabricate an evidence ref. It omits files, tests, Artifact Contract, executable steps/task packets, and full plan tiers.
-      For execution_intent != prepare_only: inline is a compact plan with goal, files, risks, and tests; approval_required medium is standard per plan-template.md; approval_required large/mega is full including Security and Operability.
+      For execution_intent != prepare_only: inline is a compact plan with goal, files, risks, the unchanged verification_decision, selected checks and concrete procedures; approval_required medium is standard per plan-template.md; approval_required large/mega is full including Security and Operability. Do not infer TDD or add checks outside the decision without recording a binding conflict and resolving it.
       plan_mode=none: artifact is absent.
     on_fail: "For prepare_only, write or repair only the readiness plan with the applicable existing-system evidence ref or typed not_applicable basis, implications, open decisions, recommended next state, and execution not started; do not add files, tests, or executable packets. For execution_intent != prepare_only, write or update the proportional execution plan when plan_mode is inline or approval_required; omit this artifact when plan_mode is none."
 
@@ -3263,7 +3359,7 @@ artifacts:
 # Completeness check:
 # Before printing --- WORKFLOW COMPLETE ---, verify:
 # 1. execution_intent=prepare_only selects completion_tiers.preparation_only and returns feature_preparation_result plus every applicable preparation artifact (including feature_preparation_evidence for existing_system); it excludes Build, changed-file, test, review, and final-handoff claims. Otherwise all required artifacts for the selected completion tier are present and controller_intensity matches the selected tier.
-# 2. When execution_intent != prepare_only, test_results.failed == 0 when tests ran; validation_results contains at least one result=passed entry for completed implementation workflows. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason.
+# 2. When execution_intent != prepare_only, test_results.failed == 0 when selected tests ran; validation_results records selected checks and binding checks with actual outcomes. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason. evidence_assessment reflects current evidence and cannot be sufficient while a material selected-check gap remains.
 # 3. When execution_intent != prepare_only and (size is medium/large/mega, risk_tier is high/critical, controller_intensity is strict, or qa_evaluation_mode=required): spec_review_result.status == PASS and required_fixes are empty or resolved
 # 4. When execution_intent != prepare_only and (size is medium/large/mega, risk_tier is high/critical, controller_intensity is strict, or qa_evaluation_mode=required): review_result contains validated canonical result and delegation-path refs, plus final_snapshot_identity_ref and final_snapshot_identity exactly bound to the same assistant-review final_summary and current final batch; an applicable Pack also carries architecture_decision_pack_review_ref and its exact canonical contract
 # 5. If execution_intent != prepare_only and qa_evaluation_mode=required: qa_evaluation_result contains validated canonical result and delegation-path refs after build/test and code-review evidence; QA evaluation does not replace review_result. A rejected, HAS_REMAINING_ITEMS, blocked, or BLOCKED QA terminal state prevents clean workflow completion.

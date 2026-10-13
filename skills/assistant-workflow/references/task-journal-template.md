@@ -44,6 +44,9 @@ Architecture Decision Pack ref: [ref, or N/A with concrete reason]
 Pack handoff binding: [prepare_only: discover_only context/journal ref only through Preparation Completion, including optional readiness Plan and no downstream packet refs | execution_intent != prepare_only: Plan binds downstream context/journal + plan/task-packet + review-scope refs before Build; plan_mode=none binds compact inline task-packet/execution + review-scope refs before Build]
 Independent challenge evidence: [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 Build execution lane: [prepare_only: none | execution_intent != prepare_only: inline_direct | bounded_executor | separated_workers]
+Verification decision: [canonical assistant-verification/contracts/output.yaml#verification_decision object or stable ref, unchanged]
+Evidence assessment: [canonical assistant-verification/contracts/output.yaml#evidence_assessment object or ref; planned before results, current gaps/status before Review]
+TDD mode: [exact verification_decision.tdd_choice.mode projection; RED applies only when true]
 Workflow state mode: [inline | journal]
 Uncertainty shape: [bounded | progressive]
 Progressive discovery state: [not_applicable | mapping | resolving | route_clear | blocked]
@@ -197,14 +200,15 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 [required for medium+ tasks; update after each slice and before starting a dependent slice or another source-changing slice in a shared or unknown workspace]
 [applies only when `execution_intent != prepare_only`; prepare_only has no slices]
 do not start a dependent slice until every `depends_on` prerequisite is `VERIFIED`; source-changing slices may overlap only with runtime-proven isolated workspaces
-| Slice | Task Packet | RED Status | Implementation Status | Verification Command/Result | Criteria Checked | Self-Check Result | Final Status |
-|-----------|-------------|------------|-----------------------|-----------------------------|------------------|-------------------|--------------|
-| 1. [slice_id] [name] | [packet id] | [pass/fail/N/A] | [done/blocked] | `["executable", "arg"]` → [pass/fail + signal] | [X/Y passed] | [pass/fail + note] | [VERIFIED/BLOCKED] |
+| Slice | Task Packet | TDD/RED | Implementation Status | Selected Check or Procedure/Result | Criteria Checked | Self-Check Result | Final Status |
+|-----------|-------------|---------|-----------------------|------------------------------------|------------------|-------------------|--------------|
+| 1. [slice_id] [name] | [packet id] | [pass/fail when active; otherwise N/A] | [done/blocked] | [check id, exact argv/cwd or procedure, result/evidence] | [X/Y passed] | [pass/fail + note] | [VERIFIED/BLOCKED] |
 
-## Test Coverage
-- Unit: [what's covered]
-- Integration: [what's covered, or "N/A"]
-- E2E: [what's covered, or "N/A"]
+## Selected Verification Evidence
+- Selected check ids, methods, and outcomes: [current evidence]
+- Reused evidence identity and input comparison: [original run, relevant inputs, argv/cwd or procedure, and current comparison; or N/A]
+- Material gaps and omitted checks: [preserve decision rationale and evidence gaps]
+- Automated tests: [selected tests and oracle, or N/A when none were selected]
 
 ## Debugging Evidence (bugfixes)
 
@@ -221,8 +225,12 @@ do not start a dependent slice until every `depends_on` prerequisite is `VERIFIE
 ### What changed
 - [file]: [what and why]
 
-### What's tested
-- [test]: [what it verifies]
+### Verification decision and evidence assessment
+- Decision: [unchanged canonical assistant-verification decision ref]
+- Assessment: [current status, evidence refs, and unresolved gaps]
+- Selected checks: [check id, method, exact argv/cwd or concrete procedure, outcome]
+- Reused evidence: [original identity and current input comparison, or N/A]
+- Omitted checks: [decision rationale]
 
 ### Manual test instructions
 [N/A unless manual_verification_mode is optional/required; otherwise actionable steps]

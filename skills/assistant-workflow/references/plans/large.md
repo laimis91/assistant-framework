@@ -43,15 +43,20 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Files:
   - Create: [exact paths or "none"]
   - Modify: [exact paths or "none"]
-  - Test: [exact test paths or "none"]
+- Test: [exact selected test paths or "none"]
 - Enabling changes included:
   - [setup, contracts, wiring, or "none"]
 - Depends on: [slice ids or "none"]
-- TDD / RED step:
-  - tdd_applies: [true/false]
-  - TDD default: true for behavior changes, bugfixes with RED-ready evidence, and interface-affecting refactors; false only with explicit exception reason
-  - RED command: [command or "N/A"]
-  - Expected failure: [specific failing test/assertion or "N/A"]
+- Verification / TDD decision:
+  - verification_decision: [canonical ref; preserve selected scope, CheckSpec entries, exclusions, and rationale unchanged]
+  - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
+  - selected_checks: [ids and method-specific evidence; each command-based CheckSpec retains its own literal argv and explicit cwd]
+  - selected_check_ids: [due check IDs assigned to this packet]
+  - binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
+  - tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
+  - RED evidence: [required only when tdd_applies=true; otherwise N/A, with no fabricated RED]
+  - RED test execution: [required only when tdd_applies=true; executable automated-test CheckSpec, literal argv/cwd when command-based or concrete automated procedure, and intended failure; otherwise N/A]
+  - Expected failure: [specific intended behavior assertion; never syntax/import/environment failure]
   - Architecture test obligations: [N/A unless tdd_applies=true and an Architecture Decision Pack applies; otherwise stable obligation_id, Pack ref, kind, behavior, verification]
 - Implementation notes / constraints:
   - implementation_notes:
@@ -66,11 +71,14 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - decision_rationale: [why this is the bounded existing-capability decision]
   - divergence_control: [required for intentional_duplicate]
 - Verification:
-  - verification_command: ["executable", "arg1", "arg2"]
-  - argv rule: [one literal argument per item; execute directly without shell parsing]
-  - Expected success signal: [exit code 0, passing test name, output marker, etc.]
+  - verification_decision: [canonical typed ref, unchanged]
+  - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
+  - selected_check_refs: [the applicable CheckSpec ids]
+  - command argv and cwd: [per command-based selected CheckSpec, bound by check_id; one literal argument per item and an explicit cwd]
+  - non-command procedure: [concrete steps and observable result for selected checks without a command]
+  - Expected success signal: [the selected check's discriminating oracle/evidence]
 - Evidence to record:
-  - [test result, eval fixture, changed file, review note, or artifact proof]
+  - [selected-check result, eval fixture, changed file, review note, or artifact proof]
 - Loop / Experiment Routing:
   - controller_intensity: [light | standard | strict; standard keeps ordinary medium+ non-harness work out of harness/QA defaults]
   - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise ref]
@@ -111,7 +119,12 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 - files_to_test:
 - enabling_changes_included:
 - depends_on:
-- verification_command: ["executable", "arg1", "arg2"]
+- verification_decision: [unchanged canonical decision and selected CheckSpecs]
+- evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
+- selected_check_ids: [due CheckSpec IDs assigned to this slice]
+- binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
+- tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
+- verification_command: [legacy singular literal argv projection only when selected_check_ids resolves exactly one matching command-based CheckSpec; otherwise omit and use each check's canonical command or concrete non-command procedure]
 - expected_success_signal:
 - evidence_to_record:
 - deviation_rollback_rule:

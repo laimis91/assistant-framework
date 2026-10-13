@@ -31,26 +31,236 @@ write_tdd_eval_responses() {
 tdd_forbidden_response_is_rejected() {
     local forbidden="$1"
     local case_id="tdd-covers-carried-architecture-obligations"
-    local case_count
     local eval_dir
     local eval_output
 
-    case_count="$(jq '.cases | length' "$tdd_evals")"
     eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-tdd-negative.XXXXXX")"
     eval_output="$(mktemp "${TMPDIR:-/tmp}/assistant-tdd-negative-output.XXXXXX")"
     p0p4_register_cleanup "$eval_dir" "$eval_output"
     write_tdd_eval_responses "$eval_dir"
     printf '%s\n' "$forbidden" >>"$eval_dir/assistant-tdd/$case_id.txt"
 
-    if "$tdd_eval_runner" --responses "$eval_dir" --skill assistant-tdd >"$eval_output" 2>&1; then
+    if "$tdd_eval_runner" --responses "$eval_dir" --skill assistant-tdd --case "$case_id" >"$eval_output" 2>&1; then
         return 1
     fi
 
     grep -Fq $'FAIL\tassistant-tdd\t'"$case_id" "$eval_output" \
-        && grep -Fq "Summary: total=$case_count passed=$((case_count - 1)) failed=1" "$eval_output" \
+        && grep -Fq "Summary: total=1 passed=0 failed=1" "$eval_output" \
         && grep -Fq "missing_required_substrings=0" "$eval_output" \
         && grep -Fq "forbidden_substring_hits=1" "$eval_output"
 }
+
+test_start "verifier decisions keep unique IDs, executed TDD coverage, and truthful provenance"
+if ! ruby -ryaml -e '
+  verification_input = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |field| field["name"] == "verification_policy" }
+    .fetch("object_fields").find { |field| field["name"] == "binding_constraints" }
+    .fetch("object_fields").find { |field| field["name"] == "value" }
+  verification_output = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").find { |artifact| artifact["name"] == "verification_decision" }
+  tdd_input = YAML.load_file(ARGV.fetch(2)).fetch("fields")
+  activation = tdd_input.find { |field| field["name"] == "activation_reason" }
+  decision = tdd_input.find { |field| field["name"] == "verification_decision" }
+  ids = tdd_input.find { |field| field["name"] == "selected_check_ids" }
+  behaviors = tdd_input.find { |field| field["name"] == "behaviors" }.fetch("validation")
+  policy = verification_input.fetch("validation")
+  checks = verification_output.fetch("object_fields").find { |f| f["name"] == "checks" }
+  test_change = verification_output.fetch("object_fields").find { |f| f["name"] == "test_change" }.fetch("validation", "")
+  test_change_ok = [
+    "selected checks with method == automated_test",
+    "none iff neither extend nor add is selected",
+    "extend_existing iff extend is selected and add is not",
+    "add_new iff add is selected and extend is not",
+    "mixed iff both extend and add are selected",
+    "reuse, run, and inspect do not change test assertions",
+    "non-test checks do not affect this summary"
+  ].all? { |rule| test_change.include?(rule) }
+  tdd_choice = verification_output.fetch("object_fields").find { |f| f["name"] == "tdd_choice" }
+  applicable = tdd_choice.fetch("object_fields").find { |f| f["name"] == "applicable_check_ids" }.fetch("validation")
+  check_fields = checks.fetch("object_fields")
+  command = check_fields.find { |field| field["name"] == "command" }
+  command_fields = command.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  check_method = check_fields.find { |field| field["name"] == "check_ref_or_method" }
+  reference_or_procedure = check_method.fetch("object_fields").find { |field| field["name"] == "reference_or_procedure" }
+  command_contract = command["required"] == "conditional" &&
+    command["condition"] == "this CheckSpec has a command to execute" &&
+    command_fields.fetch("argv").fetch("type") == "string[]" &&
+    command_fields.fetch("argv").fetch("min_items") == 1 &&
+    command_fields.fetch("cwd").fetch("type") == "string" &&
+    command_fields.fetch("cwd").fetch("required") == true &&
+    command.fetch("validation").include?("literal string arguments") &&
+    command.fetch("validation").include?("cwd is explicitly supplied") &&
+    reference_or_procedure["type"] == "string" && reference_or_procedure["required"] == true
+  choice = verification_output.fetch("validation") + " " + tdd_choice.fetch("validation")
+  selection_validation = [activation["description"], activation["infer_from"], activation["validation"], decision["validation"], ids["validation"]].compact.join(" ").downcase
+  coverage = YAML.load_file(ARGV.fetch(3)).fetch("artifacts").find { |f| f["name"] == "coverage_summary" }
+    .fetch("object_fields").find { |f| f["name"] == "total_tests_run" }
+  valid = test_change_ok && coverage["type"] == "int" && coverage["required"] == true &&
+    coverage.fetch("validation", "").include?("> 0 at completion") &&
+    policy.include?("required_tdd is exactly true or false") && policy.include?("conflicting required_tdd values") &&
+    choice.include?("required_tdd=false") && choice.include?("mode=false") && choice.include?("not_selected") &&
+    checks.fetch("validation", "").include?("nonblank and unique within checks, regardless of tdd_choice.mode") &&
+    applicable.include?("method == automated_test") && applicable.include?("action in [add, extend]") &&
+    applicable.include?("a present command") && applicable.include?("non-empty literal argv") && applicable.include?("explicit cwd per command contract") &&
+    applicable.include?("executable meaningful RED") && applicable.include?("run/reuse/inspect") &&
+    command_contract &&
+    applicable.include?("cannot be TDD-applicable") && applicable.include?("compatible add/extend meaningful RED oracle blocks") &&
+    tdd_choice.fetch("validation").include?("action add/extend") &&
+    tdd_choice.fetch("validation").include?("Required true without compatible add/extend meaningful RED blocks") &&
+    activation.fetch("enum_values") == %w[user_request plan_constraint project_convention verification_selection] &&
+    decision["required"] == "conditional" && decision["on_missing"] == "fail" && decision.fetch("condition").include?("activation_reason == verification_selection") &&
+    decision.fetch("condition").include?("invoked from assistant-workflow") &&
+    ids["required"] == "conditional" && ids.fetch("condition").include?("activation_reason == verification_selection") &&
+    ids.fetch("condition").include?("invoked from assistant-workflow") && ids["on_missing"] == "fail" &&
+    decision.fetch("validation").include?("Standalone may omit") &&
+    behaviors.include?("With verification_decision") &&
+    behaviors.include?("only behaviors wholly covered by current selected/applicable CheckSpec procedures/oracles") &&
+    behaviors.include?("reject excluded or mixed-scope behaviors before RED") &&
+    ids.fetch("validation").downcase.include?("ordered unique") &&
+    selection_validation.include?("selected_technique") && selection_validation.include?("intersect") &&
+    selection_validation.include?("invent") && selection_validation.include?("user_request") &&
+    selection_validation.include?("project_convention") && selection_validation.include?("plan_constraint")
+  cycle_log = YAML.load_file(ARGV.fetch(3)).fetch("artifacts").find { |f| f["name"] == "cycle_log" }
+  phases = %w[red green refactor].map { |name| cycle_log.fetch("object_fields").find { |f| f["name"] == name } }
+  results_ok = phases.each_with_index.all? do |phase, index|
+    results = phase.fetch("object_fields").find { |f| f["name"] == "command_results" }
+    result_fields = results.fetch("object_fields").to_h { |f| [f.fetch("name"), f] }
+    expected_fields = %w[argv check_id cwd freshness result target]
+    expected_fields += %w[test_file test_name] if index == 0
+    phase_required = index.zero? ? phase["required"] == true : phase["required"] == "conditional"
+    phase_started_condition = index.zero? || phase.fetch("condition").include?(index == 1 ? "started GREEN after authorizing RED and production edits" : "current GREEN all_tests_pass is true")
+    command_minimum = index.zero? ? results["min_items"] == 1 : results["min_items"] == 0
+    results["required"] == true && command_minimum && phase_required && phase_started_condition &&
+      result_fields.keys.sort == expected_fields.sort &&
+      result_fields.fetch("argv").fetch("type") == "string[]" && result_fields.fetch("argv").fetch("min_items") == 1 &&
+      result_fields.fetch("cwd").fetch("type") == "string" &&
+      result_fields.fetch("result").fetch("enum_values") == %w[passed failed partial unavailable] &&
+      result_fields.fetch("freshness").fetch("enum_values") == %w[current stale unknown] &&
+      result_fields.fetch("check_id")["required"] == "conditional" &&
+      (index != 0 || result_fields.fetch("check_id").fetch("validation").include?("workflow-authorizing RED invocation")) &&
+      (index != 0 || result_fields.fetch("check_id").fetch("validation").include?("standalone/no-decision TDD may omit IDs")) &&
+      results.fetch("validation").include?("omit it for standalone TDD without a verification decision")
+  end
+  red = phases[0].fetch("object_fields").find { |f| f["name"] == "verified_failing" }.fetch("validation")
+  red_reason = phases[0].fetch("object_fields").find { |f| f["name"] == "failure_reason" }.fetch("validation")
+  red_results = phases[0].fetch("object_fields").find { |f| f["name"] == "command_results" }
+  red_result_fields = red_results.fetch("object_fields").to_h { |f| [f.fetch("name"), f] }
+  green_fields = phases[1].fetch("object_fields")
+  green_test = green_fields.find { |f| f["name"] == "test_passes" }.fetch("validation")
+  all_passes = phases[1..].all? do |phase|
+    validation = phase.fetch("object_fields").find { |f| f["name"] == "all_tests_pass" }.fetch("validation")
+    validation.include?("current RED test target") && validation.include?("every due selected TDD check") &&
+      validation.include?("relevant due selected automated regression check") &&
+      validation.include?("applicable due/executable binding suite") &&
+      validation.include?("freshness=current") && validation.include?("result=passed") &&
+      validation.include?("exact check_id/argv/cwd") && validation.include?("missing or mismatched identity") &&
+      validation.include?("failed, partial, or unavailable result blocks true") &&
+      validation.include?("Include the target even in standalone TDD")
+  end
+  partial_phases_valid = cycle_log.fetch("validation").include?("During delegated workflow handoffs") &&
+    cycle_log.fetch("validation").include?("may omit not-yet-started GREEN or REFACTOR phases") &&
+    cycle_log.fetch("validation").include?("started phase may have zero command_results") &&
+    cycle_log.fetch("validation").include?("partial entry without treating it as complete") &&
+    cycle_log.fetch("validation").include?("at least one invocation per phase") &&
+    cycle_log.fetch("validation").include?("all intended pass guards") &&
+    phases[1].fetch("object_fields").find { |f| f["name"] == "command_results" }.fetch("validation").include?("empty list means verification has not run yet") &&
+    phases[2].fetch("object_fields").find { |f| f["name"] == "command_results" }.fetch("validation").include?("empty list means verification has not run yet")
+  standalone_red_history = red.include?("at least one current command_results entry") &&
+    red.include?("Standalone/no-decision TDD may retain multiple matching current failed invocations") &&
+    !red.include?("exactly one current command_results entry")
+  workflow_red_cardinality = red_results.fetch("validation").include?("For workflow-authorizing RED, exactly one current failed invocation carries") &&
+    red_results.fetch("validation").include?("other invocations remain honest")
+  workflow_red_is_current_and_bound = red.include?("whose freshness is current and result is failed") &&
+    red.include?("exact applicable selected check_id, argv, cwd, test target, and matching meaningful_failure oracle") &&
+    red.include?("missing/wrong identity or oracle is not valid RED") &&
+    red_results.fetch("validation").include?("selected/applicable ID, exact argv/cwd, and test_file/test_name") &&
+    red_reason.include?("meaningful_failure oracle")
+  results_ok &&= partial_phases_valid && standalone_red_history && workflow_red_cardinality && red.include?("result is failed") &&
+    red.include?("missing/wrong identity or oracle is not valid RED") &&
+    red.include?("standalone/no-decision TDD") &&
+    red_reason.include?("meaningful_failure oracle") &&
+    red_result_fields.fetch("target").fetch("validation").include?("same test_file and test_name") &&
+    red_result_fields.fetch("test_file")["required"] == "conditional" && red_result_fields.fetch("test_name")["required"] == "conditional" &&
+    red_result_fields.fetch("test_file")["condition"].include?("workflow-authorizing RED invocation") &&
+    red_result_fields.fetch("test_name")["condition"].include?("workflow-authorizing RED invocation") &&
+    red_results.fetch("validation").include?("matching meaningful_failure oracle") &&
+    green_test.include?("freshness=current") && green_test.include?("result=passed") && all_passes && workflow_red_is_current_and_bound &&
+    cycle_log.fetch("validation").include?("Older cycle logs without invocation identity") &&
+    cycle_log.fetch("validation").include?("cannot establish current selected-check closure") &&
+    cycle_log.fetch("validation").include?("never reconstruct or invent")
+  valid &&= results_ok
+  exit(valid ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-verification/contracts/input.yaml" \
+  "$FRAMEWORK_DIR/skills/assistant-verification/contracts/output.yaml" \
+  "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/input.yaml" \
+  "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml"; then
+    fail "TDD policy/provenance binding, command-backed applicability, or positive executed-test count is missing"
+else
+    pass
+fi
+
+test_start "assistant-tdd derives verification_selection only from the current selected technique and preserves user provenance"
+activation_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-tdd-verification-activation.XXXXXX")"
+p0p4_register_cleanup "$activation_root"
+activation_skill="$activation_root/assistant-tdd"
+mkdir -p "$activation_root"
+cp -R "$FRAMEWORK_DIR/skills/assistant-tdd" "$activation_skill"
+activation_case="tdd-covers-carried-architecture-obligations"
+jq --arg id "$activation_case" '
+  (.cases[] | select(.id == $id)) |= (
+    .prompt = "Implement import-record behavior using the unchanged canonical verifier decision; no user request or plan asks for TDD."
+    | .setup_context = ["The assistant-tdd skill instructions are active.","The unchanged verification_decision has tdd_choice.basis=selected_technique and applicable_check_ids=[behavior-check].","The current packet selected_check_ids=[behavior-check].","No user, plan, or project instruction independently requires TDD."]
+    | .expected_behavior = ["Uses verifier selection as the activation provenance only because the current selected check intersects the canonical applicable IDs.","Preserves the verifier decision unchanged and does not invent user or plan provenance."]
+    | .pass_criteria = ["The response identifies activation_reason=verification_selection and the exact basis/intersection."]
+    | .fail_signals = ["Attributes activation to a user request or plan constraint that does not exist."]
+    | .machine_expectations = {required_substrings:["\"activation_reason\":\"verification_selection\"","\"basis\":\"selected_technique\"","\"selected_check_ids\":[\"behavior-check\"]","\"applicable_check_ids\":[\"behavior-check\"]","verification_decision"],forbidden_substrings:["\"activation_reason\":\"user_request\"","\"activation_reason\":\"plan_constraint\""]}
+  )
+' "$activation_skill/evals/cases.json" >"$activation_root/activation-case.json"
+mv "$activation_root/activation-case.json" "$activation_skill/evals/cases.json"
+mkdir -p "$activation_root/positive/assistant-tdd" "$activation_root/user-fault/assistant-tdd" "$activation_root/plan-fault/assistant-tdd" \
+    "$activation_root/missing-decision/assistant-tdd" "$activation_root/missing-selected-ids/assistant-tdd"
+cat >"$activation_root/positive/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"verification_selection","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}},"selected_check_ids":["behavior-check"]}
+EOF
+cat >"$activation_root/user-fault/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"user_request","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}},"selected_check_ids":["behavior-check"]}
+EOF
+cat >"$activation_root/plan-fault/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"plan_constraint","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}},"selected_check_ids":["behavior-check"]}
+EOF
+cat >"$activation_root/missing-decision/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"verification_selection","selected_check_ids":["behavior-check"],"applicable_check_ids":["behavior-check"]}
+EOF
+cat >"$activation_root/missing-selected-ids/assistant-tdd/$activation_case.txt" <<'EOF'
+{"activation_reason":"verification_selection","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}}}
+EOF
+activation_grade_failures=()
+if ! "$tdd_eval_runner" --responses "$activation_root/positive" --skill "$activation_skill" --case "$activation_case" >"$activation_root/positive.output" 2>&1 \
+    || ! grep -Fq $'PASS\tassistant-tdd\t'"$activation_case" "$activation_root/positive.output"; then
+    activation_grade_failures+=("canonical selected-technique activation did not pass")
+fi
+for fault in user-fault plan-fault missing-decision missing-selected-ids; do
+    if "$tdd_eval_runner" --responses "$activation_root/$fault" --skill "$activation_skill" --case "$activation_case" >"$activation_root/$fault.output" 2>&1 \
+        || ! grep -Fq $'FAIL\tassistant-tdd\t'"$activation_case" "$activation_root/$fault.output"; then
+        activation_grade_failures+=("selected-technique activation accepted $fault")
+    fi
+done
+
+jq --arg id "$activation_case" '
+  (.cases[] | select(.id == $id)) |= (
+    .prompt = "Use TDD to fix the bug where the skill eval runner accepts duplicate case ids."
+    | .setup_context = ["The assistant-tdd skill instructions are active.","The user explicitly requested TDD.","No failing regression test has been written yet."]
+    | .machine_expectations = {required_substrings:["activation_reason=user_request","The user explicitly requested TDD"],forbidden_substrings:["activation_reason=verification_selection","activation_reason=plan_constraint"]}
+  )
+' "$activation_skill/evals/cases.json" >"$activation_root/user-case.json"
+mv "$activation_root/user-case.json" "$activation_skill/evals/cases.json"
+mkdir -p "$activation_root/user-positive/assistant-tdd"
+cat >"$activation_root/user-positive/assistant-tdd/$activation_case.txt" <<'EOF'
+activation_reason=user_request. The user explicitly requested TDD.
+EOF
+if ! "$tdd_eval_runner" --responses "$activation_root/user-positive" --skill "$activation_skill" --case "$activation_case" >"$activation_root/user-positive.output" 2>&1 \
+    || ! grep -Fq $'PASS\tassistant-tdd\t'"$activation_case" "$activation_root/user-positive.output"; then
+    activation_grade_failures+=("real user TDD provenance companion did not pass")
+fi
+if [[ ${#activation_grade_failures[@]} -eq 0 ]]; then pass; else fail "verification activation controls failed: ${activation_grade_failures[*]}"; fi
 
 test_start "TDD obligation coverage binds every stable obligation id exactly once"
 tdd_missing=()
@@ -72,15 +282,22 @@ for term in \
 done
 if [[ ${#tdd_missing[@]} -eq 0 ]]; then pass; else fail "TDD obligation identity/coverage contract gaps: ${tdd_missing[*]}"; fi
 
-test_start "Code Writer prompts require RED evidence before TDD production changes"
+test_start "Code Writer prompts assign RED ownership by active TDD lane in both projections"
 missing_code_writer_terms=()
 for file in \
     agents/codex/code-writer.toml \
     agents/claude/code-writer.md; do
     for term in \
-        "In TDD-active tasks, require RED evidence in the task packet/handoff before changing production code" \
-        'If missing, return `NEEDS_CONTEXT` and make no production changes' \
-        "The selected lane is authoritative: bounded_executor owns the focused"; do
+        'Apply TDD only when this packet' \
+        '`tdd_applies` is true, derived from the' \
+        'intersection of its due `selected_check_ids` and' \
+        '`tdd_choice.applicable_check_ids`.' \
+        'In `bounded_executor`, run the carried planned RED' \
+        'planned RED' \
+        'after dispatch and confirm the expected failure; in `separated_workers`,' \
+        'require valid incoming Builder/Tester RED evidence.' \
+        'no RED is required' \
+        'none should be fabricated.'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_code_writer_terms+=("$file: $term")
         fi
@@ -98,8 +315,10 @@ for file in \
     agents/codex/builder-tester.toml \
     agents/claude/builder-tester.md; do
     for term in \
-        "In TDD-active tasks, own RED: write one failing behavior test first, run it, verify it fails for the intended reason, and report RED evidence." \
-        "After Code Writer GREEN changes, run the targeted test, relevant suite, and regression checks; request Code Writer fixes for production failures." \
+        "When TDD is active, own meaningful RED" \
+        "when false, do not invent a RED step." \
+        "Run selected checks and binding project suites, not an unselected full suite." \
+        "request Code Writer fixes for production failures." \
         '**TDD evidence**: `RED: {test, command, failure, right-reason}` and `GREEN verification: {targeted, suite, regressions}` when TDD is active'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             missing_builder_tester_terms+=("$file: $term")
@@ -116,11 +335,15 @@ test_start "workflow build worker protocol preserves RED GREEN verification in b
 missing_tdd_phase_terms=()
 build_worker_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"
 for term in \
-    "## TDD Sandwich" \
-    "bounded_executor" \
-    "valid RED evidence must exist before production code" \
-    "separated_workers" \
-    "Builder/Tester owns RED, Code Writer owns GREEN"; do
+    '## Conditional TDD Boundary' \
+    'canonical `verification_decision.tdd_choice.mode` records the task-wide TDD' \
+    'Each packet derives `tdd_applies` from the intersection of its due `selected_check_ids` and' \
+    'Other packets still run their due selected checks without manufacturing RED.' \
+    'bounded_executor' \
+    'separated_workers' \
+    'Builder/Tester owns the' \
+    'pre_production_red' \
+    'final_verification'; do
     if ! p0p4_contains_text "$build_worker_ref" "$term"; then
         missing_tdd_phase_terms+=("$term")
     fi
@@ -128,46 +351,117 @@ done
 if ! grep -Fq -- "Load \`references/build-worker-protocol.md\` for source-changing Build work" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
     missing_tdd_phase_terms+=("phases.md missing build-worker-protocol loader")
 fi
+phase_sequence_source="$(sed -n '/when the canonical decision activates TDD\. In `separated_workers`, active TDD/,+5p' "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md")"
+phase_sequence_view="$(sed -n '/when the canonical decision activates TDD\. In `separated_workers`, active TDD/,+5p' "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/build.md")"
+if [[ -z "$phase_sequence_source" || "$phase_sequence_source" != "$phase_sequence_view" ]]; then
+    missing_tdd_phase_terms+=("source/generated separated-worker TDD sequence mismatch")
+fi
 if [[ "${#missing_tdd_phase_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "build-worker-protocol.md missing TDD sandwich ownership terms: ${missing_tdd_phase_terms[*]}"
 fi
 
-test_start "workflow defaults TDD active for behavior-changing work"
-missing_tdd_default_terms=()
+test_start "workflow carries one canonical TDD choice and permits adequate non-test evidence"
 workflow_input="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"
-workflow_plan="$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
-workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
+workflow_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
+workflow_index="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/index.yaml"
+workflow_root="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
+workflow_tdd_failures=()
+if ! ruby -ryaml -e '
+  input = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |f| f["name"] == "tdd_mode" }
+  decision = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").find { |f| f["name"] == "verification_decision" }
+  cycle_log_ref = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").find { |f| f["name"] == "tdd_cycle_log_ref" }
+  gates = YAML.load_file(ARGV.fetch(2)).fetch("invariants").find { |f| f["id"] == "INV_TDD_PROJECTION" }
+  completion_selector = YAML.load_file(ARGV.fetch(3)).fetch("load_sets").fetch("completion").fetch("selectors").first
+  tiers = YAML.load_file(ARGV.fetch(1)).fetch("completion_tiers")
+  executing_tiers = %w[small small_elevated medium large_critical].map { |name| tiers.fetch(name) }
+  cycle_log_ref_valid = cycle_log_ref && cycle_log_ref["type"] == "string" &&
+    cycle_log_ref["required"] == "conditional" &&
+    cycle_log_ref.fetch("condition").include?("active workflow packet with tdd_applies == true") &&
+    cycle_log_ref.fetch("condition").include?("started its RED phase") &&
+    cycle_log_ref.fetch("validation").include?("assistant-tdd/contracts/output.yaml#artifacts/cycle_log") &&
+    cycle_log_ref.fetch("validation").include?("not merely a planned RED tuple or passing verification row") &&
+    cycle_log_ref.fetch("validation").include?("observed authorizing invocation with freshness=current and result=failed") &&
+    cycle_log_ref.fetch("validation").include?("sole selected/applicable check_id") &&
+    cycle_log_ref.fetch("validation").include?("exact CheckSpec argv/cwd") &&
+    cycle_log_ref.fetch("validation").include?("failure_reason matching meaningful_failure") &&
+    cycle_log_ref.fetch("validation").include?("GREEN/REFACTOR are not required at this gate") &&
+    cycle_log_ref.fetch("validation").include?("Before Review and workflow completion") &&
+    cycle_log_ref.fetch("validation").include?("full canonical completed cycle_log") &&
+    cycle_log_ref.fetch("validation").include?("Preserve prior cycles and all actual invocation records") &&
+    cycle_log_ref.fetch("validation").include?("Omit for inactive or unstarted TDD and prepare_only work") &&
+    completion_selector.fetch("allowed_names").include?("tdd_cycle_log_ref") &&
+    executing_tiers.all? { |tier| tier.fetch("conditional_artifacts").include?("tdd_cycle_log_ref") } &&
+    !tiers.fetch("preparation_only").fetch("conditional_artifacts").include?("tdd_cycle_log_ref")
+  valid = input["default"] == false && input.fetch("validation").include?("Must equal the canonical task-global mode.") &&
+    input.fetch("validation").include?("local tdd_applies intersection is non-empty") &&
+    input.fetch("infer_from").include?("Copy verification_decision.tdd_choice.mode unchanged as the task-global choice.") &&
+    decision.fetch("validation").include?("assistant-verification/contracts/output.yaml#verification_decision") &&
+    gates.fetch("check").include?("Task-wide tdd_mode equals verification_decision.tdd_choice.mode") &&
+    gates.fetch("check").include?("Each packet\u0027s tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids") &&
+    gates.fetch("check").include?("Every active workflow packet must contain exactly one intersecting ID") &&
+    gates.fetch("check").include?("split a packet with multiple IDs before dispatch") &&
+    gates.fetch("check").include?("Before production, active packets require one red_check_id") &&
+    gates.fetch("check").include?("red_command, red_cwd, and expected_red_failure exactly equal") &&
+    gates.fetch("check").include?("actual authorizing RED in the canonical assistant-tdd cycle_log") &&
+    gates.fetch("check").include?("Before production, active inline or bounded TDD requires tdd_cycle_log_ref to the actual authorizing RED in the canonical assistant-tdd cycle_log") &&
+    gates.fetch("check").include?("Before Review and workflow completion") &&
+    gates.fetch("check").include?("that ref resolves to the full canonical completed cycle_log") &&
+    gates.fetch("on_fail").include?("missing, stale, unbound, or wrong-reason") &&
+    gates.fetch("check").include?("verification_stage=pre_production_red") &&
+    gates.fetch("check").include?("CodeWriter for production and BuilderTester final_verification for GREEN") &&
+    gates.fetch("check").include?("only after current GREEN passes, redispatch CodeWriter for REFACTOR") &&
+    gates.fetch("check").include?("pre_production_red never closes Build or permits Review") &&
+    gates.fetch("check").include?("Other due checks still run without fabricated RED")
+  exit(valid && cycle_log_ref_valid ? 0 : 1)
+' "$workflow_input" "$workflow_output" "$workflow_gates" "$workflow_index"; then
+    workflow_tdd_failures+=("workflow tdd_mode is not a false-default projection of the canonical decision")
+fi
 for file_and_term in \
-    "$workflow_input::Defaults true for behavior changes, bugfixes with enough reproduction/root-cause evidence to write a RED test, and interface-affecting refactors" \
-    "$workflow_input::unknown-cause bugfix -> run assistant-debugging first, then infer true once failure mechanism is understood" \
-    "$workflow_input::non-behavior docs/config/spike/prototype/generated-code/layout-only work -> false with recorded reason" \
-    "$workflow_input::False is allowed only with an explicit not-feasible or non-behavior exception reason" \
-    "$workflow_plan::tdd_applies: [true/false]" \
-    "$workflow_plan::TDD default: true for behavior changes, bugfixes with RED-ready evidence, and interface-affecting refactors; false only with explicit exception reason" \
-    "$build_worker_ref::Workflow sets TDD active by default for behavior changes, bugfixes with RED-ready reproduction/root-cause evidence, and interface-affecting refactors" \
-    "$build_worker_ref::When \`tdd_mode=true\` or \`tdd_applies=true\`, preserve the behavior boundary" \
-    "$workflow_skill::Behavior changes default tests-first or carry explicit validation in the same Build step."; do
+    "$build_worker_ref::Other packets still run their due selected checks without manufacturing RED." \
+    "$build_worker_ref::only packets with \`tdd_applies=true\` require" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/test-strategy.md::If tests are not selected, record the selected method and its concrete procedure in the plan." \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/tdd-enforcement.md::User or project requirements must be resolved into that decision before applying this cycle."; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if ! p0p4_contains_text "$file" "$term"; then
-        missing_tdd_default_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
+    if ! p0p4_contains_text "$file" "$term"; then workflow_tdd_failures+=("${file#$FRAMEWORK_DIR/}: $term"); fi
 done
-if [[ "${#missing_tdd_default_terms[@]}" -eq 0 ]]; then
+if [[ "${#workflow_tdd_failures[@]}" -eq 0 ]]; then pass; else fail "workflow TDD projection or false-mode policy drifted: ${workflow_tdd_failures[*]}"; fi
+
+test_start "workflow Stop Rules permit sufficient selected non-test evidence"
+workflow_stop_rule_allows_non_test() {
+    local file="$1"
+    local stop_rules
+    stop_rules="$(awk '
+        /^## Stop Rules$/ { in_section = 1; print; next }
+        in_section && /^## / { exit }
+        in_section { print }
+    ' "$file")"
+    grep -Fq "missing required output evidence" <<<"$stop_rules" \
+        && grep -Fq "completed selected and binding checks and applicable review" <<<"$stop_rules" \
+        && ! grep -Fq "a build, tests, and review" <<<"$stop_rules"
+}
+workflow_stop_rule_wrong="$(mktemp)"
+p0p4_register_cleanup "$workflow_stop_rule_wrong"
+sed 's/completed selected and binding checks and applicable review/a build, tests, and review/' \
+    "$workflow_root" >"$workflow_stop_rule_wrong"
+if workflow_stop_rule_allows_non_test "$workflow_root" \
+    && ! workflow_stop_rule_allows_non_test "$workflow_stop_rule_wrong"; then
     pass
 else
-    fail "workflow TDD default activation guard failed: ${missing_tdd_default_terms[*]}"
+    fail "workflow Stop Rules did not distinguish selected non-test evidence from the retired blanket test requirement"
 fi
 
-test_start "TDD skill documents orchestrated ownership and required RED evidence"
+test_start "TDD skill gates meaningful RED only for active TDD and allows assertion extension"
 missing_tdd_skill_terms=()
 for term in \
-    "bounded executor owns RED, GREEN, focused verification, and refactor safety" \
-    "Builder/Tester owns RED, Code Writer owns GREEN" \
-    "Builder/Tester owns verification/refactor-safety" \
+    "When workflow delegates, ownership follows" \
+    'In `bounded_executor`, one bounded executor owns RED, production, GREEN, and REFACTOR verification; production starts only after valid RED.' \
+    'Separated_workers: Builder/Tester owns RED and GREEN/REFACTOR verification; Code Writer carries RED unchanged, owns production, then refactors after current GREEN passes.' \
     "Required RED evidence before production implementation:" \
+    "add or extend one behavior assertion" \
     "Test file and test name" \
     "Why the failure proves the intended missing behaviour" \
     'If TDD is active and RED evidence is missing, the selected production owner' \
@@ -176,6 +470,17 @@ for term in \
         missing_tdd_skill_terms+=("$term")
     fi
 done
+if ! ruby -ryaml -e '
+  gate = YAML.load_file(ARGV.fetch(0)).fetch("invariants").find { |item| item["id"] == "INV3" }
+  check = gate.fetch("check")
+  recovery = gate.fetch("on_fail")
+  exit(check.include?("only start REFACTOR after current GREEN passes") &&
+    check.include?("do not close a partial delegated log as complete") &&
+    recovery.include?("Preserve actual partial phase evidence") &&
+    recovery.include?("require an actual matching authorizing RED plus passing GREEN and REFACTOR invocations before completion") ? 0 : 1)
+' "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml"; then
+    missing_tdd_skill_terms+=("INV3 must preserve partial evidence without allowing early refactor or completion")
+fi
 if [[ "${#missing_tdd_skill_terms[@]}" -eq 0 ]]; then
     pass
 else
@@ -187,8 +492,8 @@ handoffs_file="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
 missing_tdd_handoff_terms=()
 stale_code_writer_tdd_wording="CodeWriter must write failing test BEFORE production code"
 for term in \
-    "CodeWriter must receive BuilderTester RED evidence before production changes" \
-    "return NEEDS_CONTEXT if RED evidence is missing"; do
+    "Incoming BuilderTester RED evidence required before production edits only in separated_workers" \
+    "No active TDD lane may proceed without valid RED evidence."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_tdd_handoff_terms+=("$term")
     fi
@@ -207,16 +512,44 @@ missing_codewriter_red_evidence_terms=()
 for field in \
     tdd_applies \
     implementation_notes \
-    verification_command \
     expected_success_signal; do
     if ! codewriter_current_task_packet_field_required "$handoffs_file" "$field"; then
         missing_codewriter_red_evidence_terms+=("current_task_packet.$field required")
     fi
 done
+if ! ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  writer = handoffs.find { |h| h["name"] == "orchestrator_to_code_writer" }
+  writer_return = writer.fetch("return_fields")
+  bounded_red_return = writer_return.find { |field| field["name"] == "red_evidence" }
+  bounded_red_fields = bounded_red_return.fetch("object_fields").map { |field| field["name"] }
+  writer_status = writer_return.find { |field| field["name"] == "status" }
+  writer_validation = writer_return.find { |field| field["name"] == "validation_results" }.fetch("validation")
+  bounded_red_valid = bounded_red_return["type"] == "object" &&
+    bounded_red_return["required"] == "conditional" &&
+    bounded_red_return["condition"] == "tdd_applies is true and build_execution_lane == bounded_executor and valid matching authorizing RED was observed" &&
+    bounded_red_fields == %w[check_id test_file test_name command cwd failure_summary right_reason] &&
+    bounded_red_return.fetch("validation").include?("Omit when RED was not started") &&
+    bounded_red_return.fetch("validation").include?("never invent evidence") &&
+    bounded_red_return.fetch("object_fields").find { |field| field["name"] == "command" }.fetch("validation").include?("red_command argv") &&
+    bounded_red_return.fetch("object_fields").find { |field| field["name"] == "cwd" }.fetch("validation").include?("red_cwd") &&
+    bounded_red_return.fetch("object_fields").find { |field| field["name"] == "right_reason" }.fetch("validation").include?("expected_red_failure") &&
+    writer_status.fetch("validation").include?("DONE and DONE_WITH_CONCERNS require this return") &&
+    writer_validation.include?("retained in red_evidence as TDD stage evidence, not as a failed validation_results row") &&
+    writer.fetch("on_missing_field").include?("active bounded_executor TDD additionally requires matching typed red_evidence")
+  packet = writer.fetch("context_fields").find { |f| f["name"] == "current_task_packet" }
+  command = packet.fetch("object_fields").find { |f| f["name"] == "verification_command" }
+  valid = command["required"] == "conditional" && command.fetch("condition").include?("exactly one matching command-based CheckSpec")
+  exit(valid && bounded_red_valid ? 0 : 1)
+' "$handoffs_file"; then
+    missing_codewriter_red_evidence_terms+=("verification_command must be conditional on command-bearing selected CheckSpec")
+fi
 for field in \
+    check_id \
     test_file \
     test_name \
     command \
+    cwd \
     failure_summary \
     right_reason; do
     if ! codewriter_red_evidence_field_required "$handoffs_file" "$field"; then
@@ -224,10 +557,10 @@ for field in \
     fi
 done
 for term in \
-    "condition: \"required when tdd_applies is true or tdd_mode is true\"" \
-    "BuilderTester RED evidence received by CodeWriter before implementation" \
-    "CodeWriter does not own RED" \
-    "return NEEDS_CONTEXT if this evidence is missing while TDD is active"; do
+    "condition: \"tdd_applies is true and build_execution_lane == separated_workers\"" \
+    "Incoming BuilderTester RED evidence required before production edits only in separated_workers" \
+    "In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits" \
+    "No active TDD lane may proceed without valid RED evidence."; do
     if ! codewriter_red_evidence_has_line "$handoffs_file" "$term"; then
         missing_codewriter_red_evidence_terms+=("$term")
     fi
@@ -239,6 +572,125 @@ if [[ "${#missing_codewriter_red_evidence_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "CodeWriter current_task_packet must require BuilderTester RED evidence details only when TDD is active: ${missing_codewriter_red_evidence_terms[*]}"
+fi
+
+test_start "incoming RED evidence is required only for active separated_workers and bounded_executor owns RED"
+if ruby -ryaml -e '
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  writer = handoffs.find { |h| h["name"] == "orchestrator_to_code_writer" }
+  packet = writer.fetch("context_fields").find { |f| f["name"] == "current_task_packet" }
+  red = packet.fetch("object_fields").find { |f| f["name"] == "red_evidence" }
+  red_check = packet.fetch("object_fields").find { |f| f["name"] == "red_check_id" }
+  lane = writer.fetch("context_fields").find { |f| f["name"] == "build_execution_lane" }
+  applies = packet.fetch("object_fields").find { |f| f["name"] == "tdd_applies" }
+  planned_red_fields = %w[red_check_id red_command red_cwd expected_red_failure].map do |name|
+    packet.fetch("object_fields").find { |field| field["name"] == name }
+  end
+  writer_packet_cycle_ref = packet.fetch("object_fields").find { |field| field["name"] == "tdd_cycle_log_ref" }
+  writer_inline_cycle_ref = writer.fetch("context_fields").find { |field| field["name"] == "tdd_cycle_log_ref" }
+  writer_return_cycle_ref = writer.fetch("return_fields").find { |field| field["name"] == "tdd_cycle_log_ref" }
+  evidence_fields = %w[check_id test_file test_name command cwd failure_summary right_reason]
+  actual_evidence_fields = red.fetch("object_fields").map { |field| field["name"] }
+  evidence_by_name = red.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
+  planned_by_name = planned_red_fields.to_h { |field| [field.fetch("name"), field] }
+  red_check_valid = red_check["required"] == "conditional" &&
+    red_check["condition"] == "tdd_applies is true" &&
+    %w[sole ID selected_check_ids applicable_check_ids multiple IDs require packet splitting command.argv command.cwd].all? { |term| red_check.fetch("validation").include?(term) }
+  planned_bindings_valid = planned_by_name.fetch("red_check_id").fetch("validation").include?("sole ID") &&
+    planned_by_name.fetch("red_check_id").fetch("validation").include?("multiple IDs require packet splitting") &&
+    planned_by_name.fetch("red_command").fetch("validation").include?("command.argv") &&
+    planned_by_name.fetch("red_cwd").fetch("validation").include?("command.cwd") &&
+    planned_by_name.fetch("expected_red_failure").fetch("validation").include?("meaningful_failure") &&
+    planned_by_name.fetch("expected_red_failure").fetch("validation").include?("red_check_id")
+  incoming_bindings_valid = evidence_by_name.fetch("check_id").fetch("validation").include?("red_check_id") &&
+    evidence_by_name.fetch("command").fetch("validation").include?("red_command") &&
+    evidence_by_name.fetch("cwd").fetch("validation").include?("red_cwd") &&
+    evidence_by_name.fetch("right_reason").fetch("description").include?("observed failure") &&
+    evidence_by_name.fetch("right_reason").fetch("validation").include?("observed failure") &&
+    evidence_by_name.fetch("right_reason").fetch("validation").include?("matching expected_red_failure")
+  tester = handoffs.find { |h| h["name"] == "orchestrator_to_builder_tester" }
+  tester_context = tester.fetch("context_fields")
+  tester_packet = tester_context.find { |field| field["name"] == "current_task_packet" }.fetch("object_fields")
+  tester_inline = %w[red_check_id red_command red_cwd expected_red_failure].map { |name| tester_context.find { |field| field["name"] == name } }
+  tester_packet_red = %w[red_check_id red_command red_cwd expected_red_failure].map { |name| tester_packet.find { |field| field["name"] == name } }
+  tester_packet_cycle_ref = tester_packet.find { |field| field["name"] == "tdd_cycle_log_ref" }
+  tester_inline_cycle_ref = tester_context.find { |field| field["name"] == "tdd_cycle_log_ref" }
+  stage_input = tester_context.find { |field| field["name"] == "verification_stage" }
+  tester_return = tester.fetch("return_fields")
+  tester_return_cycle_ref = tester_return.find { |field| field["name"] == "tdd_cycle_log_ref" }
+  stage_return = tester_return.find { |field| field["name"] == "verification_stage" }
+  red_return = tester_return.find { |field| field["name"] == "red_evidence" }
+  tester_stage_valid = stage_input["required"] == "conditional" && stage_input["condition"] == "tdd_applies is true" &&
+    stage_input.fetch("enum_values") == %w[pre_production_red final_verification] &&
+    stage_input.fetch("validation").include?("Reuse final_verification after production for GREEN") &&
+    stage_input.fetch("validation").include?("again after the post-GREEN CodeWriter refactor for REFACTOR") &&
+    stage_input.fetch("validation").include?("cycle_log progress distinguishes them") &&
+    stage_return["condition"] == "tdd_applies is true" && stage_return.fetch("validation").include?("Equals the dispatch stage") &&
+    red_return["condition"] == "verification_stage == pre_production_red and tdd_applies is true and valid matching authorizing RED was observed" &&
+    red_return.fetch("object_fields").map { |field| field["name"] } == evidence_fields &&
+    red_return.fetch("validation").include?("expected_red_failure oracle") &&
+    tester_inline.all? { |field| field && field["required"] == "conditional" } &&
+    tester_packet_red.all? { |field| field && field["required"] == "conditional" && field["condition"] == "tdd_applies is true" }
+  cycle_refs = [writer_packet_cycle_ref, writer_inline_cycle_ref, writer_return_cycle_ref,
+    tester_packet_cycle_ref, tester_inline_cycle_ref, tester_return_cycle_ref]
+  cycle_refs_valid = cycle_refs.all? do |field|
+    field && field["type"] == "string" && field["required"] == "conditional" &&
+      field.fetch("condition").include?("tdd_applies is true") &&
+      field.fetch("validation").include?("assistant-tdd/contracts/output.yaml#artifacts/cycle_log")
+  end && writer_packet_cycle_ref.fetch("validation").include?("first RED owner creates the in-progress entry") &&
+    writer_inline_cycle_ref.fetch("validation").include?("bounded_executor") &&
+    tester_packet_cycle_ref.fetch("validation").include?("first RED owner creates its in-progress entry") &&
+    tester_inline_cycle_ref.fetch("validation").include?("create the current task-journal or workflow-output cycle_log entry") &&
+    writer_return_cycle_ref.fetch("validation").include?("actual resolvable location") &&
+    tester_return_cycle_ref.fetch("validation").include?("same ref on later partial or failed stages")
+  tester_validation = tester_return.find { |field| field["name"] == "validation_results" }.fetch("validation")
+  stage_aggregate = tester_return.find { |field| field["name"] == "verification" }.fetch("object_fields").find { |field| field["name"] == "result" }.fetch("validation")
+  tester_rows_valid = tester_validation.include?("pre_production_red retains matching failed RED and pending GREEN") &&
+    tester_validation.include?("Ordinary failure yields FAILED_VERIFICATION") &&
+    stage_aggregate.include?("aggregates partial") && stage_aggregate.include?("Ordinary failure takes precedence")
+  writer_context = writer.fetch("context_fields")
+  inline_tuple = %w[red_check_id red_command red_cwd expected_red_failure].map { |name| writer_context.find { |field| field["name"] == name } }
+  inline_red = writer_context.find { |field| field["name"] == "red_evidence" }
+  inline_red_valid = inline_tuple.all? do |field|
+    field && field["required"] == "conditional" &&
+      field["condition"] == "current_task_packet is absent and tdd_applies is true" && field["on_missing"] == "fail"
+  end && inline_tuple[0].fetch("validation").include?("sole ID") &&
+    inline_tuple[0].fetch("validation").include?("multiple IDs require packet splitting") &&
+    inline_tuple[1].fetch("validation").include?("command.argv") &&
+    inline_tuple[2].fetch("validation").include?("command.cwd") &&
+    inline_tuple[3].fetch("validation").include?("meaningful_failure") &&
+    inline_red["condition"] == "current_task_packet is absent and tdd_applies is true and build_execution_lane == separated_workers" &&
+    inline_red.fetch("object_fields").map { |field| field["name"] } == evidence_fields &&
+    inline_red.fetch("validation").include?("expected_red_failure")
+  condition = red.fetch("condition")
+  expected_condition = "tdd_applies is true and build_execution_lane == separated_workers"
+  condition_matches_contract = ->(expr) { expr == expected_condition }
+  applies_to = lambda do |expr, execution_lane, tdd|
+    (!expr.include?("tdd_applies is true") || tdd) &&
+      (!expr.include?("build_execution_lane == separated_workers") || execution_lane == "separated_workers")
+  end
+  valid_shape = red["required"] == "conditional" &&
+    condition == "tdd_applies is true and build_execution_lane == separated_workers" &&
+    lane.fetch("enum_values").include?("bounded_executor") &&
+    applies.fetch("required") == true &&
+    planned_red_fields.all? { |field| field["required"] == "conditional" && field["condition"] == "tdd_applies is true" } &&
+    red_check_valid && planned_bindings_valid && incoming_bindings_valid &&
+    (evidence_fields - actual_evidence_fields).empty? &&
+    red.fetch("description").include?("In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits")
+  lane_cases = [
+    applies_to.call(condition, "separated_workers", true),
+    !applies_to.call(condition, "bounded_executor", true),
+    !applies_to.call(condition, "separated_workers", false),
+    !applies_to.call(condition, "bounded_executor", false)
+  ].all?
+  wrong_condition = "tdd_applies is true"
+  wrong_condition_would_block_bounded = applies_to.call(wrong_condition, "bounded_executor", true)
+  wrong_condition_rejected = !condition_matches_contract.call(wrong_condition)
+  exit(valid_shape && lane_cases && wrong_condition_would_block_bounded && wrong_condition_rejected && tester_stage_valid && tester_rows_valid && cycle_refs_valid && inline_red_valid ? 0 : 1)
+' "$handoffs_file"; then
+    pass
+else
+    fail "CodeWriter incoming RED policy did not distinguish separated_workers from bounded_executor active-TDD ownership"
 fi
 
 test_start "workflow task packets carry TDD Architecture Decision Pack obligations with exact-once coverage"

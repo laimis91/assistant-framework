@@ -378,11 +378,240 @@ p0p4_write_assistant_research_retained_follow_ups_response() {
     mv "${response_path}.summary" "$response_path"
 }
 
+p0p4_write_assistant_verification_response() {
+    local response_path="$1"
+    local summary="$2"
+    local case_id="$3"
+
+    jq -n --arg summary "$summary" --arg case_id "$case_id" '
+        def check($check_id; $claim; $action; $method; $scope; $technique; $procedure; $prerequisites; $exclusions; $success; $failure; $rationale; $method_refs):
+          {
+            check_id: $check_id,
+            claim_or_risk: $claim,
+            action: $action,
+            method: $method
+          }
+          + (if $scope == null then {} else {test_scope: $scope} end)
+          + {
+            technique: $technique,
+            check_ref_or_method: {
+              reference_or_procedure: $procedure,
+              prerequisites: $prerequisites,
+              exclusions: $exclusions,
+              expected_success: $success,
+              meaningful_failure: $failure
+            },
+            rationale: $rationale,
+            method_refs: $method_refs
+          };
+        def decision($scope; $constraints; $limits; $test_change; $checks; $tdd; $omitted; $stop):
+          {
+            scope: $scope,
+            policy_basis: {
+              binding_constraints: $constraints,
+              preferences_applied: [],
+              capability_limits: $limits
+            },
+            test_change: $test_change,
+            checks: $checks,
+            tdd_choice: $tdd,
+            omitted_checks_and_rationale: $omitted,
+            stop_rule: $stop
+          };
+        def planned_assessment($gaps; $next):
+          {
+            status: "planned",
+            scope_and_evidence_refs: [],
+            gaps_and_limitations: $gaps,
+            next_action: $next
+          };
+        def ref($slot; $field): "fixture:\($case_id)#\($slot).\($field)";
+        def catalog($slot): "fixture:\($case_id)#\($slot)";
+        {summary: $summary} + (
+          if $case_id == "qrg-content-change-reuses-behavioral-coverage" then
+            {
+              verification_decision: decision(
+                "Add the two named help documents to the existing menu; preserve the unchanged loader and opener behavior.";
+                [];
+                [];
+                "none";
+                [
+                  check("help-document-content"; ref("content"; "claim"); "inspect"; "artifact_inspection"; null; "exploratory"; ref("content"; "procedure"); ["Both PDFs are available locally."]; ["Does not establish that each menu entry opens its document."]; ref("content"; "success"); ref("content"; "failure"); "Directly checks the content claim that generic loader tests cannot cover."; ["skills/assistant-verification/references/methods/artifact-validation.md"]),
+                  check("menu-open-behavior"; ref("menu-open"; "claim"); "inspect"; "manual_observation"; null; "exploratory"; ref("menu-open"; "procedure"); ["Application can be launched with the updated menu."]; ["Does not create persistent assertions for mutable filenames."]; ref("menu-open"; "success"); ref("menu-open"; "failure"); "Observes the new path-to-document associations directly without mirroring filenames in permanent tests."; ["skills/assistant-verification/references/methods/end-to-end.md"]),
+                  check("generic-menu-opening"; ref("generic-loader"; "claim"); "reuse"; "automated_test"; "unit"; "characterization"; ref("generic-loader"; "procedure"); ["Current loader unit test is available."]; ["Does not verify either requested PDF content or its specific menu association."]; ref("generic-loader"; "success"); ref("generic-loader"; "failure"); "Reuses relevant generic behavior evidence while preserving direct checks for the new content and associations."; ["skills/assistant-verification/references/methods/unit.md"])
+                ];
+                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "No code behavior is changing and no stable RED cycle is selected for this content update."};
+                ["No permanent filename-specific assertion is added because the menu list is mutable and generic loader coverage exists."];
+                "Stop after content inspection, both menu-opening observations, and the existing generic test pass; expand only for a new material gap."
+              ),
+              evidence_assessment: planned_assessment(["The two PDF contents and actual menu-opening paths have not yet been observed."]; "Run the selected checks through the existing workflow owner.")
+            }
+          elif $case_id == "loader-path-change-adds-a-behavioral-oracle" then
+            {
+              verification_decision: decision(
+                "Correct nested-menu document resolution relative to the menu file.";
+                [];
+                [];
+                "extend_existing";
+                [check("nested-menu-relative-path"; ref("nested-menu-relative-path"; "claim"); "extend"; "automated_test"; "unit"; "example"; ref("nested-menu-relative-path"; "procedure"); ["A temporary nested menu fixture can be created.", "The loader can be called with a path relative to the nested menu."]; ["Does not verify either help PDF\u0027s content or a named menu entry\u0027s UI association."]; ref("nested-menu-relative-path"; "success"); ref("nested-menu-relative-path"; "failure"); "A nested fixture with an expected PDF and a working-directory decoy observes the changed resolver behavior."; ["skills/assistant-verification/references/methods/unit.md"])];
+                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "No binding TDD requirement applies; the focused unit check is selected as a regression oracle for the changed relative-path behavior."};
+                ["No broad end-to-end suite is selected because the focused loader oracle covers the changed relative-path claim."];
+                "Stop when the nested-menu test selects the expected menu-relative PDF and rejects the plausible wrong path."
+              ),
+              evidence_assessment: planned_assessment(["The changed nested-menu relative-path behavior has not yet been exercised."]; "Run the selected loader unit check through the existing workflow owner.")
+            }
+          elif $case_id == "unit-only-policy-excludes-other-automated-scopes" then
+            {
+              verification_decision: decision(
+                "Add focused coverage for both owner authorization and non-owner denial in the changed local predicate.";
+                [
+                  {kind: "required_scope", value: "unit", source_ref: catalog("project-policy")},
+                  {kind: "prohibited_scope", value: "integration", source_ref: catalog("project-policy")},
+                  {kind: "prohibited_scope", value: "e2e", source_ref: catalog("project-policy")}
+                ];
+                ["Real-service authorization behavior remains unverified by this unit check."];
+                "add_new";
+                [check("authorization-allow-deny"; ref("allow-deny"; "claim"); "add"; "automated_test"; "unit"; "example"; ref("allow-deny"; "procedure"); ["Authenticated owner and authenticated non-owner subjects for document-1 are available as deterministic local fixtures.", "The changed authorization predicate can be called directly."]; ["Does not exercise authorization through a real service, API, or persistence boundary."]; ref("allow-deny"; "success"); ref("allow-deny"; "failure"); "Both owner allowance and non-owner denial are asserted at the changed local predicate within the binding unit-only policy."; ["skills/assistant-verification/references/methods/unit.md"]) + {command:{argv:["pytest", "tests/test_authorization.py::test_owner_allow_non_owner_deny"], cwd:"/workspace/document-access"}}];
+                {mode: true, applicable_check_ids: ["authorization-allow-deny"], basis: "selected_technique", rationale: "The deterministic local predicate provides a stable allow/deny oracle, so write and run both assertions before changing the implementation."};
+                ["Integration and end-to-end checks are excluded by the binding project policy; the real-service boundary remains a stated limitation."];
+                "Stop when the owner is allowed and the non-owner is denied by the local predicate; expand only for a new in-scope gap."
+              ),
+              evidence_assessment: planned_assessment(["Real-service authorization behavior has not been observed."]; "Write and run the selected unit test, then implement the predicate change.")
+            }
+          elif $case_id == "required-unit-check-does-not-prohibit-integration" then
+            {
+              verification_decision: decision(
+                "Preserve the required unit coverage and add the distinct API-to-storage serialization boundary check.";
+                [
+                  {kind: "required_scope", value: "unit", source_ref: catalog("project-policy")},
+                  {kind: "required_tdd", value: "false", source_ref: catalog("project-policy")}
+                ];
+                [];
+                "extend_existing";
+                [
+                  check("domain-value-unit-suite"; ref("domain-value"; "claim"); "run"; "automated_test"; "unit"; "characterization"; ref("domain-value"; "procedure"); ["The existing domain-value unit suite is available."]; ["Does not observe JSON serialization or an API-to-adapter storage round trip."]; ref("domain-value"; "success"); ref("domain-value"; "failure"); "Retains the mandated unit suite for the independent domain-value claim."; ["skills/assistant-verification/references/methods/unit.md"]),
+                  check("api-storage-round-trip"; ref("api-storage-round-trip"; "claim"); "extend"; "automated_test"; "integration"; "example"; ref("api-storage-round-trip"; "procedure"); ["The isolated API-to-adapter integration fixture is available.", "The representative JSON contract value is defined."]; ["Does not establish unrelated end-to-end user journeys or production storage availability."]; ref("api-storage-round-trip"; "success"); ref("api-storage-round-trip"; "failure"); "The isolated round trip observes field preservation across the changed serialization boundary."; ["skills/assistant-verification/references/methods/integration.md"])
+                ];
+                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "The binding project required_tdd=false tuple keeps TDD off despite meaningful unit and integration oracles."};
+                ["No end-to-end journey is selected because it would add no distinct claim beyond the isolated adapter-boundary check."];
+                "Stop when the required unit suite and isolated round-trip check pass; expand only for a distinct material gap."
+              ),
+              evidence_assessment: planned_assessment(["The selected domain-value unit suite and API-to-storage round trip have not yet been run."]; "Run the selected unit and isolated integration checks through the existing workflow owner.")
+            }
+          elif $case_id == "explicit-tdd-request-keeps-meaningful-red" then
+            {
+              verification_decision: decision(
+                "Add the focused integer-cent calculation boundary test under the user\u0027s explicit TDD requirement.";
+                [{kind: "required_tdd", value: "true", source_ref: catalog("user-request")}];
+                [];
+                "add_new";
+                [check("calculation-boundary"; ref("calculation-boundary"; "claim"); "add"; "automated_test"; "unit"; "example"; ref("calculation-boundary"; "procedure"); ["The calculation operates on integer cents and truncates 10 percent toward zero.", "A focused unit test can run before production edits."]; ["Does not require unrelated full-suite execution."]; ref("calculation-boundary"; "success"); ref("calculation-boundary"; "failure"); "The focused 199-cent example supplies the requested stable RED oracle."; ["skills/assistant-verification/references/methods/unit.md"]) + {command:{argv:["pytest", "tests/test_calculation.py::test_199_cent_10_percent"], cwd:"/workspace/calculation-project"}}];
+                {mode: true, applicable_check_ids: ["calculation-boundary"], basis: "user_requirement", rationale: "The user\u0027s explicit TDD requirement is binding, and the 199-cent boundary gives the focused assertion a stable meaningful RED outcome."};
+                ["No unrelated full-suite run is required to establish the focused boundary oracle."];
+                "Stop when the 199-cent boundary fails meaningfully before implementation and passes after the calculation fix."
+              ),
+              evidence_assessment: planned_assessment(["The focused calculation test has not yet been written or run."]; "Write and run the boundary test first, then implement the calculation fix.")
+            }
+          elif $case_id == "unknown-cause-bug-routes-through-debugging" then
+            {
+              verification_decision: decision(
+                "Reproduce and isolate the intermittent stale-content-on-reopen report before selecting a regression check.";
+                [];
+                [];
+                "none";
+                [check("reproduce-and-isolate"; ref("reproduce-and-isolate"; "claim"); "inspect"; "manual_observation"; null; "exploratory"; ref("reproduce-and-isolate"; "procedure"); ["A representative saved document and its ordinary reopen path are available."]; ["Does not define or claim a regression oracle or RED result before reproduction and isolation."]; ref("reproduce-and-isolate"; "success"); ref("reproduce-and-isolate"; "failure"); "Reproduction and isolation establish the failure boundary before a stable regression oracle is selected."; [])];
+                {mode: false, applicable_check_ids: [], basis: "not_selected", rationale: "No stable regression oracle is available until assistant-debugging reproduces and isolates the reported failure."};
+                ["No speculative regression test or RED claim is selected before the failure is reproduced and isolated."];
+                "Stop after reproduction/isolation evidence determines whether a stable regression oracle can be selected."
+              ),
+              evidence_assessment: planned_assessment(["The intermittent stale-content failure has not been reproduced or isolated."]; "Use assistant-debugging to reproduce and isolate the report before selecting regression coverage.")
+            }
+          elif $case_id == "binding-coverage-mandate-keeps-source-and-enforcement" then
+            {
+              verification_decision: decision(
+                "Preserve the parser package\u0027s source-mandated 85% line coverage threshold.";
+                [{kind:"required_check",value:"At least 85% line coverage for the changed parser package, measured by coverage.py; fail below 85%.",source_ref:"testing-policy.md#parser-coverage"}];
+                [];
+                "none";
+                [check("parser-coverage-threshold"; "The changed parser package meets the mandated 85% line coverage threshold."; "run"; "static_validation"; null; "schema_or_lint"; "Run python -m coverage report --include=\u0027src/parser/*\u0027 --fail-under=85 and retain the package-scoped measurement."; ["The changed parser package and coverage.py are available."]; ["Does not establish unrelated runtime behavior or repository-wide coverage."]; "The package-scoped report meets the source-mandated 85% threshold."; "The package report is below 85% or measures a broader scope."; "Runs the exact source-mandated metric and threshold."; []) + {command:{argv:["python", "-m", "coverage", "report", "--include=src/parser/*", "--fail-under=85"], cwd:"/workspace/parser-project"}}];
+                {mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected coverage check has no meaningful RED cycle."};
+                ["No broader default or repository-wide coverage target is selected."];
+                "Stop after the source-mandated package report passes or report the exact policy gap."
+              ),
+              evidence_assessment: planned_assessment(["The mandated package coverage command has not yet run."]; "Run the selected package-scoped coverage command and retain its current measurement.")
+            }
+          elif $case_id == "same-claim-checks-require-distinct-evidence-identity" then
+            {
+              verification_decision: decision(
+                "Assess the checkout amount through its separate unit and API integration boundaries.";
+                [];
+                [];
+                "none";
+                [
+                  check("checkout-total-unit"; "The checkout amount is calculated correctly."; "run"; "automated_test"; "unit"; "example"; "Run the checkout amount calculation unit test with integer-cent boundary values."; ["The unit test result is current."]; ["Does not observe the API-to-storage boundary."]; "The calculation unit test passes for the selected boundary values."; "The calculated amount differs from the expected integer-cent result."; "Observes the isolated calculation procedure."; ["skills/assistant-verification/references/methods/unit.md"]) + {command:{argv:["pytest", "tests/unit/test_checkout.py"], cwd:"services/checkout"}},
+                  check("checkout-total-api"; "The checkout amount is calculated correctly."; "run"; "automated_test"; "integration"; "example"; "Run the checkout API-to-storage round trip and inspect the persisted amount."; ["The isolated API-to-storage fixture is available."]; ["Does not replace the isolated calculation unit test."]; "The API round trip preserves the expected checkout amount."; "The request-to-storage round trip changes the expected amount."; "Observes the separate integration procedure despite shared claim wording."; ["skills/assistant-verification/references/methods/integration.md"]) + {command:{argv:["pytest", "tests/integration/test_checkout_api.py"], cwd:"services/api"}}
+                ];
+                {mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected checks do not require a meaningful RED cycle."};
+                [];
+                "Close both selected check IDs with their own current result refs."
+              ),
+              evidence_assessment: {
+                status:"sufficient",
+                scope_and_evidence_refs:[
+                  {evidence_ref:"unit-run-42",claim_kind:"task_behavior",claim_scope:["The checkout amount is calculated correctly."],selected_check_ids:["checkout-total-unit"],binding_obligation_refs:[],result_state:"passed",freshness:"current",exclusions:["Does not observe the API-to-storage boundary."]},
+                  {evidence_ref:"api-run-42",claim_kind:"task_behavior",claim_scope:["The checkout amount is calculated correctly."],selected_check_ids:["checkout-total-api"],binding_obligation_refs:[],result_state:"passed",freshness:"current",exclusions:["Does not replace the isolated calculation unit test."]}
+                ],
+                gaps_and_limitations:[],
+                next_action:"none_needed"
+              }
+            }
+          elif $case_id == "phrase-compliant-empty-artifact-and-stale-pass-remain-insufficient" then
+            {
+              evidence_assessment: {
+                status: "insufficient",
+                scope_and_evidence_refs: [
+                  {
+                    evidence_ref: "schema-check-old",
+                    claim_kind: "structural_validity",
+                    claim_scope: ["Required guide structure and link fields on the earlier source revision identified by schema-check-old."],
+                    selected_check_ids: [],
+                    binding_obligation_refs: [],
+                    result_state: "passed",
+                    freshness: "stale",
+                    exclusions: ["The source revision is stale and the schema check does not establish useful rendered content or working links."]
+                  },
+                  {
+                    evidence_ref: "current-html-inspection",
+                    claim_kind: "other",
+                    claim_scope: ["Current generated HTML artifact content and browser render for guide usability."],
+                    selected_check_ids: [],
+                    binding_obligation_refs: [],
+                    result_state: "failed",
+                    freshness: "current",
+                    exclusions: ["The observed zero-byte file and blank browser capture provide no successful content or link-render evidence."]
+                  }
+                ],
+                gaps_and_limitations: [
+                  "The actual generated HTML is zero bytes, so useful guide content is absent.",
+                  "The current browser capture is blank; no successful rendered guide or working-link observation is available."
+                ],
+                next_action: "Regenerate the HTML and capture a useful current render before treating the guide as usable."
+              }
+            }
+          else
+            error("unsupported assistant-verification factory case: \($case_id)")
+          end
+        )
+    ' >"$response_path"
+}
+
 p0p4_write_skill_eval_responses() {
     local output_dir="$1"
     local omit_skill="${2:-}"
     local omit_case="${3:-}"
     local omit_required="${4:-}"
+    local only_skill="${5:-}"
+    local only_case="${6:-}"
     local fixture_file
     local skill_name
     local id
@@ -392,6 +621,9 @@ p0p4_write_skill_eval_responses() {
 
     while IFS= read -r fixture_file; do
         skill_name="$(basename "$(dirname "$(dirname "$fixture_file")")")"
+        if [[ -n "$only_skill" && "$skill_name" != "$only_skill" ]]; then
+            continue
+        fi
         mkdir -p "$output_dir/$skill_name"
         while IFS= read -r id; do
             response_path="$output_dir/$skill_name/$id.txt"
@@ -399,6 +631,72 @@ p0p4_write_skill_eval_responses() {
             if [[ "$skill_name" == "assistant-workflow" ]] \
                 && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
                 case "$id" in
+                    unknown-cause-bugfix-routes-through-debugging-before-tdd)
+                        jq -n --arg summary "$required_summary assistant-tdd" '{
+                          summary:$summary,
+                          debugging_result:{status:"root_cause_found",reproduction_status:"yes",hypotheses_count:3,root_cause:"The promotion is applied twice when checkout-42 is replayed.",confidence:"high",transition_to_tdd:"ready",residual_risks:[]},
+                          verification_decision:{
+                            scope:"Fix the reproduced duplicate checkout promotion with the requested TDD cycle.",
+                            policy_basis:{binding_constraints:[{kind:"required_tdd",value:"true",source_ref:"fixture:unknown-cause-bugfix-routes-through-debugging-before-tdd#user-request"}],preferences_applied:[],capability_limits:[]},
+                            test_change:"add_new",
+                            checks:[{check_id:"checkout-promotion-once",claim_or_risk:"The 100-cent promotion is applied once to the 1000-cent subtotal.",action:"add",method:"automated_test",test_scope:"unit",technique:"example",check_ref_or_method:{reference_or_procedure:"Write and run checkout-42 before repair, asserting a 900-cent total instead of the reproduced 800-cent total.",prerequisites:["The checkout-42 replay reproduces duplicate promotion application."],exclusions:["Does not establish the external payment-service boundary."],expected_success:"The total is 900 cents after the repair.",meaningful_failure:"Before repair the assertion fails because the total is 800 cents."},rationale:"The supplied replay provides a meaningful regression oracle for the requested TDD cycle.",method_refs:["skills/assistant-verification/references/methods/unit.md"]}],
+                            tdd_choice:{mode:true,applicable_check_ids:["checkout-promotion-once"],basis:"user_requirement",rationale:"The explicit user TDD mandate remains binding after successful reproduction."},
+                            omitted_checks_and_rationale:["No unrelated full suite is selected."],
+                            stop_rule:"Run meaningful RED before repair, then the selected GREEN check and applicable review."
+                          }
+                        }' >"$response_path"
+                        ;;
+                    light-completion-retains-canonical-verification-outputs)
+                        jq -n --arg summary "$required_summary" '{
+                          summary:$summary,
+                          verification_decision:{
+                            scope:"Correct the README install command spelling.",
+                            policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},
+                            test_change:"none",
+                            checks:[{
+                              check_id:"readme-install-command",
+                              claim_or_risk:"The README install command uses an option supported by install.sh.",
+                              action:"run",
+                              method:"automated_test",
+                              test_scope:"unit",
+                              technique:"schema_or_lint",
+                              check_ref_or_method:{
+                                reference_or_procedure:"Run the focused documentation-contract test that checks the README install command against install.sh.",
+                                prerequisites:["Updated README.md, install.sh, and the focused documentation-contract test are available."],
+                                exclusions:["Does not execute the installer or prove native activation."],
+                                expected_success:"The test confirms the documented option is supported by install.sh.",
+                                meaningful_failure:"The README command includes an option the installer does not accept."
+                              },
+                              rationale:"The focused test directly checks the changed documentation claim.",
+                              method_refs:["skills/assistant-verification/references/methods/unit.md"]
+                            }],
+                            tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected check does not provide a meaningful RED-GREEN-REFACTOR cycle."},
+                            omitted_checks_and_rationale:["Installer execution is outside the selected documentation-only claim."],
+                            stop_rule:"Stop when the command comparison passes and the fresh light review passes."
+                          },
+                          evidence_assessment:{
+                            status:"sufficient",
+                            scope_and_evidence_refs:[{
+                              evidence_ref:"check:readme-install-command:17",
+                              selected_check_ids:["readme-install-command"],
+                              binding_obligation_refs:[],
+                              claim_kind:"structural_validity",
+                              claim_scope:["README documents an install.sh-supported option."],
+                              result_state:"passed",
+                              freshness:"current",
+                              exclusions:["Does not prove installer execution or native activation."]
+                            }],
+                            gaps_and_limitations:[],
+                            next_action:"none_needed"
+                          }
+                        }' >"$response_path"
+                        ;;
+                    build-derives-tdd-from-selected-slice-checks)
+                        write_tdd_slice_projection_response "$response_path" "$required_summary"
+                        ;;
+                    build-phase-verifies-selected-check-before-advancing)
+                        jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria.",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[]}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
+                        ;;
                     native-slice-execution-uses-dependencies-not-runner-topology)
                         jq -n '{execution_policy:{source_writer_policy:"sequential_shared_or_unknown",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"not_available",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
                         ;;
@@ -722,6 +1020,23 @@ p0p4_write_skill_eval_responses() {
             fi
             if jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
                 case "$skill_name:$id" in
+                    assistant-tdd:bugfix-starts-with-red-evidence)
+                        jq -n --arg summary "$required_summary" '{summary:$summary,cycle_log:[{behavior:"Reject duplicate eval case ids",red:{test_name:"reject_duplicate_case_ids",test_file:"tests/eval_runner_test.rb",failure_reason:"The duplicate id was accepted before validation was added.",verified_failing:true,command_results:[{target:"tests/eval_runner_test.rb",test_file:"tests/eval_runner_test.rb",test_name:"reject_duplicate_case_ids",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"failed",freshness:"current"}]},green:{production_file:"lib/eval_runner.rb",test_passes:true,all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]},refactor:{changes_made:"none needed",all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]}}],coverage_summary:{new_tests:1,total_tests_run:4,all_passing:true}}' >"$response_path"
+                        ;;
+                    assistant-tdd:green-refactor-runs-selected-regressions)
+                        jq -n --arg summary "$required_summary" '{summary:$summary,cycle_log:[{behavior:"Reject duplicate eval case ids",red:{test_name:"reject_duplicate_case_ids",test_file:"tests/eval_runner_test.rb",failure_reason:"The duplicate id was accepted before validation was added.",verified_failing:true,command_results:[{target:"tests/eval_runner_test.rb",test_file:"tests/eval_runner_test.rb",test_name:"reject_duplicate_case_ids",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"failed",freshness:"current"}]},green:{production_file:"lib/eval_runner.rb",test_passes:true,all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]},refactor:{changes_made:"none needed",all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]}}],coverage_summary:{new_tests:1,total_tests_run:7,all_passing:true}}' >"$response_path"
+                        ;;
+                    assistant-verification:qrg-content-change-reuses-behavioral-coverage|\
+                    assistant-verification:loader-path-change-adds-a-behavioral-oracle|\
+                    assistant-verification:unit-only-policy-excludes-other-automated-scopes|\
+                    assistant-verification:required-unit-check-does-not-prohibit-integration|\
+                    assistant-verification:explicit-tdd-request-keeps-meaningful-red|\
+                    assistant-verification:unknown-cause-bug-routes-through-debugging|\
+                    assistant-verification:phrase-compliant-empty-artifact-and-stale-pass-remain-insufficient|\
+                    assistant-verification:binding-coverage-mandate-keeps-source-and-enforcement|\
+                    assistant-verification:same-claim-checks-require-distinct-evidence-identity)
+                        p0p4_write_assistant_verification_response "$response_path" "$required_summary" "$id" || return 1
+                        ;;
                     assistant-thinking:feature-preparation-candidates-require-evidence)
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["Existing observable effects require workflow evidence before promotion."], recommendation: "Keep the concern as a candidate and complete feature preparation.", confidence: "medium", gaps_or_assumptions: ["No canonical feature-preparation evidence row is available."], evidence_or_observations: ["ACTIVE code and behavioral tests identify selection, highlight, and viewport focus."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus unless evidence authorizes a change", promotion_status: "requires_feature_preparation_evidence", rationale: "Implementation and behavioral tests must be inspected before promotion."}]}' >"$response_path"
                         ;;
@@ -778,7 +1093,7 @@ p0p4_write_skill_eval_responses() {
 ' "$seeded_anchor"
                 done < <(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .seeded_defects[]? | (.detection_anchors[]?, .evidence_anchors[]?, .acceptable_severities[]?, .finding_markers[]?)' "$fixture_file")
             } >"$response_path"
-        done < <(jq -r '.cases[].id' "$fixture_file")
+        done < <(jq -r --arg only_case "$only_case" '.cases[] | select($only_case == "" or .id == $only_case) | .id' "$fixture_file")
     done < <(p0p4_skill_eval_default_fixtures)
 }
 
@@ -986,10 +1301,10 @@ while IFS= read -r fixture_file; do
         canonical_schema_failures+=("${fixture_file#$FRAMEWORK_DIR/}")
     fi
 done < <(p0p4_skill_eval_default_fixtures)
-if [[ "$activation_case_count" -eq 14 && ${#activation_case_failures[@]} -eq 0 && ${#canonical_schema_failures[@]} -eq 0 ]]; then
+if [[ "$activation_case_count" -gt 0 && ${#activation_case_failures[@]} -eq 0 && ${#canonical_schema_failures[@]} -eq 0 ]]; then
     pass
 else
-    fail "activation case inventory must contain 14 schema-2.0 typed fixtures: ${activation_case_failures[*]-} ${canonical_schema_failures[*]-}"
+    fail "discovered first-class fixtures must all provide schema-2.0 typed activation cases: ${activation_case_failures[*]-} ${canonical_schema_failures[*]-}"
 fi
 
 test_start "activation cases keep curated review routes and nearby nonmatches"
@@ -1368,24 +1683,24 @@ test_start "skill eval runner list includes covered skill case rows"
 default_case_count="$(p0p4_skill_eval_default_case_count)"
 if list_output="$("$skill_eval_runner" --list)" \
     && [[ "$(printf '%s\n' "$list_output" | grep -c .)" -eq "$default_case_count" ]] \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-clarify\tmulti-intent-prompt-asks-material-clarification\tambiguous_multi_intent\tMulti-intent prompt asks material clarification' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-thinking\tarchitecture-decision-selects-perspectives\ttool_selection_methodology\tArchitecture decision selects perspectives' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tmedium-task-plans-before-build\tphase_gate_approval\tMedium task plans before build' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tworkflow-trigger-routes-dev-verbs-not-raw-code\ttrigger_routing\tWorkflow trigger routes dev verbs not raw code' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tunknown-cause-bugfix-routes-through-debugging-before-tdd\tdebugging_tdd_routing\tUnknown-cause bugfix routes through debugging before TDD' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-workflow\tclarification-is-material-not-capped\tclarification_admissibility\tClarification is material, not capped' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-review\treview-fix-loop-handles-findings\tautonomous_review_loop\tReview-fix loop handles findings' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tbugfix-starts-with-red-evidence\tred_gate_enforcement\tBugfix starts with RED evidence' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-tdd\tunknown-cause-bugfix-waits-for-debugging-evidence\tdebugging_bridge\tUnknown-cause bugfix waits for debugging evidence' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-security\tfindings-include-severity-impact-remediation\tsecurity_report_contract\tFindings include severity impact remediation' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-debugging\tbugfix-reproduces-before-patching\treproduction_gate\tBugfix reproduces before patching' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-diagrams\tarchitecture-diagram-derived-from-code\tcode_derived_architecture\tArchitecture diagram derived from code' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-docs\tarchitecture-doc-uses-code-evidence\tcode_derived_architecture_docs\tArchitecture doc uses code evidence' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-ideate\tbrainstorm-diverges-before-ranking\tdiverge_converge_gate\tBrainstorm diverges before ranking' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-skill-creator\tnew-process-skill-designs-contracts-before-build\tcontract_design_gate\tNew process skill designs contracts before build' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-research\ttechnology-comparison-uses-standard-tier\ttier_and_synthesis\tTechnology comparison uses standard tier' \
-    && printf '%s\n' "$list_output" | grep -Fq $'assistant-onboard\tnew-repo-onboarding-produces-orientation\tsystematic_onboarding\tNew repo onboarding produces orientation'; then
+    && grep -Fq -- $'assistant-clarify\tmulti-intent-prompt-asks-material-clarification\tambiguous_multi_intent\tMulti-intent prompt asks material clarification' <<<"$list_output" \
+    && grep -Fq -- $'assistant-thinking\tarchitecture-decision-selects-perspectives\ttool_selection_methodology\tArchitecture decision selects perspectives' <<<"$list_output" \
+    && grep -Fq -- $'assistant-workflow\tmedium-task-plans-before-build\tphase_gate_approval\tMedium task plans before build' <<<"$list_output" \
+    && grep -Fq -- $'assistant-workflow\tworkflow-trigger-routes-dev-verbs-not-raw-code\ttrigger_routing\tWorkflow trigger routes dev verbs not raw code' <<<"$list_output" \
+    && grep -Fq -- $'assistant-workflow\tunknown-cause-bugfix-routes-through-debugging-before-tdd\tdebugging_tdd_routing\tUnknown-cause bugfix routes through debugging before TDD' <<<"$list_output" \
+    && grep -Fq -- $'assistant-workflow\tclarification-is-material-not-capped\tclarification_admissibility\tClarification is material, not capped' <<<"$list_output" \
+    && grep -Fq -- $'assistant-review\treview-fix-loop-handles-findings\tautonomous_review_loop\tReview-fix loop handles findings' <<<"$list_output" \
+    && grep -Fq -- $'assistant-tdd\tbugfix-starts-with-red-evidence\tred_gate_enforcement\tBugfix starts with RED evidence' <<<"$list_output" \
+    && grep -Fq -- $'assistant-tdd\tunknown-cause-bugfix-waits-for-debugging-evidence\tdebugging_bridge\tUnknown-cause bugfix waits for debugging evidence' <<<"$list_output" \
+    && grep -Fq -- $'assistant-security\tfindings-include-severity-impact-remediation\tsecurity_report_contract\tFindings include severity impact remediation' <<<"$list_output" \
+    && grep -Fq -- $'assistant-debugging\tbugfix-reproduces-before-patching\treproduction_gate\tBugfix reproduces before patching' <<<"$list_output" \
+    && grep -Fq -- $'assistant-diagrams\tarchitecture-diagram-derived-from-code\tcode_derived_architecture\tArchitecture diagram derived from code' <<<"$list_output" \
+    && grep -Fq -- $'assistant-docs\tarchitecture-doc-uses-code-evidence\tcode_derived_architecture_docs\tArchitecture doc uses code evidence' <<<"$list_output" \
+    && grep -Fq -- $'assistant-ideate\tbrainstorm-diverges-before-ranking\tdiverge_converge_gate\tBrainstorm diverges before ranking' <<<"$list_output" \
+    && grep -Fq -- $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' <<<"$list_output" \
+    && grep -Fq -- $'assistant-skill-creator\tnew-process-skill-designs-contracts-before-build\tcontract_design_gate\tNew process skill designs contracts before build' <<<"$list_output" \
+    && grep -Fq -- $'assistant-research\ttechnology-comparison-uses-standard-tier\ttier_and_synthesis\tTechnology comparison uses standard tier' <<<"$list_output" \
+    && grep -Fq -- $'assistant-onboard\tnew-repo-onboarding-produces-orientation\tsystematic_onboarding\tNew repo onboarding produces orientation' <<<"$list_output"; then
     pass
 else
     fail "skill eval runner --list did not include expected covered assistant case rows"
@@ -1536,6 +1851,552 @@ elif grep -Fq "Heuristic/local grading only" "$response_output" \
     pass
 else
     fail "skill eval runner --responses did not report empty and missing responses clearly"
+fi
+
+p0p4_skill_eval_grade_matches() {
+    local response_dir="$1"
+    local skill_name="$2"
+    local case_id="$3"
+    local expected_status="$4"
+    local output_path="$5"
+    local exit_code=0
+
+    "$skill_eval_runner" --responses "$response_dir" --skill "$skill_name" --case "$case_id" \
+        >"$output_path" 2>&1 || exit_code=$?
+
+    if [[ "$expected_status" == "PASS" ]]; then
+        [[ "$exit_code" -eq 0 ]] \
+            && grep -Fq $'PASS\t'"$skill_name"$'\t'"$case_id" "$output_path" \
+            && grep -Fq "structured_json_assertion_failures=0" "$output_path"
+    else
+        [[ "$exit_code" -ne 0 ]] \
+            && grep -Fq $'FAIL\t'"$skill_name"$'\t'"$case_id" "$output_path" \
+            && grep -Eq 'structured_json_assertion_failures=[1-9][0-9]*' "$output_path"
+    fi
+}
+
+test_start "assistant-verification grading rejects wrong policy, evidence, and correlated procedures"
+verification_grade_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-verification-grade.XXXXXX")"
+p0p4_register_cleanup "$verification_grade_root"
+verification_grade_case="qrg-content-change-reuses-behavioral-coverage"
+if ! p0p4_write_skill_eval_responses "$verification_grade_root/factory" "" "" "" \
+    assistant-verification "$verification_grade_case"; then
+    fail "assistant-verification response factory did not build selected fixtures"
+    finish
+    exit 1
+fi
+verification_grade_correct="$verification_grade_root/factory/assistant-verification/$verification_grade_case.txt"
+mkdir -p "$verification_grade_root/correct/assistant-verification" \
+    "$verification_grade_root/wrong_policy/assistant-verification" \
+    "$verification_grade_root/wrong_evidence/assistant-verification" \
+    "$verification_grade_root/empty_selection/assistant-verification" \
+    "$verification_grade_root/unrelated_selection/assistant-verification" \
+    "$verification_grade_root/reuse_only/assistant-verification" \
+    "$verification_grade_root/opening_object_missing/assistant-verification" \
+    "$verification_grade_root/label_only_distractor/assistant-verification" \
+    "$verification_grade_root/opening_failure_crossbound/assistant-verification" \
+    "$verification_grade_root/opening_exclusion_crossbound/assistant-verification" \
+    "$verification_grade_root/legacy_positive/assistant-verification" \
+    "$verification_grade_root/legacy_opening_missing/assistant-verification" \
+    "$verification_grade_root/legacy_label_only/assistant-verification"
+cp "$verification_grade_correct" "$verification_grade_root/correct/assistant-verification/$verification_grade_case.txt"
+jq '.verification_decision.test_change = "add_new"' "$verification_grade_correct" \
+    >"$verification_grade_root/wrong_policy/assistant-verification/$verification_grade_case.txt"
+jq '.evidence_assessment.status = "sufficient"' "$verification_grade_correct" \
+    >"$verification_grade_root/wrong_evidence/assistant-verification/$verification_grade_case.txt"
+jq '.verification_decision.checks = []' "$verification_grade_correct" \
+    >"$verification_grade_root/empty_selection/assistant-verification/$verification_grade_case.txt"
+jq '.verification_decision.checks = [(.verification_decision.checks[0] | .check_id = "filename-inventory" | .claim_or_risk = "Every requested filename appears in a hardcoded inventory." | .action = "add" | .method = "automated_test" | .test_scope = "unit")]' \
+    "$verification_grade_correct" \
+    >"$verification_grade_root/unrelated_selection/assistant-verification/$verification_grade_case.txt"
+jq '.verification_decision.checks = [.verification_decision.checks[2]]' "$verification_grade_correct" \
+    >"$verification_grade_root/reuse_only/assistant-verification/$verification_grade_case.txt"
+jq 'del(.verification_decision.checks[1].check_ref_or_method)' "$verification_grade_correct" \
+    >"$verification_grade_root/opening_object_missing/assistant-verification/$verification_grade_case.txt"
+jq '
+    .verification_decision.checks[1].claim_or_risk = "fixture:qrg-content-change-reuses-behavioral-coverage#menu-labels.claim"
+    | .verification_decision.checks[1].check_ref_or_method = {
+        reference_or_procedure: "fixture:qrg-content-change-reuses-behavioral-coverage#menu-labels.procedure",
+        prerequisites: ["Application can be launched with the updated menu."],
+        exclusions: ["No document is selected and no opening behavior is checked."],
+        expected_success: "fixture:qrg-content-change-reuses-behavioral-coverage#menu-labels.success",
+        meaningful_failure: "fixture:qrg-content-change-reuses-behavioral-coverage#menu-labels.failure"
+      }
+' "$verification_grade_correct" \
+    >"$verification_grade_root/label_only_distractor/assistant-verification/$verification_grade_case.txt"
+jq '.verification_decision.checks[1].check_ref_or_method.meaningful_failure = "fixture:qrg-content-change-reuses-behavioral-coverage#content.failure"' \
+    "$verification_grade_correct" \
+    >"$verification_grade_root/opening_failure_crossbound/assistant-verification/$verification_grade_case.txt"
+jq '.verification_decision.checks[1].check_ref_or_method.exclusions = ["No document is selected and no opening behavior is checked."]' \
+    "$verification_grade_correct" \
+    >"$verification_grade_root/opening_exclusion_crossbound/assistant-verification/$verification_grade_case.txt"
+jq '
+    .verification_decision.checks[0].claim_or_risk = "Each requested PDF contains the intended help content."
+    | .verification_decision.checks[0].check_ref_or_method.reference_or_procedure = "Open each requested PDF and compare its contents with the supplied help topic and intended menu label."
+    | .verification_decision.checks[0].check_ref_or_method.expected_success = "Each PDF contains the requested help content."
+    | .verification_decision.checks[0].check_ref_or_method.meaningful_failure = "A PDF is empty or contains content for a different help topic."
+    | .verification_decision.checks[1].claim_or_risk = "Each new menu entry opens its requested PDF through the existing UI path."
+    | .verification_decision.checks[1].check_ref_or_method.reference_or_procedure = "Select each added menu entry in the application and observe that its corresponding PDF opens."
+    | .verification_decision.checks[1].check_ref_or_method.expected_success = "Both menu entries open their corresponding documents."
+    | .verification_decision.checks[1].check_ref_or_method.meaningful_failure = "An entry is missing, opens the wrong document, or fails to open."
+    | .verification_decision.checks[2].claim_or_risk = "The existing generic loader and opener behavior remains covered."
+    | .verification_decision.checks[2].check_ref_or_method.reference_or_procedure = "Run the existing loader test that uses an arbitrary menu entry and verifies that it opens a document."
+    | .verification_decision.checks[2].check_ref_or_method.expected_success = "The existing generic menu-opening test passes."
+    | .verification_decision.checks[2].check_ref_or_method.meaningful_failure = "An arbitrary entry fails to open a document."
+' "$verification_grade_correct" \
+    >"$verification_grade_root/legacy_positive/assistant-verification/$verification_grade_case.txt"
+jq 'del(.verification_decision.checks[1].check_ref_or_method)' \
+    "$verification_grade_root/legacy_positive/assistant-verification/$verification_grade_case.txt" \
+    >"$verification_grade_root/legacy_opening_missing/assistant-verification/$verification_grade_case.txt"
+jq '
+    .verification_decision.checks[1].claim_or_risk = "The two requested menu labels appear in the correct order."
+    | .verification_decision.checks[1].check_ref_or_method = {
+        reference_or_procedure: "Inspect the rendered menu and compare its two new labels and order with the requested list.",
+        prerequisites: ["Application can be launched with the updated menu."],
+        exclusions: ["No document is selected and no opening behavior is checked."],
+        expected_success: "Both requested labels are visible in the specified order.",
+        meaningful_failure: "A requested label is missing or appears out of order."
+      }
+    | .verification_decision.checks[1].rationale = "A direct observation checks the displayed menu content."
+' "$verification_grade_root/legacy_positive/assistant-verification/$verification_grade_case.txt" \
+    >"$verification_grade_root/legacy_label_only/assistant-verification/$verification_grade_case.txt"
+if ! jq -e '
+    (.verification_decision | has("scope") and has("policy_basis") and has("test_change") and has("checks") and has("tdd_choice") and has("omitted_checks_and_rationale") and has("stop_rule"))
+    and (.verification_decision.policy_basis | has("binding_constraints") and has("preferences_applied") and has("capability_limits"))
+    and all(.verification_decision.checks[]; has("check_id") and has("claim_or_risk") and has("action") and has("method") and has("technique") and has("check_ref_or_method") and has("rationale") and has("method_refs"))
+    and all(.verification_decision.checks[] | select(.method == "automated_test"); has("test_scope"))
+    and all(.verification_decision.checks[]; .check_ref_or_method | has("reference_or_procedure") and has("prerequisites") and has("exclusions") and has("expected_success") and has("meaningful_failure"))
+    and (.verification_decision.tdd_choice | has("mode") and has("basis") and has("rationale"))
+    and (.evidence_assessment | has("status") and has("scope_and_evidence_refs") and has("gaps_and_limitations") and has("next_action"))
+  ' "$verification_grade_correct" >/dev/null; then
+    fail "QRG expected response omits required VerificationDecision or EvidenceAssessment fields"
+fi
+verification_grade_failures=()
+if ! p0p4_skill_eval_grade_matches "$verification_grade_root/correct" assistant-verification "$verification_grade_case" PASS "$verification_grade_root/correct.output"; then
+    verification_grade_failures+=("complete QRG positive response did not pass")
+fi
+for control in wrong_policy wrong_evidence empty_selection unrelated_selection reuse_only \
+    opening_object_missing label_only_distractor opening_failure_crossbound opening_exclusion_crossbound \
+    legacy_positive legacy_opening_missing legacy_label_only; do
+    if ! p0p4_skill_eval_grade_matches "$verification_grade_root/$control" assistant-verification "$verification_grade_case" FAIL "$verification_grade_root/$control.output"; then
+        verification_grade_failures+=("$control was not rejected by the exact-case grader")
+    fi
+done
+if [[ "${#verification_grade_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-verification QRG grading gaps: ${verification_grade_failures[*]}"
+fi
+
+test_start "assistant-verification unit authorization requires allow and deny evidence"
+unit_grade_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-unit-authorization-grade.XXXXXX")"
+p0p4_register_cleanup "$unit_grade_root"
+unit_grade_case="unit-only-policy-excludes-other-automated-scopes"
+if ! p0p4_write_skill_eval_responses "$unit_grade_root/factory" "" "" "" \
+    assistant-verification "$unit_grade_case"; then
+    fail "assistant-verification unit-policy response factory did not build the selected fixture"
+    finish
+    exit 1
+fi
+unit_grade_correct="$unit_grade_root/factory/assistant-verification/$unit_grade_case.txt"
+mkdir -p "$unit_grade_root/correct/assistant-verification" \
+    "$unit_grade_root/allow_only/assistant-verification" \
+    "$unit_grade_root/failure_omitted/assistant-verification" \
+    "$unit_grade_root/legacy_incomplete/assistant-verification"
+cp "$unit_grade_correct" "$unit_grade_root/correct/assistant-verification/$unit_grade_case.txt"
+jq '
+    .verification_decision.checks[0].claim_or_risk = "fixture:unit-only-policy-excludes-other-automated-scopes#allow-only.claim"
+    | .verification_decision.checks[0].check_ref_or_method = {
+        reference_or_procedure: "fixture:unit-only-policy-excludes-other-automated-scopes#allow-only.procedure",
+        prerequisites: [
+          "An authenticated owner subject for document-1 is available as a deterministic local fixture.",
+          "The changed authorization predicate can be called directly."
+        ],
+        exclusions: ["Does not exercise authorization through a real service, API, or persistence boundary."],
+        expected_success: "fixture:unit-only-policy-excludes-other-automated-scopes#allow-only.success",
+        meaningful_failure: "fixture:unit-only-policy-excludes-other-automated-scopes#allow-only.failure"
+      }
+    | .verification_decision.checks[0].rationale = "Checks the owner path against the unit-only project policy."
+' "$unit_grade_correct" \
+    >"$unit_grade_root/allow_only/assistant-verification/$unit_grade_case.txt"
+jq 'del(.verification_decision.checks[0].check_ref_or_method.meaningful_failure)' "$unit_grade_correct" \
+    >"$unit_grade_root/failure_omitted/assistant-verification/$unit_grade_case.txt"
+jq -n --arg summary "binding unauthorized unit" \
+    '{summary:$summary,verification_decision:{checks:[{test_scope:"unit"}]},evidence_assessment:{status:"planned"}}' \
+    >"$unit_grade_root/legacy_incomplete/assistant-verification/$unit_grade_case.txt"
+unit_grade_failures=()
+if ! p0p4_skill_eval_grade_matches "$unit_grade_root/correct" assistant-verification "$unit_grade_case" PASS "$unit_grade_root/correct.output"; then
+    unit_grade_failures+=("complete allow-deny positive response did not pass")
+fi
+for control in allow_only failure_omitted legacy_incomplete; do
+    if ! p0p4_skill_eval_grade_matches "$unit_grade_root/$control" assistant-verification "$unit_grade_case" FAIL "$unit_grade_root/$control.output"; then
+        unit_grade_failures+=("$control was not rejected by the exact-case grader")
+    fi
+done
+if [[ "${#unit_grade_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-verification unit authorization grading gaps: ${unit_grade_failures[*]}"
+fi
+
+test_start "assistant-verification additional complete selection and assessment responses pass exact-case grading"
+verification_positive_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-verification-positive-grade.XXXXXX")"
+p0p4_register_cleanup "$verification_positive_root"
+verification_positive_failures=()
+for verification_positive_case in \
+    loader-path-change-adds-a-behavioral-oracle \
+    required-unit-check-does-not-prohibit-integration \
+    explicit-tdd-request-keeps-meaningful-red \
+    unknown-cause-bug-routes-through-debugging \
+    phrase-compliant-empty-artifact-and-stale-pass-remain-insufficient \
+    binding-coverage-mandate-keeps-source-and-enforcement \
+    same-claim-checks-require-distinct-evidence-identity; do
+    if ! p0p4_write_skill_eval_responses "$verification_positive_root/responses" "" "" "" \
+        assistant-verification "$verification_positive_case"; then
+        verification_positive_failures+=("$verification_positive_case response factory failed")
+        continue
+    fi
+    if ! p0p4_skill_eval_grade_matches "$verification_positive_root/responses" assistant-verification \
+        "$verification_positive_case" PASS "$verification_positive_root/$verification_positive_case.output"; then
+        verification_positive_failures+=("$verification_positive_case complete response did not pass")
+    fi
+done
+if [[ "${#verification_positive_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-verification exact-case positive grading gaps: ${verification_positive_failures[*]}"
+fi
+
+test_start "assistant-verification enforces required TDD true false and conflicting mandates"
+tdd_policy_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-tdd-policy.XXXXXX")"
+p0p4_register_cleanup "$tdd_policy_root"
+false_policy_case="required-unit-check-does-not-prohibit-integration"
+true_policy_case="explicit-tdd-request-keeps-meaningful-red"
+policy_grade_failures=()
+if ! p0p4_write_skill_eval_responses "$tdd_policy_root/false-positive" "" "" "" assistant-verification "$false_policy_case"; then
+    policy_grade_failures+=("false-policy positive response factory failed")
+else
+    mkdir -p "$tdd_policy_root/false-correct/assistant-verification"
+    cp "$tdd_policy_root/false-positive/assistant-verification/$false_policy_case.txt" \
+        "$tdd_policy_root/false-correct/assistant-verification/$false_policy_case.txt"
+    mkdir -p "$tdd_policy_root/false-enabled/assistant-verification" "$tdd_policy_root/false-unbound/assistant-verification"
+    jq '.verification_decision.tdd_choice = {mode:true,applicable_check_ids:["domain-value-unit-suite"],basis:"selected_technique",rationale:"A meaningful RED oracle overrides the policy."}' \
+        "$tdd_policy_root/false-correct/assistant-verification/$false_policy_case.txt" \
+        >"$tdd_policy_root/false-enabled/assistant-verification/$false_policy_case.txt"
+    jq '.verification_decision.policy_basis.binding_constraints |= map(select(.kind != "required_tdd"))' \
+        "$tdd_policy_root/false-correct/assistant-verification/$false_policy_case.txt" \
+        >"$tdd_policy_root/false-unbound/assistant-verification/$false_policy_case.txt"
+    if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/false-correct" assistant-verification "$false_policy_case" PASS "$tdd_policy_root/false-positive.output"; then
+        policy_grade_failures+=("required_tdd=false positive did not pass")
+    fi
+    for mutation in false-enabled false-unbound; do
+        if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/$mutation" assistant-verification "$false_policy_case" FAIL "$tdd_policy_root/$mutation.output"; then
+            policy_grade_failures+=("required_tdd=false accepted $mutation")
+        fi
+    done
+fi
+if ! p0p4_write_skill_eval_responses "$tdd_policy_root/true-positive" "" "" "" assistant-verification "$true_policy_case"; then
+    policy_grade_failures+=("true-policy positive response factory failed")
+else
+    mkdir -p "$tdd_policy_root/true-disabled/assistant-verification" \
+        "$tdd_policy_root/true-missing-command/assistant-verification" \
+        "$tdd_policy_root/true-wrong-argv/assistant-verification" \
+        "$tdd_policy_root/true-wrong-cwd/assistant-verification"
+    jq '.verification_decision.tdd_choice = {mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected oracle should be run without TDD."}' \
+        "$tdd_policy_root/true-positive/assistant-verification/$true_policy_case.txt" \
+        >"$tdd_policy_root/true-disabled/assistant-verification/$true_policy_case.txt"
+    if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/true-positive" assistant-verification "$true_policy_case" PASS "$tdd_policy_root/true-positive.output"; then
+        policy_grade_failures+=("required_tdd=true positive did not pass")
+    fi
+    if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/true-disabled" assistant-verification "$true_policy_case" FAIL "$tdd_policy_root/true-disabled.output"; then
+        policy_grade_failures+=("required_tdd=true accepted a disabled TDD choice")
+    fi
+    jq 'del(.verification_decision.checks[0].command)' \
+        "$tdd_policy_root/true-positive/assistant-verification/$true_policy_case.txt" \
+        >"$tdd_policy_root/true-missing-command/assistant-verification/$true_policy_case.txt"
+    jq '.verification_decision.checks[0].command.argv = ["echo", "unrelated"]' \
+        "$tdd_policy_root/true-positive/assistant-verification/$true_policy_case.txt" \
+        >"$tdd_policy_root/true-wrong-argv/assistant-verification/$true_policy_case.txt"
+    jq '.verification_decision.checks[0].command.cwd = "/workspace/unrelated"' \
+        "$tdd_policy_root/true-positive/assistant-verification/$true_policy_case.txt" \
+        >"$tdd_policy_root/true-wrong-cwd/assistant-verification/$true_policy_case.txt"
+    for command_control in true-missing-command true-wrong-argv true-wrong-cwd; do
+        if ! p0p4_skill_eval_grade_matches "$tdd_policy_root/$command_control" assistant-verification \
+            "$true_policy_case" FAIL "$tdd_policy_root/$command_control.output"; then
+            policy_grade_failures+=("required_tdd=true accepted $command_control")
+        fi
+    done
+fi
+
+conflict_skill="$tdd_policy_root/assistant-verification"
+mkdir -p "$tdd_policy_root"
+cp -R "$FRAMEWORK_DIR/skills/assistant-verification" "$conflict_skill"
+jq --arg id "$false_policy_case" '
+  (.cases[] | select(.id == $id)) |= (
+    .prompt = "The project and user provide conflicting required_tdd=true and required_tdd=false mandates for this change. Return no actionable verification decision and a blocked evidence assessment."
+    | .setup_context += ["Conflicting binding tuples: required_tdd=true from fixture:user-policy and required_tdd=false from fixture:project-policy."]
+    | .expected_behavior = ["Blocks actionable selection until the conflicting mandates are resolved."]
+    | .pass_criteria = ["The assessment is blocked and no actionable decision is emitted."]
+    | .fail_signals = ["Chooses either TDD mode despite the conflict."]
+    | .machine_expectations = {required_substrings:["required_tdd=true","required_tdd=false","conflict","blocked"],forbidden_substrings:["verification_decision"],structured_json_assertions:[{operator:"equals",path:["evidence_assessment","status"],expected:"blocked"}]}
+  )
+' "$conflict_skill/evals/cases.json" >"$tdd_policy_root/conflict-cases.json"
+mv "$tdd_policy_root/conflict-cases.json" "$conflict_skill/evals/cases.json"
+mkdir -p "$tdd_policy_root/conflict-positive/assistant-verification" "$tdd_policy_root/conflict-actionable/assistant-verification"
+cat >"$tdd_policy_root/conflict-positive/assistant-verification/$false_policy_case.txt" <<'EOF'
+{"summary":"Conflicting required_tdd=true and required_tdd=false sources block actionable selection.","evidence_assessment":{"status":"blocked","scope_and_evidence_refs":[],"gaps_and_limitations":["The user and project binding sources conflict and must be resolved."],"next_action":"Resolve the conflicting mandates before selecting verification."}}
+EOF
+cat >"$tdd_policy_root/conflict-actionable/assistant-verification/$false_policy_case.txt" <<'EOF'
+{"summary":"required_tdd=true wins the conflict.","verification_decision":{"tdd_choice":{"mode":true,"basis":"user_requirement","applicable_check_ids":["domain-value-unit-suite"]}},"evidence_assessment":{"status":"planned"}}
+EOF
+if ! "$skill_eval_runner" --responses "$tdd_policy_root/conflict-positive" --skill "$conflict_skill" --case "$false_policy_case" >"$tdd_policy_root/conflict-positive.output" 2>&1 \
+    || ! grep -Fq $'PASS\tassistant-verification\t'"$false_policy_case" "$tdd_policy_root/conflict-positive.output"; then
+    policy_grade_failures+=("conflicting required_tdd mandates did not grade as blocked")
+fi
+if "$skill_eval_runner" --responses "$tdd_policy_root/conflict-actionable" --skill "$conflict_skill" --case "$false_policy_case" >"$tdd_policy_root/conflict-actionable.output" 2>&1 \
+    || ! grep -Fq $'FAIL\tassistant-verification\t'"$false_policy_case" "$tdd_policy_root/conflict-actionable.output"; then
+    policy_grade_failures+=("conflicting required_tdd mandates accepted an actionable decision")
+fi
+if [[ "${#policy_grade_failures[@]}" -eq 0 ]]; then pass; else fail "required TDD mandate controls failed: ${policy_grade_failures[*]}"; fi
+
+test_start "assistant-verification preserves source coverage enforcement and exact evidence identity"
+verification_binding_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-verification-binding.XXXXXX")"
+p0p4_register_cleanup "$verification_binding_root"
+binding_grade_failures=()
+for binding_case in binding-coverage-mandate-keeps-source-and-enforcement same-claim-checks-require-distinct-evidence-identity; do
+    if ! p0p4_write_skill_eval_responses "$verification_binding_root/factory" "" "" "" assistant-verification "$binding_case"; then
+        binding_grade_failures+=("$binding_case fixture factory failed")
+        continue
+    fi
+    binding_positive="$verification_binding_root/factory/assistant-verification/$binding_case.txt"
+    mkdir -p "$verification_binding_root/positive/assistant-verification"
+    cp "$binding_positive" "$verification_binding_root/positive/assistant-verification/$binding_case.txt"
+    if ! p0p4_skill_eval_grade_matches "$verification_binding_root/positive" assistant-verification "$binding_case" PASS "$verification_binding_root/$binding_case.positive.output"; then
+        binding_grade_failures+=("$binding_case complete response did not pass")
+    fi
+    case "$binding_case" in
+        binding-coverage-mandate-keeps-source-and-enforcement)
+            mkdir -p "$verification_binding_root/wrong-threshold/assistant-verification" "$verification_binding_root/no-enforcer/assistant-verification"
+            jq '.verification_decision.policy_basis.binding_constraints[0].value = "At least 80% line coverage for the changed parser package, measured by coverage.py; fail below 80%."' \
+                "$binding_positive" >"$verification_binding_root/wrong-threshold/assistant-verification/$binding_case.txt"
+            jq 'del(.verification_decision.checks[0])' "$binding_positive" >"$verification_binding_root/no-enforcer/assistant-verification/$binding_case.txt"
+            for mutation in wrong-threshold no-enforcer; do
+                if ! p0p4_skill_eval_grade_matches "$verification_binding_root/$mutation" assistant-verification "$binding_case" FAIL "$verification_binding_root/$binding_case.$mutation.output"; then
+                    binding_grade_failures+=("$binding_case accepted $mutation")
+                fi
+            done
+            ;;
+        same-claim-checks-require-distinct-evidence-identity)
+            mkdir -p "$verification_binding_root/crossbound/assistant-verification" "$verification_binding_root/missing-integration/assistant-verification" "$verification_binding_root/wrong-api-procedure/assistant-verification" \
+                "$verification_binding_root/missing-cwd/assistant-verification" "$verification_binding_root/wrong-command-association/assistant-verification" \
+                "$verification_binding_root/malformed-argv/assistant-verification"
+            jq '.evidence_assessment.scope_and_evidence_refs[1].selected_check_ids = ["checkout-total-unit"]' \
+                "$binding_positive" >"$verification_binding_root/crossbound/assistant-verification/$binding_case.txt"
+            jq 'del(.evidence_assessment.scope_and_evidence_refs[1])' \
+                "$binding_positive" >"$verification_binding_root/missing-integration/assistant-verification/$binding_case.txt"
+            jq '.verification_decision.checks[1].check_ref_or_method = .verification_decision.checks[0].check_ref_or_method' \
+                "$binding_positive" >"$verification_binding_root/wrong-api-procedure/assistant-verification/$binding_case.txt"
+            jq 'del(.verification_decision.checks[0].command.cwd)' \
+                "$binding_positive" >"$verification_binding_root/missing-cwd/assistant-verification/$binding_case.txt"
+            jq '(.verification_decision.checks[0].command) as $unit | (.verification_decision.checks[1].command) as $api | .verification_decision.checks[0].command = $api | .verification_decision.checks[1].command = $unit' \
+                "$binding_positive" >"$verification_binding_root/wrong-command-association/assistant-verification/$binding_case.txt"
+            jq '.verification_decision.checks[0].command.argv = "pytest tests/unit/test_checkout.py"' \
+                "$binding_positive" >"$verification_binding_root/malformed-argv/assistant-verification/$binding_case.txt"
+            for mutation in crossbound missing-integration wrong-api-procedure missing-cwd wrong-command-association malformed-argv; do
+                if ! p0p4_skill_eval_grade_matches "$verification_binding_root/$mutation" assistant-verification "$binding_case" FAIL "$verification_binding_root/$binding_case.$mutation.output"; then
+                    binding_grade_failures+=("$binding_case accepted $mutation")
+                fi
+            done
+            ;;
+    esac
+done
+if [[ "${#binding_grade_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-verification binding/evidence grading gaps: ${binding_grade_failures[*]}"
+fi
+
+test_start "workflow reproduced bugfix retains the explicit user TDD mandate"
+bugfix_grade_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-bugfix-tdd-grade.XXXXXX")"
+p0p4_register_cleanup "$bugfix_grade_root"
+bugfix_grade_case="unknown-cause-bugfix-routes-through-debugging-before-tdd"
+p0p4_write_skill_eval_responses "$bugfix_grade_root/correct" "" "" "" assistant-workflow "$bugfix_grade_case"
+for control in waived_tdd missing_mandate phrase_only; do
+    mkdir -p "$bugfix_grade_root/$control/assistant-workflow"
+done
+bugfix_grade_correct="$bugfix_grade_root/correct/assistant-workflow/$bugfix_grade_case.txt"
+jq '.verification_decision.tdd_choice = {mode:false,basis:"not_selected",rationale:"Run selected checks without TDD despite successful reproduction."}' \
+    "$bugfix_grade_correct" >"$bugfix_grade_root/waived_tdd/assistant-workflow/$bugfix_grade_case.txt"
+jq '.verification_decision.policy_basis.binding_constraints = []' \
+    "$bugfix_grade_correct" >"$bugfix_grade_root/missing_mandate/assistant-workflow/$bugfix_grade_case.txt"
+jq -r '.summary' "$bugfix_grade_correct" >"$bugfix_grade_root/phrase_only/assistant-workflow/$bugfix_grade_case.txt"
+bugfix_grade_failures=()
+if ! p0p4_skill_eval_grade_matches "$bugfix_grade_root/correct" assistant-workflow "$bugfix_grade_case" PASS "$bugfix_grade_root/correct.output"; then
+    bugfix_grade_failures+=("binding-TDD positive response did not pass")
+fi
+for control in waived_tdd missing_mandate phrase_only; do
+    if ! p0p4_skill_eval_grade_matches "$bugfix_grade_root/$control" assistant-workflow "$bugfix_grade_case" FAIL "$bugfix_grade_root/$control.output"; then
+        bugfix_grade_failures+=("$control was not rejected")
+    fi
+done
+if [[ "${#bugfix_grade_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow bugfix TDD grading gaps: ${bugfix_grade_failures[*]}"
+fi
+
+test_start "workflow TDD applicability follows selected check IDs within each slice"
+slice_tdd_grade_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-slice-tdd.XXXXXX")"
+p0p4_register_cleanup "$slice_tdd_grade_root"
+slice_tdd_case="build-derives-tdd-from-selected-slice-checks"
+if ! p0p4_write_skill_eval_responses "$slice_tdd_grade_root/factory" "" "" "" assistant-workflow "$slice_tdd_case"; then
+    fail "workflow local-TDD fixture factory did not build the selected case"
+    finish
+    exit 1
+fi
+mkdir -p "$slice_tdd_grade_root/wrong-local-projection/assistant-workflow" "$slice_tdd_grade_root/wrong-applicability/assistant-workflow" "$slice_tdd_grade_root/missing-defining-checks/assistant-workflow"
+jq '.slice_manifest[0].tdd_applies = false | .slice_manifest[1].tdd_applies = true' \
+    "$slice_tdd_grade_root/factory/assistant-workflow/$slice_tdd_case.txt" \
+    >"$slice_tdd_grade_root/wrong-local-projection/assistant-workflow/$slice_tdd_case.txt"
+jq '.slice_manifest[1].verification_decision.tdd_choice.applicable_check_ids = ["docs-content-inspection"]' \
+    "$slice_tdd_grade_root/factory/assistant-workflow/$slice_tdd_case.txt" \
+    >"$slice_tdd_grade_root/wrong-applicability/assistant-workflow/$slice_tdd_case.txt"
+jq '.verification_decision.checks = [] | .slice_manifest[0].verification_decision.checks = [] | .slice_manifest[1].verification_decision.checks = []' \
+    "$slice_tdd_grade_root/factory/assistant-workflow/$slice_tdd_case.txt" \
+    >"$slice_tdd_grade_root/missing-defining-checks/assistant-workflow/$slice_tdd_case.txt"
+slice_tdd_grade_failures=()
+if ! p0p4_skill_eval_grade_matches "$slice_tdd_grade_root/factory" assistant-workflow "$slice_tdd_case" PASS "$slice_tdd_grade_root/positive.output"; then
+    slice_tdd_grade_failures+=("calc TDD plus docs inspection fixture did not pass")
+fi
+if ! p0p4_skill_eval_grade_matches "$slice_tdd_grade_root/wrong-local-projection" assistant-workflow "$slice_tdd_case" FAIL "$slice_tdd_grade_root/mutated.output"; then
+    slice_tdd_grade_failures+=("swapping local TDD applicability was not rejected")
+fi
+if ! p0p4_skill_eval_grade_matches "$slice_tdd_grade_root/wrong-applicability" assistant-workflow "$slice_tdd_case" FAIL "$slice_tdd_grade_root/wrong-applicability.output"; then
+    slice_tdd_grade_failures+=("changed slice applicability decision was not rejected")
+fi
+if ! p0p4_skill_eval_grade_matches "$slice_tdd_grade_root/missing-defining-checks" assistant-workflow "$slice_tdd_case" FAIL "$slice_tdd_grade_root/missing-defining-checks.output"; then
+    slice_tdd_grade_failures+=("missing defining checks copied across all decisions were not rejected")
+fi
+if [[ "${#slice_tdd_grade_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow per-slice TDD grading gaps: ${slice_tdd_grade_failures[*]}"
+fi
+
+test_start "workflow slice decision control accepts adequate non-test evidence and rejects fabricated TDD"
+slice_grade_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-workflow-slice-grade.XXXXXX")"
+p0p4_register_cleanup "$slice_grade_root"
+slice_grade_case="build-phase-verifies-selected-check-before-advancing"
+if ! p0p4_write_skill_eval_responses "$slice_grade_root/factory" "" "" "" \
+    assistant-workflow "$slice_grade_case"; then
+    fail "workflow slice response factory did not build the selected fixture"
+    finish
+    exit 1
+fi
+mkdir -p "$slice_grade_root/correct/assistant-workflow" "$slice_grade_root/wrong/assistant-workflow" \
+    "$slice_grade_root/wrong-result/assistant-workflow" "$slice_grade_root/wrong-command/assistant-workflow" \
+    "$slice_grade_root/wrong-selected-test/assistant-workflow" "$slice_grade_root/wrong-slice-selection/assistant-workflow" \
+    "$slice_grade_root/wrong-both-selections/assistant-workflow" "$slice_grade_root/wrong-both-oracles/assistant-workflow" \
+    "$slice_grade_root/wrong-result-reference/assistant-workflow"
+cp "$slice_grade_root/factory/assistant-workflow/$slice_grade_case.txt" \
+    "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt"
+jq '.verification_decision.tdd_choice.mode = true | .slice_manifest[0].verification_decision.tdd_choice.mode = true' \
+    "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
+    >"$slice_grade_root/wrong/assistant-workflow/$slice_grade_case.txt"
+jq '.validation_results[0].result = "failed"' \
+    "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
+    >"$slice_grade_root/wrong-result/assistant-workflow/$slice_grade_case.txt"
+jq '.slice_manifest[0].verification_command = ["echo", "unselected-command"]' \
+    "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
+    >"$slice_grade_root/wrong-command/assistant-workflow/$slice_grade_case.txt"
+jq '.verification_decision.checks[0].method = "automated_test" | .verification_decision.checks[0].test_scope = "unit" | .slice_manifest[0].verification_decision.checks[0].method = "automated_test" | .slice_manifest[0].verification_decision.checks[0].test_scope = "unit"' \
+    "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
+    >"$slice_grade_root/wrong-selected-test/assistant-workflow/$slice_grade_case.txt"
+jq '.slice_manifest[0].verification_decision.checks[0].check_id = "unselected-check"' \
+    "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
+    >"$slice_grade_root/wrong-slice-selection/assistant-workflow/$slice_grade_case.txt"
+jq '.verification_decision.checks[0].check_id = "unselected-check" | .slice_manifest[0].verification_decision = .verification_decision | .validation_results[0].command_or_check = "unselected-check"' \
+    "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
+    >"$slice_grade_root/wrong-both-selections/assistant-workflow/$slice_grade_case.txt"
+jq '.verification_decision.checks[0].check_ref_or_method.expected_success = "Any existing file is sufficient." | .slice_manifest[0].verification_decision = .verification_decision' \
+    "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
+    >"$slice_grade_root/wrong-both-oracles/assistant-workflow/$slice_grade_case.txt"
+jq '.validation_results[0].command_or_check = "unselected-check"' \
+    "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
+    >"$slice_grade_root/wrong-result-reference/assistant-workflow/$slice_grade_case.txt"
+if "$skill_eval_runner" --responses "$slice_grade_root/correct" --skill assistant-workflow --case "$slice_grade_case" \
+        >"$slice_grade_root/correct.output" 2>&1 \
+    && ! "$skill_eval_runner" --responses "$slice_grade_root/wrong" --skill assistant-workflow --case "$slice_grade_case" \
+        >"$slice_grade_root/wrong.output" 2>&1 \
+    && grep -Fq $'PASS\tassistant-workflow\t'"$slice_grade_case" "$slice_grade_root/correct.output" \
+    && grep -Fq $'FAIL\tassistant-workflow\t'"$slice_grade_case" "$slice_grade_root/wrong.output" \
+    && grep -Fq 'structured_json_assertion_failures=2' "$slice_grade_root/wrong.output" \
+    && ! "$skill_eval_runner" --responses "$slice_grade_root/wrong-result" --skill assistant-workflow --case "$slice_grade_case" \
+        >"$slice_grade_root/wrong-result.output" 2>&1 \
+    && grep -Fq $'FAIL\tassistant-workflow\t'"$slice_grade_case" "$slice_grade_root/wrong-result.output" \
+    && grep -Fq 'structured_json_assertion_failures=1' "$slice_grade_root/wrong-result.output" \
+    && ! "$skill_eval_runner" --responses "$slice_grade_root/wrong-command" --skill assistant-workflow --case "$slice_grade_case" \
+        >"$slice_grade_root/wrong-command.output" 2>&1 \
+    && grep -Fq $'FAIL\tassistant-workflow\t'"$slice_grade_case" "$slice_grade_root/wrong-command.output" \
+    && grep -Fq 'structured_json_assertion_failures=1' "$slice_grade_root/wrong-command.output"; then
+    if ! "$skill_eval_runner" --responses "$slice_grade_root/wrong-selected-test" --skill assistant-workflow --case "$slice_grade_case" \
+            >"$slice_grade_root/wrong-selected-test.output" 2>&1 \
+        && grep -Fq $'FAIL\tassistant-workflow\t'"$slice_grade_case" "$slice_grade_root/wrong-selected-test.output" \
+        && grep -Fq 'structured_json_assertion_failures=1' "$slice_grade_root/wrong-selected-test.output" \
+        && ! "$skill_eval_runner" --responses "$slice_grade_root/wrong-slice-selection" --skill assistant-workflow --case "$slice_grade_case" \
+            >"$slice_grade_root/wrong-slice-selection.output" 2>&1 \
+        && grep -Fq $'FAIL\tassistant-workflow\t'"$slice_grade_case" "$slice_grade_root/wrong-slice-selection.output" \
+        && grep -Fq 'structured_json_assertion_failures=1' "$slice_grade_root/wrong-slice-selection.output"; then
+        pass
+    else
+        fail "workflow grader accepted an unselected automated test or a slice that changed the canonical decision"
+    fi
+else
+    fail "workflow selected-check grader did not distinguish adequate non-test evidence from fabricated TDD"
+fi
+
+test_start "workflow Build grading binds both decisions and result to the approved CheckSpec"
+slice_anchor_failures=()
+for control in wrong-both-selections wrong-both-oracles wrong-result-reference; do
+    if ! p0p4_skill_eval_grade_matches "$slice_grade_root/$control" assistant-workflow "$slice_grade_case" FAIL "$slice_grade_root/$control.output"; then
+        slice_anchor_failures+=("$control was not rejected")
+    fi
+done
+if [[ "${#slice_anchor_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow approved-check grading gaps: ${slice_anchor_failures[*]}"
+fi
+
+test_start "TDD RED and selected GREEN/REFACTOR graders reject invalid phase evidence"
+tdd_grade_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-tdd-grade.XXXXXX")"
+p0p4_register_cleanup "$tdd_grade_root"
+tdd_grade_ok=1
+for tdd_grade_case in bugfix-starts-with-red-evidence green-refactor-runs-selected-regressions; do
+    if ! p0p4_write_skill_eval_responses "$tdd_grade_root/factory" "" "" "" assistant-tdd "$tdd_grade_case"; then
+        tdd_grade_ok=0
+        break
+    fi
+    mkdir -p "$tdd_grade_root/correct/assistant-tdd" "$tdd_grade_root/wrong/assistant-tdd"
+    cp "$tdd_grade_root/factory/assistant-tdd/$tdd_grade_case.txt" "$tdd_grade_root/correct/assistant-tdd/$tdd_grade_case.txt"
+    if [[ "$tdd_grade_case" == "bugfix-starts-with-red-evidence" ]]; then
+        jq '.cycle_log[0].red.verified_failing = false' "$tdd_grade_root/correct/assistant-tdd/$tdd_grade_case.txt" >"$tdd_grade_root/wrong/assistant-tdd/$tdd_grade_case.txt"
+    else
+        jq '.cycle_log[0].refactor.all_tests_pass = false' "$tdd_grade_root/correct/assistant-tdd/$tdd_grade_case.txt" >"$tdd_grade_root/wrong/assistant-tdd/$tdd_grade_case.txt"
+    fi
+    if ! "$skill_eval_runner" --responses "$tdd_grade_root/correct" --skill assistant-tdd --case "$tdd_grade_case" >"$tdd_grade_root/correct-$tdd_grade_case.output" 2>&1 \
+        || ! grep -Fq $'PASS\tassistant-tdd\t'"$tdd_grade_case" "$tdd_grade_root/correct-$tdd_grade_case.output" \
+        || "$skill_eval_runner" --responses "$tdd_grade_root/wrong" --skill assistant-tdd --case "$tdd_grade_case" >"$tdd_grade_root/wrong-$tdd_grade_case.output" 2>&1 \
+        || ! grep -Fq $'FAIL\tassistant-tdd\t'"$tdd_grade_case" "$tdd_grade_root/wrong-$tdd_grade_case.output" \
+        || ! grep -Fq 'structured_json_assertion_failures=1' "$tdd_grade_root/wrong-$tdd_grade_case.output"; then
+        tdd_grade_ok=0
+        break
+    fi
+done
+if [[ "$tdd_grade_ok" -eq 1 ]]; then
+    pass
+else
+    fail "TDD graders did not distinguish right-reason RED and selected GREEN/REFACTOR evidence from false completion"
 fi
 
 test_start "skill string misses remain unavailable and diagnostic"
@@ -2179,6 +3040,106 @@ if [[ "${#workflow_assertion_path_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow fixture validation accepted undeclared triage assertion operands: ${workflow_assertion_path_failures[*]}"
+fi
+
+test_start "workflow fixture hydrates canonical verification aliases and fails closed on producer drift"
+verification_alias_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-verification-alias.XXXXXX")"
+verification_alias_repo="$verification_alias_root/repo"
+verification_alias_skill="$verification_alias_repo/skills/assistant-workflow"
+verification_alias_runner="$verification_alias_repo/tools/evals/run-skill-evals.sh"
+verification_alias_err="$verification_alias_root/validation.err"
+p0p4_register_cleanup "$verification_alias_root"
+mkdir -p "$verification_alias_repo/tools" "$verification_alias_repo/skills/assistant-verification/contracts" "$verification_alias_repo/skills/assistant-review/contracts" "$verification_alias_skill/evals"
+cp -R "$FRAMEWORK_DIR/tools/evals" "$verification_alias_repo/tools/"
+cp "$FRAMEWORK_DIR/skills/assistant-verification/contracts/output.yaml" "$verification_alias_repo/skills/assistant-verification/contracts/output.yaml"
+cp "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$verification_alias_repo/skills/assistant-review/contracts/output.yaml"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$verification_alias_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$verification_alias_skill/contracts"
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$verification_alias_skill/evals/cases.json"
+verification_alias_failures=()
+if ! "$verification_alias_runner" --validate-fixture --skill "$verification_alias_skill" >/dev/null 2>"$verification_alias_err"; then
+    verification_alias_failures+=("canonical verification decision/evidence assessment aliases did not resolve")
+fi
+jq '(.cases[] | select(.id == "build-phase-verifies-selected-check-before-advancing") | .machine_expectations.structured_json_assertions[0].path) = ["verification_decision", "checks", 0, "invented_field"]' \
+    "$verification_alias_skill/evals/cases.json" >"$verification_alias_root/mutated.json"
+mv "$verification_alias_root/mutated.json" "$verification_alias_skill/evals/cases.json"
+if "$verification_alias_runner" --validate-fixture --skill "$verification_alias_skill" >/dev/null 2>"$verification_alias_err" \
+    || ! grep -Fq "undeclared assertion path" "$verification_alias_err"; then
+    verification_alias_failures+=("misspelled nested producer field was not rejected")
+fi
+jq '(.cases[] | select(.id == "build-phase-verifies-selected-check-before-advancing") | .machine_expectations.structured_json_assertions) = [{"operator":"equals","path":["verification_decision","checks",0,"method"],"expected":"not_a_method"}]' \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$verification_alias_skill/evals/cases.json"
+if "$verification_alias_runner" --validate-fixture --skill "$verification_alias_skill" >/dev/null 2>"$verification_alias_err" \
+    || ! grep -Fq "assertion literal outside contract schema" "$verification_alias_err"; then
+    verification_alias_failures+=("invalid canonical method enum was not rejected")
+fi
+cp "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$verification_alias_skill/evals/cases.json"
+for producer_mutation in missing duplicate; do
+    ruby -ryaml -e '
+      path = ARGV.fetch(0)
+      artifact_name = ARGV.fetch(1)
+      mutation = ARGV.fetch(2)
+      document = YAML.load_file(path)
+      artifact = document.fetch("artifacts").find { |item| item["name"] == artifact_name }
+      abort("source producer artifact missing") unless artifact
+      if mutation == "missing"
+        document["artifacts"].reject! { |item| item["name"] == artifact_name }
+      else
+        document["artifacts"] << Marshal.load(Marshal.dump(artifact))
+      end
+      File.write(path, YAML.dump(document))
+    ' "$verification_alias_repo/skills/assistant-verification/contracts/output.yaml" verification_decision "$producer_mutation"
+    if "$verification_alias_runner" --validate-fixture --skill "$verification_alias_skill" >/dev/null 2>"$verification_alias_err" \
+        || ! grep -Fq "verification producer alias must resolve exactly once: verification_decision" "$verification_alias_err"; then
+        verification_alias_failures+=("$producer_mutation producer was not rejected fail-closed")
+    fi
+    cp "$FRAMEWORK_DIR/skills/assistant-verification/contracts/output.yaml" "$verification_alias_repo/skills/assistant-verification/contracts/output.yaml"
+done
+if [[ "${#verification_alias_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "workflow canonical verification aliases lack bounded fail-closed validation: ${verification_alias_failures[*]}"
+fi
+
+test_start "light completion requires both canonical verification outputs"
+light_completion_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-light-completion.XXXXXX")"
+p0p4_register_cleanup "$light_completion_root"
+light_completion_case="light-completion-retains-canonical-verification-outputs"
+if ! p0p4_write_skill_eval_responses "$light_completion_root/correct" "" "" "" assistant-workflow "$light_completion_case"; then
+    fail "primary light-completion response factory did not build the selected case"
+    finish
+    exit 1
+fi
+light_completion_failures=()
+if ! "$skill_eval_runner" --responses "$light_completion_root/correct" --skill assistant-workflow --case "$light_completion_case" >"$light_completion_root/correct.output" 2>&1 \
+    || ! grep -Fq $'PASS\tassistant-workflow\t'"$light_completion_case" "$light_completion_root/correct.output" \
+    || ! grep -Fq 'structured_json_assertion_failures=0' "$light_completion_root/correct.output"; then
+    light_completion_failures+=("complete canonical response was not accepted")
+fi
+for missing_output in verification_decision evidence_assessment; do
+    mkdir -p "$light_completion_root/missing-$missing_output/assistant-workflow"
+    jq --arg key "$missing_output" 'del(.[$key])' \
+        "$light_completion_root/correct/assistant-workflow/$light_completion_case.txt" \
+        >"$light_completion_root/missing-$missing_output/assistant-workflow/$light_completion_case.txt"
+    if "$skill_eval_runner" --responses "$light_completion_root/missing-$missing_output" --skill assistant-workflow --case "$light_completion_case" >"$light_completion_root/missing-$missing_output.output" 2>&1 \
+        || ! grep -Fq $'FAIL\tassistant-workflow\t'"$light_completion_case" "$light_completion_root/missing-$missing_output.output" \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9][0-9]*' "$light_completion_root/missing-$missing_output.output"; then
+        light_completion_failures+=("missing $missing_output was not rejected structurally while its name remained in the summary")
+    fi
+done
+mkdir -p "$light_completion_root/automated-test-as-inspect/assistant-workflow"
+jq '.verification_decision.checks[0].action = "inspect"' \
+    "$light_completion_root/correct/assistant-workflow/$light_completion_case.txt" \
+    >"$light_completion_root/automated-test-as-inspect/assistant-workflow/$light_completion_case.txt"
+if "$skill_eval_runner" --responses "$light_completion_root/automated-test-as-inspect" --skill assistant-workflow --case "$light_completion_case" >"$light_completion_root/automated-test-as-inspect.output" 2>&1 \
+    || ! grep -Fq $'FAIL\tassistant-workflow\t'"$light_completion_case" "$light_completion_root/automated-test-as-inspect.output" \
+    || ! grep -Eq 'structured_json_assertion_failures=[1-9][0-9]*' "$light_completion_root/automated-test-as-inspect.output"; then
+    light_completion_failures+=("automated-test CheckSpec action inspect was not rejected")
+fi
+if [[ "${#light_completion_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "light completion canonical-output grading gaps: ${light_completion_failures[*]}"
 fi
 
 test_start "fixture validation rejects unknown roots across every assertion operand"
@@ -3719,6 +4680,54 @@ else
     fail "approved preparation result copies were not exactly graded: ${approved_preparation_result_failures[*]}"
 fi
 
+test_start "actual grader rejects missing or rewritten executable verification packet carriers"
+implementation_packet_failures=()
+for implementation_packet_case in \
+    "medium-implement-only-consumes-preparation-harness-obligation build_medium_implement_only_harness_handoff_response true" \
+    "ordinary-implement-only-carries-not-applicable-preparation-result build_medium_implement_only_not_applicable_preparation_result_response false"; do
+    implementation_packet_case_id="${implementation_packet_case%% *}"
+    implementation_packet_rest="${implementation_packet_case#* }"
+    implementation_packet_builder="${implementation_packet_rest%% *}"
+    implementation_packet_wrong_tdd="${implementation_packet_rest##* }"
+    if ! run_isolated_workflow_routing_mutations \
+        "$implementation_packet_case_id" \
+        "$implementation_packet_builder" \
+        'del(.implementation_steps[0].verification_decision)' \
+        '.implementation_steps[0].verification_decision.scope = "rewritten packet decision"' \
+        'del(.implementation_steps[0].selected_check_ids)' \
+        '.implementation_steps[0].selected_check_ids = ["unselected-check"]' \
+        'del(.implementation_steps[0].binding_obligation_refs)' \
+        '.implementation_steps[0].binding_obligation_refs = [{kind:"required_check",value:"rewritten binding",source_ref:"rewritten"}]' \
+        'del(.implementation_steps[0].evidence_assessment)' \
+        '.implementation_steps[0].evidence_assessment.status = "sufficient"' \
+        ".implementation_steps[0].tdd_applies = $implementation_packet_wrong_tdd"; then
+        implementation_packet_failures+=("$implementation_packet_case_id:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+    fi
+done
+if ! run_isolated_workflow_routing_mutations \
+    "medium-implement-only-consumes-preparation-harness-obligation" \
+    "build_medium_implement_only_harness_handoff_response" \
+    'del(.slice_manifest[0].verification_decision)' \
+    'del(.slice_manifest[0].selected_check_ids)' \
+    'del(.slice_manifest[0].binding_obligation_refs)' \
+    'del(.slice_manifest[0].tdd_applies)' \
+    'del(.validation_results[0].selected_check_ids)' \
+    'del(.validation_results[0].binding_obligation_refs)' \
+    '.slice_manifest[0].tdd_applies = true'; then
+    implementation_packet_failures+=("harness-companion:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+fi
+if ! run_isolated_workflow_routing_mutations \
+    "medium-implement-only-consumes-preparation-qa-obligation" \
+    "build_medium_implement_only_qa_handoff_response" \
+    '.slice_manifest[0].binding_obligation_refs = [{kind:"required_check",value:"Run the explicitly requested QA/acceptance evaluation.",source_ref:"prep/medium-feature"}]'; then
+    implementation_packet_failures+=("qa-companion:$WORKFLOW_ROUTING_MUTATION_FAILURE")
+fi
+if [[ ${#implementation_packet_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "executable packet or companion decision, selection, binding, assessment, local-TDD, incidental-result, or future-QA allocation mutations were accepted: ${implementation_packet_failures[*]}"
+fi
+
 test_start "assistant-workflow fixture binds every implement-only preparation result to a bounded immutable authority"
 preparation_authority_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-preparation-authority.XXXXXX")"
 p0p4_register_cleanup "$preparation_authority_root"
@@ -4368,6 +5377,68 @@ for object_keys_invalid in \
     fi
     cp "$object_keys_root/base-cases.json" "$object_keys_skill/evals/cases.json"
 done
+
+object_keys_verification_skill="$object_keys_root/assistant-verification"
+object_keys_verification_responses="$object_keys_root/verification-responses"
+object_keys_verification_case="required-unit-check-does-not-prohibit-integration"
+mkdir -p "$object_keys_verification_skill/evals" "$object_keys_verification_responses/assistant-verification"
+cp "$FRAMEWORK_DIR/skills/assistant-verification/SKILL.md" "$object_keys_verification_skill/SKILL.md"
+ln -s "$FRAMEWORK_DIR/skills/assistant-verification/contracts" "$object_keys_verification_skill/contracts"
+jq --arg id "$object_keys_verification_case" '.cases |= map(select(.id == $id))' \
+    "$FRAMEWORK_DIR/skills/assistant-verification/evals/cases.json" >"$object_keys_verification_skill/evals/cases.json"
+cp "$object_keys_verification_skill/evals/cases.json" "$object_keys_root/verification-base-cases.json"
+object_keys_verification_response="$object_keys_verification_responses/assistant-verification/$object_keys_verification_case.txt"
+object_keys_verification_summary="$(jq -r --arg id "$object_keys_verification_case" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$object_keys_verification_skill/evals/cases.json" | paste -sd ' ' -)"
+p0p4_write_assistant_verification_response "$object_keys_verification_response" "$object_keys_verification_summary" "$object_keys_verification_case"
+cp "$object_keys_verification_response" "$object_keys_root/verification-valid-response.json"
+object_keys_record_control_output() {
+    if [[ -n "${P0P4_KEY_GUARD_EVIDENCE_DIR:-}" ]]; then
+        mkdir -p "$P0P4_KEY_GUARD_EVIDENCE_DIR"
+        cp "$2" "$P0P4_KEY_GUARD_EVIDENCE_DIR/$1.log"
+    fi
+}
+
+if ! "$skill_eval_runner" --validate-fixture --skill "$object_keys_verification_skill" >"$object_keys_output" 2>&1; then
+    object_keys_record_control_output "valid-conditional-omission-preflight" "$object_keys_output"
+    object_keys_failures+=("CheckSpec exact-key fixture with omitted conditional command was rejected: $(cat "$object_keys_output")")
+else
+    object_keys_record_control_output "valid-conditional-omission-preflight" "$object_keys_output"
+    if ! "$skill_eval_runner" --responses "$object_keys_verification_responses" --skill "$object_keys_verification_skill" --case "$object_keys_verification_case" >"$object_keys_output" 2>&1; then
+        object_keys_record_control_output "valid-checkspec-response" "$object_keys_output"
+        object_keys_failures+=("valid CheckSpec response with omitted conditional command failed: $(cat "$object_keys_output")")
+    else
+        object_keys_record_control_output "valid-checkspec-response" "$object_keys_output"
+    fi
+
+    jq '(.cases[0].machine_expectations.structured_json_assertions) |= map(if .operator == "object_keys_exact" and .path == ["verification_decision", "checks", 0] then .fields |= map(select(. != "check_id")) else . end)' \
+        "$object_keys_root/verification-base-cases.json" >"$object_keys_verification_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$object_keys_verification_skill" >"$object_keys_output" 2>&1; then
+        object_keys_failures+=("CheckSpec exact-key assertion missing a required field was accepted")
+    fi
+    object_keys_record_control_output "missing-required-declaration" "$object_keys_output"
+
+    jq '(.cases[0].machine_expectations.structured_json_assertions) |= map(if .operator == "object_keys_exact" and .path == ["verification_decision", "checks", 0] then .fields += ["unsafe_override"] else . end)' \
+        "$object_keys_root/verification-base-cases.json" >"$object_keys_verification_skill/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$object_keys_verification_skill" >"$object_keys_output" 2>&1; then
+        object_keys_failures+=("CheckSpec exact-key assertion with an undeclared field was accepted")
+    fi
+    object_keys_record_control_output "undeclared-field-declaration" "$object_keys_output"
+
+    cp "$object_keys_root/verification-base-cases.json" "$object_keys_verification_skill/evals/cases.json"
+    jq '.verification_decision.checks[0].unsafe_override = true' "$object_keys_root/verification-valid-response.json" >"$object_keys_verification_response"
+    if "$skill_eval_runner" --responses "$object_keys_verification_responses" --skill "$object_keys_verification_skill" --case "$object_keys_verification_case" >"$object_keys_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9][0-9]*' "$object_keys_output"; then
+        object_keys_failures+=("CheckSpec exact-key response accepted an arbitrary extra key")
+    fi
+    object_keys_record_control_output "extra-response-key" "$object_keys_output"
+
+    jq 'del(.verification_decision.checks[0].check_id)' "$object_keys_root/verification-valid-response.json" >"$object_keys_verification_response"
+    if "$skill_eval_runner" --responses "$object_keys_verification_responses" --skill "$object_keys_verification_skill" --case "$object_keys_verification_case" >"$object_keys_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9][0-9]*' "$object_keys_output"; then
+        object_keys_failures+=("CheckSpec exact-key response accepted a missing required key")
+    fi
+    object_keys_record_control_output "missing-response-key" "$object_keys_output"
+fi
 if [[ "${#object_keys_failures[@]}" -eq 0 ]]; then
     pass
 else
@@ -4679,7 +5750,7 @@ else
 fi
 
 test_start "skill eval docs describe complete first-class coverage"
-if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/README.md" \
+if grep -Fq "default eval inventory is 15 first-class \`assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-debugging" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-diagrams" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-docs" "$FRAMEWORK_DIR/README.md" \
@@ -4688,22 +5759,23 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq "assistant-skill-creator" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-research" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-onboard" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-verification" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-workflow" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-review" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-tdd" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-security" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq 'Canonical first-class fixtures use schema `2.0` and include top-level' "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "Local-only" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "This slice now covers all 14 first-class \`assistant-*\` skills" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "This inventory now covers all 15 first-class \`assistant-*\` skills" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'Every first-class fixture uses schema `2.0` and declares top-level' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && ! grep -Fq "5 of 15 first-class skills remain" "$FRAMEWORK_DIR/README.md" \
     && ! grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && ! grep -Fq "skills/assistant-reflexion/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "The default per-skill eval inventory is 14 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
+    && grep -Fq "The default per-skill eval inventory is 15 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq 'Every first-class schema `2.0` `evals/cases.json` fixture declares top-level' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq -- '--activation-results FILE' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq "The default per-skill eval inventory is 14 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && grep -Fq "The default per-skill eval inventory is 15 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && ! grep -Fq "Level 4 is future work" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
@@ -4714,6 +5786,7 @@ if grep -Fq "default eval inventory is 14 first-class \`assistant-*\` skills wit
     && grep -Fq "skills/assistant-skill-creator/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-research/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-onboard/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "skills/assistant-verification/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-workflow/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-review/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-tdd/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
