@@ -6804,6 +6804,12 @@
           "mandatory Luna-then-Sol"
         ],
         "structured_json_assertions": [
+          {"operator":"equals","path":["actual_output"],"expected":"approved exact wording\n"},
+          {"operator":"equals","path":["dependent_output"],"expected":"dependent must remain unchanged\n"},
+          {"operator":"equals","path":["status"],"expected":"DONE"},
+          {"operator":"equals","path":["failure_class"],"expected":"none"},
+          {"operator":"equals","path":["next_action"],"expected":"review"},
+          {"operator":"array_object_values_exact","path":["slice_manifest",0,"binding_obligation_refs"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_scope","value":"only output.txt","source_ref":"scope.md"}]},
           {
             "operator": "equals",
             "path": [
@@ -6928,6 +6934,12 @@
           "mandatory Luna-then-Sol"
         ],
         "structured_json_assertions": [
+          {"operator":"equals","path":["actual_output"],"expected":"success requires exact artifact\n"},
+          {"operator":"equals","path":["dependent_output"],"expected":"dependent must remain unchanged\n"},
+          {"operator":"equals","path":["status"],"expected":"DONE"},
+          {"operator":"equals","path":["failure_class"],"expected":"none"},
+          {"operator":"equals","path":["next_action"],"expected":"review"},
+          {"operator":"array_object_values_exact","path":["slice_manifest",0,"binding_obligation_refs"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_scope","value":"only output.txt","source_ref":"scope.md"}]},
           {
             "operator": "equals",
             "path": [
@@ -7008,6 +7020,12 @@
           "mandatory Luna-then-Sol"
         ],
         "structured_json_assertions": [
+          {"operator":"equals","path":["actual_output"],"expected":"oracle rejects plausible wrong output\n"},
+          {"operator":"equals","path":["dependent_output"],"expected":"dependent must remain unchanged\n"},
+          {"operator":"equals","path":["status"],"expected":"DONE"},
+          {"operator":"equals","path":["failure_class"],"expected":"none"},
+          {"operator":"equals","path":["next_action"],"expected":"review"},
+          {"operator":"array_object_values_exact","path":["slice_manifest",0,"binding_obligation_refs"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_scope","value":"only output.txt","source_ref":"scope.md"}]},
           {
             "operator": "equals",
             "path": [
@@ -7088,6 +7106,12 @@
           "mandatory Luna-then-Sol"
         ],
         "structured_json_assertions": [
+          {"operator":"equals","path":["actual_output"],"expected":"partial approved wording\n"},
+          {"operator":"equals","path":["dependent_output"],"expected":"dependent must remain unchanged\n"},
+          {"operator":"equals","path":["status"],"expected":"NEEDS_CONTEXT"},
+          {"operator":"equals","path":["failure_class"],"expected":"stale_plan"},
+          {"operator":"equals","path":["next_action"],"expected":"orchestrator"},
+          {"operator":"array_object_values_exact","path":["slice_manifest",0,"binding_obligation_refs"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_scope","value":"only output.txt","source_ref":"scope.md"}]},
           {
             "operator": "equals",
             "path": [
@@ -7212,6 +7236,12 @@
           "mandatory Luna-then-Sol"
         ],
         "structured_json_assertions": [
+          {"operator":"equals","path":["actual_output"],"expected":"seed wording\n"},
+          {"operator":"equals","path":["dependent_output"],"expected":"dependent must remain unchanged\n"},
+          {"operator":"equals","path":["status"],"expected":"BLOCKED"},
+          {"operator":"equals","path":["failure_class"],"expected":"broken_baseline"},
+          {"operator":"equals","path":["next_action"],"expected":"orchestrator"},
+          {"operator":"array_object_values_exact","path":["slice_manifest",0,"binding_obligation_refs"],"fields":["kind","value","source_ref"],"expected_objects":[{"kind":"required_scope","value":"only output.txt","source_ref":"scope.md"}]},
           {
             "operator": "equals",
             "path": [

@@ -7529,6 +7529,48 @@ else
 fi
 
 
+test_start "writer seeds provide an empty receipt directory before worker commands"
+writer_seed_root="$(mktemp -d "${TMPDIR:-/tmp}/writer-seed-contract.XXXXXX")"
+p0p4_register_cleanup "$writer_seed_root"
+writer_seed_function="$writer_seed_root/seed-case-workspace.sh"
+# This function includes heredocs: its next top-level function is the boundary.
+python3 - "$runner" "$writer_seed_function" <<'PY'
+import pathlib
+import sys
+source = pathlib.Path(sys.argv[1]).read_text()
+start = source.index("seed_case_workspace() {\n")
+end = source.index("run_codex_supervisor() {\n", start)
+function = source[start:end]
+assert function.rstrip().endswith("}")
+pathlib.Path(sys.argv[2]).write_text(function)
+PY
+source "$writer_seed_function"
+writer_seed_failures=()
+for writer_seed_case in writer-routing-exact-pattern writer-routing-small-semantic writer-routing-small-grader writer-routing-stale-partial writer-routing-baseline-failure; do
+    writer_seed_workspace="$writer_seed_root/$writer_seed_case"
+    mkdir "$writer_seed_workspace"
+    if [[ -e "$writer_seed_workspace/.assistant-eval" ]]; then
+        writer_seed_failures+=("$writer_seed_case receipt parent existed before seeding")
+    fi
+    seed_case_workspace "$writer_seed_workspace" "$writer_seed_case"
+    if [[ ! -d "$writer_seed_workspace/.assistant-eval" ]]; then
+        writer_seed_failures+=("$writer_seed_case receipt parent missing after seeding")
+        continue
+    fi
+    if [[ -n "$(ls -A "$writer_seed_workspace/.assistant-eval")" || -e "$writer_seed_workspace/.assistant-eval/writer-result.json" ]]; then
+        writer_seed_failures+=("$writer_seed_case receipt directory was not empty")
+    fi
+    if ! cat >"$writer_seed_workspace/.assistant-eval/writer-result.json" <<'RECEIPT'
+{"status":"DONE"}
+RECEIPT
+    then
+        writer_seed_failures+=("$writer_seed_case receipt write required a worker mkdir")
+    elif ! cmp -s "$writer_seed_workspace/.assistant-eval/writer-result.json" <(printf '%s\n' '{"status":"DONE"}'); then
+        writer_seed_failures+=("$writer_seed_case receipt write changed bytes")
+    fi
+done
+if [[ ${#writer_seed_failures[@]} -eq 0 ]]; then pass; else fail "${writer_seed_failures[*]}"; fi
+
 test_start "writer routing outcomes require fixed artifacts and truthful partial work beyond role phrases"
 writer_outcome_failures=()
 writer_cases="writer-routing-exact-pattern,writer-routing-small-semantic,writer-routing-small-grader,writer-routing-stale-partial,writer-routing-baseline-failure"

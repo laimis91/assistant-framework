@@ -3451,6 +3451,7 @@ seed_case_workspace() {
 
     case "$case_id" in
         writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader|writer-routing-stale-partial|writer-routing-baseline-failure)
+            mkdir -p "$workspace/.assistant-eval"
             printf '%s\n' 'seed wording' >"$workspace/output.txt"
             printf '%s\n' 'dependent must remain unchanged' >"$workspace/dependent.txt"
             printf '%s\n' 'Approved recipe: exact supplied output text with one newline.' >"$workspace/recipe.md"

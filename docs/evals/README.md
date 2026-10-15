@@ -1322,6 +1322,10 @@ success, fabricated checks and automatic cascade. These are deterministic
 contract/adapter checks, not native activation or model quality proof. Shared
 selection remains an instruction contract with no executable routing controller.
 
+For skill-only response grading, `actual_output`, `dependent_output`, `status`,
+`failure_class` and `next_action` are bounded eval-only scalar projections; the
+binding tuple remains under `slice_manifest[0]`.
+
 Both new Codex definitions and standalone deprecated code-writer retain the
 logical CodeWriter verification, TDD, status and independent review contract.
 Claude code-writer/Opus and Gemini supported native/default tiers remain intact.
