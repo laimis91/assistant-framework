@@ -159,6 +159,12 @@ final_snapshot_identity_schema = {
 }
 inline_eval_only_roots = {
   "assistant-workflow" => [
+    # Synthetic writer-response projections; real artifacts remain adapter-owned.
+    { "name" => "actual_output", "type" => "string", "required" => false },
+    { "name" => "dependent_output", "type" => "string", "required" => false },
+    { "name" => "status", "type" => "enum", "required" => false, "enum_values" => %w[DONE NEEDS_CONTEXT BLOCKED] },
+    { "name" => "failure_class", "type" => "string", "required" => false },
+    { "name" => "next_action", "type" => "enum", "required" => false, "enum_values" => %w[review orchestrator] },
     { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["8.0"] }] },
     { "name" => "current_final_batch", "type" => "object", "required" => false, "object_fields" => [{ "name" => "review_snapshot_id", "type" => "string", "required" => true }, final_snapshot_identity_schema] },
     { "name" => "harness_entry_state", "type" => "object", "required" => false },

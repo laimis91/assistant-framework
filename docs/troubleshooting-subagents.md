@@ -90,3 +90,28 @@ Direct fallback is valid only after the user opts out of delegation, policy
 forbids it, or a real spawn attempt fails. Record that reason plus equivalent
 implementation, verification, and review evidence instead of treating missing
 framework runtime output as proof that subagents are unavailable.
+
+## Codex writer migration
+
+The source inventory is eleven normal roles plus standalone deprecated
+`code-writer` (twelve TOMLs). New implementation packets select
+`intelligent-writer` (gpt-6.1-sol/high) by default or `mechanical-writer`
+(gpt-6-luna/high) with all four current eligibility evidence references. The
+legacy definition is explicit intelligent compatibility, not a native alias.
+A missing new configured name is a deployment mismatch; stop and report it.
+Do not silently choose a generic worker. Explicit legacy or authorized bootstrap
+execution records its actual runtime identity without claiming native activation.
+
+`tools/smoke-test-codex-agents.sh --check-only` validates twelve source definitions.
+The five live representatives, when separately authorized and supported, are
+mapper, mechanical writer, intelligent writer, legacy writer and architect:
+four configured model/effort tuples and all three writer identities. The probe
+parent remains intentionally pinned to gpt-5.6-luna/low, independently from child
+configuration. Metadata proves dispatch identity only; artifact correctness and
+consequential actions need fixed outcome evaluation and independent review.
+
+Claude retains code-writer/Opus; Gemini retains supported native/default tiers
+without custom definitions. Real installation is a separate authorized action
+and can overwrite managed installed TOMLs. Compatibility removal needs a later
+retirement change and ownership-safe cleanup. Static source checks do not prove
+native activation, Windows runtime execution, or total workflow savings.

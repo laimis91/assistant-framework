@@ -18,7 +18,7 @@ TEMPLATE_FILE=""
 TRACE_VALIDATOR="$REPO_ROOT/tools/evals/run-framework-instruction-evals.sh"
 COMPARISON_PROGRAM="$SCRIPT_DIR/lib/framework-comparison.jq"
 CODEX_EVAL_RUNNER="$SCRIPT_DIR/run-codex-framework-evals.sh"
-EXPECTED_ADAPTER_VERSION="codex-framework-eval-v7"
+EXPECTED_ADAPTER_VERSION="codex-framework-eval-v8"
 CURRENT_BASELINE_INSTRUCTION_HASH=""
 CURRENT_CANDIDATE_INSTRUCTION_HASH=""
 CURRENT_CONTEXT_BUDGET_EVIDENCE_HASH=""
@@ -639,7 +639,7 @@ trusted_execution_profile_passes() {
             and (.provenance.requested_model_catalog_entry_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
             and (.provenance.codex_executable_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
             and (.provenance | has("resolved_model") | not)
-            and .provenance.adapter_version == "codex-framework-eval-v7")
+            and .provenance.adapter_version == "codex-framework-eval-v8")
         ' "$traces_dir"/*.json >/dev/null \
         && current_model_selection_evidence_matches "$plan"
 }

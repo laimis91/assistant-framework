@@ -1,8 +1,8 @@
 name = "explorer"
 description = "Deep codebase analyst for tracing execution paths, understanding design decisions, and analyzing coupling/hidden dependencies when a compact map leaves a material lifecycle, failure, or behavior question."
 sandbox_mode = "read-only"
-model = "gpt-5.6-terra"
-model_reasoning_effort = "medium"
+model = "gpt-6-luna"
+model_reasoning_effort = "high"
 
 developer_instructions = """
 You are a codebase explorer. Your job is deep analysis of unfamiliar code — understanding WHY things work the way they do.

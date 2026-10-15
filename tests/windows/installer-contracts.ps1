@@ -2242,6 +2242,39 @@ requires:
         }
     }
 
+    Invoke-Contract 'Codex twelve writer transition definitions survive fresh upgrade and dry-run' {
+        Use-IsolatedEnvironment 'writer transition' {
+            param($root, $isolatedUserProfile)
+            $codexHome = Join-Path $root 'Writer Transition Home'
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', $codexHome, 'Process')
+            $agents = Join-Path $codexHome 'agents'
+            [void][System.IO.Directory]::CreateDirectory($agents)
+            $config = Join-Path $codexHome 'config.toml'
+            [System.IO.File]::WriteAllText($config, 'personal = "retained"')
+            [System.IO.File]::WriteAllText((Join-Path $agents 'personal-role.toml'), 'unrelated custom role')
+            foreach ($phase in @('fresh', 'upgrade')) {
+                $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-NoHooks')
+                Assert-Equal 0 $result.ExitCode "Writer $phase install failed: $($result.Output)"
+                $definitions = @(Get-ChildItem -LiteralPath (Join-Path $script:FrameworkRoot 'agents\codex') -Filter '*.toml' -File)
+                Assert-Equal 12 $definitions.Count 'Transition must contain eleven normal definitions plus legacy writer'
+                foreach ($definition in $definitions) {
+                    Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($definition.FullName))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $agents $definition.Name)))) "Writer definition mismatch: $($definition.Name)"
+                }
+                Assert-Equal 'personal = "retained"' ([System.IO.File]::ReadAllText($config)) 'Writer migration changed unrelated configuration'
+                Assert-Equal 'unrelated custom role' ([System.IO.File]::ReadAllText((Join-Path $agents 'personal-role.toml'))) 'Writer migration changed unrelated role'
+                if ($phase -eq 'fresh') {
+                    [System.IO.File]::WriteAllText((Join-Path $agents 'code-writer.toml'), 'old managed compatibility writer')
+                    [System.IO.File]::Delete((Join-Path $agents 'intelligent-writer.toml'))
+                    [System.IO.File]::Delete((Join-Path $agents 'mechanical-writer.toml'))
+                }
+            }
+            $before = Get-TreeFingerprint -LiteralPath $root
+            $dry = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-NoHooks', '-DryRun')
+            Assert-Equal 0 $dry.ExitCode "Writer migration dry-run failed: $($dry.Output)"
+            Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'Writer migration dry-run mutated scratch state'
+        }
+    }
+
 }
 finally {
     if (Test-Path -LiteralPath $script:SuiteRoot) {

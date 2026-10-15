@@ -49,11 +49,55 @@ active skill requires subagents.
 | **Code Mapper** | `code-mapper` | `code-mapper` | Read-only | Discover |
 | **Explorer** | `explorer` | `explorer` | Read-only | Discover |
 | **Architect** | `architect` | `architect` | Read-only | Decompose, Plan, Design |
-| **Code Writer** | `code-writer` | `code-writer` | Write | Build |
+| **Code Writer** | `code-writer` (existing Opus) | `intelligent-writer` default; eligible `mechanical-writer` | Write | Build |
 | **Builder/Tester** | `builder-tester` | `builder-tester` | Write | Build |
 | **Code Reviewer** | `code-reviewer` | `code-reviewer` | Read-only | Review |
 | **Reviewer** | `reviewer` | `reviewer` | Read-only | Review compatibility |
 | **QA Evaluator** | `qa-evaluator` | `qa-evaluator` | Read-only | Review QA |
+
+## Concrete writer selection
+
+The logical `CodeWriter` and `orchestrator_to_code_writer` handoff stay canonical.
+The Orchestrator owns `writer_selection`; Architect may propose it. New Codex
+packets carry `agent` (`intelligent-writer` default or `mechanical-writer`) and a
+`rationale` tied to remaining judgment and consequences. Mechanical selection also
+carries `mechanical_eligibility` with all four refs: `recipe_or_example_ref`,
+`resolved_decisions_ref`, `scope_and_dependencies_ref`, and
+`correctness_expectations_ref`. Resolve actual current evidence before dispatch:
+applicable approved recipe/example, resolved semantic/edge/compatibility decisions,
+understood ownership/dependencies/baseline, and independently fixed correctness
+expectations. Nonempty refs or self-asserted labels do not establish eligibility.
+Neither edit size nor file type/count nor a simple label selects the role.
+
+Skill/contract semantics, grader/oracle/counterexample design, interacting
+constraints, lifecycle/error handling and unresolved compatibility use intelligent
+judgment. Approved exact wording or an exact existing pattern can be mechanical
+only when every condition is substantiated. A one-line grader edit can require
+intelligent-writer. Writers cannot invent desired behavior or replace specialist
+ownership; missing requirements return `NEEDS_CONTEXT` to the Orchestrator.
+
+Carry the identical object in each packet projection and inline CodeWriter
+context. `current_task_packet` wins when supplied; packet/inline conflicts block
+instead of being merged. Old packets without selection remain valid and use
+intelligent compatibility semantics. Both writers retain exact scope, selected
+checks and binding tuples, unchanged verification/TDD, statuses, partial changes,
+and independent review. Stale eligibility stops dependent mutations and returns
+actual changed files with observed evidence and the existing truthful blocker
+status. Classify failures from evidence; no mandatory Luna-then-Sol cascade.
+
+Codex has eleven normal roles and twelve transition TOMLs, including standalone
+deprecated `code-writer` (Sol/high intelligent compatibility). New normal dispatches
+use only the two new names. An explicit legacy request may use `code-writer`.
+A missing new Codex definition is a deployment mismatch: report it and stop;
+never silently substitute a generic worker or nearest coding agent. A separately
+authorized bootstrap must record actual runtime role/model/effort and cannot
+claim native activation. Keep compatibility for the transition release; removal
+requires a later retirement decision and ownership-safe installed cleanup.
+
+Claude keeps its existing `code-writer`/Opus preference. Gemini has no custom
+framework definitions: use its supported native/default route and existing tier
+guidance, without inventing names or model preferences. The two-writer choice
+adds no delegation requirement to otherwise direct lightweight work.
 
 ## What each role does
 

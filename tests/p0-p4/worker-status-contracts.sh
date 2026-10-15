@@ -395,7 +395,7 @@ if ruby -ryaml -e '
       mode.fetch("validation").include?("otherwise equals verification_decision.tdd_choice.mode")
   end
   root = File.expand_path("../../..", File.dirname(ARGV.fetch(0)))
-  valid_schema &&= %w[agents/codex/code-writer.toml agents/claude/code-writer.md agents/codex/builder-tester.toml agents/claude/builder-tester.md].all? do |path|
+  valid_schema &&= %w[agents/codex/code-writer.toml agents/codex/intelligent-writer.toml agents/codex/mechanical-writer.toml agents/claude/code-writer.md agents/codex/builder-tester.toml agents/claude/builder-tester.md].all? do |path|
     File.read(File.join(root, path)).include?("from current_task_packet when present, otherwise")
   end
   exit(valid_schema ? 0 : 1)
@@ -476,6 +476,8 @@ for term in \
 done
 for file in \
     agents/codex/code-writer.toml \
+    agents/codex/intelligent-writer.toml \
+    agents/codex/mechanical-writer.toml \
     agents/claude/code-writer.md; do
     for term in \
         '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \

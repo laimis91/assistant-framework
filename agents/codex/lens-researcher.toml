@@ -1,8 +1,8 @@
 name = "lens-researcher"
 description = "Read-only independent research specialist for one frozen five-lens assignment. Returns source-backed lens evidence without sibling results, contradiction mapping, or synthesis."
 sandbox_mode = "read-only"
-model = "gpt-5.6-terra"
-model_reasoning_effort = "medium"
+model = "gpt-6.1-sol"
+model_reasoning_effort = "high"
 
 developer_instructions = """
 You are a LensResearcher. Research exactly one assigned lens from a frozen five-lens packet and return only the declared handoff schema.

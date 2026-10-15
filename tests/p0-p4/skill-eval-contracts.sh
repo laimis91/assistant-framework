@@ -5,6 +5,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-re
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assistant-research-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/verification-reuse-response-fixtures.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/writer-routing-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/response-fixture-preflight.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/creator-response-fixtures.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
@@ -636,6 +637,9 @@ p0p4_write_skill_eval_responses() {
             if [[ "$skill_name" == "assistant-workflow" ]] \
                 && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
                 case "$id" in
+                    writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader|writer-routing-stale-partial|writer-routing-baseline-failure)
+                        write_writer_routing_response "$id" "$response_path"
+                        ;;
                     unknown-cause-bugfix-routes-through-debugging-before-tdd)
                         jq -n --arg summary "$required_summary assistant-tdd" '{
                           summary:$summary,
@@ -6552,6 +6556,55 @@ if [[ ${#review_distillation_mapping_failures[@]} -eq 0 ]]; then
 else
     fail "should-fix or regressed rule-distillation mapping behavior is incomplete: ${review_distillation_mapping_failures[*]}"
 fi
+
+test_start "writer response proxies reject each wrong fixed outcome and binding tuple independently"
+writer_proxy_root="$(mktemp -d "${TMPDIR:-/tmp}/writer-proxy-contract.XXXXXX")"
+p0p4_register_cleanup "$writer_proxy_root"
+mkdir -p "$writer_proxy_root/baseline/assistant-workflow" "$writer_proxy_root/mutations/assistant-workflow"
+writer_proxy_cases=(writer-routing-exact-pattern writer-routing-small-semantic writer-routing-small-grader writer-routing-stale-partial writer-routing-baseline-failure)
+writer_proxy_case_args=()
+writer_proxy_failures=()
+# These fixed responses are independent of the fixture's mutable assertions.
+for writer_proxy_case in "${writer_proxy_cases[@]}"; do
+    write_writer_routing_response "$writer_proxy_case" "$writer_proxy_root/baseline/assistant-workflow/$writer_proxy_case.md"
+    writer_proxy_case_args+=(--case "$writer_proxy_case")
+done
+if ! "$skill_eval_runner" --responses "$writer_proxy_root/baseline" --skill assistant-workflow "${writer_proxy_case_args[@]}" >"$writer_proxy_root/baseline.output" 2>&1 \
+    || ! grep -Fq 'Summary: total=5 passed=5 failed=0 unavailable=0' "$writer_proxy_root/baseline.output"; then
+    writer_proxy_failures+=("fixed independent positive responses rejected")
+fi
+# Each response starts from its unchanged positive example for every mutation.
+while IFS='|' read -r writer_proxy_mutation writer_proxy_filter; do
+    for writer_proxy_case in "${writer_proxy_cases[@]}"; do
+        jq "$writer_proxy_filter" "$writer_proxy_root/baseline/assistant-workflow/$writer_proxy_case.md" \
+            >"$writer_proxy_root/mutations/assistant-workflow/$writer_proxy_case.md"
+    done
+    writer_proxy_output="$writer_proxy_root/$writer_proxy_mutation.output"
+    if "$skill_eval_runner" --responses "$writer_proxy_root/mutations" --skill assistant-workflow "${writer_proxy_case_args[@]}" >"$writer_proxy_output" 2>&1; then
+        writer_proxy_failures+=("$writer_proxy_mutation accepted wrong field in writer responses")
+    elif ! grep -Fq 'Summary: total=5 passed=0 failed=5 unavailable=0 incomplete=0 missing=0 empty=0 fail_signal_hits=0 missing_required_substrings=0 forbidden_substring_hits=0' "$writer_proxy_output" \
+        || ! grep -Fq 'structured_json_assertion_failures=5 semantic_validation_failures=0' "$writer_proxy_output"; then
+        writer_proxy_failures+=("$writer_proxy_mutation did not reject all five responses once for the fixed assertion")
+    fi
+done <<'WRITER_PROXY_MUTATIONS'
+wrong-output|.actual_output = "plausible wrong output\n"
+missing-output|del(.actual_output)
+output-missing-newline|.actual_output = (.actual_output | sub("\n$"; ""))
+output-extra-newline|.actual_output += "\n"
+wrong-dependent|.dependent_output = "changed dependent output\n"
+missing-dependent|del(.dependent_output)
+dependent-missing-newline|.dependent_output = (.dependent_output | sub("\n$"; ""))
+dependent-extra-newline|.dependent_output += "\n"
+wrong-status|.status = (if .status == "DONE" then "BLOCKED" else "DONE" end)
+wrong-failure-class|.failure_class = (if .failure_class == "none" then "broken_baseline" else "none" end)
+wrong-next-action|.next_action = (if .next_action == "review" then "orchestrator" else "review" end)
+wrong-binding-kind|.slice_manifest[0].binding_obligation_refs[0].kind = "prohibited_scope"
+wrong-binding-value|.slice_manifest[0].binding_obligation_refs[0].value = "include dependent.txt"
+wrong-binding-source|.slice_manifest[0].binding_obligation_refs[0].source_ref = "untrusted.md"
+missing-binding-tuple|.slice_manifest[0].binding_obligation_refs = []
+extra-binding-tuple|.slice_manifest[0].binding_obligation_refs += [{kind:"required_scope",value:"only output.txt",source_ref:"scope.md"}]
+WRITER_PROXY_MUTATIONS
+if [[ ${#writer_proxy_failures[@]} -eq 0 ]]; then pass; else fail "${writer_proxy_failures[*]}"; fi
 
 test_start "skill eval runner preflights Ruby modules before operational work while help stays dependency-free"
 ruby_preflight_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-ruby-preflight.XXXXXX")"

@@ -855,4 +855,38 @@ else
     fail "$change_impact_install_failure"
 fi
 
+
+test_start "Codex writer migration fresh upgrade and dry-run preserve unrelated configuration"
+writer_install_home="$(mktemp -d "${TMPDIR:-/tmp}/writer-install.XXXXXX")"
+p0p4_register_cleanup "$writer_install_home"
+mkdir -p "$writer_install_home/.codex/agents"
+printf '%s\n' 'personal setting = retained' >"$writer_install_home/.codex/config.toml"
+printf '%s\n' 'unrelated custom role' >"$writer_install_home/.codex/agents/personal-role.toml"
+cp "$writer_install_home/.codex/config.toml" "$writer_install_home/config.before"
+writer_install_ok=true
+for writer_install_phase in fresh upgrade; do
+    if ! HOME="$writer_install_home" CODEX_HOME="$writer_install_home/.codex" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks >"$writer_install_home/$writer_install_phase.out" 2>"$writer_install_home/$writer_install_phase.err"; then
+        writer_install_ok=false
+        break
+    fi
+    writer_definition_count=0
+    for writer_source in "$FRAMEWORK_DIR/agents/codex/"*.toml; do
+        writer_definition_count=$((writer_definition_count + 1))
+        cmp -s "$writer_source" "$writer_install_home/.codex/agents/${writer_source##*/}" || writer_install_ok=false
+    done
+    [[ "$writer_definition_count" == 12 ]] || writer_install_ok=false
+    cmp -s "$writer_install_home/config.before" "$writer_install_home/.codex/config.toml" || writer_install_ok=false
+    [[ "$(cat "$writer_install_home/.codex/agents/personal-role.toml")" == 'unrelated custom role' ]] || writer_install_ok=false
+    # Simulate an old managed compatibility definition before upgrade.
+    if [[ "$writer_install_phase" == fresh ]]; then
+        printf '%s\n' 'old managed writer' >"$writer_install_home/.codex/agents/code-writer.toml"
+        rm "$writer_install_home/.codex/agents/intelligent-writer.toml" "$writer_install_home/.codex/agents/mechanical-writer.toml"
+    fi
+done
+writer_before="$(find "$writer_install_home/.codex" "$writer_install_home/.agents" -type f -exec shasum -a 256 {} + | LC_ALL=C sort)"
+if ! HOME="$writer_install_home" CODEX_HOME="$writer_install_home/.codex" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow --no-hooks --dry-run >"$writer_install_home/dry.out" 2>"$writer_install_home/dry.err"; then writer_install_ok=false; fi
+writer_after="$(find "$writer_install_home/.codex" "$writer_install_home/.agents" -type f -exec shasum -a 256 {} + | LC_ALL=C sort)"
+[[ "$writer_before" == "$writer_after" ]] || writer_install_ok=false
+if [[ "$writer_install_ok" == true ]]; then pass; else fail "writer migration installer parity/preservation/dry-run failure"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

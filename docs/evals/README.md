@@ -626,7 +626,7 @@ Exact-manifest planning requires Python 3 for bounded admission and Ruby for
 the materialized-tree context measurement. Existing directory root overlays
 retain their root-only reporter path and do not add either prerequisite.
 
-Before any model call, adapter v7 runs only the reporter from the evaluator's
+Before any model call, adapter v8 runs only the reporter from the evaluator's
 trusted repository; variant inputs can never supply executable tooling. It uses
 `LC_ALL=C` over the already materialized snapshot root files. The run plan embeds one canonical,
 count-only `context_budget_evidence` object plus its SHA-256. It binds the
@@ -878,7 +878,7 @@ two-artifact decision is rejected.
 
 `grader_sha256` binds both the canonical case grading contract and the complete
 Codex eval-runner implementation. Current promotion evidence requires adapter
-`codex-framework-eval-v7`; changing the contract or runner invalidates existing
+`codex-framework-eval-v8`; changing the contract or runner invalidates existing
 traces instead of retroactively re-grading deleted response or workspace data.
 
 Metrics without native Codex event timestamps are explicitly labeled as
@@ -1301,3 +1301,36 @@ catch the planted issue?" instead of only "did the response mention the expected
 headings?" Together they are the current Level 4 per-skill conformance
 foundation for first-class assistant skills, with local-only skill experiments
 remaining opt-in through `--include-local`.
+
+## Writer selection outcome controls
+
+The five `writer-routing-*` cases reuse the existing disposable workspace,
+allowed-path, seed, fixed-output verifier and offline adversarial controls. Exact
+pattern work selects mechanical; deceptively small semantic and grader changes
+select intelligent. Stale eligibility preserves a prior actual partial edit and
+stops dependent mutations; a broken baseline returns to the Orchestrator without
+mandatory model switching. The stale case seeds the prior worker invocation's
+partial output and checks its preservation plus truthful cumulative changed files.
+
+Acceptance checks exact output bytes, immutable dependent/evidence files,
+selection, status, actual cumulative changed files, next action, selected-check
+identity, binding tuple and no-TDD state. The fixed output oracle belongs to the
+adapter, independently of the model's receipt. Offline controls reject plausible
+wrong output with convincing role prose, mechanical semantic routing, missing
+eligibility evidence, omitted partial work, continued dependent mutation, false
+success, fabricated checks and automatic cascade. These are deterministic
+contract/adapter checks, not native activation or model quality proof. Shared
+selection remains an instruction contract with no executable routing controller.
+
+For skill-only response grading, `actual_output`, `dependent_output`, `status`,
+`failure_class` and `next_action` are bounded eval-only scalar projections; the
+binding tuple remains under `slice_manifest[0]`.
+
+Both new Codex definitions and standalone deprecated code-writer retain the
+logical CodeWriter verification, TDD, status and independent review contract.
+Claude code-writer/Opus and Gemini supported native/default tiers remain intact.
+Metadata and phrase/schema matches alone cannot prove task success. Source
+migration, live installation and paid comparisons have separate authorization;
+total cost/value claims require accepted outcomes, correction/review effort,
+escalations, elapsed time and available whole-workflow usage. Missing telemetry
+stays unknown; the bounded synthetic pilot does not establish production savings.
