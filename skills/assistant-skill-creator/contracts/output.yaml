@@ -1,75 +1,86 @@
 # Assistant Skill Creator Output Contract
-# All artifacts must exist before printing --- PHASE: VALIDATE COMPLETE ---
+# Operation-specific artifacts are required only for their applicable operation.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: output
 skill: assistant-skill-creator
 
 artifacts:
+  - name: operation_summary
+    type: string
+    required: true
+    description: "Outcome and status for the selected operation, including evidence and unresolved limits"
+    validation: "Create/update summarize authored files and validation; assess/refresh summarize findings without claiming authoring or unavailable evidence"
+    on_fail: "Return the selected operation, its actual result, evidence, and unresolved gaps"
+
   - name: skill_md
     type: file
-    required: true
-    description: "SKILL.md entry point with required name and description plus optional plain block-sequence requires, and the markdown body"
+    required: conditional
+    condition: "operation in [create, update] and authoring is complete"
+    description: "Target SKILL.md with required name and description and preserved or explicitly changed supported metadata"
     path: "skills/{skill_name}/SKILL.md"
-    validation: "Must contain valid YAML frontmatter with required name and non-empty description. Emit optional requires only when validated hard dependencies are non-empty, preserving their order as a plain block sequence with two-space dash kebab-case items; omit requires when dependencies are explicitly empty. When updating an existing skill and dependencies are omitted, preserve its current canonical requires. Reject inline, empty, or quoted `requires` forms. Reject legacy top-level `effort` and `triggers` keys. Body must be under 500 lines."
-    on_fail: "Fix the SKILL.md — add required name and description, preserve existing requires when dependencies are omitted, emit or omit optional requires according to explicit hard dependencies using the canonical plain block sequence, remove inline, empty, or quoted `requires` forms and legacy top-level `effort` and `triggers` keys, or trim body length"
+    validation: "Use a valid name and a 1–1024-character description; optional compatibility is 1–500 characters. Preserve supported metadata, policy, and current canonical requires unless explicitly changed. Emit non-empty validated hard dependencies in order as a plain block sequence with two-space dash kebab-case items, omit requires when empty, preserve omitted update dependencies, and preserve supported policy and metadata. Reject inline, empty, or quoted `requires` forms. Reject legacy top-level `effort` and `triggers` keys. Keep body under 500 lines."
+    on_fail: "Fix metadata or preserve the existing target fields and dependency behavior before reporting completion"
 
   - name: input_contract
     type: file
-    required: true
-    description: "Input contract YAML defining fields the skill needs to start"
+    required: conditional
+    condition: "operation in [create, update] and authoring is complete"
+    description: "Target input contract containing only outcome-relevant fields"
     path: "skills/{skill_name}/contracts/input.yaml"
-    validation: "Must have schema_version, contract, skill headers. Every required field must have on_missing action."
-    on_fail: "Add missing on_missing actions to required fields"
+    validation: "Include headers, explicit enums, conditional requiredness, and recovery for required fields; do not add fields to meet a count"
+    on_fail: "Correct the contract structure and remove fields without an outcome-changing purpose"
 
   - name: output_contract
     type: file
-    required: true
-    description: "Output contract YAML defining artifacts the skill must produce"
+    required: conditional
+    condition: "operation in [create, update] and authoring is complete"
+    description: "Target output contract containing only required outcome artifacts"
     path: "skills/{skill_name}/contracts/output.yaml"
-    validation: "Must have schema_version, contract, skill headers. Every required artifact must have on_fail action."
-    on_fail: "Add missing on_fail actions to required artifacts"
+    validation: "Include headers and actionable on_fail recovery for every required artifact; do not add artifacts to meet a count"
+    on_fail: "Correct requiredness and recovery, then remove artifacts not needed for the stated outcome"
 
   - name: phase_gates_contract
     type: file
     required: conditional
-    condition: "skill_category is process or analysis"
-    description: "Phase gates YAML defining binary assertions at each phase transition"
+    condition: "operation in [create, update] and skill_category is process or analysis and authoring is complete"
+    description: "Target phase gates for a multi-step Process or Analysis skill"
     path: "skills/{skill_name}/contracts/phase-gates.yaml"
-    validation: "Must have at least one gate per phase. Assertions must be binary (pass/fail). Corrective actions must be actionable."
-    on_fail: "Add missing phase gates or fix non-binary assertions"
+    validation: "Use binary assertions, explicit conditions, and actionable recovery"
+    on_fail: "Add or correct only phase gates needed to protect the target workflow"
 
   - name: handoffs_contract
     type: file
     required: conditional
-    condition: "skill_category is process"
-    description: "Handoffs YAML defining data shapes between subagent dispatch and return"
+    condition: "operation in [create, update] and skill_category is process and authoring is complete"
+    description: "Target Process handoffs with matching typed producer and consumer fields"
     path: "skills/{skill_name}/contracts/handoffs.yaml"
-    validation: "Producer return_fields must satisfy consumer context_fields. All fields must be typed."
-    on_fail: "Fix field mismatches between producer and consumer schemas"
+    validation: "Producer return fields satisfy consumer context fields; Analysis and Utility skills have no handoffs"
+    on_fail: "Align the handoff fields or remove unsupported delegation"
 
   - name: validation_summary
     type: string
-    required: true
-    description: "Summary of validation results against the contract design guide rules and company-safe/agent-agnostic checks"
-    validation: "Must report pass/fail for all contract rules plus policy/runtime checks. activation_examples remain required for new and existing skills. For existing skills, inspect the existing description and activation evals first, derive adequate structured activation examples, and ask only for remaining material gaps; verify 2 normalized-distinct positive and 1 normalized-disjoint nearby negative decision before DESIGN completion. No failures allowed in final output."
-    on_fail: "Derive adequate existing activation evidence or ask only for remaining material gaps, fix failing rules, and re-validate"
+    required: conditional
+    condition: "operation in [create, update]"
+    description: "Validation result for all applicable contract design rules and policy constraints"
+    validation: "Report applicable pass/fail outcomes, actual checks, and limits. Validate all 15 applicable guide rules. When a creator behavior fixture is evaluated, load the behavioral_evaluation set for its independent artifact/trace evidence; this does not replace canonical verification. For existing skills, inspect the existing description and activation evals first, derive structured activation examples from the existing description and activation evals when adequate, and ask only for remaining material gaps."
+    on_fail: "Fix applicable failures, rerun the affected checks, and report unresolved limits"
 
   - name: policy_safety_summary
     type: string
-    required: true
-    description: "How the skill handles memory, metrics, automation, subagents, state paths, external tools, and sensitive examples"
-    validation: "Must state either 'none used' or describe the optional/configurable fallback for each runtime/tooling assumption"
-    on_fail: "Add policy gates or fallback behavior before finalizing the skill"
-
+    required: conditional
+    condition: "operation in [create, update]"
+    description: "Relevant memory, metrics, automation, subagent, state-path, external-tool, host, and sensitive-example constraints"
+    validation: "State applicable assumptions and fallbacks; do not invent host support or silently change target invocation policy"
+    on_fail: "Add the applicable safe fallback or report the limitation before authoring completion"
 
   - name: distillation_verification
     type: object
     required: conditional
     condition: "creating or updating a skill from a completed workflow, review lesson, reusable procedure, or user-requested skill save"
-    description: "Verifier-approved distillation packet proving the skill should be saved"
-    validation: "verifier_result must be approved and the full distillation packet must be present before skill files are written"
-    on_fail: "Load references/verified-skill-distillation.md and request verifier approval or return revision checklist before writing the skill"
+    description: "Verifier-approved distillation packet required before writing target skill files"
+    validation: "verifier_result must be approved and the full packet must be present before writing"
+    on_fail: "Load references/verified-skill-distillation.md and request verifier approval or return a revision checklist"
     object_fields:
       - name: candidate_workflow
         type: string
@@ -103,3 +114,76 @@ artifacts:
         type: enum
         enum_values: [create_skill, update_skill, add_constraint, skip]
         required: true
+
+  - name: upstream_guidance_assessment
+    type: object
+    required: conditional
+    condition: "operation == refresh_guidance or (operation in [create, update] and (((authoring is new or materially changed) and a relevant registered assessment has expired) or a relevant source/runtime change is known))"
+    description: "Read-only source freshness report when authoring freshness is due or refresh is requested"
+    validation: "Preserve the checker-reported status and prior source identity; never infer currentness, adoption, or a source change from dates or retrieval."
+    on_fail: "Return the actual report or an explicit unavailable result with prior identity and limits"
+    object_fields:
+      - name: schema_version
+        type: enum
+        enum_values: ["1.0"]
+        required: false
+      - name: checked_at
+        type: string
+        required: true
+      - name: assessment_window_days
+        type: int
+        required: true
+      - name: limits
+        type: object
+        required: true
+      - name: registry_mutated
+        type: boolean
+        required: true
+      - name: results
+        type: object[]
+        required: true
+        object_fields:
+          - name: source_id
+            type: string
+            required: true
+          - name: status
+            type: enum
+            enum_values: [current, review_required, stale, unavailable]
+            required: true
+          - name: retrieval_state
+            type: enum
+            enum_values: [complete, partial, unavailable, not_configured]
+            required: true
+          - name: last_assessed
+            type: object
+            required: true
+          - name: reason
+            type: string
+            required: true
+          - name: candidate_sha256
+            type: string
+            required: false
+          - name: candidate_bytes
+            type: int
+            required: false
+          - name: affected_refs
+            type: string[]
+            required: false
+          - name: difference
+            type: object
+            required: false
+
+  - name: verification_decision
+    type: object
+    required: conditional
+    condition: "canonical assistant-verification selection is actionable or a verification_decision is carried"
+    description: "Canonical selection result carried unchanged when this operation requires check selection"
+    validation: "Use assistant-verification/contracts/output.yaml#verification_decision unchanged, including its CheckSpecs, literal argv/cwd, source-bound obligations, and TddChoice; do not select twice or replace its shape"
+    on_fail: "Preserve the canonical producer result or report why the selected evidence is blocked"
+
+  - name: evidence_assessment
+    type: object
+    required: true
+    description: "Canonical evidence adequacy result for the selected operation"
+    validation: "Use assistant-verification/contracts/output.yaml#evidence_assessment unchanged, including required checks, actual evidence, limits, and claim status"
+    on_fail: "Carry the canonical assessment unchanged and leave unsupported claims open"

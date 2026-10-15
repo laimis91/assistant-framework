@@ -40,6 +40,8 @@ source "$P0P4_SUITE_DIR/response-fixture-preflight-contracts.sh"
 if ! p0p4_suite_is_excluded "skill-eval-contracts.sh"; then
     source "$P0P4_SUITE_DIR/skill-eval-contracts.sh"
 fi
+source "$P0P4_SUITE_DIR/skill-creator-semantic-contracts.sh"
+source "$P0P4_SUITE_DIR/skill-creator-upstream-contracts.sh"
 source "$P0P4_SUITE_DIR/workflow-basics-contracts.sh"
 source "$P0P4_SUITE_DIR/workflow-reference-loading-contracts.sh"
 source "$P0P4_SUITE_DIR/workflow-verification-reuse-contracts.sh"

@@ -1,0 +1,479 @@
+{
+  "schema_version": "1.0",
+  "purpose": "Assessed upstream guidance provenance for assistant-skill-creator; a retrieval is not adoption.",
+  "preparation_manifest_ref": "docs/plans/assistant-skill-creator-refresh/source-manifest.json",
+  "checked_snapshot_refreshed_at": "2026-10-13T07:00:58.150550+00:00",
+  "assessment_window_days": 30,
+  "limits": {
+    "total_deadline_seconds": 30,
+    "request_timeout_seconds": 5,
+    "maximum_retries": 1,
+    "maximum_source_bytes": 262144,
+    "maximum_total_bytes": 1048576
+  },
+  "sources": [
+    {
+      "source_id": "anthropic:skills/skill-creator/SKILL.md",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/skill-creator/SKILL.md",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "repository_path": "skills/skill-creator/SKILL.md",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/SKILL.md",
+      "last_checked_at": "2026-10-13T07:36:25.107686+00:00",
+      "last_checked_status": "verified_same_as_assessed",
+      "last_checked_scope": "complete bytes at the mutable relevant file path; compared to the assessed digest",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "last_assessed_sha256": "dcd4803e61e913e6fc27294184cd3a71f09f5e924ff20c8a9a20173e7b3c2bcf",
+      "last_assessed_bytes": 33168,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Apply concise authoring and evaluation guidance within V1 contracts, approval gates, and permission policy.",
+      "affected_refs": [
+        "SKILL.md#Authoring",
+        "contracts/phase-gates.yaml#DESIGN"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "anthropic:skills/skill-creator/references/schemas.md",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/skill-creator/references/schemas.md",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "repository_path": "skills/skill-creator/references/schemas.md",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/references/schemas.md",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "last_assessed_sha256": "8e8876180a8989b406a4d3edddf875b04cdfd5805cc8616686d552b11ce4455f",
+      "last_assessed_bytes": 12061,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Use schema examples as source context; V1 typed contracts remain authoritative.",
+      "affected_refs": [
+        "contracts/input.yaml",
+        "contracts/output.yaml"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "anthropic:skills/skill-creator/agents/grader.md",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/skill-creator/agents/grader.md",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "repository_path": "skills/skill-creator/agents/grader.md",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/agents/grader.md",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "last_assessed_sha256": "57134da0c1a4eea33fbd74a1c9c44aa814f07d6bc64de303edb586f941e5d21a",
+      "last_assessed_bytes": 9049,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Use artifact-centered evaluation concepts through the bounded local evidence contract; do not copy vendor runtime roles.",
+      "affected_refs": [
+        "references/behavioral-evaluation.md",
+        "contracts/output.yaml#evidence_assessment"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "anthropic:skills/skill-creator/agents/comparator.md",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/skill-creator/agents/comparator.md",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "repository_path": "skills/skill-creator/agents/comparator.md",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/agents/comparator.md",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "last_assessed_sha256": "fe1fc9787c495d864c5d6eada47396478572325fde1b33a96d78bf4b849b7a3e",
+      "last_assessed_bytes": 7287,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Use matched comparisons only when an improvement claim warrants them; preserve canonical verification ownership.",
+      "affected_refs": [
+        "references/behavioral-evaluation.md",
+        "assistant-verification/references/methods/behavioral-evals.md"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "anthropic:skills/skill-creator/agents/analyzer.md",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/skill-creator/agents/analyzer.md",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "repository_path": "skills/skill-creator/agents/analyzer.md",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/agents/analyzer.md",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "last_assessed_sha256": "bf68f4cac5a56c673a928c2e6d619586c5b93ea364026ab37547772cb45a663a",
+      "last_assessed_bytes": 10376,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "defer",
+      "disposition_rationale": "Do not add vendor-specific worker delegation to this Analysis skill; reassess only if the approved contract tier changes.",
+      "affected_refs": [
+        "SKILL.md#Ownership",
+        "contracts/index.yaml"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "anthropic:skills/skill-creator/scripts/run_loop.py",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/skill-creator/scripts/run_loop.py",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "repository_path": "skills/skill-creator/scripts/run_loop.py",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/scripts/run_loop.py",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "last_assessed_sha256": "7bd6f674203168520517eec94c55f493c0d154339b061b4d7c0f0dad187d0f21",
+      "last_assessed_bytes": 13605,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "defer",
+      "disposition_rationale": "Do not copy a vendor optimization loop into the framework; existing bounded workflow controls remain authoritative.",
+      "affected_refs": [
+        "SKILL.md#Stop-Rules",
+        "references/behavioral-evaluation.md"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "anthropic:skills/skill-creator/scripts/run_eval.py",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/skill-creator/scripts/run_eval.py",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "repository_path": "skills/skill-creator/scripts/run_eval.py",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/scripts/run_eval.py",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "last_assessed_sha256": "43e3b8f80dbf69c343967ba77e268fae991d9fa3ed68b32a0ff02532cd48657f",
+      "last_assessed_bytes": 11464,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Use execution evidence and outcome grading ideas without adopting provider-specific execution or artifact formats.",
+      "affected_refs": [
+        "references/behavioral-evaluation.md"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "anthropic:skills/skill-creator/scripts/quick_validate.py",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/skill-creator/scripts/quick_validate.py",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "repository_path": "skills/skill-creator/scripts/quick_validate.py",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/scripts/quick_validate.py",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "last_assessed_sha256": "67cf5703402013936c8fb75ad6a1afecd8841d45cc5e606b634eb05825fde365",
+      "last_assessed_bytes": 3972,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Use portable metadata guidance only where it agrees with the Agent Skills format and local validator.",
+      "affected_refs": [
+        "SKILL.md#Authoring",
+        "tools/skills/lib/validate-frontmatter.sh"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "anthropic:skills/skill-creator/scripts/package_skill.py",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/skill-creator/scripts/package_skill.py",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "repository_path": "skills/skill-creator/scripts/package_skill.py",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/scripts/package_skill.py",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "last_assessed_sha256": "1a33059b0db1ef73375d46d513e5ea81369d2e8838c970597b0d52ddef8d1c0f",
+      "last_assessed_bytes": 4234,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "reject",
+      "disposition_rationale": "Portable packaging/export is outside the approved scope and does not change installer behavior.",
+      "affected_refs": [
+        "SKILL.md#Constraints"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "openai:skills/.system/skill-creator/SKILL.md",
+      "official_locator": "https://raw.githubusercontent.com/openai/skills/49f948faa9258a0c61caceaf225e179651397431/skills/.system/skill-creator/SKILL.md",
+      "source_kind": "official_repository_file",
+      "provider": "openai",
+      "source_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "repository_path": "skills/.system/skill-creator/SKILL.md",
+      "refresh_url": "https://raw.githubusercontent.com/openai/skills/main/skills/.system/skill-creator/SKILL.md",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "last_assessed_sha256": "a17383bfb1448637ac1f757ad891ddb9676fa30b0eff620200f0e1cbc0cc0d50",
+      "last_assessed_bytes": 18664,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Use the installed creator as available-session guidance while retaining its unknown public release identity and V1 contracts.",
+      "affected_refs": [
+        "SKILL.md",
+        "contracts/index.yaml"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "openai:skills/.system/skill-creator/references/openai_yaml.md",
+      "official_locator": "https://raw.githubusercontent.com/openai/skills/49f948faa9258a0c61caceaf225e179651397431/skills/.system/skill-creator/references/openai_yaml.md",
+      "source_kind": "official_repository_file",
+      "provider": "openai",
+      "source_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "repository_path": "skills/.system/skill-creator/references/openai_yaml.md",
+      "refresh_url": "https://raw.githubusercontent.com/openai/skills/main/skills/.system/skill-creator/references/openai_yaml.md",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "last_assessed_sha256": "9fb5928b7f4a746fdb39df503ebbd7a659d5e64b47f85a60626aa1a03fd76b17",
+      "last_assessed_bytes": 2130,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Keep host-specific OpenAI metadata conditional and separate from portable format and framework policy.",
+      "affected_refs": [
+        "SKILL.md#Authoring",
+        "references/contract-design-checklist.md"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "openai:skills/.system/skill-creator/scripts/quick_validate.py",
+      "official_locator": "https://raw.githubusercontent.com/openai/skills/49f948faa9258a0c61caceaf225e179651397431/skills/.system/skill-creator/scripts/quick_validate.py",
+      "source_kind": "official_repository_file",
+      "provider": "openai",
+      "source_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "repository_path": "skills/.system/skill-creator/scripts/quick_validate.py",
+      "refresh_url": "https://raw.githubusercontent.com/openai/skills/main/skills/.system/skill-creator/scripts/quick_validate.py",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "last_assessed_sha256": "6cc9dc3199c935916cf6f73fcbbbb0e3bb1b58c8f5109fefa499978908164f51",
+      "last_assessed_bytes": 3293,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Use validator behavior as host-specific evidence; the repository validator remains the implementation authority.",
+      "affected_refs": [
+        "tools/skills/lib/validate-frontmatter.sh"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "anthropic-official-plugin:SKILL.md",
+      "official_locator": "https://raw.githubusercontent.com/anthropics/claude-plugins-official/f359d43b406057f1a8cdbc4ea93b827642c162e6/plugins/skill-creator/skills/skill-creator/SKILL.md",
+      "source_kind": "official_repository_file",
+      "provider": "anthropic",
+      "source_revision": "f359d43b406057f1a8cdbc4ea93b827642c162e6",
+      "repository_path": "plugins/skill-creator/skills/skill-creator/SKILL.md",
+      "refresh_url": "https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/plugins/skill-creator/skills/skill-creator/SKILL.md",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete bytes at the pinned official repository locator; this does not assert mutable branch currency",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": "f359d43b406057f1a8cdbc4ea93b827642c162e6",
+      "last_assessed_sha256": "dcd4803e61e913e6fc27294184cd3a71f09f5e924ff20c8a9a20173e7b3c2bcf",
+      "last_assessed_bytes": 33168,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "defer",
+      "disposition_rationale": "This pinned copy matched the Anthropic creator bytes and is not independent corroboration.",
+      "affected_refs": [
+        "SKILL.md#Authoring"
+      ],
+      "limitations": [
+        "Pinned copy matched the Anthropic creator bytes; it is corroborating distribution evidence, not an independent source."
+      ]
+    },
+    {
+      "source_id": "agent-skills-format",
+      "official_locator": "https://agentskills.io/specification.md",
+      "source_kind": "official_format_specification",
+      "provider": "agent-skills",
+      "source_revision": null,
+      "repository_path": null,
+      "refresh_url": "https://agentskills.io/specification.md",
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "complete fetched file bytes",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": null,
+      "last_assessed_sha256": "4c649bdf0e0a51c9e215d9f91009ecdca05ee9d073edb6f37c20265bbd829e11",
+      "last_assessed_bytes": 7697,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Apply portable name and description constraints while preserving the framework-specific requires extension and host limits.",
+      "affected_refs": [
+        "SKILL.md#Authoring",
+        "tools/skills/lib/validate-frontmatter.sh"
+      ],
+      "limitations": []
+    },
+    {
+      "source_id": "openai-skills-docs",
+      "official_locator": "https://developers.openai.com/codex/skills",
+      "source_kind": "official_documentation",
+      "provider": "openai",
+      "source_revision": null,
+      "repository_path": null,
+      "refresh_url": null,
+      "last_checked_at": "2026-10-13",
+      "last_checked_status": "verified",
+      "last_checked_scope": "retrieved Markdown serialized as a local snapshot",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": null,
+      "last_assessed_sha256": "4093dba843bd333cdfe25df52cd36828b51d1a4199fdb2fcf2be1b7913063775",
+      "last_assessed_bytes": 10926,
+      "last_assessed_content_scope": "retrieved Markdown serialized as a local snapshot",
+      "disposition": "adapt",
+      "disposition_rationale": "Use current OpenAI host-routing and optional agents/openai.yaml guidance only for Codex-specific decisions.",
+      "affected_refs": [
+        "SKILL.md#Authoring",
+        "references/contract-design-checklist.md"
+      ],
+      "limitations": [
+        "Retrieved documentation representation is not complete-byte equivalent to a raw page; automatic digest comparison is disabled."
+      ]
+    },
+    {
+      "source_id": "openai-skill-evals",
+      "official_locator": "https://developers.openai.com/blog/eval-skills",
+      "source_kind": "official_documentation",
+      "provider": "openai",
+      "source_revision": null,
+      "repository_path": null,
+      "refresh_url": null,
+      "last_checked_at": "2026-10-13",
+      "last_checked_status": "verified",
+      "last_checked_scope": "retrieved Markdown serialized as a local snapshot",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": null,
+      "last_assessed_sha256": "32194fa4f525c357ef015e500c79f36682fea290660fb36ba2c6d6c8ca047cdb",
+      "last_assessed_bytes": 19227,
+      "last_assessed_content_scope": "retrieved Markdown serialized as a local snapshot",
+      "disposition": "adapt",
+      "disposition_rationale": "Use trace, artifact, and outcome evaluation guidance without claiming a benchmark result.",
+      "affected_refs": [
+        "references/behavioral-evaluation.md"
+      ],
+      "limitations": [
+        "Retrieved documentation representation is not complete-byte equivalent to a raw page; automatic digest comparison is disabled."
+      ]
+    },
+    {
+      "source_id": "openai-installed-creator",
+      "official_locator": null,
+      "source_kind": "installed_snapshot",
+      "provider": "openai",
+      "source_revision": null,
+      "repository_path": null,
+      "refresh_url": null,
+      "last_checked_at": "2026-10-13T07:00:58.150550+00:00",
+      "last_checked_status": "verified",
+      "last_checked_scope": "local installed snapshot; no public release identity or publication date established",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": null,
+      "last_assessed_sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66",
+      "last_assessed_bytes": 15311,
+      "last_assessed_content_scope": "complete fetched file bytes",
+      "disposition": "adapt",
+      "disposition_rationale": "Reflect the creator resource installed for this session; this undated snapshot is not identified as a public release.",
+      "affected_refs": [
+        "SKILL.md",
+        "contracts/index.yaml"
+      ],
+      "limitations": [
+        "Undated local installed snapshot; public release identity and publication date are unknown."
+      ]
+    },
+    {
+      "source_id": "anthropic-authoring",
+      "official_locator": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
+      "source_kind": "official_documentation",
+      "provider": "anthropic",
+      "source_revision": null,
+      "repository_path": null,
+      "refresh_url": null,
+      "last_checked_at": "2026-10-13",
+      "last_checked_status": "verified",
+      "last_checked_scope": "not_available",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": null,
+      "last_assessed_sha256": null,
+      "last_assessed_bytes": null,
+      "last_assessed_content_scope": "not_available",
+      "disposition": "adapt",
+      "disposition_rationale": "Use the observed official authoring page for concision and freedom proportional to task fragility; the retrieved page was not retained as complete bytes.",
+      "affected_refs": [
+        "SKILL.md#Authoring",
+        "references/contract-design-checklist.md"
+      ],
+      "limitations": [
+        "Retrieved documentation representation is not complete-byte equivalent to a raw page; automatic digest comparison is disabled."
+      ]
+    },
+    {
+      "source_id": "anthropic-release",
+      "official_locator": "https://claude.com/resources/articles/improving-skill-creator-test-measure-and-refine-agent-skills",
+      "source_kind": "official_documentation",
+      "provider": "anthropic",
+      "source_revision": null,
+      "repository_path": null,
+      "refresh_url": null,
+      "last_checked_at": "2026-10-13",
+      "last_checked_status": "verified",
+      "last_checked_scope": "not_available",
+      "last_assessed_at": "2026-10-13",
+      "last_assessed_revision": null,
+      "last_assessed_sha256": null,
+      "last_assessed_bytes": null,
+      "last_assessed_content_scope": "not_available",
+      "disposition": "adapt",
+      "disposition_rationale": "Use the observed capability-versus-preference distinction without claiming an independent trial; the page representation is not byte-comparable.",
+      "affected_refs": [
+        "contracts/input.yaml#skill_value_kind",
+        "references/behavioral-evaluation.md"
+      ],
+      "limitations": [
+        "Retrieved documentation representation is not complete-byte equivalent to a raw page; automatic digest comparison is disabled."
+      ]
+    }
+  ]
+}

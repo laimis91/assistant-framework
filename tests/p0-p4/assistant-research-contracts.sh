@@ -2071,7 +2071,7 @@ jq '(.cases[] | select(.id == "five-lens-decision-briefing-uses-storm-style-work
     "$semantic_fixture" >"$semantic_fixture.next" && mv "$semantic_fixture.next" "$semantic_fixture"
 unknown_semantic_validator_rejected=false
 if ! "$research_eval_runner" --validate-fixture --skill "$semantic_fixture_root/assistant-research" >"$semantic_fixture_output" 2>&1 \
-    && grep -Fq -- 'semantic_validator must be the allowlisted assistant-research.five_lens_v3' "$semantic_fixture_output"; then
+    && grep -Fq -- 'semantic_validator is only supported by its exact assistant-research or assistant-skill-creator case allowlist' "$semantic_fixture_output"; then
     unknown_semantic_validator_rejected=true
 fi
 cp "$research_evals" "$semantic_fixture"

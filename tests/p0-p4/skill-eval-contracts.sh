@@ -6,6 +6,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-ca
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assistant-research-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/verification-reuse-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/response-fixture-preflight.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/creator-response-fixtures.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
@@ -625,6 +626,10 @@ p0p4_write_skill_eval_responses() {
             continue
         fi
         mkdir -p "$output_dir/$skill_name"
+        if [[ "$skill_name" == "assistant-skill-creator" ]]; then
+            p0p4_write_creator_bound_response_fixtures "$output_dir"
+            continue
+        fi
         while IFS= read -r id; do
             response_path="$output_dir/$skill_name/$id.txt"
             required_summary="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$fixture_file" | paste -sd ' ' -)"
@@ -1142,18 +1147,21 @@ else
     fail "missing or non-executable runner: $skill_eval_runner"
 fi
 
-test_start "assistant-skill-creator v2 captures activation examples without legacy header metadata"
+test_start "assistant-skill-creator v3 scopes activation evidence and preserves target metadata"
 skill_creator_skill="$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md"
 skill_creator_input="$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/input.yaml"
 skill_creator_index="$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/index.yaml"
 skill_creator_output="$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/output.yaml"
 skill_creator_gates="$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/phase-gates.yaml"
 skill_creator_cases="$FRAMEWORK_DIR/skills/assistant-skill-creator/evals/cases.json"
-if grep -Fq 'schema_version: "2.0"' "$skill_creator_input" \
-    && grep -Fq 'schema_version: "2.0"' "$skill_creator_index" \
-    && grep -Fq 'schema_version: "2.0"' "$skill_creator_output" \
-    && grep -Fq 'schema_version: "2.0"' "$skill_creator_gates" \
+if grep -Fq 'schema_version: "3.0"' "$skill_creator_input" \
+    && grep -Fq 'schema_version: "3.0"' "$skill_creator_index" \
+    && grep -Fq 'schema_version: "3.0"' "$skill_creator_output" \
+    && grep -Fq 'schema_version: "3.0"' "$skill_creator_gates" \
     && grep -Fq 'name: activation_examples' "$skill_creator_input" \
+    && grep -Fq '  - assistant-verification' "$skill_creator_skill" \
+    && grep -Fq 'assistant-verification/contracts/output.yaml#verification_decision' "$skill_creator_output" \
+    && grep -Fq 'assistant-verification/contracts/output.yaml#evidence_assessment' "$skill_creator_output" \
     && ruby -ryaml -e '
         field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "activation_examples" }
         fields = field.fetch("object_fields").map { |candidate| [candidate["name"], candidate["type"], candidate["required"]] }.to_h { |name, type, required| [name, [type, required]] }
@@ -1164,7 +1172,7 @@ if grep -Fq 'schema_version: "2.0"' "$skill_creator_input" \
             example.count { |item| item["should_activate"] == true } >= 2 &&
             example.any? { |item| item["should_activate"] == false }
         end
-        exit field["type"] == "object[]" && field["required"] == true && field["min_items"] == 3 && fields == { "user_request" => ["string", true], "should_activate" => ["boolean", true] } && concrete_example ? 0 : 1
+        exit field["type"] == "object[]" && field["required"] == "conditional" && field["condition"].include?("operation in [create, update]") && field["min_items"] == 3 && fields == { "user_request" => ["string", true], "should_activate" => ["boolean", true] } && concrete_example ? 0 : 1
     ' "$skill_creator_input" \
     && ruby -ryaml -e '
         field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "dependencies" }
@@ -1177,55 +1185,105 @@ if grep -Fq 'schema_version: "2.0"' "$skill_creator_input" \
     && ! grep -Fq 'effort_level' "$skill_creator_input" \
     && grep -Fiq 'at least 2 distinct true and 1 false' "$skill_creator_input" \
     && grep -Fiq 'normalized' "$skill_creator_input" \
-    && grep -Fq 'Derive structured activation examples' "$skill_creator_skill" \
-    && grep -Fiq 'normalized' "$skill_creator_skill" \
-    && grep -Fq 'from existing description and activation evals when adequate' "$skill_creator_skill" \
-    && grep -Fq 'derive structured activation examples from the existing description and activation evals' "$skill_creator_input" \
-    && grep -Fq 'should_activate' "$skill_creator_gates" \
+    && ruby -ryaml -e '
+        input = YAML.load_file(ARGV.fetch(0))
+        activation = input.fetch("fields").find { |field| field["name"] == "activation_examples" }
+        validation = activation.fetch("validation")
+        prompt = activation.fetch("ask_prompt")
+        exit validation.include?("normalized-distinct positives") &&
+          validation.include?("normalized-disjoint nearby negative") &&
+          validation.match?(/derive structured (?:activation )?examples/) &&
+          prompt.include?("ask only for remaining material gaps") ? 0 : 1
+    ' "$skill_creator_input" \
+    && ruby -ryaml -e '
+        gates = YAML.load_file(ARGV.fetch(0)).fetch("gates")
+        capture = gates.find { |gate| gate["phase"] == "CAPTURE" }
+        design = gates.find { |gate| gate["phase"] == "DESIGN" }
+        assertions = [capture, design].map { |gate| gate.fetch("exit_assertions") }
+        activation = [assertions[0].find { |item| item["id"] == "SC4" }, assertions[1].find { |item| item["id"] == "SD0" }]
+        exit [capture, design].all? { |gate| gate["condition"].include?("operation in [create, update]") } &&
+          activation.all? { |item| item && item["check"].include?("normalized") && item["check"].include?("positive") && item["check"].include?("negative") && !item["on_fail"].to_s.empty? } ? 0 : 1
+    ' "$skill_creator_gates" \
     && grep -Fiq 'normalized' "$skill_creator_gates" \
     && grep -Fq 'before DESIGN completion' "$skill_creator_gates" \
     && grep -Fq 'plain block sequence' "$skill_creator_output" \
     && grep -Fq 'For existing skills, inspect the existing description and activation evals first' "$skill_creator_output" \
     && grep -Fq 'two-space dash kebab-case items' "$skill_creator_output" \
     && grep -Fq 'Reject inline, empty, or quoted `requires` forms. Reject legacy top-level `effort` and `triggers` keys.' "$skill_creator_output" \
-    && grep -Fq 'inline, empty, or quoted `requires` forms are rejected; legacy top-level `effort` and `triggers` keys are rejected' "$skill_creator_gates" \
-    && jq -e '.cases as $cases | ($cases[] | select(.id == "new-process-skill-designs-contracts-before-build") | .machine_expectations.required_substrings as $required | ["activation_examples", "user_request", "should_activate", "should_activate: true", "should_activate: false", "description", "activation evals", "conditional requires", "plain block sequence", "omit requires when empty", "legacy header metadata"] | all(. as $anchor | $required | index($anchor))) and ($cases[] | select(.id == "new-process-skill-designs-contracts-before-build") | .machine_expectations.required_substrings as $required | ["requires:", "  - assistant-review"] | all(. as $anchor | $required | index($anchor) | not)) and ($cases[] | select(.id == "existing-skill-validation-enforces-checklist") | .machine_expectations.required_substrings as $required | ["activation_examples", "required activation_examples", "user_request", "should_activate: true", "should_activate: false", "derive structured examples", "reuse adequate existing positive evidence", "only for remaining material gaps"] | all(. as $anchor | $required | index($anchor))) and ([$cases[].expected_behavior[]] | any(contains("activation_examples") and contains("normalized"))) and ([$cases[] | tostring] | join(" ") | contains("trigger_phrases") | not) and ([$cases[] | tostring] | join(" ") | contains("effort_level") | not)' "$skill_creator_cases" >/dev/null; then
+    && ruby -ryaml -e '
+        gate = YAML.load_file(ARGV.fetch(0)).fetch("gates").find { |item| item["phase"] == "BUILD" }
+        item = gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "SB1" }
+        check = item.fetch("check")
+        exit gate["condition"].include?("operation in [create, update]") &&
+          check.include?("rejects inline, empty, or quoted `requires` forms") &&
+          check.include?("rejects legacy top-level `effort` and `triggers` keys") &&
+          !item["on_fail"].to_s.empty? ? 0 : 1
+    ' "$skill_creator_gates" \
+    && jq -e '.cases as $cases | ($cases[] | select(.id == "new-process-skill-designs-contracts-before-build") | .machine_expectations.required_substrings as $required | ["activation_examples", "user_request", "should_activate", "should_activate: true", "should_activate: false", "description", "activation evals", "conditional requires", "plain block sequence", "omit requires when empty", "legacy header metadata"] | all(. as $anchor | $required | index($anchor))) and ($cases[] | select(.id == "new-process-skill-designs-contracts-before-build") | .machine_expectations.required_substrings as $required | ["requires:", "  - assistant-review"] | all(. as $anchor | $required | index($anchor) | not)) and ($cases[] | select(.id == "existing-skill-validation-enforces-checklist") | .machine_expectations.required_substrings as $required | ["activation_examples", "required activation_examples", "user_request", "should_activate: true", "should_activate: false", "derive structured examples", "reuse adequate existing positive evidence", "only for remaining material gaps"] | all(. as $anchor | $required | index($anchor))) and ([$cases[].expected_behavior[]] | any(contains("activation_examples") and contains("normalized"))) and ([$cases[] | tostring] | join(" ") | contains("trigger_phrases") | not) and ([$cases[] | tostring] | join(" ") | contains("effort_level") | not)' "$skill_creator_cases" >/dev/null \
+        && jq -e '[.cases[].id] as $ids | ($ids | index("assess-existing-skill-without-authoring")) and ($ids | index("refresh-guidance-is-read-only-and-provenance-bound"))' "$skill_creator_cases" >/dev/null; then
     pass
 else
-    fail "assistant-skill-creator did not define v2 activation examples and legacy header exclusions"
+    fail "assistant-skill-creator did not define v3 activation evidence and legacy header exclusions"
 fi
 
-test_start "assistant-skill-creator requires activation evidence while deriving before residual prompts"
+test_start "assistant-skill-creator v3 isolates operations and carries canonical verification"
+if ruby -ryaml -e '
+    input = YAML.load_file(ARGV.fetch(0))
+    output = YAML.load_file(ARGV.fetch(1))
+    index = YAML.load_file(ARGV.fetch(2))
+    operation = input.fetch("fields").find { |field| field["name"] == "operation" }
+    fields = input.fetch("fields").to_h { |field| [field["name"], field] }
+    artifacts = output.fetch("artifacts").to_h { |artifact| [artifact["name"], artifact] }
+    phase_selector = index.fetch("load_sets").fetch("current_phase").fetch("selectors").find { |selector| selector["id"] == "skill-creator-current-operation-phase" }
+    expected_operations = %w[create update assess refresh_guidance]
+    exit operation["enum_values"] == expected_operations &&
+      fields.fetch("activation_examples")["required"] == "conditional" &&
+      fields.fetch("activation_examples")["condition"].include?("operation in [create, update]") &&
+      fields.fetch("assessment_goal")["condition"] == "operation == assess" &&
+      fields.fetch("guidance_scope")["condition"] == "operation == refresh_guidance" &&
+      artifacts.fetch("operation_summary")["required"] == true &&
+      artifacts.fetch("evidence_assessment")["required"] == true &&
+      artifacts.fetch("verification_decision")["condition"].include?("canonical assistant-verification selection") &&
+      phase_selector.fetch("allowed_names").include?("ASSESS") &&
+      phase_selector.fetch("allowed_names").include?("REFRESH_GUIDANCE") ? 0 : 1
+' "$skill_creator_input" "$skill_creator_output" "$skill_creator_index"; then
+    pass
+else
+    fail "assistant-skill-creator v3 operation requiredness or canonical evidence binding is incomplete"
+fi
+
+test_start "assistant-skill-creator requires activation evidence only for authored targets"
 if ruby -ryaml -e '
     field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "activation_examples" }
     index = YAML.load_file(ARGV.fetch(1))
-    names = index.fetch("load_sets").fetch("entry").fetch("selectors").find { |selector| selector["id"] == "skill-creator-entry-fields" }.fetch("names")
+    entry_names = index.fetch("load_sets").fetch("entry").fetch("selectors").find { |selector| selector["id"] == "skill-creator-entry-fields" }.fetch("names")
+    authoring_names = index.fetch("load_sets").fetch("authoring_inputs").fetch("selectors").find { |selector| selector["id"] == "skill-creator-authoring-fields" }.fetch("names")
     validation = field.fetch("validation")
     prompt = field.fetch("ask_prompt")
-    exit field["required"] == true && !field.key?("condition") && field.fetch("on_missing") == "ask" &&
+    exit field["required"] == "conditional" && field.fetch("condition").include?("operation in [create, update]") && field.fetch("on_missing") == "ask" &&
       validation.include?("2 distinct") && prompt.include?("For a new skill") &&
-      prompt.include?("For existing_skill_path") && prompt.include?("only for remaining material gaps") &&
-      names.index("existing_skill_path") < names.index("activation_examples") ? 0 : 1
+      prompt.match?(/For (?:existing_skill_path|an existing skill), .*inspect.*description.*evals.*derive.*only for remaining material gaps/) && prompt.include?("only for remaining material gaps") &&
+      entry_names.include?("existing_skill_path") && !entry_names.include?("activation_examples") && authoring_names.include?("activation_examples") ? 0 : 1
 ' "$skill_creator_input" "$skill_creator_index"; then
     pass
 else
-    fail "activation_examples does not remain required while modeling derive-first existing-skill recovery"
+    fail "activation_examples is not operation-scoped with derive-first existing-skill recovery"
 fi
 
 test_start "assistant-skill-creator preserves existing dependencies unless explicitly replaced"
 if ruby -ryaml -e '
     field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "dependencies" }
-    inference = field.fetch("infer_from")
+    inference = field.fetch("infer_from").downcase
+    gates = YAML.load_file(ARGV.fetch(1)).fetch("gates")
+    build = gates.find { |gate| gate["phase"] == "BUILD" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "SB1" }.fetch("check")
+    skill_md = YAML.load_file(ARGV.fetch(2)).fetch("artifacts").find { |artifact| artifact["name"] == "skill_md" }.fetch("validation")
     exit field["on_missing"] == "infer" && !field.key?("default") &&
-      inference.include?("existing_skill_path") && inference.include?("preserve") &&
-      inference.include?("explicit") && inference.include?("new skill") ? 0 : 1
-' "$skill_creator_input" \
-    && ruby -e '
-        prose = File.read(ARGV.fetch(0)).gsub(/\s+/, " ")
-        exit prose.include?("When updating an existing skill and dependencies are omitted, preserve its current canonical requires.") &&
-          prose.include?("Explicit dependencies, including an explicit empty list, replace or remove current requires") ? 0 : 1
-    ' "$skill_creator_skill" \
-    && grep -Fq 'preserve current canonical requires when dependencies are omitted' "$skill_creator_gates" \
+      field["condition"].include?("operation in [create, update]") &&
+      inference.include?("for an update") && inference.include?("preserve current canonical requires when omitted") &&
+      inference.include?("explicit") && inference.include?("new skill") &&
+      build.include?("current canonical requires unless explicitly changed") &&
+      skill_md.include?("preserve omitted update dependencies") ? 0 : 1
+' "$skill_creator_input" "$skill_creator_gates" "$skill_creator_output" \
     && jq -e '
         .cases[] | select(.id == "existing-skill-validation-enforces-checklist")
         | (.setup_context | join(" ") | contains("current canonical requires"))
@@ -1258,9 +1316,13 @@ fi
 test_start "assistant-skill-creator category inference is process-first and ordered"
 if ruby -ryaml -e '
     field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "skill_category" }
+    validation = field.fetch("validation")
     inference = field.fetch("infer_from")
     process_terms = %w[workflow pipeline multi-phase subagent dispatch handoff]
     analysis_terms = %w[analyze analysis reason research diverge converge]
+    process_position = validation.index("Process-first inference:")
+    analysis_position = validation.index("otherwise analyze")
+    utility_position = validation.index("else utility")
     infer_category = lambda do |purpose|
       normalized = purpose.downcase
       if process_terms.any? { |term| normalized.include?(term) }
@@ -1277,8 +1339,10 @@ if ruby -ryaml -e '
       "write API documentation" => "utility",
       "research a workflow handoff" => "process",
     }
-    exit inference.include?("Process first") && process_terms.all? { |term| inference.include?(term) } &&
-      analysis_terms.all? { |term| inference.include?(term) } && inference.include?("else Utility") &&
+    exit field["enum_values"] == %w[process analysis utility] && process_position && analysis_position && utility_position &&
+      process_position < analysis_position && analysis_position < utility_position &&
+      process_terms.all? { |term| validation.include?(term) } && analysis_terms.all? { |term| validation.include?(term) } &&
+      inference.include?("skill purpose") && inference.include?("Process-first category inference") &&
       representative_purposes.all? { |purpose, expected| infer_category.call(purpose) == expected } ? 0 : 1
 ' "$skill_creator_input"; then
     pass
@@ -1588,17 +1652,14 @@ fi
 
 test_start "assistant-skill-creator activation eval rejects a response missing activation evidence"
 creator_activation_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-creator-activation-eval.XXXXXX")"
-creator_activation_skill="$creator_activation_root/assistant-skill-creator"
 creator_activation_responses="$creator_activation_root/responses"
 creator_activation_output="$creator_activation_root/output"
 p0p4_register_cleanup "$creator_activation_root"
-mkdir -p "$creator_activation_skill/evals" "$creator_activation_responses/assistant-skill-creator"
-cp "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md" "$creator_activation_skill/SKILL.md"
-jq '.cases = [.cases[] | select(.id == "new-process-skill-designs-contracts-before-build")]' "$skill_creator_cases" >"$creator_activation_skill/evals/cases.json"
-while IFS= read -r required; do
-    [[ "$required" == "activation_examples" ]] && continue
-    printf '%s\n' "$required"
-done < <(jq -r '.cases[0].machine_expectations.required_substrings[]' "$creator_activation_skill/evals/cases.json") >"$creator_activation_responses/assistant-skill-creator/new-process-skill-designs-contracts-before-build.txt"
+p0p4_write_creator_bound_response_fixtures "$creator_activation_responses"
+creator_activation_skill="$creator_activation_responses/.creator-bound/assistant-skill-creator"
+creator_activation_response="$creator_activation_responses/assistant-skill-creator/new-process-skill-designs-contracts-before-build.txt"
+jq --arg missing "activation_examples" '.summary = (.summary | gsub($missing; ""))' "$creator_activation_response" >"$creator_activation_output"
+mv "$creator_activation_output" "$creator_activation_response"
 if "$skill_eval_runner" --responses "$creator_activation_responses" --skill "$creator_activation_skill" >"$creator_activation_output" 2>&1; then
     fail "assistant-skill-creator activation eval accepted a response missing activation_examples"
 elif grep -Fq 'missing_required_substrings=1' "$creator_activation_output" \
@@ -1610,17 +1671,16 @@ fi
 
 test_start "assistant-skill-creator existing-skill eval rejects missing negative activation evidence"
 existing_activation_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-creator-existing-activation-eval.XXXXXX")"
-existing_activation_skill="$existing_activation_root/assistant-skill-creator"
 existing_activation_responses="$existing_activation_root/responses"
 existing_activation_output="$existing_activation_root/output"
 p0p4_register_cleanup "$existing_activation_root"
-mkdir -p "$existing_activation_skill/evals" "$existing_activation_responses/assistant-skill-creator"
-cp "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md" "$existing_activation_skill/SKILL.md"
-jq '.cases = [.cases[] | select(.id == "existing-skill-validation-enforces-checklist")]' "$skill_creator_cases" >"$existing_activation_skill/evals/cases.json"
+p0p4_write_creator_bound_response_fixtures "$existing_activation_responses"
+existing_activation_skill="$existing_activation_responses/.creator-bound/assistant-skill-creator"
+existing_activation_response="$existing_activation_responses/assistant-skill-creator/existing-skill-validation-enforces-checklist.txt"
 while IFS= read -r required; do
     [[ "$required" == "should_activate: false" ]] && continue
     printf '%s\n' "$required"
-done < <(jq -r '.cases[0].machine_expectations.required_substrings[]' "$existing_activation_skill/evals/cases.json") >"$existing_activation_responses/assistant-skill-creator/existing-skill-validation-enforces-checklist.txt"
+done < <(jq -r '.cases[] | select(.id == "existing-skill-validation-enforces-checklist") | .machine_expectations.required_substrings[]' "$skill_creator_cases") >"$existing_activation_response"
 if "$skill_eval_runner" --responses "$existing_activation_responses" --skill "$existing_activation_skill" >"$existing_activation_output" 2>&1; then
     fail "assistant-skill-creator existing-skill eval accepted a response missing negative activation evidence"
 elif grep -Fq 'missing_required_substrings=1' "$existing_activation_output" \
@@ -2405,7 +2465,7 @@ missing_required_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-missing-required-o
 p0p4_register_cleanup "$missing_required_dir" "$missing_required_output"
 omitted_required="$(jq -r '.cases[] | select(.id == "multi-intent-prompt-asks-material-clarification") | .machine_expectations.required_substrings[0]' "$clarify_fixture")"
 p0p4_write_skill_eval_responses "$missing_required_dir" "assistant-clarify" "multi-intent-prompt-asks-material-clarification" "$omitted_required"
-if "$skill_eval_runner" --responses "$missing_required_dir" >"$missing_required_output" 2>&1 \
+if p0p4_run_default_response_grades "$missing_required_dir" >"$missing_required_output" 2>&1 \
     && grep -Fq $'UNAVAILABLE\tassistant-clarify\tmulti-intent-prompt-asks-material-clarification' "$missing_required_output" \
     && ! grep -Fq $'FAIL\tassistant-clarify\tmulti-intent-prompt-asks-material-clarification' "$missing_required_output" \
     && grep -Fq "missing_required_substrings=1" "$missing_required_output"; then
@@ -2421,7 +2481,7 @@ p0p4_register_cleanup "$forbidden_dir" "$forbidden_output"
 forbidden_substring="$(jq -r '.cases[] | select(.id == "multi-intent-prompt-asks-material-clarification") | .machine_expectations.forbidden_substrings[0]' "$clarify_fixture")"
 p0p4_write_skill_eval_responses "$forbidden_dir"
 printf '%s\n' "$forbidden_substring" >>"$forbidden_dir/assistant-clarify/multi-intent-prompt-asks-material-clarification.txt"
-if "$skill_eval_runner" --responses "$forbidden_dir" >"$forbidden_output" 2>&1 \
+if p0p4_run_default_response_grades "$forbidden_dir" >"$forbidden_output" 2>&1 \
     && grep -Fq $'UNAVAILABLE\tassistant-clarify\tmulti-intent-prompt-asks-material-clarification' "$forbidden_output" \
     && ! grep -Fq $'FAIL\tassistant-clarify\tmulti-intent-prompt-asks-material-clarification' "$forbidden_output" \
     && grep -Fq "forbidden_substring_hits=1" "$forbidden_output"; then
@@ -2451,7 +2511,7 @@ remove = {
 lines = [line for line in path.read_text().splitlines() if line not in remove]
 path.write_text("\n".join(lines) + "\n")
 PYSEED
-if "$skill_eval_runner" --responses "$seeded_dir" >"$seeded_output" 2>&1; then
+if p0p4_run_default_response_grades "$seeded_dir" >"$seeded_output" 2>&1; then
     fail "skill eval runner --responses unexpectedly passed with missing seeded defect anchors"
 elif grep -Fq $'FAIL	assistant-review	code-review-checks-behavioral-contracts' "$seeded_output" \
     && grep -Fq "seeded defect assertion failure" "$seeded_output" \
@@ -2474,7 +2534,7 @@ p0p4_write_skill_eval_responses "$false_positive_dir"
     printf '%s
 ' "unrelated architectural rewrite"
 } >>"$false_positive_dir/assistant-review/code-review-checks-behavioral-contracts.txt"
-if "$skill_eval_runner" --responses "$false_positive_dir" >"$false_positive_output" 2>&1; then
+if p0p4_run_default_response_grades "$false_positive_dir" >"$false_positive_output" 2>&1; then
     fail "skill eval runner --responses unexpectedly passed with false positive markers above budget"
 elif grep -Fq $'FAIL	assistant-review	code-review-checks-behavioral-contracts' "$false_positive_output"     && grep -Fq "false positive marker budget failure" "$false_positive_output"     && grep -Fq "false_positive_marker_failures=" "$false_positive_output"; then
     pass
@@ -2509,7 +2569,7 @@ passing_response_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-passing.XXXXXX")"
 passing_response_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-passing-output.XXXXXX")"
 p0p4_register_cleanup "$passing_response_dir" "$passing_response_output"
 p0p4_write_skill_eval_responses "$passing_response_dir"
-if "$skill_eval_runner" --responses "$passing_response_dir" >"$passing_response_output" 2>&1 \
+if p0p4_run_default_response_grades "$passing_response_dir" >"$passing_response_output" 2>&1 \
     && grep -Fq "Summary: total=$default_case_count passed=$nonclarification_case_count failed=0 unavailable=$clarification_case_count" "$passing_response_output" \
     && ! grep -Fq $'PASS\tassistant-clarify' "$passing_response_output" \
     && grep -Fq $'UNAVAILABLE\tassistant-clarify' "$passing_response_output" \

@@ -16,6 +16,19 @@ assistant_research_five_lens_v3_valid() {
     local case_id="$3"
     node "$semantic_validator_dir/research-semantic-validator.cjs" "$response_path" "$fixture_file" "$case_id"
 }
+
+assistant_skill_creator_behavior_v1_valid() {
+    local response_path="$1"
+    local fixture_file="$2"
+    local case_id="$3"
+    if [[ -n "${CREATOR_RUN_BINDINGS_FILE:-}" ]]; then
+        node "$semantic_validator_dir/skill-creator-semantic-validator.cjs" "$response_path" "$fixture_file" "$case_id" \
+            --creator-run-bindings "$CREATOR_RUN_BINDINGS_FILE" "$CREATOR_RUN_BINDINGS_SHA256"
+    else
+        node "$semantic_validator_dir/skill-creator-semantic-validator.cjs" "$response_path" "$fixture_file" "$case_id"
+    fi
+}
+
 run_semantic_validator() {
     local validator_id="$1"
     local response_path="$2"
@@ -24,6 +37,7 @@ run_semantic_validator() {
 
     case "$validator_id" in
         assistant-research.five_lens_v3) assistant_research_five_lens_v3_valid "$response_path" "$fixture_file" "$case_id" ;;
+        assistant-skill-creator.behavior_v1) assistant_skill_creator_behavior_v1_valid "$response_path" "$fixture_file" "$case_id" ;;
         *)
             echo "Unknown semantic validator: $validator_id" >&2
             return 1

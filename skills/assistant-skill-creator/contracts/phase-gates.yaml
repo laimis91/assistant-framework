@@ -1,7 +1,7 @@
 # Assistant Skill Creator Phase Gates
-# Binary assertions checked at every phase transition.
+# Run only the gates that belong to the selected operation.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: phase-gates
 skill: assistant-skill-creator
 
@@ -9,155 +9,177 @@ gates:
   - phase: CAPTURE
     checkpoint_start: "--- PHASE: CAPTURE ---"
     checkpoint_end: "--- PHASE: CAPTURE COMPLETE ---"
-    condition: "existing_skill_path is not provided"
+    condition: "operation in [create, update]"
     exit_assertions:
-      - id: SC1a
-        check: "skill_name is defined"
-        on_fail: "Ask the user to provide a skill name"
-      - id: SC1b
-        check: "skill_name follows kebab-case with a domain prefix"
-        on_fail: "Ask the user to reformat the name as kebab-case with domain prefix (e.g., assistant-foo)"
+      - id: SC1
+        check: "The target skill name and path are resolved"
+        on_fail: "Ask for the new name or inspect the named existing target"
       - id: SC2
-        check: "skill_purpose is a concrete one-sentence description"
-        on_fail: "Ask the user to refine the purpose into one actionable sentence"
+        check: "skill_purpose is a concrete outcome"
+        on_fail: "Infer from the existing target or ask for the missing outcome"
       - id: SC3
-        check: "skill_category follows Process-first inference: workflow, pipeline, multi-phase, subagent, dispatch, handoff, or handoffs select process; then analyze, analysis, reason, research, diverge, or converge select analysis; otherwise utility"
-        on_fail: "Apply Process-first category inference from purpose or ask the user"
+        check: "skill_category follows Process-first inference"
+        on_fail: "Infer the category from the target purpose or ask only when contract tier changes"
       - id: SC4
-        check: "Activation examples include 2 normalized-distinct should_activate=true requests and 1 normalized-disjoint should_activate=false nearby non-match for description and positive and negative activation eval design"
-        on_fail: "Ask for normalized-distinct positive and normalized-disjoint negative activation decisions"
+        check: "Authoring activation evidence contains two normalized-distinct positives and one normalized-disjoint nearby negative"
+        on_fail: "Inspect existing description and activation evals, derive adequate examples, and ask only for remaining material gaps"
+      - id: SC5
+        check: "The requested value kind is identified before extensive authoring"
+        condition: "authoring is extensive or a capability improvement is claimed"
+        on_fail: "Classify the request as capability, preference, or mixed from available evidence; ask only if material"
+      - id: SC6
+        check: "Success criteria are grounded in stated requirements, existing acceptance, or demonstrated gaps"
+        condition: "authoring is extensive or a capability improvement is claimed"
+        on_fail: "Derive criteria from available evidence or ask for unresolved outcome-shaping criteria"
+      - id: SC7
+        check: "For new/material authoring with an expired relevant assessment, or any known relevant source/runtime change, check only registered IDs and preserve actual status and identity"
+        condition: "operation in [create, update] and (((authoring is new or materially changed) and a relevant registered assessment has expired) or a relevant source/runtime change is known)"
+        on_fail: "Use authoring_freshness with registered IDs from affected_refs; follow references/upstream-guidance.md for reuse and source-dependent stops"
 
   - phase: DESIGN
     checkpoint_start: "--- PHASE: DESIGN ---"
     checkpoint_end: "--- PHASE: DESIGN COMPLETE ---"
+    condition: "operation in [create, update]"
     exit_assertions:
       - id: SD0
-        check: "Required activation_examples include 2 normalized-distinct should_activate=true requests and 1 normalized-disjoint should_activate=false nearby non-match before DESIGN completion; for existing_skill_path, inspect existing description and activation evals first, derive adequate structured examples, then ask only for remaining material gaps"
-        on_fail: "Derive adequate activation examples, then ask only residual gaps with normalized-distinct positive and normalized-disjoint negative decisions"
-      - id: SD1a
-        check: "Input contract has at least 3 fields"
-        on_fail: "Add more input fields — minimum 3 per SKILL.md guidance"
-      - id: SD1b
-        check: "Every input field has a type declaration"
-        on_fail: "Add type to each input field missing one"
-      - id: SD1c
+        check: "Activation examples satisfy the author's normalized positive and nearby negative requirement before DESIGN completion"
+        on_fail: "Derive adequate existing examples, then ask only for residual activation gaps"
+      - id: SD1
+        check: "Every input field declares a type"
+        on_fail: "Add a semantic type or a justified primitive boundary"
+      - id: SD2
         check: "Every required input field has an on_missing action"
-        on_fail: "Add on_missing action to each required field missing one"
-      - id: SD2a
-        check: "Output contract has at least 2 artifacts"
-        on_fail: "Add more output artifacts — minimum 2 per SKILL.md guidance"
-      - id: SD2b
-        check: "Every required output artifact has an on_fail action"
-        on_fail: "Add on_fail action to each required artifact missing one"
+        on_fail: "Add an actionable recovery action to each required field"
       - id: SD3
-        check: "Phase gates are designed for each phase"
-        condition: "skill_category is process or analysis"
-        on_fail: "Design at least one gate assertion per phase"
+        check: "Every required output artifact has an on_fail action"
+        on_fail: "Add an actionable recovery action to each required artifact"
       - id: SD4
-        check: "Handoff schemas are designed with matching context_fields and return_fields"
-        condition: "skill_category is process"
-        on_fail: "Design handoff schemas with explicit field matching"
+        check: "Analysis and Process targets have gates for each phase"
+        condition: "skill_category is process or analysis"
+        on_fail: "Add only the binary gates needed for the target workflow"
       - id: SD5
-        check: "User has reviewed and approved the contract design, unless this is a small low-risk edit to an existing skill with explicit direction and reversible changes"
-        on_fail: "Present the design to the user and wait for approval, or record why the small-edit exception applies"
+        check: "Process targets have matching typed handoffs"
+        condition: "skill_category is process"
+        on_fail: "Define matching producer and consumer fields for each necessary handoff"
       - id: SD6
-        check: "Policy/runtime assumptions are explicit, optional/configurable, and have fallback behavior"
-        on_fail: "Add company-safe constraints and fallback behavior for memory, metrics, automation, subagents, state paths, external tools, and sensitive examples"
+        check: "The user has reviewed new or materially changed contract design before BUILD"
+        condition: "design is new or materially changed"
+        on_fail: "Present the design for approval before BUILD; record the small reversible explicit-direction exception when applicable"
       - id: SD7
-        check: "Domain/public/lifecycle/unit/extension-bearing interfaces use named semantic types, every primitive exception has a stated boundary plus conversion/validation, and any control/resource/extension abstraction has a representative path with applicable early-exit, ownership/disposal, bounded-resource, and registration checks"
-        on_fail: "Replace generic interface primitives with semantic types or document the permitted local temporary, wire/storage, foreign/framework, or no-domain-semantics exception and its validation boundary; add a representative path and applicable design-pressure checks before approving a generic engine or interface"
-
+        check: "Policy and host assumptions have applicable safe fallbacks"
+        on_fail: "Make assumptions optional/configurable or report the host limitation"
+      - id: SD8
+        check: "Meaning-bearing interfaces use named semantic types, primitive exceptions record their boundary and conversion or validation, and control, resource, or extension abstractions have a representative producer-consumer path with applicable early-exit, ownership/disposal, bounded-resource, and registration checks"
+        on_fail: "Use named semantic types or record the permitted primitive exception, boundary conversion and validation, representative path, and applicable design-pressure checks"
+      - id: SD9
+        check: "No fixed input-field or output-artifact count is used to justify contract design"
+        on_fail: "Remove count-driven fields and artifacts; retain only outcome-relevant items"
 
   - phase: VERIFIED_DISTILLATION
     checkpoint_start: "--- PHASE: VERIFIED DISTILLATION ---"
     checkpoint_end: "--- PHASE: VERIFIED DISTILLATION COMPLETE ---"
-    condition: "creating or updating a skill from a completed workflow, review lesson, reusable procedure, or user-requested skill save"
+    condition: "operation in [create, update] and content derives from a completed workflow, review lesson, reusable procedure, or user-requested skill save"
     exit_assertions:
       - id: DISTILLATION1
-        check: "distillation_verification exists and verifier_result is approved before skill files are written"
-        on_fail: "Do not write the skill; load references/verified-skill-distillation.md and request verifier approval or return revision checklist"
+        check: "distillation_verification exists and verifier_result is approved before target skill files are written"
+        on_fail: "Do not write target files; load references/verified-skill-distillation.md and request approval or return a revision checklist"
       - id: DISTILLATION2
-        check: "distillation_verification includes candidate workflow, inputs, process steps, output artifact, verification gate, learned constraints, scope/non-goals, evidence, verifier result, and promotion decision"
-        on_fail: "Return the missing packet fields for revision before creating or updating skill files"
+        check: "The approved distillation packet includes candidate workflow, inputs, process steps, output, verification gate, constraints, scope, evidence, and promotion decision"
+        on_fail: "Return missing packet fields for revision before authoring"
 
   - phase: BUILD
     checkpoint_start: "--- PHASE: BUILD ---"
     checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
+    condition: "operation in [create, update]"
     exit_assertions:
       - id: SB1
-        check: "SKILL.md exists with required name and non-empty description, optional requires only when validated hard dependencies are non-empty and ordered as a plain block sequence with two-space dash items; preserve current canonical requires when dependencies are omitted for an existing skill, and let explicit dependencies including an empty list replace or remove them; inline, empty, or quoted `requires` forms are rejected; legacy top-level `effort` and `triggers` keys are rejected"
-        on_fail: "Create or fix SKILL.md frontmatter with name and description; preserve existing requires when dependencies are omitted, project explicit validated hard dependencies to ordered optional requires only when non-empty as a plain block sequence, remove requires for an explicit empty list, and remove inline, empty, or quoted `requires` forms and legacy top-level `effort` and `triggers` keys"
+        check: "The target SKILL.md has a valid name and description, preserves supported metadata and current canonical requires unless explicitly changed, rejects inline, empty, or quoted `requires` forms, and rejects legacy top-level `effort` and `triggers` keys"
+        on_fail: "Correct target metadata while preserving unrelated fields, policy, and omitted dependencies"
       - id: SB2
-        check: "contracts/input.yaml exists with schema_version header"
-        on_fail: "Create input.yaml with proper header"
+        check: "The target contracts contain only artifacts needed by the requested outcome"
+        on_fail: "Remove fabricated or unnecessary contract artifacts"
       - id: SB3
-        check: "contracts/output.yaml exists with schema_version header"
-        on_fail: "Create output.yaml with proper header"
-      - id: SB4
-        check: "contracts/phase-gates.yaml exists"
+        check: "Analysis and Process targets include phase gates"
         condition: "skill_category is process or analysis"
-        on_fail: "Create phase-gates.yaml"
-      - id: SB5
-        check: "contracts/handoffs.yaml exists"
+        on_fail: "Create the required phase-gates contract"
+      - id: SB4
+        check: "Process targets include matching handoffs"
         condition: "skill_category is process"
-        on_fail: "Create handoffs.yaml"
+        on_fail: "Create necessary typed handoffs or correct the category"
 
   - phase: VALIDATE
     checkpoint_start: "--- PHASE: VALIDATE ---"
     checkpoint_end: "--- PHASE: VALIDATE COMPLETE ---"
+    condition: "operation in [create, update]"
     exit_assertions:
-      - id: SV1a
-        check: "Every required field has an on_missing action"
-        on_fail: "Add on_missing actions to required fields that lack them"
-      - id: SV1b
-        check: "Every enum field lists all valid values"
-        on_fail: "Add enum_values to enum fields with missing or open-ended values"
-      - id: SV1c
-        check: "All validation rules are plain English"
-        on_fail: "Rewrite validation rules that contain regex, code, or framework syntax"
-      - id: SV1d
-        check: "All phase gate assertions are binary"
-        on_fail: "Split compound assertions into individual binary checks"
-      - id: SV1e
-        check: "Handoff return_fields satisfy consumer context_fields"
-        condition: "skill_category is process"
-        on_fail: "Align producer return_fields with consumer context_fields"
-      - id: SV1f
-        check: "All corrective actions are actionable"
-        on_fail: "Replace vague on_fail actions with specific recovery steps"
-      - id: SV1g
-        check: "No previously required fields have been removed unless a documented major schema migration updates consumers, evals, and generated mirrors"
-        condition: "skill has a prior version and the removal is not the approved v2.0 header-metadata migration"
-        on_fail: "Restore removed required fields or document the major schema migration and update consumers, evals, and generated mirrors"
-      - id: SV1h
-        check: "Conditional fields use condition: syntax"
-        on_fail: "Add condition: to fields that only apply in certain contexts"
-      - id: SV1i
-        check: "Ambiguous fields have examples:"
-        on_fail: "Add at least 2 realistic examples to ambiguous fields"
-      - id: SV1j
-        check: "At least one cross-phase invariant exists"
-        condition: "skill_category is process or analysis"
-        on_fail: "Add at least one invariant with scope: all_phases"
-      - id: SV1k
-        check: "Semantic interface types, primitive exceptions, and applicable representative-path/design-pressure checks comply with Rule 13"
-        on_fail: "Add named semantic types where meaning is erased, or document the permitted exception, conversion/validation, public-contract evolution plan, and applicable early-exit/ownership/resource/registration evidence"
-      - id: SV1l
-        check: "Hard dependencies are unique non-empty kebab-case skill names, exclude skill_name, project explicit values in order to optional requires only when non-empty as a plain block sequence with two-space dash items, and preserve current canonical requires for an existing skill when dependencies are omitted"
-        on_fail: "Correct hard dependencies, preserve omitted existing requires, and apply canonical block-sequence requires projection before completion"
+      - id: SV1
+        check: "All 15 applicable contract design guide rules pass"
+        on_fail: "Correct the applicable rule failures and validate again"
       - id: SV2
-        check: "SKILL.md body is under 500 lines"
-        on_fail: "Split content into sub-files under references/"
+        check: "Target metadata respects current name, description, compatibility, and dependency behavior"
+        on_fail: "Preserve supported fields and validate exact standard metadata limits"
       - id: SV3
-        check: "No hidden runtime-specific assumptions, mandatory external tools, hardcoded state paths, or sensitive examples are present unless explicitly scoped and policy-gated"
-        on_fail: "Make assumptions optional/configurable, add fallback behavior, replace hardcoded paths with placeholders, or remove sensitive examples"
+        check: "Structural validity, host activation, and post-activation behavior are reported as separate claims"
+        on_fail: "Report only evidence available for each distinct claim"
+      - id: SV4
+        check: "Canonical verification_decision and evidence_assessment outputs are carried unchanged when applicable"
+        on_fail: "Use assistant-verification/contracts/output.yaml without a local replacement schema"
+      - id: SV5
+        check: "For shared impacts, source identity and current valid pre-build evidence are preserved, completion has verification and review evidence, and missing loaded-path runtimes remain blockers"
+        condition: "change impact is shared or unresolved"
+        on_fail: "Preserve identity-bound impact evidence and report missing runtime or completion evidence as an open blocker"
+      - id: SV6
+        check: "When a creator behavior fixture runs, operation claims bind to its independent run capture; authored outputs match actual bytes and successful writes, updates bind unchanged target files, and read-only outcomes contain no writes"
+        condition: "a creator behavior fixture is being evaluated"
+        on_fail: "Load the behavioral_evaluation set from contracts/index.yaml and report only artifact and trace evidence that the fixture collector independently captured"
+
+  - phase: ASSESS
+    checkpoint_start: "--- PHASE: ASSESS ---"
+    checkpoint_end: "--- PHASE: ASSESS COMPLETE ---"
+    condition: "operation == assess"
+    exit_assertions:
+      - id: SA1
+        check: "The named target and assessment goal are defined"
+        on_fail: "Resolve the target and ask for the missing assessment boundary"
+      - id: SA2
+        check: "Assessment findings cite accessible evidence and disclose gaps"
+        on_fail: "Inspect available target evidence or report the access gap"
+      - id: SA3
+        check: "No target skill files are written"
+        on_fail: "Discard proposed writes and return read-only findings"
+
+  - phase: REFRESH_GUIDANCE
+    checkpoint_start: "--- PHASE: REFRESH GUIDANCE ---"
+    checkpoint_end: "--- PHASE: REFRESH GUIDANCE COMPLETE ---"
+    condition: "operation == refresh_guidance"
+    exit_assertions:
+      - id: SR1
+        check: "The requested source scope is explicit"
+        on_fail: "Ask which source or guidance scope to inspect"
+      - id: SR2
+        check: "The source ID, checked time, last-assessed identity, relevance, disposition, affected consumers, retrieval state, and configured limits are reported with unknowns explicit"
+        on_fail: "Record accessible provenance and mark unavailable values honestly"
+      - id: SR3
+        check: "Current is limited to complete bytes matching a recent assessment at the same configured source path; changed, expired, partial, and inaccessible results stay distinct, and retrieval never changes adoption"
+        on_fail: "Separate retrieval, freshness assessment, and adoption; preserve the prior disposition"
+      - id: SR4
+        check: "The refresh operation writes no target skill files, registry dispositions, settings, or schedules; the checker only returns a report"
+        on_fail: "Discard proposed mutations and return a read-only source assessment"
 
 invariants:
   - id: INV1
-    check: "All YAML contract files have schema_version, contract, and skill headers"
+    check: "All creator contract files use schema_version 3.0 and declare contract and skill"
     scope: all_phases
-    on_fail: "Add missing headers to the contract file"
+    on_fail: "Correct the creator contract headers"
   - id: INV2
-    check: "No enum field has open-ended values — all enums list explicit values"
+    check: "Every enum declares its complete bounded value list"
     scope: all_phases
-    on_fail: "Replace open-ended enum with explicit value list"
+    on_fail: "Add the complete explicit enum values"
+  - id: INV3
+    check: "Assess and refresh_guidance never require or write target skill artifacts"
+    scope: all_phases
+    on_fail: "Route the operation through read-only outputs and remove authoring artifacts"
+  - id: INV4
+    check: "Update preserves target name, supported metadata, policy, and canonical dependencies unless explicitly changed"
+    scope: all_phases
+    on_fail: "Restore omitted target metadata and dependency values"

@@ -1,133 +1,82 @@
 ---
 name: assistant-skill-creator
-description: "Create or update V1 skills and contracts. Use for skill scaffolding, contract design, or contract-compliance validation."
+description: "Create, update, or assess V1 skills, or check registered upstream guidance read-only. Use for skill contracts, compliance, or authoring."
+requires:
+  - assistant-verification
 ---
 
 # Skill Creator
 
 ## Goal
 
-Create compact V1 skills with precise routing, typed boundaries, safe fallback,
-and offline validation.
+Create concise V1 skills with precise routing, typed boundaries, safe fallback,
+and evidence matched to the requested operation.
 
 ## Success Criteria
 
-- The skill uses the correct Process, Analysis, or Utility contract tier.
-- Headers contain required `name` and non-empty `description`; optional
-  `requires` is a plain block sequence for validated hard dependencies only.
-- Root instructions state Goal, Success Criteria, Constraints, Output, and Stop Rules.
-- Missing inputs ask only when outcome-shaping and otherwise infer, skip, or fail.
-- Preserve domain, public-contract, lifecycle, and unit semantics with named
-  types; allow primitives only at an explicit validated boundary.
-- Evals cover positive routing plus a false-positive or unsafe behavior case.
+- Route create, update, assess, and refresh_guidance without requiring authoring artifacts for read-only work.
+- Use the correct Process, Analysis, or Utility contract tier; this skill is Analysis and has no handoffs.
+- Preserve a target skill's name, supported metadata, policy, and canonical dependencies unless the user explicitly changes them.
+- Define the value kind and evidence-backed success criteria before extensive authoring or a capability-improvement claim.
+- Reuse assistant-verification's canonical selection and evidence assessment unchanged.
+- Keep structural validity, explicit loading, implicit native selection, and post-activation behavior as separate claims.
 
 ## Constraints
 
-- Keep root `SKILL.md` concise and move detail to on-demand references.
-- Analysis and Utility skills do not gain subagent handoffs.
-- Resources and state stay optional/configurable and policy-gated unless owned.
-- Ask every material question by topic with why/risk/default; no fixed quota.
-- Keep examples agent-agnostic and free of sensitive data.
-
-## Progressive Contract Loading
-
-Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`, and
-`contracts/phase-gates.yaml`.
-
-Read `contracts/index.yaml` first; load only the active boundary:
-
-- `entry` for purpose, category, activation, dependencies, policy, and path;
-- `current_phase` for CAPTURE through VALIDATE;
-- `contract_design`, `harness_design`, `verified_distillation`, or `validation`
-  only when applicable; and `completion` for the returned artifact.
-
-Missing or invalid selectors fall back to the full named canonical contract. Do
-not load every contract or reference at entry.
-
-The local contract guide is generated from docs/skill-contract-design-guide.md;
-edit the source, then run `tools/skills/sync-skill-contract-guide.sh --apply`.
+- Keep this root compact and outcome-shaped; load detail only from the active contract boundary and relevant references.
+- Preserve existing activation examples and derive adequate examples from a target skill before asking for residual gaps.
+- Require only outcome-relevant fields and artifacts; there are no fixed contract field or output counts.
+- Treat `requires` as a framework hard-dependency extension, `allowed-tools` as experimental, and host behavior as distinct from portable skill behavior.
+- Do not inject `assistant-verification` into generated target skills.
+- Keep source identity, revision or digest when available, check date, retrieval limits, disposition, and affected consumers attached to guidance claims.
+- Shared impacts preserve source identity and gaps, require current valid pre-build evidence before mutation and verification/review at completion, block on missing loaded-path runtimes, and do not escalate from fanout alone.
 
 ## Ownership
 
-assistant-skill-creator owns skill contract design, routing precision, and
-contract validation. Generic workflow may coordinate file edits and review, but
-specialist gates are authoritative.
+assistant-skill-creator owns skill contract design; specialist gates are authoritative.
 
-## Phases
+## Progressive Contract Loading
 
-### CAPTURE
+Read `contracts/index.yaml`; load only `contracts/input.yaml`, `contracts/output.yaml`, `contracts/phase-gates.yaml` (no handoffs), `entry`, and selected operation inputs. Inspect relevant registry dates; route `authoring_freshness` for new/material authoring with expired relevant sources or any known relevant change; refresh asks for missing scope. Load selected gate/completion; invalid selectors fall back to full contract.
 
-Resolve name, existing path, purpose, category, typed activation examples,
-dependencies, and policy. Resolve `existing_skill_path` first. Examples pair
-`user_request` with boolean `should_activate`; they shape native `description`
-and positive/negative activation evals, never header metadata. For an existing
-skill, inspect its description and evals. Derive structured activation examples
-from existing description and activation evals when adequate; ask only for
-remaining material gaps. Before DESIGN, require two distinct normalized
-positives and a normalized-disjoint nearby negative. Dependencies are unique, non-empty kebab-case names, exclude
-the skill, preserve order, and project to optional plain-block `requires`.
-When updating an existing skill and dependencies are omitted, preserve its
-current canonical requires. Explicit dependencies, including an explicit empty
-list, replace or remove current requires; for a new skill, omission infers
-empty.
-Activation examples remain required for new and existing skills; derivation
-changes their recovery path, not their requiredness.
+The local guide is generated from docs/skill-contract-design-guide.md. Edit that canonical source, then run tools/skills/sync-skill-contract-guide.sh --apply.
 
-Contract tiers:
+## v3 Contract Migration
 
-- Utility: input + output
-- Analysis: input + output + phase-gates
-- Process: input + output + phase-gates + handoffs
+An `operation` discriminator scopes v3 inputs; authoring inputs apply only to create/update; `operation_summary` and canonical `evidence_assessment` are required. Refresh or adapt v2 packets before use.
 
-### DESIGN
+For Process targets with multi-round review, QA, optimization, or restart loops, load `harness_design` and apply `references/harness-patterns.md`.
 
-Load `contract_design`. Define typed input/output fields, recovery actions,
-binary phase gates, invariants, and matching handoffs where applicable. Present
-new or materially changed contract design for user review before BUILD. A small,
-reversible existing-skill edit may proceed when direction is already explicit.
-For a Process skill with multi-round review, QA, optimization, or restart loops,
-load `harness_design` and apply `references/harness-patterns.md`: bounded rounds,
-rubric/score progression, drift/stagnation handling, separate generation and
-evaluation, and explicit completion/pivot artifacts.
+## Operation
 
-### VERIFIED_DISTILLATION
+Infer the requested operation; ask only when the choice materially changes the work.
 
-When turning a completed workflow or lesson into a reusable skill, load
-`verified_distillation`. Require `distillation_verification` with
-`verifier_result: approved` before writing. Remove task progress, PR numbers,
-secrets, logs, and stale facts; otherwise return a revision checklist.
+- **create** and **update** use CAPTURE, DESIGN, optional VERIFIED_DISTILLATION, BUILD, and VALIDATE. Inspect an existing target first. Present new or materially changed contract design for user review before BUILD. A small, reversible update may proceed when direction is already explicit.
+- **assess** reads a named skill against the user's goal and available evidence. Return findings, evidence, and gaps; do not write skill files or require creation inputs.
+- **refresh_guidance** checks explicitly named registered sources read-only with `scripts/check-upstream-guidance.py`. Report its status, identity/date, revision/digest, limits, affected consumers, and prior disposition. A fetch does not change adoption. Never change skills, registry dispositions, settings, or schedules.
 
-### BUILD
+## Authoring
 
-Create `skills/<name>/SKILL.md`, required tier contracts, and focused evals.
-Emit required `name` and non-empty `description`. Project explicit non-empty
-validated dependencies to ordered top-level plain-block `requires`, omit it for
-an explicit empty list, and preserve an existing skill's current canonical
-`requires` when dependencies are omitted. Reject inline, empty, or quoted
-`requires`, and legacy top-level `effort` and `triggers`. Reuse templates; add
-references only when they reduce root load.
+For create/update, inspect the existing skill before proposing changes. Derive name, purpose, category, current metadata, dependencies, description, and activation evidence from the target where possible. Derive structured activation examples from the existing description and activation evals when adequate; ask only for remaining material gaps. Activation examples pair `user_request` with boolean `should_activate`; they shape the native description and positive/negative activation evals, never header metadata. Before DESIGN, retain two normalized-distinct positives and one normalized-disjoint nearby negative.
 
-### VALIDATE
+Choose Utility, Analysis, or Process from the job. Require only fields and artifacts needed for that outcome. Before extensive authoring, identify whether the requested value is a capability, an encoded preference, or mixed, and define success criteria from stated requirements, existing acceptance, or demonstrated gaps. Do not claim improvement without evidence.
 
-Load `validation`; run the 14 contract design guide rules plus company-safety,
-source validation, eval validation, sync checks, and relevant P0-P4 contracts.
-Fix failures before reporting `VALIDATE COMPLETE`.
+Keep metadata rules aligned with current validation: name is 1–64 ASCII lowercase letters, digits, and single hyphens, with no leading, trailing, or repeated hyphen; description is 1–1024 characters; optional compatibility is 1–500 characters. Preserve supported optional metadata and intended invocation policy. For an update, omitted dependencies preserve canonical `requires`; explicit dependencies, including an empty list, replace or remove them. For a new skill, omitted dependencies infer empty. Project validated non-empty hard dependencies to ordered plain block-sequence `requires`; omit it when empty.
 
-## v2.0 Migration
+## Verification and Distillation
 
-This major migration replaces `trigger_phrases` with `activation_examples` and
-removes `effort_level`. Remove top-level `effort` and `triggers`; examples stay
-contract/eval inputs. Non-empty hard dependencies project to plain-block
-`requires` only.
+The creator itself requires `assistant-verification`. Carry these producer outputs unchanged when applicable: `assistant-verification/contracts/output.yaml#verification_decision` and `assistant-verification/contracts/output.yaml#evidence_assessment`. Supply domain checks and actual evidence; do not select twice or create a local replacement schema. Selection and TDD are separate: preserve the carried TddChoice and activate RED only for an intersecting selected check with a meaningful executable oracle.
+
+Structural validation does not prove host activation or outcome quality. Explicit invocation, forced body loading, implicit native selection, and post-activation behavior are different evidence. Bind runtime claims to the observed host, inventory, source identity, and available trace; missing telemetry stays unavailable.
+
+For an offline creator behavior fixture, load the `behavioral_evaluation` set from `contracts/index.yaml` and bind the reported operation to its case, independent run capture, and actual artifact bytes. This fixture evidence does not replace normal operation outputs or the canonical assistant-verification result.
+
+When saving a completed workflow or lesson, load `references/verified-skill-distillation.md` and require `distillation_verification` with `verifier_result: approved` before writing. Remove transient progress, secrets, logs, and stale facts; otherwise return a revision checklist.
 
 ## Output
 
-Return status, changed files, contract tier/summary, validation evidence,
-policy-safety summary, and unresolved gaps.
+Return the operation summary, artifacts required for that operation, validation and policy-safety results where applicable, evidence, and unresolved gaps. Assess and refresh return summaries and canonical evidence without skill artifacts.
 
 ## Stop Rules
 
-- Stop when purpose/category ambiguity changes contract shape.
-- Stop before skill work if the canonical contract guide was not read.
-- Stop before BUILD when required design approval or verified distillation is absent.
-- Stop before completion when contracts, evals, validation, or generated sync fail.
+Stop when purpose or category changes contract shape, required design approval or verified distillation is absent, a source-dependent fact is unavailable and affects correctness, or a due contract, fixture, validation, or generated-guide check fails. Validate against all 15 applicable contract design guide rules and the current project policies.

@@ -1186,18 +1186,27 @@ count_structured_json_assertion_failures() {
     local assertion
     local structured_assertion_count
     local failures=0
+    local semantic_validator
 
     if [[ -z "$skill_name" ]]; then
         skill_name="$(jq -r 'if (.skill | type) == "string" then .skill elif (.skill | type) == "object" then .skill.name // .skill_name // empty else .skill_name // empty end' "$fixture_file")"
     fi
 
     structured_assertion_count="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length' "$fixture_file")"
+    if [[ "$skill_name" == "assistant-skill-creator" ]]; then
+        semantic_validator="$(semantic_validator_id_for_case "$fixture_file" "$id")"
+        if [[ "$semantic_validator" != "assistant-skill-creator.behavior_v1" ]]; then
+            if ! node "$REPO_ROOT/tools/evals/lib/skill-creator-semantic-validator.cjs" --validate-ordinary-output "$id" "$response_path" >/dev/null; then
+                failures=$((failures + 1))
+            fi
+        fi
+    fi
 
     if ! jq -e -s 'length == 1' "$response_path" >/dev/null 2>&1; then
         if [[ "$structured_assertion_count" -gt 0 ]]; then
-            printf '1\n'
+            printf '%s\n' "$((failures + 1))"
         else
-            printf '0\n'
+            printf '%s\n' "$failures"
         fi
         return
     fi

@@ -12,6 +12,9 @@ fixture = JSON.parse(File.read(ARGV.fetch(0)))
 skill_name = ARGV.fetch(1)
 contracts_dir = ARGV.fetch(2)
 repo_root = ARGV.fetch(3)
+load_contract_yaml = lambda do |path|
+  YAML.safe_load(File.read(path), permitted_classes: [], permitted_symbols: [], aliases: false)
+end
 
 # Resolve only the two explicitly carried verification producer artifacts.
 # Consumer requiredness stays local; nested types come from their sole owner.
@@ -24,7 +27,7 @@ expand_verification_aliases = lambda do |field|
   if %w[verification_decision evidence_assessment].include?(name) &&
       field["type"] == "object" &&
       field.fetch("validation", "").include?("assistant-verification/contracts/output.yaml##{name}")
-    verification_producer_artifacts ||= YAML.load_file(
+    verification_producer_artifacts ||= load_contract_yaml.call(
       File.join(repo_root, "skills", "assistant-verification", "contracts", "output.yaml")
     ).fetch("artifacts")
     matches = verification_producer_artifacts.select { |artifact| artifact["name"] == name }
@@ -47,11 +50,11 @@ end
 
 load_contract_roots = lambda do |directory, include_non_output_roots|
   output_path = File.join(directory, "output.yaml")
-  YAML.load_file(output_path).fetch("artifacts", []).each { |artifact| add_root.call(artifact) } if File.file?(output_path)
+  load_contract_yaml.call(output_path).fetch("artifacts", []).each { |artifact| add_root.call(artifact) } if File.file?(output_path)
   next unless include_non_output_roots
 
   input_path = File.join(directory, "input.yaml")
-  YAML.load_file(input_path).fetch("fields", []).each { |field| add_root.call(field) } if File.file?(input_path)
+  load_contract_yaml.call(input_path).fetch("fields", []).each { |field| add_root.call(field) } if File.file?(input_path)
 
   handoffs_path = File.join(directory, "handoffs.yaml")
   next unless File.file?(handoffs_path)
@@ -70,7 +73,7 @@ load_contract_roots = lambda do |directory, include_non_output_roots|
       node.each { |value| walk_handoffs.call(value) }
     end
   end
-  walk_handoffs.call(YAML.load_file(handoffs_path))
+  walk_handoffs.call(load_contract_yaml.call(handoffs_path))
 end
 
 load_contract_roots.call(contracts_dir, skill_name == "assistant-review")
@@ -115,18 +118,18 @@ end
 eval_only_root_registry.fetch(skill_name, []).each do |selector|
   selected = case selector.fetch("kind")
              when "input_field"
-               input = YAML.load_file(File.join(contracts_dir, "input.yaml"))
+               input = load_contract_yaml.call(File.join(contracts_dir, "input.yaml"))
                input.fetch("fields", []).select { |field| field["name"] == selector.fetch("name") }
              when "handoff_field"
                matches = []
-               find_named_fields.call(YAML.load_file(File.join(contracts_dir, "handoffs.yaml")), selector.fetch("name"), matches)
+               find_named_fields.call(load_contract_yaml.call(File.join(contracts_dir, "handoffs.yaml")), selector.fetch("name"), matches)
                matches
              when "output_child"
-               output = YAML.load_file(File.join(contracts_dir, "output.yaml"))
+               output = load_contract_yaml.call(File.join(contracts_dir, "output.yaml"))
                artifact = output.fetch("artifacts", []).find { |field| field["name"] == selector.fetch("artifact") }
                artifact ? artifact.fetch("object_fields", []).select { |field| field["name"] == selector.fetch("name") } : []
              when "output_array_item"
-               output = YAML.load_file(File.join(contracts_dir, "output.yaml"))
+               output = load_contract_yaml.call(File.join(contracts_dir, "output.yaml"))
                artifact = output.fetch("artifacts", []).find { |field| field["name"] == selector.fetch("artifact") }
                if artifact.is_a?(Hash) && artifact["type"] == "object[]" && artifact["object_fields"].is_a?(Array)
                  [artifact.dup.merge("type" => "object")]
@@ -274,7 +277,7 @@ external_producer_root_aliases.fetch(skill_name, {}).each do |alias_name, alias_
   producer_output = File.join(repo_root, "skills", producer_skill, "contracts", "output.yaml")
   next unless File.file?(producer_output)
 
-  artifact = YAML.load_file(producer_output).fetch("artifacts", []).find { |item| item["name"] == artifact_name }
+  artifact = load_contract_yaml.call(producer_output).fetch("artifacts", []).find { |item| item["name"] == artifact_name }
   if artifact.is_a?(Hash)
     add_root.call(wrap_external_artifact.call(alias_name, artifact))
     external_absent_paths[alias_name] = alias_config.fetch("absent_paths")
@@ -1048,8 +1051,74 @@ validate_fixture() {
             empty
           end;
 
+        def creator_context_valid($context; $index; $case_id; $prompt):
+          if ($context | type) != "object" or ($context | keys | sort) != ["creator_evidence"] then
+            "case[\($index)].semantic_context must contain only creator_evidence"
+          else
+            $context.creator_evidence as $creator
+            | (["allowed_artifacts", "artifact_checks", "assessment_criteria", "comparison_required", "design_required", "expected_outcome", "operation", "preserved_metadata", "preserved_target_files", "required_artifacts", "run_binding", "schema_version", "skill_category", "skill_name"] | sort) as $creator_fields
+            | if ($creator | type) != "object" or ((($creator | keys | sort) != $creator_fields) and (($creator | keys | sort) != ($creator_fields + ["requested_body_change"] | sort))) then
+                "case[\($index)].semantic_context.creator_evidence has invalid fields"
+              elif $creator.schema_version != "1.0" or ($creator.operation as $operation | ["create", "update", "assess", "refresh_guidance"] | index($operation) == null) or ($creator.expected_outcome as $outcome | ["design_pending_approval", "authoring_complete", "read_only_assessment", "read_only_refresh", "comparison_assessment"] | index($outcome) == null) then
+                "case[\($index)].semantic_context.creator_evidence has unsupported version, operation, or outcome"
+              elif ($creator | has("requested_body_change")) and $case_id != "narrow-existing-skill-update-preserves-metadata-and-agent-policy" then
+                "case[\($index)].semantic_context body changes are reserved for the fixed narrow-update case"
+              elif (($creator.operation == "update") != ($creator | has("requested_body_change"))) then
+                "case[\($index)].semantic_context narrow updates must freeze their requested body change"
+              elif ($creator | has("requested_body_change")) and (($creator.requested_body_change | type) != "object" or ($creator.requested_body_change | keys | sort) != ["after_text", "before_text"] or ($creator.requested_body_change.before_text | nonempty_string | not) or ($creator.requested_body_change.after_text | nonempty_string | not) or $creator.requested_body_change.before_text == $creator.requested_body_change.after_text) then
+                "case[\($index)].semantic_context requested body change must have distinct non-empty before_text and after_text"
+              elif ($creator.skill_name | nonempty_string | not) or ($creator.skill_name | test("^[a-z0-9]+(?:-[a-z0-9]+)*$") | not) or ($creator.skill_category as $category | ["process", "analysis", "utility"] | index($category) == null) or ($creator.comparison_required | type) != "boolean" then
+                "case[\($index)].semantic_context.creator_evidence has invalid target, category, or comparison flag"
+              elif $creator.operation == "assess" and $creator.expected_outcome == "read_only_assessment" and ($prompt | contains($creator.skill_name) | not) then
+                "case[\($index)] target skill name must appear in the prompt"
+              elif ($creator.design_required | type) != "boolean" or ($creator.allowed_artifacts | type) != "array" or ($creator.required_artifacts | type) != "array" or ($creator.preserved_metadata | type) != "array" or ($creator.preserved_target_files | type) != "array" or ($creator.artifact_checks | type) != "array" or ($creator.assessment_criteria | type) != "array" then
+                "case[\($index)].semantic_context.creator_evidence artifact and metadata policies must be arrays"
+              elif ($creator.allowed_artifacts | any(.[]; (type != "string") or (test("^(SKILL\\.md|agents/openai\\.yaml|contracts/(input|output|phase-gates|handoffs)\\.yaml|evals/cases\\.json)$") | not))) or ($creator.required_artifacts | any(.[]; (type != "string") or (test("^(SKILL\\.md|agents/openai\\.yaml|contracts/(input|output|phase-gates|handoffs)\\.yaml|evals/cases\\.json)$") | not))) or ($creator.preserved_target_files | any(.[]; (type != "string") or (test("^(SKILL\\.md|agents/openai\\.yaml|contracts/(input|output|phase-gates|handoffs)\\.yaml|evals/cases\\.json)$") | not))) then
+                "case[\($index)].semantic_context.creator_evidence contains an unsupported target path"
+              elif (($creator.allowed_artifacts | length) != ($creator.allowed_artifacts | unique | length)) or (($creator.required_artifacts | length) != ($creator.required_artifacts | unique | length)) or (($creator.preserved_target_files | length) != ($creator.preserved_target_files | unique | length)) or (($creator.preserved_metadata | length) != ($creator.preserved_metadata | unique | length)) or (($creator.assessment_criteria | length) != ($creator.assessment_criteria | unique | length)) or (($creator.artifact_checks | map([.path,.name] | join("#")) | unique | length) != ($creator.artifact_checks | length)) then
+                "case[\($index)].semantic_context.creator_evidence contains duplicate policy values"
+              elif ($creator.required_artifacts - $creator.allowed_artifacts | length) != 0 or ($creator.preserved_target_files - $creator.allowed_artifacts | length) != 0 or ($creator.preserved_metadata - ["name", "description", "compatibility", "license", "metadata", "allowed-tools", "policy", "requires"] | length) != 0 or ($creator.assessment_criteria | any(.[]; nonempty_string | not)) then
+                "case[\($index)].semantic_context.creator_evidence policy is outside its fixed allowlist"
+              elif ($creator.artifact_checks | any(.[]; (type != "object") or (keys | sort) != ["name", "path", "recovery_field", "section", "type"] or (.path as $path | ["contracts/input.yaml", "contracts/output.yaml", "contracts/phase-gates.yaml", "contracts/handoffs.yaml"] | index($path) == null) or (.section as $section | ["fields", "artifacts"] | index($section) == null) or (.recovery_field as $recovery | ["on_missing", "on_fail"] | index($recovery) == null) or (.name | nonempty_string | not) or (.type | nonempty_string | not) or (.path as $path | $creator.required_artifacts | index($path) == null))) then
+                "case[\($index)].semantic_context.creator_evidence content check is not bound to a required contract artifact"
+              elif ($creator.comparison_required != ($creator.expected_outcome == "comparison_assessment")) then
+                "case[\($index)].semantic_context.creator_evidence comparison flag must match the outcome"
+              elif (["design_pending_approval", "authoring_complete"] | index($creator.expected_outcome) != null) and (["create", "update"] | index($creator.operation) == null) then
+                "case[\($index)].semantic_context.creator_evidence authoring outcome requires create or update"
+              elif $creator.expected_outcome == "read_only_assessment" and $creator.operation != "assess" then
+                "case[\($index)].semantic_context.creator_evidence assessment outcome requires assess"
+              elif $creator.expected_outcome == "read_only_refresh" and $creator.operation != "refresh_guidance" then
+                "case[\($index)].semantic_context.creator_evidence refresh outcome requires refresh_guidance"
+              elif $creator.expected_outcome == "comparison_assessment" and $creator.operation != "assess" then
+                "case[\($index)].semantic_context.creator_evidence comparison outcome requires assess"
+              elif (["design_pending_approval", "read_only_assessment", "read_only_refresh", "comparison_assessment"] | index($creator.expected_outcome) != null) and (($creator.allowed_artifacts | length) != 0 or ($creator.required_artifacts | length) != 0 or ($creator.preserved_target_files | length) != 0 or ($creator.artifact_checks | length) != 0) then
+                "case[\($index)].semantic_context.creator_evidence non-writing outcome must not allow target artifacts"
+              elif $creator.expected_outcome == "authoring_complete" and (($creator.required_artifacts | length) == 0 or ($creator.allowed_artifacts | length) == 0) then
+                "case[\($index)].semantic_context.creator_evidence completed authoring requires fixed output paths"
+              elif ($creator.operation == "update") != (($creator.preserved_metadata | length) > 0) then
+                "case[\($index)].semantic_context.creator_evidence update preservation fields must be explicit"
+              elif ($creator.expected_outcome == "design_pending_approval") and ($creator.design_required | not) then
+                "case[\($index)].semantic_context.creator_evidence pending design must require approval"
+              elif (["read_only_assessment", "read_only_refresh", "comparison_assessment"] | index($creator.expected_outcome) != null) and $creator.design_required then
+                "case[\($index)].semantic_context.creator_evidence read-only operations cannot require a design gate"
+              elif (($creator.operation == "assess") != (($creator.assessment_criteria | length) > 0)) then
+                "case[\($index)].semantic_context.creator_evidence assessment criteria must match assess operations"
+              elif $creator.run_binding != null and (($creator.run_binding | type) != "object" or ($creator.run_binding | keys | sort) != ["capture_id", "comparison_sha256", "output_root", "run_id", "source_root", "source_snapshot_sha256"] or ($creator.run_binding.capture_id | nonempty_string | not) or ($creator.run_binding.run_id | nonempty_string | not) or ($creator.run_binding.output_root | nonempty_string | not) or ($creator.run_binding.output_root | test("^/" ) | not) or ($creator.run_binding.source_root != null and (($creator.run_binding.source_root | nonempty_string | not) or ($creator.run_binding.source_root | test("^/") | not))) or ($creator.run_binding.source_snapshot_sha256 != null and ($creator.run_binding.source_snapshot_sha256 | test("^sha256:[0-9a-f]{64}$") | not)) or ($creator.run_binding.comparison_sha256 != null and ($creator.run_binding.comparison_sha256 | test("^sha256:[0-9a-f]{64}$") | not))) then
+                "case[\($index)].semantic_context.creator_evidence run binding is malformed"
+              elif $creator.run_binding != null and (($creator.run_binding.comparison_sha256 != null) != $creator.comparison_required) then
+                "case[\($index)].semantic_context.creator_evidence run binding comparison digest must match the fixture"
+              elif $creator.run_binding != null and ((["update", "assess"] | index($creator.operation) != null) != ($creator.run_binding.source_root != null and $creator.run_binding.source_snapshot_sha256 != null)) then
+                "case[\($index)].semantic_context.creator_evidence run binding source identity must match the operation"
+              elif ($creator.operation != "update") and (($creator.preserved_target_files | length) > 0) then
+                "case[\($index)].semantic_context.creator_evidence preserved target files require update"
+              else empty
+              end
+          end;
+
         def case_semantic_context($index):
-          if has("semantic_context") then
+          if has("semantic_context") and $skill_name == "assistant-skill-creator" then
+            creator_context_valid(.semantic_context; $index; .id; .prompt)
+          elif has("semantic_context") and $skill_name == "assistant-research" then
             .semantic_context as $context
             | if ($context | type) != "object" or ($context | keys | sort) != ["adapter_context", "follow_up_requirements", "high_stakes_context", "packet_scope", "required_topic_terms"] then
                 "case[\($index)].semantic_context must contain exactly packet_scope, follow_up_requirements, required_topic_terms, high_stakes_context, and adapter_context"
@@ -1080,7 +1149,7 @@ validate_fixture() {
               else empty
               end
           elif has("semantic_validator") then
-            "case[\($index)] semantic_validator requires semantic_context"
+            "case[\($index)] semantic_validator requires a supported semantic_context"
           else empty
           end;
 
@@ -1137,14 +1206,18 @@ validate_fixture() {
     validation_error="$(jq -r --arg skill_name "$skill_name" '
         def five_lens_case_ids:
           ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-delegated-lenses-sequential-peer-fallback", "five-lens-quick-normalizes-to-standard", "five-lens-retains-all-material-follow-ups", "five-lens-sequential-fallback-preserves-process-evidence"];
+        def creator_case_ids:
+          ["new-process-skill-designs-contracts-before-build", "narrow-existing-skill-update-preserves-metadata-and-agent-policy", "create-minimal-utility-validates-label-to-slug-contract", "assess-existing-skill-without-authoring", "refresh-guidance-is-read-only-and-provenance-bound", "assess-skill-contracts-under-frozen-comparison"];
         [ .cases[] | .id ] as $case_ids
         | [ .cases[] | select(has("semantic_validator")) | {id, semantic_validator} ] as $declared
         | if $skill_name == "assistant-research" and (five_lens_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "five-lens assistant-research cases must declare their semantic validator"
+          elif $skill_name == "assistant-skill-creator" and (creator_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "creator behavior cases must declare their semantic validator"
           elif ($declared | length) == 0 then empty
-          elif $skill_name != "assistant-research" then "semantic_validator is only supported for assistant-research"
-          elif ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the five five-lens assistant-research cases"
-          elif ($declared | all(.semantic_validator == "assistant-research.five_lens_v3")) then empty
-          else "semantic_validator must be the allowlisted assistant-research.five_lens_v3" end
+          elif $skill_name == "assistant-research" and ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the five five-lens assistant-research cases"
+          elif $skill_name == "assistant-research" and ($declared | all(.semantic_validator == "assistant-research.five_lens_v3")) then empty
+          elif $skill_name == "assistant-skill-creator" and ($declared | map(.id) | sort) != (creator_case_ids | sort) then "semantic_validator must be declared by exactly the six fixed assistant-skill-creator cases"
+          elif $skill_name == "assistant-skill-creator" and ($declared | all(.semantic_validator == "assistant-skill-creator.behavior_v1")) then empty
+          else "semantic_validator is only supported by its exact assistant-research or assistant-skill-creator case allowlist" end
     ' "$fixture_file")" || die "Fixture is not valid JSON: $(display_path "$fixture_file")"
     [[ -z "$validation_error" ]] || die "$validation_error"
 }

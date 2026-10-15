@@ -506,7 +506,11 @@ encode arbitrary structures.
 9. **Examples clarify ambiguous fields** — when `description` alone isn't enough, add `examples:`
 10. **Cross-phase invariants catch slow drift** — things that must ALWAYS be true, not just at gates
 11. **Root SKILL.md stays compact and outcome-shaped** — detailed controller
-    patterns live in references loaded only when the active task needs them
+    patterns live in references loaded only when the active task needs them.
+    Before extensive authoring, identify whether the requested value is a
+    capability, an encoded preference, or mixed; use existing requirements or
+    demonstrated gaps as success criteria and make no improvement claim without
+    evidence.
 12. **Clarification prompts are admissible and uncapped** — ask every material,
     non-discoverable missing decision with no safe default; group questions by
     topic and do not add ritual or count-driven questions
