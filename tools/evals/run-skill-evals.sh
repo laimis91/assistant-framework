@@ -9,6 +9,8 @@ MODE=""
 OUTPUT_DIR=""
 RESPONSES_DIR=""
 ACTIVATION_RESULTS_FILE=""
+CREATOR_RUN_BINDINGS_FILE=""
+CREATOR_RUN_BINDINGS_SHA256=""
 INCLUDE_LOCAL=false
 SKILL_SELECTORS=()
 CASE_SELECTORS=()
@@ -32,6 +34,7 @@ Usage:
   run-skill-evals.sh --list [--skill NAME|PATH ...] [--case CASE_ID ...] [--include-local]
   run-skill-evals.sh --emit-prompts DIR [--skill NAME|PATH ...] [--case CASE_ID ...] [--include-local]
   run-skill-evals.sh --responses DIR [--skill NAME|PATH ...] [--case CASE_ID ...] [--include-local]
+                      [--creator-run-bindings FILE]
   run-skill-evals.sh --activation-results FILE [--skill NAME|PATH ...] [--include-local]
   run-skill-evals.sh --help
 
@@ -52,6 +55,9 @@ Options:
   --list              Print skill, case id, category, and title as tab-separated lines.
   --emit-prompts DIR  Write one Markdown prompt packet per case under DIR/<skill>/.
   --responses DIR     Heuristically grade local response files from DIR.
+  --creator-run-bindings FILE
+                      Supply an independent per-run manifest for selected creator
+                      behavior cases; valid only with --responses.
   --activation-results FILE
                       Compare externally observed native skill selections for every
                       selected activation case. The runner does not route requests.
@@ -96,6 +102,13 @@ while [[ $# -gt 0 ]]; do
             RESPONSES_DIR="$2"
             shift 2
             ;;
+        --creator-run-bindings)
+            [[ $# -ge 2 ]] || die "Missing file for --creator-run-bindings."
+            [[ -z "$CREATOR_RUN_BINDINGS_FILE" ]] || die "--creator-run-bindings may be specified only once."
+            [[ -n "$2" ]] || die "File for --creator-run-bindings must not be empty."
+            CREATOR_RUN_BINDINGS_FILE="$2"
+            shift 2
+            ;;
         --activation-results)
             [[ -z "$MODE" ]] || die "Only one mode may be specified."
             [[ $# -ge 2 ]] || die "Missing file for --activation-results."
@@ -132,9 +145,43 @@ done
 if [[ -n "${CASE_SELECTORS[*]-}" && "$MODE" != "list" && "$MODE" != "emit" && "$MODE" != "responses" ]]; then
     die "--case is supported only with --list, --emit-prompts, or --responses."
 fi
+if [[ -n "$CREATOR_RUN_BINDINGS_FILE" && "$MODE" != "responses" ]]; then
+    die "--creator-run-bindings is supported only with --responses."
+fi
+if [[ -n "$CREATOR_RUN_BINDINGS_FILE" && "$CREATOR_RUN_BINDINGS_FILE" != /* ]]; then
+    CREATOR_RUN_BINDINGS_FILE="$PWD/$CREATOR_RUN_BINDINGS_FILE"
+fi
 
 require_skill_eval_ruby "$MODE"
 load_selected_inventory
+
+if [[ -n "$CREATOR_RUN_BINDINGS_FILE" ]]; then
+    validate_selected_case_ids
+    selected_cases="$(selected_case_ids_json)"
+    creator_case_ids=()
+    creator_fixture_files=()
+    for index in "${!FIXTURE_FILES[@]}"; do
+        [[ "${SKILL_NAMES[$index]}" == "assistant-skill-creator" ]] || continue
+        fixture_file="${FIXTURE_FILES[$index]}"
+        creator_fixture_files+=("$fixture_file")
+        while IFS= read -r case_id; do
+            [[ -n "$case_id" ]] && creator_case_ids+=("$case_id")
+        done < <(jq -r --argjson selected "$selected_cases" '
+          .cases[]
+          | select(.semantic_validator == "assistant-skill-creator.behavior_v1")
+          | .id as $case_id
+          | select(($selected | length) == 0 or ($selected | index($case_id)) != null)
+          | $case_id
+        ' "$fixture_file")
+    done
+    [[ "${#creator_fixture_files[@]}" -gt 0 && "${#creator_case_ids[@]}" -gt 0 ]] \
+        || die "--creator-run-bindings requires at least one selected assistant-skill-creator behavior case."
+    creator_case_ids_json="$(printf '%s\n' "${creator_case_ids[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
+    CREATOR_RUN_BINDINGS_SHA256="$(node "$SCRIPT_DIR/lib/skill-creator-semantic-validator.cjs" \
+        --validate-run-bindings "$CREATOR_RUN_BINDINGS_FILE" "$creator_case_ids_json" "${creator_fixture_files[@]}")" \
+        || die "Creator run bindings failed canonical selected-case validation."
+    export CREATOR_RUN_BINDINGS_FILE CREATOR_RUN_BINDINGS_SHA256
+fi
 
 case "$MODE" in
     validate)

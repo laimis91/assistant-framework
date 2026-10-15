@@ -3,8 +3,11 @@
 This reference applies only when a registered offline creator behavior fixture is graded. It defines an evaluation envelope and companion capture; it does not add fields to an ordinary user-facing result, replace artifact validation, or alter the canonical `assistant-verification` producer contracts.
 
 ## Independent capture
+The fixture fixes the operation, expected outcome, target name and category, required and allowed paths, preserved metadata, assessment criteria, and comparison requirements. The response cannot choose bindings. Canonical cases keep `run_binding` null until independent evaluator input supplies them.
 
-The fixture fixes the operation, expected outcome, target name and category, required and allowed paths, preserved metadata, assessment criteria, and whether comparison evidence is expected. The evaluator binds each execution to a fresh `capture_id`, `run_id`, source root and `SKILL.md` digest when applicable, output root, and comparison digest when applicable. The response cannot choose or replace those bindings. A case without its per-run binding is not gradable.
+Use `--creator-run-bindings FILE` with `--responses`: JSON `schema_version: "1.0"` and one `{case_id, run_binding}` per selected case. Bindings contain exactly `capture_id`, `run_id`, `source_root`, `source_snapshot_sha256`, `output_root`, and `comparison_sha256`. Before grading, validate all entries against canonical null-bound cases; reject missing, extra, duplicate, malformed, changed, already-bound or ambiguously owned cases. Pin manifest bytes across per-case checks. Preserve fixtures and legacy fixture-bound evaluation.
+
+Freeze run, settings, prompt and rubric identities before execution. After capture, finalize source/output bindings and comparison digests from both complete runs; freeze the manifest before grading. Never infer bindings from responses or companions. Consistency checks cannot authenticate the observer or detect maliciously consistent input. No execution adapter or collector is added.
 
 The companion JSON is captured by the harness beside the response. It records `schema_version`, `case_id`, `capture_id`, `run_id`, `operation`, `outcome`, `skill_name`, `source_root`, `source_snapshot`, `output_root`, `events`, `artifact_manifest`, and `preserved_files`; comparison cases also carry the frozen `comparison` record. File manifests contain safe relative paths and SHA-256 digests. The harness reads files as data, rejects empty, stale, symlinked, or escaping paths, and never executes authored files.
 

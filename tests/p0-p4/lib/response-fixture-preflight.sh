@@ -26,6 +26,8 @@ p0p4_preflight_response_fixtures() {
         ' "$fixture" >>"$root/cases.tsv" || return 1
     done
     if ! (
+        P0P4_RESPONSE_FIXTURE_PREFLIGHT=1
+        export P0P4_RESPONSE_FIXTURE_PREFLIGHT
         "$builder" "$root/responses" || exit 1
         [[ "${FAIL:-0}" -eq "$failures_before" ]]
     ) >"$root/builder.log" 2>&1; then

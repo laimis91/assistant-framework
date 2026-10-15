@@ -21,6 +21,7 @@ const exactKeys = (value, keys) => value && typeof value === "object" && !Array.
 const digestBytes = bytes => "sha256:" + crypto.createHash("sha256").update(bytes).digest("hex");
 const comparePaths = (left, right) => String(left).localeCompare(String(right));
 const fail = (errors, message) => errors.push(message);
+const creatorFixturePath = path.resolve(__dirname, "../../../skills/assistant-skill-creator/evals/cases.json");
 
 function stableJson(value) {
   if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
@@ -28,6 +29,138 @@ function stableJson(value) {
   return JSON.stringify(value);
 }
 const digestJson = value => digestBytes(Buffer.from(stableJson(value), "utf8"));
+
+function creatorCaseMap(errors) {
+  const bytes = safeFile(creatorFixturePath, "canonical creator fixture", errors);
+  if (!bytes) return new Map();
+  try {
+    const fixture = JSON.parse(bytes.toString("utf8"));
+    return new Map((fixture.cases || [])
+      .filter(item => item?.semantic_validator === validatorId)
+      .map(item => [item.id, item]));
+  } catch {
+    fail(errors, "canonical creator fixture: readable JSON required");
+    return new Map();
+  }
+}
+
+function validRunBinding(binding, testCase, errors, label) {
+  const fields = ["capture_id", "run_id", "source_root", "source_snapshot_sha256", "output_root", "comparison_sha256"];
+  if (!exactKeys(binding, fields) || !nonblank(binding.capture_id) || !nonblank(binding.run_id)
+    || !nonblank(binding.output_root) || !path.isAbsolute(binding.output_root)
+    || (binding.source_root !== null && (typeof binding.source_root !== "string" || !path.isAbsolute(binding.source_root)))
+    || (binding.source_snapshot_sha256 !== null && !hashPattern.test(binding.source_snapshot_sha256 || ""))
+    || (binding.comparison_sha256 !== null && !hashPattern.test(binding.comparison_sha256 || ""))) {
+    fail(errors, label + ": exact run_binding fields and valid identities required");
+    return false;
+  }
+  const context = testCase?.semantic_context?.creator_evidence;
+  if (!context) { fail(errors, label + ": canonical creator behavior case required"); return false; }
+  const sourceRequired = ["update", "assess"].includes(context.operation);
+  if ((sourceRequired && (!path.isAbsolute(binding.source_root || "") || !hashPattern.test(binding.source_snapshot_sha256 || "")))
+    || (!sourceRequired && (binding.source_root !== null || binding.source_snapshot_sha256 !== null))) {
+    fail(errors, label + ": source identity differs from canonical operation requirements");
+  }
+  if ((context.comparison_required && !hashPattern.test(binding.comparison_sha256 || ""))
+    || (!context.comparison_required && binding.comparison_sha256 !== null)) {
+    fail(errors, label + ": comparison identity differs from canonical case requirements");
+  }
+  return true;
+}
+
+function validateRunBindings(bytes, selectedCaseIds, fixturePaths) {
+  const errors = [];
+  if (!Array.isArray(selectedCaseIds) || !selectedCaseIds.length || selectedCaseIds.some(id => !nonblank(id))) {
+    fail(errors, "selected canonical creator case IDs must be a non-empty string array");
+    return errors;
+  }
+  if (new Set(selectedCaseIds).size !== selectedCaseIds.length) {
+    fail(errors, "selected creator cases have ambiguous ownership; each case must have exactly one fixture owner");
+    return errors;
+  }
+  if (!Array.isArray(fixturePaths) || !fixturePaths.length) {
+    fail(errors, "selected creator fixture paths are required");
+    return errors;
+  }
+  let manifest;
+  try { manifest = JSON.parse(bytes.toString("utf8")); }
+  catch { fail(errors, "creator run bindings must be readable JSON"); return errors; }
+  if (!exactKeys(manifest, ["schema_version", "cases"]) || manifest.schema_version !== "1.0" || !Array.isArray(manifest.cases)) {
+    fail(errors, "creator run bindings require schema_version 1.0 and an exact cases array");
+    return errors;
+  }
+
+  const canonicalCases = creatorCaseMap(errors);
+  const selected = new Set(selectedCaseIds);
+  const owners = new Map();
+  for (const fixturePath of fixturePaths) {
+    const fixtureBytes = safeFile(fixturePath, "selected creator fixture", errors);
+    if (!fixtureBytes) continue;
+    let fixture;
+    try { fixture = JSON.parse(fixtureBytes.toString("utf8")); }
+    catch { fail(errors, "selected creator fixture must be readable JSON"); continue; }
+    for (const testCase of (Array.isArray(fixture.cases) ? fixture.cases : [])) {
+      if (!selected.has(testCase?.id) || testCase?.semantic_validator !== validatorId) continue;
+      owners.set(testCase.id, (owners.get(testCase.id) || 0) + 1);
+      const canonical = canonicalCases.get(testCase.id);
+      if (!canonical) fail(errors, "selected creator behavior case is not canonical: " + testCase.id);
+      else if (testCase.semantic_context?.creator_evidence?.run_binding !== null
+        || stableJson(testCase) !== stableJson(canonical)) {
+        fail(errors, "selected creator case differs from its canonical null-bound fixture: " + testCase.id);
+      }
+    }
+  }
+  for (const caseId of selectedCaseIds) {
+    if (owners.get(caseId) !== 1) fail(errors, "selected creator case must have exactly one fixture owner: " + caseId);
+    if (!canonicalCases.has(caseId)) fail(errors, "selected case is not a canonical creator behavior case: " + caseId);
+  }
+
+  const entries = new Map();
+  for (const item of manifest.cases) {
+    if (!exactKeys(item, ["case_id", "run_binding"]) || !nonblank(item.case_id)) {
+      fail(errors, "creator run binding entry requires exact case_id and run_binding fields");
+      continue;
+    }
+    if (entries.has(item.case_id)) fail(errors, "duplicate creator run binding case_id: " + item.case_id);
+    entries.set(item.case_id, item.run_binding);
+    const canonical = canonicalCases.get(item.case_id);
+    if (!canonical) fail(errors, "creator run bindings contain an unknown case_id: " + item.case_id);
+    else validRunBinding(item.run_binding, canonical, errors, "creator run binding " + item.case_id);
+    if (!selected.has(item.case_id)) fail(errors, "creator run bindings contain an unselected case_id: " + item.case_id);
+  }
+  if (entries.size !== selected.size || [...selected].some(caseId => !entries.has(caseId))) {
+    fail(errors, "creator run bindings must contain exactly one entry for every selected creator behavior case");
+  }
+  return errors;
+}
+
+function readPinnedRunBinding(file, expectedDigest, caseId, errors) {
+  if (!hashPattern.test(expectedDigest || "")) {
+    fail(errors, "creator run bindings require the preflight SHA-256 identity");
+    return;
+  }
+  const bytes = safeFile(file, "creator run bindings", errors);
+  if (!bytes) return;
+  if (digestBytes(bytes) !== expectedDigest) {
+    fail(errors, "creator run bindings changed after whole-manifest preflight");
+    return;
+  }
+  let manifest;
+  try { manifest = JSON.parse(bytes.toString("utf8")); }
+  catch { fail(errors, "creator run bindings must be readable JSON"); return; }
+  if (!exactKeys(manifest, ["schema_version", "cases"]) || manifest.schema_version !== "1.0" || !Array.isArray(manifest.cases)) {
+    fail(errors, "creator run bindings require schema_version 1.0 and an exact cases array");
+    return;
+  }
+  const matching = manifest.cases.filter(item => item?.case_id === caseId);
+  if (matching.length !== 1) {
+    fail(errors, "creator run bindings must contain exactly one entry for " + caseId);
+    return;
+  }
+  const canonical = creatorCaseMap(errors).get(caseId);
+  if (canonical) validRunBinding(matching[0].run_binding, canonical, errors, "creator run binding " + caseId);
+  return matching[0].run_binding;
+}
 
 function safeDirectory(directory, label, errors) {
   if (typeof directory !== "string" || !path.isAbsolute(directory)) { fail(errors, label + ": absolute directory required"); return; }
@@ -638,7 +771,7 @@ function validateMetAssessmentCriterion(criterion, evidencePath, context, source
   fail(errors, "assessment met criterion has no registered supporting validator: " + criterion);
 }
 
-function validateCreatorResponse(text, fixture, caseId, responsePath) {
+function validateCreatorResponse(text, fixture, caseId, responsePath, runBinding = null) {
   const errors = [];
   const testCase = fixture?.cases?.find(item => item?.id === caseId);
   const context = testCase?.semantic_context?.creator_evidence;
@@ -663,7 +796,15 @@ function validateCreatorResponse(text, fixture, caseId, responsePath) {
     || !nonblank(trusted.skill_name) || !Array.isArray(trusted.artifact_manifest) || !Array.isArray(trusted.preserved_files)) {
     fail(errors, "companion trace has an invalid fixed schema"); return errors;
   }
-  const binding = context.run_binding;
+  let binding = context.run_binding;
+  if (runBinding !== null) {
+    const canonicalCase = creatorCaseMap(errors).get(caseId);
+    if (!canonicalCase || context.run_binding !== null || stableJson(testCase) !== stableJson(canonicalCase)) {
+      fail(errors, "manifest overlay requires the unchanged canonical null-bound creator case");
+      return [...new Set(errors)];
+    }
+    binding = runBinding;
+  }
   if (!exactKeys(binding, ["capture_id", "run_id", "source_root", "source_snapshot_sha256", "output_root", "comparison_sha256"]) || !nonblank(binding.capture_id)
     || !nonblank(binding.run_id) || !nonblank(binding.output_root) || (binding.source_snapshot_sha256 !== null && !hashPattern.test(binding.source_snapshot_sha256 || ""))
     || (binding.comparison_sha256 !== null && !hashPattern.test(binding.comparison_sha256 || ""))) {
@@ -792,6 +933,22 @@ function validateCreatorResponse(text, fixture, caseId, responsePath) {
 }
 
 function runCli(...args) {
+  if (args[0] === "--validate-run-bindings") {
+    const [, file, selectedIdsJson, ...fixturePaths] = args;
+    const errors = [];
+    const bytes = safeFile(file, "creator run bindings", errors);
+    let selectedIds;
+    try { selectedIds = JSON.parse(selectedIdsJson); }
+    catch { fail(errors, "selected creator case IDs must be JSON"); }
+    if (bytes && selectedIds !== undefined) errors.push(...validateRunBindings(bytes, selectedIds, fixturePaths));
+    if (errors.length) {
+      console.error("creator run bindings: " + [...new Set(errors)].slice(0, 16).join("; "));
+      process.exitCode = 1;
+    } else {
+      process.stdout.write(digestBytes(bytes) + "\n");
+    }
+    return;
+  }
   if (args[0] === "--list-output-only-case-ids") {
     process.stdout.write(outputOnlyCaseIds.join("\n") + "\n");
     return;
@@ -808,17 +965,25 @@ function runCli(...args) {
     }
     return;
   }
-  const [responsePath, fixturePath, caseId] = args;
+  const [responsePath, fixturePath, caseId, ...options] = args;
   const errors = [];
+  let runBinding = null;
+  if (options.length) {
+    if (options.length !== 3 || options[0] !== "--creator-run-bindings") {
+      fail(errors, "usage: response fixture case [--creator-run-bindings FILE PREFLIGHT_SHA256]");
+    } else {
+      runBinding = readPinnedRunBinding(options[1], options[2], caseId, errors);
+    }
+  }
   let fixture, text;
   try { fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8")); } catch { errors.push("fixture JSON required"); }
   try { text = fs.readFileSync(responsePath, "utf8"); } catch { errors.push("response file required"); }
-  if (fixture && text !== undefined) errors.push(...validateCreatorResponse(text, fixture, caseId, responsePath));
+  if (fixture && text !== undefined) errors.push(...validateCreatorResponse(text, fixture, caseId, responsePath, runBinding));
   if (errors.length) {
     console.error("creator semantic validation: " + errors.slice(0, 16).join("; "));
     process.exitCode = 1;
   }
 }
 
-module.exports = {validatorId, validateCreatorResponse, validateOutputOnlyCreatorResponse, outputOnlyCaseIds};
+module.exports = {validatorId, validateCreatorResponse, validateOutputOnlyCreatorResponse, outputOnlyCaseIds, validateRunBindings};
 if (require.main === module) runCli(...process.argv.slice(2));

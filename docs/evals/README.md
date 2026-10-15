@@ -1177,6 +1177,53 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --responses /tmp/clarify-eval-responses --skill assistant-clarify
 ```
 
+The six `assistant-skill-creator` behavior cases are fail-closed when their
+committed fixtures have no per-run binding. After an independent observer has
+captured the response, companion trace, source snapshot, and output tree, supply
+that observer's binding manifest explicitly:
+
+```json
+{
+  "schema_version": "1.0",
+  "cases": [
+    {
+      "case_id": "new-process-skill-designs-contracts-before-build",
+      "run_binding": {
+        "capture_id": "capture-2026-10-15-001",
+        "run_id": "run-2026-10-15-001",
+        "source_root": null,
+        "source_snapshot_sha256": null,
+        "output_root": "/tmp/creator-capture/output",
+        "comparison_sha256": null
+      }
+    }
+  ]
+}
+```
+
+For example, when grading that one prepared case:
+
+```bash
+tools/evals/run-skill-evals.sh --responses /tmp/creator-responses \
+  --skill assistant-skill-creator \
+  --case new-process-skill-designs-contracts-before-build \
+  --creator-run-bindings /tmp/creator-run-bindings.json
+```
+
+The manifest must contain exactly one entry for every selected creator
+behavior case, with the existing six `run_binding` fields. Source and output
+paths, snapshot hashes, and comparison hashes are checked against each captured
+trace and response. A comparison digest is finalized from the complete observed
+pair after both runs, before grading; predeclared run, settings, prompt, and
+rubric identities remain fixed during execution. Do not derive bindings from a
+response or companion file. The manifest is an explicit trusted evaluator
+input, not an authenticated statement: the grader can reject missing, altered,
+or inconsistent evidence, but cannot prove that a maliciously consistent
+manifest came from an independent observer. The grader pins the manifest bytes
+between whole-selection preflight and per-case checks. This option is limited
+to `--responses`; it does not change generic skill grading or the existing
+fixture-bound route.
+
 Compare native-selection observations captured by a separate adapter or manual
 run:
 

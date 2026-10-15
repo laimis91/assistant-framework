@@ -6,10 +6,30 @@ P0P4_CREATOR_FIXTURE_OWNER_SUBSHELL="${BASH_SUBSHELL:-0}"
 p0p4_write_creator_bound_response_fixtures() {
     local output_dir="$1"
     local bundle_dir="$P0P4_CREATOR_BOUND_FIXTURE_BUNDLE"
+    local creator_fixture="$P0P4_SUITE_DIR/../../skills/assistant-skill-creator/evals/cases.json"
+    local case_id
+    local response_path
     local retained_run_root
     local response_source
     local created_bundle=false
     local builder_subshell=false
+
+    if [[ "${P0P4_RESPONSE_FIXTURE_PREFLIGHT:-0}" == "1" ]]; then
+        mkdir -p "$output_dir/assistant-skill-creator"
+        while IFS= read -r case_id; do
+            response_path="$output_dir/assistant-skill-creator/$case_id.txt"
+            if jq -e --arg id "$case_id" '
+              .cases[] | select(.id == $id)
+              | ((.machine_expectations.structured_json_assertions // [] | length) > 0
+                or .semantic_validator != null)
+            ' "$creator_fixture" >/dev/null; then
+                printf '{}\n' >"$response_path"
+            else
+                printf 'Completeness-only response placeholder.\n' >"$response_path"
+            fi
+        done < <(jq -r '.cases[].id' "$creator_fixture")
+        return 0
+    fi
 
     [[ "${BASH_SUBSHELL:-0}" == "$P0P4_CREATOR_FIXTURE_OWNER_SUBSHELL" ]] || builder_subshell=true
     if [[ -z "$bundle_dir" ]]; then

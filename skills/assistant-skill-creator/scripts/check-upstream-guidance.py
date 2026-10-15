@@ -814,7 +814,6 @@ def refresh_registry(
             "last_assessed": _identity(source),
             "candidate_sha256": candidate_digest,
             "candidate_bytes": len(response_body),
-            "candidate_etag": _header(fetched.get("headers", {}), "ETag"),
         }
         if candidate_digest != assessed_digest:
             difference = {"state": "unavailable", "reason": "no complete-byte prior snapshot is configured for a text diff"}

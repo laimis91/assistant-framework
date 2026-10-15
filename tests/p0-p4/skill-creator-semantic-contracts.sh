@@ -36,8 +36,11 @@ const refreshCapture = (scenario = "review_required") => {
 import datetime
 import hashlib
 import importlib.util
+import contextlib
+import io
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 repo = Path(sys.argv[1])
@@ -60,7 +63,8 @@ def fetch(url, **kwargs):
         return {"status_code": 503, "final_url": url, "headers": {}, "body": b""}
     if scenario == "partial":
         return {"status_code": 200, "final_url": url, "headers": {}, "body": b"partial", "partial": True, "error": "controlled incomplete response"}
-    return {"status_code": 200, "final_url": url, "headers": {"ETag": "local-capture"}, "body": new}
+    headers = {} if scenario == "complete_no_etag" else {"ETag": "local-capture"}
+    return {"status_code": 200, "final_url": url, "headers": headers, "body": new}
 
 report = module.refresh_registry(
     {"schema_version": registry["schema_version"], "assessment_window_days": registry["assessment_window_days"], "sources": [source]},
@@ -69,28 +73,47 @@ report = module.refresh_registry(
     monotonic=lambda: 1.0,
     sleeper=lambda _: None,
 )
-print(json.dumps({"source_id": source["source_id"], "report": report}))
+module._fetch_url = fetch
+module._snapshot_url = lambda _: None
+with tempfile.TemporaryDirectory() as directory:
+    registry_path = Path(directory) / "registry.json"
+    registry_path.write_text(json.dumps({
+        "schema_version": registry["schema_version"],
+        "assessment_window_days": registry["assessment_window_days"],
+        "sources": [source],
+    }), encoding="utf-8")
+    cli_output = io.StringIO()
+    with contextlib.redirect_stdout(cli_output):
+        cli_status = module.main(["--registry", str(registry_path)])
+    if cli_status != 0:
+        raise RuntimeError("checker CLI returned " + str(cli_status))
+    cli_report = json.loads(cli_output.getvalue())
+print(json.dumps({"source_id": source["source_id"], "report": report, "cli_report": cli_report,
+    "fetch_had_etag": bool(fetch("unused")["headers"].get("ETag"))}))
 `;
   const captured = JSON.parse(execFileSync("python3", ["-B", "-c", python, repo, scenario], {encoding: "utf8"}));
-  const helperReport = captured.report;
-  const resultFields = ["source_id", "status", "retrieval_state", "last_assessed", "reason", "candidate_sha256", "candidate_bytes", "affected_refs", "difference"];
-  const report = {
-    checked_at: helperReport.checked_at,
-    assessment_window_days: helperReport.assessment_window_days,
-    limits: helperReport.limits,
-    registry_mutated: helperReport.registry_mutated,
-    results: helperReport.results.map(result => Object.fromEntries(resultFields
-      .filter(key => Object.prototype.hasOwnProperty.call(result, key)).map(key => [key, result[key]])))
-  };
+  const report = captured.report;
   const result = report.results.find(item => item.source_id === captured.source_id);
+  assert.equal(Object.hasOwn(report, "schema_version"), true, scenario + ": helper report retains its versioned output shape");
+  assert.equal(Object.hasOwn(result, "candidate_etag"), false, scenario + ": helper result has no undeclared ETag field");
+  const cliReport = captured.cli_report;
+  const cliResult = cliReport.results.find(item => item.source_id === captured.source_id);
+  assert.equal(Object.hasOwn(cliReport, "schema_version"), true, scenario + ": CLI output retains its versioned output shape");
+  assert.equal(Object.hasOwn(cliResult, "candidate_etag"), false, scenario + ": CLI result has no undeclared ETag field");
   const resultCapture = {
-    report: {
-      ...report
-    },
+    report,
     sourceIdentity: captured.source_id,
     checkedAt: report.checked_at,
     digest: typeof result?.candidate_sha256 === "string" ? "sha256:" + result.candidate_sha256 : null,
-    result
+    result,
+    fetchHadEtag: captured.fetch_had_etag,
+    cliCapture: {
+      report: cliReport,
+      sourceIdentity: captured.source_id,
+      checkedAt: cliReport.checked_at,
+      digest: typeof cliResult?.candidate_sha256 === "string" ? "sha256:" + cliResult.candidate_sha256 : null,
+      result: cliResult
+    }
   };
   refreshCaptureCache.set(scenario, resultCapture);
   return resultCapture;
@@ -386,6 +409,144 @@ function exportBoundFixtureProjection(targetDir, runs) {
   process.stdout.write("ok - foreign creator case cannot bypass the closed ordinary-output identities\n");
   fs.rmSync(path.join(responseDir, foreignId + ".txt"), {force: true});
   put(path.join(fixtureDir, "cases.json"), JSON.stringify(projected));
+
+  const canonicalFixtureHashBeforeBindings = sha(fileBytes(fixturePath));
+  const bindingsPath = path.join(bundle, "creator-run-bindings.json");
+  const bindingEntries = runs.map(run => ({
+    case_id: path.basename(run.responsePath, ".txt"),
+    run_binding: JSON.parse(JSON.stringify(run.context.run_binding))
+  }));
+  const fullBindings = {schema_version: "1.0", cases: bindingEntries};
+  const writeBindings = value => put(bindingsPath, JSON.stringify(value, null, 2) + "\n");
+  const bindingRunnerArgs = extra => [runner, "--responses", path.join(bundle, "responses"), "--skill", "assistant-skill-creator",
+    ...extra, "--creator-run-bindings", bindingsPath];
+  const bindingNegative = (label, manifest, extra = [], expectPreflight = true) => {
+    writeBindings(manifest);
+    const result = spawnSync("bash", bindingRunnerArgs(extra), {encoding: "utf8"});
+    const output = result.stdout + result.stderr;
+    assert.notEqual(result.status, 0, label + ": registered grader unexpectedly accepted invalid run bindings");
+    if (expectPreflight) assert.match(output, /creator run bindings:/, label + ": expected whole-manifest rejection");
+    else assert.match(output, /FAIL\s+assistant-skill-creator/, label + ": expected semantic capture rejection");
+    process.stdout.write("ok - " + label + " is rejected\n");
+    return result;
+  };
+
+  writeBindings(fullBindings);
+  const canonicalBound = spawnSync("bash", bindingRunnerArgs([]), {encoding: "utf8"});
+  assert.equal(canonicalBound.status, 0, "canonical null-bound fixture must grade all six cases with an independent manifest: "
+    + canonicalBound.stdout + canonicalBound.stderr);
+  assert.match(canonicalBound.stdout, /Summary: total=11 passed=11 failed=0/);
+  process.stdout.write("ok - all six canonical creator cases pass through the selected run-binding manifest\n");
+
+  const noManifest = spawnSync("bash", [runner, "--responses", path.join(bundle, "responses"), "--skill", "assistant-skill-creator"], {encoding: "utf8"});
+  assert.notEqual(noManifest.status, 0, "canonical null-bound fixture unexpectedly passed without an explicit run manifest");
+  assert.match(noManifest.stdout, /FAIL\s+assistant-skill-creator/);
+  process.stdout.write("ok - response and companion files cannot replace a missing run-binding manifest\n");
+
+  bindingNegative("missing selected binding", {...fullBindings, cases: bindingEntries.slice(1)});
+  bindingNegative("duplicate binding entry", {...fullBindings, cases: [...bindingEntries, bindingEntries[0]]});
+  bindingNegative("unknown binding case", {...fullBindings, cases: bindingEntries.map((entry, index) => index === 0 ? {...entry, case_id: "unregistered-case"} : entry)});
+  bindingNegative("malformed binding fields", {...fullBindings, cases: bindingEntries.map((entry, index) => index === 0
+    ? {...entry, run_binding: {...entry.run_binding, unknown: true}} : entry)});
+  bindingNegative("extra unselected binding", fullBindings, ["--case", bindingEntries[0].case_id]);
+
+  const assessBindingId = "assess-existing-skill-without-authoring";
+  const comparisonBindingId = "assess-skill-contracts-under-frozen-comparison";
+  const pristineBindingEntries = JSON.stringify(bindingEntries);
+  const oneBinding = caseId => ({schema_version: "1.0", cases: [JSON.parse(JSON.stringify(bindingEntries.find(entry => entry.case_id === caseId)))]});
+  const bindingFor = (caseId, mutate) => {
+    const value = oneBinding(caseId);
+    mutate(value.cases[0].run_binding);
+    return value;
+  };
+  bindingFor("assess-existing-skill-without-authoring", binding => { binding.capture_id = "control-only-capture"; });
+  assert.equal(JSON.stringify(bindingEntries), pristineBindingEntries,
+    "an individual binding control must not mutate the pristine manifest baseline");
+  const oneCaseArgs = caseId => ["--case", caseId];
+  const bindingPositive = caseId => {
+    writeBindings(oneBinding(caseId));
+    const result = spawnSync("bash", bindingRunnerArgs(oneCaseArgs(caseId)), {encoding: "utf8"});
+    assert.equal(result.status, 0, caseId + ": valid one-case binding was rejected: " + result.stdout + result.stderr);
+    assert.match(result.stdout, /PASS\s+assistant-skill-creator/);
+    assert(result.stdout.includes(caseId), caseId + ": selected creator case was not reported as passing");
+    process.stdout.write("ok - valid single-case binding passes for " + caseId + "\n");
+  };
+  bindingPositive(assessBindingId);
+  bindingPositive(comparisonBindingId);
+  for (const [label, mutate] of [
+    ["capture ID mismatch", binding => { binding.capture_id = "different-capture"; }],
+    ["run ID mismatch", binding => { binding.run_id = "different-run"; }],
+    ["output path mismatch", binding => { binding.output_root = mkdir(path.join(bundle, "wrong-output-root")); }],
+    ["source path mismatch", binding => { binding.source_root = mkdir(path.join(bundle, "wrong-source-root")); }],
+    ["source snapshot hash mismatch", binding => { binding.source_snapshot_sha256 = "sha256:" + "0".repeat(64); }]
+  ]) bindingNegative(label, bindingFor(assessBindingId, mutate), oneCaseArgs(assessBindingId), false);
+  bindingNegative("comparison hash mismatch", bindingFor(comparisonBindingId,
+    binding => { binding.comparison_sha256 = "sha256:" + "0".repeat(64); }), oneCaseArgs(comparisonBindingId), false);
+
+  const responsePath = path.join(responseDir, assessBindingId + ".txt");
+  const tracePath = path.join(responseDir, assessBindingId + ".creator-evidence.json");
+  const savedResponse = fileBytes(responsePath);
+  const savedTrace = fileBytes(tracePath);
+  try {
+    const response = JSON.parse(savedResponse.toString("utf8"));
+    response.creator_evidence.capture_id = "response-forged-capture";
+    put(responsePath, JSON.stringify(response) + "\n");
+    bindingNegative("response cannot override manifest capture identity", oneBinding(assessBindingId), oneCaseArgs(assessBindingId), false);
+    put(responsePath, savedResponse);
+    const trace = JSON.parse(savedTrace.toString("utf8"));
+    trace.output_root = mkdir(path.join(bundle, "tampered-trace-output"));
+    put(tracePath, JSON.stringify(trace));
+    bindingNegative("companion tampering is rejected", oneBinding(assessBindingId), oneCaseArgs(assessBindingId), false);
+  } finally {
+    put(responsePath, savedResponse);
+    put(tracePath, savedTrace);
+  }
+
+  writeBindings(oneBinding(assessBindingId));
+  const wrongPin = spawnSync("node", [path.join(repo, "tools/evals/lib/skill-creator-semantic-validator.cjs"),
+    responsePath, fixturePath, assessBindingId, "--creator-run-bindings", bindingsPath, "sha256:" + "0".repeat(64)], {encoding: "utf8"});
+  assert.notEqual(wrongPin.status, 0, "per-case validator unexpectedly accepted a changed manifest digest");
+  assert.match(wrongPin.stderr, /changed after whole-manifest preflight/);
+  process.stdout.write("ok - per-case creator checks reject a manifest that differs from the pinned preflight bytes\n");
+
+  const customSkillDir = mkdir(path.join(bundle, "custom", "assistant-skill-creator"));
+  fs.copyFileSync(path.join(repo, "skills/assistant-skill-creator/SKILL.md"), path.join(customSkillDir, "SKILL.md"));
+  const customFixturePath = path.join(customSkillDir, "evals/cases.json");
+  put(customFixturePath, fileBytes(fixturePath));
+  const customFixture = JSON.parse(fileBytes(customFixturePath).toString("utf8"));
+  customFixture.cases.find(item => item.id === assessBindingId).semantic_context.creator_evidence.assessment_criteria.pop();
+  put(customFixturePath, JSON.stringify(customFixture));
+  writeBindings(oneBinding(assessBindingId));
+  const customPolicy = spawnSync("bash", [runner, "--responses", path.join(bundle, "responses"), "--skill", customSkillDir,
+    "--case", assessBindingId, "--creator-run-bindings", bindingsPath], {encoding: "utf8"});
+  assert.notEqual(customPolicy.status, 0, "custom fixture policy mutation unexpectedly weakened the manifest authority");
+  assert.match(customPolicy.stderr, /creator run bindings:/);
+  process.stdout.write("ok - custom creator policy cannot be combined with the canonical run manifest\n");
+
+  const duplicateSkillDirs = ["first", "second"].map(name => mkdir(path.join(bundle, "ambiguous", name, "assistant-skill-creator")));
+  for (const dir of duplicateSkillDirs) {
+    fs.copyFileSync(path.join(repo, "skills/assistant-skill-creator/SKILL.md"), path.join(dir, "SKILL.md"));
+    put(path.join(dir, "evals/cases.json"), fileBytes(fixturePath));
+  }
+  writeBindings(oneBinding(assessBindingId));
+  const ambiguousFixtures = spawnSync("bash", [runner, "--responses", path.join(bundle, "responses"),
+    "--skill", duplicateSkillDirs[0], "--skill", duplicateSkillDirs[1], "--case", assessBindingId,
+    "--creator-run-bindings", bindingsPath], {encoding: "utf8"});
+  assert.notEqual(ambiguousFixtures.status, 0, "duplicate selected fixture ownership unexpectedly passed");
+  assert.match(ambiguousFixtures.stderr, /exactly one fixture owner/);
+  process.stdout.write("ok - ambiguous selected creator fixture ownership is rejected\n");
+
+  writeBindings(fullBindings);
+  const existingBoundFixture = spawnSync("bash", [runner, "--responses", path.join(bundle, "responses"), "--skill", skillDir,
+    "--creator-run-bindings", bindingsPath], {encoding: "utf8"});
+  assert.notEqual(existingBoundFixture.status, 0, "manifest option unexpectedly overwrote non-null fixture run bindings");
+  assert.match(existingBoundFixture.stderr, /null-bound fixture/);
+  process.stdout.write("ok - manifest option rejects already-bound fixture cases\n");
+
+  assert.equal(sha(fileBytes(fixturePath)), canonicalFixtureHashBeforeBindings,
+    "manifest grading and all negative controls must leave the canonical fixture bytes unchanged");
+  process.stdout.write("ok - canonical creator fixture hash is unchanged after manifest grading controls\n");
+
   fs.writeFileSync(path.join(bundle, "manifest.json"), JSON.stringify({
     schema_version: "1.0",
     retained_run_root: root,
@@ -801,15 +962,20 @@ try {
   const refresh = refreshForCapture(capturedRefresh);
   const refreshEvent = refreshEventFor(capturedRefresh);
   const refreshRun = makeRefreshRun(capturedRefresh);
+  assert.equal(capturedRefresh.fetchHadEtag, true, "complete helper capture includes the controlled upstream ETag");
   check("refresh binds provenance without adoption", refreshRun);
+  const standaloneCliRun = makeRefreshRun(capturedRefresh.cliCapture);
+  check("standalone checker CLI report validates without field projection", standaloneCliRun);
   for (const [scenario, expectedStatus, expectedRetrieval] of [
     ["current", "current", "complete"], ["stale", "stale", "complete"],
+    ["complete_no_etag", "review_required", "complete"],
     ["unavailable", "unavailable", "unavailable"], ["partial", "unavailable", "partial"],
     ["not_configured", "unavailable", "not_configured"]
   ]) {
     const capture = refreshCapture(scenario);
     assert.equal(capture.result.status, expectedStatus, scenario + ": fixture must retain the actual helper status");
     assert.equal(capture.result.retrieval_state, expectedRetrieval, scenario + ": fixture must retain the actual helper retrieval state");
+    if (scenario === "complete_no_etag") assert.equal(capture.fetchHadEtag, false, "complete capture omits upstream ETag");
     if (expectedRetrieval !== "complete") assert.equal(capture.digest, null, scenario + ": incomplete retrieval must not invent a digest");
     check("captured helper report preserves " + scenario + " without changing adoption", makeRefreshRun(capture));
   }
@@ -829,7 +995,8 @@ try {
   const capturedReportTamperCases = [
     ["limits", report => { report.limits.maximum_total_bytes += 1; }],
     ["status", report => { report.results[0].status = "current"; }],
-    ["digest", report => { report.results[0].candidate_sha256 = "0".repeat(64); }]
+    ["digest", report => { report.results[0].candidate_sha256 = "0".repeat(64); }],
+    ["unknown candidate_etag field", report => { report.results[0].candidate_etag = "undeclared"; }]
   ];
   for (const [field, mutation] of capturedReportTamperCases) {
     const tampered = makeRefreshRun(capturedRefresh);

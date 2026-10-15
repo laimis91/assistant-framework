@@ -123,6 +123,10 @@ artifacts:
     validation: "Preserve the checker-reported status and prior source identity; never infer currentness, adoption, or a source change from dates or retrieval."
     on_fail: "Return the actual report or an explicit unavailable result with prior identity and limits"
     object_fields:
+      - name: schema_version
+        type: enum
+        enum_values: ["1.0"]
+        required: false
       - name: checked_at
         type: string
         required: true
