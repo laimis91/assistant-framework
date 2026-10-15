@@ -137,6 +137,7 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 
 - slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]
 - name:
+- writer_selection: [Orchestrator validates intelligent-writer default or mechanical-writer with rationale and recipe_or_example_ref, resolved_decisions_ref, scope_and_dependencies_ref, correctness_expectations_ref to actual current evidence; legacy packets may omit; packet/inline conflicts block]
 - observable_increment:
 - deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
 - requirement_ids:

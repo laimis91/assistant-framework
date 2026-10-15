@@ -836,6 +836,37 @@ handoffs:
         description: "Ordered list of smallest iterable slices. Layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits are invalid unless the slice itself produces a verified deliverable artifact."
         min_items: 1
         object_fields:
+          - name: writer_selection
+            type: object
+            required: conditional
+            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
+            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
+            on_missing: fail
+            object_fields:
+              - name: agent
+                type: enum
+                required: true
+                enum_values: [intelligent-writer, mechanical-writer]
+                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                on_missing: fail
+              - name: rationale
+                type: string
+                required: true
+                description: "Reason tied to remaining judgment and consequences; intelligent-writer is the default."
+                on_missing: fail
+              - name: mechanical_eligibility
+                type: object
+                required: conditional
+                condition: "agent == mechanical-writer"
+                description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                on_missing: fail
+                object_fields:
+                  - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
+                  - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
+                  - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
+                  - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
           - name: slice_id
             type: string
             required: true
@@ -1183,6 +1214,37 @@ handoffs:
         on_missing: re-dispatch
         notes: "Block Architect dispatch; Orchestrator must supply the approved DECOMPOSE slice_manifest or re-run DECOMPOSE before Plan."
         object_fields:
+          - name: writer_selection
+            type: object
+            required: conditional
+            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
+            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
+            on_missing: fail
+            object_fields:
+              - name: agent
+                type: enum
+                required: true
+                enum_values: [intelligent-writer, mechanical-writer]
+                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                on_missing: fail
+              - name: rationale
+                type: string
+                required: true
+                description: "Reason tied to remaining judgment and consequences; intelligent-writer is the default."
+                on_missing: fail
+              - name: mechanical_eligibility
+                type: object
+                required: conditional
+                condition: "agent == mechanical-writer"
+                description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                on_missing: fail
+                object_fields:
+                  - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
+                  - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
+                  - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
+                  - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
           - name: slice_id
             type: string
             required: true
@@ -1329,6 +1391,37 @@ handoffs:
         description: "Ordered executable task packets with exact slice_id, create/modify/test file lists, acceptance criteria, the unchanged verification_decision and conditional TDD choice, and exact command argv or concrete selected-check procedures. Optional display summaries may exist only for human readability; they cannot satisfy or replace exact slice and files_to_* fields."
         min_items: 1
         object_fields:
+          - name: writer_selection
+            type: object
+            required: conditional
+            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
+            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
+            on_missing: fail
+            object_fields:
+              - name: agent
+                type: enum
+                required: true
+                enum_values: [intelligent-writer, mechanical-writer]
+                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                on_missing: fail
+              - name: rationale
+                type: string
+                required: true
+                description: "Reason tied to remaining judgment and consequences; intelligent-writer is the default."
+                on_missing: fail
+              - name: mechanical_eligibility
+                type: object
+                required: conditional
+                condition: "agent == mechanical-writer"
+                description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                on_missing: fail
+                object_fields:
+                  - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
+                  - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
+                  - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
+                  - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
           - name: order
             type: int
             required: true
@@ -1729,6 +1822,37 @@ handoffs:
     to: CodeWriter
     phase: BUILD
     context_fields:
+      - name: writer_selection
+        type: object
+        required: conditional
+        condition: "new Codex writer dispatch; legacy packets and other providers may omit"
+        description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+        validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
+        on_missing: fail
+        object_fields:
+          - name: agent
+            type: enum
+            required: true
+            enum_values: [intelligent-writer, mechanical-writer]
+            description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+            on_missing: fail
+          - name: rationale
+            type: string
+            required: true
+            description: "Reason tied to remaining judgment and consequences; intelligent-writer is the default."
+            on_missing: fail
+          - name: mechanical_eligibility
+            type: object
+            required: conditional
+            condition: "agent == mechanical-writer"
+            description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
+            validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+            on_missing: fail
+            object_fields:
+              - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
+              - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
+              - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
+              - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
       - name: change_impact_applicability
         type: object
         required: conditional
@@ -1852,6 +1976,37 @@ handoffs:
         on_missing: fail
         notes: "Block CodeWriter dispatch; Orchestrator must select the matching implementation_steps packet or re-dispatch Architect to produce executable task packets before Build."
         object_fields:
+          - name: writer_selection
+            type: object
+            required: conditional
+            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
+            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
+            on_missing: fail
+            object_fields:
+              - name: agent
+                type: enum
+                required: true
+                enum_values: [intelligent-writer, mechanical-writer]
+                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                on_missing: fail
+              - name: rationale
+                type: string
+                required: true
+                description: "Reason tied to remaining judgment and consequences; intelligent-writer is the default."
+                on_missing: fail
+              - name: mechanical_eligibility
+                type: object
+                required: conditional
+                condition: "agent == mechanical-writer"
+                description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                on_missing: fail
+                object_fields:
+                  - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
+                  - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
+                  - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
+                  - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
           - name: slice_id
             type: string
             required: true
@@ -2761,6 +2916,37 @@ handoffs:
         on_missing: fail
         notes: "Block BuilderTester dispatch; Orchestrator must pass the slice task packet being verified or re-dispatch Architect to produce executable task packets before verification."
         object_fields:
+          - name: writer_selection
+            type: object
+            required: conditional
+            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
+            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
+            on_missing: fail
+            object_fields:
+              - name: agent
+                type: enum
+                required: true
+                enum_values: [intelligent-writer, mechanical-writer]
+                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                on_missing: fail
+              - name: rationale
+                type: string
+                required: true
+                description: "Reason tied to remaining judgment and consequences; intelligent-writer is the default."
+                on_missing: fail
+              - name: mechanical_eligibility
+                type: object
+                required: conditional
+                condition: "agent == mechanical-writer"
+                description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                on_missing: fail
+                object_fields:
+                  - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
+                  - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
+                  - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
+                  - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
           - name: slice_id
             type: string
             required: true

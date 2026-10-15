@@ -132,6 +132,25 @@ result to a different check. Missing or ambiguous command context requires a
 refreshed decision or a blocked result; non-command checks keep their concrete
 procedure.
 
+## Writer identity within the selected lane
+
+Resolve `writer_selection` using `subagent-dispatch.md#concrete-writer-selection`
+before dispatch. The Orchestrator validates all four mechanical evidence refs;
+Architect proposals do not authorize selection. Carry the identical selection
+through the task packet and inline CodeWriter context; packet context is
+authoritative and conflicts block. Old packets remain valid with intelligent
+compatibility semantics. New Codex dispatch defaults to intelligent-writer;
+missing named definitions are a deployment mismatch, never silent generic fallback.
+Claude code-writer/Opus and Gemini native/default tiers remain unchanged.
+
+When mechanical evidence becomes stale, stop dependent mutations and return all
+actual partial changes, observed evidence, truthful status and blocker fields.
+Intelligent discretion stays within approved behavior and specialist boundaries.
+The Orchestrator classifies failure from evidence, including baseline, hidden
+dependency, environment and permission failures; no automatic capability
+escalation or mandatory Luna-then-Sol chain. Both writers obey the existing
+lane-specific checks/TDD/status guarantees and never independently review.
+
 ## Build Loop
 
 For light work, implement the carried Discover scope/criteria or the inline plan

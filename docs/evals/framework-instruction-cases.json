@@ -1223,6 +1223,176 @@
         "required_substrings": ["architecture", "SearchPolicy", "bash tests/search-contracts.sh", "search_policy_v2", "rationale", "rejected alternatives", "requirement", "manual", "limitations", "rollback", "reviewed scope"],
         "forbidden_substrings": ["CLEAN proves correctness", "manual confirmation is always required"]
       }
+    },
+    {
+      "id": "writer-routing-exact-pattern",
+      "title": "writer routing exact pattern",
+      "category": "role_constraints",
+      "purpose": "Check evidence-based writer selection and actual fixed output, including truthful partial work and failure classification.",
+      "setup_context": [
+        "Approved scope and independent fixed outcome are supplied in disposable seeded files.",
+        "This adapter tests contract adherence; it does not prove native custom-role activation or comparative cost."
+      ],
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nAll semantic/edge/compatibility decisions are resolved. The approved exact recipe replaces output.txt with exactly \"approved exact wording\" plus one newline. Apply that concrete pattern using the evidence-qualified mechanical route.",
+      "expected_behavior": [
+        "Uses the judgment-appropriate writer and preserves packet identity.",
+        "Produces only the independently fixed output or stops with truthful partial work.",
+        "Preserves unchanged dependencies, binding tuples, no-TDD and independent review."
+      ],
+      "pass_criteria": [
+        "Actual output.txt bytes equal the independently fixed oracle.",
+        "dependent.txt remains unchanged and actual changed_files match mutations.",
+        "Selection, status, failure class and next action match the fixed case."
+      ],
+      "fail_signals": [
+        "Selects mechanical solely from size or type.",
+        "Reports success for wrong output, drops partial work, or automatically switches models."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol",
+          "native activation proven"
+        ]
+      }
+    },
+    {
+      "id": "writer-routing-small-semantic",
+      "title": "writer routing small semantic",
+      "category": "role_constraints",
+      "purpose": "Check evidence-based writer selection and actual fixed output, including truthful partial work and failure classification.",
+      "setup_context": [
+        "Approved scope and independent fixed outcome are supplied in disposable seeded files.",
+        "This adapter tests contract adherence; it does not prove native custom-role activation or comparative cost."
+      ],
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nThe change is only one line in a skill rule. It changes success semantics and requires reconciling constraints; size and file type do not establish mechanical eligibility. Approved desired outcome: output.txt must be exactly \"success requires exact artifact\" plus one newline. Use intelligent judgment within this packet.",
+      "expected_behavior": [
+        "Uses the judgment-appropriate writer and preserves packet identity.",
+        "Produces only the independently fixed output or stops with truthful partial work.",
+        "Preserves unchanged dependencies, binding tuples, no-TDD and independent review."
+      ],
+      "pass_criteria": [
+        "Actual output.txt bytes equal the independently fixed oracle.",
+        "dependent.txt remains unchanged and actual changed_files match mutations.",
+        "Selection, status, failure class and next action match the fixed case."
+      ],
+      "fail_signals": [
+        "Selects mechanical solely from size or type.",
+        "Reports success for wrong output, drops partial work, or automatically switches models."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol",
+          "native activation proven"
+        ]
+      }
+    },
+    {
+      "id": "writer-routing-small-grader",
+      "title": "writer routing small grader",
+      "category": "role_constraints",
+      "purpose": "Check evidence-based writer selection and actual fixed output, including truthful partial work and failure classification.",
+      "setup_context": [
+        "Approved scope and independent fixed outcome are supplied in disposable seeded files.",
+        "This adapter tests contract adherence; it does not prove native custom-role activation or comparative cost."
+      ],
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nThis tiny grader change requires choosing a meaningful oracle and counterexample; do not classify it mechanical because it is small. Approved desired outcome: output.txt must be exactly \"oracle rejects plausible wrong output\" plus one newline. Use intelligent judgment within scope.",
+      "expected_behavior": [
+        "Uses the judgment-appropriate writer and preserves packet identity.",
+        "Produces only the independently fixed output or stops with truthful partial work.",
+        "Preserves unchanged dependencies, binding tuples, no-TDD and independent review."
+      ],
+      "pass_criteria": [
+        "Actual output.txt bytes equal the independently fixed oracle.",
+        "dependent.txt remains unchanged and actual changed_files match mutations.",
+        "Selection, status, failure class and next action match the fixed case."
+      ],
+      "fail_signals": [
+        "Selects mechanical solely from size or type.",
+        "Reports success for wrong output, drops partial work, or automatically switches models."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol",
+          "native activation proven"
+        ]
+      }
+    },
+    {
+      "id": "writer-routing-stale-partial",
+      "title": "writer routing stale partial",
+      "category": "role_constraints",
+      "purpose": "Check evidence-based writer selection and actual fixed output, including truthful partial work and failure classification.",
+      "setup_context": [
+        "Approved scope and independent fixed outcome are supplied in disposable seeded files.",
+        "This adapter tests contract adherence; it does not prove native custom-role activation or comparative cost."
+      ],
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nThe incoming mechanical selection was supported before the first approved edit. output.txt is already this worker's actual partial change: \"partial approved wording\" plus newline. decisions.md now explicitly says STALE: compatibility decision unresolved. Stop dependent mutations, preserve that partial output and unchanged dependent.txt, return actual changed_files=[output.txt], NEEDS_CONTEXT with stale_plan and next_action=orchestrator. Do not fabricate checks or switch writer.",
+      "expected_behavior": [
+        "Uses the judgment-appropriate writer and preserves packet identity.",
+        "Produces only the independently fixed output or stops with truthful partial work.",
+        "Preserves unchanged dependencies, binding tuples, no-TDD and independent review."
+      ],
+      "pass_criteria": [
+        "Actual output.txt bytes equal the independently fixed oracle.",
+        "dependent.txt remains unchanged and actual changed_files match mutations.",
+        "Selection, status, failure class and next action match the fixed case."
+      ],
+      "fail_signals": [
+        "Selects mechanical solely from size or type.",
+        "Reports success for wrong output, drops partial work, or automatically switches models."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol",
+          "native activation proven"
+        ]
+      }
+    },
+    {
+      "id": "writer-routing-baseline-failure",
+      "title": "writer routing baseline failure",
+      "category": "role_constraints",
+      "purpose": "Check evidence-based writer selection and actual fixed output, including truthful partial work and failure classification.",
+      "setup_context": [
+        "Approved scope and independent fixed outcome are supplied in disposable seeded files.",
+        "This adapter tests contract adherence; it does not prove native custom-role activation or comparative cost."
+      ],
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nThe baseline is broken (decisions.md records an inspected dependency failure before mutation). Stop within scope, leave output.txt and dependent.txt unchanged, return BLOCKED with broken_baseline, changed_files=[], next_action=orchestrator. Do not conclude Luna is inadequate or mandate a cascade.",
+      "expected_behavior": [
+        "Uses the judgment-appropriate writer and preserves packet identity.",
+        "Produces only the independently fixed output or stops with truthful partial work.",
+        "Preserves unchanged dependencies, binding tuples, no-TDD and independent review."
+      ],
+      "pass_criteria": [
+        "Actual output.txt bytes equal the independently fixed oracle.",
+        "dependent.txt remains unchanged and actual changed_files match mutations.",
+        "Selection, status, failure class and next action match the fixed case."
+      ],
+      "fail_signals": [
+        "Selects mechanical solely from size or type.",
+        "Reports success for wrong output, drops partial work, or automatically switches models."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol",
+          "native activation proven"
+        ]
+      }
     }
   ]
 }

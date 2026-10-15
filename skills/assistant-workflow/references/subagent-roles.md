@@ -50,7 +50,7 @@ Spawn the qa-evaluator agent to evaluate acceptance for {task}. This is QA round
 Spawn the explorer agent to trace execution paths for {feature}...
 Spawn the architect agent to design implementation for {feature}...
 Spawn the code-mapper agent to map the structure around {area}...
-Spawn the code-writer agent to implement the following plan: {plan}...
+Spawn the selected intelligent-writer (default) or evidence-qualified mechanical-writer agent to implement the following plan: {plan}...
 Spawn the builder-tester agent to build and test the project...
 ```
 
@@ -65,7 +65,7 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 | `code-mapper` | Fast / economical | Read-only | Discover | Produces context map (`{agent_state_dir}/context-map.md`) — entry points, interfaces, data flow, conventions |
 | `explorer` | Balanced / standard | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
 | `architect` | Strongest / deep reasoning | Read-only | Decompose, Plan, Design | Strict slice decomposition, implementation blueprints, design direction |
-| `code-writer` | Strongest / deep reasoning | Write | Build | Implements the packet and follows its unchanged verification decision; RED only when TDD is active; no independent review |
+| Logical CodeWriter: Codex `intelligent-writer` / eligible `mechanical-writer`; Claude `code-writer` | Approved provider configuration | Write | Build | Implements the packet and follows its unchanged verification decision; RED only when TDD is active; no independent review |
 | `builder-tester` | Balanced / standard | Write | Build | Conditional separated verifier for selected checks and binding suites; owns RED only when TDD is active; no production edits |
 | `code-reviewer` | Strongest / deep reasoning | Read-only | Review | Canonical code review for bugs, security issues, architecture violations, test coverage gaps, and structural problems |
 | `reviewer` | Strongest / deep reasoning | Read-only | Review compatibility | Compatibility route for existing reviewer handoffs; prefer `code-reviewer` for new code review dispatches |
@@ -129,17 +129,19 @@ Round 10 is terminal; return the final verdict instead of implying round 11.
 
 ## Fallback: agents not installed
 
-If custom agents are not installed, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
+For missing new Codex writer definitions, report a deployment mismatch and stop; never silently use a nearest generic worker. Explicit legacy `code-writer` requests and separately authorized bootstrap execution record their real runtime identity. For other supported provider fallbacks, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
 
 | Role | Fallback subagent_type | Recommended tier |
 |---|---|---|
 | Code Mapper | `Explore` or nearest read-only explorer | Fast / economical |
 | Explorer | `Explore` or nearest read-only explorer | Balanced / standard |
 | Architect | `general-purpose` or nearest planning agent | Strongest / deep reasoning |
-| Code Writer | `general-purpose` or nearest coding agent | Strongest / deep reasoning |
+| Code Writer (Claude/Gemini supported fallback only) | `general-purpose` or nearest coding agent | Strongest / deep reasoning |
 | Builder/Tester | `general-purpose` or nearest coding agent with shell/test access | Balanced / standard |
 | Code Reviewer | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |
 | Reviewer compatibility | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |
 | QA Evaluator | `general-purpose` or nearest read-only evaluator | Strongest / deep reasoning |
 
 When using fallback types, include the full role instructions in the dispatch prompt (the agent won't have a built-in system prompt for the role). Prefer the matching role definition for the active runtime under the framework's `agents/` directory when available; otherwise adapt the closest provider-neutral role prompt.
+
+Writer selection is owned by the Orchestrator; load `subagent-dispatch.md#concrete-writer-selection` for the four actual-evidence conditions, intelligent default, provider mapping, stale evidence stop, and compatibility rules. CodeWriter remains a logical role; concrete names do not weaken its verification, TDD, status, partial-work or independent-review contract.

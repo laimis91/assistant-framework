@@ -15,7 +15,9 @@ code-mapper
 code-reviewer
 code-writer
 explorer
+intelligent-writer
 lens-researcher
+mechanical-writer
 qa-evaluator
 research-peer-reviewer
 reviewer"
@@ -34,7 +36,7 @@ actual_agents="$(
 )"
 agent_baseline_failures=()
 if [[ "$actual_agents" != "$expected_agents" ]]; then
-    agent_baseline_failures+=("expected exactly ten agent files")
+    agent_baseline_failures+=("expected eleven normal roles plus deprecated code-writer (twelve files)")
 fi
 while IFS='|' read -r agent expected_sandbox; do
     file="$agent_dir/$agent.toml"
@@ -55,7 +57,9 @@ code-mapper|read-only
 code-reviewer|read-only
 code-writer|workspace-write
 explorer|read-only
+intelligent-writer|workspace-write
 lens-researcher|read-only
+mechanical-writer|workspace-write
 qa-evaluator|read-only
 research-peer-reviewer|read-only
 reviewer|read-only
@@ -95,16 +99,18 @@ while IFS='|' read -r agent expected_model expected_effort; do
         matrix_failures+=("$agent: model fields must precede developer_instructions")
     fi
 done <<'EOF'
-architect|gpt-5.6-sol|xhigh
-builder-tester|gpt-5.6-terra|medium
-code-mapper|gpt-5.6-luna|low
-code-reviewer|gpt-5.6-sol|xhigh
-code-writer|gpt-5.6-terra|high
-explorer|gpt-5.6-terra|medium
-lens-researcher|gpt-5.6-terra|medium
-qa-evaluator|gpt-5.6-sol|high
-research-peer-reviewer|gpt-5.6-sol|high
-reviewer|gpt-5.6-sol|xhigh
+architect|gpt-6.1-sol|xhigh
+builder-tester|gpt-6-luna|high
+code-mapper|gpt-6-luna|medium
+code-reviewer|gpt-6.1-sol|xhigh
+code-writer|gpt-6.1-sol|high
+explorer|gpt-6-luna|high
+intelligent-writer|gpt-6.1-sol|high
+lens-researcher|gpt-6.1-sol|high
+mechanical-writer|gpt-6-luna|high
+qa-evaluator|gpt-6.1-sol|high
+research-peer-reviewer|gpt-6.1-sol|high
+reviewer|gpt-6.1-sol|xhigh
 EOF
 if [[ "${#matrix_failures[@]}" -eq 0 ]]; then
     pass
@@ -146,7 +152,9 @@ code-mapper|paths
 code-reviewer|correctness
 code-writer|smallest
 explorer|evidence
+intelligent-writer|smallest
 lens-researcher|independent
+mechanical-writer|smallest
 qa-evaluator|acceptance
 research-peer-reviewer|independent
 reviewer|compatibility
@@ -328,7 +336,7 @@ else
         "$smoke_helper"; then
         smoke_failures+=("live smoke must compare child parent_thread_id with the selected parent payload.id before accepting metadata")
     fi
-    for representative_role in code-mapper explorer code-writer architect qa-evaluator lens-researcher research-peer-reviewer; do
+    for representative_role in code-mapper mechanical-writer intelligent-writer code-writer architect; do
         prompt_case="$(awk -v role="$representative_role" '
             $0 ~ "^[[:space:]]*" role "\\)" { in_role = 1 }
             in_role { print }
@@ -355,7 +363,7 @@ else
         verification_line="$(tr -d '"' <"$smoke_helper" \
             | tr -d "'" \
             | grep -nE \
-                "(\\$\\{?${probe_counter}\\}?|${probe_counter})[[:space:]]*(-eq|==|-ne|!=)[[:space:]]*7" \
+                "(\\$\\{?${probe_counter}\\}?|${probe_counter})[[:space:]]*(-eq|==|-ne|!=)[[:space:]]*5" \
             | sed -n '1s/:.*//p')"
 
         if [[ -z "$run_probe_line" || -z "$increment_line" ]] \
@@ -364,7 +372,7 @@ else
         fi
         if [[ -z "$verification_line" || -z "$success_line_number" ]] \
             || (( verification_line >= success_line_number )); then
-            smoke_failures+=("live smoke must verify the actual successful probe count equals seven before success")
+            smoke_failures+=("live smoke must verify the actual successful probe count equals five before success")
         fi
         if [[ "$success_text" != *'representatives='* ]] \
             || [[ "$success_text" == *'representatives=7'* ]] \
@@ -413,13 +421,11 @@ else
         'call_count=$((call_count + 1))' \
         'printf "%s\n" "$call_count" >"$state_file"' \
         'case "$call_count" in' \
-        '    1) role="code-mapper"; model="gpt-5.6-luna"; effort="low" ;;' \
-        '    2) role="explorer"; model="gpt-5.6-terra"; effort="medium" ;;' \
-        '    3) role="code-writer"; model="gpt-5.6-terra"; effort="high" ;;' \
-        '    4) role="architect"; model="gpt-5.6-sol"; effort="xhigh" ;;' \
-        '    5) role="qa-evaluator"; model="gpt-5.6-sol"; effort="high" ;;' \
-        '    6) role="lens-researcher"; model="gpt-5.6-terra"; effort="medium" ;;' \
-        '    7) role="research-peer-reviewer"; model="gpt-5.6-sol"; effort="high" ;;' \
+        '    1) role="code-mapper"; model="gpt-6-luna"; effort="medium" ;;' \
+        '    2) role="mechanical-writer"; model="gpt-6-luna"; effort="high" ;;' \
+        '    3) role="intelligent-writer"; model="gpt-6.1-sol"; effort="high" ;;' \
+        '    4) role="code-writer"; model="gpt-6.1-sol"; effort="high" ;;' \
+        '    5) role="architect"; model="gpt-6.1-sol"; effort="xhigh" ;;' \
         '    *) exit 91 ;;' \
         'esac' \
         'session_file="$CODEX_HOME/sessions/fake-child-${call_count}.jsonl"' \

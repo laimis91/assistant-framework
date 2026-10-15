@@ -18,7 +18,7 @@ Use this template when decomposing mega tasks into strict slice packets. Each ap
 ## Slice Brief: [name]
 
 ### Agent
-Agent: [code-writer | architect | code-reviewer | qa-evaluator | reviewer | explorer | builder-tester | code-mapper]
+Agent: [Codex intelligent-writer | Codex mechanical-writer | explicit legacy code-writer | Claude code-writer | Gemini native/default | architect | code-reviewer | qa-evaluator | reviewer | explorer | builder-tester | code-mapper]
 Role: [Implementer | Architect | Code Reviewer | QA Evaluator | Reviewer compatibility | Explorer]
 
 ### Context
@@ -52,6 +52,7 @@ This strict slice packet is the authoritative packet and executable contract for
 - feature_preparation_evidence_ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise not_applicable]
 - feature_preparation_harness_obligation: [required exact approved object when the preparation result contains future_harness_obligation; include requested_scope, evidence_basis, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
 - feature_preparation_qa_acceptance_obligation: [required exact approved object when the preparation result contains future_qa_acceptance_obligation; include requested_scope, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
+- writer_selection: [new Codex: agent=intelligent-writer by default or mechanical-writer with rationale and all four substantiated mechanical_eligibility refs; legacy/other-provider packets may omit; packet wins and inline conflict blocks]
 - verification_decision: [canonical assistant-verification/contracts/output.yaml#verification_decision object, unchanged; preserve selected scope, CheckSpec entries, exclusions, rationales, and TddChoice]
 - evidence_assessment: [current canonical assistant-verification/contracts/output.yaml#evidence_assessment object; reassess from actual selected-check results before Review]
 - selected_check_ids: [due CheckSpec IDs assigned to this packet]

@@ -12,24 +12,24 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 framework_dir="$(cd "$script_dir/.." && pwd)"
 source_agent_dir="$framework_dir/agents/codex"
 
-agent_specs='architect|gpt-5.6-sol|xhigh|trade-off
-builder-tester|gpt-5.6-terra|medium|repeatable
-code-mapper|gpt-5.6-luna|low|paths
-code-reviewer|gpt-5.6-sol|xhigh|correctness
-code-writer|gpt-5.6-terra|high|smallest
-explorer|gpt-5.6-terra|medium|evidence
-lens-researcher|gpt-5.6-terra|medium|independent
-qa-evaluator|gpt-5.6-sol|high|acceptance
-research-peer-reviewer|gpt-5.6-sol|high|independent
-reviewer|gpt-5.6-sol|xhigh|compatibility'
+agent_specs='architect|gpt-6.1-sol|xhigh|trade-off
+builder-tester|gpt-6-luna|high|repeatable
+code-mapper|gpt-6-luna|medium|paths
+code-reviewer|gpt-6.1-sol|xhigh|correctness
+code-writer|gpt-6.1-sol|high|smallest
+explorer|gpt-6-luna|high|evidence
+intelligent-writer|gpt-6.1-sol|high|smallest
+lens-researcher|gpt-6.1-sol|high|independent
+mechanical-writer|gpt-6-luna|high|smallest
+qa-evaluator|gpt-6.1-sol|high|acceptance
+research-peer-reviewer|gpt-6.1-sol|high|independent
+reviewer|gpt-6.1-sol|xhigh|compatibility'
 
-representative_specs='code-mapper|gpt-5.6-luna|low
-explorer|gpt-5.6-terra|medium
-code-writer|gpt-5.6-terra|high
-architect|gpt-5.6-sol|xhigh
-qa-evaluator|gpt-5.6-sol|high
-lens-researcher|gpt-5.6-terra|medium
-research-peer-reviewer|gpt-5.6-sol|high'
+representative_specs='code-mapper|gpt-6-luna|medium
+mechanical-writer|gpt-6-luna|high
+intelligent-writer|gpt-6.1-sol|high
+code-writer|gpt-6.1-sol|high
+architect|gpt-6.1-sol|xhigh'
 
 config_failure() {
     printf 'CONFIG_MISMATCH %s\n' "$1" >&2
@@ -64,7 +64,7 @@ check_source_config() {
         done | LC_ALL=C sort
     )"
     if [[ "$actual_inventory" != "$expected_inventory" ]]; then
-        config_failure 'source agent inventory is not the expected ten fixed roles'
+        config_failure 'source agent inventory is not the expected twelve transition definitions'
         return 1
     fi
 
@@ -120,7 +120,7 @@ if ! check_source_config; then
 fi
 
 if [[ "$mode" == "--check-only" ]]; then
-    printf 'STATIC_CHECK_OK agents=10 representatives=7\n'
+    printf 'STATIC_CHECK_OK agents=12 representatives=5\n'
     exit 0
 fi
 
@@ -171,6 +171,12 @@ prompt_for_role() {
             ;;
         explorer)
             printf '%s' 'Call spawn_agent exactly once with agent_type set to explorer. Tell that child to call no tools and return exactly ROLE_SMOKE_OK explorer. Wait for it, spawn no other agent, then return exactly PARENT_SMOKE_OK explorer.'
+            ;;
+        mechanical-writer)
+            printf '%s' 'Call spawn_agent exactly once with agent_type set to mechanical-writer. Tell that child to call no tools and return exactly ROLE_SMOKE_OK mechanical-writer. Wait for it, spawn no other agent, then return exactly PARENT_SMOKE_OK mechanical-writer.'
+            ;;
+        intelligent-writer)
+            printf '%s' 'Call spawn_agent exactly once with agent_type set to intelligent-writer. Tell that child to call no tools and return exactly ROLE_SMOKE_OK intelligent-writer. Wait for it, spawn no other agent, then return exactly PARENT_SMOKE_OK intelligent-writer.'
             ;;
         code-writer)
             printf '%s' 'Call spawn_agent exactly once with agent_type set to code-writer. Tell that child to call no tools and return exactly ROLE_SMOKE_OK code-writer. Wait for it, spawn no other agent, then return exactly PARENT_SMOKE_OK code-writer.'
@@ -335,8 +341,8 @@ done <<EOF
 $representative_specs
 EOF
 
-if [[ "$verified_probe_count" -ne 7 ]]; then
-    runtime_failure "verified_probe_count=$verified_probe_count expected=7"
+if [[ "$verified_probe_count" -ne 5 ]]; then
+    runtime_failure "verified_probe_count=$verified_probe_count expected=5"
     exit 1
 fi
 

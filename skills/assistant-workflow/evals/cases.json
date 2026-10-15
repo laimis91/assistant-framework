@@ -6788,6 +6788,490 @@
           {"id":"documentation_check_preserves_failure_oracle","operator":"equals","path":["verification_decision","checks",1,"check_ref_or_method","meaningful_failure"],"expected":"The documentation example or explanation contradicts the calculation behavior."}
         ]
       }
+    },
+    {
+      "id": "writer-routing-exact-pattern",
+      "title": "writer routing exact pattern",
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nAll semantic/edge/compatibility decisions are resolved. The approved exact recipe replaces output.txt with exactly \"approved exact wording\" plus one newline. Apply that concrete pattern using the evidence-qualified mechanical route.\nReturn the complete response as one valid JSON object with actual_output and dependent_output containing the exact observed bytes.\nFor this skill-only structured response, project writer_selection, selected_check_ids and tdd_applies into slice_manifest[0]; use canonical changed_files objects (path, change_type, description), and slice_verification_summary[0].implementation_status=done or blocked. Include the truthful worker status, actual output and blocker evidence in the response summary. This response proxy is separate from the framework adapter's actual artifact inspection.",
+      "expected_behavior": [
+        "Records evidence-based selection and actual fixed output with truthful partial work and unchanged dependent output."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "agent"
+            ],
+            "expected": "mechanical-writer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "selected_check_ids"
+            ],
+            "expected": [
+              "CHECK-OUTPUT"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "tdd_applies"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "implementation_status"
+            ],
+            "expected": "done"
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "changed_files"
+            ],
+            "field": "path",
+            "expected_values": [
+              "output.txt"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "recipe_or_example_ref"
+            ],
+            "expected": "recipe.md"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "resolved_decisions_ref"
+            ],
+            "expected": "decisions.md"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "scope_and_dependencies_ref"
+            ],
+            "expected": "scope.md"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "correctness_expectations_ref"
+            ],
+            "expected": "expectations.md"
+          }
+        ]
+      },
+      "category": "role_constraints",
+      "purpose": "Exercise concrete writer selection through canonical packet/output projections.",
+      "setup_context": [
+        "Approved fixed recipe and independent output expectations are supplied.",
+        "This local structured response is a contract proxy; the framework adapter checks real disposable artifacts."
+      ],
+      "pass_criteria": [
+        "Records correct evidence-based selection and packet identities.",
+        "Preserves cumulative partial changes and the appropriate done/blocked outcome."
+      ],
+      "fail_signals": [
+        "Selects mechanical from size/type alone or drops actual partial changes."
+      ]
+    },
+    {
+      "id": "writer-routing-small-semantic",
+      "title": "writer routing small semantic",
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nThe change is only one line in a skill rule. It changes success semantics and requires reconciling constraints; size and file type do not establish mechanical eligibility. Approved desired outcome: output.txt must be exactly \"success requires exact artifact\" plus one newline. Use intelligent judgment within this packet.\nReturn the complete response as one valid JSON object with actual_output and dependent_output containing the exact observed bytes.\nFor this skill-only structured response, project writer_selection, selected_check_ids and tdd_applies into slice_manifest[0]; use canonical changed_files objects (path, change_type, description), and slice_verification_summary[0].implementation_status=done or blocked. Include the truthful worker status, actual output and blocker evidence in the response summary. This response proxy is separate from the framework adapter's actual artifact inspection.",
+      "expected_behavior": [
+        "Records evidence-based selection and actual fixed output with truthful partial work and unchanged dependent output."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "agent"
+            ],
+            "expected": "intelligent-writer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "selected_check_ids"
+            ],
+            "expected": [
+              "CHECK-OUTPUT"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "tdd_applies"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "implementation_status"
+            ],
+            "expected": "done"
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "changed_files"
+            ],
+            "field": "path",
+            "expected_values": [
+              "output.txt"
+            ]
+          }
+        ]
+      },
+      "category": "role_constraints",
+      "purpose": "Exercise concrete writer selection through canonical packet/output projections.",
+      "setup_context": [
+        "Approved fixed recipe and independent output expectations are supplied.",
+        "This local structured response is a contract proxy; the framework adapter checks real disposable artifacts."
+      ],
+      "pass_criteria": [
+        "Records correct evidence-based selection and packet identities.",
+        "Preserves cumulative partial changes and the appropriate done/blocked outcome."
+      ],
+      "fail_signals": [
+        "Selects mechanical from size/type alone or drops actual partial changes."
+      ]
+    },
+    {
+      "id": "writer-routing-small-grader",
+      "title": "writer routing small grader",
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nThis tiny grader change requires choosing a meaningful oracle and counterexample; do not classify it mechanical because it is small. Approved desired outcome: output.txt must be exactly \"oracle rejects plausible wrong output\" plus one newline. Use intelligent judgment within scope.\nReturn the complete response as one valid JSON object with actual_output and dependent_output containing the exact observed bytes.\nFor this skill-only structured response, project writer_selection, selected_check_ids and tdd_applies into slice_manifest[0]; use canonical changed_files objects (path, change_type, description), and slice_verification_summary[0].implementation_status=done or blocked. Include the truthful worker status, actual output and blocker evidence in the response summary. This response proxy is separate from the framework adapter's actual artifact inspection.",
+      "expected_behavior": [
+        "Records evidence-based selection and actual fixed output with truthful partial work and unchanged dependent output."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "agent"
+            ],
+            "expected": "intelligent-writer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "selected_check_ids"
+            ],
+            "expected": [
+              "CHECK-OUTPUT"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "tdd_applies"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "implementation_status"
+            ],
+            "expected": "done"
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "changed_files"
+            ],
+            "field": "path",
+            "expected_values": [
+              "output.txt"
+            ]
+          }
+        ]
+      },
+      "category": "role_constraints",
+      "purpose": "Exercise concrete writer selection through canonical packet/output projections.",
+      "setup_context": [
+        "Approved fixed recipe and independent output expectations are supplied.",
+        "This local structured response is a contract proxy; the framework adapter checks real disposable artifacts."
+      ],
+      "pass_criteria": [
+        "Records correct evidence-based selection and packet identities.",
+        "Preserves cumulative partial changes and the appropriate done/blocked outcome."
+      ],
+      "fail_signals": [
+        "Selects mechanical from size/type alone or drops actual partial changes."
+      ]
+    },
+    {
+      "id": "writer-routing-stale-partial",
+      "title": "writer routing stale partial",
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nThe incoming mechanical selection was supported before the first approved edit. output.txt is already this worker's actual partial change: \"partial approved wording\" plus newline. decisions.md now explicitly says STALE: compatibility decision unresolved. Stop dependent mutations, preserve that partial output and unchanged dependent.txt, return actual changed_files=[output.txt], NEEDS_CONTEXT with stale_plan and next_action=orchestrator. Do not fabricate checks or switch writer.\nReturn the complete response as one valid JSON object with actual_output and dependent_output containing the exact observed bytes.\nFor this skill-only structured response, project writer_selection, selected_check_ids and tdd_applies into slice_manifest[0]; use canonical changed_files objects (path, change_type, description), and slice_verification_summary[0].implementation_status=done or blocked. Include the truthful worker status, actual output and blocker evidence in the response summary. This response proxy is separate from the framework adapter's actual artifact inspection.",
+      "expected_behavior": [
+        "Records evidence-based selection and actual fixed output with truthful partial work and unchanged dependent output."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "agent"
+            ],
+            "expected": "mechanical-writer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "selected_check_ids"
+            ],
+            "expected": [
+              "CHECK-OUTPUT"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "tdd_applies"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "implementation_status"
+            ],
+            "expected": "blocked"
+          },
+          {
+            "operator": "array_field_values_exact",
+            "path": [
+              "changed_files"
+            ],
+            "field": "path",
+            "expected_values": [
+              "output.txt"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "recipe_or_example_ref"
+            ],
+            "expected": "recipe.md"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "resolved_decisions_ref"
+            ],
+            "expected": "decisions.md"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "scope_and_dependencies_ref"
+            ],
+            "expected": "scope.md"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "correctness_expectations_ref"
+            ],
+            "expected": "expectations.md"
+          }
+        ]
+      },
+      "category": "role_constraints",
+      "purpose": "Exercise concrete writer selection through canonical packet/output projections.",
+      "setup_context": [
+        "Approved fixed recipe and independent output expectations are supplied.",
+        "This local structured response is a contract proxy; the framework adapter checks real disposable artifacts."
+      ],
+      "pass_criteria": [
+        "Records correct evidence-based selection and packet identities.",
+        "Preserves cumulative partial changes and the appropriate done/blocked outcome."
+      ],
+      "fail_signals": [
+        "Selects mechanical from size/type alone or drops actual partial changes."
+      ]
+    },
+    {
+      "id": "writer-routing-baseline-failure",
+      "title": "writer routing baseline failure",
+      "prompt": "Read the four approved evidence files and output.txt/dependent.txt before acting. This is an approved synthetic packet with build_execution_lane=separated_workers, tdd_applies=false, selected_check_ids=[CHECK-OUTPUT], and binding_obligation_refs=[{kind:required_scope,value:only output.txt,source_ref:scope.md}]. Do not run tests, select new checks, edit evidence or dependent.txt, or independently review. Preserve the exact selected check and binding tuple. Write .assistant-eval/writer-result.json with writer_selection (agent, rationale, conditional mechanical_eligibility), status, changed_files (actual paths), failure_class (none or existing blocker_type), next_action (review or orchestrator), selected_check_ids, binding_obligation_refs, and tdd_applies. The four mechanical_eligibility refs, when justified, are recipe.md, decisions.md, scope.md, expectations.md under their canonical field names. Selection belongs to Orchestrator; this exercise asks you to apply its rules and record the decision honestly. A failed check does not mandate a model cascade. Return one JSON object summarizing the result; artifact contents and consequential edits decide success, never role-name prose.\nThe baseline is broken (decisions.md records an inspected dependency failure before mutation). Stop within scope, leave output.txt and dependent.txt unchanged, return BLOCKED with broken_baseline, changed_files=[], next_action=orchestrator. Do not conclude Luna is inadequate or mandate a cascade.\nReturn the complete response as one valid JSON object with actual_output and dependent_output containing the exact observed bytes.\nFor this skill-only structured response, project writer_selection, selected_check_ids and tdd_applies into slice_manifest[0]; use canonical changed_files objects (path, change_type, description), and slice_verification_summary[0].implementation_status=done or blocked. Include the truthful worker status, actual output and blocker evidence in the response summary. This response proxy is separate from the framework adapter's actual artifact inspection.",
+      "expected_behavior": [
+        "Records evidence-based selection and actual fixed output with truthful partial work and unchanged dependent output."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "writer_selection"
+        ],
+        "forbidden_substrings": [
+          "mandatory Luna-then-Sol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "agent"
+            ],
+            "expected": "intelligent-writer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "selected_check_ids"
+            ],
+            "expected": [
+              "CHECK-OUTPUT"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "tdd_applies"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "implementation_status"
+            ],
+            "expected": "blocked"
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "changed_files"
+            ]
+          }
+        ]
+      },
+      "category": "role_constraints",
+      "purpose": "Exercise concrete writer selection through canonical packet/output projections.",
+      "setup_context": [
+        "Approved fixed recipe and independent output expectations are supplied.",
+        "This local structured response is a contract proxy; the framework adapter checks real disposable artifacts."
+      ],
+      "pass_criteria": [
+        "Records correct evidence-based selection and packet identities.",
+        "Preserves cumulative partial changes and the appropriate done/blocked outcome."
+      ],
+      "fail_signals": [
+        "Selects mechanical from size/type alone or drops actual partial changes."
+      ]
     }
   ],
   "canonical_feature_preparation_result_expectations": {

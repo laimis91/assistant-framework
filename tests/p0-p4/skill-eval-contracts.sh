@@ -5,6 +5,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-re
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assistant-research-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/verification-reuse-response-fixtures.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/writer-routing-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/response-fixture-preflight.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/creator-response-fixtures.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
@@ -636,6 +637,9 @@ p0p4_write_skill_eval_responses() {
             if [[ "$skill_name" == "assistant-workflow" ]] \
                 && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
                 case "$id" in
+                    writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader|writer-routing-stale-partial|writer-routing-baseline-failure)
+                        write_writer_routing_response "$id" "$response_path"
+                        ;;
                     unknown-cause-bugfix-routes-through-debugging-before-tdd)
                         jq -n --arg summary "$required_summary assistant-tdd" '{
                           summary:$summary,

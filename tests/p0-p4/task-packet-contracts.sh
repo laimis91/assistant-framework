@@ -607,7 +607,7 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/subagent-dispatch.md|MUST NOT spawn subagents"
     "skills/assistant-workflow/references/subagent-dispatch.md|direct fallback evidence"
     "skills/assistant-workflow/references/subagent-roles.md|Current Codex CLI/app releases support native subagent workflows by default"
-    "skills/assistant-workflow/references/subagent-roles.md|Spawn the code-writer agent"
+    "skills/assistant-workflow/references/subagent-roles.md|Spawn the selected intelligent-writer (default) or evidence-qualified mechanical-writer agent"
     "skills/assistant-workflow/references/subagent-roles.md|do not look for a visible Claude-style \`Agent\` tool"
     "skills/assistant-workflow/references/subagent-roles.md|optional limits; absence of those settings is not proof that subagents are unavailable"
     "skills/assistant-workflow/references/subagent-dispatch.md|Evidence gate for standard/strict work"
@@ -1482,5 +1482,59 @@ elif ! p0p4_contains_text_ci "$repair_protocol" "same plan version" \
 else
     pass
 fi
+
+
+test_start "writer_selection is identical across six packet projections and inline CodeWriter context"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+root = ARGV.fetch(0)
+h = YAML.load_file("#{root}/skills/assistant-workflow/contracts/handoffs.yaml")
+o = YAML.load_file("#{root}/skills/assistant-workflow/contracts/output.yaml")
+packets = []
+h.fetch('handoffs').each do |handoff|
+  %w[context_fields return_fields].each do |direction|
+    Array(handoff[direction]).each do |field|
+      packets << field if %w[slice_manifest implementation_steps current_task_packet].include?(field['name'])
+    end
+  end
+end
+packets << o.fetch('artifacts').find { |f| f['name'] == 'slice_manifest' }
+raise 'six packet projections required' unless packets.length == 6
+inline = h.fetch('handoffs').find { |f| f['name'] == 'orchestrator_to_code_writer' }.fetch('context_fields').find { |f| f['name'] == 'writer_selection' }
+shapes = packets.map { |f| f.fetch('object_fields').find { |x| x['name'] == 'writer_selection' } } + [inline]
+raise 'selection drift/missing' if shapes.any?(&:nil?) || shapes.uniq.length != 1
+shape = shapes.first
+raise 'legacy omission broken' unless shape['required'] == 'conditional' && shape['condition'].include?('legacy packets')
+raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '12.0' }
+fields = shape.fetch('object_fields').to_h { |f| [f['name'],f] }
+raise 'normal identity widened' unless fields.fetch('agent')['enum_values'] == %w[intelligent-writer mechanical-writer]
+eligibility = fields.fetch('mechanical_eligibility')
+raise 'eligibility no longer conditional' unless eligibility['required'] == 'conditional' && eligibility['condition'] == 'agent == mechanical-writer'
+expected = %w[recipe_or_example_ref resolved_decisions_ref scope_and_dependencies_ref correctness_expectations_ref]
+raise 'evidence schema weakened' unless eligibility.fetch('object_fields').map { |f| f['name'] } == expected && eligibility['object_fields'].all? { |f| f['required'] == true && f['on_missing'] == 'fail' }
+# Extension-only fixture interpretation: not an executable runtime router.
+# Independent evidence objects substantiate the four distinct claims.
+evidence = {'recipe.md'=>'approved exact transform', 'decisions.md'=>'all semantic/edge/compatibility decisions resolved', 'scope.md'=>'owned files/dependencies/current baseline', 'expectations.md'=>'independently fixed output bytes'}
+valid = {'agent'=>'mechanical-writer','rationale'=>'exact approved recipe','mechanical_eligibility'=>expected.zip(evidence.keys).to_h}
+accept = lambda do |packet|
+  next true unless packet.key?('writer_selection') # old packets stay valid
+  selection = packet['writer_selection']
+  next false unless selection.is_a?(Hash) && fields['agent']['enum_values'].include?(selection['agent']) && selection['rationale'].is_a?(String) && !selection['rationale'].strip.empty?
+  next true if selection['agent'] == 'intelligent-writer'
+  refs = selection['mechanical_eligibility']
+  refs.is_a?(Hash) && expected.all? { |k| evidence.key?(refs[k]) }
+end
+raise 'old packet rejected' unless accept.call({'slice_id'=>'legacy','selected_check_ids'=>['old-check'],'tdd_applies'=>false})
+raise 'eligible pattern rejected' unless accept.call({'writer_selection'=>valid})
+expected.each do |key|
+  [nil,'','I assert resolved','missing.md'].each do |invalid|
+    mutation = Marshal.load(Marshal.dump(valid)); mutation['mechanical_eligibility'][key] = invalid
+    raise "invalid evidence accepted #{key}" if accept.call({'writer_selection'=>mutation})
+  end
+end
+raise 'mechanical without evidence accepted' if accept.call({'writer_selection'=>{'agent'=>'mechanical-writer','rationale'=>'one small file'}})
+raise 'legacy runtime identity allowed as normal selection' if accept.call({'writer_selection'=>{'agent'=>'code-writer','rationale'=>'legacy'}})
+raise 'default intelligent rejected' unless accept.call({'writer_selection'=>{'agent'=>'intelligent-writer','rationale'=>'grader oracle judgment'}})
+RUBY
+then pass; else fail "writer selection projection/compatibility/evidence contract drift"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -1069,6 +1069,95 @@ fi
 if [[ -f "$workspace/RECOVERY.md" ]]; then
     response='STAGNATION and legacy_code_bug require pivot_restart_signal plus pivot_restart_decision; exact_next_action is assistant-debugging before any further patch.'
 fi
+if [[ -f "$workspace/recipe.md" && -f "$workspace/expectations.md" ]]; then
+    writer_action_events="$raw_dir/writer-actions.jsonl"
+    writer_read_command='cat recipe.md decisions.md scope.md expectations.md output.txt dependent.txt'
+    writer_late_read=false
+    writer_read_argv=''
+    if [[ "$is_candidate_identity" == true ]]; then
+        case "${FAKE_WRITER_OUTCOME_MODE:-correct}" in
+            missing-read) writer_read_command='cat recipe.md' ;;
+            late-read) writer_late_read=true ;;
+            read-reordered-string) writer_read_command='cat decisions.md recipe.md scope.md expectations.md output.txt dependent.txt' ;;
+            read-reordered-argv) writer_read_argv='["cat","dependent.txt","output.txt","expectations.md","scope.md","recipe.md","decisions.md"]' ;;
+            read-reordered-wrapper) writer_read_command="/bin/zsh -lc 'cat decisions.md recipe.md scope.md expectations.md output.txt dependent.txt'" ;;
+            read-unsafe-flag) writer_read_command='cat -n recipe.md decisions.md scope.md expectations.md output.txt dependent.txt' ;;
+            read-unsafe-operator) writer_read_command='cat recipe.md decisions.md scope.md expectations.md output.txt dependent.txt; true' ;;
+            read-unapproved-file) writer_read_command='cat recipe.md decisions.md scope.md expectations.md output.txt dependent.txt unapproved.txt' ;;
+        esac
+    fi
+    : >"$writer_action_events"
+    if [[ "$writer_late_read" == false ]]; then
+        if [[ -n "$writer_read_argv" ]]; then
+            jq -cn --argjson command "$writer_read_argv" '{type:"item.completed",item:{id:"writer-read-context",type:"command_execution",command:$command,exit_code:0,status:"completed",aggregated_output:"Approved writer evidence and current output inspected."}}' >>"$writer_action_events"
+        else
+            jq -cn --arg command "$writer_read_command" '{type:"item.completed",item:{id:"writer-read-context",type:"command_execution",command:$command,exit_code:0,status:"completed",aggregated_output:"Approved writer evidence and current output inspected."}}' >>"$writer_action_events"
+        fi
+    fi
+    writer_agent=intelligent-writer
+    writer_status=DONE
+    writer_class=none
+    writer_next=review
+    writer_changes='["output.txt"]'
+    if grep -Fq 'STALE:' "$workspace/decisions.md"; then
+        writer_agent=mechanical-writer; writer_status=NEEDS_CONTEXT; writer_class=stale_plan; writer_next=orchestrator
+    elif grep -Fq 'Inspected dependency failure:' "$workspace/decisions.md"; then
+        writer_status=BLOCKED; writer_class=broken_baseline; writer_next=orchestrator; writer_changes='[]'
+    elif [[ "$prompt" == *'success requires exact artifact'* ]]; then
+        printf '%s\n' 'success requires exact artifact' >"$workspace/output.txt"
+    elif [[ "$prompt" == *'oracle rejects plausible wrong output'* ]]; then
+        printf '%s\n' 'oracle rejects plausible wrong output' >"$workspace/output.txt"
+    else
+        writer_agent=mechanical-writer
+        printf '%s\n' 'approved exact wording' >"$workspace/output.txt"
+    fi
+    mkdir -p "$workspace/.assistant-eval"
+    jq -n --arg agent "$writer_agent" --arg status "$writer_status" --arg class "$writer_class" --arg next "$writer_next" --argjson changes "$writer_changes" '{writer_selection:{agent:$agent,rationale:"Selection follows inspected evidence and remaining judgment"},status:$status,changed_files:$changes,failure_class:$class,next_action:$next,selected_check_ids:["CHECK-OUTPUT"],binding_obligation_refs:[{kind:"required_scope",value:"only output.txt",source_ref:"scope.md"}],tdd_applies:false} | if $agent == "mechanical-writer" then .writer_selection.mechanical_eligibility={recipe_or_example_ref:"recipe.md",resolved_decisions_ref:"decisions.md",scope_and_dependencies_ref:"scope.md",correctness_expectations_ref:"expectations.md"} else . end' >"$workspace/.assistant-eval/writer-result.json"
+    if [[ "$writer_status" == DONE ]]; then
+        jq -cn '{type:"item.completed",item:{id:"writer-approved-output",type:"file_change",changes:[{path:"output.txt",kind:"update"}],status:"completed"}}' >>"$writer_action_events"
+    fi
+    if [[ "$writer_late_read" == true ]]; then
+        # A complete but late inspection cannot authorize the preceding write.
+        jq -cn --arg command "$writer_read_command" '{type:"item.completed",item:{id:"writer-read-context",type:"command_execution",command:$command,exit_code:0,status:"completed",aggregated_output:"All six required files inspected after output mutation."}}' >>"$writer_action_events"
+    fi
+    if [[ "$is_candidate_identity" == true ]]; then
+        writer_receipt="$workspace/.assistant-eval/writer-result.json"
+        case "${FAKE_WRITER_OUTCOME_MODE:-correct}" in
+            correct|missing-read|late-read|read-reordered-string|read-reordered-argv|read-reordered-wrapper|read-unsafe-flag|read-unsafe-operator|read-unapproved-file) ;;
+            wrong-output) printf '%s\n' 'plausible wording with all expected role phrases' >"$workspace/output.txt" ;;
+            wrong-role) jq '.writer_selection.agent="mechanical-writer"' "$writer_receipt" >"$writer_receipt.tmp"; mv "$writer_receipt.tmp" "$writer_receipt" ;;
+            missing-evidence) jq 'del(.writer_selection.mechanical_eligibility.resolved_decisions_ref)' "$writer_receipt" >"$writer_receipt.tmp"; mv "$writer_receipt.tmp" "$writer_receipt" ;;
+            lost-partial) jq '.changed_files=[]' "$writer_receipt" >"$writer_receipt.tmp"; mv "$writer_receipt.tmp" "$writer_receipt" ;;
+            changed-dependent) printf '%s\n' 'unauthorized continued mutation' >"$workspace/dependent.txt" ;;
+            restored-dependent)
+                # The final bytes and receipt remain correct; action history must
+                # still expose the forbidden dependent edit and its restoration.
+                cp "$workspace/dependent.txt" "$raw_dir/writer-dependent-before.txt"
+                printf '%s\n' 'unauthorized transient mutation' >"$workspace/dependent.txt"
+                jq -cn '{type:"item.completed",item:{id:"writer-dependent-edit",type:"file_change",changes:[{path:"dependent.txt",kind:"update"}],status:"completed"}}' >>"$writer_action_events"
+                cp "$raw_dir/writer-dependent-before.txt" "$workspace/dependent.txt"
+                jq -cn '{type:"item.completed",item:{id:"writer-dependent-restore",type:"file_change",changes:[{path:"dependent.txt",kind:"update"}],status:"completed"}}' >>"$writer_action_events"
+                ;;
+            unsupported-shape)
+                # Generic JSONL accepts item.updated; the writer adapter does
+                # not support that payload dialect and must leave it unscored.
+                jq -cn '{type:"item.updated",item:{id:"writer-unsupported-update",type:"file_change",path:".assistant-eval/writer-result.json",status:"completed"}}' >>"$writer_action_events"
+                ;;
+            prohibited-test)
+                # Emit a supported observed-action fixture only. Never execute
+                # the prohibited test command or create a real model call.
+                jq -cn '{type:"item.started",item:{id:"writer-prohibited-test",type:"command_execution",command:"npm test"}}' >>"$writer_action_events"
+                jq -cn '{type:"item.completed",item:{id:"writer-prohibited-test",type:"command_execution",command:"npm test",exit_code:0,status:"completed",aggregated_output:"Synthetic test invocation completed."}}' >>"$writer_action_events"
+                ;;
+            false-success) jq '.status="DONE" | .next_action="review"' "$writer_receipt" >"$writer_receipt.tmp"; mv "$writer_receipt.tmp" "$writer_receipt" ;;
+            cascade) jq '.next_action="switch-to-sol"' "$writer_receipt" >"$writer_receipt.tmp"; mv "$writer_receipt.tmp" "$writer_receipt" ;;
+            fabricated-check) jq '.selected_check_ids=["invented-check"]' "$writer_receipt" >"$writer_receipt.tmp"; mv "$writer_receipt.tmp" "$writer_receipt" ;;
+            *) exit 91 ;;
+        esac
+    fi
+    jq -cn '{type:"item.completed",item:{id:"writer-result-receipt",type:"file_change",changes:[{path:".assistant-eval/writer-result.json",kind:"add"}],status:"completed"}}' >>"$writer_action_events"
+    response='writer_selection recorded; bounded contract complete; artifact checks decide acceptance.'
+fi
 printf '%s\n' "$response" >"$last_message"
 resolved_model='resolved-test-model'
 if [[ "${FAKE_DIFFERENT_MODEL_CANDIDATE:-false}" == "true" ]] \
@@ -1087,6 +1176,9 @@ else
     printf '{"type":"thread.started","thread_id":"fake-thread","model":"%s"}\n' "$resolved_model"
 fi
 printf '%s\n' '{"type":"turn.started"}'
+if [[ -n "${writer_action_events:-}" ]]; then
+    cat "$writer_action_events"
+fi
 printf '%s\n' '{"type":"item.completed","item":{"id":"item-1","type":"agent_message","text":"phase small docs/usage.md teh"}}'
 if [[ -f "$workspace/docs/usage.md" ]]; then
     case "${FAKE_PATTERN_EVENT_MODE:-}" in
@@ -2297,7 +2389,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_OFFICIAL_JSONL=true "$runner" --execut
         and .provenance.model_selection_evidence == "explicit_model_argument_only"
         and .provenance.requested_model_catalog_entry_sha256 == null
         and (.provenance | has("resolved_model") | not)
-        and .provenance.adapter_version == "codex-framework-eval-v7")
+        and .provenance.adapter_version == "codex-framework-eval-v8")
     ' "$official_jsonl_output/traces/"*.json >/dev/null \
     && jq -e '.complete_pairs == 1 and .excluded_incomplete_pairs == 0' \
         "$official_jsonl_output/comparison.json" >/dev/null; then
@@ -3640,7 +3732,7 @@ else
     fail "persisted traces lack provenance/verifier fields, violate the schema, or retain raw content"
 fi
 
-test_start "grader provenance binds the canonical contract and full v7 runner bytes"
+test_start "grader provenance binds the canonical contract and full v8 runner bytes"
 small_contract_hash="$(jq -cS --arg id small-fix-stays-lightweight '
   .cases[] | select(.id == $id) | {fail_signals,machine_expectations,semantic_review}
 ' "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json" | test_sha256_stream)"
@@ -3650,12 +3742,12 @@ expected_grader_hash="$(printf 'contract_sha256=%s\nrunner_sha256=%s\n' \
 changed_grader_hash="$(printf 'contract_sha256=%s\nrunner_sha256=%064d\n' \
     "$small_contract_hash" 0 | test_sha256_stream)"
 if jq -s -e --arg expected "$expected_grader_hash" 'all(.[].provenance;
-      .grader_sha256 == $expected and .adapter_version == "codex-framework-eval-v7")
+      .grader_sha256 == $expected and .adapter_version == "codex-framework-eval-v8")
     ' "$execute_output/traces/"*.json >/dev/null \
     && [[ "$changed_grader_hash" != "$expected_grader_hash" ]]; then
     pass
 else
-    fail "grader hash is not bound to the exact case contract and full v7 runner implementation"
+    fail "grader hash is not bound to the exact case contract and full v8 runner implementation"
 fi
 
 test_start "active adapter-version docs and diagnostics match the canonical runner"
@@ -6760,7 +6852,7 @@ else
     fail "raw adapter error message rejection was not actionable"
 fi
 
-test_start "v4 resolved-model traces cannot mix with the v7 attestation contract"
+test_start "v4 resolved-model traces cannot mix with the v8 attestation contract"
 legacy_v4_trace_dir="$fixture_root/legacy-v4-trace"
 legacy_v4_error="$fixture_root/legacy-v4-error.txt"
 mkdir -p "$legacy_v4_trace_dir"
@@ -6777,7 +6869,7 @@ if ! "$legacy_runner" --validate-traces "$legacy_v4_trace_dir" >/dev/null 2>"$le
     && grep -Eq 'runtime_model_attestation|resolved_model' "$legacy_v4_error"; then
     pass
 else
-    fail "legacy resolved-model evidence remained valid under the v7 schema"
+    fail "legacy resolved-model evidence remained valid under the v8 schema"
 fi
 
 test_start "trace identity rejects requested-model alias contradictions"
@@ -7435,5 +7527,89 @@ elif grep -Fq 'Stopped after 2 incomplete pairs' "$parallel_mixed_error" \
 else
     fail "the breaker did not ignore only known pre-dispatch unavailable pairs while retaining the two-real-pair stop"
 fi
+
+
+test_start "writer routing outcomes require fixed artifacts and truthful partial work beyond role phrases"
+writer_outcome_failures=()
+writer_cases="writer-routing-exact-pattern,writer-routing-small-semantic,writer-routing-small-grader,writer-routing-stale-partial,writer-routing-baseline-failure"
+writer_positive="$fixture_root/writer-positive"
+if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
+    --baseline-variant "$baseline" --candidate-variant "$candidate" --cases "$writer_cases" \
+    --repeats 1 --output "$writer_positive" --codex-bin "$fake_codex" >/dev/null \
+    || ! jq -s -e 'length == 10 and all(.[]; .metrics.acceptance_passed == true and .execution.verifier.workspace_status == "passed")' "$writer_positive/traces/"*.json >/dev/null; then
+    writer_outcome_failures+=("positive fixed output or partial-work case rejected")
+fi
+while IFS='|' read -r writer_attack writer_case; do
+    writer_negative="$fixture_root/writer-$writer_attack"
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_WRITER_OUTCOME_MODE="$writer_attack" "$runner" --execute --model test-model \
+        --baseline-variant "$baseline" --candidate-variant "$candidate" --cases "$writer_case" \
+        --repeats 1 --output "$writer_negative" --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e 'length == 2 and all(.[] | select(.variant == "baseline"); .metrics.acceptance_passed == true) and all(.[] | select(.variant == "candidate"); .metrics.acceptance_passed == false and .execution.verifier.workspace_status == "failed" and (.execution.verifier.workspace_failure_ids | length) > 0)' "$writer_negative/traces/"*.json >/dev/null; then
+        writer_outcome_failures+=("$writer_attack plausible wrong outcome accepted or positive baseline rejected")
+    elif [[ "$writer_attack" == restored-dependent || "$writer_attack" == prohibited-test || "$writer_attack" == missing-read || "$writer_attack" == late-read ]]; then
+        if ! jq -s -e 'all(.[] | select(.variant == "candidate"); .execution.verifier.workspace_failure_ids == ["workspace-005"])' "$writer_negative/traces/"*.json >/dev/null; then
+            writer_outcome_failures+=("$writer_attack rejection came from final artifacts rather than observed actions")
+        fi
+    fi
+done <<'WRITER_ATTACKS'
+wrong-output|writer-routing-exact-pattern
+wrong-role|writer-routing-small-semantic
+missing-evidence|writer-routing-exact-pattern
+lost-partial|writer-routing-stale-partial
+changed-dependent|writer-routing-stale-partial
+false-success|writer-routing-stale-partial
+cascade|writer-routing-baseline-failure
+fabricated-check|writer-routing-small-grader
+restored-dependent|writer-routing-stale-partial
+prohibited-test|writer-routing-exact-pattern
+missing-read|writer-routing-exact-pattern
+late-read|writer-routing-exact-pattern
+WRITER_ATTACKS
+if [[ ${#writer_outcome_failures[@]} -eq 0 ]]; then pass; else fail "${writer_outcome_failures[*]}"; fi
+
+test_start "unsupported writer action telemetry stays unavailable and unscored"
+writer_telemetry_output="$fixture_root/writer-telemetry-unsupported"
+if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_WRITER_OUTCOME_MODE=unsupported-shape "$runner" --execute \
+    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+    --cases writer-routing-exact-pattern --repeats 1 --output "$writer_telemetry_output" \
+    --codex-bin "$fake_codex" >/dev/null \
+    && jq -s -e 'length == 2
+      and all(.[] | select(.variant == "baseline"); .status == "completed" and .metrics.acceptance_passed == true and .execution.verifier.workspace_failure_ids == [])
+      and all(.[] | select(.variant == "candidate"); .status == "adapter_unavailable" and .error.code == "unknown_event_shape" and (has("metrics") | not) and .metrics.acceptance_passed == null and .execution.verifier.status == "not_run")' "$writer_telemetry_output/traces/"*.json >/dev/null \
+    && jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1
+      and (.incomplete_pairs | length) == 1
+      and .incomplete_pairs[0].baseline_status == "completed"
+      and .incomplete_pairs[0].candidate_status == "adapter_unavailable"
+      and .variants.baseline.completed_runs == 0
+      and .variants.candidate.completed_runs == 0' "$writer_telemetry_output/comparison.json" >/dev/null; then
+    pass
+else
+    fail "unsupported writer action telemetry was scored or included in paired comparison instead of remaining unavailable"
+fi
+
+test_start "writer context reads accept bounded filename permutations and reject unsafe arguments"
+writer_read_form_failures=()
+while IFS='|' read -r writer_read_form writer_read_form_accepted; do
+    writer_read_form_output="$fixture_root/writer-read-form-$writer_read_form"
+    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_WRITER_OUTCOME_MODE="$writer_read_form" "$runner" --execute \
+        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
+        --cases writer-routing-exact-pattern --repeats 1 --output "$writer_read_form_output" \
+        --codex-bin "$fake_codex" >/dev/null \
+        || ! jq -s -e --argjson accepted "$writer_read_form_accepted" 'length == 2
+          and all(.[] | select(.variant == "baseline"); .status == "completed" and .metrics.acceptance_passed == true and .execution.verifier.workspace_failure_ids == [])
+          and all(.[] | select(.variant == "candidate"); .status == "completed" and .metrics.acceptance_passed == $accepted
+            and (if $accepted then .execution.verifier.workspace_failure_ids == [] else .execution.verifier.workspace_failure_ids == ["workspace-005"] end))' "$writer_read_form_output/traces/"*.json >/dev/null \
+        || ! jq -e '.complete_pairs == 1 and .excluded_incomplete_pairs == 0' "$writer_read_form_output/comparison.json" >/dev/null; then
+        writer_read_form_failures+=("$writer_read_form did not preserve bounded read-argument semantics")
+    fi
+done <<'WRITER_READ_FORMS'
+read-reordered-string|true
+read-reordered-argv|true
+read-reordered-wrapper|true
+read-unsafe-flag|false
+read-unsafe-operator|false
+read-unapproved-file|false
+WRITER_READ_FORMS
+if [[ ${#writer_read_form_failures[@]} -eq 0 ]]; then pass; else fail "${writer_read_form_failures[*]}"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

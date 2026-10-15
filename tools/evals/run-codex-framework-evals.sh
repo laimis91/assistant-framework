@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/lib/context-budget-evidence.sh"
 FIXTURE="$REPO_ROOT/docs/evals/framework-instruction-cases.json"
 SYNTHETIC_FIXTURE_REF="docs/evals/fixtures/seeded-code-review-regressions"
 SYNTHETIC_FIXTURE_DIR="$REPO_ROOT/$SYNTHETIC_FIXTURE_REF"
-ADAPTER_VERSION="codex-framework-eval-v7"
+ADAPTER_VERSION="codex-framework-eval-v8"
 MODE="plan"
 RESUME=false
 MODEL="gpt-5.6-sol"
@@ -2115,6 +2115,8 @@ path_allowed_for_case() {
     local case_id="$1"
     local path="$2"
     case "$case_id:$path" in
+        writer-routing-exact-pattern:output.txt|writer-routing-small-semantic:output.txt|writer-routing-small-grader:output.txt|writer-routing-stale-partial:output.txt) return 0 ;;
+        writer-routing-exact-pattern:.assistant-eval/writer-result.json|writer-routing-small-semantic:.assistant-eval/writer-result.json|writer-routing-small-grader:.assistant-eval/writer-result.json|writer-routing-stale-partial:.assistant-eval/writer-result.json|writer-routing-baseline-failure:.assistant-eval/writer-result.json) return 0 ;;
         small-fix-stays-lightweight:docs/usage.md) return 0 ;;
         small-fix-stays-lightweight:.assistant-eval/workflow-decision.json) return 0 ;;
         pivot-restart-on-stagnation-or-code-writer-blocker:.assistant-eval/stagnation-recovery.json) return 0 ;;
@@ -2526,7 +2528,7 @@ case_event_payload_shape_supported() {
         small-fix-stays-lightweight)
             allowed_item_types='["agent_message","reasoning","command_execution","file_change","mcp_tool_call","web_search"]'
             ;;
-        pivot-restart-on-stagnation-or-code-writer-blocker)
+        pivot-restart-on-stagnation-or-code-writer-blocker|writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader|writer-routing-stale-partial|writer-routing-baseline-failure)
             allowed_item_types='["agent_message","reasoning","command_execution","file_change"]'
             ;;
         *) return 1 ;;
@@ -2565,6 +2567,81 @@ case_event_payload_shape_supported() {
         else true end)
 JQ
     )" "$jsonl" >/dev/null 2>&1
+}
+
+# Writer cases keep final-byte oracles separate from observed action scope.
+# Only these bounded read and file-change forms are supported; unfamiliar
+# relevant telemetry cannot establish acceptance from correct final bytes.
+writer_routing_event_evidence() {
+    local jsonl="$1" workspace="$2" case_id="$3" path_mappings allow_output=false
+    case_event_payload_shape_supported "$jsonl" "$case_id" || return 1
+    path_mappings="$(workspace_event_path_mappings "$jsonl" "$workspace")" || return 1
+    case "$case_id" in
+        writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader) allow_output=true ;;
+        writer-routing-stale-partial|writer-routing-baseline-failure) ;;
+        *) return 1 ;;
+    esac
+    jq -cse --argjson path_mappings "$path_mappings" --argjson allow_output "$allow_output" \
+        "$EVENT_EVIDENCE_NORMALIZATION_JQ$(cat <<'JQ'
+      def required_context_paths:
+        ["recipe.md", "decisions.md", "scope.md", "expectations.md", "output.txt", "dependent.txt"];
+      def context_read_paths:
+        . as $event
+        | [command_text
+            | if type == "array" then .[] else . end
+            | scan(required_context_paths | map(gsub("[.]"; "[.]")) | join("|"))] as $paths
+        # Filename matches alone never authorize a command. Exact round-trip
+        # comparison rejects every flag, operator, or extra/unapproved argument
+        # while retaining the existing string, argv, and shell-wrapper forms.
+        | if ($paths | length) > 0
+            and ($event | is_exact_command("cat " + ($paths | join(" ")))) then
+            $paths | unique
+          else [] end;
+      def is_context_reader:
+        (context_read_paths | length) > 0;
+      def file_change_paths_are_allowed:
+        normalized_file_change_paths as $paths
+        | $paths != null and ($paths | length) > 0
+          and all($paths[];
+            . == ".assistant-eval/writer-result.json"
+            or ($allow_output and . == "output.txt"));
+      . as $events
+      | [$events[] | select(
+          (.type == "item.started" or .type == "item.completed")
+          and .item.type == "file_change")] as $changes
+      | [$events[] | select(
+          (.type == "item.started" or .type == "item.completed")
+          and .item.type == "command_execution")] as $commands
+      | ([range(0; length) | select(
+          ($events[.].type == "item.started" or $events[.].type == "item.completed")
+          and $events[.].item.type == "file_change")] | first) as $first_mutation
+      | ([range(0; length) as $index | $events[$index]
+          | select($first_mutation != null and $index < $first_mutation
+              and .type == "item.completed" and .item.type == "command_execution"
+              and .item.exit_code == 0 and is_context_reader
+              and ((.item | has("status") | not) or .item.status == "completed"))
+          | context_read_paths[]] | unique) as $inspected_paths
+      | {
+          file_change_scope_valid: ($changes | all(.[]; file_change_paths_are_allowed)),
+          file_change_status_valid: ($changes | all(.[];
+            .type != "item.completed" or (.item | has("status") | not)
+            or .item.status == "completed")),
+          commands_scope_valid: ($commands | all(.[];
+            is_context_reader
+            and (.type != "item.completed"
+              or (.item.exit_code == 0
+                and ((.item | has("status") | not) or .item.status == "completed"))))),
+          # Each required read must finish before any file mutation starts,
+          # including creation of the receipt; later reads cannot authorize it.
+          reader_observed: ($first_mutation != null
+            and (required_context_paths | all(.[];
+              . as $path | ($inspected_paths | index($path)) != null))),
+          receipt_change_observed: ($changes | any(.[];
+            .type == "item.completed"
+            and ((normalized_file_change_paths // []) | index(".assistant-eval/writer-result.json")) != null))
+        }
+JQ
+    )" "$jsonl"
 }
 
 small_fix_event_shape_supported() {
@@ -3001,6 +3078,49 @@ verify_workspace() {
     done < <(workspace_changed_paths "$workspace")
 
     case "$case_id" in
+        writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader|writer-routing-stale-partial|writer-routing-baseline-failure)
+            status="passed"
+            local expected_agent expected_status expected_output expected_class expected_next expected_changed
+            case "$case_id" in
+                writer-routing-exact-pattern) expected_agent=mechanical-writer; expected_status=DONE; expected_output='approved exact wording'; expected_class=none; expected_next=review; expected_changed='["output.txt"]' ;;
+                writer-routing-small-semantic) expected_agent=intelligent-writer; expected_status=DONE; expected_output='success requires exact artifact'; expected_class=none; expected_next=review; expected_changed='["output.txt"]' ;;
+                writer-routing-small-grader) expected_agent=intelligent-writer; expected_status=DONE; expected_output='oracle rejects plausible wrong output'; expected_class=none; expected_next=review; expected_changed='["output.txt"]' ;;
+                writer-routing-stale-partial) expected_agent=mechanical-writer; expected_status=NEEDS_CONTEXT; expected_output='partial approved wording'; expected_class=stale_plan; expected_next=orchestrator; expected_changed='["output.txt"]' ;;
+                writer-routing-baseline-failure) expected_agent=intelligent-writer; expected_status=BLOCKED; expected_output='seed wording'; expected_class=broken_baseline; expected_next=orchestrator; expected_changed='[]' ;;
+            esac
+            artifact="$workspace/.assistant-eval/writer-result.json"
+            workspace_artifact_preflight "$workspace" "$artifact" "workspace-001"
+            # Fixed case oracles are owned here, never read from a model-written receipt.
+            workspace_regular_file_preflight "$workspace" "$workspace/output.txt" 65536
+            if [[ "$workspace_regular_file_safe" == true ]] && cmp -s "$workspace/output.txt" <(printf '%s\n' "$expected_output"); then
+                workspace_record_check "workspace-002" true
+            else
+                workspace_record_check "workspace-002" false
+            fi
+            workspace_regular_file_preflight "$workspace" "$workspace/dependent.txt" 65536
+            if [[ "$workspace_regular_file_safe" == true ]] && cmp -s "$workspace/dependent.txt" <(printf '%s\n' 'dependent must remain unchanged'); then
+                workspace_record_check "workspace-003" true
+            else
+                workspace_record_check "workspace-003" false
+            fi
+            if [[ "$workspace_artifact_safe" == true ]] && jq -e --arg agent "$expected_agent" --arg status "$expected_status" --arg class "$expected_class" --arg next "$expected_next" --argjson changed "$expected_changed" '
+                .writer_selection.agent == $agent and (.writer_selection.rationale | type == "string" and test("[^[:space:]]"))
+                and .status == $status and .failure_class == $class and .next_action == $next and .changed_files == $changed
+                and .selected_check_ids == ["CHECK-OUTPUT"] and .tdd_applies == false
+                and .binding_obligation_refs == [{kind:"required_scope",value:"only output.txt",source_ref:"scope.md"}]
+                and (if $agent == "mechanical-writer" then .writer_selection.mechanical_eligibility == {recipe_or_example_ref:"recipe.md",resolved_decisions_ref:"decisions.md",scope_and_dependencies_ref:"scope.md",correctness_expectations_ref:"expectations.md"} else true end)
+              ' "$artifact" >/dev/null 2>&1; then
+                workspace_record_check "workspace-004" true
+            else
+                workspace_record_check "workspace-004" false
+            fi
+            event_evidence="$(writer_routing_event_evidence "$jsonl" "$workspace_identity" "$case_id")" || event_evidence='{}'
+            if jq -e '.file_change_scope_valid == true and .file_change_status_valid == true and .commands_scope_valid == true and .reader_observed == true and .receipt_change_observed == true' <<<"$event_evidence" >/dev/null; then
+                workspace_record_check "workspace-005" true
+            else
+                workspace_record_check "workspace-005" false
+            fi
+            ;;
         small-fix-stays-lightweight)
             status="passed"
             workspace_regular_file_preflight "$workspace" "$workspace/docs/usage.md" 65536
@@ -3330,6 +3450,20 @@ seed_case_workspace() {
     local case_id="$2"
 
     case "$case_id" in
+        writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader|writer-routing-stale-partial|writer-routing-baseline-failure)
+            printf '%s\n' 'seed wording' >"$workspace/output.txt"
+            printf '%s\n' 'dependent must remain unchanged' >"$workspace/dependent.txt"
+            printf '%s\n' 'Approved recipe: exact supplied output text with one newline.' >"$workspace/recipe.md"
+            printf '%s\n' 'Exact pattern decisions resolved; semantic/grader tasks still require intelligent judgment.' >"$workspace/decisions.md"
+            printf '%s\n' 'Own only output.txt and the result receipt; dependent.txt and all evidence are immutable.' >"$workspace/scope.md"
+            printf '%s\n' 'Independent fixed output oracle is owned by the adapter; role phrases alone cannot pass.' >"$workspace/expectations.md"
+            if [[ "$case_id" == "writer-routing-stale-partial" ]]; then
+                printf '%s\n' 'partial approved wording' >"$workspace/output.txt"
+                printf '%s\n' 'STALE: compatibility decision unresolved after first actual edit; stop dependent mutations.' >"$workspace/decisions.md"
+            elif [[ "$case_id" == "writer-routing-baseline-failure" ]]; then
+                printf '%s\n' 'Inspected dependency failure: baseline is broken before mutation; no capability conclusion.' >"$workspace/decisions.md"
+            fi
+            ;;
         small-fix-stays-lightweight)
             mkdir -p "$workspace/docs"
             printf '%s\n' 'This fixture contains teh requested typo.' >"$workspace/docs/usage.md"
@@ -3792,6 +3926,18 @@ execute_one_run() {
         rm -rf "$run_raw"
         return
     fi
+
+    case "$case_id" in
+        writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader|writer-routing-stale-partial|writer-routing-baseline-failure)
+            if ! case_event_payload_shape_supported "$jsonl" "$case_id"; then
+                write_unavailable_trace "$trace_path" "$run_id" "$pair_id" "$case_id" "$trial_index" "$variant" \
+                    unknown_event_shape 0 "$fixture_hash" "$case_digest" "$instruction_hash" "$grader_digest" "$cli_version"
+                mark_run_attempt_completed "$attempt_path" || die "Could not complete run-attempt state for $run_id."
+                rm -rf "$run_raw"
+                return
+            fi
+            ;;
+    esac
 
     local semantic_extract_path=""
     if is_synthetic_seeded_case "$case_id"; then
