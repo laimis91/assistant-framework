@@ -1,81 +1,146 @@
 # Assistant Skill Creator Input Contract
-# Resolve these fields before entering CAPTURE phase.
+# Resolve only the fields required by the selected operation.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: input
 skill: assistant-skill-creator
 
 fields:
-  - name: skill_name
-    type: string
-    required: true
-    description: "Kebab-case new-skill identifier with a domain prefix"
-    validation: "Must be kebab-case with a domain prefix"
-    on_missing: ask
-    ask_prompt: "What is this kebab-case, domain-prefixed skill name?"
-
-  - name: skill_purpose
-    type: string
-    required: true
-    description: "One sentence describing what the skill enables the agent to do"
-    validation: "Non-empty concrete capability, not a vague goal"
-    on_missing: ask
-    ask_prompt: "In one sentence, what should this skill enable the agent to do?"
-
-  - name: skill_category
+  - name: operation
     type: enum
     required: true
-    enum_values: [process, analysis, utility]
-    description: "Contract tier determining required files"
-    validation: "Must be an enum value"
+    enum_values: [create, update, assess, refresh_guidance]
+    description: "Requested creator operation"
+    validation: "Use create for a new skill, update for editing a named skill, assess for read-only evaluation, and refresh_guidance for a read-only check of an explicitly named source scope"
     on_missing: infer
-    infer_from: "Process first: workflow, pipeline, multi-phase, subagent, dispatch, handoff, or handoffs -> process; otherwise analyze, analysis, reason, research, diverge, or converge -> analysis; else Utility"
+    infer_from: "Infer from the explicit request; ask only when the intended operation is ambiguous"
+
+  - name: skill_name
+    type: string
+    required: conditional
+    condition: "operation == create"
+    description: "New target skill name"
+    validation: "Use 1–64 ASCII lowercase letters, digits, and single hyphens; do not start, end, or repeat a hyphen"
+    on_missing: ask
+    ask_prompt: "What name should the new skill use?"
 
   - name: existing_skill_path
     type: string
-    required: false
-    description: "Existing skill path when updating rather than creating"
-    default: null
-    on_missing: skip
-    notes: "Resolve first. Inspect existing description/evals, derive adequate examples, then ask only residual gaps; require 2 normalized distinct positives and 1 normalized-disjoint nearby negative before DESIGN."
+    required: conditional
+    condition: "operation in [update, assess]"
+    description: "Path to the existing skill to update or assess"
+    validation: "Resolve the named target before proposing changes; derive its current name, metadata, dependencies, description, and evals from the files"
+    on_missing: ask
+    ask_prompt: "Which existing skill should I inspect or update?"
+
+  - name: skill_purpose
+    type: string
+    required: conditional
+    condition: "operation in [create, update]"
+    description: "Outcome the authored skill should enable"
+    validation: "Use one concrete sentence; for updates, derive the current purpose and ask only about material changes"
+    on_missing: infer
+    infer_from: "Use the explicit request and existing skill where available; ask only if a new skill purpose remains unclear"
+
+  - name: skill_category
+    type: enum
+    required: conditional
+    condition: "operation in [create, update]"
+    enum_values: [process, analysis, utility]
+    description: "Contract tier for the target skill"
+    validation: "Process-first inference: workflow, pipeline, multi-phase, subagent, dispatch, or handoffs selects process; otherwise analyze, analysis, reason, research, diverge, or converge selects analysis; else utility"
+    on_missing: infer
+    infer_from: "Infer from the skill purpose using Process-first category inference"
+
+  - name: skill_value_kind
+    type: enum
+    required: conditional
+    condition: "operation in [create, update]"
+    enum_values: [capability, preference, mixed]
+    description: "Whether the target encodes a capability, a preference, or both"
+    validation: "Select the value kind supported by the request and existing evidence; do not present an encoded preference as a measured capability improvement"
+    on_missing: infer
+    infer_from: "Infer from the requested outcome and existing acceptance evidence; ask only if the distinction changes design"
+
+  - name: success_criteria
+    type: string[]
+    required: conditional
+    condition: "operation in [create, update] and authoring is extensive or a capability improvement is claimed"
+    description: "Observable criteria for the requested authoring outcome"
+    validation: "Derive criteria from stated requirements, existing acceptance, or demonstrated gaps; include only criteria that change the design or its validation"
+    on_missing: ask
+    ask_prompt: "What outcome criteria should guide this extensive authoring or capability claim? I will first use existing requirements, acceptance checks, and demonstrated gaps."
+    examples:
+      - ["Routes the two stated deployment actions and excludes the adjacent announcement request"]
+      - ["Preserves the current dependency metadata while adding the requested validation rule"]
 
   - name: activation_examples
     type: object[]
-    required: true
-    description: "User requests with activation decisions for native description and positive/negative evals; never header metadata"
-    validation: "Require at least 2 distinct true and 1 false should_activate decisions, each with concrete nonblank user_request and boolean should_activate. Normalize requests by trim, whitespace collapse, and ASCII case fold; positive and negative sets must be disjoint. For existing_skill_path, derive structured activation examples from the existing description and activation evals when adequate; capture only missing material examples for description and evals."
+    required: conditional
+    condition: "operation in [create, update]"
+    description: "Activation evidence for the target skill's native description and positive/negative evals, never header metadata"
+    validation: "For authored targets, require at least 2 distinct true and 1 false should_activate requests with normalized-distinct positives and a normalized-disjoint nearby negative. For existing targets, inspect the description and activation evals, derive structured examples when adequate, and ask only about residual material gaps."
     min_items: 3
     on_missing: ask
-    ask_prompt: "For a new skill, give two distinct normalized should_activate: true requests and one normalized-disjoint nearby should_activate: false non-match. For existing_skill_path, inspect description/evals, derive adequate examples, then ask only for remaining material gaps. Use them for description/evals, not header metadata."
+    ask_prompt: "For a new skill, provide two distinct positive requests and one nearby negative. For an existing skill, I will inspect its description and evals, derive examples, and ask only for remaining material gaps."
     object_fields:
       - name: user_request
         type: string
         required: true
-        description: "Concrete activation-evidence request"
+        description: "Concrete request used to assess activation"
       - name: should_activate
         type: boolean
         required: true
-        description: "Whether to activate for user_request"
+        description: "Whether the target skill should activate for the request"
     examples:
-      - - user_request: "Deploy the approved release"
+      - - user_request: "Create a new skill with contracts."
           should_activate: true
-        - user_request: "Roll out the approved release"
+        - user_request: "Update this skill's contract design."
           should_activate: true
-        - user_request: "Draft a release announcement"
+        - user_request: "Run the existing skill without modifying its design."
           should_activate: false
 
   - name: dependencies
     type: string[]
     required: false
-    description: "Hard dependencies only when no safe fallback exists"
-    validation: "unique non-empty kebab-case skill names, not skill_name, preserve order; project non-empty values to optional plain-block two-space-dash requires, otherwise omit it. When updating an existing skill and dependencies are omitted, preserve its current canonical requires; explicit dependencies, including an empty list, replace or remove current requires."
+    condition: "operation in [create, update]"
+    description: "Hard dependencies required only when no safe fallback exists"
+    validation: "Use unique non-empty kebab-case skill names other than skill_name, preserve order, and project non-empty values to optional plain-block requires. When updating an existing skill and dependencies are omitted, preserve its current canonical requires; explicit dependencies, including an empty list, replace or remove them."
     on_missing: infer
-    infer_from: "When existing_skill_path is provided, inspect and preserve current canonical requires when dependencies are omitted; when creating a new skill, infer an empty dependency list. An explicit dependencies value, including [], replaces the inferred value."
+    infer_from: "For an update, inspect and preserve current canonical requires when omitted; for a new skill, infer an empty dependency list. Explicit dependencies, including [], replace or remove the current list."
 
   - name: policy_constraints
     type: string[]
     required: false
-    description: "Company, privacy, runtime, or tool-use constraints"
+    condition: "operation in [create, update]"
+    description: "Applicable company, privacy, runtime, and tool-use constraints"
     default: []
     on_missing: infer
-    infer_from: "User/project constraints: external tools, locality, memory, subagents, network"
+    infer_from: "Use user and project constraints; keep external tools, locality, memory, subagents, network, and state optional/configurable with safe fallbacks"
+
+  - name: assessment_goal
+    type: string
+    required: conditional
+    condition: "operation == assess"
+    description: "Question or acceptance boundary for the read-only assessment"
+    validation: "State what evidence or behavior is being assessed; do not imply inspection beyond accessible files or observations"
+    on_missing: infer
+    infer_from: "Use the explicit request; ask only when the assessment boundary materially changes the conclusion"
+
+  - name: authoring_guidance_sources
+    type: string[]
+    required: conditional
+    condition: "operation in [create, update] and (((authoring is new or materially changed) and a relevant registered assessment has expired) or a relevant source/runtime change is known)"
+    description: "Registered source IDs for authoring"
+    validation: "Match registered IDs by affected_refs to changed inputs or known source/runtime changes"
+    on_missing: infer
+    infer_from: "Use affected_refs. Expiry triggers only for new/material authoring; known relevant changes trigger independently. Ask only if a missing source fact affects correctness; otherwise continue offline."
+
+  - name: guidance_scope
+    type: string
+    required: conditional
+    condition: "operation == refresh_guidance"
+    description: "Explicit source set or guidance topic to check"
+    validation: "Name source IDs from references/upstream-guidelines.json; distinguish public sources from installed snapshots, do not fetch arbitrary URLs, and report manual or incomplete sources with their access and representation limits"
+    on_missing: ask
+    ask_prompt: "Which upstream source or guidance scope should I check?"

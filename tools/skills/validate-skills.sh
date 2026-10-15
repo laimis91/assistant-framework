@@ -531,7 +531,7 @@ validate_contract_field_types() {
     local type_kind field_type type_nodes
 
     if ! type_nodes="$(ruby -ryaml -e '
-      document = YAML.load_file(ARGV.fetch(0))
+      document = YAML.safe_load(File.read(ARGV.fetch(0)), permitted_classes: [], permitted_symbols: [], aliases: false)
       type_kind = lambda do |value|
         case value
         when String then "string"

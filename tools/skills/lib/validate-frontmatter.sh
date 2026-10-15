@@ -8,17 +8,59 @@ frontmatter_has_bounds() {
     ' "$file"
 }
 
-frontmatter_value() {
+frontmatter_standard_metadata_errors() {
     local file="$1"
-    local key="$2"
+    local skill_name="$2"
 
-    frontmatter_scalar_value "$file" "$key" | awk '
-        {
-            sub(/[[:space:]]+#.*$/, "", $0)
-            print
-            exit
-        }
-    ' | trim_value
+    ruby -ryaml -rdate -e '
+        begin
+            file, skill_name = ARGV
+            lines = File.readlines(file, encoding: "UTF-8")
+            closing_index = (1...lines.length).find { |index| lines[index].chomp == "---" }
+            exit 0 unless lines.first&.chomp == "---" && closing_index
+
+            frontmatter = lines[1...closing_index].join
+            metadata = YAML.safe_load(frontmatter, permitted_classes: [Date, Time], aliases: false)
+            exit 0 unless metadata.is_a?(Hash)
+
+            mapping = Psych.parse_stream(frontmatter).children.first&.root
+            if mapping.is_a?(Psych::Nodes::Mapping)
+                scanner = Psych::ScalarScanner.new(Psych::ClassLoader::Restricted.new(["Date", "Time"], []))
+                seen_keys = {}
+                duplicate_key = false
+                mapping.children.each_slice(2) do |key_node, _value_node|
+                    next unless key_node.is_a?(Psych::Nodes::Scalar)
+                    key = key_node.tag.nil? && key_node.plain ? scanner.tokenize(key_node.value) : key_node.value
+                    duplicate_key ||= seen_keys.key?(key)
+                    seen_keys[key] = true
+                end
+                puts "DUPLICATE_KEY" if duplicate_key
+            end
+
+            name = metadata["name"]
+            if !name.is_a?(String) || name.empty?
+                puts "NAME_REQUIRED"
+            else
+                puts "NAME_FORMAT" unless name.match?(/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/)
+                puts "NAME_LENGTH" if name.length > 64
+                puts "NAME_DIRECTORY" if name != skill_name
+            end
+
+            description = metadata["description"]
+            puts "DESCRIPTION_LENGTH" if description.is_a?(String) && description.length > 1024
+
+            if metadata.key?("compatibility")
+                compatibility = metadata["compatibility"]
+                if !compatibility.is_a?(String)
+                    puts "COMPATIBILITY_TYPE"
+                elsif compatibility.empty? || compatibility.length > 500
+                    puts "COMPATIBILITY_LENGTH"
+                end
+            end
+        rescue Psych::Exception, ArgumentError, EncodingError
+            puts "PARSE_ERROR"
+        end
+    ' "$file" "$skill_name"
 }
 
 frontmatter_description_codepoint_is_printable() {
@@ -429,8 +471,8 @@ frontmatter_requires_validation_errors() {
 validate_frontmatter() {
     local skill_file="$1"
     local skill_name="$2"
-    local name
     local description
+    local standard_metadata_error
 
     if ! frontmatter_has_bounds "$skill_file"; then
         record_error "FRONTMATTER_BOUNDS" "$skill_file" "SKILL.md must start with YAML frontmatter bounded by opening and closing ---"
@@ -441,12 +483,37 @@ validate_frontmatter() {
         record_error "FRONTMATTER_KEY_FORMAT" "$skill_file" "top-level frontmatter keys must use plain or quoted scalar block-mapping syntax; YAML merge keys, tags, anchors, aliases, and explicit-key indicators are unsupported"
     fi
 
-    name="$(frontmatter_value "$skill_file" "name")"
-    if [[ -z "$name" ]]; then
-        record_error "FRONTMATTER_NAME" "$skill_file" "frontmatter name is required"
-    elif [[ "$name" != "$skill_name" ]]; then
-        record_error "FRONTMATTER_NAME" "$skill_file" "frontmatter name '$name' must match directory name '$skill_name'"
-    fi
+    while IFS= read -r standard_metadata_error; do
+        case "$standard_metadata_error" in
+            PARSE_ERROR)
+                record_error "FRONTMATTER_STANDARD_METADATA_PARSE" "$skill_file" "frontmatter must be valid YAML to validate standard metadata"
+                ;;
+            DUPLICATE_KEY)
+                record_error "FRONTMATTER_DUPLICATE_KEY" "$skill_file" "top-level frontmatter keys must be unique by parsed YAML identity"
+                ;;
+            NAME_REQUIRED)
+                record_error "FRONTMATTER_NAME" "$skill_file" "frontmatter name is required and must be a string"
+                ;;
+            NAME_FORMAT)
+                record_error "FRONTMATTER_NAME_FORMAT" "$skill_file" "frontmatter name must use lowercase letters, digits, and single hyphen separators"
+                ;;
+            NAME_LENGTH)
+                record_error "FRONTMATTER_NAME_LENGTH" "$skill_file" "frontmatter name must be at most 64 characters"
+                ;;
+            NAME_DIRECTORY)
+                record_error "FRONTMATTER_NAME" "$skill_file" "frontmatter name must match directory name '$skill_name'"
+                ;;
+            DESCRIPTION_LENGTH)
+                record_error "FRONTMATTER_DESCRIPTION_LENGTH" "$skill_file" "frontmatter description must be at most 1,024 characters"
+                ;;
+            COMPATIBILITY_TYPE)
+                record_error "FRONTMATTER_COMPATIBILITY" "$skill_file" "optional frontmatter compatibility must be a string"
+                ;;
+            COMPATIBILITY_LENGTH)
+                record_error "FRONTMATTER_COMPATIBILITY_LENGTH" "$skill_file" "optional frontmatter compatibility must be 1 to 500 characters"
+                ;;
+        esac
+    done < <(frontmatter_standard_metadata_errors "$skill_file" "$skill_name")
 
     description="$(frontmatter_description_value "$skill_file")"
     if [[ -z "$description" ]]; then

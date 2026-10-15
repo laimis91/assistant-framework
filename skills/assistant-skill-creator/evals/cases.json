@@ -8,9 +8,18 @@
   "provider_neutral": true,
   "model_specific_api_calls": false,
   "activation_cases": [
-    {"user_request": "Create a new skill with contracts.", "should_activate": true},
-    {"user_request": "Update this skill's contract design.", "should_activate": true},
-    {"user_request": "Run the existing skill without modifying its design.", "should_activate": false}
+    {
+      "user_request": "Create a new skill with contracts.",
+      "should_activate": true
+    },
+    {
+      "user_request": "Update this skill's contract design.",
+      "should_activate": true
+    },
+    {
+      "user_request": "Run the existing skill without modifying its design.",
+      "should_activate": false
+    }
   ],
   "recommended_use": [
     "Run each case with the assistant-skill-creator skill instructions loaded.",
@@ -30,7 +39,8 @@
         "No contract design has been approved yet."
       ],
       "expected_behavior": [
-        "Starts with CAPTURE and resolves skill_name, skill_purpose, skill_category, activation_examples, dependencies, and policy_constraints.",
+        "Routes the request to create, then CAPTURE, DESIGN, BUILD, and VALIDATE with only the applicable authoring inputs.",
+        "Identifies skill_value_kind and evidence-backed success criteria before extensive authoring.",
         "Captures activation_examples as user_request and should_activate pairs, with two normalized-distinct true decisions and one normalized-disjoint false nearby non-match.",
         "Uses activation_examples only to shape the native description and positive and negative activation evals; it does not emit legacy header metadata.",
         "Projects validated hard dependencies in order to conditional requires only when they are supplied and non-empty as a plain block sequence with two-space dash items, while preserving required name and description.",
@@ -57,6 +67,10 @@
         "required_substrings": [
           "--- PHASE: CAPTURE ---",
           "--- PHASE: DESIGN ---",
+          "operation",
+          "create",
+          "skill_value_kind",
+          "success criteria",
           "skill_category",
           "process",
           "input.yaml",
@@ -84,7 +98,34 @@
           "No design approval needed",
           "utility skill",
           "skip phase-gates.yaml"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
         ]
+      },
+      "semantic_validator": "assistant-skill-creator.behavior_v1",
+      "semantic_context": {
+        "creator_evidence": {
+          "schema_version": "1.0",
+          "operation": "create",
+          "expected_outcome": "design_pending_approval",
+          "skill_name": "assistant-deploy",
+          "skill_category": "process",
+          "design_required": true,
+          "allowed_artifacts": [],
+          "required_artifacts": [],
+          "preserved_metadata": [],
+          "preserved_target_files": [],
+          "artifact_checks": [],
+          "assessment_criteria": [],
+          "comparison_required": false,
+          "run_binding": null
+        }
       }
     },
     {
@@ -103,11 +144,11 @@
       "expected_behavior": [
         "Uses the existing skill shortcut and reads the existing SKILL.md, description, activation evals, and current canonical requires instead of asking for all capture fields again.",
         "Preserves current canonical requires when dependencies are omitted, while explicit dependencies or explicit empty dependencies replace or remove them.",
-        "Treats activation_examples as required even for an existing skill, deriving available evidence before asking for residual gaps.",
+        "Requires activation_examples for create and update only; for update, derives available evidence before asking for residual gaps.",
         "Reuses adequate existing positive evidence without an all-example prompt, derives structured examples from existing description and activation evals, and asks only for remaining material gaps.",
         "Enters DESIGN using the existing skill purpose, category, description, and activation evidence only after two normalized-distinct positive and one normalized-disjoint nearby negative should_activate decisions are available.",
         "Builds the contract files required for the inferred skill category.",
-        "Runs VALIDATE against the 14 contract design guide rules.",
+        "Runs VALIDATE against all 15 applicable contract design guide rules.",
         "Checks compact Goal, Success criteria, Constraints, Output, and Stop rules for non-trivial skills.",
         "Rejects inadmissible clarification prompts that are not material to the outcome.",
         "Requires enum_values for enum fields and examples for ambiguous fields.",
@@ -117,7 +158,7 @@
         "The response names existing_skill_path or existing skill shortcut behavior, reuses adequate existing positive evidence, and derives structured activation examples.",
         "The response includes two normalized-distinct positive and one normalized-disjoint nearby negative activation decisions before DESIGN completion.",
         "The response includes the VALIDATE phase and validation summary.",
-        "The response references all 14 contract design guide rules.",
+        "The response references all 15 applicable contract design guide rules.",
         "The response fixes missing enum_values or examples before completion.",
         "The response does not claim validation passed with known failures."
       ],
@@ -146,7 +187,7 @@
           "--- PHASE: BUILD ---",
           "--- PHASE: VALIDATE ---",
           "validation summary",
-          "14 contract design guide rules",
+          "15 applicable contract design guide rules",
           "Success criteria",
           "Stop rules",
           "admissible",
@@ -159,6 +200,14 @@
           "enum_values can be omitted",
           "examples are optional for ambiguous fields",
           "skip VALIDATE"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
         ]
       }
     },
@@ -208,6 +257,14 @@
           "one run is enough",
           "save task progress",
           "verification is optional"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
         ]
       }
     },
@@ -255,6 +312,14 @@
           "string is fine everywhere",
           "int is always enough",
           "no compatibility plan needed"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
         ]
       }
     },
@@ -302,6 +367,14 @@
           "created the skill immediately",
           "single successful run is enough",
           "stored PR numbers"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
         ]
       }
     },
@@ -354,7 +427,422 @@
           "generic generator/evaluator loop is enough",
           "max 20",
           "QA replaces code review"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
         ]
+      }
+    },
+    {
+      "id": "assess-existing-skill-without-authoring",
+      "title": "Assess an existing skill without authoring",
+      "category": "read_only_assessment",
+      "purpose": "Checks that assessment uses operation-specific inputs and returns evidence without requiring or creating skill artifacts.",
+      "prompt": "Assess the existing assistant-calendar skill against its activation and metadata requirements without changing it.",
+      "setup_context": [
+        "The assistant-skill-creator instructions are active.",
+        "The named existing skill is accessible.",
+        "The user requests a read-only assessment."
+      ],
+      "expected_behavior": [
+        "Routes the request to assess and resolves the assessment goal and existing target.",
+        "Inspects available target evidence and distinguishes structural validity, activation evidence, and outcome quality.",
+        "Returns an operation summary, canonical evidence assessment, and unresolved gaps.",
+        "Does not request authoring-only activation or dependency inputs and does not write target skill files."
+      ],
+      "pass_criteria": [
+        "The response names assess and the read-only boundary.",
+        "The response reports accessible evidence and limits.",
+        "The response returns findings without creating skill files."
+      ],
+      "fail_signals": [
+        "Routes assessment through BUILD.",
+        "Requires create/update fields that do not apply.",
+        "Claims behavior or host activation without evidence.",
+        "Writes target skill files."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "assess",
+          "read-only",
+          "existing_skill_path",
+          "assessment_goal",
+          "operation_summary",
+          "evidence_assessment",
+          "do not write skill files"
+        ],
+        "forbidden_substrings": [
+          "--- PHASE: BUILD ---",
+          "I created SKILL.md"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
+        ]
+      },
+      "semantic_validator": "assistant-skill-creator.behavior_v1",
+      "semantic_context": {
+        "creator_evidence": {
+          "schema_version": "1.0",
+          "operation": "assess",
+          "expected_outcome": "read_only_assessment",
+          "skill_name": "assistant-calendar",
+          "skill_category": "analysis",
+          "design_required": false,
+          "allowed_artifacts": [],
+          "required_artifacts": [],
+          "preserved_metadata": [],
+          "preserved_target_files": [],
+          "artifact_checks": [],
+          "assessment_criteria": [
+            "contract structure is supported",
+            "activation evidence is present"
+          ],
+          "comparison_required": false,
+          "run_binding": null
+        }
+      }
+    },
+    {
+      "id": "refresh-guidance-is-read-only-and-provenance-bound",
+      "title": "Refresh guidance without claiming adoption",
+      "category": "read_only_guidance_refresh",
+      "purpose": "Checks that a guidance refresh records available provenance and limitations without changing skills or claiming that retrieval means adoption.",
+      "prompt": "Refresh the current official agent-skills guidance used by this skill and report what changed.",
+      "setup_context": [
+        "The assistant-skill-creator instructions are active.",
+        "The user explicitly requests a read-only check of an upstream source scope.",
+        "Source access or complete revision data may be unavailable."
+      ],
+      "expected_behavior": [
+        "Routes the request to refresh_guidance and resolves the explicit source scope.",
+        "Records source identity, retrieval/check date, revision or digest when available, relevance, disposition, affected consumers, and access limits.",
+        "Distinguishes a matching recent assessment, changed relevant bytes, an expired unchanged assessment, and incomplete or unavailable retrieval.",
+        "Leaves unknown, stale, partial, or unavailable values explicit and does not equate fetching with adoption.",
+        "Returns a read-only operation summary and canonical evidence assessment without writing skills, installing tools, or scheduling checks."
+      ],
+      "pass_criteria": [
+        "The response names refresh_guidance and a read-only source scope.",
+        "The response reports available provenance and retrieval limits.",
+        "A relevant source change is review-required, and expired unchanged evidence is due for assessment.",
+        "The response does not claim adoption from fetching alone."
+      ],
+      "fail_signals": [
+        "Claims a source is current without evidence.",
+        "Treats an expired unchanged assessment as current or a changed path as adopted.",
+        "Treats an inaccessible or partial source as complete.",
+        "Writes skill files, changes the source disposition, or creates a scheduled check."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "refresh_guidance",
+          "guidance_scope",
+          "source identity",
+          "retrieval/check date",
+          "revision or digest",
+          "disposition",
+          "affected consumers",
+          "access limitations",
+          "fetch does not establish adoption",
+          "read-only"
+        ],
+        "forbidden_substrings": [
+          "source is current because it was fetched",
+          "scheduled weekly check created"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
+        ]
+      },
+      "semantic_validator": "assistant-skill-creator.behavior_v1",
+      "semantic_context": {
+        "creator_evidence": {
+          "schema_version": "1.0",
+          "operation": "refresh_guidance",
+          "expected_outcome": "read_only_refresh",
+          "skill_name": "assistant-skill-creator",
+          "skill_category": "analysis",
+          "design_required": false,
+          "allowed_artifacts": [],
+          "required_artifacts": [],
+          "preserved_metadata": [],
+          "preserved_target_files": [],
+          "artifact_checks": [],
+          "assessment_criteria": [],
+          "comparison_required": false,
+          "run_binding": null
+        }
+      }
+    },
+    {
+      "id": "narrow-existing-skill-update-preserves-metadata-and-agent-policy",
+      "title": "Narrow update preserves supported metadata and agent policy",
+      "category": "metadata_preservation",
+      "purpose": "Checks that a body-only correction preserves supported SKILL.md metadata and the separate agent policy file byte for byte.",
+      "prompt": "Fix the typo in the assistant-note-scope instructions only. Preserve its metadata, dependencies, contracts, evals, and agents/openai.yaml policy.",
+      "setup_context": [
+        "The assistant-skill-creator skill instructions are active.",
+        "An existing assistant-note-scope skill has SKILL.md metadata and agents/openai.yaml UI policy.",
+        "The requested change does not alter the skill purpose or contract design."
+      ],
+      "expected_behavior": [
+        "Applies the bounded update operation without reopening an unrelated design.",
+        "Preserves name, description, compatibility, license, metadata, allowed-tools, policy, and requires exactly.",
+        "Applies exactly one frozen body-text correction and preserves every other SKILL.md byte.",
+        "Preserves agents/openai.yaml bytes and reports only the requested body correction."
+      ],
+      "pass_criteria": [
+        "The exact body correction is present in the actual SKILL.md output with all other bytes unchanged.",
+        "Every configured supported metadata field is unchanged.",
+        "The actual agents/openai.yaml output digest matches the source digest."
+      ],
+      "fail_signals": [
+        "Leaves the source body unchanged or makes any unrequested body edit.",
+        "Changes or removes supported metadata or requires.",
+        "Changes agents/openai.yaml display or implicit-invocation policy.",
+        "Claims the update without a captured successful write and non-empty file."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "assistant-note-scope",
+          "body-only correction",
+          "preserve",
+          "agents/openai.yaml"
+        ],
+        "forbidden_substrings": [
+          "remove requires",
+          "enable implicit invocation"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
+        ]
+      },
+      "semantic_validator": "assistant-skill-creator.behavior_v1",
+      "semantic_context": {
+        "creator_evidence": {
+          "schema_version": "1.0",
+          "operation": "update",
+          "requested_body_change": {
+            "before_text": "Existing body.",
+            "after_text": "Updated body-only correction."
+          },
+          "expected_outcome": "authoring_complete",
+          "skill_name": "assistant-note-scope",
+          "skill_category": "utility",
+          "design_required": false,
+          "allowed_artifacts": [
+            "SKILL.md",
+        "agents/openai.yaml",
+        "contracts/input.yaml",
+        "contracts/output.yaml",
+        "evals/cases.json"
+          ],
+          "required_artifacts": [
+            "SKILL.md"
+          ],
+          "preserved_metadata": [
+            "name",
+            "description",
+            "compatibility",
+            "license",
+            "metadata",
+            "allowed-tools",
+            "policy",
+            "requires"
+          ],
+          "preserved_target_files": [
+        "agents/openai.yaml",
+        "contracts/input.yaml",
+        "contracts/output.yaml",
+        "evals/cases.json"
+          ],
+          "artifact_checks": [],
+          "assessment_criteria": [],
+          "comparison_required": false,
+          "run_binding": null
+        }
+      }
+    },
+    {
+      "id": "assess-skill-contracts-under-frozen-comparison",
+      "title": "Assess skill contracts under a frozen comparison",
+      "category": "matched_comparison",
+      "purpose": "Checks that a read-only comparison uses matched frozen runs, separated outputs, disjoint partitions, and raw per-class outcomes.",
+      "prompt": "Compare the approved baseline and candidate assistant-skill-creator runs using the same prompts, rubric, model, tools, permissions, and fresh output locations.",
+      "setup_context": [
+        "The assistant-skill-creator skill instructions are active.",
+        "A collector has frozen baseline and candidate run identities and the comparison rubric.",
+        "Assessment is read-only; the final acceptance partition is held out from candidate selection."
+      ],
+      "expected_behavior": [
+        "Uses the frozen pair and matched conditions without rerunning or changing either output.",
+        "Reports disjoint training, validation, and final-acceptance partitions.",
+        "Derives each metric from raw outcomes and reports unavailable values for zero denominators."
+      ],
+      "pass_criteria": [
+        "The baseline and candidate identities, settings, and output roots match the collector record.",
+        "Candidate selection uses validation only and does not inspect final acceptance labels.",
+        "Raw outcome counts and denominators support each reported metric."
+      ],
+      "fail_signals": [
+        "Uses shared or nested output roots.",
+        "Uses different prompts, rubric, model settings, tools, or permissions.",
+        "Selects from the final acceptance partition or invents a one-class metric."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "baseline",
+          "candidate",
+          "matched conditions",
+          "final acceptance",
+          "denominator"
+        ],
+        "forbidden_substrings": [
+          "shared output directory",
+          "holdout used for selection"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
+        ]
+      },
+      "semantic_validator": "assistant-skill-creator.behavior_v1",
+      "semantic_context": {
+        "creator_evidence": {
+          "schema_version": "1.0",
+          "operation": "assess",
+          "expected_outcome": "comparison_assessment",
+          "skill_name": "assistant-skill-creator",
+          "skill_category": "analysis",
+          "design_required": false,
+          "allowed_artifacts": [],
+          "required_artifacts": [],
+          "preserved_metadata": [],
+          "preserved_target_files": [],
+          "artifact_checks": [],
+          "assessment_criteria": [
+            "baseline and candidate are bound to matched conditions",
+            "final acceptance is held out from selection"
+          ],
+          "comparison_required": true,
+          "run_binding": null
+        }
+      }
+    },
+    {
+      "id": "create-minimal-utility-validates-label-to-slug-contract",
+      "title": "Create a minimal Utility skill with evidenced input and output contracts",
+      "category": "minimal_authoring",
+      "purpose": "Checks that a small Utility design states a typed label input, slug output, and applicable recovery, then validates the actual authored YAML.",
+      "prompt": "Create assistant-label-slug. It takes a label and returns a slug. Keep the contracts minimal and recover from a missing label or failed slug output.",
+      "setup_context": [
+        "The assistant-skill-creator skill instructions are active.",
+        "The requested target is a small Utility capability.",
+        "The authoring harness provides a separate output root and captures writes."
+      ],
+      "expected_behavior": [
+        "Uses the Utility tier with input.yaml and output.yaml.",
+        "Provides one required string label input with on_missing recovery.",
+        "Provides one required string slug output with on_fail recovery.",
+        "Writes non-empty target files only after the material design is approved."
+      ],
+      "pass_criteria": [
+        "The typed design is presented before approval.",
+        "The actual input and output YAML contain the frozen label and slug content checks.",
+        "The output manifest digests match the actual non-empty files and successful write events."
+      ],
+      "fail_signals": [
+        "Lists filenames without typed field boundaries or recovery.",
+        "Claims success with empty, missing, stale, or unobserved files.",
+        "Writes target files before the approved design."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "assistant-label-slug",
+          "Utility",
+          "label",
+          "slug",
+          "on_missing",
+          "on_fail",
+          "approval"
+        ],
+        "forbidden_substrings": [
+          "no recovery required",
+          "process handoff"
+        ],
+        "structured_json_assertions": [
+          {"operator": "nonempty_string","path": ["operation_summary"]},
+          {"operator": "object_keys_exact","path": ["evidence_assessment"],"fields": ["status","scope_and_evidence_refs","gaps_and_limitations","next_action"]},
+          {"operator": "one_of","path": ["evidence_assessment","status"],"expected_values": ["planned","sufficient","insufficient","blocked"]},
+          {"operator": "array_type","path": ["evidence_assessment","scope_and_evidence_refs"]},
+          {"operator": "array_type","path": ["evidence_assessment","gaps_and_limitations"]},
+          {"operator": "nonempty_string","path": ["evidence_assessment","next_action"]}
+        ]
+      },
+      "semantic_validator": "assistant-skill-creator.behavior_v1",
+      "semantic_context": {
+        "creator_evidence": {
+          "schema_version": "1.0",
+          "operation": "create",
+          "expected_outcome": "authoring_complete",
+          "skill_name": "assistant-label-slug",
+          "skill_category": "utility",
+          "design_required": true,
+          "allowed_artifacts": [
+            "SKILL.md",
+            "contracts/input.yaml",
+            "contracts/output.yaml"
+          ],
+          "required_artifacts": [
+            "SKILL.md",
+            "contracts/input.yaml",
+            "contracts/output.yaml"
+          ],
+          "preserved_metadata": [],
+          "preserved_target_files": [],
+          "artifact_checks": [
+            {
+              "path": "contracts/input.yaml",
+              "section": "fields",
+              "name": "label",
+              "type": "string",
+              "recovery_field": "on_missing"
+            },
+            {
+              "path": "contracts/output.yaml",
+              "section": "artifacts",
+              "name": "slug",
+              "type": "string",
+              "recovery_field": "on_fail"
+            }
+          ],
+          "assessment_criteria": [],
+          "comparison_required": false,
+          "run_binding": null
+        }
       }
     }
   ]

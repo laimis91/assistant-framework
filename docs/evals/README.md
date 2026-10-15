@@ -1031,6 +1031,11 @@ instruction eval runner. Operational modes require local shell, `jq`, and Ruby
 with JSON plus Psych/YAML support; response grading also requires Ruby
 BigDecimal. It does not call provider SDKs, model APIs, or network services.
 
+The assistant-skill-creator upstream freshness suite uses deterministic fetch
+fixtures to check unchanged, changed, stale, partial, and unavailable source
+responses, including bounded recovery and registry preservation. It performs no
+network requests; the installed helper's actual transport is a separate check.
+
 This inventory now covers all 15 first-class `assistant-*` skills. Local-only Unity
 skills remain excluded from the default inventory unless `--include-local` is
 passed. The current tracked first-class fixtures are:
@@ -1066,6 +1071,28 @@ included field is still structurally validated. Other schema versions are
 rejected. These cases provide
 native-description activation evidence and remain separate from response-grade
 `.cases` and SKILL.md frontmatter.
+
+The registered `assistant-skill-creator` behavior cases also use a fixed domain
+validator. It binds each response to an independently captured operation trace,
+actual artifact bytes, and per-run source/output identities. Update fixtures
+record changed files separately from unchanged preserved target files; assess
+and refresh cases require observed read-only evidence. Comparison evidence
+checks matched run conditions, held-out selection, raw outcome denominators,
+and isolated outputs. See
+`skills/assistant-skill-creator/references/behavioral-evaluation.md` for the
+fixture envelope and evidence boundary. These deterministic checks do not
+establish native activation or general model quality.
+
+The registered `assistant-skill-creator` behavior cases also use a fixed domain
+validator. It binds each response to an independently captured operation trace,
+actual artifact bytes, and per-run source/output identities. Update fixtures
+record changed files separately from unchanged preserved target files; assess
+and refresh cases require observed read-only evidence. Comparison evidence
+checks matched run conditions, held-out selection, raw outcome denominators,
+and isolated outputs. See
+`skills/assistant-skill-creator/references/behavioral-evaluation.md` for the
+fixture envelope and evidence boundary. These deterministic checks do not
+establish native activation or general model quality.
 
 To evaluate externally observed native selections without adding a custom router
 or provider API call, save one JSON result for every selected activation case:

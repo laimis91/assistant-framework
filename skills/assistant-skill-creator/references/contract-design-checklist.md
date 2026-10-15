@@ -1,8 +1,8 @@
 # Contract Design Checklist
 
-Validate every new or modified skill against these 14 rules from the [contract design guide](skill-contract-design-guide.md). All must pass.
+Validate every new or modified skill against these 15 rules from the [contract design guide](skill-contract-design-guide.md). All must pass.
 
-## The 14 Rules
+## The 15 Rules
 
 ### 1. Required fields have `on_missing` actions
 - [ ] Every field with `required: true` has an `on_missing:` value
@@ -78,6 +78,12 @@ Validate every new or modified skill against these 14 rules from the [contract d
 - [ ] Code review and QA remain distinct responsibilities and handoffs
 - [ ] Stagnation, repeated drift/regression, pivots, and blockers use explicit pivot/restart decisions
 - [ ] Review, QA, and fix-verify loops terminate after at most 10 rounds
+
+### 15. Shared-impact evidence
+- [ ] Preserve identity. Discovery reports gaps; mutation requires current valid pre-build entry evidence.
+- [ ] Completion includes verification and review evidence.
+- [ ] Missing loaded-path runtimes block.
+- [ ] Fanout alone does not escalate architecture, QA, or execution lane.
 
 ## Quick Reference: Contract Tier Requirements
 

@@ -173,6 +173,182 @@ else
     fail "validator rejected representative plain description"
 fi
 
+test_start "skill validator rejects duplicate parsed top-level keys and preserves nested and multiline metadata"
+duplicate_frontmatter_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-duplicate-frontmatter.XXXXXX")"
+p0p4_register_cleanup "$duplicate_frontmatter_root"
+duplicate_frontmatter_failures=()
+for duplicate_frontmatter_case in unquoted_then_quoted quoted_then_unquoted; do
+    duplicate_skill="$duplicate_frontmatter_root/$duplicate_frontmatter_case-validator-skill"
+    duplicate_err="$duplicate_frontmatter_root/$duplicate_frontmatter_case.err"
+    p0p4_write_valid_skill_fixture "$duplicate_skill"
+    if [[ "$duplicate_frontmatter_case" == "unquoted_then_quoted" ]]; then
+        duplicate_description='description: "First usable description."'
+        duplicate_key='"description": null'
+    else
+        duplicate_description='"description": "First usable description."'
+        duplicate_key='description: { unusable: value }'
+    fi
+    cat >"$duplicate_skill/SKILL.md" <<EOF
+---
+name: $duplicate_frontmatter_case-validator-skill
+$duplicate_description
+$duplicate_key
+metadata:
+  description: "Nested description remains supported."
+---
+
+# Multiline body remains supported
+
+The body contains ordinary paragraphs and more than one line.
+EOF
+    if "$skill_validator" --skill "$duplicate_skill" >/dev/null 2>"$duplicate_err" \
+        || ! grep -Fq "FRONTMATTER_DUPLICATE_KEY" "$duplicate_err"; then
+        duplicate_frontmatter_failures+=("$duplicate_frontmatter_case")
+    fi
+done
+nested_metadata_skill="$duplicate_frontmatter_root/nested-metadata-validator-skill"
+p0p4_write_valid_skill_fixture "$nested_metadata_skill"
+cat >"$nested_metadata_skill/SKILL.md" <<'EOF'
+---
+name: nested-metadata-validator-skill
+description: A plain ordinary description with a supported nested metadata field.
+metadata:
+  description: "Nested description remains supported."
+---
+
+# Multiline body remains supported
+
+The body contains ordinary paragraphs and more than one line.
+EOF
+if ! "$skill_validator" --skill "$nested_metadata_skill" >/dev/null; then
+    duplicate_frontmatter_failures+=("nested_metadata_or_multiline_positive")
+fi
+if [[ ${#duplicate_frontmatter_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator did not preserve parsed top-level metadata authority: ${duplicate_frontmatter_failures[*]}"
+fi
+
+p0p4_write_standard_metadata_fixture() {
+    local skill_dir="$1"
+    local description="$2"
+    local metadata="${3:-}"
+    local skill_name
+
+    skill_name="$(basename "$skill_dir")"
+    p0p4_write_valid_skill_fixture "$skill_dir"
+    cat >"$skill_dir/SKILL.md" <<EOF
+---
+name: $skill_name
+description: "$description"
+$metadata
+---
+
+# Fixture Skill
+EOF
+}
+
+p0p4_repeat_character() {
+    local character="$1"
+    local count="$2"
+    local target="$3"
+    local repeated=""
+    local index
+
+    for ((index = 0; index < count; index++)); do
+        repeated+="$character"
+    done
+    printf -v "$target" '%s' "$repeated"
+}
+
+test_start "skill validator enforces standard frontmatter names and Unicode character limits"
+standard_metadata_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-standard-metadata.XXXXXX")"
+p0p4_register_cleanup "$standard_metadata_root"
+standard_metadata_failures=()
+name_64="$(printf '%064d' 0 | tr '0' 'a')"
+name_65="$(printf '%065d' 0 | tr '0' 'a')"
+p0p4_write_standard_metadata_fixture "$standard_metadata_root/$name_64" "Valid skill description."
+if ! "$skill_validator" --skill "$standard_metadata_root/$name_64" >/dev/null; then
+    standard_metadata_failures+=("name_64_boundary")
+fi
+for invalid_name in Uppercase -leading trailing- double--hyphen underscore_name "$name_65"; do
+    invalid_name_skill="$standard_metadata_root/$invalid_name"
+    invalid_name_err="$standard_metadata_root/$(printf '%s' "$invalid_name" | tr -cd '[:alnum:]').err"
+    p0p4_write_standard_metadata_fixture "$invalid_name_skill" "Valid skill description."
+    if "$skill_validator" --skill "$invalid_name_skill" >/dev/null 2>"$invalid_name_err" \
+        || ! grep -Fq "FRONTMATTER_NAME" "$invalid_name_err"; then
+        standard_metadata_failures+=("invalid_name:$invalid_name")
+    fi
+done
+
+description_1024="$(printf '%1024s' '' | tr ' ' 'a')"
+description_1025="$(printf '%1025s' '' | tr ' ' 'a')"
+p0p4_repeat_character 'é' 1024 unicode_description_1024
+p0p4_repeat_character 'é' 1025 unicode_description_1025
+p0p4_write_standard_metadata_fixture "$standard_metadata_root/description-1024" "$description_1024"
+p0p4_write_standard_metadata_fixture "$standard_metadata_root/unicode-description-1024" "$unicode_description_1024"
+for valid_description_case in description-1024 unicode-description-1024; do
+    if ! "$skill_validator" --skill "$standard_metadata_root/$valid_description_case" >/dev/null; then
+        standard_metadata_failures+=("$valid_description_case")
+    fi
+done
+for overlong_description_case in description-1025 unicode-description-1025; do
+    case "$overlong_description_case" in
+        description-1025) overlong_description="$description_1025" ;;
+        unicode-description-1025) overlong_description="$unicode_description_1025" ;;
+    esac
+    overlong_description_err="$standard_metadata_root/$overlong_description_case.err"
+    p0p4_write_standard_metadata_fixture "$standard_metadata_root/$overlong_description_case" "$overlong_description"
+    if "$skill_validator" --skill "$standard_metadata_root/$overlong_description_case" >/dev/null 2>"$overlong_description_err" \
+        || ! grep -Fq "FRONTMATTER_DESCRIPTION_LENGTH" "$overlong_description_err"; then
+        standard_metadata_failures+=("$overlong_description_case")
+    fi
+done
+
+p0p4_repeat_character 'é' 500 unicode_compatibility_500
+p0p4_repeat_character 'é' 501 unicode_compatibility_501
+portable_metadata="compatibility: \"$unicode_compatibility_500\"
+license: Apache-2.0
+metadata:
+  author: example-org
+  version: \"1.0\"
+allowed-tools: \"Read Bash(git:*)\"
+requires:
+  - assistant-review"
+p0p4_write_standard_metadata_fixture "$standard_metadata_root/portable-metadata" "Valid skill description." "$portable_metadata"
+if ! "$skill_validator" --skill "$standard_metadata_root/portable-metadata" >/dev/null; then
+    standard_metadata_failures+=("optional_metadata_or_requires")
+fi
+
+for compatibility_case in overlong unicode-overlong empty non-string; do
+    case "$compatibility_case" in
+        overlong) compatibility_value="$(printf '%501s' '' | tr ' ' 'a')"; compatibility_line="compatibility: \"$compatibility_value\"" ;;
+        unicode-overlong) compatibility_line="compatibility: \"$unicode_compatibility_501\"" ;;
+        empty) compatibility_line='compatibility: ""' ;;
+        non-string) compatibility_line='compatibility: [fixture]' ;;
+    esac
+    compatibility_err="$standard_metadata_root/$compatibility_case-compatibility.err"
+    p0p4_write_standard_metadata_fixture "$standard_metadata_root/$compatibility_case-compatibility" "Valid skill description." "$compatibility_line"
+    if "$skill_validator" --skill "$standard_metadata_root/$compatibility_case-compatibility" >/dev/null 2>"$compatibility_err" \
+        || ! grep -Fq "FRONTMATTER_COMPATIBILITY" "$compatibility_err"; then
+        standard_metadata_failures+=("compatibility:$compatibility_case")
+    fi
+done
+
+malformed_compatibility_skill="$standard_metadata_root/Uppercase"
+malformed_compatibility_err="$standard_metadata_root/malformed-compatibility.err"
+p0p4_write_standard_metadata_fixture "$malformed_compatibility_skill" "Valid skill description." 'compatibility: "unterminated'
+if "$skill_validator" --skill "$malformed_compatibility_skill" >/dev/null 2>"$malformed_compatibility_err" \
+    || ! grep -Fq "FRONTMATTER_STANDARD_METADATA_PARSE" "$malformed_compatibility_err"; then
+    standard_metadata_failures+=("malformed_compatibility_invalid_name")
+fi
+
+if [[ ${#standard_metadata_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "validator did not enforce standard metadata names and Unicode character limits: ${standard_metadata_failures[*]}"
+fi
+
 test_start "skill validator accepts quoted and escaped required top-level keys"
 quoted_required_keys_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-quoted-required-keys.XXXXXX")"
 p0p4_register_cleanup "$quoted_required_keys_root"
@@ -340,7 +516,7 @@ mixed_whitespace_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-mixed-whites
 p0p4_register_cleanup "$mixed_whitespace_root"
 mixed_whitespace_failures=()
 for mixed_whitespace_case in raw_double raw_single escaped_double; do
-    mixed_whitespace_skill="$mixed_whitespace_root/$mixed_whitespace_case-validator-skill"
+    mixed_whitespace_skill="$mixed_whitespace_root/${mixed_whitespace_case//_/-}-validator-skill"
     p0p4_write_valid_skill_fixture "$mixed_whitespace_skill"
     case "$mixed_whitespace_case" in
         raw_double)
@@ -430,7 +606,7 @@ for escaped_printable_case in escaped_space escaped_nbsp escaped_hex; do
         escaped_nbsp) escaped_printable_line='description: "Fixture\\_routing"' ;;
         escaped_hex) escaped_printable_line='description: "Fixture\\x41 routing"' ;;
     esac
-    escaped_printable_skill="$escaped_description_root/$escaped_printable_case-validator-skill"
+    escaped_printable_skill="$escaped_description_root/${escaped_printable_case//_/-}-validator-skill"
     p0p4_write_valid_skill_fixture "$escaped_printable_skill"
     awk -v line="$escaped_printable_line" 'NR == 3 { print line; next } { print }' "$escaped_printable_skill/SKILL.md" >"$escaped_printable_skill/skill.tmp"
     mv "$escaped_printable_skill/skill.tmp" "$escaped_printable_skill/SKILL.md"
@@ -1220,6 +1396,47 @@ elif grep -Fq "CONTRACT_MISSING" "$missing_handoffs_err" \
     pass
 else
     fail "missing handoffs failure did not include CONTRACT_MISSING, stderr=$(cat "$missing_handoffs_err")"
+fi
+
+test_start "skill validator treats contract YAML aliases and Ruby object tags as invalid passive data"
+safe_contract_yaml_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-safe-contract-yaml.XXXXXX")"
+p0p4_register_cleanup "$safe_contract_yaml_root"
+safe_contract_yaml_failures=()
+ordinary_contract_skill="$safe_contract_yaml_root/ordinary-contract-skill"
+p0p4_write_valid_skill_fixture "$ordinary_contract_skill"
+cat >>"$ordinary_contract_skill/contracts/output.yaml" <<'EOF'
+metadata:
+  note: ordinary passive contract metadata
+EOF
+if ! "$skill_validator" --skill "$ordinary_contract_skill" >/dev/null; then
+    safe_contract_yaml_failures+=("ordinary_contract_rejected")
+fi
+for safe_contract_yaml_case in alias object-tag; do
+    safe_contract_yaml_skill="$safe_contract_yaml_root/$safe_contract_yaml_case-contract-skill"
+    safe_contract_yaml_err="$safe_contract_yaml_root/$safe_contract_yaml_case.err"
+    p0p4_write_valid_skill_fixture "$safe_contract_yaml_skill"
+    if [[ "$safe_contract_yaml_case" == "alias" ]]; then
+        cat >>"$safe_contract_yaml_skill/contracts/output.yaml" <<'EOF'
+metadata:
+  note: &ordinary_note ordinary
+  copied_note: *ordinary_note
+EOF
+    else
+        cat >>"$safe_contract_yaml_skill/contracts/output.yaml" <<'EOF'
+metadata:
+  note: !ruby/object:Object {}
+EOF
+    fi
+    if "$skill_validator" --skill "$safe_contract_yaml_skill" >/dev/null 2>"$safe_contract_yaml_err"; then
+        safe_contract_yaml_failures+=("$safe_contract_yaml_case accepted")
+    elif ! grep -Fq "CONTRACT_FIELD_TYPE" "$safe_contract_yaml_err"; then
+        safe_contract_yaml_failures+=("$safe_contract_yaml_case lacked CONTRACT_FIELD_TYPE")
+    fi
+done
+if [[ ${#safe_contract_yaml_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "contract YAML trust controls failed: ${safe_contract_yaml_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
