@@ -74,4 +74,3 @@ Use the field schema, phase gate schema, and handoff schema formats defined in t
 - **Native skill discovery drives routing.** Adding a new skill requires only a well-described SKILL.md and its contracts; no runtime script changes are needed.
 - **install.sh auto-discovers skills** — any subdirectory of `skills/` containing a SKILL.md is installable.
 - **Contracts** (`contracts/` dirs) define structured input/output schemas in YAML. All assistant skills have contracts; see the Mandatory section above.
-- **Unity skills** (`unity-*`) are a separate family targeting Unity game development via UnityMCP.

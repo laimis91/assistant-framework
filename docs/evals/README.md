@@ -1036,9 +1036,8 @@ fixtures to check unchanged, changed, stale, partial, and unavailable source
 responses, including bounded recovery and registry preservation. It performs no
 network requests; the installed helper's actual transport is a separate check.
 
-This inventory now covers all 15 first-class `assistant-*` skills. Local-only Unity
-skills remain excluded from the default inventory unless `--include-local` is
-passed. The current tracked first-class fixtures are:
+This inventory now covers all 15 first-class `assistant-*` skills. The current
+tracked first-class fixtures are:
 
 - `skills/assistant-clarify/evals/cases.json`
 - `skills/assistant-debugging/evals/cases.json`
@@ -1057,8 +1056,7 @@ passed. The current tracked first-class fixtures are:
 - `skills/assistant-workflow/evals/cases.json`
 
 By default, the runner discovers first-class `skills/assistant-*/SKILL.md`
-skills that have `evals/cases.json` fixtures. Local-only `skills/unity-*`
-skills are excluded from the default inventory. Use `--include-local` only when
+skills that have `evals/cases.json` fixtures. Use `--include-local` only when
 you explicitly want to include local skill experiments that also have eval
 fixtures.
 

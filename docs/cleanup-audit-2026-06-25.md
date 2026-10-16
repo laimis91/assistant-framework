@@ -119,7 +119,7 @@ Hook scripts originally totaled 3,333 lines. The largest hook scripts at audit t
 
 ### Ignored Local Clutter
 
-`.gitignore` already ignores build outputs, publish outputs, `.DS_Store`, Unity skills, `Assistant2/`, and `.codex/`.
+`.gitignore` already ignores build outputs, publish outputs, `.DS_Store`, `Assistant2/`, and `.codex/`.
 
 At audit time, ignored outputs included `.DS_Store` files and .NET build/publish products. Disk usage snapshot:
 

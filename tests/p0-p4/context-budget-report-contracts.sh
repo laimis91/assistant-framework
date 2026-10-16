@@ -29,11 +29,11 @@ catalog_path_fixture="$(mktemp -d "${TMPDIR:-/tmp}/assistant-framework.XXXXXX")"
 p0p4_register_cleanup "$catalog_path_fixture"
 mkdir -p \
     "$catalog_path_fixture/skills/assistant-real" \
-    "$catalog_path_fixture/skills/unity-temporary"
+    "$catalog_path_fixture/skills/custom-inventory-fixture"
 printf '%s\n' '---' 'name: assistant-real' 'description: "Real"' '---' \
     >"$catalog_path_fixture/skills/assistant-real/SKILL.md"
-printf '%s\n' '---' 'name: unity-temporary' 'description: "Temporary"' '---' \
-    >"$catalog_path_fixture/skills/unity-temporary/SKILL.md"
+printf '%s\n' '---' 'name: custom-inventory-fixture' 'description: "Temporary"' '---' \
+    >"$catalog_path_fixture/skills/custom-inventory-fixture/SKILL.md"
 unsafe_catalog_match_count="$(find "$catalog_path_fixture/skills" \
     -mindepth 2 -maxdepth 2 -type f -path '*/assistant-*/SKILL.md' -print \
     | wc -l | tr -d '[:space:]')"

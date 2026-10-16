@@ -30,7 +30,7 @@ Install all skills for any supported agent:
 ./install.sh --agent gemini   # → ~/.gemini/skills/assistant-*/
 ```
 
-The release inventory is the tracked `skills/assistant-*` set. `skills/unity-*` directories are local-only and ignored by git; they are not installed or validated as framework release skills.
+The release inventory is the tracked `skills/assistant-*` set.
 
 Install one root skill with its bundled hard dependencies:
 ```bash
@@ -304,7 +304,7 @@ BigDecimal (`ruby -rbigdecimal`).
 tools/skills/validate-skills.sh
 ```
 
-By default it validates only the release inventory: tracked `skills/assistant-*/SKILL.md` skills and their `contracts/*.yaml` files. Local-only `skills/unity-*` directories are excluded by default.
+By default it validates only the release inventory: tracked `skills/assistant-*/SKILL.md` skills and their `contracts/*.yaml` files.
 
 Target a specific skill by name, directory, or `SKILL.md` path:
 
@@ -334,8 +334,7 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
-The default eval inventory is 15 first-class `assistant-*` skills with fixtures
-and excludes local-only `unity-*` skills unless `--include-local` is passed.
+The default eval inventory is 15 first-class `assistant-*` skills with fixtures.
 Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at
 least two normalized-distinct positive requests and one normalized-disjoint
@@ -345,7 +344,7 @@ rejected. Activation cases shape discovery
 coverage only unless compared against externally observed native selections with
 `--activation-results`; they are separate from response-graded `.cases` and
 never SKILL.md metadata. The runner does not invoke native routing itself.
-Local-only Unity skills remain opt-in through `--include-local`. Local grading is heuristic
+Local-only skill experiments remain opt-in through `--include-local`. Local grading is heuristic
 substring-based checking, useful as a Level 4 conformance proxy but not a
 replacement for semantic review. Detailed usage is in `docs/evals/README.md`.
 
@@ -527,8 +526,6 @@ skills/
 
   assistant-telos/
     SKILL.md                       <- Purpose context framework (Telos Method)
-
-  unity-*/                         <- Local-only skill experiments ignored by git, not release inventory
 
 tools/
   skills/

@@ -11,7 +11,7 @@ else
     pass
 fi
 
-test_start "README documents tracked assistant skills and local-only Unity policy"
+test_start "README documents tracked assistant skills"
 assistant_skill_count="$(find "$FRAMEWORK_DIR/skills" -mindepth 2 -maxdepth 2 -type f -name SKILL.md -path "$FRAMEWORK_DIR/skills/assistant-*/SKILL.md" -print | wc -l | tr -d '[:space:]')"
 missing_readme_skills=()
 while IFS= read -r skill_file; do
@@ -27,12 +27,7 @@ elif [[ "${#missing_readme_skills[@]}" -ne 0 ]]; then
     fail "README is missing tracked assistant skill sections: ${missing_readme_skills[*]}"
 elif ! grep -Fq "$assistant_skill_count first-class" "$FRAMEWORK_DIR/README.md"; then
     fail "README does not state the tracked assistant skill count"
-elif ! grep -Fq 'skills/unity-*' "$FRAMEWORK_DIR/README.md" \
-    || ! grep -Fq 'local-only' "$FRAMEWORK_DIR/README.md" \
-    || ! grep -Fq 'ignored by git' "$FRAMEWORK_DIR/README.md"; then
-    fail "README must document Unity skills as local-only and ignored"
-elif rg -n '^### unity-' "$FRAMEWORK_DIR/README.md" >/tmp/p0p4-docs-drift-unity-readme.out; then
-    fail "README should not list Unity skills as first-class release skills; see /tmp/p0p4-docs-drift-unity-readme.out"
+
 else
     pass
 fi

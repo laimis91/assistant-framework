@@ -5776,11 +5776,11 @@ else
     fail "duplicate case id failure was not clear, stderr=$(cat "$duplicate_id_err")"
 fi
 
-test_start "skill eval runner default inventory excludes generated local-only unity fixtures"
-unity_fixture_dir="$(mktemp -d "$FRAMEWORK_DIR/skills/unity-skill-eval-local.XXXXXX")"
-unity_fixture_name="$(basename "$unity_fixture_dir")"
-p0p4_register_cleanup "$unity_fixture_dir"
-p0p4_write_skill_eval_fixture "$unity_fixture_dir"
+test_start "skill eval runner default inventory excludes generated local-only custom fixtures"
+custom_fixture_dir="$(mktemp -d "$FRAMEWORK_DIR/skills/custom-skill-eval-local.XXXXXX")"
+custom_fixture_name="$(basename "$custom_fixture_dir")"
+p0p4_register_cleanup "$custom_fixture_dir"
+p0p4_write_skill_eval_fixture "$custom_fixture_dir"
 if local_only_list_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-clarify" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-debugging" \
@@ -5793,14 +5793,14 @@ if local_only_list_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-telos" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-thinking" \
     && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-workflow" \
-    && ! printf '%s\n' "$local_only_list_output" | grep -Fq "$unity_fixture_name"; then
+    && ! printf '%s\n' "$local_only_list_output" | grep -Fq "$custom_fixture_name"; then
     pass
 else
-    fail "default skill eval inventory should include assistant fixtures and exclude local-only unity fixtures"
+    fail "default skill eval inventory should include assistant fixtures and exclude local-only custom fixtures"
 fi
 
-test_start "skill eval runner include-local lists generated local-only unity fixtures"
-include_local_fixture_dir="$(mktemp -d "$FRAMEWORK_DIR/skills/unity-skill-eval-include-local.XXXXXX")"
+test_start "skill eval runner include-local lists generated local-only custom fixtures"
+include_local_fixture_dir="$(mktemp -d "$FRAMEWORK_DIR/skills/custom-skill-eval-include-local.XXXXXX")"
 include_local_fixture_name="$(basename "$include_local_fixture_dir")"
 p0p4_register_cleanup "$include_local_fixture_dir"
 p0p4_write_skill_eval_fixture "$include_local_fixture_dir"
@@ -5810,7 +5810,7 @@ if include_local_default_output="$("$skill_eval_runner" --list)" \
     && printf '%s\n' "$include_local_output" | grep -Fq $''"$include_local_fixture_name"$'\tfixture-case\tfixture\tFixture case'; then
     pass
 else
-    fail "skill eval runner --list --include-local should include generated local-only unity fixtures while default list excludes them"
+    fail "skill eval runner --list --include-local should include generated local-only custom fixtures while default list excludes them"
 fi
 
 test_start "skill eval docs describe complete first-class coverage"

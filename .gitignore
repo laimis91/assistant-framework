@@ -7,9 +7,6 @@
 # OS files
 **/.DS_Store
 
-# Unity skills
-skills/unity-*/
-
 # V2 development (not tracked until ready)
 Assistant2/
 
