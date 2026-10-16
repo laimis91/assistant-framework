@@ -419,7 +419,7 @@ Run the source validator before changing first-class skill contracts:
 tools/skills/validate-skills.sh
 ```
 
-The default inventory is the tracked first-class release set: `skills/assistant-*/SKILL.md`. Local-only `skills/unity-*` directories are excluded by default. Use targeted validation when working on one skill:
+The default inventory is the tracked first-class release set: `skills/assistant-*/SKILL.md`. Use targeted validation when working on one skill:
 
 ```bash
 tools/skills/validate-skills.sh --skill assistant-thinking
@@ -466,7 +466,7 @@ tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
 tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 ```
 
-The default per-skill eval inventory is 15 first-class `skills/assistant-*` skills with fixtures. Local-only `skills/unity-*` fixtures are excluded unless `--include-local` is passed: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-onboard`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, `assistant-verification`, and `assistant-workflow`.
+The default per-skill eval inventory is 15 first-class `skills/assistant-*` skills with fixtures: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-onboard`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, `assistant-verification`, and `assistant-workflow`.
 
 Each first-class schema `2.0` fixture must provide top-level `activation_cases`
 with exact `user_request` and `should_activate` fields, at least two

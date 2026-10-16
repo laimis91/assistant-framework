@@ -89,19 +89,19 @@ else
     fail "validator did not emit the Ruby Psych/YAML prerequisite diagnostic, stderr=$(cat "$runtime_prerequisite_err")"
 fi
 
-test_start "skill validator default list includes assistant skills and excludes local unity skills"
+test_start "skill validator default list includes assistant skills and excludes local custom skills"
 list_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-list.XXXXXX")"
 p0p4_register_cleanup "$list_fixture_root"
-unity_fixture_dir="$(mktemp -d "$FRAMEWORK_DIR/skills/unity-validator-local.XXXXXX")"
-unity_fixture_name="$(basename "$unity_fixture_dir")"
-p0p4_register_cleanup "$unity_fixture_dir"
-p0p4_write_valid_skill_fixture "$unity_fixture_dir"
+custom_fixture_dir="$(mktemp -d "$FRAMEWORK_DIR/skills/custom-validator-local.XXXXXX")"
+custom_fixture_name="$(basename "$custom_fixture_dir")"
+p0p4_register_cleanup "$custom_fixture_dir"
+p0p4_write_valid_skill_fixture "$custom_fixture_dir"
 list_output="$("$skill_validator" --list)"
 if printf '%s\n' "$list_output" | grep -Fq "assistant-workflow" \
-    && ! printf '%s\n' "$list_output" | grep -Fq "$unity_fixture_name"; then
+    && ! printf '%s\n' "$list_output" | grep -Fq "$custom_fixture_name"; then
     pass
 else
-    fail "default skill list should include assistant skills and exclude local unity skills"
+    fail "default skill list should include assistant skills and exclude local custom skills"
 fi
 
 test_start "skill validator targeted custom skill path works"

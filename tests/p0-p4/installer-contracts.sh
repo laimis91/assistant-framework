@@ -692,29 +692,29 @@ else
     fail "codex install for eval runner fixture failed; see /tmp/p0p4-install-evals.err"
 fi
 
-test_start "default install uses assistant inventory without Unity hardcoding"
+test_start "default install uses assistant inventory without domain-specific rules"
 INSTALL_HOME_TEN="$(mktemp -d)"
-UNITY_FIXTURE="$(mktemp -d "$FRAMEWORK_DIR/skills/unity-contract-fixture-XXXXXX")"
-UNITY_FIXTURE_NAME="$(basename "$UNITY_FIXTURE")"
-ASSISTANT_UNITY_FIXTURE="$(mktemp -d "$FRAMEWORK_DIR/skills/assistant-unity-contract-fixture-XXXXXX")"
-ASSISTANT_UNITY_FIXTURE_NAME="$(basename "$ASSISTANT_UNITY_FIXTURE")"
-p0p4_register_cleanup "$INSTALL_HOME_TEN" "$UNITY_FIXTURE" "$ASSISTANT_UNITY_FIXTURE"
-cat > "$UNITY_FIXTURE/SKILL.md" <<'UNITY_SKILL'
+CUSTOM_INVENTORY_FIXTURE="$(mktemp -d "$FRAMEWORK_DIR/skills/custom-inventory-fixture-XXXXXX")"
+CUSTOM_INVENTORY_FIXTURE_NAME="$(basename "$CUSTOM_INVENTORY_FIXTURE")"
+ASSISTANT_INVENTORY_FIXTURE="$(mktemp -d "$FRAMEWORK_DIR/skills/assistant-inventory-fixture-XXXXXX")"
+ASSISTANT_INVENTORY_FIXTURE_NAME="$(basename "$ASSISTANT_INVENTORY_FIXTURE")"
+p0p4_register_cleanup "$INSTALL_HOME_TEN" "$CUSTOM_INVENTORY_FIXTURE" "$ASSISTANT_INVENTORY_FIXTURE"
+cat > "$CUSTOM_INVENTORY_FIXTURE/SKILL.md" <<CUSTOM_INVENTORY_SKILL
 ---
-name: unity-local-contract-fixture
-description: Local-only Unity fixture that must not be installed by default.
----
-
-# Unity Local Contract Fixture
-UNITY_SKILL
-cat > "$ASSISTANT_UNITY_FIXTURE/SKILL.md" <<'ASSISTANT_UNITY_SKILL'
----
-name: assistant-unity-contract-fixture
-description: Assistant-named Unity fixture that should follow the normal assistant inventory rule.
+name: $CUSTOM_INVENTORY_FIXTURE_NAME
+description: Local-only custom fixture that must not be installed by default.
 ---
 
-# Assistant Unity Contract Fixture
-ASSISTANT_UNITY_SKILL
+# Custom Inventory Fixture
+CUSTOM_INVENTORY_SKILL
+cat > "$ASSISTANT_INVENTORY_FIXTURE/SKILL.md" <<ASSISTANT_INVENTORY_SKILL
+---
+name: $ASSISTANT_INVENTORY_FIXTURE_NAME
+description: Assistant-named custom fixture that should follow the normal assistant inventory rule.
+---
+
+# Assistant Inventory Fixture
+ASSISTANT_INVENTORY_SKILL
 if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-hooks >/tmp/p0p4-install-default-skills.out 2>/tmp/p0p4-install-default-skills.err; then
     installed_skills_dir="$INSTALL_HOME_TEN/.codex/skills"
     agents_file="$INSTALL_HOME_TEN/.codex/AGENTS.md"
@@ -735,7 +735,7 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
         fi
     done < <(find "$FRAMEWORK_DIR/skills" -maxdepth 2 -path "$FRAMEWORK_DIR/skills/assistant-*/SKILL.md" -type f | sort)
 
-    rm -rf "$UNITY_FIXTURE" "$ASSISTANT_UNITY_FIXTURE"
+    rm -rf "$CUSTOM_INVENTORY_FIXTURE" "$ASSISTANT_INVENTORY_FIXTURE"
 
     if [[ -d "$installed_skills_dir" ]]; then
         while IFS= read -r installed_skill_dir; do
@@ -758,16 +758,16 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
         fail "expected generated Codex AGENTS.md to stay lean and keep routing metadata in installed skills"
     elif [[ -n "$unexpected_installed_skill" ]]; then
         fail "expected default install to exclude non-assistant skill $unexpected_installed_skill"
-    elif [[ -e "$installed_skills_dir/$UNITY_FIXTURE_NAME" ]]; then
-        fail "expected default install to exclude non-assistant local Unity fixture"
-    elif [[ ! -e "$installed_skills_dir/$ASSISTANT_UNITY_FIXTURE_NAME" ]]; then
-        fail "expected default install to include assistant-named custom Unity fixture"
+    elif [[ -e "$installed_skills_dir/$CUSTOM_INVENTORY_FIXTURE_NAME" ]]; then
+        fail "expected default install to exclude non-assistant local custom fixture"
+    elif [[ ! -e "$installed_skills_dir/$ASSISTANT_INVENTORY_FIXTURE_NAME" ]]; then
+        fail "expected default install to include assistant-named custom fixture"
     else
         pass
     fi
 else
-    rm -rf "$UNITY_FIXTURE" "$ASSISTANT_UNITY_FIXTURE"
-    fail "default install with Unity fixture coverage failed; see /tmp/p0p4-install-default-skills.err"
+    rm -rf "$CUSTOM_INVENTORY_FIXTURE" "$ASSISTANT_INVENTORY_FIXTURE"
+    fail "default install with custom fixture coverage failed; see /tmp/p0p4-install-default-skills.err"
 fi
 
 test_start "deprecated --no-hooks remains a hookless no-op for one compatibility release"
