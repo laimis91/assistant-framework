@@ -366,9 +366,8 @@ for every `depends_on` prerequisite to be `VERIFIED`. Print `>> Slice
 [S]/[total]: [slice_id] [name]`. In `bounded_executor`, the bounded executor
 owns selected implementation and verification; RED/GREEN/REFACTOR apply only
 when the canonical decision activates TDD. In `separated_workers`, active TDD
-runs Builder/Tester `pre_production_red`, forwards its unchanged typed RED to
-Code Writer, then runs Builder/Tester `final_verification`; inactive TDD runs
-Code Writer then Builder/Tester `final_verification`. Verify each acceptance
+runs SAME selected Code Writer `worker_stage=test_authoring` (tests only, no incoming RED), then Builder/Tester `pre_production_red`, forwards unchanged current typed RED to that writer `worker_stage=production`, then Builder/Tester GREEN; only after current GREEN passes does that writer `worker_stage=refactor` return before distinct Builder/Tester REFACTOR verification. Stage-only DONE never completes Build or permits Review; inactive TDD runs
+Code Writer tests plus code then execution-only Builder/Tester `final_verification`. Verify each acceptance
 criterion, record lane-matched slice ledger evidence, and mark the slice
 `VERIFIED` before a dependent packet starts.
 

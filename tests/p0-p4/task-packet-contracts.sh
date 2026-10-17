@@ -1209,6 +1209,14 @@ for term in \
     "- files_to_test:" \
     "- enabling_changes_included:" \
     "- depends_on:" \
+    "- worker_stage:" \
+    "- build_execution_lane:" \
+    "- writer_selection: [new Claude or Codex:" \
+    "- red_check_id:" \
+    "- red_command:" \
+    "- red_cwd:" \
+    "- expected_red_failure:" \
+    "- tdd_cycle_log_ref:" \
     "- acceptance_criteria:" \
     "- selected_check_procedure: [for each CheckSpec, exact argv and cwd if command-based; otherwise concrete procedure and observable result; do not invent a command]" \
     "- expected_success_signal:" \
@@ -1504,7 +1512,7 @@ shapes = packets.map { |f| f.fetch('object_fields').find { |x| x['name'] == 'wri
 raise 'selection drift/missing' if shapes.any?(&:nil?) || shapes.uniq.length != 1
 shape = shapes.first
 raise 'legacy omission broken' unless shape['required'] == 'conditional' && shape['condition'].include?('legacy packets')
-raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '12.0' }
+raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '13.0' }
 fields = shape.fetch('object_fields').to_h { |f| [f['name'],f] }
 raise 'normal identity widened' unless fields.fetch('agent')['enum_values'] == %w[intelligent-writer mechanical-writer]
 eligibility = fields.fetch('mechanical_eligibility')

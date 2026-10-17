@@ -42,7 +42,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [cycle_log, coverage_summary, architecture_obligation_coverage, task_journal_entry]
+        allowed_names: [cycle_log, coverage_summary, architecture_obligation_coverage, task_journal_entry, ownership_stage_projection]
     budget_words: 3500
 
 fallback:

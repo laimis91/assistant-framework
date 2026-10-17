@@ -54,7 +54,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - selected_check_ids: [due check IDs assigned to this packet]
   - binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
   - tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
-  - RED evidence: [required only when tdd_applies=true; otherwise N/A, with no fabricated RED]
+  - RED evidence: [required before production only when tdd_applies=true; test_authoring needs no incoming RED; otherwise N/A, with no fabricated RED]
   - RED test execution: [required only when tdd_applies=true; executable automated-test CheckSpec, literal argv/cwd when command-based or concrete automated procedure, and intended failure; otherwise N/A]
   - Expected failure: [specific intended behavior assertion; never syntax/import/environment failure]
   - Architecture test obligations: [N/A unless tdd_applies=true and an Architecture Decision Pack applies; otherwise stable obligation_id, Pack ref, kind, behavior, verification]
@@ -110,7 +110,8 @@ For Medium and Large/Mega plans, paste the approved Decompose slice manifest onc
 
 - slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]
 - name:
-- writer_selection: [Orchestrator validates intelligent-writer default or mechanical-writer with rationale and recipe_or_example_ref, resolved_decisions_ref, scope_and_dependencies_ref, correctness_expectations_ref to actual current evidence; legacy packets may omit; packet/inline conflicts block]
+- worker_stage: [test_authoring | production | refactor; SAME writer owns tests plus code; test authoring needs no incoming RED and may change tests only; active production needs current matching RED; refactor needs current passing GREEN; stage-only DONE never completes Build]
+- writer_selection: [Orchestrator validates intelligent-writer default or mechanical-writer with rationale and recipe_or_example_ref, resolved_decisions_ref, scope_and_dependencies_ref, correctness_expectations_ref to actual current evidence covering BOTH tests and implementation, including fixed cases/expected values/assertion patterns; legacy packets may omit; packet/inline conflicts block]
 - observable_increment:
 - deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
 - requirement_ids:

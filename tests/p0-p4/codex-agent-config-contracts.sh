@@ -499,4 +499,19 @@ else
     fail "Codex agent contract registration/syntax violations: ${syntax_failures[*]}"
 fi
 
+test_start "Claude writer native metadata and portable instructions match Codex"
+if python3 - "$FRAMEWORK_DIR" <<'PYTHON'
+from pathlib import Path
+import sys
+root=Path(sys.argv[1])
+for role, model in [('intelligent-writer','opus'),('mechanical-writer','sonnet'),('code-writer','opus')]:
+    codex=(root/f'agents/codex/{role}.toml').read_text().split('developer_instructions = '+chr(34)*3+'\n',1)[1].rsplit(chr(34)*3,1)[0]
+    claude=(root/f'agents/claude/{role}.md').read_text()
+    metadata,body=claude.split('---\n',2)[1:]
+    assert f'name: {role}\n' in metadata and f'model: {model}\n' in metadata
+    assert 'tools: Read, Grep, Glob, LS, Edit, Write, Bash' in metadata
+    assert body.split('## Simplicity rules',1)[0].strip()==codex.strip(), role
+PYTHON
+then pass; else fail "provider writer instruction or native metadata drift"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

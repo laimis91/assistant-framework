@@ -24,7 +24,7 @@ artifacts:
       - name: red
         type: object
         required: true
-        description: "RED phase: write failing test"
+        description: "RED phase: writer-authored failing test independently executed in separated_workers"
         object_fields:
           - name: test_name
             type: string
@@ -247,6 +247,40 @@ artifacts:
         type: enum
         required: true
         enum_values: [covered, blocked, explicit_unknown]
+
+  - name: ownership_stage_projection
+    type: object
+    required: false
+    description: "Optional non-executing instruction projection of the permitted active separated TDD sequence, only when explicitly requested"
+    validation: "This projection never substitutes for cycle_log, authorizing RED, or completion evidence; it describes permitted order and ownership, not actual dispatches or command history. Omission does not weaken any required cycle or completion artifact."
+    object_fields:
+      - name: stage_order
+        type: string[]
+        required: true
+        min_items: 6
+        description: "Ordered permitted stages: test_authoring, pre_production_red, production, GREEN, refactor, REFACTOR"
+        on_missing: "Return NEEDS_CONTEXT for the requested projection; do not fabricate execution evidence"
+      - name: owner_order
+        type: string[]
+        required: true
+        min_items: 6
+        description: "Owners aligned with stage_order: the SAME selected writer alternates with the independent builder-tester"
+        on_missing: "Return NEEDS_CONTEXT for the requested projection; do not fabricate execution evidence"
+      - name: completes_build
+        type: boolean
+        required: true
+        description: "False: a stage-only result never completes Build or permits Review"
+        on_missing: "Return NEEDS_CONTEXT for the requested projection; do not infer Build completion"
+      - name: production_requires_red
+        type: boolean
+        required: true
+        description: "True: active production requires current matching meaningful RED"
+        on_missing: "Return NEEDS_CONTEXT for the requested projection; do not infer RED authorization"
+      - name: refactor_requires_green
+        type: boolean
+        required: true
+        description: "True: refactor requires current passing GREEN"
+        on_missing: "Return NEEDS_CONTEXT for the requested projection; do not infer GREEN authorization"
 
   - name: task_journal_entry
     type: string

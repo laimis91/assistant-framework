@@ -63,6 +63,8 @@ if [[ -f "$installer" ]]; then
 fi
 
 if [[ -f "$native_suite" ]]; then
+    grep -Fq -- 'Claude writer transition definitions survive fresh upgrade and dry-run' "$native_suite" \
+        || failures+=("native suite lacks Claude writer migration parity")
     grep -Fq -- 'Codex twelve writer transition definitions survive fresh upgrade and dry-run' "$native_suite" \
         || failures+=("native suite lacks writer migration parity")
     grep -Fq -- '#requires -Version 5.1' "$native_suite" \

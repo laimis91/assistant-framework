@@ -119,8 +119,8 @@ responsibilities:
 
 | Role | Responsibility | Writes Source? |
 |---|---|---|
-| Code Writer | Implements the approved task packet and reports blockers without broadening scope | Yes |
-| Builder/Tester | Runs builds, tests, and verification; requests Code Writer fixes for production failures | Tests/fixtures as assigned, not production code |
+| Code Writer | Owns selected tests, fixtures, snapshots, helpers, test/build configuration and implementation; reports blockers without broadening scope | Yes |
+| Builder/Tester | Runs builds, tests, and verification; requests Code Writer fixes for production failures | Only designated generated outputs/evidence logs; no authored source/tests/fixtures/snapshots/build configuration |
 | Code Reviewer | Reviews code defects, security, architecture, test coverage, and structural code risk | No |
 | QA Evaluator | Evaluates Done Contract, acceptance criteria, verification evidence, final readiness, and scoped domain quality | No |
 

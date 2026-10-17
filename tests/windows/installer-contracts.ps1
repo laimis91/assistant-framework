@@ -372,8 +372,61 @@ function Assert-ScriptsParse {
     }
 }
 
+function Get-RunnerParentHelperLeaks {
+    param([Parameter(Mandatory = $true)][string]$Source)
+    $tokens = $null
+    $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($Source, [ref]$tokens, [ref]$errors)
+    Assert-Equal 0 @($errors).Count 'Standalone runner template does not parse'
+    $localFunctions = @($ast.FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
+    }, $true) | ForEach-Object { $_.Name })
+    return @($ast.FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.CommandAst]
+    }, $true) | ForEach-Object {
+        $name = $_.GetCommandName()
+        if ($name -in @('Invoke-Contract', 'Use-IsolatedEnvironment') -and $name -notin $localFunctions) {
+            $name
+        }
+    })
+}
+
 try {
     [void][System.IO.Directory]::CreateDirectory($script:SuiteRoot)
+
+    Invoke-Contract 'standalone Windows runner templates reject parent-only suite dependencies' {
+        $tokens = $null
+        $errors = $null
+        $suiteAst = [System.Management.Automation.Language.Parser]::ParseFile($PSCommandPath, [ref]$tokens, [ref]$errors)
+        Assert-Equal 0 @($errors).Count 'Cannot inspect standalone runner templates'
+        $templates = @($suiteAst.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                $node.Left.VariablePath.UserPath -eq 'runnerSource'
+        }, $true) | ForEach-Object {
+            $_.Right.FindAll({
+                param($node)
+                $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+                    $node.StringConstantType -eq [System.Management.Automation.Language.StringConstantType]::SingleQuotedHereString -and
+                    $node.Value.Contains('__INSTALLER_FUNCTIONS__')
+            }, $true)
+        })
+        Assert-True ($templates.Count -gt 0) 'No standalone installer function templates were inspected'
+        foreach ($template in $templates) {
+            $leaks = @(Get-RunnerParentHelperLeaks -Source $template.Value)
+            Assert-Equal 0 $leaks.Count "Standalone child depends on parent-only helpers: $($leaks -join ', ')"
+            foreach ($parentHelper in @('Invoke-Contract', 'Use-IsolatedEnvironment')) {
+                $mutant = $template.Value + "`n" + $parentHelper + " 'parent-only dependency' {}"
+                $mutantLeaks = @(Get-RunnerParentHelperLeaks -Source $mutant)
+                Assert-True ($mutantLeaks -contains $parentHelper) "Dependency counterexample was accepted: $parentHelper"
+            }
+        }
+        $localDefinition = "function Invoke-Contract {} `n Invoke-Contract"
+        Assert-Equal 0 @(Get-RunnerParentHelperLeaks -Source $localDefinition).Count 'Locally defined child function was mistaken for a parent dependency'
+    }
 
     Invoke-Contract 'Codex process preflight blocks before installation and handles closed, unrelated, and unavailable process states' {
         # Run the real installer entry function with a controlled process table.
@@ -2272,6 +2325,186 @@ requires:
             $dry = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-NoHooks', '-DryRun')
             Assert-Equal 0 $dry.ExitCode "Writer migration dry-run failed: $($dry.Output)"
             Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'Writer migration dry-run mutated scratch state'
+        }
+    }
+
+    Invoke-Contract 'Claude writer transition definitions survive fresh upgrade and dry-run' {
+        Use-IsolatedEnvironment 'Claude writer transition' {
+            param($root, $isolatedUserProfile)
+            $claudeHome = Join-Path $isolatedUserProfile '.claude'
+            $agents = Join-Path $claudeHome 'agents'
+            [void][System.IO.Directory]::CreateDirectory($agents)
+            $config = Join-Path $claudeHome 'settings.json'
+            [System.IO.File]::WriteAllText($config, '{"personal":true}')
+            [System.IO.File]::WriteAllText((Join-Path $agents 'personal-role.md'), 'unrelated custom role')
+            foreach ($phase in @('fresh', 'upgrade')) {
+                $result = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow', '-NoHooks')
+                Assert-Equal 0 $result.ExitCode "Claude writer $phase install failed: $($result.Output)"
+                foreach ($name in @('intelligent-writer', 'mechanical-writer', 'code-writer')) {
+                    $source = Join-Path $script:FrameworkRoot ("agents\claude\" + $name + '.md')
+                    Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($source))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $agents ($name + '.md'))))) "Claude writer mismatch: $name"
+                }
+                Assert-Equal '{"personal":true}' ([System.IO.File]::ReadAllText($config)) 'Claude writer migration changed settings'
+                Assert-Equal 'unrelated custom role' ([System.IO.File]::ReadAllText((Join-Path $agents 'personal-role.md'))) 'Claude writer migration changed custom role'
+                if ($phase -eq 'fresh') {
+                    [System.IO.File]::WriteAllText((Join-Path $agents 'code-writer.md'), 'old managed writer')
+                    [System.IO.File]::Delete((Join-Path $agents 'intelligent-writer.md'))
+                    [System.IO.File]::Delete((Join-Path $agents 'mechanical-writer.md'))
+                }
+            }
+            $before = Get-TreeFingerprint -LiteralPath $root
+            $dry = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow', '-NoHooks', '-DryRun')
+            Assert-Equal 0 $dry.ExitCode "Claude writer dry-run failed: $($dry.Output)"
+            Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) 'Claude writer dry-run mutated scratch state'
+        }
+    }
+
+    Invoke-Contract 'selective ownership profile upgrades preserve compatible controllers before any write' {
+        function Write-OwnershipWorkflowFixture {
+            param([string]$Workflow, [string]$Variant)
+            [void][System.IO.Directory]::CreateDirectory((Join-Path $Workflow 'contracts'))
+            $utf8 = New-Object System.Text.UTF8Encoding($false)
+            $skillText = "---`nname: assistant-workflow`ndescription: Retained ownership protocol fixture.`n---`n"
+            $indexText = "schema_version: `"13.0`"`ncontract: index`nskill: assistant-workflow`n"
+            # Fixed declared tuples, independent of the production compatibility reader.
+            $handoffsText = @'
+schema_version: "13.0"
+contract: handoffs
+skill: assistant-workflow
+worker_stage_protocol:
+  stages:
+    - value: test_authoring
+      mutation_scope: tests_only
+      active_tdd_prerequisite: none
+      completes_build: false
+    - value: production
+      mutation_scope: tests_and_production
+      active_tdd_prerequisite: current_matching_red
+      completes_build: false
+    - value: refactor
+      mutation_scope: behavior_neutral
+      active_tdd_prerequisite: current_passing_green
+      completes_build: false
+'@
+            $handoffsText = $handoffsText.Replace("`r`n", "`n") + "`n"
+            switch ($Variant) {
+                { $_ -in @('old', 'recovery', 'full', 'gemini') } { $indexText = $indexText.Replace('13.0', '12.0') }
+                'no-stages' { $handoffsText = $handoffsText.Substring(0, $handoffsText.IndexOf('worker_stage_protocol:')) }
+                'stage-mismatch' { $handoffsText = $handoffsText.Replace('current_matching_red', 'none') }
+                'early-completion' { $handoffsText = $handoffsText.Replace('completes_build: false', 'completes_build: true') }
+                'duplicate-index' { $indexText += "skill: assistant-workflow`n" }
+                'duplicate-handoffs' { $handoffsText += "schema_version: `"13.0`"`n" }
+                'malformed' { $indexText = "schema_version: `"13.0`ncontract: index`nskill: assistant-workflow`n" }
+                'wrong-identity' { $indexText = $indexText.Replace('contract: index', 'contract: output') }
+                'bom-crlf' {
+                    $utf8 = New-Object System.Text.UTF8Encoding($true)
+                    $skillText = $skillText.Replace("`n", "`r`n")
+                    $indexText = $indexText.Replace("`n", "`r`n")
+                    $handoffsText = $handoffsText.Replace("`n", "`r`n")
+                }
+            }
+            [System.IO.File]::WriteAllText((Join-Path $Workflow 'SKILL.md'), $skillText, $utf8)
+            [System.IO.File]::WriteAllText((Join-Path $Workflow 'contracts/index.yaml'), $indexText, $utf8)
+            [System.IO.File]::WriteAllText((Join-Path $Workflow 'contracts/handoffs.yaml'), $handoffsText, $utf8)
+            switch ($Variant) {
+                'missing-index' { [System.IO.File]::Delete((Join-Path $Workflow 'contracts/index.yaml')) }
+                'unsafe-workflow' {
+                    [System.IO.Directory]::Delete($Workflow, $true)
+                    [System.IO.File]::WriteAllText($Workflow, 'wrong path type')
+                }
+                'unsafe-skill' {
+                    [System.IO.File]::Delete((Join-Path $Workflow 'SKILL.md'))
+                    [void][System.IO.Directory]::CreateDirectory((Join-Path $Workflow 'SKILL.md'))
+                }
+                'unsafe-index' {
+                    [System.IO.File]::Delete((Join-Path $Workflow 'contracts/index.yaml'))
+                    [void][System.IO.Directory]::CreateDirectory((Join-Path $Workflow 'contracts/index.yaml'))
+                }
+            }
+        }
+
+        foreach ($agent in @('codex', 'claude')) {
+            foreach ($variant in @('old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'bom-crlf', 'recovery', 'full')) {
+                foreach ($mode in @('normal', 'dry-run')) {
+                    if ($mode -eq 'dry-run' -and $variant -in @('recovery', 'full')) { continue }
+                    Use-IsolatedEnvironment ("ownership-$agent-$variant-$mode") {
+                        param($root, $isolatedUserProfile)
+                        if ($agent -eq 'codex') {
+                            $agentHome = Join-Path $root 'Custom Codex Home'
+                            [Environment]::SetEnvironmentVariable('CODEX_HOME', $agentHome, 'Process')
+                            # The active PowerShell skills target does not move with CODEX_HOME.
+                            $skillsTarget = Join-Path $isolatedUserProfile '.agents/skills'
+                            $roleLeaf = 'builder-tester.toml'
+                            $settingsLeaf = 'config.toml'
+                            $settingsText = 'personal = "retained"'
+                        }
+                        else {
+                            $agentHome = Join-Path $isolatedUserProfile '.claude'
+                            [Environment]::SetEnvironmentVariable('CODEX_HOME', [System.IO.Path]::GetPathRoot($root), 'Process')
+                            $skillsTarget = Join-Path $agentHome 'skills'
+                            $roleLeaf = 'builder-tester.md'
+                            $settingsLeaf = 'settings.json'
+                            $settingsText = '{"personal":true}'
+                        }
+                        [void][System.IO.Directory]::CreateDirectory((Join-Path $agentHome 'agents'))
+                        [void][System.IO.Directory]::CreateDirectory((Join-Path $agentHome 'tools'))
+                        [System.IO.File]::WriteAllText((Join-Path $agentHome ("agents/$roleLeaf")), 'old role sentinel')
+                        [System.IO.File]::WriteAllText((Join-Path $agentHome 'tools/sentinel.txt'), 'old tool sentinel')
+                        [System.IO.File]::WriteAllText((Join-Path $agentHome $settingsLeaf), $settingsText)
+                        $workflow = Join-Path $skillsTarget 'assistant-workflow'
+                        if ($variant -ne 'absent') { Write-OwnershipWorkflowFixture -Workflow $workflow -Variant $variant }
+                        if ($variant -in @('recovery', 'full')) {
+                            [void][System.IO.Directory]::CreateDirectory((Join-Path $skillsTarget 'assistant-tdd'))
+                            [System.IO.File]::WriteAllText((Join-Path $skillsTarget 'assistant-tdd/SKILL.md'), 'OLD_SPECIALIST_SENTINEL')
+                        }
+                        $before = Get-TreeFingerprint -LiteralPath $root
+                        $workflowBefore = if (Test-Path -LiteralPath $workflow -PathType Container) { Get-TreeFingerprint -LiteralPath $workflow } else { '' }
+                        $installArguments = @('-Agent', $agent, '-NoHooks')
+                        if ($variant -eq 'recovery') { $installArguments += @('-Skill', 'assistant-workflow') }
+                        elseif ($variant -ne 'full') { $installArguments += @('-Skill', 'assistant-docs') }
+                        if ($mode -eq 'dry-run') { $installArguments += '-DryRun' }
+                        $result = Invoke-Installer -Arguments $installArguments
+                        $after = Get-TreeFingerprint -LiteralPath $root
+                        $label = "$agent/$variant/$mode"
+                        if ($variant -in @('absent', 'current', 'bom-crlf', 'recovery', 'full')) {
+                            Assert-Equal 0 $result.ExitCode "$label unexpectedly rejected: $($result.Output)"
+                            if ($mode -eq 'dry-run') { Assert-Equal $before $after "$label dry-run mutated scratch tree" }
+                            if ($variant -eq 'absent') { Assert-False (Test-Path -LiteralPath $workflow) "$label added unselected workflow" }
+                            if ($variant -in @('current', 'bom-crlf')) {
+                                Assert-Equal $workflowBefore (Get-TreeFingerprint -LiteralPath $workflow) "$label refreshed retained compatible controller"
+                            }
+                            if ($variant -in @('recovery', 'full')) {
+                                foreach ($pair in @(@('assistant-workflow/contracts/handoffs.yaml', 'controller'), @('assistant-tdd/contracts/phase-gates.yaml', 'old TDD'))) {
+                                    $source = Join-Path (Join-Path $script:FrameworkRoot 'skills') $pair[0]
+                                    $target = Join-Path $skillsTarget $pair[0]
+                                    $expectedBytes = [System.Text.Encoding]::UTF8.GetBytes(([System.IO.File]::ReadAllText($source)).Replace('{agent_state_dir}', '.' + $agent))
+                                    Assert-Equal ([Convert]::ToBase64String($expectedBytes)) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($target))) "$label coupled refresh omitted $($pair[1])"
+                                }
+                                if ($variant -eq 'recovery') {
+                                    $retry = Invoke-Installer -Arguments @('-Agent', $agent, '-Skill', 'assistant-docs', '-NoHooks')
+                                    Assert-Equal 0 $retry.ExitCode "$label docs retry failed after workflow-first recovery: $($retry.Output)"
+                                }
+                            }
+                        }
+                        else {
+                            Assert-True ($result.ExitCode -ne 0) "$label accepted incompatible retained workflow"
+                            Assert-Equal $before $after "$label rejected after managed-tree mutation"
+                            if (-not $variant.StartsWith('unsafe-')) {
+                                Assert-Contains $result.Output 'INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE' "$label missing diagnostic"
+                                Assert-Contains $result.Output $workflow "$label missing retained workflow path"
+                                Assert-Contains $result.Output '-Skill assistant-workflow' "$label missing workflow-first recovery"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Use-IsolatedEnvironment 'ownership-gemini' {
+            param($root, $isolatedUserProfile)
+            Write-OwnershipWorkflowFixture -Workflow (Join-Path $isolatedUserProfile '.gemini/skills/assistant-workflow') -Variant gemini
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', [System.IO.Path]::GetPathRoot($root), 'Process')
+            $result = Invoke-Installer -Arguments @('-Agent', 'gemini', '-Skill', 'assistant-docs', '-NoHooks')
+            Assert-Equal 0 $result.ExitCode "Gemini incorrectly inherited ownership profile guard: $($result.Output)"
         }
     }
 

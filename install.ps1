@@ -2232,6 +2232,136 @@ function Update-CodexInstructions {
     Write-Ok "Installer guidance refreshed in $InstructionsFile (user content preserved)"
 }
 
+# This is a bounded reader for declared ownership compatibility, not a YAML loader.
+# String scalars may use canonical quotes; the boolean token is checked separately.
+function Test-WorkflowDeclaredScalar {
+    param([AllowEmptyString()][string]$Raw, [string]$Expected)
+    return ($Raw -ceq $Expected -or $Raw -ceq ('"' + $Expected + '"') -or $Raw -ceq ("'" + $Expected + "'"))
+}
+
+function Test-DeclaredWorkflowContract {
+    param([string]$Text, [string]$ExpectedContract)
+    $metadata = New-OrdinalDictionary
+    $sections = New-OrdinalDictionary
+    $stages = New-Object 'System.Collections.Generic.List[object]'
+    $currentStage = $null
+    $inProtocol = $false
+    $protocolCount = 0
+    $section = ''
+    foreach ($rawLine in @($Text -split "`n")) {
+        $line = $rawLine.TrimEnd([char]13)
+        if ($line.IndexOf([char]9) -ge 0) { return $false }
+        if ($line -cmatch '^[ ]*(#.*)?$') { continue }
+        $line = [regex]::Replace($line, '[ ]+#.*$', '').TrimEnd([char]32)
+        if ($line -cnotmatch '^ ') {
+            $inProtocol = $false
+            $section = ''
+            $rootMatch = [regex]::Match($line, '^([A-Za-z_][A-Za-z_0-9]*):[ ]*(.*)$')
+            if (-not $rootMatch.Success) { return $false }
+            $key = $rootMatch.Groups[1].Value
+            $value = $rootMatch.Groups[2].Value
+            $lower = $key.ToLowerInvariant()
+            if (@('schema_version', 'contract', 'skill') -ccontains $lower) {
+                if ($key -cne $lower -or $metadata.ContainsKey($key)) { return $false }
+                $metadata.Add($key, $value)
+            }
+            elseif ($ExpectedContract -ceq 'handoffs' -and $lower -ceq 'worker_stage_protocol') {
+                $protocolCount++
+                if ($key -cne $lower -or $value -cne '' -or $protocolCount -ne 1) { return $false }
+                $inProtocol = $true
+            }
+            continue
+        }
+        if (-not $inProtocol) { continue }
+        $sectionMatch = [regex]::Match($line, '^  ([A-Za-z_][A-Za-z_0-9]*):[ ]*(.*)$')
+        if ($sectionMatch.Success) {
+            $key = $sectionMatch.Groups[1].Value
+            $value = $sectionMatch.Groups[2].Value
+            if ($sections.ContainsKey($key) -or @('description', 'stages', 'rules') -cnotcontains $key) { return $false }
+            $sections.Add($key, $true)
+            if (@('stages', 'rules') -ccontains $key -and $value -cne '') { return $false }
+            $section = $key
+            continue
+        }
+        if ($section -ceq 'stages') {
+            $itemMatch = [regex]::Match($line, '^    - value:[ ]*(.*)$')
+            $fieldMatch = [regex]::Match($line, '^      (mutation_scope|active_tdd_prerequisite|completes_build):[ ]*(.*)$')
+            if ($itemMatch.Success) {
+                if ($stages.Count -ge 3) { return $false }
+                $currentStage = New-OrdinalDictionary
+                $currentStage.Add('value', $itemMatch.Groups[1].Value)
+                $stages.Add($currentStage)
+            }
+            elseif ($fieldMatch.Success) {
+                $key = $fieldMatch.Groups[1].Value
+                if ($null -eq $currentStage -or $currentStage.ContainsKey($key)) { return $false }
+                $currentStage.Add($key, $fieldMatch.Groups[2].Value)
+            }
+            else { return $false }
+        }
+        elseif ($section -cne 'rules' -or $line -cnotmatch '^    - ') { return $false }
+    }
+    foreach ($key in @('schema_version', 'contract', 'skill')) {
+        if (-not $metadata.ContainsKey($key)) { return $false }
+    }
+    if (-not (Test-WorkflowDeclaredScalar -Raw $metadata['schema_version'] -Expected '13.0') -or
+        -not (Test-WorkflowDeclaredScalar -Raw $metadata['contract'] -Expected $ExpectedContract) -or
+        -not (Test-WorkflowDeclaredScalar -Raw $metadata['skill'] -Expected 'assistant-workflow')) { return $false }
+    if ($ExpectedContract -ceq 'handoffs') {
+        if ($protocolCount -ne 1 -or -not $sections.ContainsKey('stages') -or $stages.Count -ne 3) { return $false }
+        $expected = @(
+            @('test_authoring', 'tests_only', 'none'),
+            @('production', 'tests_and_production', 'current_matching_red'),
+            @('refactor', 'behavior_neutral', 'current_passing_green')
+        )
+        for ($i = 0; $i -lt 3; $i++) {
+            $tuple = $stages[$i]
+            if ($tuple.Count -ne 4 -or -not $tuple.ContainsKey('mutation_scope') -or
+                -not $tuple.ContainsKey('active_tdd_prerequisite') -or -not $tuple.ContainsKey('completes_build')) { return $false }
+            if (-not (Test-WorkflowDeclaredScalar -Raw $tuple['value'] -Expected ($expected[$i][0])) -or
+                -not (Test-WorkflowDeclaredScalar -Raw $tuple['mutation_scope'] -Expected ($expected[$i][1])) -or
+                -not (Test-WorkflowDeclaredScalar -Raw $tuple['active_tdd_prerequisite'] -Expected ($expected[$i][2])) -or
+                $tuple['completes_build'] -cne 'false') { return $false }
+        }
+    }
+    return $true
+}
+
+function Assert-WorkflowRoleCompatibility {
+    param([string]$AgentName, [string]$SkillsTarget, [string[]]$SelectedSkills)
+    if (@('codex', 'claude') -cnotcontains $AgentName) { return }
+    $extension = if ($AgentName -ceq 'codex') { '.toml' } else { '.md' }
+    $profileSource = Join-Path (Join-Path $script:FrameworkDir 'agents') $AgentName
+    $hasProfiles = $false
+    foreach ($name in @('builder-tester', 'code-writer', 'intelligent-writer', 'mechanical-writer')) {
+        if (Test-Path -LiteralPath (Join-Path $profileSource ($name + $extension)) -PathType Leaf) { $hasProfiles = $true }
+    }
+    if (-not $hasProfiles -or $SelectedSkills -contains 'assistant-workflow') { return }
+    $workflow = Join-Path $SkillsTarget 'assistant-workflow'
+    try {
+        [void](Assert-SafeManagedChild -LiteralPath $workflow -ManagedRoot $SkillsTarget -Purpose 'retained workflow')
+        try { $workflowItem = Get-Item -LiteralPath $workflow -Force -ErrorAction Stop }
+        catch [System.Management.Automation.ItemNotFoundException] { return }
+        if (($workflowItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or -not $workflowItem.PSIsContainer) {
+            throw "Refusing unsafe retained workflow directory: $workflow"
+        }
+        foreach ($relative in @('SKILL.md', 'contracts/index.yaml', 'contracts/handoffs.yaml')) {
+            $file = Join-Path $workflow $relative
+            [void](Assert-SafeUserFile -LiteralPath $file -ManagedRoot $SkillsTarget -Purpose 'retained workflow metadata')
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing regular retained workflow metadata: $file" }
+        }
+        $index = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/index.yaml')
+        $handoffs = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/handoffs.yaml')
+        if (-not (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index') -or
+            -not (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs')) {
+            throw 'Retained index/handoffs do not uniquely declare schema 13.0 and the supported ownership stage tuples.'
+        }
+    }
+    catch {
+        throw "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at '$workflow': $($_.Exception.Message) No installation files have been changed. Run .\install.ps1 -Agent $AgentName -Skill assistant-workflow, then retry the original selection; or run .\install.ps1 -Agent $AgentName for a full install."
+    }
+}
+
 function Invoke-AssistantFrameworkInstall {
     if ([string]::IsNullOrWhiteSpace($Agent)) { throw 'Missing -Agent. Supported: claude, codex, gemini.' }
     $agentName = $Agent.Trim().ToLowerInvariant()
@@ -2373,6 +2503,7 @@ function Invoke-AssistantFrameworkInstall {
         Assert-FlatArtifactsSafe -Source (Join-Path (Join-Path $script:FrameworkDir 'agents') 'claude') -Target (Join-Path $agentHome 'agents') -ManagedRoot $agentHome -Filter '*.md' -Label 'Claude agent'
     }
     Assert-LegacyHookCleanupSafe -HooksTarget $hooksTarget
+    Assert-WorkflowRoleCompatibility -AgentName $agentName -SkillsTarget $skillsTarget -SelectedSkills $selectedSkills
 
     $installedAgentFiles = @()
     try {

@@ -1324,9 +1324,11 @@ For skill-only response grading, `actual_output`, `dependent_output`, `status`,
 `failure_class` and `next_action` are bounded eval-only scalar projections; the
 binding tuple remains under `slice_manifest[0]`.
 
-Both new Codex definitions and standalone deprecated code-writer retain the
+Claude and Codex intelligent/mechanical definitions and standalone deprecated code-writer retain the
 logical CodeWriter verification, TDD, status and independent review contract.
-Claude code-writer/Opus and Gemini supported native/default tiers remain intact.
+Claude uses native Opus for intelligent-writer and Sonnet for fully specified mechanical-writer, retaining explicit deprecated code-writer intelligent compatibility. Gemini supported native/default tiers remain intact. Mechanical evidence must fix tests and implementation, including cases, expected values/oracles and assertion patterns.
+
+Workflow v13 adds writer worker_stage test_authoring before independent RED, production after matching current RED, and refactor after current GREEN. Stage-only DONE cannot complete Build; Builder/Tester authors no tests or fixtures/snapshots/configuration. The focused ownership suite mutates the structured stage contract and checks provider profiles; it does not claim native enforcement or model-quality evidence.
 Metadata and phrase/schema matches alone cannot prove task success. Source
 migration, live installation and paid comparisons have separate authorization;
 total cost/value claims require accepted outcomes, correction/review effort,

@@ -7302,6 +7302,497 @@
       "fail_signals": [
         "Selects mechanical from size/type alone or drops actual partial changes."
       ]
+    },
+    {
+      "id": "ownership-authoring-without-red",
+      "title": "Ownership authoring without red",
+      "category": "role_constraints",
+      "purpose": "Check the bounded instruction-contract ownership/stage projection with existing structured operators; no native runtime enforcement claim.",
+      "prompt": "Active separated TDD has one selected CHECK-OWNERSHIP and no failing test yet. Dispatch the selected intelligent writer to author the assertion and fixtures; no incoming RED exists. Return stage outcome as JSON. Return the ownership outcome using slice_manifest.worker_stage/writer_selection, slice_verification_summary implementation_status/final_status/red_status/self_check_result, and actual changed_files objects; use task_journal_entry for TDD ordering. A completed stage keeps slice final_status BLOCKED until full verification. These are bounded evaluation projections, not invented execution history.",
+      "setup_context": [
+        "Approved ownership protocol and unchanged selected verification decision apply.",
+        "Only the supplied stage is being completed; no invented command or phase history."
+      ],
+      "expected_behavior": [
+        "Return the requested exact stage/role/status and preserve actual changes.",
+        "Keep production gated by meaningful current RED and refactor by current GREEN."
+      ],
+      "pass_criteria": [
+        "Matches ownership and stage prerequisites; stage-only completion cannot close Build."
+      ],
+      "fail_signals": [
+        "Verifier authors tests, hidden mutations, incorrect writer judgment, stale RED authorizes production, or early Build completion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ownership protocol"
+        ],
+        "forbidden_substrings": [
+          "ignore ownership protocol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "worker_stage"
+            ],
+            "expected": "test_authoring"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "agent"
+            ],
+            "expected": "intelligent-writer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "rationale"
+            ],
+            "expected": "Test oracle selection requires judgment."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "implementation_status"
+            ],
+            "expected": "done"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "final_status"
+            ],
+            "expected": "BLOCKED"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "red_status"
+            ],
+            "expected": "not_started"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files",
+              0,
+              "path"
+            ],
+            "expected": "tests/ownership_test.rb"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files",
+              0,
+              "change_type"
+            ],
+            "expected": "created"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files",
+              0,
+              "description"
+            ],
+            "expected": "Writer-authored test."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files",
+              1,
+              "path"
+            ],
+            "expected": "tests/fixtures/ownership.json"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files",
+              1,
+              "change_type"
+            ],
+            "expected": "created"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files",
+              1,
+              "description"
+            ],
+            "expected": "Writer-authored fixture."
+          }
+        ]
+      }
+    },
+    {
+      "id": "ownership-production-invalid-red",
+      "title": "Ownership production invalid red",
+      "category": "role_constraints",
+      "purpose": "Check the bounded instruction-contract ownership/stage projection with existing structured operators; no native runtime enforcement claim.",
+      "prompt": "Active separated production has seven-field RED from CHECK-OTHER, a different argv/cwd, and stale target/oracle. Keep historical evidence; no current authorizing RED exists. Return stage outcome as JSON. Return the ownership outcome using slice_manifest.worker_stage/writer_selection, slice_verification_summary implementation_status/final_status/red_status/self_check_result, and actual changed_files objects; use task_journal_entry for TDD ordering. A completed stage keeps slice final_status BLOCKED until full verification. These are bounded evaluation projections, not invented execution history.",
+      "setup_context": [
+        "Approved ownership protocol and unchanged selected verification decision apply.",
+        "Only the supplied stage is being completed; no invented command or phase history."
+      ],
+      "expected_behavior": [
+        "Return the requested exact stage/role/status and preserve actual changes.",
+        "Keep production gated by meaningful current RED and refactor by current GREEN."
+      ],
+      "pass_criteria": [
+        "Matches ownership and stage prerequisites; stage-only completion cannot close Build."
+      ],
+      "fail_signals": [
+        "Verifier authors tests, hidden mutations, incorrect writer judgment, stale RED authorizes production, or early Build completion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ownership protocol"
+        ],
+        "forbidden_substrings": [
+          "ignore ownership protocol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "status"
+            ],
+            "expected": "NEEDS_CONTEXT"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "worker_stage"
+            ],
+            "expected": "production"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "agent"
+            ],
+            "expected": "intelligent-writer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "rationale"
+            ],
+            "expected": "Preserve semantic ownership."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "implementation_status"
+            ],
+            "expected": "blocked"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "final_status"
+            ],
+            "expected": "BLOCKED"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "red_status"
+            ],
+            "expected": "stale_wrong_identity_no_authorization"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files"
+            ],
+            "expected": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "ownership-verifier-prohibited-mutation",
+      "title": "Ownership verifier prohibited mutation",
+      "category": "role_constraints",
+      "purpose": "Check the bounded instruction-contract ownership/stage projection with existing structured operators; no native runtime enforcement claim.",
+      "prompt": "Execution-only Builder/Tester unexpectedly edited tests/fixtures/ownership.json during pre_production_red. No other check failed. Return its honest result as JSON; do not silently restore or hide the mutation. Return the ownership outcome using slice_manifest.worker_stage/writer_selection, slice_verification_summary implementation_status/final_status/red_status/self_check_result, and actual changed_files objects; use task_journal_entry for TDD ordering. A completed stage keeps slice final_status BLOCKED until full verification. These are bounded evaluation projections, not invented execution history.",
+      "setup_context": [
+        "Approved ownership protocol and unchanged selected verification decision apply.",
+        "Only the supplied stage is being completed; no invented command or phase history."
+      ],
+      "expected_behavior": [
+        "Return the requested exact stage/role/status and preserve actual changes.",
+        "Keep production gated by meaningful current RED and refactor by current GREEN."
+      ],
+      "pass_criteria": [
+        "Matches ownership and stage prerequisites; stage-only completion cannot close Build."
+      ],
+      "fail_signals": [
+        "Verifier authors tests, hidden mutations, incorrect writer judgment, stale RED authorizes production, or early Build completion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ownership protocol"
+        ],
+        "forbidden_substrings": [
+          "ignore ownership protocol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "implementation_status"
+            ],
+            "expected": "blocked"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "final_status"
+            ],
+            "expected": "BLOCKED"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_verification_summary",
+              0,
+              "self_check_result"
+            ],
+            "expected": "DEVIATED: verifier changed authored fixture; route repair to selected writer."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files",
+              0,
+              "path"
+            ],
+            "expected": "tests/fixtures/ownership.json"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files",
+              0,
+              "change_type"
+            ],
+            "expected": "modified"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "changed_files",
+              0,
+              "description"
+            ],
+            "expected": "Actual prohibited verifier mutation preserved in evidence."
+          }
+        ]
+      }
+    },
+    {
+      "id": "ownership-mechanical-fixed-tests",
+      "title": "Ownership mechanical fixed tests",
+      "category": "role_constraints",
+      "purpose": "Check the bounded instruction-contract ownership/stage projection with existing structured operators; no native runtime enforcement claim.",
+      "prompt": "Approved recipe, resolved decisions, ownership/dependencies and independent correctness evidence fully specify BOTH tests and implementation: cases input 2 -> expected 4 and input -1 -> expected -2, negative cases and fixture/assertion pattern are fixed. For this controlled case, explicitly select the fully eligible mechanical-writer for BOTH tests and implementation. Intelligent-writer remains the general default when no specific eligible mechanical selection is requested. Return JSON. Return the ownership outcome using slice_manifest.worker_stage/writer_selection, slice_verification_summary implementation_status/final_status/red_status/self_check_result, and actual changed_files objects; use task_journal_entry for TDD ordering. A completed stage keeps slice final_status BLOCKED until full verification. These are bounded evaluation projections, not invented execution history.",
+      "setup_context": [
+        "Approved ownership protocol and unchanged selected verification decision apply.",
+        "Only the supplied stage is being completed; no invented command or phase history."
+      ],
+      "expected_behavior": [
+        "Return the requested exact stage/role/status and preserve actual changes.",
+        "Keep production gated by meaningful current RED and refactor by current GREEN."
+      ],
+      "pass_criteria": [
+        "Matches ownership and stage prerequisites; stage-only completion cannot close Build."
+      ],
+      "fail_signals": [
+        "Verifier authors tests, hidden mutations, incorrect writer judgment, stale RED authorizes production, or early Build completion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ownership protocol"
+        ],
+        "forbidden_substrings": [
+          "ignore ownership protocol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "worker_stage"
+            ],
+            "expected": "test_authoring"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "agent"
+            ],
+            "expected": "mechanical-writer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "rationale"
+            ],
+            "expected": "BOTH tests and implementation have fixed cases, expected values, negative cases and assertion/fixture patterns."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "recipe_or_example_ref"
+            ],
+            "expected": "recipe.md"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "resolved_decisions_ref"
+            ],
+            "expected": "decisions.md"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "scope_and_dependencies_ref"
+            ],
+            "expected": "scope.md"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "mechanical_eligibility",
+              "correctness_expectations_ref"
+            ],
+            "expected": "expectations.md"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ownership-unresolved-test-oracle",
+      "title": "Ownership unresolved test oracle",
+      "category": "role_constraints",
+      "purpose": "Check the bounded instruction-contract ownership/stage projection with existing structured operators; no native runtime enforcement claim.",
+      "prompt": "The implementation is a one-line exact pattern, but the test oracle and negative counterexamples for interacting lifecycle requirements remain unresolved. Choose one writer for BOTH tests and code. Return JSON. Return the ownership outcome using slice_manifest.worker_stage/writer_selection, slice_verification_summary implementation_status/final_status/red_status/self_check_result, and actual changed_files objects; use task_journal_entry for TDD ordering. A completed stage keeps slice final_status BLOCKED until full verification. These are bounded evaluation projections, not invented execution history.",
+      "setup_context": [
+        "Approved ownership protocol and unchanged selected verification decision apply.",
+        "Only the supplied stage is being completed; no invented command or phase history."
+      ],
+      "expected_behavior": [
+        "Return the requested exact stage/role/status and preserve actual changes.",
+        "Keep production gated by meaningful current RED and refactor by current GREEN."
+      ],
+      "pass_criteria": [
+        "Matches ownership and stage prerequisites; stage-only completion cannot close Build."
+      ],
+      "fail_signals": [
+        "Verifier authors tests, hidden mutations, incorrect writer judgment, stale RED authorizes production, or early Build completion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ownership protocol"
+        ],
+        "forbidden_substrings": [
+          "ignore ownership protocol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "worker_stage"
+            ],
+            "expected": "test_authoring"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "agent"
+            ],
+            "expected": "intelligent-writer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "slice_manifest",
+              0,
+              "writer_selection",
+              "rationale"
+            ],
+            "expected": "Unresolved oracle and counterexample selection requires judgment for BOTH tests and implementation."
+          }
+        ]
+      }
     }
   ],
   "canonical_feature_preparation_result_expectations": {

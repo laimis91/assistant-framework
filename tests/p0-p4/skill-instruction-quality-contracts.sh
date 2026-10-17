@@ -382,7 +382,9 @@ done
 tdd_skill="$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md"
 for term in \
     "one bounded executor owns RED, production, GREEN, and REFACTOR verification" \
-    "Separated_workers: Builder/Tester owns RED and GREEN/REFACTOR verification" \
+    "Separated_workers: SAME writer authors tests" \
+    "Builder/Tester only executes RED/GREEN/REFACTOR" \
+    "Stage-only DONE cannot complete Build or Review" \
     "Required RED evidence before production implementation:"; do
     if ! p0p4_section_has_term "$tdd_skill" "## Ownership" "$term"; then
         missing_paired_guidance+=("assistant-tdd Ownership: $term")

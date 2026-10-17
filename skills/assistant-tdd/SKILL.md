@@ -56,14 +56,15 @@ decision and phase boundary:
   intersection; preserve its source.
 
 - In `bounded_executor`, one bounded executor owns RED, production, GREEN, and REFACTOR verification; production starts only after valid RED.
-- Separated_workers: Builder/Tester owns RED and GREEN/REFACTOR verification; Code Writer carries RED unchanged, owns production, then refactors after current GREEN passes. Use for independent RED, high risk, or broad/noisy/environment-heavy verification.
+- Separated_workers: SAME writer authors tests (`test_authoring`, no incoming RED), implements after current RED (`production`), and refactors after current GREEN (`refactor`). Builder/Tester only executes RED/GREEN/REFACTOR. Stage-only DONE cannot complete Build or Review.
+
+Reused checks force no new tests/stages. Changed authorizing inputs require fresh RED; preserve history.
 
 Required RED evidence before production implementation:
 
 - Test file and test name
 - For authorizing RED, the sole applicable selected CheckSpec ID, exact argv/cwd,
   and matching oracle; standalone/no-decision TDD may omit the ID.
-- Command argv/cwd (standalone/no-decision TDD may omit ID)
 - Failure summary
 - Why the failure proves the intended missing behaviour
 
@@ -78,10 +79,7 @@ must return `NEEDS_CONTEXT` and make no production changes.
 
 ## Cycle
 
-1. **RED** — add or extend one behavior assertion, run it, and verify the right
-   failure. If it passes unexpectedly, inspect whether behavior already exists
-   or the test is wrong; use characterization or current regression evidence
-   instead of fabricating a failure when the behavior already exists.
+1. **RED** — writer adds or extends one behavior assertion; the verification owner runs it for the right failure. If it passes unexpectedly, inspect existing behavior and test validity; use current regression/characterization evidence instead of fabricating RED.
 2. **GREEN** — write the simplest passing code, rerun the target and relevant
    regressions, plus any binding suite. Repair regressions before continuing.
 3. **REFACTOR** — remove duplication or improve names without new behavior; keep

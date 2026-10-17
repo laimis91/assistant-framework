@@ -102,6 +102,7 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 - Explorer dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
 - Architect dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
 - Code Writer dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
+- Writer stages: [test_authoring (tests only, no incoming RED) -> independent RED -> SAME writer production -> GREEN -> SAME writer refactor -> distinct REFACTOR; stage-only DONE never completes Build]
 - Builder/Tester dispatch/result/direct evidence: [delegated refs | direct evidence | N/A when bounded_executor]
 - Code Reviewer dispatch/result/direct evidence: [delegated refs | Code Reviewer direct evidence | Reviewer legacy compatibility | N/A]
 - Reviewer dispatch/result/direct evidence: [compatibility refs/direct evidence when used | N/A]

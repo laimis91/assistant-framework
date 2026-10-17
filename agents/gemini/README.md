@@ -11,8 +11,10 @@ The following roles should be created:
 - explorer — Deep codebase analyst (read-only)
 - code-mapper — Lightweight structure mapping (read-only)
 - architect — Implementation blueprint design (read-only)
-- code-writer — Focused code implementation (write access)
-- builder-tester — Build and test automation (write access)
+- logical CodeWriter — Selected tests plus implementation; use supported native/default routing until custom definitions exist
+- logical Builder/Tester — Execution-only selected checks; writes designated generated outputs/evidence logs, with authored fixes returned to the same writer
 - reviewer — Independent code review (read-only)
 - lens-researcher — Independent frozen five-lens evidence collection (read-only)
 - research-peer-reviewer — Independent five-lens synthesis critique (read-only)
+
+Current fallback follows shared writer_selection judgment and worker_stage ownership: the selected native writer authors tests, fixtures, snapshots, helpers and test/build configuration, then production/refactor subject to RED/GREEN gates. Do not invent custom Gemini role names or model overrides.
