@@ -2342,6 +2342,10 @@ function Assert-WorkflowRoleCompatibility {
         [void](Assert-SafeManagedChild -LiteralPath $workflow -ManagedRoot $SkillsTarget -Purpose 'retained workflow')
         try { $workflowItem = Get-Item -LiteralPath $workflow -Force -ErrorAction Stop }
         catch [System.Management.Automation.ItemNotFoundException] { return }
+        if ($null -eq $workflowItem) {
+            if (-not (Test-Path -LiteralPath $workflow)) { return }
+            throw "Unable to inspect existing retained workflow directory: $workflow"
+        }
         if (($workflowItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or -not $workflowItem.PSIsContainer) {
             throw "Refusing unsafe retained workflow directory: $workflow"
         }

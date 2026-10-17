@@ -2378,6 +2378,58 @@ requires:
     }
 
     Invoke-Contract 'selective ownership profile upgrades preserve compatible controllers before any write' {
+        # BEGIN retained-workflow no-result controls
+        & {
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:InstallerPath, [ref]$tokens, [ref]$errors)
+            $definitions = @($ast.FindAll({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq 'Assert-WorkflowRoleCompatibility'
+            }, $true))
+            Assert-Equal 1 $definitions.Count 'Missing retained workflow compatibility function'
+            . ([scriptblock]::Create($definitions[0].Extent.Text))
+            $script:FrameworkDir = $script:FrameworkRoot
+            $skills = Join-Path $script:SuiteRoot 'controlled-skills'
+            $expectedWorkflow = Join-Path $skills 'assistant-workflow'
+            $traversals = New-Object System.Collections.Generic.List[string]
+            $lookups = New-Object System.Collections.Generic.List[string]
+            function Assert-SafeManagedChild {
+                param([string]$LiteralPath, [string]$ManagedRoot, [string]$Purpose)
+                Assert-Equal $skills $ManagedRoot 'Retained workflow traversal lost its managed boundary'
+                $traversals.Add($LiteralPath)
+                return $LiteralPath
+            }
+            function Test-Path {
+                param([string]$LiteralPath, [string]$PathType)
+                if ($LiteralPath -eq $expectedWorkflow) { return $workflowExists }
+                return $PathType -eq 'Leaf'
+            }
+            function Get-Item {
+                param([string]$LiteralPath, [switch]$Force, [string]$ErrorAction)
+                Assert-Equal $expectedWorkflow $LiteralPath 'Unexpected retained workflow lookup'
+                Assert-True $Force.IsPresent 'Retained workflow lookup lost Force'
+                Assert-Equal 'Stop' $ErrorAction 'Retained workflow lookup lost terminating errors'
+                $lookups.Add($LiteralPath)
+                # Model the evidenced no-object lookup without assuming provider internals.
+                return $null
+            }
+            $workflowExists = $false
+            $caught = ''
+            try { Assert-WorkflowRoleCompatibility -AgentName codex -SkillsTarget $skills -SelectedSkills @('assistant-docs') }
+            catch { $caught = $_.Exception.Message }
+            Assert-Equal '' $caught 'No-result lookup must admit independently confirmed absent workflow'
+            $workflowExists = $true
+            $caught = ''
+            try { Assert-WorkflowRoleCompatibility -AgentName codex -SkillsTarget $skills -SelectedSkills @('assistant-docs') }
+            catch { $caught = $_.Exception.Message }
+            Assert-Contains $caught 'INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE' 'No-result existing workflow must fail closed'
+            Assert-Contains $caught 'Unable to inspect existing retained workflow directory' 'No-result existing workflow lacks inspection diagnostic'
+            Assert-Equal 2 $traversals.Count 'Both no-result paths must retain safe traversal'
+            Assert-Equal 2 $lookups.Count 'Both no-result paths must retain the forced object lookup'
+        }
+        # END retained-workflow no-result controls
         function Write-OwnershipWorkflowFixture {
             param([string]$Workflow, [string]$Variant)
             [void][System.IO.Directory]::CreateDirectory((Join-Path $Workflow 'contracts'))
