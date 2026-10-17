@@ -138,7 +138,7 @@ For missing new Claude or Codex writer definitions, report a deployment mismatch
 | Code Mapper | `Explore` or nearest read-only explorer | Fast / economical |
 | Explorer | `Explore` or nearest read-only explorer | Balanced / standard |
 | Architect | `general-purpose` or nearest planning agent | Strongest / deep reasoning |
-| Code Writer (Claude/Gemini supported fallback only) | `general-purpose` or nearest coding agent | Strongest / deep reasoning |
+| Code Writer (Gemini supported fallback only) | `general-purpose` or nearest coding agent | Strongest / deep reasoning |
 | Builder/Tester | `general-purpose` or nearest coding agent with shell/test access | Balanced / standard |
 | Code Reviewer | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |
 | Reviewer compatibility | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |

@@ -1251,8 +1251,26 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             $lookalike = $runtimePaths[0] + '.installer-owned'
             $sentinel = Join-Path $root 'installer-owned-sentinel.txt'
             [System.IO.File]::WriteAllText($sentinel, 'sentinel-before')
+            $runtimeProbe = Join-Path $root 'runtime-noop.ps1'
+            [System.IO.File]::WriteAllText($runtimeProbe, 'exit 0')
+            $observerBefore = Get-TreeFingerprint -LiteralPath $root
+            $observerAfter = Get-TreeFingerprint -LiteralPath $root
+            Write-Host ("RUNTIME_OBSERVER version={0} executable={1}`nbefore={2}`nafter={3}" -f $PSVersionTable.PSVersion, $script:PowerShellExecutable, $observerBefore, $observerAfter)
+            Assert-Equal $observerBefore $observerAfter 'Fingerprint observation alone changed the isolated tree'
 
-            $before = Get-TreeFingerprint -LiteralPath $root
+            # No installer code runs: expose first-child initialization separately
+            # from the unchanged-fingerprint requirement for a repeated child.
+            $firstChild = Invoke-PowerShellFile -LiteralPath $runtimeProbe
+            Assert-Equal 0 $firstChild.ExitCode 'First bare PowerShell no-op failed'
+            $afterFirstChild = Get-TreeFingerprint -LiteralPath $root
+            $secondChild = Invoke-PowerShellFile -LiteralPath $runtimeProbe
+            Assert-Equal 0 $secondChild.ExitCode 'Second bare PowerShell no-op failed'
+            $afterSecondChild = Get-TreeFingerprint -LiteralPath $root
+            Write-Host ("RUNTIME_NOOP version={0} executable={1}`npre_child={2}`nfirst_child={3}`nsecond_child={4}" -f $PSVersionTable.PSVersion, $script:PowerShellExecutable, $observerAfter, $afterFirstChild, $afterSecondChild)
+            Assert-Equal $afterFirstChild $afterSecondChild 'Repeated no-installer child was not fingerprint-idempotent'
+            Assert-Equal 'sentinel-before' ([System.IO.File]::ReadAllText($sentinel)) 'No-op child changed the managed sentinel'
+
+            $before = $afterSecondChild
             foreach ($runtimePath in $runtimePaths) {
                 [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $runtimePath))
                 [System.IO.File]::WriteAllText($runtimePath, 'runtime-before')
@@ -2457,6 +2475,12 @@ worker_stage_protocol:
                             [void][System.IO.Directory]::CreateDirectory((Join-Path $skillsTarget 'assistant-tdd'))
                             [System.IO.File]::WriteAllText((Join-Path $skillsTarget 'assistant-tdd/SKILL.md'), 'OLD_SPECIALIST_SENTINEL')
                         }
+                        # Establish only child-runtime state before measurement.
+                        # The probe contains no installer invocation or filesystem writes.
+                        $runtimeProbe = Join-Path $root 'runtime-noop.ps1'
+                        [System.IO.File]::WriteAllText($runtimeProbe, 'exit 0')
+                        $warmup = Invoke-PowerShellFile -LiteralPath $runtimeProbe
+                        Assert-Equal 0 $warmup.ExitCode 'Ownership matrix bare PowerShell warm-up failed'
                         $before = Get-TreeFingerprint -LiteralPath $root
                         $workflowBefore = if (Test-Path -LiteralPath $workflow -PathType Container) { Get-TreeFingerprint -LiteralPath $workflow } else { '' }
                         $installArguments = @('-Agent', $agent, '-NoHooks')

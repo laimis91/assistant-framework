@@ -2868,7 +2868,7 @@ handoffs:
       - name: changed_files
         type: string[]
         required: conditional
-        condition: "verification_stage == final_verification or tdd_applies is false"
+        condition: "verification_stage == final_verification or tdd_applies is false or (verification_stage == pre_production_red and prior CodeWriter test_authoring edits occurred)"
         description: "Files actually modified by CodeWriter; pre_production_red consumes actual CodeWriter test_authoring test/fixture outputs when creation or repair occurred. It may omit this field or carry an empty list only when no prior authoring edits occurred."
       - name: files_changed
         type: string[]

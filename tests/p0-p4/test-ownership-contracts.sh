@@ -59,6 +59,29 @@ if ruby -ryaml -e '
     abort "negative control changed the correct global stage protocol" unless bad.fetch("worker_stage_protocol") == protocol
     abort "selected BuilderTester accepts stale #{name}.#{scalar} despite correct global stages" if builder_valid.call(bad)
   end
+  # Bounded projection of this selected declaration, not an executable contract language.
+  required_for = lambda do |condition, stage, tdd, authored|
+    condition.split(" or ").any? do |branch|
+      case branch
+      when "verification_stage == final_verification" then stage == "final_verification"
+      when "tdd_applies is false" then !tdd
+      when "(verification_stage == pre_production_red and prior CodeWriter test_authoring edits occurred)" then stage == "pre_production_red" && authored
+      when "verification_stage == pre_production_red" then stage == "pre_production_red"
+      else abort "unknown selected changed_files condition branch: #{branch}"
+      end
+    end
+  end
+  cases = [["pre_production_red", true, true, true], ["pre_production_red", true, false, false], ["final_verification", true, false, true], [nil, false, false, true]]
+  changes_valid = lambda do |field|
+    field["required"] == "conditional" && cases.all? do |stage, tdd, authored, required|
+      required_for.call(field.fetch("condition"), stage, tdd, authored) == required
+    end
+  end
+  changed = builder_fields.call(schema).fetch("changed_files")
+  abort "RED handoff can omit prior writer authoring paths or forces them for unchanged-test reuse" unless changes_valid.call(changed)
+  ["verification_stage == final_verification or tdd_applies is false", "verification_stage == final_verification or tdd_applies is false or verification_stage == pre_production_red"].each do |stale|
+    abort "accepts wrong authoring/reuse changed_files requiredness" if changes_valid.call(changed.merge("condition" => stale))
+  end
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then pass; else fail "writer stage admission contract invalid"; fi
 
 test_start "Builder/Tester authoring prohibition includes fixtures snapshots and build configuration"
@@ -85,6 +108,16 @@ if ruby -e '
       abort "no deprecated compatibility identity" if role == "code-writer" && !text.include?("deprecated")
     end
   end
+  roles = File.read(File.join(root, "skills/assistant-workflow/references/subagent-roles.md"))
+  fallback_valid = lambda do |text|
+    rows = text.lines.select { |line| line.start_with?("| Code Writer (") }
+    rows.length == 1 && rows.first.include?("Gemini supported fallback only") &&
+      rows.first.include?("general-purpose") && !rows.first.match?(/Claude|Codex/) &&
+      text.include?("For missing new Claude or Codex writer definitions, report a deployment mismatch and stop")
+  end
+  abort "fallback table still authorizes generic Claude/Codex writers despite deployment stop" unless fallback_valid.call(roles)
+  stale = roles.sub("Code Writer (Gemini supported fallback only)", "Code Writer (Claude/Gemini supported fallback only)")
+  abort "old Claude fallback row accepted beneath correct stop rule" if fallback_valid.call(stale)
 ' "$FRAMEWORK_DIR"; then pass; else fail "provider writer ownership or compatibility differs"; fi
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ownership-response-fixtures.sh"
@@ -182,7 +215,14 @@ if ruby -ryaml -e '
   abort "reuse weakened current actual failure requirement" unless specialist.fetch("RED2").fetch("check").include?("exactly one current failed invocation is bound to this test")
   right_reason = specialist.fetch("RED3").fetch("check")
   abort "reuse weakened exact target/right-reason RED" unless right_reason.include?("failed for the RIGHT reason") && right_reason.include?("exact selected-and-applicable CheckSpec ID, argv, cwd, target test file/name, and matching meaningful_failure oracle")
-' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml"; then pass; else fail "workflow/specialist reuse admission requires authoring or weakens meaningful RED"; fi
+  journal = File.read(ARGV[2]).lines.find { |line| line.start_with?("- Writer stages:") }.to_s
+  journal_valid = lambda do |line|
+    ["record only actually executed stages with evidence refs", "inactive TDD: writer tests + code then selected verification, no invented RED", "active separated TDD, tests need creation or repair: test_authoring", "active separated TDD, reused tests: independent RED", "active bounded_executor: SAME executor", "stage-only DONE never completes Build"].all? { |term| line.include?(term) }
+  end
+  abort "journal forces unobserved or inapplicable writer stages for inactive/reuse/bounded work" unless journal_valid.call(journal)
+  stale_journal = "- Writer stages: [test_authoring (tests only, no incoming RED) -> independent RED -> SAME writer production -> GREEN -> SAME writer refactor -> distinct REFACTOR; stage-only DONE never completes Build]"
+  abort "unconditional old journal sequence accepted" if journal_valid.call(stale_journal)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then pass; else fail "workflow/specialist reuse admission requires authoring or weakens meaningful RED"; fi
 
 test_start "bounded TDD admits the planned initial dispatch and gates production edits on observed RED"
 # Declaration conformance only; this is not an execution controller or model run.
