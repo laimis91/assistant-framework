@@ -2332,11 +2332,13 @@ function Assert-WorkflowRoleCompatibility {
     if (@('codex', 'claude') -cnotcontains $AgentName) { return }
     $extension = if ($AgentName -ceq 'codex') { '.toml' } else { '.md' }
     $profileSource = Join-Path (Join-Path $script:FrameworkDir 'agents') $AgentName
-    $hasProfiles = $false
-    foreach ($name in @('builder-tester', 'code-writer', 'intelligent-writer', 'mechanical-writer')) {
-        if (Test-Path -LiteralPath (Join-Path $profileSource ($name + $extension)) -PathType Leaf) { $hasProfiles = $true }
+    foreach ($name in @('intelligent-writer', 'mechanical-writer')) {
+        $definition = Join-Path $profileSource ($name + $extension)
+        if (-not (Test-Path -LiteralPath $definition -PathType Leaf)) {
+            throw "Missing required writer definition for ${AgentName}: $definition. Restore the complete framework source and retry. No installation files have been changed."
+        }
     }
-    if (-not $hasProfiles -or $SelectedSkills -contains 'assistant-workflow') { return }
+    if ($SelectedSkills -contains 'assistant-workflow') { return }
     $workflow = Join-Path $SkillsTarget 'assistant-workflow'
     try {
         [void](Assert-SafeManagedChild -LiteralPath $workflow -ManagedRoot $SkillsTarget -Purpose 'retained workflow')

@@ -15,6 +15,14 @@ p0p4_file_mode_octal() {
     esac
 }
 
+p0p4_seed_required_writer_profiles() {
+    local fixture_root="$1" agent="${2:-codex}" extension=md
+    [[ "$agent" != codex ]] || extension=toml
+    mkdir -p "$fixture_root/agents/$agent"
+    cp "$FRAMEWORK_DIR/agents/$agent/intelligent-writer.$extension" "$fixture_root/agents/$agent/"
+    cp "$FRAMEWORK_DIR/agents/$agent/mechanical-writer.$extension" "$fixture_root/agents/$agent/"
+}
+
 legacy_orchestrator_role="You are an orchestrator. You delegate ALL ""file editing, code implementation, and phase execution to specialized agents."
 stale_generated_phrase="delegate ALL ""file editing, code implementation, and phase execution"
 route_guidance="For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent."
@@ -135,6 +143,7 @@ INSTALL_HOME_REQUIRES_CLOSURE="$(mktemp -d)"
 REQUIRES_CLOSURE_FRAMEWORK_ROOT="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_REQUIRES_CLOSURE" "$REQUIRES_CLOSURE_FRAMEWORK_ROOT"
 cp "$FRAMEWORK_DIR/install.sh" "$REQUIRES_CLOSURE_FRAMEWORK_ROOT/install.sh"
+p0p4_seed_required_writer_profiles "$REQUIRES_CLOSURE_FRAMEWORK_ROOT"
 for closure_skill in assistant-closure-a assistant-closure-b assistant-closure-c; do
     mkdir -p "$REQUIRES_CLOSURE_FRAMEWORK_ROOT/skills/$closure_skill"
 done
@@ -190,6 +199,7 @@ EMPTY_INVENTORY_SKILL="$EMPTY_INVENTORY_FRAMEWORK_ROOT/skills/$EMPTY_INVENTORY_S
 p0p4_register_cleanup "$INSTALL_HOME_EMPTY_INVENTORY" "$EMPTY_INVENTORY_FRAMEWORK_ROOT"
 mkdir -p "$EMPTY_INVENTORY_SKILL"
 cp "$FRAMEWORK_DIR/install.sh" "$EMPTY_INVENTORY_FRAMEWORK_ROOT/install.sh"
+p0p4_seed_required_writer_profiles "$EMPTY_INVENTORY_FRAMEWORK_ROOT"
 cat >"$EMPTY_INVENTORY_SKILL/SKILL.md" <<EOF
 ---
 name: $EMPTY_INVENTORY_SKILL_NAME
@@ -275,6 +285,7 @@ UNSAFE_SOURCE_FRAMEWORK_ROOT="$(mktemp -d)"
 UNSAFE_SOURCE_EXTERNAL="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_UNSAFE_SOURCE" "$UNSAFE_SOURCE_FRAMEWORK_ROOT" "$UNSAFE_SOURCE_EXTERNAL"
 cp "$FRAMEWORK_DIR/install.sh" "$UNSAFE_SOURCE_FRAMEWORK_ROOT/install.sh"
+p0p4_seed_required_writer_profiles "$UNSAFE_SOURCE_FRAMEWORK_ROOT"
 mkdir -p "$UNSAFE_SOURCE_FRAMEWORK_ROOT/skills"
 for unsafe_source_kind in source metadata; do
     unsafe_source_skill="assistant-unsafe-$unsafe_source_kind"
@@ -318,6 +329,7 @@ REQUIRES_FIXTURE="$REQUIRES_FRAMEWORK_ROOT/skills/$REQUIRES_FIXTURE_NAME"
 p0p4_register_cleanup "$INSTALL_HOME_REQUIRES" "$REQUIRES_FRAMEWORK_ROOT"
 mkdir -p "$REQUIRES_FIXTURE"
 cp "$FRAMEWORK_DIR/install.sh" "$REQUIRES_FRAMEWORK_ROOT/install.sh"
+p0p4_seed_required_writer_profiles "$REQUIRES_FRAMEWORK_ROOT"
 cat >"$REQUIRES_FIXTURE/SKILL.md" <<EOF
 ---
 name: $REQUIRES_FIXTURE_NAME
@@ -1039,6 +1051,51 @@ ownership_install_compatibility_matrix() {
     if ! HOME="$case_home" CODEX_HOME=/ bash "$FRAMEWORK_DIR/install.sh" --agent gemini --skill assistant-docs --no-hooks >"$matrix_root/gemini.log" 2>&1; then
         ownership_matrix_failure='Gemini incorrectly inherited the ownership profile guard'; return 1
     fi
+
+    # One common pre-mode source guard: representative branches, not a Cartesian inventory.
+    local missing selection preview source_root extension expected_definition row
+    while IFS='|' read -r agent missing selection preview; do
+        row="$agent-$missing-$selection-$preview"
+        source_root="$matrix_root/source-$row"
+        mkdir -p "$source_root/skills/assistant-docs" "$source_root/skills/assistant-workflow"
+        source_root="$(cd -P "$source_root" && pwd -P)"
+        cp "$FRAMEWORK_DIR/install.sh" "$source_root/install.sh"
+        for variant in assistant-docs assistant-workflow; do
+            printf '%s\n' '---' "name: $variant" 'description: Source profile admission fixture.' '---' >"$source_root/skills/$variant/SKILL.md"
+        done
+        extension=md; [[ "$agent" != codex ]] || extension=toml
+        if [[ "$missing" != absent-agent-source ]]; then
+            p0p4_seed_required_writer_profiles "$source_root" "$agent"
+            cp "$FRAMEWORK_DIR/agents/$agent/builder-tester.$extension" "$source_root/agents/$agent/"
+            rm "$source_root/agents/$agent/$missing.$extension"
+        fi
+        expected_definition="$source_root/agents/$agent/$([[ "$missing" == absent-agent-source ]] && printf intelligent-writer || printf '%s' "$missing").$extension"
+        case_home="$matrix_root/home-$row"; mkdir -p "$case_home"
+        agent_home="$case_home/.$agent"
+        mkdir -p "$agent_home/agents" "$agent_home/tools"
+        printf 'old role sentinel\n' >"$agent_home/agents/builder-tester.$extension"
+        printf 'old tool sentinel\n' >"$agent_home/tools/sentinel.txt"
+        if [[ "$agent" == codex ]]; then printf 'personal = "retained"\n' >"$agent_home/config.toml"; else printf '{"personal":true}\n' >"$agent_home/settings.json"; fi
+        before="$(ownership_install_fingerprint "$case_home")"
+        args=(--agent "$agent" --no-hooks)
+        [[ "$selection" == full ]] || args+=(--skill "assistant-$selection")
+        [[ "$preview" != dry-run ]] || args+=(--dry-run)
+        log="$matrix_root/source-$row.log"; status=0
+        HOME="$case_home" CODEX_HOME="$([[ "$agent" == codex ]] && printf '%s' "$agent_home" || printf /)" bash "$source_root/install.sh" "${args[@]}" >"$log" 2>&1 || status=$?
+        after="$(ownership_install_fingerprint "$case_home")"
+        if [[ "$status" == 0 ]]; then ownership_matrix_failure="$row accepted missing mandatory writer source; $log"; return 1; fi
+        if [[ "$before" != "$after" ]]; then ownership_matrix_failure="$row missing-source refusal mutated managed tree"; return 1; fi
+        if ! grep -Fq 'required writer definition' "$log" || ! grep -Fq "$expected_definition" "$log" || ! grep -Fq 'No installation files have been changed' "$log"; then
+            ownership_matrix_failure="$row lacks actionable missing-definition diagnostic; $log"; return 1
+        fi
+    done <<'SOURCE_PROFILE_CASES'
+codex|intelligent-writer|full|normal
+codex|mechanical-writer|workflow|dry-run
+claude|intelligent-writer|docs|normal
+claude|mechanical-writer|full|dry-run
+codex|absent-agent-source|docs|dry-run
+claude|absent-agent-source|workflow|normal
+SOURCE_PROFILE_CASES
 }
 
 test_start "selective Claude and Codex role upgrades require a compatible retained workflow before writes"

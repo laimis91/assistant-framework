@@ -228,13 +228,15 @@ declared_workflow_contract_compatible() {
 }
 
 preflight_workflow_role_compatibility() {
-    local extension profile profiles_present=false workflow="$SKILLS_TARGET/assistant-workflow" file
+    local extension profile definition workflow="$SKILLS_TARGET/assistant-workflow" file
     [[ "$AGENT" == codex || "$AGENT" == claude ]] || return 0
     extension=md; [[ "$AGENT" != codex ]] || extension=toml
-    for profile in builder-tester code-writer intelligent-writer mechanical-writer; do
-        if [[ -f "$FRAMEWORK_DIR/agents/$AGENT/$profile.$extension" ]]; then profiles_present=true; fi
+    for profile in intelligent-writer mechanical-writer; do
+        definition="$FRAMEWORK_DIR/agents/$AGENT/$profile.$extension"
+        if [[ -L "$definition" || ! -f "$definition" || ! -r "$definition" ]]; then
+            fail "Missing required writer definition for $AGENT: $definition. Restore the complete framework source and retry. No installation files have been changed."
+        fi
     done
-    $profiles_present || return 0
     array_contains assistant-workflow "${SKILLS[@]}" && return 0
 
     assert_managed_skill_target_root_safe

@@ -24,6 +24,8 @@ mkdir -p "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/contracts" \
     "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/references" \
     "$FIXTURE_FRAMEWORK/tools"
 cp "$FRAMEWORK_DIR/install.sh" "$FIXTURE_FRAMEWORK/install.sh"
+mkdir -p "$FIXTURE_FRAMEWORK/agents/codex"
+cp "$FRAMEWORK_DIR/agents/codex/intelligent-writer.toml" "$FRAMEWORK_DIR/agents/codex/mechanical-writer.toml" "$FIXTURE_FRAMEWORK/agents/codex/"
 cat > "$FIXTURE_FRAMEWORK/skills/path-substitution-contract/SKILL.md" <<'SKILL_FIXTURE'
 ---
 name: path-substitution-contract

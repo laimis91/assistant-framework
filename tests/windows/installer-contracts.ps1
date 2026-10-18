@@ -276,6 +276,17 @@ function Invoke-PowerShellFile {
     })
 }
 
+function Copy-RequiredWriterProfilesFixture {
+    param([string]$FixtureRoot, [string]$AgentName = 'codex')
+    $extension = if ($AgentName -eq 'codex') { '.toml' } else { '.md' }
+    $target = Join-Path (Join-Path $FixtureRoot 'agents') $AgentName
+    [void][System.IO.Directory]::CreateDirectory($target)
+    foreach ($name in @('intelligent-writer', 'mechanical-writer')) {
+        $source = Join-Path (Join-Path (Join-Path $script:FrameworkRoot 'agents') $AgentName) ($name + $extension)
+        [System.IO.File]::Copy($source, (Join-Path $target ($name + $extension)))
+    }
+}
+
 function Get-TreeFingerprint {
     param([string]$LiteralPath)
     $root = [System.IO.Path]::GetFullPath($LiteralPath).TrimEnd([char[]]@('\', '/'))
@@ -1397,6 +1408,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
         try {
             [void][System.IO.Directory]::CreateDirectory($fixtureRoot)
             [System.IO.File]::Copy($script:InstallerPath, $fixtureInstaller)
+            Copy-RequiredWriterProfilesFixture -FixtureRoot $fixtureFrameworkRoot
             [System.IO.File]::WriteAllText($fixtureSkill, @"
 ---
 name: $fixtureName
@@ -1430,6 +1442,7 @@ requires:
         try {
             [System.IO.Directory]::CreateDirectory((Join-Path $fixtureFrameworkRoot 'skills')) | Out-Null
             [System.IO.File]::Copy($script:InstallerPath, $fixtureInstaller)
+            Copy-RequiredWriterProfilesFixture -FixtureRoot $fixtureFrameworkRoot
             $fixtureSkills = @{
                 'assistant-closure-a' = @('Closure root fixture.', @('assistant-closure-b', 'assistant-closure-c'))
                 'assistant-closure-b' = @('Closure transitive fixture.', @('assistant-closure-c'))
@@ -2581,6 +2594,67 @@ worker_stage_protocol:
             [Environment]::SetEnvironmentVariable('CODEX_HOME', [System.IO.Path]::GetPathRoot($root), 'Process')
             $result = Invoke-Installer -Arguments @('-Agent', 'gemini', '-Skill', 'assistant-docs', '-NoHooks')
             Assert-Equal 0 $result.ExitCode "Gemini incorrectly inherited ownership profile guard: $($result.Output)"
+        }
+
+        # Representative callers of the same pre-mode source completeness guard.
+        $sourceCases = @(
+            @{ Agent = 'codex'; Missing = 'intelligent-writer'; Selection = 'full'; Preview = $false },
+            @{ Agent = 'codex'; Missing = 'mechanical-writer'; Selection = 'workflow'; Preview = $true },
+            @{ Agent = 'claude'; Missing = 'intelligent-writer'; Selection = 'docs'; Preview = $false },
+            @{ Agent = 'claude'; Missing = 'mechanical-writer'; Selection = 'full'; Preview = $true },
+            @{ Agent = 'codex'; Missing = 'absent-agent-source'; Selection = 'docs'; Preview = $true },
+            @{ Agent = 'claude'; Missing = 'absent-agent-source'; Selection = 'workflow'; Preview = $false }
+        )
+        $sourceCaseIndex = 0
+        foreach ($sourceCase in $sourceCases) {
+            $sourceCaseIndex++
+            Use-IsolatedEnvironment ("source-profiles-$sourceCaseIndex") {
+                param($root, $isolatedUserProfile)
+                $agent = $sourceCase.Agent
+                $extension = if ($agent -eq 'codex') { '.toml' } else { '.md' }
+                $sourceRoot = Join-Path $root 'source'
+                $sourceInstaller = Join-Path $sourceRoot 'install.ps1'
+                foreach ($skill in @('assistant-docs', 'assistant-workflow')) {
+                    $skillRoot = Join-Path (Join-Path $sourceRoot 'skills') $skill
+                    [void][System.IO.Directory]::CreateDirectory($skillRoot)
+                    [System.IO.File]::WriteAllText((Join-Path $skillRoot 'SKILL.md'), "---`nname: $skill`ndescription: Source profile admission fixture.`n---`n")
+                }
+                [System.IO.File]::Copy($script:InstallerPath, $sourceInstaller)
+                if ($sourceCase.Missing -ne 'absent-agent-source') {
+                    Copy-RequiredWriterProfilesFixture -FixtureRoot $sourceRoot -AgentName $agent
+                    $profileRoot = Join-Path (Join-Path $sourceRoot 'agents') $agent
+                    $legacyProfile = Join-Path (Join-Path (Join-Path $script:FrameworkRoot 'agents') $agent) ('builder-tester' + $extension)
+                    [System.IO.File]::Copy($legacyProfile, (Join-Path $profileRoot ('builder-tester' + $extension)))
+                    [System.IO.File]::Delete((Join-Path $profileRoot ($sourceCase.Missing + $extension)))
+                }
+                $expectedRole = if ($sourceCase.Missing -eq 'absent-agent-source') { 'intelligent-writer' } else { $sourceCase.Missing }
+                $expectedDefinition = Join-Path (Join-Path (Join-Path $sourceRoot 'agents') $agent) ($expectedRole + $extension)
+                $agentHome = if ($agent -eq 'codex') { Join-Path $root 'Custom Codex Home' } else { Join-Path $isolatedUserProfile '.claude' }
+                [Environment]::SetEnvironmentVariable('CODEX_HOME', $(if ($agent -eq 'codex') { $agentHome } else { [System.IO.Path]::GetPathRoot($root) }), 'Process')
+                [void][System.IO.Directory]::CreateDirectory((Join-Path $agentHome 'agents'))
+                [void][System.IO.Directory]::CreateDirectory((Join-Path $agentHome 'tools'))
+                [System.IO.File]::WriteAllText((Join-Path $agentHome ('agents/builder-tester' + $extension)), 'old role sentinel')
+                [System.IO.File]::WriteAllText((Join-Path $agentHome 'tools/sentinel.txt'), 'old tool sentinel')
+                $settingsLeaf = if ($agent -eq 'codex') { 'config.toml' } else { 'settings.json' }
+                $settingsText = if ($agent -eq 'codex') { 'personal = "retained"' } else { '{"personal":true}' }
+                [System.IO.File]::WriteAllText((Join-Path $agentHome $settingsLeaf), $settingsText)
+                $runtimeProbe = Join-Path $root 'runtime-noop.ps1'
+                [System.IO.File]::WriteAllText($runtimeProbe, 'exit 0')
+                $warmup = Invoke-PowerShellFile -LiteralPath $runtimeProbe
+                Assert-Equal 0 $warmup.ExitCode 'Source profile matrix bare PowerShell warm-up failed'
+                $before = Get-TreeFingerprint -LiteralPath $root
+                $arguments = @('-Agent', $agent, '-NoHooks')
+                if ($sourceCase.Selection -ne 'full') { $arguments += @('-Skill', ('assistant-' + $sourceCase.Selection)) }
+                if ($sourceCase.Preview) { $arguments += '-DryRun' }
+                $result = Invoke-PowerShellFile -LiteralPath $sourceInstaller -Arguments $arguments
+                $after = Get-TreeFingerprint -LiteralPath $root
+                $label = "$agent/$($sourceCase.Missing)/$($sourceCase.Selection)/$($sourceCase.Preview)"
+                Assert-True ($result.ExitCode -ne 0) "$label accepted missing mandatory writer source"
+                Assert-Equal $before $after "$label missing-source refusal mutated managed tree"
+                Assert-Contains $result.Output 'required writer definition' "$label lacks missing-definition diagnostic"
+                Assert-Contains $result.Output $expectedDefinition "$label lacks missing source path"
+                Assert-Contains $result.Output 'No installation files have been changed' "$label lacks no-write diagnostic"
+            }
         }
     }
 

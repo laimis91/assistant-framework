@@ -82,6 +82,22 @@ if ruby -ryaml -e '
   ["verification_stage == final_verification or tdd_applies is false", "verification_stage == final_verification or tdd_applies is false or verification_stage == pre_production_red"].each do |stale|
     abort "accepts wrong authoring/reuse changed_files requiredness" if changes_valid.call(changed.merge("condition" => stale))
   end
+  architect = schema.fetch("handoffs").find { |h| h["name"] == "orchestrator_to_architect" }
+  steps = architect.fetch("return_fields").find { |f| f["name"] == "implementation_steps" }.fetch("object_fields")
+  file_lists_valid = lambda do |fields|
+    descriptions = fields.to_h { |f| [f.fetch("name"), f.fetch("description", "")] }
+    authored = %w[files_to_create files_to_modify].all? do |name|
+      descriptions.fetch(name).include?("CodeWriter") && descriptions.fetch(name).match?(/test/i)
+    end
+    targets = descriptions.fetch("files_to_test")
+    authored && targets.include?("execution only") && targets.include?("BuilderTester") &&
+      targets.include?("CodeWriter") && targets.include?("files_to_create") && targets.include?("files_to_modify") &&
+      !targets.include?("BuilderTester is expected to create, modify, or run")
+  end
+  abort "Architect files_to_test assigns verifier authoring instead of execution targets and writer-owned file lists" unless file_lists_valid.call(steps)
+  stale_steps = Marshal.load(Marshal.dump(steps))
+  stale_steps.find { |f| f["name"] == "files_to_test" }["description"] = "Exact test files or verification targets BuilderTester is expected to create, modify, or run for this task packet; use an empty array only when no test file applies"
+  abort "stale Architect verifier-authoring description accepted beneath correct global ownership" if file_lists_valid.call(stale_steps)
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then pass; else fail "writer stage admission contract invalid"; fi
 
 test_start "Builder/Tester authoring prohibition includes fixtures snapshots and build configuration"
@@ -133,7 +149,7 @@ while IFS='|' read -r ownership_skill ownership_case ownership_mutation; do
     if ! bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$ownership_eval_root/correct" --skill "$ownership_skill" --case "$ownership_case" >"$ownership_eval_root/correct.log" 2>&1; then
         ownership_eval_failures+=("$ownership_case rejects fixed correct response")
     elif bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$ownership_eval_root/wrong" --skill "$ownership_skill" --case "$ownership_case" >"$ownership_eval_root/wrong.log" 2>&1; then
-        ownership_eval_failures+=("$ownership_case accepts plausible wrong response")
+        ownership_eval_failures+=("$ownership_case accepts plausible wrong response: $ownership_mutation")
     elif ! grep -Fq "structured_json_assertion_failures=" "$ownership_eval_root/wrong.log"; then
         ownership_eval_failures+=("$ownership_case failed without structured evidence")
     fi
@@ -142,6 +158,8 @@ assistant-workflow|ownership-authoring-without-red|.slice_verification_summary[0
 assistant-workflow|ownership-authoring-without-red|.slice_manifest[0].worker_stage="production"
 assistant-workflow|ownership-production-invalid-red|.slice_verification_summary[0].implementation_status="done" | .status="DONE"
 assistant-workflow|ownership-verifier-prohibited-mutation|.changed_files=[]
+assistant-workflow|ownership-verifier-prohibited-mutation|.status="BLOCKED"
+assistant-workflow|ownership-verifier-prohibited-mutation|del(.status)
 assistant-workflow|ownership-mechanical-fixed-tests|del(.slice_manifest[0].writer_selection.mechanical_eligibility.correctness_expectations_ref)
 assistant-workflow|ownership-unresolved-test-oracle|.slice_manifest[0].writer_selection.agent="mechanical-writer"
 CASES

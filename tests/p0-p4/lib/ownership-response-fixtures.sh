@@ -15,7 +15,7 @@ RESPONSE
             ;;
         ownership-verifier-prohibited-mutation)
             cat >"$response_path" <<'RESPONSE'
-{"summary":"ownership protocol","slice_verification_summary":[{"implementation_status":"blocked","final_status":"BLOCKED","self_check_result":"DEVIATED: verifier changed authored fixture; route repair to selected writer."}],"changed_files":[{"path":"tests/fixtures/ownership.json","change_type":"modified","description":"Actual prohibited verifier mutation preserved in evidence."}]}
+{"summary":"ownership protocol","status":"DEVIATED","slice_verification_summary":[{"implementation_status":"blocked","final_status":"BLOCKED","self_check_result":"DEVIATED: verifier changed authored fixture; route repair to selected writer."}],"changed_files":[{"path":"tests/fixtures/ownership.json","change_type":"modified","description":"Actual prohibited verifier mutation preserved in evidence."}]}
 RESPONSE
             ;;
         ownership-mechanical-fixed-tests)

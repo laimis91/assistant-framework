@@ -1609,15 +1609,15 @@ handoffs:
           - name: files_to_create
             type: string[]
             required: true
-            description: "Exact files CodeWriter is expected to create for this task packet; use an empty array when none"
+            description: "Exact files CodeWriter is expected to create for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
           - name: files_to_modify
             type: string[]
             required: true
-            description: "Exact existing files CodeWriter is expected to modify for this task packet; use an empty array when none"
+            description: "Exact existing files CodeWriter is expected to modify for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
           - name: files_to_test
             type: string[]
             required: true
-            description: "Exact test files or verification targets BuilderTester is expected to create, modify, or run for this task packet; use an empty array only when no test file applies"
+            description: "Exact test files or verification targets for execution only: BuilderTester executes and diagnoses selected checks; CodeWriter owns test authoring listed in files_to_create and files_to_modify. Use an empty array only when no test file applies"
           - name: enabling_changes_included
             type: string[]
             required: true
