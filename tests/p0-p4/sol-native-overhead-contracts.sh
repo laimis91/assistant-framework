@@ -269,6 +269,32 @@ for skill_name in assistant-workflow assistant-review; do
         contract_index_failures+=("$skill_name index lacks full-authoritative-file fallback for missing/invalid selectors")
     fi
 done
+if ! ruby -ryaml -e '
+  sets = YAML.load_file(ARGV[0]).fetch("load_sets")
+  protocol = "references/build-worker-protocol.md"
+  builders = %w[orchestrator_to_code_writer orchestrator_to_builder_tester]
+  other_roles = %w[orchestrator_to_code_mapper orchestrator_to_explorer orchestrator_to_architect_decompose orchestrator_to_architect]
+  valid = lambda do |candidate|
+    base = candidate.fetch("selected_handoff")
+    build = candidate.fetch("build_handoff", {})
+    selected = build.fetch("selectors", []).find { |item| item["name_from"] == "selected_handoff_name" }
+    next false unless selected && selected["allowed_names"] == builders
+    refs_for = lambda do |role|
+      selected.fetch("allowed_names").include?(role) ? build.fetch("references", []) : base.fetch("references", [])
+    end
+    builders.all? { |role| refs_for.call(role).include?(protocol) } &&
+      other_roles.none? { |role| refs_for.call(role).include?(protocol) }
+  end
+  abort "Build protocol leaks to non-Build handoffs or is unavailable to Build workers" unless valid.call(sets)
+  leaked = Marshal.load(Marshal.dump(sets))
+  leaked.fetch("selected_handoff")["references"] = [protocol]
+  abort "unconditional protocol reference accepted" if valid.call(leaked)
+  widened = Marshal.load(Marshal.dump(sets))
+  widened.fetch("build_handoff").fetch("selectors").first.fetch("allowed_names") << "orchestrator_to_architect"
+  abort "non-Build selector accepted" if valid.call(widened)
+' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/index.yaml"; then
+    contract_index_failures+=("Build-only handoff loading boundary")
+fi
 if [[ "${#contract_index_failures[@]}" -eq 0 ]]; then
     pass
 else

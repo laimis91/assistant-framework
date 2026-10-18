@@ -2565,7 +2565,7 @@ handoffs:
         required: true
         enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]
         description: "Worker status packet result"
-        validation: "test_authoring DONE is stage-only and requires no incoming RED; it may never complete Build or enter Review. refactor requires current passing GREEN. For active bounded_executor production TDD, DONE and DONE_WITH_CONCERNS require this return's matching typed red_evidence before production edits. Preserve an observed valid RED and actual file changes when another due check makes the final status FAILED_VERIFICATION; without valid RED, keep the honest blocker or failure status."
+        validation: "test_authoring DONE/DONE_WITH_CONCERNS is stage-only and requires no incoming RED; active separated TDD requires at least one actual permitted test-scope mutation from this stage in both change aliases. With no authoring needed, skip that stage; never invent edits or report empty authoring success. It may never complete Build or enter Review. refactor requires current passing GREEN. For active bounded_executor production TDD, DONE and DONE_WITH_CONCERNS require this return's matching typed red_evidence before production edits. Preserve an observed valid RED and actual file changes when another due check makes the final status FAILED_VERIFICATION; without valid RED, keep the honest blocker or failure status."
       - name: red_evidence
         type: object
         required: conditional
@@ -2588,9 +2588,11 @@ handoffs:
         validation: "When the authorizing RED invocation starts, create the current task-journal or workflow-output cycle_log entry conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log if no ref exists and return its actual resolvable location. Return the same ref on later partial or failed stages; omit only when no cycle_log was started. Preserve history and never reconstruct or invent phase evidence."
       - name: changed_files
         type: object[]
-        required: false
-        condition: "required with min_items: 1 whenever implementation or test files were actually changed; optional and may be empty or omitted only when no file changed"
+        required: conditional
+        condition: "implementation or test files were actually changed or (tdd_applies is true and build_execution_lane == separated_workers and worker_stage == test_authoring and status in [DONE, DONE_WITH_CONCERNS])"
         min_items: 0
+        validation: "When required, contains at least one actual mutation. Successful active separated test_authoring requires at least one actual permitted test-scope mutation from this stage; prior-stage evidence alone cannot satisfy it. Keep changed_files and files_changed equal. Never fabricate edits; if tests need no creation or repair, skip test_authoring and reuse the selected tests."
+        on_missing: fail
         description: "Files actually created, modified, or deleted by this worker. Preserve all actual changes, including test edits before a later NEEDS_CONTEXT, BLOCKED, DEVIATED, or FAILED_VERIFICATION return and across retries. Omit only when no file changed; never invent entries."
         object_fields:
           - name: path
@@ -2704,10 +2706,12 @@ handoffs:
         description: "Optional non-binding recovery hint; the orchestrator owns the final pivot_restart_decision."
       - name: files_changed
         type: object[]
-        required: false
-        condition: "required with min_items: 1 whenever implementation or test files were actually changed; optional and may be empty or omitted only when no file changed"
+        required: conditional
+        condition: "implementation or test files were actually changed or (tdd_applies is true and build_execution_lane == separated_workers and worker_stage == test_authoring and status in [DONE, DONE_WITH_CONCERNS])"
         description: "Legacy alias for changed_files; keep it equal to actual worker changes, including changes retained after NEEDS_CONTEXT, BLOCKED, DEVIATED, or FAILED_VERIFICATION and across retries. Omit only when no file changed; never invent entries."
         min_items: 0
+        validation: "When required, contains at least one actual mutation. Successful active separated test_authoring requires at least one actual permitted test-scope mutation from this stage; prior-stage evidence alone cannot satisfy it. Keep changed_files and files_changed equal. Never fabricate edits; if tests need no creation or repair, skip test_authoring and reuse the selected tests."
+        on_missing: fail
         object_fields:
           - name: path
             type: string
@@ -2774,7 +2778,7 @@ handoffs:
         required: false
         description: "What the plan assumed vs. what was found"
         condition: "when deviation_detected is true or status is DEVIATED"
-    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require evidence and every real changed_files/files_changed entry; stage-only DONE or refactor none needed with no mutation may omit changes; active bounded_executor TDD production additionally requires matching typed red_evidence. For every terminal status, retain every actual implementation or test file across retries; omit changed_files only when none changed. Return tdd_cycle_log_ref on every active-TDD return after its cycle_log starts, including partial or failed work; omit it only when RED never started. Bounded FAILED_VERIFICATION requires validation_results and actual failure evidence. DEVIATED requires deviation_details and concrete evidence; never fabricate artifacts or changes. NEEDS_CONTEXT/BLOCKED require open_questions, actual changes, and blocker evidence when unexpected."
+    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require evidence and every real changed_files/files_changed entry; nonmutating returns may omit changes except active separated test_authoring DONE/DONE_WITH_CONCERNS, which requires nonempty actual test-scope changes in both aliases; refactor none needed may remain empty; active bounded_executor TDD production additionally requires matching typed red_evidence. For every terminal status, retain every actual implementation or test file across retries; omit changed_files only when none changed. Return tdd_cycle_log_ref on every active-TDD return after its cycle_log starts, including partial or failed work; omit it only when RED never started. Bounded FAILED_VERIFICATION requires validation_results and actual failure evidence. DEVIATED requires deviation_details and concrete evidence; never fabricate artifacts or changes. NEEDS_CONTEXT/BLOCKED require open_questions, actual changes, and blocker evidence when unexpected."
 
   # ─────────────────────────────────────────────
   # Orchestrator → BuilderTester

@@ -98,6 +98,42 @@ if ruby -ryaml -e '
   stale_steps = Marshal.load(Marshal.dump(steps))
   stale_steps.find { |f| f["name"] == "files_to_test" }["description"] = "Exact test files or verification targets BuilderTester is expected to create, modify, or run for this task packet; use an empty array only when no test file applies"
   abort "stale Architect verifier-authoring description accepted beneath correct global ownership" if file_lists_valid.call(stale_steps)
+  # Bounded admission projection for these return fields, not a runtime controller.
+  returns = handoff.fetch("return_fields")
+  changes = %w[changed_files files_changed].map { |name| returns.find { |f| f["name"] == name } }
+  old_condition = "required with min_items: 1 whenever implementation or test files were actually changed; optional and may be empty or omitted only when no file changed"
+  author_condition = "implementation or test files were actually changed or (tdd_applies is true and build_execution_lane == separated_workers and worker_stage == test_authoring and status in [DONE, DONE_WITH_CONCERNS])"
+  admitted = lambda do |fields, tdd, lane, stage, status, actual, items|
+    fields.all? do |field|
+      needed = case field.fetch("condition")
+      when old_condition then actual
+      when author_condition then actual || (tdd && lane == "separated_workers" && stage == "test_authoring" && %w[DONE DONE_WITH_CONCERNS].include?(status))
+      else abort "unknown bounded changed-file condition"
+      end
+      item_list = items.fetch(field.fetch("name"), nil)
+      !needed || (item_list.is_a?(Array) && !item_list.empty?)
+    end
+  end
+  empty_aliases = {"changed_files" => [], "files_changed" => []}
+  %w[DONE DONE_WITH_CONCERNS].each do |status|
+    [{}, empty_aliases].each do |items|
+      abort "empty successful active separated test_authoring admitted" if admitted.call(changes, true, "separated_workers", "test_authoring", status, false, items)
+    end
+  end
+  authored = [{"path" => "tests/fixtures/input.json", "change_type" => "created", "description" => "Actual approved test fixture authored in this stage"}]
+  authored_aliases = {"changed_files" => authored, "files_changed" => authored}
+  abort "actual test-authoring mutation rejected" unless admitted.call(changes, true, "separated_workers", "test_authoring", "DONE", true, authored_aliases)
+  %w[changed_files files_changed].each do |name|
+    abort "missing #{name} accepted despite other alias" if admitted.call(changes, true, "separated_workers", "test_authoring", "DONE", true, authored_aliases.reject { |key, _| key == name })
+  end
+  [[true, "separated_workers", "refactor", "DONE"], [true, "separated_workers", "test_authoring", "BLOCKED"], [false, "separated_workers", "test_authoring", "DONE"], [true, "bounded_executor", "production", "DONE"]].each do |tdd, lane, stage, status|
+    abort "non-authoring-success return incorrectly requires fabricated edits" unless admitted.call(changes, tdd, lane, stage, status, false, empty_aliases)
+  end
+  stale_changes = Marshal.load(Marshal.dump(changes))
+  stale_changes.each { |field| field["condition"] = old_condition }
+  abort "old empty-authoring negative did not restore the demonstrated defect" unless admitted.call(stale_changes, true, "separated_workers", "test_authoring", "DONE", false, empty_aliases)
+  abort "authoring mutation invariant lacks fail-closed schema declaration" unless changes.all? { |field| field["required"] == "conditional" && field["on_missing"] == "fail" }
+
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then pass; else fail "writer stage admission contract invalid"; fi
 
 test_start "Builder/Tester authoring prohibition includes fixtures snapshots and build configuration"

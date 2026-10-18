@@ -54,7 +54,7 @@ canonical contracts.
   and exact binding tuple refs. Derive packet-local `tdd_applies` from the
   intersection with `tdd_choice.applicable_check_ids`; assess actual evidence
   before review/completion.
-- `current_phase`: load active `contracts/phase-gates.yaml` at transition. `selected_handoff`: load `contracts/handoffs.yaml` before dispatch and return. `completion`: load `contracts/output.yaml` before final exit.
+- `current_phase`: load active `contracts/phase-gates.yaml` at transition. Before dispatch and return, load `contracts/handoffs.yaml` through `build_handoff` only for CodeWriter/BuilderTester; other roles use `selected_handoff`. `completion`: load `contracts/output.yaml` before final exit.
 
 Selectors resolve by unique id plus canonical path, section, key, and explicit names; runtime `name_from` resolves only declared `allowed_names`. Missing or invalid selectors use `load_full_authoritative_file`; validate the full named canonical contract and record recovery.
 

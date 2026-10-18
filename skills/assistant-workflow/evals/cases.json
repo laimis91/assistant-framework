@@ -7641,29 +7641,24 @@
       "id": "ownership-mechanical-fixed-tests",
       "title": "Ownership mechanical fixed tests",
       "category": "role_constraints",
-      "purpose": "Check the bounded instruction-contract ownership/stage projection with existing structured operators; no native runtime enforcement claim.",
-      "prompt": "Approved recipe, resolved decisions, ownership/dependencies and independent correctness evidence fully specify BOTH tests and implementation: cases input 2 -> expected 4 and input -1 -> expected -2, negative cases and fixture/assertion pattern are fixed. For this controlled case, explicitly select the fully eligible mechanical-writer for BOTH tests and implementation. Intelligent-writer remains the general default when no specific eligible mechanical selection is requested. Return JSON. Return the ownership outcome using slice_manifest.worker_stage/writer_selection, slice_verification_summary implementation_status/final_status/red_status/self_check_result, and actual changed_files objects; use task_journal_entry for TDD ordering. A completed stage keeps slice final_status BLOCKED until full verification. These are bounded evaluation projections, not invented execution history.",
+      "purpose": "Bounded writer-selection projection for BOTH tests and implementation; checks proposed stage, writer and supplied eligibility, not execution or stage completion.",
+      "prompt": "Approved recipe, resolved decisions, ownership/dependencies and independent correctness evidence fully specify BOTH tests and implementation: cases input 2 -> expected 4 and input -1 -> expected -2, negative cases and fixture/assertion pattern are fixed. For this controlled case, explicitly select the fully eligible mechanical-writer for BOTH tests and implementation. Intelligent-writer remains the general default when no specific eligible mechanical selection is requested. Return only a writer-selection JSON projection using slice_manifest[0].worker_stage and slice_manifest[0].writer_selection. worker_stage=test_authoring names the proposed stage, not an executed stage. This evaluation assesses the selection only; no worker execution, mutation, RED/GREEN or completion evidence is requested.",
       "setup_context": [
-        "Approved ownership protocol and unchanged selected verification decision apply.",
-        "Only the supplied stage is being completed; no invented command or phase history."
+        "Approved selection inputs apply; no worker has been dispatched.",
+        "This is a selection-only projection, not a worker return or execution record."
       ],
       "expected_behavior": [
-        "Return the requested exact stage/role/status and preserve actual changes.",
-        "Keep production gated by meaningful current RED and refactor by current GREEN."
+        "Choose one writer for BOTH tests and implementation using the supplied oracle and eligibility facts."
       ],
       "pass_criteria": [
-        "Matches ownership and stage prerequisites; stage-only completion cannot close Build."
+        "Matches the proposed test_authoring stage and the requested eligible mechanical writer or required intelligent judgment."
       ],
       "fail_signals": [
-        "Verifier authors tests, hidden mutations, incorrect writer judgment, stale RED authorizes production, or early Build completion."
+        "Wrong writer selection or missing required mechanical eligibility evidence."
       ],
       "machine_expectations": {
-        "required_substrings": [
-          "ownership protocol"
-        ],
-        "forbidden_substrings": [
-          "ignore ownership protocol"
-        ],
+        "required_substrings": ["\"writer_selection\""],
+        "forbidden_substrings": ["\"agent\":\"builder-tester\""],
         "structured_json_assertions": [
           {
             "operator": "equals",
@@ -7745,29 +7740,24 @@
       "id": "ownership-unresolved-test-oracle",
       "title": "Ownership unresolved test oracle",
       "category": "role_constraints",
-      "purpose": "Check the bounded instruction-contract ownership/stage projection with existing structured operators; no native runtime enforcement claim.",
-      "prompt": "The implementation is a one-line exact pattern, but the test oracle and negative counterexamples for interacting lifecycle requirements remain unresolved. Choose one writer for BOTH tests and code. Return JSON. Return the ownership outcome using slice_manifest.worker_stage/writer_selection, slice_verification_summary implementation_status/final_status/red_status/self_check_result, and actual changed_files objects; use task_journal_entry for TDD ordering. A completed stage keeps slice final_status BLOCKED until full verification. These are bounded evaluation projections, not invented execution history.",
+      "purpose": "Bounded writer-selection projection for BOTH tests and implementation; checks proposed stage, writer and supplied eligibility, not execution or stage completion.",
+      "prompt": "The implementation is a one-line exact pattern, but the test oracle and negative counterexamples for interacting lifecycle requirements remain unresolved. Choose one writer for BOTH tests and code. Return only a writer-selection JSON projection using slice_manifest[0].worker_stage and slice_manifest[0].writer_selection. worker_stage=test_authoring names the proposed stage, not an executed stage. This evaluation assesses the selection only; no worker execution, mutation, RED/GREEN or completion evidence is requested.",
       "setup_context": [
-        "Approved ownership protocol and unchanged selected verification decision apply.",
-        "Only the supplied stage is being completed; no invented command or phase history."
+        "Approved selection inputs apply; no worker has been dispatched.",
+        "This is a selection-only projection, not a worker return or execution record."
       ],
       "expected_behavior": [
-        "Return the requested exact stage/role/status and preserve actual changes.",
-        "Keep production gated by meaningful current RED and refactor by current GREEN."
+        "Choose one writer for BOTH tests and implementation using the supplied oracle and eligibility facts."
       ],
       "pass_criteria": [
-        "Matches ownership and stage prerequisites; stage-only completion cannot close Build."
+        "Matches the proposed test_authoring stage and the requested eligible mechanical writer or required intelligent judgment."
       ],
       "fail_signals": [
-        "Verifier authors tests, hidden mutations, incorrect writer judgment, stale RED authorizes production, or early Build completion."
+        "Wrong writer selection or missing required mechanical eligibility evidence."
       ],
       "machine_expectations": {
-        "required_substrings": [
-          "ownership protocol"
-        ],
-        "forbidden_substrings": [
-          "ignore ownership protocol"
-        ],
+        "required_substrings": ["\"writer_selection\""],
+        "forbidden_substrings": ["\"agent\":\"builder-tester\""],
         "structured_json_assertions": [
           {
             "operator": "equals",

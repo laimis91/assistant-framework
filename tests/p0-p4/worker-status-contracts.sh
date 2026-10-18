@@ -419,8 +419,10 @@ for field in changed_files evidence files_changed; do
     if handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" "required: true"; then
         missing_code_writer_status_terms+=("handoff return $field must be conditional, not unconditionally required")
     fi
+    expected_required="required: conditional"
+    [[ "$field" != evidence ]] || expected_required="required: false"
     for term in \
-        "required: false" \
+        "$expected_required" \
         "min_items: 0"; do
         if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" "$term"; then
             missing_code_writer_status_terms+=("handoff return $field: $term")
@@ -429,7 +431,7 @@ for field in changed_files evidence files_changed; do
 done
 for field in changed_files files_changed; do
     if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" \
-        'condition: "required with min_items: 1 whenever implementation or test files were actually changed; optional and may be empty or omitted only when no file changed"'; then
+        'condition: "implementation or test files were actually changed or (tdd_applies is true and build_execution_lane == separated_workers and worker_stage == test_authoring and status in [DONE, DONE_WITH_CONCERNS])"'; then
         missing_code_writer_status_terms+=("handoff return $field must require actual mutations for every terminal status")
     fi
 done
@@ -438,13 +440,13 @@ if ! ruby -ryaml -e '
   fields = %w[changed_files files_changed].map do |name|
     writer.fetch("return_fields").find { |field| field["name"] == name }
   end
-  expected = "required with min_items: 1 whenever implementation or test files were actually changed; optional and may be empty or omitted only when no file changed"
+  expected = "implementation or test files were actually changed or (tdd_applies is true and build_execution_lane == separated_workers and worker_stage == test_authoring and status in [DONE, DONE_WITH_CONCERNS])"
   statuses = %w[DONE DONE_WITH_CONCERNS NEEDS_CONTEXT BLOCKED DEVIATED FAILED_VERIFICATION]
   success = %w[DONE DONE_WITH_CONCERNS]
   matrix = statuses.product([false, true]).map do |status, file_changed|
     [status, file_changed, file_changed]
   end
-  valid = fields.all? { |field| field["required"] == false && field["min_items"] == 0 && field["condition"] == expected } &&
+  valid = fields.all? { |field| field["required"] == "conditional" && field["on_missing"] == "fail" && field["min_items"] == 0 && field["condition"] == expected } &&
     matrix.all? do |status, file_changed, required|
       required == (file_changed)
     end

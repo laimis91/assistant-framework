@@ -902,6 +902,13 @@ if ruby -ryaml -e '
   abort "projection field mismatch" unless fields.keys == %w[stage_order owner_order completes_build production_requires_red refactor_requires_green]
   abort "projection arrays are not typed" unless %w[stage_order owner_order].all? { |name| fields[name]["type"] == "string[]" && fields[name]["required"] == true }
   abort "projection guards are not typed" unless %w[completes_build production_requires_red refactor_requires_green].all? { |name| fields[name]["type"] == "boolean" && fields[name]["required"] == true }
+  missing_action_valid = ->(candidate) { candidate.values.all? { |field| field["on_missing"] == "fail" } }
+  abort "requested projection admits missing required fields" unless missing_action_valid.call(fields)
+  fields.each_key do |name|
+    bad = Marshal.load(Marshal.dump(fields))
+    bad[name]["on_missing"] = "Return NEEDS_CONTEXT instead of a canonical action"
+    abort "freeform required-field action accepted" if missing_action_valid.call(bad)
+  end
   abort "projection claims runtime authority" unless projection.fetch("validation").include?("never substitutes for cycle_log, authorizing RED, or completion evidence")
   index = YAML.load_file(ARGV[1])
   allowed = index.fetch("load_sets").fetch("completion").fetch("selectors").flat_map { |s| s.fetch("allowed_names", []) }

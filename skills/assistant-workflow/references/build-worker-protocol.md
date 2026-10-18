@@ -179,7 +179,7 @@ Before starting a slice:
 For each step, dispatch the selected lane owner for one task packet at a time
 per worker. In active TDD, the bounded executor records actual RED, production,
 GREEN, REFACTOR, and separate phase invocations in one canonical cycle log.
-Active separated TDD first dispatches the selected writer `worker_stage=test_authoring` for selected tests only, without incoming RED. Stage-only DONE cannot complete Build or permit Review. Then dispatch Builder/Tester `pre_production_red` on those already authored tests, carrying
+Active separated TDD dispatches the selected writer `worker_stage=test_authoring` only when tests need creation or repair, without incoming RED. Successful DONE/DONE_WITH_CONCERNS requires at least one actual permitted test-scope mutation from this stage in both `changed_files` and `files_changed`; otherwise do not claim authoring success or fabricate changes. Reused unchanged tests skip authoring and proceed directly to RED. Refactor `none needed` and truthful nonmutating blocker returns may keep empty changes. Stage-only DONE cannot complete Build or permit Review. Dispatch Builder/Tester `pre_production_red` on the selected authored or reused tests, carrying
 its typed RED and `tdd_cycle_log_ref` to the SAME Code Writer `worker_stage=production` for production, then uses
 Builder/Tester `final_verification` for GREEN. Only after GREEN passes does the
 same Code Writer `worker_stage=refactor` own REFACTOR; a second `final_verification` records separate
