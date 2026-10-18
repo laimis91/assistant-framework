@@ -3,7 +3,7 @@
 # Any agent executing this skill MUST verify all required artifacts exist
 # before printing --- WORKFLOW COMPLETE ---.
 
-schema_version: "12.0"
+schema_version: "13.0"
 contract: output
 skill: assistant-workflow
 
@@ -2378,11 +2378,19 @@ artifacts:
     on_fail: "Return to DECOMPOSE/PLAN and produce a strict slice manifest; reject broad layer/module/folder/feature/component splits and setup-only or contract-only splits unless they are verified deliverable artifacts; include a single-slice rationale when only one slice is correct"
     min_items: 1
     object_fields:
+      - name: worker_stage
+        type: enum
+        required: conditional
+        condition: "new CodeWriter dispatch or active separated TDD"
+        enum_values: [test_authoring, production, refactor]
+        description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
+        validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
+        on_missing: fail
       - name: writer_selection
         type: object
         required: conditional
-        condition: "new Codex writer dispatch; legacy packets and other providers may omit"
-        description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+        condition: "new Claude or Codex writer dispatch; legacy packets and Gemini native fallback may omit"
+        description: "Orchestrator-owned concrete Claude or Codex writer choice; Architect proposals require Orchestrator validation."
         validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
         on_missing: fail
         object_fields:
@@ -2390,7 +2398,7 @@ artifacts:
             type: enum
             required: true
             enum_values: [intelligent-writer, mechanical-writer]
-            description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+            description: "Normal new Claude or Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
             on_missing: fail
           - name: rationale
             type: string
@@ -2402,7 +2410,7 @@ artifacts:
             required: conditional
             condition: "agent == mechanical-writer"
             description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
-            validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+            validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Evidence covers BOTH tests and implementation: fully specified cases, expected values/oracles, negative cases, assertion/fixture patterns and implementation recipe; unresolved test judgment requires intelligent-writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
             on_missing: fail
             object_fields:
               - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}

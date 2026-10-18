@@ -7,6 +7,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-re
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-case-oracle.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/verification-reuse-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/writer-routing-response-fixtures.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ownership-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/response-fixture-preflight.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
@@ -356,6 +357,9 @@ write_workflow_eval_responses() {
         required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$fixture" | paste -sd ' ' -)"
         if jq -e --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture" >/dev/null; then
             case "$case_id" in
+                ownership-*)
+                    write_ownership_response "$case_id" "$response_path"
+                    ;;
                 writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader|writer-routing-stale-partial|writer-routing-baseline-failure)
                     write_writer_routing_response "$case_id" "$response_path"
                     ;;

@@ -18,7 +18,8 @@ gates:
 
       - id: RED1
         check: "One behavior-focused test assertion was added or extended for this active TDD cycle"
-        on_fail: "Add or extend one assertion for the selected behavior; do not require a new test file or unrelated tests."
+        condition: "selected tests need creation or repair"
+        on_fail: "Have the selected writer add or extend one assertion only when selected tests need creation or repair; otherwise reuse the unchanged selected behavior-focused assertion and require exact current meaningful observed RED under RED2/RED3. Do not require a new test file or unrelated tests."
 
       - id: RED2
         check: "The test was executed and it FAILED; when authorizing workflow production edits, exactly one current failed invocation is bound to this test"

@@ -207,3 +207,5 @@ Key files found:
 
 Continue Discovery — ask remaining questions.
 ```
+
+Writer continuation: retain worker_stage (`test_authoring`, `production`, `refactor`), SAME selected writer identity, actual cumulative changes and canonical cycle ref. Test authoring may lack incoming RED and edits tests only; active production requires current matching RED; refactor requires current passing GREEN. Stage-only DONE does not complete Build or permit Review. Builder/Tester executes already authored checks and routes every authored fix to that writer.

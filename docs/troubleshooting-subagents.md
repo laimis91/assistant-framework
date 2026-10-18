@@ -22,6 +22,38 @@ scope.
 | Spawned agents lack role instructions | Agent definition is stale or empty | Inspect the relevant Claude Markdown, Codex TOML, or Gemini definition and reinstall it. |
 | Results are ignored after dispatch | The orchestrator lost or failed to update durable task state | Inspect the project task journal and context map, then resume from the last verified step. |
 
+## Selective upgrades and ownership compatibility
+
+`INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE` means a selective Claude or Codex install
+would replace writer/verifier profiles while retaining an old or unknown
+workflow controller. The installer stops before changing files, including in
+dry-run mode. It checks the retained controller’s declared v13 ownership stage
+protocol using its regular `SKILL.md`, `contracts/index.yaml`, and
+`contracts/handoffs.yaml` files.
+
+Refresh the workflow and its review, verification, and TDD dependencies first,
+then retry the original selection in the same environment:
+
+```bash
+./install.sh --agent codex --skill assistant-workflow
+./install.sh --agent codex --skill assistant-docs
+```
+
+```powershell
+.\install.ps1 -Agent codex -Skill assistant-workflow
+.\install.ps1 -Agent codex -Skill assistant-docs
+```
+
+Use `claude` for Claude installations, and substitute the original selected skill
+for `assistant-docs`. A full install also refreshes the coupled controller and
+profiles. A genuinely absent workflow or a compatible declared controller permits
+the selective install without adding or refreshing the workflow. Gemini retains
+its native profile behavior.
+
+The Bash installer checks workflow under `${CODEX_HOME:-$HOME/.codex}/skills`
+for Codex. The PowerShell installer checks `%USERPROFILE%/.agents/skills` for
+Codex skills independently of `CODEX_HOME`; Claude uses its own native home.
+
 ## Quick verification
 
 ```bash
@@ -110,8 +142,9 @@ parent remains intentionally pinned to gpt-5.6-luna/low, independently from chil
 configuration. Metadata proves dispatch identity only; artifact correctness and
 consequential actions need fixed outcome evaluation and independent review.
 
-Claude retains code-writer/Opus; Gemini retains supported native/default tiers
-without custom definitions. Real installation is a separate authorized action
+Claude uses native intelligent-writer/Opus and mechanical-writer/Sonnet defaults,
+with standalone deprecated code-writer as explicit intelligent compatibility.
+Gemini retains supported native/default tiers without custom definitions. Real installation is a separate authorized action
 and can overwrite managed installed TOMLs. Compatibility removal needs a later
 retirement change and ownership-safe cleanup. Static source checks do not prove
 native activation, Windows runtime execution, or total workflow savings.

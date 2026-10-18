@@ -49,7 +49,7 @@ active skill requires subagents.
 | **Code Mapper** | `code-mapper` | `code-mapper` | Read-only | Discover |
 | **Explorer** | `explorer` | `explorer` | Read-only | Discover |
 | **Architect** | `architect` | `architect` | Read-only | Decompose, Plan, Design |
-| **Code Writer** | `code-writer` (existing Opus) | `intelligent-writer` default; eligible `mechanical-writer` | Write | Build |
+| **Code Writer** | `intelligent-writer` default (Opus); eligible `mechanical-writer` (Sonnet) | `intelligent-writer` default; eligible `mechanical-writer` | Write | Build |
 | **Builder/Tester** | `builder-tester` | `builder-tester` | Write | Build |
 | **Code Reviewer** | `code-reviewer` | `code-reviewer` | Read-only | Review |
 | **Reviewer** | `reviewer` | `reviewer` | Read-only | Review compatibility |
@@ -58,7 +58,7 @@ active skill requires subagents.
 ## Concrete writer selection
 
 The logical `CodeWriter` and `orchestrator_to_code_writer` handoff stay canonical.
-The Orchestrator owns `writer_selection`; Architect may propose it. New Codex
+The Orchestrator owns `writer_selection`; Architect may propose it. New Claude and Codex
 packets carry `agent` (`intelligent-writer` default or `mechanical-writer`) and a
 `rationale` tied to remaining judgment and consequences. Mechanical selection also
 carries `mechanical_eligibility` with all four refs: `recipe_or_example_ref`,
@@ -66,7 +66,7 @@ carries `mechanical_eligibility` with all four refs: `recipe_or_example_ref`,
 `correctness_expectations_ref`. Resolve actual current evidence before dispatch:
 applicable approved recipe/example, resolved semantic/edge/compatibility decisions,
 understood ownership/dependencies/baseline, and independently fixed correctness
-expectations. Nonempty refs or self-asserted labels do not establish eligibility.
+expectations for BOTH tests and implementation, including fully specified cases, expected values/oracles, negative cases, assertion and fixture patterns. Unresolved test judgment selects intelligent. Nonempty refs or self-asserted labels do not establish eligibility.
 Neither edit size nor file type/count nor a simple label selects the role.
 
 Skill/contract semantics, grader/oracle/counterexample design, interacting
@@ -88,13 +88,13 @@ status. Classify failures from evidence; no mandatory Luna-then-Sol cascade.
 Codex has eleven normal roles and twelve transition TOMLs, including standalone
 deprecated `code-writer` (Sol/high intelligent compatibility). New normal dispatches
 use only the two new names. An explicit legacy request may use `code-writer`.
-A missing new Codex definition is a deployment mismatch: report it and stop;
+A missing new Claude or Codex definition is a deployment mismatch: report it and stop;
 never silently substitute a generic worker or nearest coding agent. A separately
 authorized bootstrap must record actual runtime role/model/effort and cannot
 claim native activation. Keep compatibility for the transition release; removal
 requires a later retirement decision and ownership-safe installed cleanup.
 
-Claude keeps its existing `code-writer`/Opus preference. Gemini has no custom
+Claude has the same eleven normal roles and twelve transition definitions: intelligent-writer uses its native Opus alias and fully specified mechanical-writer uses Sonnet. Its standalone deprecated code-writer preserves intelligent compatibility for explicit legacy requests; do not silently alias or redirect. Keep user configuration untouched. Gemini has no custom
 framework definitions: use its supported native/default route and existing tier
 guidance, without inventing names or model preferences. The two-writer choice
 adds no delegation requirement to otherwise direct lightweight work.
@@ -104,8 +104,8 @@ adds no delegation requirement to otherwise direct lightweight work.
 - **Code Mapper** — Lightweight structural map: file paths, entry points, interfaces, conventions. Use only when the current boundary cannot be resolved directly; output stays compact enough to paste into the current packet.
 - **Explorer** — Deep analysis: traces execution paths, analyzes design decisions, finds hidden dependencies and coupling. Use only for an unresolved lifecycle, failure, coupling, or behavior question after a compact map.
 - **Architect** — Conditional Architecture Decision Pack/implementation blueprint work for genuine boundary, public-contract, quality-driver, or viable-alternative uncertainty. Does not write code and is not a permanent role.
-- **Code Writer / bounded executor** — Implements the packet and follows its unchanged verification decision. RED is required only when TDD is active; never performs independent review.
-- **Builder/Tester** — Conditional separated verifier for broad/noisy/environment-heavy or high-risk work. Runs selected checks and binding suites; owns RED only when TDD is active and does not modify production code.
+- **Code Writer / bounded executor** — Owns selected tests and implementation for the packet, following its unchanged verification decision and worker_stage. test_authoring needs no incoming RED; active production needs current RED; refactor needs current GREEN and the SAME writer. Stage-only DONE never completes Build; never performs independent review.
+- **Builder/Tester** — Conditional separated verifier for broad/noisy/environment-heavy or high-risk work. Execution-only: runs selected checks and binding suites, observes RED on writer-authored tests when TDD is active, and routes every authored source/test/fixture/snapshot/helper/build configuration fix to the same writer. Writes only designated generated outputs/evidence logs; prohibited mutations return DEVIATED with actual changes.
 - **Code Reviewer** — Canonical independent code review with confidence-based filtering. Finds bugs, security issues, architecture violations, test coverage gaps, and structural code issues. Does not edit files.
 - **Reviewer** — Compatibility route for existing handoffs that still say `Reviewer`; use only when `code-reviewer` is unavailable or a legacy prompt/handoff requires the old name.
 - **QA Evaluator** — Independent QA acceptance evaluation after build/test and code-review evidence. Checks acceptance criteria, Done Contract, verification evidence, scoped UI/visual/product/UX/docs/DX/domain quality, score progression, and final result. Does not replace Code Reviewer.

@@ -286,7 +286,9 @@ test_start "Code Writer prompts assign RED ownership by active TDD lane in both 
 missing_code_writer_terms=()
 for file in \
     agents/codex/code-writer.toml \
-    agents/claude/code-writer.md; do
+    agents/claude/code-writer.md \
+    agents/claude/intelligent-writer.md \
+    agents/claude/mechanical-writer.md; do
     for term in \
         'Apply TDD only when this packet' \
         '`tdd_applies` is true, derived from the' \
@@ -295,7 +297,7 @@ for file in \
         'In `bounded_executor`, run the carried planned RED' \
         'planned RED' \
         'after dispatch and confirm the expected failure; in `separated_workers`,' \
-        'require valid incoming Builder/Tester RED evidence.' \
+        'require valid incoming Builder/Tester RED evidence for worker_stage=production;' \
         'no RED is required' \
         'none should be fabricated.'; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
@@ -309,14 +311,14 @@ else
     fail "Code Writer prompts missing TDD RED-evidence guardrails: ${missing_code_writer_terms[*]}"
 fi
 
-test_start "Builder Tester prompts own RED and report RED GREEN evidence"
+test_start "Builder Tester prompts observe writer-authored RED and report RED GREEN evidence"
 missing_builder_tester_terms=()
 for file in \
     agents/codex/builder-tester.toml \
     agents/claude/builder-tester.md; do
     for term in \
-        "When TDD is active, own meaningful RED" \
-        "when false, do not invent a RED step." \
+        "When TDD is active, observe meaningful RED" \
+        "When false, do not invent a RED step." \
         "Run selected checks and binding project suites, not an unselected full suite." \
         "request Code Writer fixes for production failures." \
         '**TDD evidence**: `RED: {test, command, failure, right-reason}` and `GREEN verification: {targeted, suite, regressions}` when TDD is active'; do
@@ -411,8 +413,8 @@ if ! ruby -ryaml -e '
     gates.fetch("check").include?("that ref resolves to the full canonical completed cycle_log") &&
     gates.fetch("on_fail").include?("missing, stale, unbound, or wrong-reason") &&
     gates.fetch("check").include?("verification_stage=pre_production_red") &&
-    gates.fetch("check").include?("CodeWriter for production and BuilderTester final_verification for GREEN") &&
-    gates.fetch("check").include?("only after current GREEN passes, redispatch CodeWriter for REFACTOR") &&
+    gates.fetch("check").include?("CodeWriter worker_stage=production and BuilderTester final_verification for GREEN") &&
+    gates.fetch("check").include?("only after current GREEN passes, redispatch the SAME CodeWriter worker_stage=refactor for REFACTOR") &&
     gates.fetch("check").include?("pre_production_red never closes Build or permits Review") &&
     gates.fetch("check").include?("Other due checks still run without fabricated RED")
   exit(valid && cycle_log_ref_valid ? 0 : 1)
@@ -459,9 +461,9 @@ missing_tdd_skill_terms=()
 for term in \
     "When workflow delegates, ownership follows" \
     'In `bounded_executor`, one bounded executor owns RED, production, GREEN, and REFACTOR verification; production starts only after valid RED.' \
-    'Separated_workers: Builder/Tester owns RED and GREEN/REFACTOR verification; Code Writer carries RED unchanged, owns production, then refactors after current GREEN passes.' \
+    'Separated_workers: SAME writer authors tests (`test_authoring`, no incoming RED), implements after current RED (`production`), and refactors after current GREEN (`refactor`).' \
     "Required RED evidence before production implementation:" \
-    "add or extend one behavior assertion" \
+    "adds or extends one behavior assertion" \
     "Test file and test name" \
     "Why the failure proves the intended missing behaviour" \
     'If TDD is active and RED evidence is missing, the selected production owner' \
@@ -493,7 +495,7 @@ missing_tdd_handoff_terms=()
 stale_code_writer_tdd_wording="CodeWriter must write failing test BEFORE production code"
 for term in \
     "Incoming BuilderTester RED evidence required before production edits only in separated_workers" \
-    "No active TDD lane may proceed without valid RED evidence."; do
+    "No active TDD lane may proceed with production without valid RED evidence."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
         missing_tdd_handoff_terms+=("$term")
     fi
@@ -536,7 +538,7 @@ if ! ruby -ryaml -e '
     bounded_red_return.fetch("object_fields").find { |field| field["name"] == "right_reason" }.fetch("validation").include?("expected_red_failure") &&
     writer_status.fetch("validation").include?("DONE and DONE_WITH_CONCERNS require this return") &&
     writer_validation.include?("retained in red_evidence as TDD stage evidence, not as a failed validation_results row") &&
-    writer.fetch("on_missing_field").include?("active bounded_executor TDD additionally requires matching typed red_evidence")
+    writer.fetch("on_missing_field").include?("active bounded_executor TDD production additionally requires matching typed red_evidence")
   packet = writer.fetch("context_fields").find { |f| f["name"] == "current_task_packet" }
   command = packet.fetch("object_fields").find { |f| f["name"] == "verification_command" }
   valid = command["required"] == "conditional" && command.fetch("condition").include?("exactly one matching command-based CheckSpec")
@@ -557,10 +559,10 @@ for field in \
     fi
 done
 for term in \
-    "condition: \"tdd_applies is true and build_execution_lane == separated_workers\"" \
+    "condition: \"tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production\"" \
     "Incoming BuilderTester RED evidence required before production edits only in separated_workers" \
     "In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits" \
-    "No active TDD lane may proceed without valid RED evidence."; do
+    "No active TDD lane may proceed with production without valid RED evidence."; do
     if ! codewriter_red_evidence_has_line "$handoffs_file" "$term"; then
         missing_codewriter_red_evidence_terms+=("$term")
     fi
@@ -659,18 +661,19 @@ if ruby -ryaml -e '
     inline_tuple[1].fetch("validation").include?("command.argv") &&
     inline_tuple[2].fetch("validation").include?("command.cwd") &&
     inline_tuple[3].fetch("validation").include?("meaningful_failure") &&
-    inline_red["condition"] == "current_task_packet is absent and tdd_applies is true and build_execution_lane == separated_workers" &&
+    inline_red["condition"] == "current_task_packet is absent and tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production" &&
     inline_red.fetch("object_fields").map { |field| field["name"] } == evidence_fields &&
     inline_red.fetch("validation").include?("expected_red_failure")
   condition = red.fetch("condition")
-  expected_condition = "tdd_applies is true and build_execution_lane == separated_workers"
+  expected_condition = "tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production"
   condition_matches_contract = ->(expr) { expr == expected_condition }
-  applies_to = lambda do |expr, execution_lane, tdd|
+  applies_to = lambda do |expr, execution_lane, tdd, stage = "production"|
     (!expr.include?("tdd_applies is true") || tdd) &&
-      (!expr.include?("build_execution_lane == separated_workers") || execution_lane == "separated_workers")
+      (!expr.include?("build_execution_lane == separated_workers") || execution_lane == "separated_workers") &&
+      (!expr.include?("worker_stage == production") || stage == "production")
   end
   valid_shape = red["required"] == "conditional" &&
-    condition == "tdd_applies is true and build_execution_lane == separated_workers" &&
+    condition == "tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production" &&
     lane.fetch("enum_values").include?("bounded_executor") &&
     applies.fetch("required") == true &&
     planned_red_fields.all? { |field| field["required"] == "conditional" && field["condition"] == "tdd_applies is true" } &&
@@ -679,6 +682,8 @@ if ruby -ryaml -e '
     red.fetch("description").include?("In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits")
   lane_cases = [
     applies_to.call(condition, "separated_workers", true),
+    !applies_to.call(condition, "separated_workers", true, "test_authoring"),
+    !applies_to.call(condition, "separated_workers", true, "refactor"),
     !applies_to.call(condition, "bounded_executor", true),
     !applies_to.call(condition, "separated_workers", false),
     !applies_to.call(condition, "bounded_executor", false)
@@ -887,5 +892,28 @@ if [[ "$tdd_negative_coverage" -eq 0 ]]; then
 else
     fail "assistant-tdd grader accepts $tdd_negative_coverage unsafe obligation coverage response(s)"
 fi
+
+test_start "ownership stage projection stays optional typed and separate from actual TDD evidence"
+if ruby -ryaml -e '
+  output = YAML.load_file(ARGV[0])
+  projection = output.fetch("artifacts").find { |a| a["name"] == "ownership_stage_projection" }
+  abort "missing optional projection" unless projection && projection["required"] == false && projection["type"] == "object"
+  fields = projection.fetch("object_fields").to_h { |f| [f.fetch("name"), f] }
+  abort "projection field mismatch" unless fields.keys == %w[stage_order owner_order completes_build production_requires_red refactor_requires_green]
+  abort "projection arrays are not typed" unless %w[stage_order owner_order].all? { |name| fields[name]["type"] == "string[]" && fields[name]["required"] == true }
+  abort "projection guards are not typed" unless %w[completes_build production_requires_red refactor_requires_green].all? { |name| fields[name]["type"] == "boolean" && fields[name]["required"] == true }
+  missing_action_valid = ->(candidate) { candidate.values.all? { |field| field["on_missing"] == "fail" } }
+  abort "requested projection admits missing required fields" unless missing_action_valid.call(fields)
+  fields.each_key do |name|
+    bad = Marshal.load(Marshal.dump(fields))
+    bad[name]["on_missing"] = "Return NEEDS_CONTEXT instead of a canonical action"
+    abort "freeform required-field action accepted" if missing_action_valid.call(bad)
+  end
+  abort "projection claims runtime authority" unless projection.fetch("validation").include?("never substitutes for cycle_log, authorizing RED, or completion evidence")
+  index = YAML.load_file(ARGV[1])
+  allowed = index.fetch("load_sets").fetch("completion").fetch("selectors").flat_map { |s| s.fetch("allowed_names", []) }
+  abort "projection selector missing" unless allowed.include?("ownership_stage_projection")
+  abort "unnecessary major migration" unless output["schema_version"] == "2.0" && index["schema_version"] == "2.0"
+' "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml" "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/index.yaml"; then pass; else fail "non-executing ownership projection contract invalid"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

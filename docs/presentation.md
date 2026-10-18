@@ -257,11 +257,11 @@ You: "Draw the architecture"
 | **Code Mapper** | Read-only | Lightweight structural map |
 | **Explorer** | Read-only | Deep execution path tracing |
 | **Architect** | Read-only | Implementation blueprint design |
-| **Code Writer** | Write | Implements code following the plan |
-| **Builder/Tester** | Write | Builds, writes tests, runs tests |
+| **Code Writer** | Write | Authors selected tests and implements code following the plan |
+| **Builder/Tester** | Write | Executes selected builds/tests; returns authored repairs to writer |
 | **Reviewer** | Read-only | Independent review, confidence-filtered |
 
-**Reviewer cannot edit files. Code Writer doesn't run tests.**
+**Reviewer is read-only. One selected writer owns tests and implementation; bounded writers execute selected checks, while separated Builder/Tester is execution-only.**
 Separation of concerns at the agent level.
 
 ---

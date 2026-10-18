@@ -152,6 +152,110 @@ preflight_managed_skill_closure() {
     done
 }
 
+# Read only the declared ownership compatibility surface, not general YAML.
+# Unknown forms in these fields are incompatible; unrelated contract sections
+# remain owned by the workflow skill. Boolean false must stay an unquoted token.
+declared_workflow_contract_compatible() {
+    local contract_file="$1" expected_contract="$2"
+    LC_ALL=C awk -v expected_contract="$expected_contract" -v bom="$(printf '\357\273\277')" '
+        function reject() { invalid = 1; exit 1 }
+        function trim(value) { sub(/^[ ]+/, "", value); sub(/[ ]+$/, "", value); return value }
+        function scalar(value, expected) {
+            return ("x" value == "x" expected || "x" value == "x\"" expected "\"" || "x" value == "x" quote expected quote)
+        }
+        function field(name, value) {
+            if (stage < 1 || ++field_seen[stage, name] != 1) reject()
+            fields[stage, name] = value; field_count[stage]++
+        }
+        BEGIN {
+            quote = sprintf("%c", 39)
+            names[1] = "test_authoring"; scopes[1] = "tests_only"; prerequisites[1] = "none"
+            names[2] = "production"; scopes[2] = "tests_and_production"; prerequisites[2] = "current_matching_red"
+            names[3] = "refactor"; scopes[3] = "behavior_neutral"; prerequisites[3] = "current_passing_green"
+        }
+        {
+            line = $0
+            if (NR == 1 && index(line, bom) == 1) line = substr(line, length(bom) + 1)
+            sub(/\r$/, "", line)
+            if (line ~ /\t/) reject()
+            if (line ~ /^[ ]*(#.*)?$/) next
+            sub(/[ ]+#.*$/, "", line); sub(/[ ]+$/, "", line)
+            if (line !~ /^ /) {
+                in_protocol = 0; section = ""
+                if (line !~ /^[A-Za-z_][A-Za-z_0-9]*:[ ]*/) reject()
+                key = line; sub(/:.*/, "", key)
+                value = line; sub(/^[^:]+:[ ]*/, "", value)
+                lower = tolower(key)
+                if (lower == "schema_version" || lower == "contract" || lower == "skill") {
+                    if (key != lower || ++metadata_seen[key] != 1) reject()
+                    metadata[key] = value
+                } else if (expected_contract == "handoffs" && lower == "worker_stage_protocol") {
+                    if (key != lower || value != "" || ++protocols != 1) reject()
+                    in_protocol = 1
+                }
+                next
+            }
+            if (!in_protocol) next
+            if (line ~ /^  [A-Za-z_][A-Za-z_0-9]*:/) {
+                key = substr(line, 3); sub(/:.*/, "", key)
+                value = line; sub(/^  [^:]+:[ ]*/, "", value)
+                if (++sections[key] != 1) reject()
+                if (key != "description" && key != "stages" && key != "rules") reject()
+                if ((key == "stages" || key == "rules") && value != "") reject()
+                section = key; next
+            }
+            if (section == "stages") {
+                if (line ~ /^    - value:[ ]*/) {
+                    if (++stage > 3) reject()
+                    value = line; sub(/^    - value:[ ]*/, "", value); field("value", value)
+                } else if (line ~ /^      (mutation_scope|active_tdd_prerequisite|completes_build):[ ]*/) {
+                    key = substr(line, 7); sub(/:.*/, "", key)
+                    value = line; sub(/^      [^:]+:[ ]*/, "", value); field(key, value)
+                } else reject()
+            } else if (section != "rules" || line !~ /^    - /) reject()
+        }
+        END {
+            if (invalid || metadata_seen["schema_version"] != 1 || metadata_seen["contract"] != 1 || metadata_seen["skill"] != 1) exit 1
+            if (!scalar(metadata["schema_version"], "13.0") || !scalar(metadata["contract"], expected_contract) || !scalar(metadata["skill"], "assistant-workflow")) exit 1
+            if (expected_contract == "handoffs") {
+                if (protocols != 1 || sections["stages"] != 1 || stage != 3) exit 1
+                for (i = 1; i <= 3; i++) {
+                    if (field_count[i] != 4 || !scalar(fields[i, "value"], names[i]) || !scalar(fields[i, "mutation_scope"], scopes[i]) || !scalar(fields[i, "active_tdd_prerequisite"], prerequisites[i]) || fields[i, "completes_build"] != "false") exit 1
+                }
+            }
+        }
+    ' "$contract_file"
+}
+
+preflight_workflow_role_compatibility() {
+    local extension profile definition workflow="$SKILLS_TARGET/assistant-workflow" file
+    [[ "$AGENT" == codex || "$AGENT" == claude ]] || return 0
+    extension=md; [[ "$AGENT" != codex ]] || extension=toml
+    for profile in intelligent-writer mechanical-writer; do
+        definition="$FRAMEWORK_DIR/agents/$AGENT/$profile.$extension"
+        if [[ -L "$definition" || ! -f "$definition" || ! -r "$definition" ]]; then
+            fail "Missing required writer definition for $AGENT: $definition. Restore the complete framework source and retry. No installation files have been changed."
+        fi
+    done
+    array_contains assistant-workflow "${SKILLS[@]}" && return 0
+
+    assert_managed_skill_target_root_safe
+    assert_existing_directory_or_absent "$workflow" "retained workflow"
+    [[ -d "$workflow" ]] || return 0
+    assert_directory_tree_safe "$workflow" "retained workflow"
+    assert_existing_directory_or_absent "$workflow/contracts" "retained workflow contracts"
+    for file in SKILL.md contracts/index.yaml contracts/handoffs.yaml; do
+        if [[ ! -f "$workflow/$file" || ! -r "$workflow/$file" ]]; then
+            fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: missing or unreadable regular $file. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
+        fi
+    done
+    if ! cat "$workflow/SKILL.md" >/dev/null \
+        || ! declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index \
+        || ! declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs; then
+        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare schema 13.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
+    fi
+}
+
 read_canonical_skill_requires() {
     local skill_md="$1"
     local line=""
@@ -684,6 +788,7 @@ fi
 # resolver preflights each member before it reads that member's metadata; this
 # second pass also covers full installs and catches changes before copying.
 preflight_managed_skill_closure "${SKILLS[@]}"
+preflight_workflow_role_compatibility
 
 SETTINGS_FILE="$AGENT_HOME/settings.json"
 HOOKS_TARGET="$AGENT_HOME/hooks/assistant"

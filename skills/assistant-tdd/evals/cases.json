@@ -491,6 +491,91 @@
           "skip debugging"
         ]
       }
+    },
+    {
+      "id": "ownership-separated-stage-order",
+      "title": "Ownership separated stage order",
+      "category": "red_gate_enforcement",
+      "purpose": "Check the bounded instruction-contract ownership/stage projection with existing structured operators; no native runtime enforcement claim.",
+      "prompt": "Describe the permitted active separated TDD order in JSON under ownership_stage_projection using stage_order and owner_order arrays. One intelligent writer authors tests, then independent RED, same writer production, independent GREEN, same writer refactor, and distinct independent REFACTOR verification. Set completes_build=false, production_requires_red=true and refactor_requires_green=true. Explanatory task_journal_entry prose is flexible. This optional bounded projection describes permitted ownership and prerequisites; it is not actual dispatch, cycle, RED or completion evidence.",
+      "setup_context": [
+        "Approved ownership protocol and unchanged selected verification decision apply.",
+        "Only the supplied stage is being completed; no invented command or phase history."
+      ],
+      "expected_behavior": [
+        "Return the requested exact stage/role/status and preserve actual changes.",
+        "Keep production gated by meaningful current RED and refactor by current GREEN."
+      ],
+      "pass_criteria": [
+        "Matches ownership and stage prerequisites; stage-only completion cannot close Build."
+      ],
+      "fail_signals": [
+        "Verifier authors tests, hidden mutations, incorrect writer judgment, stale RED authorizes production, or early Build completion."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ownership_stage_projection"
+        ],
+        "forbidden_substrings": [
+          "ignore ownership protocol"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "ownership_stage_projection",
+              "stage_order"
+            ],
+            "expected": [
+              "test_authoring",
+              "pre_production_red",
+              "production",
+              "GREEN",
+              "refactor",
+              "REFACTOR"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "ownership_stage_projection",
+              "owner_order"
+            ],
+            "expected": [
+              "intelligent-writer",
+              "builder-tester",
+              "intelligent-writer",
+              "builder-tester",
+              "intelligent-writer",
+              "builder-tester"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "ownership_stage_projection",
+              "completes_build"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "ownership_stage_projection",
+              "production_requires_red"
+            ],
+            "expected": true
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "ownership_stage_projection",
+              "refactor_requires_green"
+            ],
+            "expected": true
+          }
+        ]
+      }
     }
   ]
 }

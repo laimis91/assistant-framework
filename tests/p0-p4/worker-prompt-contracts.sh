@@ -9,7 +9,9 @@ for file in \
     agents/codex/code-writer.toml \
     agents/codex/intelligent-writer.toml \
     agents/codex/mechanical-writer.toml \
-    agents/claude/code-writer.md; do
+    agents/claude/code-writer.md \
+    agents/claude/intelligent-writer.md \
+    agents/claude/mechanical-writer.md; do
     for term in \
         "Preserve the canonical" \
         '`tdd_applies` is true' \
@@ -70,7 +72,9 @@ for file in \
     agents/codex/code-writer.toml \
     agents/codex/intelligent-writer.toml \
     agents/codex/mechanical-writer.toml \
-    agents/claude/code-writer.md; do
+    agents/claude/code-writer.md \
+    agents/claude/intelligent-writer.md \
+    agents/claude/mechanical-writer.md; do
     for term in \
         "## What you return" \
         '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \

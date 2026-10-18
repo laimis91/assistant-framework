@@ -35,7 +35,9 @@ Agent(subagent_type="qa-evaluator", prompt="Evaluate acceptance for {task}. This
 Agent(subagent_type="explorer", prompt="Trace execution paths for {feature}...")
 Agent(subagent_type="architect", prompt="Design implementation for {feature}...")
 Agent(subagent_type="code-mapper", prompt="Map the structure around {area}...")
-Agent(subagent_type="code-writer", prompt="Implement the following plan: {plan}...")
+Agent(subagent_type="intelligent-writer", prompt="Author selected tests and implement the following plan: {plan}...")
+Agent(subagent_type="mechanical-writer", prompt="Apply fully specified tests and implementation with validated eligibility: {plan}...")
+Agent(subagent_type="code-writer", prompt="Explicit deprecated intelligent compatibility request: {plan}...")
 Agent(subagent_type="builder-tester", prompt="Build and test the project...")
 ```
 
@@ -65,8 +67,8 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 | `code-mapper` | Fast / economical | Read-only | Discover | Produces context map (`{agent_state_dir}/context-map.md`) — entry points, interfaces, data flow, conventions |
 | `explorer` | Balanced / standard | Read-only | Discover | Deep analysis: execution paths, design decisions, hidden dependencies |
 | `architect` | Strongest / deep reasoning | Read-only | Decompose, Plan, Design | Strict slice decomposition, implementation blueprints, design direction |
-| Logical CodeWriter: Codex `intelligent-writer` / eligible `mechanical-writer`; Claude `code-writer` | Approved provider configuration | Write | Build | Implements the packet and follows its unchanged verification decision; RED only when TDD is active; no independent review |
-| `builder-tester` | Balanced / standard | Write | Build | Conditional separated verifier for selected checks and binding suites; owns RED only when TDD is active; no production edits |
+| Logical CodeWriter: Claude and Codex `intelligent-writer` / eligible `mechanical-writer` | Approved provider configuration | Write | Build | Owns selected tests plus implementation and follows its unchanged verification decision and worker_stage; RED only when TDD is active; no independent review |
+| `builder-tester` | Balanced / standard | Write | Build | Execution-only separated verifier for selected checks and binding suites; observes writer-authored RED only when TDD is active; writes only designated generated outputs/evidence logs |
 | `code-reviewer` | Strongest / deep reasoning | Read-only | Review | Canonical code review for bugs, security issues, architecture violations, test coverage gaps, and structural problems |
 | `reviewer` | Strongest / deep reasoning | Read-only | Review compatibility | Compatibility route for existing reviewer handoffs; prefer `code-reviewer` for new code review dispatches |
 | `qa-evaluator` | Strongest / deep reasoning | Read-only | Review QA | Independent acceptance, Done Contract, verification evidence, UI/visual/product/UX/docs/DX/domain quality, score progression, and final result evaluation |
@@ -129,14 +131,14 @@ Round 10 is terminal; return the final verdict instead of implying round 11.
 
 ## Fallback: agents not installed
 
-For missing new Codex writer definitions, report a deployment mismatch and stop; never silently use a nearest generic worker. Explicit legacy `code-writer` requests and separately authorized bootstrap execution record their real runtime identity. For other supported provider fallbacks, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
+For missing new Claude or Codex writer definitions, report a deployment mismatch and stop; never silently use a nearest generic worker. Explicit legacy `code-writer` requests and separately authorized bootstrap execution record their real runtime identity. For other supported provider fallbacks, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
 
 | Role | Fallback subagent_type | Recommended tier |
 |---|---|---|
 | Code Mapper | `Explore` or nearest read-only explorer | Fast / economical |
 | Explorer | `Explore` or nearest read-only explorer | Balanced / standard |
 | Architect | `general-purpose` or nearest planning agent | Strongest / deep reasoning |
-| Code Writer (Claude/Gemini supported fallback only) | `general-purpose` or nearest coding agent | Strongest / deep reasoning |
+| Code Writer (Gemini supported fallback only) | `general-purpose` or nearest coding agent | Strongest / deep reasoning |
 | Builder/Tester | `general-purpose` or nearest coding agent with shell/test access | Balanced / standard |
 | Code Reviewer | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |
 | Reviewer compatibility | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |

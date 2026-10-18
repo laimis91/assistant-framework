@@ -15,6 +15,14 @@ p0p4_file_mode_octal() {
     esac
 }
 
+p0p4_seed_required_writer_profiles() {
+    local fixture_root="$1" agent="${2:-codex}" extension=md
+    [[ "$agent" != codex ]] || extension=toml
+    mkdir -p "$fixture_root/agents/$agent"
+    cp "$FRAMEWORK_DIR/agents/$agent/intelligent-writer.$extension" "$fixture_root/agents/$agent/"
+    cp "$FRAMEWORK_DIR/agents/$agent/mechanical-writer.$extension" "$fixture_root/agents/$agent/"
+}
+
 legacy_orchestrator_role="You are an orchestrator. You delegate ALL ""file editing, code implementation, and phase execution to specialized agents."
 stale_generated_phrase="delegate ALL ""file editing, code implementation, and phase execution"
 route_guidance="For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent."
@@ -135,6 +143,7 @@ INSTALL_HOME_REQUIRES_CLOSURE="$(mktemp -d)"
 REQUIRES_CLOSURE_FRAMEWORK_ROOT="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_REQUIRES_CLOSURE" "$REQUIRES_CLOSURE_FRAMEWORK_ROOT"
 cp "$FRAMEWORK_DIR/install.sh" "$REQUIRES_CLOSURE_FRAMEWORK_ROOT/install.sh"
+p0p4_seed_required_writer_profiles "$REQUIRES_CLOSURE_FRAMEWORK_ROOT"
 for closure_skill in assistant-closure-a assistant-closure-b assistant-closure-c; do
     mkdir -p "$REQUIRES_CLOSURE_FRAMEWORK_ROOT/skills/$closure_skill"
 done
@@ -190,6 +199,7 @@ EMPTY_INVENTORY_SKILL="$EMPTY_INVENTORY_FRAMEWORK_ROOT/skills/$EMPTY_INVENTORY_S
 p0p4_register_cleanup "$INSTALL_HOME_EMPTY_INVENTORY" "$EMPTY_INVENTORY_FRAMEWORK_ROOT"
 mkdir -p "$EMPTY_INVENTORY_SKILL"
 cp "$FRAMEWORK_DIR/install.sh" "$EMPTY_INVENTORY_FRAMEWORK_ROOT/install.sh"
+p0p4_seed_required_writer_profiles "$EMPTY_INVENTORY_FRAMEWORK_ROOT"
 cat >"$EMPTY_INVENTORY_SKILL/SKILL.md" <<EOF
 ---
 name: $EMPTY_INVENTORY_SKILL_NAME
@@ -275,6 +285,7 @@ UNSAFE_SOURCE_FRAMEWORK_ROOT="$(mktemp -d)"
 UNSAFE_SOURCE_EXTERNAL="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_UNSAFE_SOURCE" "$UNSAFE_SOURCE_FRAMEWORK_ROOT" "$UNSAFE_SOURCE_EXTERNAL"
 cp "$FRAMEWORK_DIR/install.sh" "$UNSAFE_SOURCE_FRAMEWORK_ROOT/install.sh"
+p0p4_seed_required_writer_profiles "$UNSAFE_SOURCE_FRAMEWORK_ROOT"
 mkdir -p "$UNSAFE_SOURCE_FRAMEWORK_ROOT/skills"
 for unsafe_source_kind in source metadata; do
     unsafe_source_skill="assistant-unsafe-$unsafe_source_kind"
@@ -318,6 +329,7 @@ REQUIRES_FIXTURE="$REQUIRES_FRAMEWORK_ROOT/skills/$REQUIRES_FIXTURE_NAME"
 p0p4_register_cleanup "$INSTALL_HOME_REQUIRES" "$REQUIRES_FRAMEWORK_ROOT"
 mkdir -p "$REQUIRES_FIXTURE"
 cp "$FRAMEWORK_DIR/install.sh" "$REQUIRES_FRAMEWORK_ROOT/install.sh"
+p0p4_seed_required_writer_profiles "$REQUIRES_FRAMEWORK_ROOT"
 cat >"$REQUIRES_FIXTURE/SKILL.md" <<EOF
 ---
 name: $REQUIRES_FIXTURE_NAME
@@ -888,5 +900,208 @@ if ! HOME="$writer_install_home" CODEX_HOME="$writer_install_home/.codex" bash "
 writer_after="$(find "$writer_install_home/.codex" "$writer_install_home/.agents" -type f -exec shasum -a 256 {} + | LC_ALL=C sort)"
 [[ "$writer_before" == "$writer_after" ]] || writer_install_ok=false
 if [[ "$writer_install_ok" == true ]]; then pass; else fail "writer migration installer parity/preservation/dry-run failure"; fi
+
+test_start "Claude writer migration preserves native metadata compatibility and unrelated configuration"
+claude_writer_home="$(mktemp -d "${TMPDIR:-/tmp}/claude-writer-install.XXXXXX")"
+p0p4_register_cleanup "$claude_writer_home"
+mkdir -p "$claude_writer_home/.claude/agents"
+printf '%s\n' '{"personal":true}' >"$claude_writer_home/.claude/settings.json"
+printf '%s\n' 'unrelated custom role' >"$claude_writer_home/.claude/agents/personal-role.md"
+cp "$claude_writer_home/.claude/settings.json" "$claude_writer_home/settings.before"
+claude_writer_ok=true
+for claude_writer_phase in fresh upgrade; do
+    if ! HOME="$claude_writer_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks >"$claude_writer_home/$claude_writer_phase.out" 2>"$claude_writer_home/$claude_writer_phase.err"; then
+        claude_writer_ok=false
+        break
+    fi
+    for claude_writer_source in "$FRAMEWORK_DIR/agents/claude/"*.md; do
+        cmp -s "$claude_writer_source" "$claude_writer_home/.claude/agents/${claude_writer_source##*/}" || claude_writer_ok=false
+    done
+    cmp -s "$claude_writer_home/settings.before" "$claude_writer_home/.claude/settings.json" || claude_writer_ok=false
+    [[ "$(cat "$claude_writer_home/.claude/agents/personal-role.md")" == 'unrelated custom role' ]] || claude_writer_ok=false
+    if [[ "$claude_writer_phase" == fresh ]]; then
+        printf '%s\n' 'old managed writer' >"$claude_writer_home/.claude/agents/code-writer.md"
+        rm "$claude_writer_home/.claude/agents/intelligent-writer.md" "$claude_writer_home/.claude/agents/mechanical-writer.md"
+    fi
+done
+claude_writer_before="$(find "$claude_writer_home/.claude" -type f -exec shasum -a 256 {} + | LC_ALL=C sort)"
+if ! HOME="$claude_writer_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks --dry-run >"$claude_writer_home/dry.out" 2>"$claude_writer_home/dry.err"; then claude_writer_ok=false; fi
+claude_writer_after="$(find "$claude_writer_home/.claude" -type f -exec shasum -a 256 {} + | LC_ALL=C sort)"
+[[ "$claude_writer_before" == "$claude_writer_after" ]] || claude_writer_ok=false
+if [[ "$claude_writer_ok" == true ]]; then pass; else fail "Claude writer migration parity/preservation/dry-run failure"; fi
+
+# Fixed declared-protocol fixture: independent of the installer's compatibility reader.
+write_ownership_workflow_fixture() {
+    local workflow="$1" variant="$2" file
+    mkdir -p "$workflow/contracts"
+    printf '%s\n' '---' 'name: assistant-workflow' 'description: Retained ownership protocol fixture.' '---' >"$workflow/SKILL.md"
+    printf '%s\n' 'schema_version: "13.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml"
+    cat >"$workflow/contracts/handoffs.yaml" <<'PROTOCOL'
+schema_version: "13.0"
+contract: handoffs
+skill: assistant-workflow
+worker_stage_protocol:
+  stages:
+    - value: test_authoring
+      mutation_scope: tests_only
+      active_tdd_prerequisite: none
+      completes_build: false
+    - value: production
+      mutation_scope: tests_and_production
+      active_tdd_prerequisite: current_matching_red
+      completes_build: false
+    - value: refactor
+      mutation_scope: behavior_neutral
+      active_tdd_prerequisite: current_passing_green
+      completes_build: false
+PROTOCOL
+    case "$variant" in
+        old|recovery|full|gemini) printf '%s\n' 'schema_version: "12.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        no-stages) sed '/^worker_stage_protocol:/,$d' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
+        stage-mismatch) sed 's/current_matching_red/none/' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
+        early-completion) sed 's/completes_build: false/completes_build: true/' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
+        missing-index) rm "$workflow/contracts/index.yaml" ;;
+        duplicate-index) printf '%s\n' 'skill: assistant-workflow' >>"$workflow/contracts/index.yaml" ;;
+        duplicate-handoffs) printf '%s\n' 'schema_version: "13.0"' >>"$workflow/contracts/handoffs.yaml" ;;
+        malformed) printf '%s\n' 'schema_version: "13.0' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        wrong-identity) printf '%s\n' 'schema_version: "13.0"' 'contract: output' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        unsafe-workflow) rm -r "$workflow"; printf 'wrong path type\n' >"$workflow" ;;
+        unsafe-skill) rm "$workflow/SKILL.md"; mkdir "$workflow/SKILL.md" ;;
+        unsafe-index) rm "$workflow/contracts/index.yaml"; ln -s "$workflow/SKILL.md" "$workflow/contracts/index.yaml" ;;
+        bom-crlf)
+            for file in "$workflow/SKILL.md" "$workflow/contracts/index.yaml" "$workflow/contracts/handoffs.yaml"; do
+                { printf '\357\273\277'; awk '{printf "%s\r\n", $0}' "$file"; } >"$workflow/encoded.tmp"
+                mv "$workflow/encoded.tmp" "$file"
+            done
+            ;;
+    esac
+}
+
+ownership_install_fingerprint() {
+    # Same file-hash basis as the existing dry-run controls, plus directories/links.
+    find "$1" -type d -print -o -type l -exec ls -ld {} \; -o -type f -exec shasum -a 256 {} \; | LC_ALL=C sort
+}
+
+ownership_install_compatibility_matrix() {
+    local matrix_root="$1" agent variant mode case_home agent_home skills workflow before after workflow_before status log
+    local -a args
+    for agent in codex claude; do
+        for variant in old no-stages stage-mismatch early-completion missing-index duplicate-index duplicate-handoffs malformed wrong-identity unsafe-workflow unsafe-skill unsafe-index absent current bom-crlf recovery full; do
+            for mode in normal dry-run; do
+                [[ "$mode" == dry-run && ( "$variant" == recovery || "$variant" == full ) ]] && continue
+                case_home="$matrix_root/$agent-$variant-$mode"
+                mkdir -p "$case_home"
+                if [[ "$agent" == codex ]]; then
+                    agent_home="$case_home/Custom Codex Home"
+                else
+                    agent_home="$case_home/.claude"
+                fi
+                skills="$agent_home/skills"; workflow="$skills/assistant-workflow"
+                mkdir -p "$agent_home/agents" "$agent_home/tools"
+                printf 'old role sentinel\n' >"$agent_home/agents/builder-tester.$([[ "$agent" == codex ]] && printf toml || printf md)"
+                printf 'old tool sentinel\n' >"$agent_home/tools/sentinel.txt"
+                if [[ "$agent" == codex ]]; then printf 'personal = "retained"\n' >"$agent_home/config.toml"; else printf '{"personal":true}\n' >"$agent_home/settings.json"; fi
+                if [[ "$variant" != absent ]]; then write_ownership_workflow_fixture "$workflow" "$variant"; fi
+                if [[ "$variant" == recovery || "$variant" == full ]]; then
+                    mkdir -p "$skills/assistant-tdd"
+                    printf 'OLD_SPECIALIST_SENTINEL\n' >"$skills/assistant-tdd/SKILL.md"
+                fi
+                before="$(ownership_install_fingerprint "$case_home")"
+                workflow_before="$(if [[ -d "$workflow" ]]; then ownership_install_fingerprint "$workflow"; fi)"
+                args=(--agent "$agent" --no-hooks)
+                if [[ "$variant" == recovery ]]; then args+=(--skill assistant-workflow); elif [[ "$variant" != full ]]; then args+=(--skill assistant-docs); fi
+                [[ "$mode" == dry-run ]] && args+=(--dry-run)
+                log="$matrix_root/$agent-$variant-$mode.log"
+                status=0
+                # Claude deliberately receives a hostile ambient CODEX_HOME.
+                HOME="$case_home" CODEX_HOME="$([[ "$agent" == codex ]] && printf '%s' "$agent_home" || printf /)" bash "$FRAMEWORK_DIR/install.sh" "${args[@]}" >"$log" 2>&1 || status=$?
+                after="$(ownership_install_fingerprint "$case_home")"
+                case "$variant" in
+                    absent|current|bom-crlf|recovery|full)
+                        if [[ "$status" != 0 ]]; then ownership_matrix_failure="$agent/$variant/$mode unexpectedly rejected; $log"; return 1; fi
+                        if [[ "$mode" == dry-run && "$before" != "$after" ]]; then ownership_matrix_failure="$agent/$variant dry-run mutated managed tree"; return 1; fi
+                        if [[ "$variant" == absent && -e "$workflow" ]]; then ownership_matrix_failure="$agent selective absent install added workflow"; return 1; fi
+                        if [[ "$variant" == current || "$variant" == bom-crlf ]]; then
+                            if [[ "$workflow_before" != "$(ownership_install_fingerprint "$workflow")" ]]; then ownership_matrix_failure="$agent selective install refreshed retained compatible controller"; return 1; fi
+                        fi
+                        if [[ "$variant" == recovery || "$variant" == full ]]; then
+                            if ! cmp -s <(sed -e "s|{agent_state_dir}|.${agent}|g" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml") "$workflow/contracts/handoffs.yaml" \
+                                || ! cmp -s "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml" "$skills/assistant-tdd/contracts/phase-gates.yaml"; then
+                                ownership_matrix_failure="$agent coupled refresh omitted controller or old TDD recovery"; return 1
+                            fi
+                            if [[ "$variant" == recovery ]] && ! HOME="$case_home" CODEX_HOME="$([[ "$agent" == codex ]] && printf '%s' "$agent_home" || printf /)" bash "$FRAMEWORK_DIR/install.sh" --agent "$agent" --skill assistant-docs --no-hooks >"$log.retry" 2>&1; then
+                                ownership_matrix_failure="$agent docs retry failed after workflow-first recovery"; return 1
+                            fi
+                        fi
+                        ;;
+                    *)
+                        if [[ "$status" == 0 ]]; then ownership_matrix_failure="$agent/$variant/$mode accepted incompatible retained workflow"; return 1; fi
+                        if [[ "$before" != "$after" ]]; then ownership_matrix_failure="$agent/$variant/$mode rejected after managed-tree mutation"; return 1; fi
+                        if [[ "$variant" != unsafe-* ]] && { ! grep -Fq 'INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE' "$log" || ! grep -Fq -- '--skill assistant-workflow' "$log" || ! grep -Fq "$workflow" "$log"; }; then
+                            ownership_matrix_failure="$agent/$variant/$mode lacks diagnostic/path/workflow-first recovery; $log"; return 1
+                        fi
+                        ;;
+                esac
+            done
+        done
+    done
+    # Gemini does not copy the coupled profiles and keeps native fallback behavior.
+    case_home="$matrix_root/gemini"; mkdir -p "$case_home"
+    write_ownership_workflow_fixture "$case_home/.gemini/skills/assistant-workflow" gemini
+    if ! HOME="$case_home" CODEX_HOME=/ bash "$FRAMEWORK_DIR/install.sh" --agent gemini --skill assistant-docs --no-hooks >"$matrix_root/gemini.log" 2>&1; then
+        ownership_matrix_failure='Gemini incorrectly inherited the ownership profile guard'; return 1
+    fi
+
+    # One common pre-mode source guard: representative branches, not a Cartesian inventory.
+    local missing selection preview source_root extension expected_definition row
+    while IFS='|' read -r agent missing selection preview; do
+        row="$agent-$missing-$selection-$preview"
+        source_root="$matrix_root/source-$row"
+        mkdir -p "$source_root/skills/assistant-docs" "$source_root/skills/assistant-workflow"
+        source_root="$(cd -P "$source_root" && pwd -P)"
+        cp "$FRAMEWORK_DIR/install.sh" "$source_root/install.sh"
+        for variant in assistant-docs assistant-workflow; do
+            printf '%s\n' '---' "name: $variant" 'description: Source profile admission fixture.' '---' >"$source_root/skills/$variant/SKILL.md"
+        done
+        extension=md; [[ "$agent" != codex ]] || extension=toml
+        if [[ "$missing" != absent-agent-source ]]; then
+            p0p4_seed_required_writer_profiles "$source_root" "$agent"
+            cp "$FRAMEWORK_DIR/agents/$agent/builder-tester.$extension" "$source_root/agents/$agent/"
+            rm "$source_root/agents/$agent/$missing.$extension"
+        fi
+        expected_definition="$source_root/agents/$agent/$([[ "$missing" == absent-agent-source ]] && printf intelligent-writer || printf '%s' "$missing").$extension"
+        case_home="$matrix_root/home-$row"; mkdir -p "$case_home"
+        agent_home="$case_home/.$agent"
+        mkdir -p "$agent_home/agents" "$agent_home/tools"
+        printf 'old role sentinel\n' >"$agent_home/agents/builder-tester.$extension"
+        printf 'old tool sentinel\n' >"$agent_home/tools/sentinel.txt"
+        if [[ "$agent" == codex ]]; then printf 'personal = "retained"\n' >"$agent_home/config.toml"; else printf '{"personal":true}\n' >"$agent_home/settings.json"; fi
+        before="$(ownership_install_fingerprint "$case_home")"
+        args=(--agent "$agent" --no-hooks)
+        [[ "$selection" == full ]] || args+=(--skill "assistant-$selection")
+        [[ "$preview" != dry-run ]] || args+=(--dry-run)
+        log="$matrix_root/source-$row.log"; status=0
+        HOME="$case_home" CODEX_HOME="$([[ "$agent" == codex ]] && printf '%s' "$agent_home" || printf /)" bash "$source_root/install.sh" "${args[@]}" >"$log" 2>&1 || status=$?
+        after="$(ownership_install_fingerprint "$case_home")"
+        if [[ "$status" == 0 ]]; then ownership_matrix_failure="$row accepted missing mandatory writer source; $log"; return 1; fi
+        if [[ "$before" != "$after" ]]; then ownership_matrix_failure="$row missing-source refusal mutated managed tree"; return 1; fi
+        if ! grep -Fq 'required writer definition' "$log" || ! grep -Fq "$expected_definition" "$log" || ! grep -Fq 'No installation files have been changed' "$log"; then
+            ownership_matrix_failure="$row lacks actionable missing-definition diagnostic; $log"; return 1
+        fi
+    done <<'SOURCE_PROFILE_CASES'
+codex|intelligent-writer|full|normal
+codex|mechanical-writer|workflow|dry-run
+claude|intelligent-writer|docs|normal
+claude|mechanical-writer|full|dry-run
+codex|absent-agent-source|docs|dry-run
+claude|absent-agent-source|workflow|normal
+SOURCE_PROFILE_CASES
+}
+
+test_start "selective Claude and Codex role upgrades require a compatible retained workflow before writes"
+ownership_matrix_root="$(mktemp -d "${TMPDIR:-/tmp}/ownership-upgrade.XXXXXX")"
+p0p4_register_cleanup "$ownership_matrix_root"
+ownership_matrix_failure=''
+if ownership_install_compatibility_matrix "$ownership_matrix_root"; then pass; else fail "$ownership_matrix_failure"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

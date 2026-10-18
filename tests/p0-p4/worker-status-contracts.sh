@@ -66,7 +66,7 @@ for term in \
     "CodeWriter status values also include DEVIATED and FAILED_VERIFICATION; CodeWriter uses FAILED_VERIFICATION only for a failed bounded_executor check." \
     "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION." \
     "During active-TDD first final_verification, passing current GREEN may return stage-only DONE only with aggregate partial and explicit pending REFACTOR rows; this stage cannot satisfy final Build or Review gates." \
-    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and whenever the worker actually created, modified, or deleted implementation or test files regardless of terminal status. They may be omitted or empty only when no file changed; never invent entries for pre-action returns, and retain actual worker changes across retries." \
+    "changed_files and files_changed require at least one item whenever the worker actually created, modified, or deleted implementation or test files regardless of terminal status. A refactor assessment of none needed may return empty changes; never invent mutations for stage-only DONE. They may be omitted or empty only when no file changed; never invent entries for pre-action returns, and retain actual worker changes across retries." \
     "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result." \
     "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence. During active-TDD pre_production_red, exact matching authorizing RED may return DONE with aggregate partial and explicit pending GREEN rows; actual failed counts remain failed, and this stage cannot satisfy final Build or Review gates."; do
     if ! grep -Fq -- "$term" "$handoffs_file"; then
@@ -76,7 +76,12 @@ done
 slice_brief_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"
 for term in \
     '| `FAILED_VERIFICATION` | An ordinary due required CheckSpec failed after execution; retain its per-check failure evidence and any real outputs. This takes precedence over completion and deviation statuses. The exact matching authorizing RED in `verification_stage=pre_production_red` is stage evidence, not an ordinary verification failure. | Orchestrator reviews the failure evidence before recovery |' \
-    'For active `separated_workers` TDD, Builder/Tester returns `verification_stage=pre_production_red`' \
+    'When selected tests need creation or repair, the SAME selected writer first completes `worker_stage=test_authoring`' \
+    'Builder/Tester then returns `verification_stage=pre_production_red`' \
+    'Reused selected tests proceed directly to independent RED without a new authoring stage.' \
+    'Builder/Tester is execution-only' \
+    'Prohibited authored mutations are `DEVIATED` with actual changes retained' \
+    'Stage-only DONE never completes Build or permits Review.' \
     'An unattempted `DEVIATED` return may omit `changed_files`, `files_changed`, `artifact_refs`, and `validation_results`. Do not invent these outputs; retain concrete evidence of the actual deviation.' \
     '## Slice Status: [DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED | DEVIATED | FAILED_VERIFICATION]'; do
     if ! grep -Fq -- "$term" "$slice_brief_template"; then
@@ -95,10 +100,10 @@ if ! ruby -ryaml -e '
   changed_files_valid = changed_files["type"] == "object[]" && changed_files["required"] == false &&
     changed_files["min_items"] == 0 && changed_file_fields == %w[path change_type description] &&
     changed_files.fetch("condition").include?("whenever BuilderTester actually created, modified, or deleted files") &&
-    changed_files.fetch("condition").include?("including a RED test addition or extension") &&
+    changed_files.fetch("condition").include?("including designated generated outputs or prohibited authored mutations") &&
     changed_files.fetch("condition").include?("regardless of status") &&
-    changed_files.fetch("description").include?("Preserve them after later verification failures") &&
-    changed_files.fetch("description").include?("never invent changes for unstarted work")
+    changed_files.fetch("description").include?("Preserve every real mutation after later verification failures") &&
+    changed_files.fetch("description").include?("never invent, suppress or silently restore changes")
   workflow_dir = File.expand_path("..", File.dirname(ARGV.fetch(0)))
   workflow_output = YAML.load_file(File.join(File.dirname(ARGV.fetch(0)), "output.yaml")).fetch("artifacts")
     .find { |field| field["name"] == "changed_files" }.fetch("validation")
@@ -414,8 +419,10 @@ for field in changed_files evidence files_changed; do
     if handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" "required: true"; then
         missing_code_writer_status_terms+=("handoff return $field must be conditional, not unconditionally required")
     fi
+    expected_required="required: conditional"
+    [[ "$field" != evidence ]] || expected_required="required: false"
     for term in \
-        "required: false" \
+        "$expected_required" \
         "min_items: 0"; do
         if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" "$term"; then
             missing_code_writer_status_terms+=("handoff return $field: $term")
@@ -424,7 +431,7 @@ for field in changed_files evidence files_changed; do
 done
 for field in changed_files files_changed; do
     if ! handoff_return_field_has_direct_line "$handoffs_file" "orchestrator_to_code_writer" "$field" \
-        'condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"'; then
+        'condition: "implementation or test files were actually changed or (tdd_applies is true and build_execution_lane == separated_workers and worker_stage == test_authoring and status in [DONE, DONE_WITH_CONCERNS])"'; then
         missing_code_writer_status_terms+=("handoff return $field must require actual mutations for every terminal status")
     fi
 done
@@ -433,15 +440,15 @@ if ! ruby -ryaml -e '
   fields = %w[changed_files files_changed].map do |name|
     writer.fetch("return_fields").find { |field| field["name"] == name }
   end
-  expected = "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"
+  expected = "implementation or test files were actually changed or (tdd_applies is true and build_execution_lane == separated_workers and worker_stage == test_authoring and status in [DONE, DONE_WITH_CONCERNS])"
   statuses = %w[DONE DONE_WITH_CONCERNS NEEDS_CONTEXT BLOCKED DEVIATED FAILED_VERIFICATION]
   success = %w[DONE DONE_WITH_CONCERNS]
   matrix = statuses.product([false, true]).map do |status, file_changed|
-    [status, file_changed, success.include?(status) || file_changed]
+    [status, file_changed, file_changed]
   end
-  valid = fields.all? { |field| field["required"] == false && field["min_items"] == 0 && field["condition"] == expected } &&
+  valid = fields.all? { |field| field["required"] == "conditional" && field["on_missing"] == "fail" && field["min_items"] == 0 && field["condition"] == expected } &&
     matrix.all? do |status, file_changed, required|
-      required == (success.include?(status) || file_changed)
+      required == (file_changed)
     end
   exit(valid ? 0 : 1)
 ' "$handoffs_file"; then
@@ -465,7 +472,7 @@ if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_code_writer
     missing_code_writer_status_terms+=("CodeWriter status enum values")
 fi
 for term in \
-    "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS" \
+    "changed_files and files_changed require at least one item whenever the worker actually" \
     "FAILED_VERIFICATION requires validation_results and actual failure evidence" \
     "pre-action DEVIATED" \
     "Return tdd_cycle_log_ref on every active-TDD return after its cycle_log starts, including partial or failed work" \
@@ -478,7 +485,9 @@ for file in \
     agents/codex/code-writer.toml \
     agents/codex/intelligent-writer.toml \
     agents/codex/mechanical-writer.toml \
-    agents/claude/code-writer.md; do
+    agents/claude/code-writer.md \
+    agents/claude/intelligent-writer.md \
+    agents/claude/mechanical-writer.md; do
     for term in \
         '`status`: one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '`changed_files`: files created, modified, or deleted with brief descriptions' \
@@ -626,7 +635,7 @@ for file in \
         '**Status**: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or `FAILED_VERIFICATION`' \
         '**Verification**: commands/checks run plus concise success signals or failure messages' \
         '`validation_results`: non-empty per-check rows for every due selected check and applicable binding obligation, even when blocked; each row includes `command_or_check`, `result`, `evidence`, exact `selected_check_ids`, and exact `binding_obligation_refs` tuples `{kind, value, source_ref}`.' \
-        '`changed_files`: return each actual created, modified, or deleted file as `{path, change_type, description}`, including RED test additions or extensions. Preserve those changes even when later verification fails; omit or leave empty only when no file changed.' \
+        '`changed_files`: return each actual created, modified, or deleted file as `{path, change_type, description}`, including designated generated outputs or any prohibited authored mutations. Preserve those changes even when later verification fails; omit or leave empty only when no file changed.' \
         'Use `result` values `passed`, `failed`, `partial`, `unavailable`, `skipped`, `not_applicable`, or `blocked`; blocked is a distinct gap and never closes a due check or establishes sufficiency.' \
         'For a started command-based selected CheckSpec, include `executed_command` with `check_id` as the sole selected ID and exact `argv` and `cwd`; omit it when the command did not start.' \
         'Only when no command or no-command procedure has started, a due command check that cannot start leaves `verification.commands` empty and aggregate `verification.result` `not_run` with status `NEEDS_CONTEXT` or `BLOCKED`. Otherwise preserve every started command and actual per-check outcome, then derive aggregate/status from all due evidence using canonical precedence; `failed`/`FAILED_VERIFICATION` takes precedence. Always retain each `blocked` row with its check ID and blocker evidence.' \

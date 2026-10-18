@@ -139,9 +139,9 @@ before dispatch. The Orchestrator validates all four mechanical evidence refs;
 Architect proposals do not authorize selection. Carry the identical selection
 through the task packet and inline CodeWriter context; packet context is
 authoritative and conflicts block. Old packets remain valid with intelligent
-compatibility semantics. New Codex dispatch defaults to intelligent-writer;
+compatibility semantics. New Claude and Codex dispatch defaults to intelligent-writer;
 missing named definitions are a deployment mismatch, never silent generic fallback.
-Claude code-writer/Opus and Gemini native/default tiers remain unchanged.
+Claude uses the same intelligent/mechanical roles with native Opus/Sonnet aliases and explicit deprecated code-writer intelligent compatibility. Gemini retains native/default tiers and shared writer ownership; do not invent custom roles. Eligibility covers BOTH tests and implementation, including approved cases, expected values/oracles, negative cases and assertion/fixture patterns.
 
 When mechanical evidence becomes stale, stop dependent mutations and return all
 actual partial changes, observed evidence, truthful status and blocker fields.
@@ -179,10 +179,10 @@ Before starting a slice:
 For each step, dispatch the selected lane owner for one task packet at a time
 per worker. In active TDD, the bounded executor records actual RED, production,
 GREEN, REFACTOR, and separate phase invocations in one canonical cycle log.
-Active separated TDD dispatches Builder/Tester `pre_production_red`, carries
-its typed RED and `tdd_cycle_log_ref` to Code Writer for production, then uses
+Active separated TDD dispatches the selected writer `worker_stage=test_authoring` only when tests need creation or repair, without incoming RED. Successful DONE/DONE_WITH_CONCERNS requires at least one actual permitted test-scope mutation from this stage in both `changed_files` and `files_changed`; otherwise do not claim authoring success or fabricate changes. Reused unchanged tests skip authoring and proceed directly to RED. Refactor `none needed` and truthful nonmutating blocker returns may keep empty changes. Stage-only DONE cannot complete Build or permit Review. Dispatch Builder/Tester `pre_production_red` on the selected authored or reused tests, carrying
+its typed RED and `tdd_cycle_log_ref` to the SAME Code Writer `worker_stage=production` for production, then uses
 Builder/Tester `final_verification` for GREEN. Only after GREEN passes does the
-same Code Writer own REFACTOR; a second `final_verification` records separate
+same Code Writer `worker_stage=refactor` own REFACTOR; a second `final_verification` records separate
 REFACTOR invocations. A GREEN-only return is partial with REFACTOR pending, not
 final Build evidence. Inactive TDD runs the selected checks without adding a
 RED step. Direct fallback follows the same selected lane. Never edit production
@@ -190,8 +190,7 @@ before observed meaningful RED when that packet applies TDD, refactor before
 passing GREEN, or invent unstarted phase evidence.
 
 For `separated_workers`, retain each worker's actual `changed_files` in its
-dispatch result, including Builder/Tester test-file changes made for RED even
-when that worker later returns a failure. Union the actual Builder/Tester and
+dispatch result, including designated generated outputs/evidence logs and any prohibited authored mutations even when that worker later returns a failure. Builder/Tester is execution-only: no authored source, tests, fixtures, snapshots, helpers or test/build configuration. Route all fixes to the selected writer. Report prohibited mutations as DEVIATED (other due failures retain precedence), never suppress or silently restore them. Prose and Bash access do not enforce OS-level prevention. Union the actual Builder/Tester and
 Code Writer file mutations into final workflow `changed_files` and the Review
 scope, while keeping each mutation attributed to its producing worker. Omit
 entries only when the work did not change a file; never invent or reassign a
@@ -202,8 +201,8 @@ If implementation or verification fails and the cause is unclear, return to
 route verification through the selected build_execution_lane: the bounded
 executor retries and verifies its focused loop; inactive-TDD separated workers
 dispatch Code Writer then Builder/Tester; direct fallback performs the same
-selected-lane responsibilities. For active separated-worker TDD, Builder/Tester owns the
-pre_production_red stage, Code Writer consumes its unchanged typed RED before
+selected-lane responsibilities. For active separated-worker TDD, the selected writer authors or repairs tests in test_authoring before Builder/Tester owns the
+pre_production_red execution stage, the SAME Code Writer worker_stage=production consumes its unchanged typed RED before
 production edits, then Builder/Tester owns final_verification for GREEN. After
 that current GREEN passes, the same Code Writer handles REFACTOR and Builder/
 Tester runs final_verification again for a distinct REFACTOR invocation.
@@ -283,8 +282,8 @@ gate rather than being inferred from a passing wrapper test.
   file, verifies GREEN, then makes refactor edits only after GREEN passes and
   records separate REFACTOR invocations; with false TDD it runs only the
   selected verification plan.
-- `separated_workers`: when TDD is active, Builder/Tester returns one typed
-  authorizing RED and its current log reference in `pre_production_red`, Code
+- `separated_workers`: when TDD is active, the selected writer first owns test_authoring for tests only without incoming RED; Builder/Tester returns one typed
+  authorizing RED and its current log reference in `pre_production_red`, the SAME Code
   Writer owns production and records `green.production_file`, then Builder/
   Tester `final_verification` records actual GREEN invocations. GREEN may return
   stage-only DONE with aggregate partial and pending REFACTOR rows; after it
@@ -292,7 +291,7 @@ gate rather than being inferred from a passing wrapper test.
   and Builder/Tester performs a separate REFACTOR invocation in a second
   `final_verification`. Preserve the same reference and actual history; no
   phase may be inferred. Inactive TDD stays Code Writer then Builder/Tester.
-  Only the complete current cycle closes Build or Review.
+  Only the complete current cycle closes Build or Review. Reused checks do not force new tests or authoring stages. Changes to test/target/argv/cwd/oracle invalidate authorizing RED: preserve old history and observe current RED before dependent production. Refactor requires current GREEN and its canonical cycle ref.
 
 For bugfixes, RED traces to the original reproduction/debugging evidence. A
 missing or wrong-reason RED blocks production edits in either lane.

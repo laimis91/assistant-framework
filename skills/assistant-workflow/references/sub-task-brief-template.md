@@ -18,7 +18,7 @@ Use this template when decomposing mega tasks into strict slice packets. Each ap
 ## Slice Brief: [name]
 
 ### Agent
-Agent: [Codex intelligent-writer | Codex mechanical-writer | explicit legacy code-writer | Claude code-writer | Gemini native/default | architect | code-reviewer | qa-evaluator | reviewer | explorer | builder-tester | code-mapper]
+Agent: [Claude or Codex intelligent-writer | Claude or Codex mechanical-writer | explicit deprecated code-writer compatibility | Gemini native/default | architect | code-reviewer | qa-evaluator | reviewer | explorer | builder-tester | code-mapper]
 Role: [Implementer | Architect | Code Reviewer | QA Evaluator | Reviewer compatibility | Explorer]
 
 ### Context
@@ -52,12 +52,20 @@ This strict slice packet is the authoritative packet and executable contract for
 - feature_preparation_evidence_ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise not_applicable]
 - feature_preparation_harness_obligation: [required exact approved object when the preparation result contains future_harness_obligation; include requested_scope, evidence_basis, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
 - feature_preparation_qa_acceptance_obligation: [required exact approved object when the preparation result contains future_qa_acceptance_obligation; include requested_scope, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
-- writer_selection: [new Codex: agent=intelligent-writer by default or mechanical-writer with rationale and all four substantiated mechanical_eligibility refs; legacy/other-provider packets may omit; packet wins and inline conflict blocks]
+- writer_selection: [new Claude or Codex: Orchestrator selects agent=intelligent-writer by default or mechanical-writer only with rationale and current substantiated recipe_or_example_ref, resolved_decisions_ref, scope_and_dependencies_ref, correctness_expectations_ref covering BOTH tests and implementation; legacy packets may omit with intelligent compatibility semantics; Gemini keeps native/default fallback; packet wins and inline conflict blocks]
+- worker_stage: [test_authoring | production | refactor; the SAME selected writer owns selected tests and implementation]
+- build_execution_lane: [bounded_executor | separated_workers; direct fallback preserves its selected lane and evidence]
 - verification_decision: [canonical assistant-verification/contracts/output.yaml#verification_decision object, unchanged; preserve selected scope, CheckSpec entries, exclusions, rationales, and TddChoice]
 - evidence_assessment: [current canonical assistant-verification/contracts/output.yaml#evidence_assessment object; reassess from actual selected-check results before Review]
 - selected_check_ids: [due CheckSpec IDs assigned to this packet]
 - binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
 - tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
+- red_check_id: [when tdd_applies=true, the sole due selected/applicable CheckSpec ID]
+- red_command: [when tdd_applies=true, that CheckSpec exact literal command.argv]
+- red_cwd: [when tdd_applies=true, that CheckSpec exact command.cwd]
+- expected_red_failure: [when tdd_applies=true, that CheckSpec exact meaningful_failure]
+- red_evidence: [incoming exact typed seven-field independent RED only for separated_workers production; initial bounded_executor may have none]
+- tdd_cycle_log_ref: [preserve the same canonical ref once RED begins; initial bounded dispatch may have no started cycle]
 - acceptance_criteria:
   - [ ] [binary pass/fail criterion]
 - selected_check_procedure: [for each CheckSpec, exact argv and cwd if command-based; otherwise concrete procedure and observable result; do not invent a command]
@@ -98,20 +106,22 @@ When the slice is complete, report status using one of these values:
 
 | Status | Meaning | What happens next |
 |---|---|---|
-| `DONE` | Acceptance criteria met, selected verification passes, no concerns | Proceed to integration |
+| `DONE` | Assigned stage met its criteria; final slice acceptance also requires complete current lane verification | Proceed only to the next authorized stage; integration follows VERIFIED |
 | `DONE_WITH_CONCERNS` | Criteria met but there are trade-offs or risks worth noting | Orchestrator reviews concerns before integration |
 | `NEEDS_CONTEXT` | Blocked by missing information not in the brief | Orchestrator provides context or adjusts the brief |
 | `BLOCKED` | Cannot proceed — dependency issue, tooling failure, legacy blocker, or design conflict | Orchestrator classifies recovery and unblocks |
 | `DEVIATED` | Work cannot follow the strict slice packet exactly | Orchestrator applies the deviation rollback rule and reapproval when scope/files/behavior/risk changes |
 | `FAILED_VERIFICATION` | An ordinary due required CheckSpec failed after execution; retain its per-check failure evidence and any real outputs. This takes precedence over completion and deviation statuses. The exact matching authorizing RED in `verification_stage=pre_production_red` is stage evidence, not an ordinary verification failure. | Orchestrator reviews the failure evidence before recovery |
 
-For active `separated_workers` TDD, Builder/Tester returns `verification_stage=pre_production_red` and the exact typed failed RED before Code Writer; Code Writer forwards that evidence unchanged to Builder/Tester `final_verification`. A matching RED may finish only its pre-production stage with aggregate `partial`, explicit pending GREEN rows, and actual failed counts. It does not satisfy final Build verification or permit Review. Inactive TDD remains Code Writer then Builder/Tester final verification.
+For active `separated_workers` TDD, preserve one selected writer across all writer stages.
+When selected tests need creation or repair, the SAME selected writer first completes `worker_stage=test_authoring` with tests/fixtures/snapshots/helpers/test-build configuration only and no incoming RED.
+Builder/Tester then returns `verification_stage=pre_production_red` from the already authored selected test, preserving exact typed failed RED and actual failed counts. The SAME writer implements in `worker_stage=production` only after current matching meaningful RED; Builder/Tester runs GREEN. Only after current passing GREEN does that SAME writer assess/refactor in `worker_stage=refactor`, followed by distinct Builder/Tester REFACTOR verification. A matching RED or first passing GREEN may finish its assigned stage with aggregate `partial` and explicit pending rows. Stage-only DONE never completes Build or permits Review.
 
-Keep each worker's actual `changed_files` in its dispatch result, including
-Builder/Tester test files added or extended for RED and any changes made before
-a later failure. The final workflow `changed_files` and Review scope union the
-actual Builder/Tester and Code Writer changes; preserve which worker produced
-each change and do not credit Builder/Tester files to Code Writer.
+For active separated_workers reuse: Reused selected tests proceed directly to independent RED without a new authoring stage.
+For active TDD, initial `bounded_executor` dispatch carries the exact planned RED tuple without observed RED or a started cycle; that SAME executor authors/runs RED and records meaningful current RED with the canonical cycle ref before its FIRST production edit, then records GREEN, a post-GREEN refactor assessment, and a distinct REFACTOR invocation. Bounded/direct lanes preserve their canonical ownership and phase order without forced separated dispatches. Inactive TDD uses writer-owned selected tests and code, then the selected lane verification, without fabricated RED.
+
+Builder/Tester is execution-only: it runs selected checks, diagnoses and returns evidence, and may write only designated generated outputs/evidence logs. The selected writer owns all authored tests, fixtures, snapshots, helpers, build configuration and production repairs.
+Prohibited authored mutations are `DEVIATED` with actual changes retained; an ordinary due failed check retains `FAILED_VERIFICATION` precedence. Keep every worker actual `changed_files` and legacy `files_changed` across failures and retries. Union actual mutations into final changed files and Review scope with their true authorship; do not suppress, silently restore, or normalize prohibited verifier changes as approved writer-authored tests.
 
 An unattempted `DEVIATED` return may omit `changed_files`, `files_changed`, `artifact_refs`, and `validation_results`. Do not invent these outputs; retain concrete evidence of the actual deviation.
 
@@ -142,6 +152,10 @@ debugging, explorer, architect, candidate search, replan, or restart.
 
 ### Slice evidence
 - slice_id: [id]
+- worker_stage: [actual assigned stage]
+- writer_selection: [carried selection and actual runtime identity]
+- build_execution_lane: [selected lane]
+- tdd_cycle_log_ref: [same actual ref once RED starts; otherwise not_started]
 - verification_decision: [unchanged canonical decision ref]
 - selected_check: [CheckSpec id and method]
 - command_or_procedure: [exact argv/cwd when command-based; otherwise concrete CheckSpec procedure]

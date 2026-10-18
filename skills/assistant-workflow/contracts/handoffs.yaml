@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "12.0"
+schema_version: "13.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -41,10 +41,34 @@ worker_status_protocol:
     - "Architect status values also include DEVIATED."
     - "CodeWriter status values also include DEVIATED and FAILED_VERIFICATION; CodeWriter uses FAILED_VERIFICATION only for a failed bounded_executor check."
     - "BuilderTester status values also include DEVIATED and FAILED_VERIFICATION."
-    - "changed_files and files_changed are required with at least one item for CodeWriter returns with DONE or DONE_WITH_CONCERNS, and whenever the worker actually created, modified, or deleted implementation or test files regardless of terminal status. They may be omitted or empty only when no file changed; never invent entries for pre-action returns, and retain actual worker changes across retries."
+    - "changed_files and files_changed require at least one item whenever the worker actually created, modified, or deleted implementation or test files regardless of terminal status. A refactor assessment of none needed may return empty changes; never invent mutations for stage-only DONE. They may be omitted or empty only when no file changed; never invent entries for pre-action returns, and retain actual worker changes across retries."
     - "Bounded CodeWriter validation_results are required for DONE, DONE_WITH_CONCERNS, or FAILED_VERIFICATION and whenever verification was attempted; an unattempted DEVIATED return may omit them. A meaningful expected RED is stage evidence, not an ordinary failed verification result."
     - "verification is required for BuilderTester returns; if status is NEEDS_CONTEXT or BLOCKED before verification runs, return result not_run with concise blocker evidence. During active-TDD pre_production_red, exact matching authorizing RED may return DONE with aggregate partial and explicit pending GREEN rows; actual failed counts remain failed, and this stage cannot satisfy final Build or Review gates."
     - "During active-TDD first final_verification, passing current GREEN may return stage-only DONE only with aggregate partial and explicit pending REFACTOR rows; this stage cannot satisfy final Build or Review gates."
+
+# Writer stages are semantic selectors on the existing CodeWriter handoff.
+worker_stage_protocol:
+  description: "One selected writer owns tests and implementation; BuilderTester executes already authored checks. Stage completion never closes Build."
+  stages:
+    - value: test_authoring
+      mutation_scope: tests_only
+      active_tdd_prerequisite: none
+      completes_build: false
+    - value: production
+      mutation_scope: tests_and_production
+      active_tdd_prerequisite: current_matching_red
+      completes_build: false
+    - value: refactor
+      mutation_scope: behavior_neutral
+      active_tdd_prerequisite: current_passing_green
+      completes_build: false
+  rules:
+    - "test_authoring permits selected tests, fixtures, snapshots, helpers and test/build configuration only, with no incoming RED. No production edits."
+    - "Separated active TDD: selected writer test_authoring -> BuilderTester pre_production_red -> SAME writer production -> BuilderTester GREEN -> SAME writer refactor -> BuilderTester distinct REFACTOR verification."
+    - "Dispatch admission during active TDD: only separated_workers production requires incoming observed RED and its canonical cycle ref before dispatch; bounded_executor initial dispatch may carry the exact planned RED tuple without observed RED or a started cycle. That SAME executor records current meaningful RED and its canonical cycle ref before its FIRST production edit."
+    - "The production active-TDD prerequisite gates production edits in every lane: current exact seven-field RED and its canonical cycle ref are required; refactor requires current green.all_tests_pass. Wrong/missing/stale identity, argv/cwd, target or oracle blocks dependent edits; preserve history and observe fresh RED after an authorizing-input change."
+    - "Inactive TDD uses writer tests plus code then verifier; bounded/direct lanes preserve selected checks and phase order. Reuse/run/inspect checks do not force new tests or a test_authoring stage."
+    - "BuilderTester may execute selected checks, diagnose and return evidence, and write only designated generated outputs/evidence logs. Authored source/tests/fixtures/snapshots/helpers/build configuration belong to the writer. A prohibited mutation is DEVIATED with real changed_files; another due failed check retains FAILED_VERIFICATION precedence. Do not hide or silently restore mutations."
 
 # ─────────────────────────────────────────────
 # Typed Artifact Reference Protocol
@@ -836,11 +860,19 @@ handoffs:
         description: "Ordered list of smallest iterable slices. Layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits are invalid unless the slice itself produces a verified deliverable artifact."
         min_items: 1
         object_fields:
+          - name: worker_stage
+            type: enum
+            required: conditional
+            condition: "new CodeWriter dispatch or active separated TDD"
+            enum_values: [test_authoring, production, refactor]
+            description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
+            validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
+            on_missing: fail
           - name: writer_selection
             type: object
             required: conditional
-            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
-            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            condition: "new Claude or Codex writer dispatch; legacy packets and Gemini native fallback may omit"
+            description: "Orchestrator-owned concrete Claude or Codex writer choice; Architect proposals require Orchestrator validation."
             validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
             on_missing: fail
             object_fields:
@@ -848,7 +880,7 @@ handoffs:
                 type: enum
                 required: true
                 enum_values: [intelligent-writer, mechanical-writer]
-                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                description: "Normal new Claude or Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
                 on_missing: fail
               - name: rationale
                 type: string
@@ -860,7 +892,7 @@ handoffs:
                 required: conditional
                 condition: "agent == mechanical-writer"
                 description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
-                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Evidence covers BOTH tests and implementation: fully specified cases, expected values/oracles, negative cases, assertion/fixture patterns and implementation recipe; unresolved test judgment requires intelligent-writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
                 on_missing: fail
                 object_fields:
                   - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
@@ -1214,11 +1246,19 @@ handoffs:
         on_missing: re-dispatch
         notes: "Block Architect dispatch; Orchestrator must supply the approved DECOMPOSE slice_manifest or re-run DECOMPOSE before Plan."
         object_fields:
+          - name: worker_stage
+            type: enum
+            required: conditional
+            condition: "new CodeWriter dispatch or active separated TDD"
+            enum_values: [test_authoring, production, refactor]
+            description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
+            validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
+            on_missing: fail
           - name: writer_selection
             type: object
             required: conditional
-            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
-            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            condition: "new Claude or Codex writer dispatch; legacy packets and Gemini native fallback may omit"
+            description: "Orchestrator-owned concrete Claude or Codex writer choice; Architect proposals require Orchestrator validation."
             validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
             on_missing: fail
             object_fields:
@@ -1226,7 +1266,7 @@ handoffs:
                 type: enum
                 required: true
                 enum_values: [intelligent-writer, mechanical-writer]
-                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                description: "Normal new Claude or Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
                 on_missing: fail
               - name: rationale
                 type: string
@@ -1238,7 +1278,7 @@ handoffs:
                 required: conditional
                 condition: "agent == mechanical-writer"
                 description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
-                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Evidence covers BOTH tests and implementation: fully specified cases, expected values/oracles, negative cases, assertion/fixture patterns and implementation recipe; unresolved test judgment requires intelligent-writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
                 on_missing: fail
                 object_fields:
                   - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
@@ -1391,11 +1431,19 @@ handoffs:
         description: "Ordered executable task packets with exact slice_id, create/modify/test file lists, acceptance criteria, the unchanged verification_decision and conditional TDD choice, and exact command argv or concrete selected-check procedures. Optional display summaries may exist only for human readability; they cannot satisfy or replace exact slice and files_to_* fields."
         min_items: 1
         object_fields:
+          - name: worker_stage
+            type: enum
+            required: conditional
+            condition: "new CodeWriter dispatch or active separated TDD"
+            enum_values: [test_authoring, production, refactor]
+            description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
+            validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
+            on_missing: fail
           - name: writer_selection
             type: object
             required: conditional
-            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
-            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            condition: "new Claude or Codex writer dispatch; legacy packets and Gemini native fallback may omit"
+            description: "Orchestrator-owned concrete Claude or Codex writer choice; Architect proposals require Orchestrator validation."
             validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
             on_missing: fail
             object_fields:
@@ -1403,7 +1451,7 @@ handoffs:
                 type: enum
                 required: true
                 enum_values: [intelligent-writer, mechanical-writer]
-                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                description: "Normal new Claude or Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
                 on_missing: fail
               - name: rationale
                 type: string
@@ -1415,7 +1463,7 @@ handoffs:
                 required: conditional
                 condition: "agent == mechanical-writer"
                 description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
-                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Evidence covers BOTH tests and implementation: fully specified cases, expected values/oracles, negative cases, assertion/fixture patterns and implementation recipe; unresolved test judgment requires intelligent-writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
                 on_missing: fail
                 object_fields:
                   - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
@@ -1561,15 +1609,15 @@ handoffs:
           - name: files_to_create
             type: string[]
             required: true
-            description: "Exact files CodeWriter is expected to create for this task packet; use an empty array when none"
+            description: "Exact files CodeWriter is expected to create for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
           - name: files_to_modify
             type: string[]
             required: true
-            description: "Exact existing files CodeWriter is expected to modify for this task packet; use an empty array when none"
+            description: "Exact existing files CodeWriter is expected to modify for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
           - name: files_to_test
             type: string[]
             required: true
-            description: "Exact test files or verification targets BuilderTester is expected to create, modify, or run for this task packet; use an empty array only when no test file applies"
+            description: "Exact test files or verification targets for execution only: BuilderTester executes and diagnoses selected checks; CodeWriter owns test authoring listed in files_to_create and files_to_modify. Use an empty array only when no test file applies"
           - name: enabling_changes_included
             type: string[]
             required: true
@@ -1822,11 +1870,19 @@ handoffs:
     to: CodeWriter
     phase: BUILD
     context_fields:
+      - name: worker_stage
+        type: enum
+        required: conditional
+        condition: "new CodeWriter dispatch or active separated TDD"
+        enum_values: [test_authoring, production, refactor]
+        description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
+        validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
+        on_missing: fail
       - name: writer_selection
         type: object
         required: conditional
-        condition: "new Codex writer dispatch; legacy packets and other providers may omit"
-        description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+        condition: "new Claude or Codex writer dispatch; legacy packets and Gemini native fallback may omit"
+        description: "Orchestrator-owned concrete Claude or Codex writer choice; Architect proposals require Orchestrator validation."
         validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
         on_missing: fail
         object_fields:
@@ -1834,7 +1890,7 @@ handoffs:
             type: enum
             required: true
             enum_values: [intelligent-writer, mechanical-writer]
-            description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+            description: "Normal new Claude or Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
             on_missing: fail
           - name: rationale
             type: string
@@ -1846,7 +1902,7 @@ handoffs:
             required: conditional
             condition: "agent == mechanical-writer"
             description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
-            validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+            validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Evidence covers BOTH tests and implementation: fully specified cases, expected values/oracles, negative cases, assertion/fixture patterns and implementation recipe; unresolved test judgment requires intelligent-writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
             on_missing: fail
             object_fields:
               - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
@@ -1976,11 +2032,19 @@ handoffs:
         on_missing: fail
         notes: "Block CodeWriter dispatch; Orchestrator must select the matching implementation_steps packet or re-dispatch Architect to produce executable task packets before Build."
         object_fields:
+          - name: worker_stage
+            type: enum
+            required: conditional
+            condition: "new CodeWriter dispatch or active separated TDD"
+            enum_values: [test_authoring, production, refactor]
+            description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
+            validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
+            on_missing: fail
           - name: writer_selection
             type: object
             required: conditional
-            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
-            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            condition: "new Claude or Codex writer dispatch; legacy packets and Gemini native fallback may omit"
+            description: "Orchestrator-owned concrete Claude or Codex writer choice; Architect proposals require Orchestrator validation."
             validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
             on_missing: fail
             object_fields:
@@ -1988,7 +2052,7 @@ handoffs:
                 type: enum
                 required: true
                 enum_values: [intelligent-writer, mechanical-writer]
-                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                description: "Normal new Claude or Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
                 on_missing: fail
               - name: rationale
                 type: string
@@ -2000,7 +2064,7 @@ handoffs:
                 required: conditional
                 condition: "agent == mechanical-writer"
                 description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
-                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Evidence covers BOTH tests and implementation: fully specified cases, expected values/oracles, negative cases, assertion/fixture patterns and implementation recipe; unresolved test judgment requires intelligent-writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
                 on_missing: fail
                 object_fields:
                   - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
@@ -2304,8 +2368,8 @@ handoffs:
           - name: red_evidence
             type: object
             required: conditional
-            condition: "tdd_applies is true and build_execution_lane == separated_workers"
-            description: "Incoming BuilderTester RED evidence required before production edits only in separated_workers. In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits. No active TDD lane may proceed without valid RED evidence."
+            condition: "tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production"
+            description: "Incoming BuilderTester RED evidence required before production edits only in separated_workers. In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits. No active TDD lane may proceed with production without valid RED evidence."
             object_fields:
               - name: check_id
                 type: string
@@ -2315,7 +2379,7 @@ handoffs:
               - name: test_file
                 type: string
                 required: true
-                description: "Test file written or modified by BuilderTester for the RED step"
+                description: "Test file authored by the selected writer and executed unchanged by BuilderTester for RED"
               - name: test_name
                 type: string
                 required: true
@@ -2438,7 +2502,7 @@ handoffs:
       - name: red_evidence
         type: object
         required: conditional
-        condition: "current_task_packet is absent and tdd_applies is true and build_execution_lane == separated_workers"
+        condition: "current_task_packet is absent and tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production"
         description: "Unchanged typed BuilderTester authorizing RED for inline handoff context."
         validation: "Matches the top-level red_check_id, red_command, red_cwd, and expected_red_failure exactly; standalone/no-decision and bounded_executor contexts do not require this field."
         object_fields:
@@ -2489,12 +2553,19 @@ handoffs:
             type: int
             required: true
     return_fields:
+      - name: worker_stage
+        type: enum
+        required: true
+        enum_values: [test_authoring, production, refactor]
+        description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
+        validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
+        on_missing: fail
       - name: status
         type: enum
         required: true
         enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED, FAILED_VERIFICATION]
         description: "Worker status packet result"
-        validation: "For active bounded_executor TDD, DONE and DONE_WITH_CONCERNS require this return's matching typed red_evidence before production edits. Preserve an observed valid RED and actual file changes when another due check makes the final status FAILED_VERIFICATION; without valid RED, keep the honest blocker or failure status."
+        validation: "test_authoring DONE/DONE_WITH_CONCERNS is stage-only and requires no incoming RED; active separated TDD requires at least one actual permitted test-scope mutation from this stage in both change aliases. With no authoring needed, skip that stage; never invent edits or report empty authoring success. It may never complete Build or enter Review. refactor requires current passing GREEN. For active bounded_executor production TDD, DONE and DONE_WITH_CONCERNS require this return's matching typed red_evidence before production edits. Preserve an observed valid RED and actual file changes when another due check makes the final status FAILED_VERIFICATION; without valid RED, keep the honest blocker or failure status."
       - name: red_evidence
         type: object
         required: conditional
@@ -2517,9 +2588,11 @@ handoffs:
         validation: "When the authorizing RED invocation starts, create the current task-journal or workflow-output cycle_log entry conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log if no ref exists and return its actual resolvable location. Return the same ref on later partial or failed stages; omit only when no cycle_log was started. Preserve history and never reconstruct or invent phase evidence."
       - name: changed_files
         type: object[]
-        required: false
-        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"
+        required: conditional
+        condition: "implementation or test files were actually changed or (tdd_applies is true and build_execution_lane == separated_workers and worker_stage == test_authoring and status in [DONE, DONE_WITH_CONCERNS])"
         min_items: 0
+        validation: "When required, contains at least one actual mutation. Successful active separated test_authoring requires at least one actual permitted test-scope mutation from this stage; prior-stage evidence alone cannot satisfy it. Keep changed_files and files_changed equal. Never fabricate edits; if tests need no creation or repair, skip test_authoring and reuse the selected tests."
+        on_missing: fail
         description: "Files actually created, modified, or deleted by this worker. Preserve all actual changes, including test edits before a later NEEDS_CONTEXT, BLOCKED, DEVIATED, or FAILED_VERIFICATION return and across retries. Omit only when no file changed; never invent entries."
         object_fields:
           - name: path
@@ -2633,10 +2706,12 @@ handoffs:
         description: "Optional non-binding recovery hint; the orchestrator owns the final pivot_restart_decision."
       - name: files_changed
         type: object[]
-        required: false
-        condition: "required with min_items: 1 when status in [DONE, DONE_WITH_CONCERNS] or implementation files were actually changed; optional and may be empty or omitted only when no file changed"
+        required: conditional
+        condition: "implementation or test files were actually changed or (tdd_applies is true and build_execution_lane == separated_workers and worker_stage == test_authoring and status in [DONE, DONE_WITH_CONCERNS])"
         description: "Legacy alias for changed_files; keep it equal to actual worker changes, including changes retained after NEEDS_CONTEXT, BLOCKED, DEVIATED, or FAILED_VERIFICATION and across retries. Omit only when no file changed; never invent entries."
         min_items: 0
+        validation: "When required, contains at least one actual mutation. Successful active separated test_authoring requires at least one actual permitted test-scope mutation from this stage; prior-stage evidence alone cannot satisfy it. Keep changed_files and files_changed equal. Never fabricate edits; if tests need no creation or repair, skip test_authoring and reuse the selected tests."
+        on_missing: fail
         object_fields:
           - name: path
             type: string
@@ -2703,7 +2778,7 @@ handoffs:
         required: false
         description: "What the plan assumed vs. what was found"
         condition: "when deviation_detected is true or status is DEVIATED"
-    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require at least one real changed_files and files_changed entry plus evidence; active bounded_executor TDD additionally requires matching typed red_evidence. For every terminal status, retain every actual implementation or test file across retries; omit changed_files only when none changed. Return tdd_cycle_log_ref on every active-TDD return after its cycle_log starts, including partial or failed work; omit it only when RED never started. Bounded FAILED_VERIFICATION requires validation_results and actual failure evidence. DEVIATED requires deviation_details and concrete evidence; never fabricate artifacts or changes. NEEDS_CONTEXT/BLOCKED require open_questions, actual changes, and blocker evidence when unexpected."
+    on_missing_field: "CodeWriter must always return status and deviation_detected. DONE and DONE_WITH_CONCERNS require evidence and every real changed_files/files_changed entry; nonmutating returns may omit changes except active separated test_authoring DONE/DONE_WITH_CONCERNS, which requires nonempty actual test-scope changes in both aliases; refactor none needed may remain empty; active bounded_executor TDD production additionally requires matching typed red_evidence. For every terminal status, retain every actual implementation or test file across retries; omit changed_files only when none changed. Return tdd_cycle_log_ref on every active-TDD return after its cycle_log starts, including partial or failed work; omit it only when RED never started. Bounded FAILED_VERIFICATION requires validation_results and actual failure evidence. DEVIATED requires deviation_details and concrete evidence; never fabricate artifacts or changes. NEEDS_CONTEXT/BLOCKED require open_questions, actual changes, and blocker evidence when unexpected."
 
   # ─────────────────────────────────────────────
   # Orchestrator → BuilderTester
@@ -2757,7 +2832,7 @@ handoffs:
         condition: "tdd_applies is true"
         enum_values: [pre_production_red, final_verification]
         description: "Active-TDD BuilderTester stage; inactive-TDD dispatches and returns are final_verification."
-        validation: "Dispatch pre_production_red before CodeWriter. Reuse final_verification after production for GREEN and again after the post-GREEN CodeWriter refactor for REFACTOR; cycle_log progress distinguishes them. The first stage-only result cannot close Build. Omit only when tdd_applies is false."
+        validation: "Dispatch pre_production_red after CodeWriter test_authoring when selected tests need creation or repair, and before the SAME CodeWriter worker_stage=production. Reused selected assertions proceed directly to pre_production_red without a forced authoring stage. Reuse final_verification after production for GREEN and again after the post-GREEN CodeWriter refactor for REFACTOR; cycle_log progress distinguishes them. The first stage-only result cannot close Build. Omit only when tdd_applies is false."
       - name: red_check_id
         type: string
         required: conditional
@@ -2797,8 +2872,8 @@ handoffs:
       - name: changed_files
         type: string[]
         required: conditional
-        condition: "verification_stage == final_verification or tdd_applies is false"
-        description: "Files actually modified by CodeWriter; pre_production_red has no CodeWriter output and may omit this field or carry an empty list."
+        condition: "verification_stage == final_verification or tdd_applies is false or (verification_stage == pre_production_red and prior CodeWriter test_authoring edits occurred)"
+        description: "Files actually modified by CodeWriter; pre_production_red consumes actual CodeWriter test_authoring test/fixture outputs when creation or repair occurred. It may omit this field or carry an empty list only when no prior authoring edits occurred."
       - name: files_changed
         type: string[]
         required: false
@@ -2916,11 +2991,19 @@ handoffs:
         on_missing: fail
         notes: "Block BuilderTester dispatch; Orchestrator must pass the slice task packet being verified or re-dispatch Architect to produce executable task packets before verification."
         object_fields:
+          - name: worker_stage
+            type: enum
+            required: conditional
+            condition: "new CodeWriter dispatch or active separated TDD"
+            enum_values: [test_authoring, production, refactor]
+            description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
+            validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
+            on_missing: fail
           - name: writer_selection
             type: object
             required: conditional
-            condition: "new Codex writer dispatch; legacy packets and other providers may omit"
-            description: "Orchestrator-owned concrete Codex writer choice; Architect proposals require Orchestrator validation."
+            condition: "new Claude or Codex writer dispatch; legacy packets and Gemini native fallback may omit"
+            description: "Orchestrator-owned concrete Claude or Codex writer choice; Architect proposals require Orchestrator validation."
             validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
             on_missing: fail
             object_fields:
@@ -2928,7 +3011,7 @@ handoffs:
                 type: enum
                 required: true
                 enum_values: [intelligent-writer, mechanical-writer]
-                description: "Normal new Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                description: "Normal new Claude or Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
                 on_missing: fail
               - name: rationale
                 type: string
@@ -2940,7 +3023,7 @@ handoffs:
                 required: conditional
                 condition: "agent == mechanical-writer"
                 description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
-                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Evidence covers BOTH tests and implementation: fully specified cases, expected values/oracles, negative cases, assertion/fixture patterns and implementation recipe; unresolved test judgment requires intelligent-writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
                 on_missing: fail
                 object_fields:
                   - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
@@ -3311,9 +3394,9 @@ handoffs:
       - name: changed_files
         type: object[]
         required: false
-        condition: "required with min_items: 1 whenever BuilderTester actually created, modified, or deleted files, including a RED test addition or extension, regardless of status; optional and may be empty or omitted only when no files were actually changed"
+        condition: "required with min_items: 1 whenever BuilderTester actually created, modified, or deleted files, including designated generated outputs or prohibited authored mutations, regardless of status; optional and may be empty or omitted only when no files were actually changed"
         min_items: 0
-        description: "Actual BuilderTester file mutations, including tests added or extended for pre_production_red. Preserve them after later verification failures; never invent changes for unstarted work."
+        description: "Actual BuilderTester file mutations: designated generated outputs/evidence logs, or any prohibited authored source/test/fixture/snapshot/helper/build configuration mutation reported as DEVIATED. Preserve every real mutation after later verification failures; never invent, suppress or silently restore changes."
         object_fields:
           - {name: path, type: string, required: true}
           - {name: change_type, type: enum, required: true, enum_values: [created, modified, deleted]}

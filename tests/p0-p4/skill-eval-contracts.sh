@@ -9,6 +9,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/writer-routing-respons
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/response-fixture-preflight.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/creator-response-fixtures.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ownership-response-fixtures.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 p0p4_activation_examples_are_adequate() {
@@ -637,6 +638,9 @@ p0p4_write_skill_eval_responses() {
             if [[ "$skill_name" == "assistant-workflow" ]] \
                 && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
                 case "$id" in
+                    ownership-*)
+                        write_ownership_response "$id" "$response_path"
+                        ;;
                     writer-routing-exact-pattern|writer-routing-small-semantic|writer-routing-small-grader|writer-routing-stale-partial|writer-routing-baseline-failure)
                         write_writer_routing_response "$id" "$response_path"
                         ;;
@@ -1029,6 +1033,9 @@ p0p4_write_skill_eval_responses() {
             fi
             if jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
                 case "$skill_name:$id" in
+                    assistant-tdd:ownership-separated-stage-order)
+                        write_ownership_response "$id" "$response_path"
+                        ;;
                     assistant-tdd:bugfix-starts-with-red-evidence)
                         jq -n --arg summary "$required_summary" '{summary:$summary,cycle_log:[{behavior:"Reject duplicate eval case ids",red:{test_name:"reject_duplicate_case_ids",test_file:"tests/eval_runner_test.rb",failure_reason:"The duplicate id was accepted before validation was added.",verified_failing:true,command_results:[{target:"tests/eval_runner_test.rb",test_file:"tests/eval_runner_test.rb",test_name:"reject_duplicate_case_ids",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"failed",freshness:"current"}]},green:{production_file:"lib/eval_runner.rb",test_passes:true,all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]},refactor:{changes_made:"none needed",all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]}}],coverage_summary:{new_tests:1,total_tests_run:4,all_passing:true}}' >"$response_path"
                         ;;
