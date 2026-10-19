@@ -18,7 +18,7 @@ artifacts:
       - name: scope
         type: string
         required: true
-        description: "Named outcome and acceptance scope from work_scope; do not broaden it"
+        description: "Named outcome and acceptance scope from work_scope; preserve explicit reduced-testing boundaries; carry their exact source refs in evidence_assessment.scope_and_evidence_refs alongside this decision, not only preferences; do not broaden it"
       - name: policy_basis
         type: object
         required: true
@@ -115,7 +115,7 @@ artifacts:
           - name: rationale
             type: string
             required: true
-            description: "Why it observes the claim at acceptable cost and adds distinct evidence."
+            description: "Why reuse suffices or extension/addition covers a distinct important uncovered failure at acceptable cost; explain inadequate existing evidence."
           - name: method_refs
             type: string[]
             required: true
@@ -183,8 +183,8 @@ artifacts:
       - name: scope_and_evidence_refs
         type: object[]
         required: true
-        description: "Scope and actual result refs considered; planned selection has no invented result refs"
-        validation: "Use only actual evidence refs. A sufficient assessment has supporting evidence for every material claim and closes each due selected check ID and applicable due/executable binding tuple named below against the resolved decision and actual observed procedure/oracle. Use empty identity arrays only when that result supports none."
+        description: "Scope, exact current instruction sources and actual result refs considered; planned selection has no invented execution results"
+        validation: "Use only actual evidence refs. Explicit reduced-testing instructions use an object row with evidence_ref equal to the exact instruction source, claim_kind=other, claim_scope containing the exact qualitative boundary, selected_check_ids=[], binding_obligation_refs=[], result_state=not_applicable, freshness=current, exclusions=[], and no executed_command. This row is valid when planned; it claims no execution and closes no check. Preserve it unchanged alongside the decision in materialized packets and through results; reconcile against the newest instruction on resume before trusting current freshness. Do not encode qualitative boundaries as required_scope/prohibited_scope (unit/integration/e2e only). A sufficient assessment has supporting evidence for every material claim and closes each due selected check ID and applicable due/executable binding tuple named below against the resolved decision and actual observed procedure/oracle. Use empty identity arrays only when that result supports none."
         object_fields:
           - name: evidence_ref
             type: string

@@ -57,7 +57,17 @@ dependency order, criterion/check alignment, output-plan match and fallback.
 Use Architect only for a concrete Pack/design uncertainty and applicable role
 trigger; otherwise perform bounded refinement with equivalent evidence. Before
 Plan fixes checks, preserve the unchanged assistant-verification decision and its
-TDD choice. Store its stable ref/full-object digest once and derive local
+TDD choice. In the Architect Decompose handoff, carry the current canonical
+`evidence_assessment` from selection/task state in its declared sibling when an
+explicit reduced-testing instruction applies. Determine applicability from newest
+authoritative instructions/task constraints, never from surviving rows; preserve
+the exact source-bearing row even when planned. Reconcile missing/stale
+provenance before dependent work without reconstructing it from scope prose.
+With no applicable instruction the sibling may be omitted; any supplied canonical
+assessment stays unchanged, including empty rows, without fabricating an
+instruction. The row claims no execution/check closure, and planned is not
+verification sufficiency. Store the decision's stable ref/full-object digest once
+and derive local
 `tdd_applies` from due selected IDs; multiple applicable TDD IDs require separate
 packets. No boundary or packet count waives approval or downstream quality gates.
 

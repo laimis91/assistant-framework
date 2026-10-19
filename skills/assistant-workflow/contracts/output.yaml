@@ -367,7 +367,7 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only and (actionable verification selection succeeded or a decision is already carried)"
     description: "verification_decision."
-    validation: "Conforms to assistant-verification/contracts/output.yaml#verification_decision; carry unchanged through packets/Build. Apply INV_TDD_PROJECTION. If no decision, omit it; evidence_assessment.status=blocked with exact material gap; stop before Plan exits or Build begins."
+    validation: "Conforms to assistant-verification/contracts/output.yaml#verification_decision; retain source-bound reduced-testing scope, rationale/exclusions, omissions and stop rule through workers, verifier, review and resume; additions require a distinct important uncovered failure and existing selection/approval; carry unchanged through packets/Build. Apply INV_TDD_PROJECTION. If no decision, omit it; evidence_assessment.status=blocked with exact material gap; stop before Plan exits or Build begins."
     on_fail: "Select; preserve carried decisions; never fabricate."
 
   - name: tdd_cycle_log_ref
@@ -1524,7 +1524,7 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only and an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
     description: "Bounded ordinary Build repair controller state; harness-specific loops keep their existing controller artifacts"
-    validation: "Fixed bounds are max_attempts 3 and no_progress_limit 2. Each attempt records normalized failure signatures and progress evidence, plan_version is stable for same-scope retries, cumulative_attempt_count never resets across worker/context/session changes, and reaching either bound sets terminal_route to pivot or block rather than another retry."
+    validation: "Fixed bounds are max_attempts 3 and no_progress_limit 2. Each attempt records normalized failure signatures and progress evidence, plan_version is stable for same-scope retries, cumulative_attempt_count never resets across changing failing tests/checks, workers, contexts or sessions, and reaching either bound sets terminal_route to pivot or block rather than another retry."
     on_fail: "Stop the retry, reconstruct the repair state from Build evidence, and create a pivot_restart_decision or return blocked before any further implementation attempt."
     object_fields:
       - name: attempt
@@ -1552,7 +1552,7 @@ artifacts:
         type: string[]
         required: true
         min_items: 1
-        validation: "Concrete changed failure, passing check, reduced failing scope, or explicit no-progress evidence"
+        validation: "Concrete newly passing selected check, reduced failing scope, new evidence isolating the cause, or explicit no-progress evidence; changed failure/test signatures alone are not progress"
       - name: plan_version
         type: string
         required: true

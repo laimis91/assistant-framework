@@ -4,7 +4,7 @@ fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 skill_validator="$FRAMEWORK_DIR/tools/skills/validate-skills.sh"
-specialists=(assistant-debugging assistant-tdd assistant-research assistant-skill-creator assistant-verification)
+specialists=(assistant-ci-audit assistant-debugging assistant-tdd assistant-research assistant-skill-creator assistant-verification)
 
 index_has_load_set() {
     local index_file="$1"

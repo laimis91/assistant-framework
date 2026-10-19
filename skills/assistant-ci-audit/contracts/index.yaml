@@ -1,0 +1,73 @@
+schema_version: "1.0"
+contract: index
+skill: assistant-ci-audit
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+load_sets:
+  entry:
+    selectors:
+      - id: audit-entry
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [audit_goal, audit_scope, execution_policy, constraints, available_evidence]
+      - id: audit-capture
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        names: [CAPTURE]
+      - id: audit-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [AUTHORITY, EVIDENCE]
+    budget_words: 1500
+  current_phase:
+    selectors:
+      - id: audit-phase
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_audit_phase
+        allowed_names: [CAPTURE, INVESTIGATE, ASSESS, REPORT]
+    budget_words: 1000
+  investigation:
+    references: [references/investigation.md]
+    selectors:
+      - id: audit-investigation-results
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [audit_trace, executed_checks, probe_results]
+    budget_words: 2000
+  maintenance:
+    references: [references/test-maintenance.md]
+    selectors:
+      - id: audit-maintenance-results
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [findings, performance_comparisons]
+    budget_words: 2000
+  completion:
+    selectors:
+      - id: audit-report-results
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [audit_summary, question_coverage, audit_trace, executed_checks, findings, probe_results, performance_comparisons, evidence_gaps, next_action]
+      - id: audit-report-gate
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        names: [REPORT]
+    budget_words: 3200
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

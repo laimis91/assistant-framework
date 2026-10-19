@@ -1249,4 +1249,30 @@ else
     fail "sub-task-brief-template.md missing canonical task packet contract terms: ${missing_sub_task_packet_terms[*]}"
 fi
 
+# Gap: old bounded-repair source checks did not distinguish invalid expectations
+# from regressions or challenge a check/worker/session switch with spent limits.
+source "$FRAMEWORK_DIR/tests/p0-p4/lib/ci-audit-response-fixtures.sh"
+test_start "expectation classification and switching failures preserve spent repair limits"
+s1_repair_root="$(mktemp -d)"
+p0p4_register_cleanup "$s1_repair_root"
+mkdir -p "$s1_repair_root/responses/assistant-workflow"
+s1_repair_response="$s1_repair_root/responses/assistant-workflow/repair-expectations-switch-and-resume.txt"
+write_s1_response repair-expectations-switch-and-resume "$s1_repair_root/baseline.json"
+s1_repair_failures=()
+for s1_repair_variant in valid reset-on-switch production-for-brittle misclassified-regression retry-after-terminal; do
+    case "$s1_repair_variant" in
+        valid) cp "$s1_repair_root/baseline.json" "$s1_repair_response" ;;
+        reset-on-switch) jq '.build_repair_state.cumulative_attempt_count = 1 | .build_repair_state.no_progress_count = 0' "$s1_repair_root/baseline.json" >"$s1_repair_response" ;;
+        production-for-brittle) jq '.changed_files = ["filter.py"]' "$s1_repair_root/baseline.json" >"$s1_repair_response" ;;
+        misclassified-regression) jq '.build_repair_state.failure_signatures[1] = "deny-nonowner:obsolete expectation"' "$s1_repair_root/baseline.json" >"$s1_repair_response" ;;
+        retry-after-terminal) jq '.build_repair_state.status = "repairing"' "$s1_repair_root/baseline.json" >"$s1_repair_response" ;;
+    esac
+    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$s1_repair_root/responses" --skill assistant-workflow --case repair-expectations-switch-and-resume >"$s1_repair_root/$s1_repair_variant.out" 2>&1; then
+        [[ "$s1_repair_variant" == valid ]] || s1_repair_failures+=("$s1_repair_variant accepted")
+    else
+        [[ "$s1_repair_variant" != valid ]] && grep -Eq 'structured_json_assertion_failures=[1-9]' "$s1_repair_root/$s1_repair_variant.out" || s1_repair_failures+=("$s1_repair_variant failed without oracle rejection")
+    fi
+done
+if [[ ${#s1_repair_failures[@]} -eq 0 ]]; then pass; else fail "repair controls: ${s1_repair_failures[*]}"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -528,7 +528,7 @@ gates:
         on_fail: "Pause Build, classify the blocker, update Harness Run State/Trace Ledger/Replay Packet when harness-capable, create pivot_restart_decision when restart/pivot/replan is selected, and obtain reapproval before continuing if scope, files, behavior, risk, verification, or acceptance criteria change"
 
       - id: B_ORDINARY_REPAIR_BOUNDS
-        check: "When ordinary non-harness Build retries an implementation or verification failure: build_repair_state records attempt, max_attempts=3, no_progress_count, no_progress_limit=2, normalized failure_signatures, progress_evidence, plan_version, cumulative_attempt_count, status, terminal_route when terminal, and evidence_ref. Two consecutive attempts with a matching failure_signature and no measurable progress are stagnation. Worker/context/session changes do not reset the cumulative count; attempt 3 or no-progress count 2 ends through pivot_restart_decision or blocked."
+        check: "When ordinary non-harness Build retries an implementation or verification failure: build_repair_state records attempt, max_attempts=3, no_progress_count, no_progress_limit=2, normalized failure_signatures, progress_evidence, plan_version, cumulative_attempt_count, status, terminal_route when terminal, and evidence_ref. Two consecutive no-progress attempts are stagnation; a matching failure_signature is not required. Increment no_progress_count when no selected check newly passes AND failing scope does not shrink AND no new evidence isolates the cause, even if the failure/test signature changes; signature changes alone are not progress. Reset only for evidence-backed measurable progress. Classify failing expectations against accepted behavior before repair; incidental assertions never justify production changes. Changing failing tests/checks, workers, contexts or sessions does not reset the cumulative count; attempt 3 or no-progress count 2 ends through pivot_restart_decision or blocked."
         condition: "an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
         on_fail: "Stop same-scope repair. Route an unknown-cause failure through assistant-debugging; otherwise reconstruct build_repair_state, then route to replan/restart through pivot_restart_decision or return blocked. Never start a fourth attempt or continue after two no-progress attempts."
 
@@ -838,7 +838,7 @@ invariants:
     on_fail: "Remove accidental strict/harness/QA requirements, or re-triage with explicit independent criteria before promoting controller_intensity to strict."
 
   - id: INV_BUILD_REPAIR_BOUNDED
-    check: "Ordinary same-scope Build repair never exceeds max_attempts=3 or no_progress_limit=2, and cumulative_attempt_count never resets across redispatch, context reset, compaction, or continuation"
+    check: "Ordinary same-scope Build repair never exceeds max_attempts=3 or no_progress_limit=2, and cumulative_attempt_count never resets across changing failing tests/checks, workers, redispatch, context reset, compaction, sessions or continuation"
     scope: all_phases
     on_fail: "Stop retrying and record terminal_pivot or blocked with a pivot_restart_decision/evidence reference before any continuation."
 
@@ -873,7 +873,7 @@ invariants:
     on_fail: "Refresh the bounded capture and expected authority, rerun affected verification/review, or retain the result as blocked/remaining rather than complete."
 
   - id: INV_VERIFICATION_SELECTION
-    check: "Select verification before Plan fixes obligations or no-plan Build; binding conflicts/material capability gaps block. Without a selected or carried decision, omit it; report evidence_assessment.status=blocked and exact material gap; stop before Plan exits or Build begins."
+    check: "Explicit reduced-testing scope/source survives selection, workers, verifier, review and resume; each added test needs a distinct important uncovered failure and inadequate-existing-evidence rationale; controlling checks and selected TDD remain intact. Select verification before Plan fixes obligations or no-plan Build; binding conflicts/material capability gaps block. Without a selected or carried decision, omit it; report evidence_assessment.status=blocked and exact material gap; stop before Plan exits or Build begins."
     condition: "execution_intent != prepare_only"
     scope: all_phases
     on_fail: "Return to assistant-verification, refresh selection against current scope and policy, and bind its unchanged decision before dependent work."

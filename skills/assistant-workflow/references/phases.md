@@ -46,6 +46,16 @@ choosing a repair. Recall lessons only when prior decisions or corrections can
 materially affect this task. Check the environment needed for the work; a numeric
 readiness score is not an implementation or completion gate.
 
+Preserve an explicit reduced-testing instruction/source in accumulated task
+constraints and verification `work_scope.source_refs`. Selection records the
+qualitative boundary in `verification_decision.scope` and its exact source-bearing
+instruction row in `evidence_assessment.scope_and_evidence_refs` (including planned
+assessments; verification owns the row semantics), with important claims,
+reuse/add rationale, exclusions, omissions and stop rule. Read existing assertions
+first; do not invent a test count, all-layer default or TDD waiver. Surface
+conflicting controlling checks with their sources; mandatory execution need not
+mean new authoring.
+
 ### Requirements sufficiency
 
 Distinguish requested intent, authoritative behavior, source-backed technical
@@ -148,7 +158,17 @@ dependency order, criterion/check alignment, output-plan match and fallback.
 Use Architect only for a concrete Pack/design uncertainty and applicable role
 trigger; otherwise perform bounded refinement with equivalent evidence. Before
 Plan fixes checks, preserve the unchanged assistant-verification decision and its
-TDD choice. Store its stable ref/full-object digest once and derive local
+TDD choice. In the Architect Decompose handoff, carry the current canonical
+`evidence_assessment` from selection/task state in its declared sibling when an
+explicit reduced-testing instruction applies. Determine applicability from newest
+authoritative instructions/task constraints, never from surviving rows; preserve
+the exact source-bearing row even when planned. Reconcile missing/stale
+provenance before dependent work without reconstructing it from scope prose.
+With no applicable instruction the sibling may be omitted; any supplied canonical
+assessment stays unchanged, including empty rows, without fabricating an
+instruction. The row claims no execution/check closure, and planned is not
+verification sufficiency. Store the decision's stable ref/full-object digest once
+and derive local
 `tdd_applies` from due selected IDs; multiple applicable TDD IDs require separate
 packets. No boundary or packet count waives approval or downstream quality gates.
 
@@ -261,6 +281,28 @@ action.
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
 
+### Reuse before creating
+
+Before production code, tests, fixtures, config, scripts or helpers, inspect the
+affected flow and callers. Choose the first sufficient option: omit capability
+outside accepted scope; reuse a suitable project component/helper; use a platform
+or standard-library capability; use a suitable installed dependency; then write
+the smallest readable code for the remaining behavior. Sufficiency includes
+compatibility, necessary error handling, trust validation, accessibility where
+relevant, and affected consumers. Do not scan the whole repository by default,
+add unsafe dependencies, compress unrelated jobs, or break architecture to shrink
+a diff. New abstractions/options need a current purpose; one line is no target.
+
+Carry source-bound reduced-testing scope and the unchanged decision to the Build
+owner and verifier alongside the assessment. When an explicit reduced-testing
+instruction applies, preserve its unchanged exact instruction row in every
+materialized packet and when adding results; reconcile missing/stale applicable
+provenance against newest intent. Without an applicable instruction, ordinary
+assessments including empty arrays require no row. Instruction rows claim no
+execution or selected-check closure. Additional test work needs a named important uncovered
+failure and inadequate-evidence explanation; material expansion returns to
+selection and existing approval. Keep selected TDD and controlling checks intact.
+
 Load `references/build-worker-protocol.md` for canonical packet or worker Build
 execution, active workflow TDD, or a repair requiring its carried protocol. It
 owns delegated/direct fallback execution, Code Writer and Builder/Tester
@@ -361,7 +403,14 @@ when `qa_evaluation_mode=required`.
 
 Before any review lane, pass the unchanged `verification_decision`, current
 `evidence_assessment`, actual selected-check results, and omitted-check
-rationales alongside scope and changed files. Preserve unresolved evidence gaps;
+rationales alongside scope and changed files. Carry the source-bound reduced-testing
+constraint and exact assessment instruction row through existing review
+criteria/evidence/snapshot refs when an explicit reduced-testing instruction
+applies; reconcile missing/stale applicable provenance against newest intent
+before resume. Without an applicable instruction, ordinary assessments including
+empty arrays require no instruction row. Generic more-coverage
+advice or a score cannot expand scope without an important gap and the existing
+selection/approval route. Preserve unresolved evidence gaps;
 review cannot upgrade them to sufficient or replace validation.
 
 For standard/strict work, run the stages in order:

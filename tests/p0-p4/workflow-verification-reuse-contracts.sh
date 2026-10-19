@@ -2,6 +2,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
+source "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
 source "$FRAMEWORK_DIR/tests/p0-p4/lib/verification-reuse-response-fixtures.sh"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
@@ -324,4 +325,87 @@ for case_id in "$matrix_case" "$review_case"; do
     fi
 done
 if [[ ${#failures[@]} -eq 0 ]]; then pass; else fail "shared response builder failed canonical grading: ${failures[*]}"; fi
+# Gap: existing reuse/TDD cases did not retain an explicit qualitative user
+# boundary through a packet while a distinct uncovered fault and CI remain due.
+source "$FRAMEWORK_DIR/tests/p0-p4/lib/ci-audit-response-fixtures.sh"
+test_start "reduced-testing boundary retains reuse, important gap, CI and selected TDD"
+s1_scope_root="$(mktemp -d)"
+p0p4_register_cleanup "$s1_scope_root"
+mkdir -p "$s1_scope_root/responses/assistant-workflow"
+s1_scope_response="$s1_scope_root/responses/assistant-workflow/reduced-testing-carried-boundary.txt"
+write_s1_response reduced-testing-carried-boundary "$s1_scope_root/baseline.json"
+s1_scope_failures=()
+for s1_scope_variant in valid lost-boundary expanded-tests swapped-actions waived-ci waived-tdd stale-packet fabricated-instruction-run; do
+    case "$s1_scope_variant" in
+        valid) cp "$s1_scope_root/baseline.json" "$s1_scope_response" ;;
+        lost-boundary) jq '.verification_decision.scope = "All available tests"' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        expanded-tests) jq '.verification_decision.checks += [.verification_decision.checks[0]]' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        swapped-actions) jq '.verification_decision.checks[0].action = "extend" | .verification_decision.checks[1].action = "reuse" | .current_task_packet.verification_decision = .verification_decision' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        waived-ci) jq '.verification_decision.checks |= map(select(.check_id != "required-ci"))' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        waived-tdd) jq '.verification_decision.tdd_choice.mode = false' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        fabricated-instruction-run) jq '.evidence_assessment.scope_and_evidence_refs[0].executed_command = {check_id:"deny-nonowner",argv:["pytest","tests/test_owner.py::test_deny_nonowner"],cwd:"/workspace/filter"} | .current_task_packet.evidence_assessment = .evidence_assessment' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        stale-packet) jq '.current_task_packet.verification_decision.scope = "stale broad plan"' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+    esac
+    if "$runner" --responses "$s1_scope_root/responses" --skill assistant-workflow --case reduced-testing-carried-boundary >"$s1_scope_root/$s1_scope_variant.out" 2>&1; then
+        [[ "$s1_scope_variant" == valid ]] || s1_scope_failures+=("$s1_scope_variant accepted")
+    else
+        [[ "$s1_scope_variant" != valid ]] && grep -Eq 'structured_json_assertion_failures=[1-9]' "$s1_scope_root/$s1_scope_variant.out" || s1_scope_failures+=("$s1_scope_variant failed without oracle rejection")
+    fi
+done
+if [[ ${#s1_scope_failures[@]} -eq 0 ]]; then pass; else fail "scope controls: ${s1_scope_failures[*]}"; fi
+
+test_start "declared handoff projections preserve conditional instruction assessments"
+write_tdd_slice_projection_response "$s1_scope_root/ordinary.json" "Ordinary planned assessment without a reduced-testing instruction"
+if ruby -ryaml -rjson - "$workflow_dir/contracts/handoffs.yaml" "$s1_scope_root/baseline.json" "$s1_scope_root/ordinary.json" <<'RUBY'
+  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
+  instruction = JSON.parse(File.read(ARGV.fetch(1))).fetch("evidence_assessment")
+  ordinary = JSON.parse(File.read(ARGV.fetch(2))).fetch("evidence_assessment")
+  names = %w[orchestrator_to_architect_decompose orchestrator_to_code_writer orchestrator_to_builder_tester]
+  field = ->(fields, name) { fields.find { |entry| entry["name"] == name } }
+  conditions = ["an explicit reduced-testing instruction applies"] +
+    ["current_task_packet is absent and an explicit reduced-testing instruction applies"] * 2
+  alias_ref = "assistant-verification/contracts/output.yaml#evidence_assessment"
+  valid = instruction.fetch("status") == "planned" &&
+    instruction.fetch("scope_and_evidence_refs").any? { |row| row["evidence_ref"] == "user:reduced-tests" } &&
+    ordinary.fetch("status") == "planned" && ordinary.fetch("scope_and_evidence_refs").empty?
+  names.zip(conditions).each do |name, condition|
+    fields = handoffs.find { |entry| entry["name"] == name }.fetch("context_fields")
+    declaration = field.call(fields, "evidence_assessment")
+    valid &&= declaration && declaration["type"] == "object" &&
+      declaration["required"] == "conditional" && declaration["condition"] == condition &&
+      declaration.fetch("validation").include?(alias_ref) && declaration["on_missing"] == "fail"
+    # Applicability is an independent caller constraint, never inferred from rows.
+    projects = lambda do |declared_fields, payload, canonical, applies|
+      projected = payload.select { |key, _| declared_fields.any? { |entry| entry["name"] == key } }
+      inline = projected["evidence_assessment"]
+      packet = projected["current_task_packet"]
+      next false if payload.key?("evidence_assessment") && inline.nil?
+      next false if packet && inline && inline != packet.fetch("evidence_assessment")
+      assessment = packet ? packet.fetch("evidence_assessment") : inline
+      next false if applies && assessment != canonical
+      assessment.nil? || assessment == canonical
+    end
+    payload = {"evidence_assessment" => instruction}
+    valid &&= projects.call(fields, payload, instruction, true)
+    without_declaration = Marshal.load(Marshal.dump(fields))
+    without_declaration.reject! { |entry| entry["name"] == "evidence_assessment" }
+    valid &&= !projects.call(without_declaration, payload, instruction, true)
+    valid &&= !projects.call(fields, {}, instruction, true)
+    valid &&= projects.call(fields, {}, ordinary, false) &&
+      projects.call(fields, {"evidence_assessment" => ordinary}, ordinary, false)
+    next if name == names.first
+    packet_declaration = field.call(fields, "current_task_packet")
+    nested = field.call(packet_declaration.fetch("object_fields"), "evidence_assessment")
+    valid &&= nested["required"] == true && nested.fetch("validation").include?(alias_ref)
+    packet_payload = {"current_task_packet" => {"evidence_assessment" => instruction}}
+    valid &&= projects.call(fields, packet_payload, instruction, true)
+    conflict = instruction.merge("next_action" => "Conflicting inline assessment")
+    valid &&= !projects.call(fields, packet_payload.merge("evidence_assessment" => conflict), instruction, true)
+  end
+  plan = handoffs.find { |entry| entry["name"] == "orchestrator_to_architect" }.fetch("context_fields")
+  valid &&= field.call(plan, "evidence_assessment")["required"] == true
+  exit(valid ? 0 : 1)
+RUBY
+then pass; else fail "conditional handoff assessment declaration or projection lost canonical provenance"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

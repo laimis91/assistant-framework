@@ -50,7 +50,7 @@ fields:
         type: string[]
         required: false
         default: []
-        description: "Opaque refs to authoritative requirements, artifacts, a carried decision, or relevant workflow evidence"
+        description: "Opaque refs to authoritative requirements, artifacts, a carried decision, or relevant workflow evidence; retain the exact explicit reduced-testing instruction source here and in task constraints."
 
   - name: verification_policy
     type: object

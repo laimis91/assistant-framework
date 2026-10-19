@@ -2,6 +2,14 @@
 
 Use these checklists when the matching assistant-review mode is applicable. Report findings with normal severity, file evidence, impact, smallest useful fix, and confidence. If a checklist area has no concrete issue, record the checked area and state that no concrete risk was found.
 
+For a carried reduced-testing boundary, inspect reuse of adequate coverage and
+why each addition protects a distinct important uncovered failure. Keep controlling
+checks, selected meaningful TDD and important accepted protection. Classify a
+failing expectation against accepted behavior before recommending repair;
+incidental coupling does not justify production changes or count-based deletion.
+Carry the boundary/source through existing criteria/evidence/snapshot refs;
+material expansion returns to selection and approval, never a score target.
+
 ## Agentic Loop Safety Checklist
 
 Use this checklist when reviewing changes that add or modify autonomous loops: agent loops, review/fix loops, research/search loops, retry loops, tool-calling loops, multi-agent orchestration, background jobs, or any workflow that repeatedly calls models, tools, APIs, or subagents.

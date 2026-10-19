@@ -10,6 +10,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/response-fixture-prefl
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/creator-response-fixtures.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ownership-response-fixtures.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ci-audit-response-fixtures.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 p0p4_activation_examples_are_adequate() {
@@ -635,6 +636,12 @@ p0p4_write_skill_eval_responses() {
         while IFS= read -r id; do
             response_path="$output_dir/$skill_name/$id.txt"
             required_summary="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$fixture_file" | paste -sd ' ' -)"
+            case "$skill_name:$id" in
+                assistant-ci-audit:*|assistant-workflow:reduced-testing-carried-boundary|assistant-workflow:repair-expectations-switch-and-resume)
+                    write_s1_response "$id" "$response_path" || return 1
+                    continue
+                    ;;
+            esac
             if [[ "$skill_name" == "assistant-workflow" ]] \
                 && jq -e --arg id "$id" '.cases[] | select(.id == $id) | ((.machine_expectations.structured_json_assertions? // [] | length > 0) or .semantic_validator != null)' "$fixture_file" >/dev/null; then
                 case "$id" in
@@ -5867,7 +5874,8 @@ else
 fi
 
 test_start "skill eval docs describe complete first-class coverage"
-if grep -Fq "default eval inventory is 15 first-class \`assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/README.md" \
+documented_skill_count="$(p0p4_skill_eval_default_fixtures | wc -l | tr -d '[:space:]')"
+if grep -Fq "default eval inventory is $documented_skill_count first-class \`assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-debugging" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-diagrams" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-docs" "$FRAMEWORK_DIR/README.md" \
@@ -5883,7 +5891,7 @@ if grep -Fq "default eval inventory is 15 first-class \`assistant-*\` skills wit
     && grep -Fq "assistant-security" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq 'Canonical first-class fixtures use schema `2.0` and include top-level' "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "Local-only" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "This inventory now covers all 15 first-class \`assistant-*\` skills" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "This inventory now covers all $documented_skill_count first-class \`assistant-*\` skills" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'Every first-class fixture uses schema `2.0` and declares top-level' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && ! grep -Fq "5 of 15 first-class skills remain" "$FRAMEWORK_DIR/README.md" \
     && ! grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
@@ -6687,5 +6695,49 @@ if [[ ${#ruby_preflight_failures[@]} -eq 0 ]]; then
 else
     fail "skill eval Ruby prerequisite behavior is incomplete: ${ruby_preflight_failures[*]}"
 fi
+
+# Gap: no audit capture/control existed for truthful false-pass/fixture
+# diagnosis, retained distinct protection, comparable completed work or authority.
+test_start "audit captures reject false protection, unsupported savings and unauthorized actions"
+s1_audit_root="$(mktemp -d)"
+p0p4_register_cleanup "$s1_audit_root"
+mkdir -p "$s1_audit_root/responses/assistant-ci-audit"
+s1_audit_failures=()
+for s1_audit_case in captured-defects-protection-and-cost inspect-only-missing-evidence; do
+    s1_audit_response="$s1_audit_root/responses/assistant-ci-audit/$s1_audit_case.txt"
+    write_s1_response "$s1_audit_case" "$s1_audit_response"
+    cp "$s1_audit_response" "$s1_audit_root/$s1_audit_case.json"
+    if ! "$skill_eval_runner" --responses "$s1_audit_root/responses" --skill assistant-ci-audit --case "$s1_audit_case" >"$s1_audit_root/$s1_audit_case.out" 2>&1; then
+        s1_audit_failures+=("$s1_audit_case valid rejected")
+    fi
+done
+while IFS='|' read -r s1_audit_variant s1_audit_case s1_audit_filter; do
+    s1_audit_response="$s1_audit_root/responses/assistant-ci-audit/$s1_audit_case.txt"
+    jq "$s1_audit_filter" "$s1_audit_root/$s1_audit_case.json" >"$s1_audit_response"
+    if "$skill_eval_runner" --responses "$s1_audit_root/responses" --skill assistant-ci-audit --case "$s1_audit_case" >"$s1_audit_root/$s1_audit_variant.out" 2>&1; then
+        s1_audit_failures+=("$s1_audit_variant accepted")
+    elif ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$s1_audit_root/$s1_audit_variant.out"; then
+        s1_audit_failures+=("$s1_audit_variant failed without oracle rejection")
+    fi
+done <<'S1_AUDIT_CONTROLS'
+missed-false-pass|captured-defects-protection-and-cost|.findings[0].observed_behavior = "gate detects failure"
+early-fixture-counted-as-production|captured-defects-protection-and-cost|.findings[1].observed_behavior = "production rejection covered"
+lost-unique-protection|captured-defects-protection-and-cost|.findings[3].maintenance.disposition = "consolidate"
+failed-work-savings|captured-defects-protection-and-cost|.performance_comparisons[1].status = "comparable"
+swapped-finding-kinds|captured-defects-protection-and-cost|.findings[0].kind = "hypothesis" | .findings[2].kind = "reproduced_defect"
+missing-captured-evidence|captured-defects-protection-and-cost|del(.audit_trace, .evidence_gaps, .findings[].evidence_refs, .probe_results[].run_refs) | .executed_checks |= map({id}) | .performance_comparisons[0].measurements = "Unavailable."
+lost-repository|captured-defects-protection-and-cost|del(.audit_summary.repository_ref, .executed_checks[].repository_ref)
+copied-summary-repository|captured-defects-protection-and-cost|.executed_checks[2].repository_ref = .audit_summary.repository_ref
+unsafe-command-display|captured-defects-protection-and-cost|.executed_checks[2].argv[2] = "/synthetic/private/stale.json" | .executed_checks[2].cwd = "/synthetic/private"
+undisclosed-redaction|captured-defects-protection-and-cost|.executed_checks[2].limits = "Synthetic supplied fixture capture; no actual repository run."
+collapsed-content-identity|captured-defects-protection-and-cost|.executed_checks[4].content_ref = .executed_checks[3].content_ref
+lost-confirmed-maintenance|captured-defects-protection-and-cost|.findings[4].maintenance.evidence_state = "unresolved"
+unsafe-probe-claim|captured-defects-protection-and-cost|.probe_results[0].original_hash_evidence = "original changed"
+planned-run-as-executed|inspect-only-missing-evidence|.executed_checks = [{id:"planned"}]
+missing-inspection-evidence|inspect-only-missing-evidence|del(.audit_trace, .question_coverage[].missing_observation, .question_coverage[].next_step)
+hidden-material-gap|inspect-only-missing-evidence|.audit_summary.status = "complete"
+unauthorized-delete|inspect-only-missing-evidence|.next_action = "Delete tests and dispatch repair now."
+S1_AUDIT_CONTROLS
+if [[ ${#s1_audit_failures[@]} -eq 0 ]]; then pass; else fail "audit controls: ${s1_audit_failures[*]}"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

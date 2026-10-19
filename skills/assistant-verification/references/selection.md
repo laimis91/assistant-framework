@@ -14,6 +14,39 @@ Load when choosing or materially reconsidering an approach. This reference guide
 
 Load only the directly linked method reference for each selected activity. Domain policy stays with the owning specialist. For an unknown-cause bug, route through assistant-debugging before selecting a regression oracle. Once TDD is active, assistant-tdd preserves meaningful RED before production; never invent a failure or remove preserved code to create one.
 
+## Explicit reduced-testing scope
+
+Treat an explicit request for fewer tests focused on important behavior as a
+source-bound acceptance boundary, not merely a preference. Preserve its source
+in task constraints and `work_scope.source_refs`, and its meaning in
+`verification_decision.scope`. Also preserve the exact instruction source as an
+object row in existing `evidence_assessment.scope_and_evidence_refs`, including
+when status is planned: `evidence_ref` is the exact source (for example
+`user:reduced-tests`), `claim_kind: other`, `claim_scope` contains the exact
+qualitative boundary, `selected_check_ids: []`, `binding_obligation_refs: []`,
+`result_state: not_applicable`, `freshness: current`, `exclusions: []`. Omit
+`executed_command`: this instruction row claims no run and closes no check.
+Carry the assessment unchanged alongside the decision into materialized packets;
+retain the row as actual results are added and reconcile the newest instruction
+on resume. Qualitative boundaries are not `required_scope`/`prohibited_scope`
+values, which remain unit/integration/e2e. Infer importance from accepted behavior, affected
+boundaries and credible consequences; do not invent a count or quota. Reuse
+adequate coverage first. Each additional test needs a distinct important uncovered
+failure and an explanation of why existing evidence is inadequate. Record reuse
+or extension rationale, exclusions and significant rejected duplication in the
+existing CheckSpec/omission fields, with a completion boundary in `stop_rule`.
+A controlling project/CI suite can require execution without new test authoring.
+Resolve real conflicts with exact sources before expanding dependent work.
+Zero new tests is valid with adequate evidence; reduced testing never implies
+`required_tdd=false` or waives selected meaningful RED, security, integrity,
+compatibility or other accepted protection. Keep the existing shapes/enums;
+qualitative scope belongs in these fields, not a new policy value or schema.
+
+Carry this unchanged boundary to execution, review and resume. Expansion needs a
+named important gap and the existing selection/approval route, including when a
+reviewer asks for generic coverage. A representation gap requires a design and
+versioning decision before changing a contract.
+
 ## Contrast
 
 For two added menu documents with an unchanged loader and existing arbitrary-entry loading/opening coverage, reuse relevant coverage and inspect that each requested document has correct content and opens at the real boundary. Do not add two permanent filename assertions unless named entries themselves are a product invariant.

@@ -11,7 +11,10 @@ requires:
 
 Complete the requested change with the smallest complete implementation and
 credible evidence. Inspect callers, tests, configuration, and other affected
-consumers before deciding the scope; reuse existing code and conventions.
+consumers before deciding the scope; reuse existing code and conventions. Carry
+explicit reduced-testing instructions and sources through selection, workers,
+review and resume; add tests only for distinct important uncovered behavior.
+Use the reuse-first ordering in the Build reference before creating code or helpers.
 
 ## Ordinary path
 
