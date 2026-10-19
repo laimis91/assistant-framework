@@ -1060,9 +1060,10 @@ fixtures to check unchanged, changed, stale, partial, and unavailable source
 responses, including bounded recovery and registry preservation. It performs no
 network requests; the installed helper's actual transport is a separate check.
 
-This inventory now covers all 15 first-class `assistant-*` skills. The current
+This inventory now covers all 16 first-class `assistant-*` skills. The current
 tracked first-class fixtures are:
 
+- `skills/assistant-ci-audit/evals/cases.json`
 - `skills/assistant-clarify/evals/cases.json`
 - `skills/assistant-debugging/evals/cases.json`
 - `skills/assistant-diagrams/evals/cases.json`
@@ -1078,6 +1079,14 @@ tracked first-class fixtures are:
 - `skills/assistant-thinking/evals/cases.json`
 - `skills/assistant-verification/evals/cases.json`
 - `skills/assistant-workflow/evals/cases.json`
+
+The CI-audit fixtures consume supplied independent captures, including false
+passes, early-rejected fixtures, retained distinct protection and incomparable
+cost/authority controls. They use the existing fixed structured operators.
+Workflow scope/repair fixtures add only the missing boundary-retention and
+switch/resume controls; existing QRG, relative-loader, TDD and review-reuse cases
+remain the coverage for those behaviors. Canned-response grading tests the oracle,
+not actual model compliance, native activation or comparative savings.
 
 By default, the runner discovers first-class `skills/assistant-*/SKILL.md`
 skills that have `evals/cases.json` fixtures. Use `--include-local` only when

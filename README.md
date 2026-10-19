@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 15 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
+A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
 
 ## What it does
 
@@ -285,6 +285,13 @@ Purpose context framework based on [Daniel Miessler's Telos Method](https://gith
 
 Triggers on: telos, my purpose, why am I doing this, what matters most, my mission, update telos
 
+### assistant-ci-audit
+Audits CI/test discovery, fixture fidelity, child/report/final-gate failures and
+maintenance value. Inspection is the default; finite authorized local diagnostics
+may use disposable controlled probes. Findings recommend protection-preserving
+changes and measured comparisons; they grant no repair or dispatch authority.
+Use debugging for one failing test and verification for selecting checks.
+
 ### assistant-verification
 Selects proportional verification scope, methods, and TDD applicability, then assesses observed evidence and limitations. It guides verification without running checks. Workflow consumers retain canonical typed decisions; human-only assessments can use concise prose.
 
@@ -339,7 +346,7 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
-The default eval inventory is 15 first-class `assistant-*` skills with fixtures.
+The default eval inventory is 16 first-class `assistant-*` skills with fixtures.
 Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at
 least two normalized-distinct positive requests and one normalized-disjoint
@@ -469,6 +476,12 @@ skills/
   assistant-clarify/
     SKILL.md                       <- Clarification workflow for ambiguous or multi-intent prompts
     evals/cases.json               <- Pilot provider-neutral behavior eval fixtures
+
+  assistant-ci-audit/
+    SKILL.md                       <- Bounded CI/test protection and maintenance audit
+    contracts/                     <- Typed input/output, gates and progressive index
+    references/                    <- Investigation and protection/cost assessment
+    evals/cases.json                <- Offline defect/control and authority fixtures
 
   assistant-tdd/
     SKILL.md                       <- TDD enforcement (Red-Green-Refactor cycle)

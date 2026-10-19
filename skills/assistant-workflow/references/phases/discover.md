@@ -48,6 +48,14 @@ choosing a repair. Recall lessons only when prior decisions or corrections can
 materially affect this task. Check the environment needed for the work; a numeric
 readiness score is not an implementation or completion gate.
 
+Preserve an explicit reduced-testing instruction/source in accumulated task
+constraints and verification `work_scope.source_refs`. Selection records the
+qualitative boundary in `verification_decision.scope`, with important claims,
+reuse/add rationale, exclusions, omissions and stop rule. Read existing assertions
+first; do not invent a test count, all-layer default or TDD waiver. Surface
+conflicting controlling checks with their sources; mandatory execution need not
+mean new authoring.
+
 ### Requirements sufficiency
 
 Distinguish requested intent, authoritative behavior, source-backed technical

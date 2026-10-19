@@ -8,6 +8,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/feature-preparation-ca
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/verification-reuse-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/writer-routing-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ownership-response-fixtures.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ci-audit-response-fixtures.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/response-fixture-preflight.sh"
 source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
@@ -357,6 +358,9 @@ write_workflow_eval_responses() {
         required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$fixture" | paste -sd ' ' -)"
         if jq -e --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | ((.machine_expectations.structured_json_assertions? // [] | length > 0) or .semantic_validator != null)' "$fixture" >/dev/null; then
             case "$case_id" in
+                reduced-testing-carried-boundary|repair-expectations-switch-and-resume)
+                    write_s1_response "$case_id" "$response_path"
+                    ;;
                 ownership-*)
                     write_ownership_response "$case_id" "$response_path"
                     ;;

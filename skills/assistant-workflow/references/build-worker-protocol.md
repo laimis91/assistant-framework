@@ -151,6 +151,17 @@ dependency, environment and permission failures; no automatic capability
 escalation or mandatory Luna-then-Sol chain. Both writers obey the existing
 lane-specific checks/TDD/status guarantees and never independently review.
 
+## Scope and implementation consumption
+
+Workers and verifiers consume the unchanged source-bound reduced-testing scope,
+CheckSpec rationale/exclusions, omissions and stop rule. Reuse adequate coverage;
+add or extend tests only for a distinct important uncovered failure with evidence
+that existing protection is inadequate. Surface controlling-check conflicts;
+selected TDD remains independent. Use the reuse-first ordering owned by the Build
+section in `phases.md`, including complete affected consumers and error paths.
+Material expansion returns to selection and approval; generic coverage advice
+cannot authorize it.
+
 ## Build Loop
 
 For light work, implement the carried Discover scope/criteria or the inline plan
@@ -215,6 +226,18 @@ entries only when that worker changed no file.
 
 ### Ordinary Build repair controller
 
+Before repair, compare the failing expectation with accepted behavior and record
+the evidence in the existing failure/progress record: product regression;
+outdated expectation after accepted change; implementation-coupled/duplicate
+assertion; baseline/environment failure; or unresolved cause (including interacting
+causes). Fix real regressions within scope. For brittle/obsolete expectations,
+propose a scoped test correction retaining unique important protection or a
+source-backed obsolete-expectation rationale. Never change production to satisfy
+incidental assertions. Unknown causes go through debugging; baseline failures
+retain their blocking relevance without automatically absorbing or ignoring repair.
+Removal/quarantine needs the existing selection/authorization route. Never weaken
+assertions, suppress errors, increase timeouts or add retries just to get green.
+
 For ordinary non-harness same-scope repair, initialize and persist
 `build_repair_state` before the second implementation attempt:
 
@@ -227,10 +250,11 @@ For ordinary non-harness same-scope repair, initialize and persist
 - status and evidence reference
 
 One initial attempt plus at most two repairs is the complete three-attempt
-budget. Redispatch, context reset, compaction, handoff, or cross-session resume
-must not reset `cumulative_attempt_count` for the same plan version. Increment no-progress when the
-same normalized signature remains and no check newly passes, no failing scope
-shrinks, and no new evidence isolates the cause. Reset it only for measurable
+budget across all failing tests/checks. Switching tests, selected checks or workers
+does not create another allowance. Redispatch, context reset, compaction, handoff, or cross-session resume
+must not reset `cumulative_attempt_count` for the same plan version. Increment no-progress when no selected check newly passes, failing scope does
+not shrink, and no new evidence isolates the cause, even when the failure/test
+signature changes. Signature changes alone are not progress. Reset it only for measurable
 evidence-backed progress.
 
 At attempt 3, or when `no_progress_count` reaches 2, do not patch again. Set

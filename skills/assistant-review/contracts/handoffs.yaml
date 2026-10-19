@@ -130,13 +130,13 @@ handoffs:
         type: string
         required: true
         description: "Sanitized Spec Review scope and criterion pointer supplied to a fresh Reviewer pass."
-        validation: "May identify scope and review criterion but excludes pre_batch_findings, mismatch description, evidence, severity, and any sibling output."
+        validation: "Retains explicit reduced-testing scope/source and the expansion boundary; may identify scope and review criterion but excludes pre_batch_findings, mismatch description, evidence, severity, and any sibling output."
 
       - name: build_test_verification_ref
         type: object
         required: true
         description: "Current selected/binding verification evidence or a permitted no-check reason"
-        validation: "Workflow-composed evidence_ref resolves to the carried verification_decision, current evidence_assessment, every due selected check and applicable due/executable binding result, exclusions, and source binding. Each due check and every source fix require current passed evidence; a fix invalidates the batch and forbids not_applicable. Standalone review-fix requires build/tests. no_build_scope is allowed only when no fix is required/occurred and no due selected or applicable due/executable binding check applies."
+        validation: "Workflow-composed evidence_ref resolves to the carried verification_decision, current evidence_assessment, every due selected check and applicable due/executable binding result, exclusions, and source binding. Each due check and every source fix require current passed evidence; a fix invalidates the batch and forbids not_applicable. Standalone review-fix requires build/tests. no_build_scope is allowed only when no fix is required/occurred and no due selected or applicable due/executable binding check applies. Retain source-bound reduced-testing scope, additions rationale/exclusions, omissions and stop rule; scores or generic coverage advice cannot expand it without a distinct important gap and existing selection/approval."
         object_fields:
           - name: evidence_ref
             type: string
@@ -154,7 +154,7 @@ handoffs:
         type: object
         required: true
         description: "The material available to review, captured as a scope snapshot rather than assuming a diff"
-        validation: "Non-empty and immutable for one batch; recompute the current scope-manifest/content identity at the response barrier and immediately before final exit. Any mismatch invalidates the batch and blocks CLEAN or ISSUES_FIXED."
+        validation: "Includes the reviewed source-bound reduced-testing criteria and evidence refs when applicable. Non-empty and immutable for one batch; recompute the current scope-manifest/content identity at the response barrier and immediately before final exit. Any mismatch invalidates the batch and blocks CLEAN or ISSUES_FIXED."
         object_fields:
           - name: kind
             type: enum

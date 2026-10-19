@@ -2,6 +2,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/p0p4-harness.sh"
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
+source "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
 source "$FRAMEWORK_DIR/tests/p0-p4/lib/verification-reuse-response-fixtures.sh"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
@@ -324,4 +325,32 @@ for case_id in "$matrix_case" "$review_case"; do
     fi
 done
 if [[ ${#failures[@]} -eq 0 ]]; then pass; else fail "shared response builder failed canonical grading: ${failures[*]}"; fi
+# Gap: existing reuse/TDD cases did not retain an explicit qualitative user
+# boundary through a packet while a distinct uncovered fault and CI remain due.
+source "$FRAMEWORK_DIR/tests/p0-p4/lib/ci-audit-response-fixtures.sh"
+test_start "reduced-testing boundary retains reuse, important gap, CI and selected TDD"
+s1_scope_root="$(mktemp -d)"
+p0p4_register_cleanup "$s1_scope_root"
+mkdir -p "$s1_scope_root/responses/assistant-workflow"
+s1_scope_response="$s1_scope_root/responses/assistant-workflow/reduced-testing-carried-boundary.txt"
+write_s1_response reduced-testing-carried-boundary "$s1_scope_root/baseline.json"
+s1_scope_failures=()
+for s1_scope_variant in valid lost-boundary expanded-tests swapped-actions waived-ci waived-tdd stale-packet; do
+    case "$s1_scope_variant" in
+        valid) cp "$s1_scope_root/baseline.json" "$s1_scope_response" ;;
+        lost-boundary) jq '.verification_decision.scope = "All available tests"' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        expanded-tests) jq '.verification_decision.checks += [.verification_decision.checks[0]]' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        swapped-actions) jq '.verification_decision.checks[0].action = "extend" | .verification_decision.checks[1].action = "reuse" | .current_task_packet.verification_decision = .verification_decision' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        waived-ci) jq '.verification_decision.checks |= map(select(.check_id != "required-ci"))' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        waived-tdd) jq '.verification_decision.tdd_choice.mode = false' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        stale-packet) jq '.current_task_packet.verification_decision.scope = "stale broad plan"' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+    esac
+    if "$runner" --responses "$s1_scope_root/responses" --skill assistant-workflow --case reduced-testing-carried-boundary >"$s1_scope_root/$s1_scope_variant.out" 2>&1; then
+        [[ "$s1_scope_variant" == valid ]] || s1_scope_failures+=("$s1_scope_variant accepted")
+    else
+        [[ "$s1_scope_variant" != valid ]] && grep -Eq 'structured_json_assertion_failures=[1-9]' "$s1_scope_root/$s1_scope_variant.out" || s1_scope_failures+=("$s1_scope_variant failed without oracle rejection")
+    fi
+done
+if [[ ${#s1_scope_failures[@]} -eq 0 ]]; then pass; else fail "scope controls: ${s1_scope_failures[*]}"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

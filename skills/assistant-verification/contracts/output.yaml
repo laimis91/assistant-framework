@@ -18,7 +18,7 @@ artifacts:
       - name: scope
         type: string
         required: true
-        description: "Named outcome and acceptance scope from work_scope; do not broaden it"
+        description: "Named outcome and acceptance scope from work_scope; preserve explicit reduced-testing boundaries and their source refs, not only preferences; do not broaden it"
       - name: policy_basis
         type: object
         required: true
@@ -115,7 +115,7 @@ artifacts:
           - name: rationale
             type: string
             required: true
-            description: "Why it observes the claim at acceptable cost and adds distinct evidence."
+            description: "Why reuse suffices or extension/addition covers a distinct important uncovered failure at acceptable cost; explain inadequate existing evidence."
           - name: method_refs
             type: string[]
             required: true

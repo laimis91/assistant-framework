@@ -18,3 +18,12 @@ The following roles should be created:
 - research-peer-reviewer — Independent five-lens synthesis critique (read-only)
 
 Current fallback follows shared writer_selection judgment and worker_stage ownership: the selected native writer authors tests, fixtures, snapshots, helpers and test/build configuration, then production/refactor subject to RED/GREEN gates. Do not invent custom Gemini role names or model overrides.
+
+The actual native/default writer also retains explicit reduced-testing scope/source,
+rationale/exclusions, omissions and stop rule. Reuse adequate coverage; additions
+need a distinct important uncovered failure and inadequate-existing-evidence
+rationale. Use workflow Build reuse-first ordering with complete consumers/error
+paths. Classify expectations before repair; incidental assertions do not justify
+production changes. Preserve controlling checks, selected meaningful TDD and
+cumulative three-total-attempt/two-no-progress limits across tests, checks, workers
+and sessions. Material expansion returns to selection/approval.

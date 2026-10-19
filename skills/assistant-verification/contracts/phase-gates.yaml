@@ -27,7 +27,7 @@ gates:
         check: "Every selected check addresses a material claim or credible failure mode and has a meaningful success and failure oracle."
         on_fail: "Name the observable claim, plausible wrong result, prerequisites, exclusions, and expected result, or remove the unsupported check."
       - id: S2
-        check: "The selection reuses or extends relevant coverage before adding checks; each additional check contributes distinct evidence at acceptable cost."
+        check: "The selection reuses or extends relevant coverage before adding checks; each additional check contributes distinct evidence at acceptable cost. An explicit reduced-testing instruction/source is retained in work_scope.source_refs, task constraints and verification_decision.scope, with important claims, reuse/add rationale, exclusions, omitted duplication and stop_rule; no quota, new policy enum or TDD waiver is inferred."
         on_fail: "Remove duplicated work or explain the uncovered claim that warrants an additional layer."
       - id: S3
         check: "Test scope, technique, and TDD are decided independently; scope restrictions, required checks, and explicit TDD requirements are honored."

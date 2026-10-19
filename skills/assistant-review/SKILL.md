@@ -9,7 +9,11 @@ Find concrete defects and regressions within the requested scope. Read the diff
 and connected callers, contracts, tests, and configuration; a change can break a
 consumer outside the diff. Each finding needs a real input/situation, file/line
 evidence, impact, calibrated confidence, and the smallest useful fix. Style taste
-and speculative concerns are non-blocking observations.
+and speculative concerns are non-blocking observations. Preserve a carried
+reduced-testing boundary/source via existing criteria, verification evidence and
+material snapshot refs. Additional tests need a distinct important uncovered
+failure and inadequate-existing-evidence rationale; scores or generic coverage
+advice cannot expand scope. Return material expansion to selection/approval.
 
 ## Authority and scope
 

@@ -16,7 +16,9 @@ dispatch, repair, retry, edit, or approve delivery.
 2. Separate binding requirements, preferences, and capability limits. Preserve
    exact mandate sources; do not waive a required check or invent a universal
    count, ratio, coverage target, or test quota.
-3. Choose checks for distinct material claims. Reuse adequate current evidence;
+3. Preserve explicit reduced-testing scope/source in the existing scope and
+   source-ref fields, not only preferences; use [selection.md](references/selection.md)
+   for that boundary and controlling-check conflicts. Choose checks for distinct material claims. Reuse adequate current evidence;
    add tests only for a real uncovered behavior or failure. Zero new tests still
    needs evidence and meaningful exclusions. Choose scope, technique, and TDD
    independently; meaningful RED is required only when TDD is active.

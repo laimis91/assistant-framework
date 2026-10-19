@@ -667,7 +667,7 @@ handoffs:
         type: object
         required: true
         description: "Canonical assistant-verification decision supplied before Decompose so DC2 does not defer selection to Plan."
-        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve its CheckSpecs and TddChoice unchanged in each slice."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; expansion requires a distinct important uncovered failure and existing selection/approval. preserve its CheckSpecs and TddChoice unchanged in each slice."
       - name: tdd_mode
         type: boolean
         required: true
@@ -1286,7 +1286,7 @@ handoffs:
         type: object
         required: true
         description: "Canonical assistant-verification producer artifact selected before Plan fixes verification obligations."
-        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve its CheckSpec and TddChoice unchanged in the plan and every executable packet."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; expansion requires a distinct important uncovered failure and existing selection/approval. preserve its CheckSpec and TddChoice unchanged in the plan and every executable packet."
       - name: evidence_assessment
         type: object
         required: true
@@ -3030,7 +3030,7 @@ handoffs:
         type: object
         required: conditional
         condition: "current_task_packet is absent"
-        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve unchanged; when current_task_packet is present, equals its verification_decision."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; expansion requires a distinct important uncovered failure and existing selection/approval. preserve unchanged; when current_task_packet is present, equals its verification_decision."
         on_missing: fail
       - name: selected_check_ids
         type: string[]
@@ -3388,7 +3388,7 @@ handoffs:
         type: object
         required: conditional
         condition: "current_task_packet is absent"
-        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; preserve unchanged; when current_task_packet is present, equals its verification_decision."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; expansion requires a distinct important uncovered failure and existing selection/approval. preserve unchanged; when current_task_packet is present, equals its verification_decision."
         on_missing: fail
       - name: selected_check_ids
         type: string[]

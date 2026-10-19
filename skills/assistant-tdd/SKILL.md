@@ -18,7 +18,10 @@ independent; inactive TDD never needs a fabricated RED.
    code or invent failure evidence.
 2. **GREEN.** Make the smallest production change that passes. Verify the target,
    selected relevant regressions, and applicable binding checks. Repair failures
-   before moving on; do not infer an unselected full suite.
+   before moving on; do not infer an unselected full suite. Classify failures
+   against accepted behavior before repair; incidental assertions do not justify
+   production changes. Keep carried reduced-testing scope and cumulative workflow
+   repair limits across tests, checks, workers and sessions.
 3. **REFACTOR.** After current GREEN, improve names or remove duplication only
    when useful; `none needed` is valid. Record actual changes and run a distinct
    REFACTOR verification, even when no refactor was needed.

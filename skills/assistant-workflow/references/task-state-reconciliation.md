@@ -47,7 +47,13 @@ Record or recover:
 
 ## Authority and recovery rules
 
-- Newest explicit user intent outranks persisted prose.
+- Newest explicit user intent outranks persisted prose. Reconcile reduced-testing
+  scope/source against stale plans before dependent work; carry it through existing
+  constraints, decision scope and reviewer refs. Expansion needs a named important
+  uncovered failure and the existing selection/approval route.
+- Preserve cumulative same-scope repair counts across changing tests, checks,
+  workers and sessions; a new failing expectation needs classification, not a
+  fresh budget. Retain the three-total-attempt/two-no-progress ceiling.
 - Current repository and verification evidence outrank unverified progress
   claims.
 - A branch or HEAD change is evidence to inspect, not automatic invalidation.
