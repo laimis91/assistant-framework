@@ -61,9 +61,12 @@ add unsafe dependencies, compress unrelated jobs, or break architecture to shrin
 a diff. New abstractions/options need a current purpose; one line is no target.
 
 Carry source-bound reduced-testing scope and the unchanged decision to the Build
-owner and verifier, alongside the assessment with its unchanged exact instruction
-row in every materialized packet. Retain that row when adding actual result rows;
-it claims no execution or selected-check closure. Additional test work needs a named important uncovered
+owner and verifier alongside the assessment. When an explicit reduced-testing
+instruction applies, preserve its unchanged exact instruction row in every
+materialized packet and when adding results; reconcile missing/stale applicable
+provenance against newest intent. Without an applicable instruction, ordinary
+assessments including empty arrays require no row. Instruction rows claim no
+execution or selected-check closure. Additional test work needs a named important uncovered
 failure and inadequate-evidence explanation; material expansion returns to
 selection and existing approval. Keep selected TDD and controlling checks intact.
 

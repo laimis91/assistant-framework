@@ -155,10 +155,12 @@ lane-specific checks/TDD/status guarantees and never independently review.
 
 Workers and verifiers consume the unchanged source-bound reduced-testing scope,
 CheckSpec rationale/exclusions, omissions and stop rule. Carry the canonical
-assessment alongside the decision in materialized packets, preserving its exact
-`scope_and_evidence_refs` instruction row even when planned and through result
-updates. That row claims no execution or check closure; reconcile the newest
-instruction before resumed dependent work. Reuse adequate coverage;
+assessment alongside the decision in materialized packets. When an explicit
+reduced-testing instruction applies, preserve its exact `scope_and_evidence_refs`
+instruction row even when planned and through results; reconcile missing/stale
+applicable provenance against newest intent before resumed dependent work. With
+no applicable instruction, ordinary assessments including empty arrays require
+no instruction row. Instruction rows claim no execution or check closure. Reuse adequate coverage;
 add or extend tests only for a distinct important uncovered failure with evidence
 that existing protection is inadequate. Surface controlling-check conflicts;
 selected TDD remains independent. Use the reuse-first ordering owned by the Build

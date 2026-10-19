@@ -47,7 +47,10 @@ Before any review lane, pass the unchanged `verification_decision`, current
 `evidence_assessment`, actual selected-check results, and omitted-check
 rationales alongside scope and changed files. Carry the source-bound reduced-testing
 constraint and exact assessment instruction row through existing review
-criteria/evidence/snapshot refs. Reconcile the newest instruction before resume. Generic more-coverage
+criteria/evidence/snapshot refs when an explicit reduced-testing instruction
+applies; reconcile missing/stale applicable provenance against newest intent
+before resume. Without an applicable instruction, ordinary assessments including
+empty arrays require no instruction row. Generic more-coverage
 advice or a score cannot expand scope without an important gap and the existing
 selection/approval route. Preserve unresolved evidence gaps;
 review cannot upgrade them to sufficient or replace validation.

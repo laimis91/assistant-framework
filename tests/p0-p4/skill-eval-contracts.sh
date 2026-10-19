@@ -6726,6 +6726,10 @@ lost-unique-protection|captured-defects-protection-and-cost|.findings[3].mainten
 failed-work-savings|captured-defects-protection-and-cost|.performance_comparisons[1].status = "comparable"
 swapped-finding-kinds|captured-defects-protection-and-cost|.findings[0].kind = "hypothesis" | .findings[2].kind = "reproduced_defect"
 missing-captured-evidence|captured-defects-protection-and-cost|del(.audit_trace, .evidence_gaps, .findings[].evidence_refs, .probe_results[].run_refs) | .executed_checks |= map({id}) | .performance_comparisons[0].measurements = "Unavailable."
+lost-repository|captured-defects-protection-and-cost|del(.audit_summary.repository_ref, .executed_checks[].repository_ref)
+copied-summary-repository|captured-defects-protection-and-cost|.executed_checks[2].repository_ref = .audit_summary.repository_ref
+unsafe-command-display|captured-defects-protection-and-cost|.executed_checks[2].argv[2] = "/synthetic/private/stale.json" | .executed_checks[2].cwd = "/synthetic/private"
+undisclosed-redaction|captured-defects-protection-and-cost|.executed_checks[2].limits = "Synthetic supplied fixture capture; no actual repository run."
 collapsed-content-identity|captured-defects-protection-and-cost|.executed_checks[4].content_ref = .executed_checks[3].content_ref
 lost-confirmed-maintenance|captured-defects-protection-and-cost|.findings[4].maintenance.evidence_state = "unresolved"
 unsafe-probe-claim|captured-defects-protection-and-cost|.probe_results[0].original_hash_evidence = "original changed"

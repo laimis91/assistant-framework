@@ -6,7 +6,7 @@ gates:
   - phase: CAPTURE
     exit_assertions:
       - id: C1
-        check: "Goal, AuditScope repository/revision_ref/dirty_state/content_ref, included/excluded paths, stable questions and AuditConstraints are captured; content_ref is immutable bounded relevant staged/unstaged/untracked/generated content or literal unknown. HEAD/status/equal unknown never establish equivalence/freshness; unknown identity permits harmless inspect_only."
+        check: "Goal, AuditScope safe repository_ref/revision_ref/dirty_state/content_ref, included/excluded paths, stable questions and AuditConstraints are captured; content_ref is immutable bounded relevant staged/unstaged/untracked/generated content or literal unknown. HEAD/status/equal unknown never establish equivalence/freshness; unknown identity permits harmless inspect_only."
         on_fail: "Inspect supplied/local source or ask only for material unavailable scope. Default inspect_only without diagnostic authority."
   - phase: INVESTIGATE
     entry_assertions:
@@ -34,7 +34,7 @@ gates:
   - phase: REPORT
     exit_assertions:
       - id: R1
-        check: "Summary inspected revision_ref/dirty_state/content_ref and each actual run identity remain explicit; historical/probe/candidate runs may legitimately differ and unavailable historical identity stays unknown with limits. Question coverage, bounded trace, actual-only runs/findings, conditional probes/comparisons, gaps and next action agree. Material unanswered questions forbid complete; empty findings/runs are valid."
+        check: "Summary inspected safe repository_ref/revision_ref/dirty_state/content_ref and each independent actual run repository/source identity remain explicit; historical/probe/candidate runs may legitimately differ and unavailable historical repository identity stays unknown with limits, while opaque/redacted identities stay safely displayed and qualified without equality/equivalence claims. AuditRun argv/cwd retain literal nonsensitive parts and known argument boundaries, explicit sensitive-part display placeholders, honest replay/identity limits and already authorized evidence_refs; never execute displays or require new secret storage/digests. Question coverage, bounded trace, actual-only runs/findings, conditional probes/comparisons, gaps and next action agree. Material unanswered questions forbid complete; empty findings/runs are valid."
         on_fail: "Correct contradictions and return partial or blocked; complete means this scoped audit only."
       - id: R2
         check: "Attempted probes include control, expected/observed detection, cleanup and original pre/post hash evidence; unchanged originals and cleanup are observed, not promised."
