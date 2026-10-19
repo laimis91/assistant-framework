@@ -335,7 +335,7 @@ mkdir -p "$s1_scope_root/responses/assistant-workflow"
 s1_scope_response="$s1_scope_root/responses/assistant-workflow/reduced-testing-carried-boundary.txt"
 write_s1_response reduced-testing-carried-boundary "$s1_scope_root/baseline.json"
 s1_scope_failures=()
-for s1_scope_variant in valid lost-boundary expanded-tests swapped-actions waived-ci waived-tdd stale-packet; do
+for s1_scope_variant in valid lost-boundary expanded-tests swapped-actions waived-ci waived-tdd stale-packet missing-instruction-source; do
     case "$s1_scope_variant" in
         valid) cp "$s1_scope_root/baseline.json" "$s1_scope_response" ;;
         lost-boundary) jq '.verification_decision.scope = "All available tests"' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
@@ -343,6 +343,7 @@ for s1_scope_variant in valid lost-boundary expanded-tests swapped-actions waive
         swapped-actions) jq '.verification_decision.checks[0].action = "extend" | .verification_decision.checks[1].action = "reuse" | .current_task_packet.verification_decision = .verification_decision' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
         waived-ci) jq '.verification_decision.checks |= map(select(.check_id != "required-ci"))' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
         waived-tdd) jq '.verification_decision.tdd_choice.mode = false' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
+        missing-instruction-source) jq 'del(.evidence_assessment.scope_and_evidence_refs[0]) | .current_task_packet.evidence_assessment = .evidence_assessment' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
         stale-packet) jq '.current_task_packet.verification_decision.scope = "stale broad plan"' "$s1_scope_root/baseline.json" >"$s1_scope_response" ;;
     esac
     if "$runner" --responses "$s1_scope_root/responses" --skill assistant-workflow --case reduced-testing-carried-boundary >"$s1_scope_root/$s1_scope_variant.out" 2>&1; then

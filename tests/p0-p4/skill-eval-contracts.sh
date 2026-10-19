@@ -6726,6 +6726,8 @@ lost-unique-protection|captured-defects-protection-and-cost|.findings[3].mainten
 failed-work-savings|captured-defects-protection-and-cost|.performance_comparisons[1].status = "comparable"
 swapped-finding-kinds|captured-defects-protection-and-cost|.findings[0].kind = "hypothesis" | .findings[2].kind = "reproduced_defect"
 missing-captured-evidence|captured-defects-protection-and-cost|del(.audit_trace, .evidence_gaps, .findings[].evidence_refs, .probe_results[].run_refs) | .executed_checks |= map({id}) | .performance_comparisons[0].measurements = "Unavailable."
+collapsed-content-identity|captured-defects-protection-and-cost|.executed_checks[4].content_ref = .executed_checks[3].content_ref
+lost-confirmed-maintenance|captured-defects-protection-and-cost|.findings[4].maintenance.evidence_state = "unresolved"
 unsafe-probe-claim|captured-defects-protection-and-cost|.probe_results[0].original_hash_evidence = "original changed"
 planned-run-as-executed|inspect-only-missing-evidence|.executed_checks = [{id:"planned"}]
 missing-inspection-evidence|inspect-only-missing-evidence|del(.audit_trace, .question_coverage[].missing_observation, .question_coverage[].next_step)

@@ -46,7 +46,8 @@ when `qa_evaluation_mode=required`.
 Before any review lane, pass the unchanged `verification_decision`, current
 `evidence_assessment`, actual selected-check results, and omitted-check
 rationales alongside scope and changed files. Carry the source-bound reduced-testing
-constraint through existing review criteria/evidence/snapshot refs. Generic more-coverage
+constraint and exact assessment instruction row through existing review
+criteria/evidence/snapshot refs. Reconcile the newest instruction before resume. Generic more-coverage
 advice or a score cannot expand scope without an important gap and the existing
 selection/approval route. Preserve unresolved evidence gaps;
 review cannot upgrade them to sufficient or replace validation.

@@ -48,7 +48,9 @@ readiness score is not an implementation or completion gate.
 
 Preserve an explicit reduced-testing instruction/source in accumulated task
 constraints and verification `work_scope.source_refs`. Selection records the
-qualitative boundary in `verification_decision.scope`, with important claims,
+qualitative boundary in `verification_decision.scope` and its exact source-bearing
+instruction row in `evidence_assessment.scope_and_evidence_refs` (including planned
+assessments; verification owns the row semantics), with important claims,
 reuse/add rationale, exclusions, omissions and stop rule. Read existing assertions
 first; do not invent a test count, all-layer default or TDD waiver. Surface
 conflicting controlling checks with their sources; mandatory execution need not
@@ -282,7 +284,9 @@ add unsafe dependencies, compress unrelated jobs, or break architecture to shrin
 a diff. New abstractions/options need a current purpose; one line is no target.
 
 Carry source-bound reduced-testing scope and the unchanged decision to the Build
-owner and verifier. Additional test work needs a named important uncovered
+owner and verifier, alongside the assessment with its unchanged exact instruction
+row in every materialized packet. Retain that row when adding actual result rows;
+it claims no execution or selected-check closure. Additional test work needs a named important uncovered
 failure and inadequate-evidence explanation; material expansion returns to
 selection and existing approval. Keep selected TDD and controlling checks intact.
 
@@ -387,7 +391,8 @@ when `qa_evaluation_mode=required`.
 Before any review lane, pass the unchanged `verification_decision`, current
 `evidence_assessment`, actual selected-check results, and omitted-check
 rationales alongside scope and changed files. Carry the source-bound reduced-testing
-constraint through existing review criteria/evidence/snapshot refs. Generic more-coverage
+constraint and exact assessment instruction row through existing review
+criteria/evidence/snapshot refs. Reconcile the newest instruction before resume. Generic more-coverage
 advice or a score cannot expand scope without an important gap and the existing
 selection/approval route. Preserve unresolved evidence gaps;
 review cannot upgrade them to sufficient or replace validation.

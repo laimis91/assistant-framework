@@ -49,7 +49,13 @@ Record or recover:
 
 - Newest explicit user intent outranks persisted prose. Reconcile reduced-testing
   scope/source against stale plans before dependent work; carry it through existing
-  constraints, decision scope and reviewer refs. Expansion needs a named important
+  constraints, decision scope and reviewer refs. Preserve the exact instruction
+  object row in `evidence_assessment.scope_and_evidence_refs` alongside the
+  unchanged decision in materialized packets and result updates, even when
+  planned. Resolve its evidence_ref/qualitative claim_scope against the newest
+  user instruction before marking freshness current; missing/stale source
+  provenance requires reconciliation before dependent work. It claims no
+  execution/check closure. Expansion needs a named important
   uncovered failure and the existing selection/approval route.
 - Preserve cumulative same-scope repair counts across changing tests, checks,
   workers and sessions; a new failing expectation needs classification, not a

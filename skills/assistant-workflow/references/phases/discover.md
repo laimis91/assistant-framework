@@ -50,7 +50,9 @@ readiness score is not an implementation or completion gate.
 
 Preserve an explicit reduced-testing instruction/source in accumulated task
 constraints and verification `work_scope.source_refs`. Selection records the
-qualitative boundary in `verification_decision.scope`, with important claims,
+qualitative boundary in `verification_decision.scope` and its exact source-bearing
+instruction row in `evidence_assessment.scope_and_evidence_refs` (including planned
+assessments; verification owns the row semantics), with important claims,
 reuse/add rationale, exclusions, omissions and stop rule. Read existing assertions
 first; do not invent a test count, all-layer default or TDD waiver. Surface
 conflicting controlling checks with their sources; mandatory execution need not

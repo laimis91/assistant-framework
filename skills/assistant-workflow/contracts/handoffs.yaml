@@ -667,7 +667,7 @@ handoffs:
         type: object
         required: true
         description: "Canonical assistant-verification decision supplied before Decompose so DC2 does not defer selection to Plan."
-        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; expansion requires a distinct important uncovered failure and existing selection/approval. preserve its CheckSpecs and TddChoice unchanged in each slice."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; carry the canonical assessment alongside this decision with its exact scope_and_evidence_refs instruction row, including planned packets and result updates; reconcile newest instruction on resume; the row claims no execution/check closure; expansion requires a distinct important uncovered failure and existing selection/approval. preserve its CheckSpecs and TddChoice unchanged in each slice."
       - name: tdd_mode
         type: boolean
         required: true
@@ -1286,12 +1286,12 @@ handoffs:
         type: object
         required: true
         description: "Canonical assistant-verification producer artifact selected before Plan fixes verification obligations."
-        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; expansion requires a distinct important uncovered failure and existing selection/approval. preserve its CheckSpec and TddChoice unchanged in the plan and every executable packet."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; carry the canonical assessment alongside this decision with its exact scope_and_evidence_refs instruction row, including planned packets and result updates; reconcile newest instruction on resume; the row claims no execution/check closure; expansion requires a distinct important uncovered failure and existing selection/approval. preserve its CheckSpec and TddChoice unchanged in the plan and every executable packet."
       - name: evidence_assessment
         type: object
         required: true
         description: "Canonical assistant-verification assessment carried from selection; it is planned until actual check results exist."
-        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment. A planned assessment is not result evidence and must be reassessed before Review."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment. Preserve the exact source-bearing reduced-testing instruction row even when planned and in materialized packets/result updates; reconcile the newest instruction on resume. The row closes no check. A planned assessment is not result evidence and must be reassessed before Review."
       - name: tdd_mode
         type: boolean
         required: true
@@ -2989,7 +2989,7 @@ handoffs:
           - name: evidence_assessment
             type: object
             required: true
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; current canonical assessment."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; current canonical assessment, preserving the exact scope_and_evidence_refs instruction row alongside the decision even when planned and through results; reconcile the newest instruction before resumed work; no execution/check closure is claimed by that row."
           - name: tdd_cycle_log_ref
             type: string
             required: conditional
@@ -3030,7 +3030,7 @@ handoffs:
         type: object
         required: conditional
         condition: "current_task_packet is absent"
-        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; expansion requires a distinct important uncovered failure and existing selection/approval. preserve unchanged; when current_task_packet is present, equals its verification_decision."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; carry the canonical assessment alongside this decision with its exact scope_and_evidence_refs instruction row, including planned packets and result updates; reconcile newest instruction on resume; the row claims no execution/check closure; expansion requires a distinct important uncovered failure and existing selection/approval. preserve unchanged; when current_task_packet is present, equals its verification_decision."
         on_missing: fail
       - name: selected_check_ids
         type: string[]
@@ -3388,7 +3388,7 @@ handoffs:
         type: object
         required: conditional
         condition: "current_task_packet is absent"
-        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; expansion requires a distinct important uncovered failure and existing selection/approval. preserve unchanged; when current_task_packet is present, equals its verification_decision."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision; Retain explicit reduced-testing scope/source, rationale, exclusions, omissions and stop rule through workers, verifier, review and resume; carry the canonical assessment alongside this decision with its exact scope_and_evidence_refs instruction row, including planned packets and result updates; reconcile newest instruction on resume; the row claims no execution/check closure; expansion requires a distinct important uncovered failure and existing selection/approval. preserve unchanged; when current_task_packet is present, equals its verification_decision."
         on_missing: fail
       - name: selected_check_ids
         type: string[]
@@ -3977,7 +3977,7 @@ handoffs:
           - name: evidence_assessment
             type: object
             required: true
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; current canonical assessment."
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; current canonical assessment, preserving the exact scope_and_evidence_refs instruction row alongside the decision even when planned and through results; reconcile the newest instruction before resumed work; no execution/check closure is claimed by that row."
           - name: tdd_cycle_log_ref
             type: string
             required: conditional

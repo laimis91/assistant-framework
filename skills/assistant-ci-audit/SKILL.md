@@ -20,7 +20,8 @@ workflow; it does not automatically need an audit.
 
 ## Procedure
 
-1. **CAPTURE.** Pin repository/revision and dirty state, included/excluded paths,
+1. **CAPTURE.** Pin repository/revision, dirty state and immutable bounded content identity
+   (or explicit unknown), included/excluded paths,
    questions, available evidence and authority. Default to `inspect_only`.
    Establish finite task-specific action/time/resource limits before diagnostics;
    missing execution permission does not block harmless source inspection.
@@ -40,6 +41,7 @@ workflow; it does not automatically need an audit.
    conditions; failed/incomplete work cannot establish savings.
 4. **REPORT.** Answer each scoped question with evidence or a missing observation.
    Distinguish reproduced defects, supported costs, hypotheses and evidence gaps.
+   Preserve source-confirmed maintenance facts separately from unexecuted effects.
    Return actual runs only; empty runs/findings are valid. Stop when scoped
    questions are answered, allowance is exhausted or further attempts add no
    evidence. Material unanswered questions mean `partial` or `blocked`, never a
@@ -53,7 +55,9 @@ current phase, selected investigation/maintenance detail and completion from
 Missing or invalid selectors load the full named authoritative file. The initial
 contracts are version `1.0`; named AuditScope/Constraints/Summary/Question/
 TraceEntry/Run/Finding/Probe/Comparison records use existing YAML object transport,
-validated at capture and report. No new type engine or selection/controller exists.
+validated at capture and report. This initial unmerged 1.0 is completed atomically
+with its producers/evals; historical missing identity remains unknown with limits.
+No new type engine or selection/controller exists.
 
 Keep commands, host/toolchain, observations, gaps and next action bounded and
 redacted. Preserve access, destructive-action, paid-call, installation and

@@ -36393,7 +36393,8 @@
         "Existing allow-owner coverage is adequate and current for unchanged allowance. Reuse it. Only the changed deny-nonowner predicate has an uncovered important cross-owner disclosure failure; extend it. A current project rule requires the complete CI suite to execute, without requiring new test authoring.",
         "The accepted verification scope is: Reuse existing coverage; add tests only for important uncovered behavior (user:reduced-tests). Preserve controlling CI and independently selected TDD.",
         "Use CheckSpec IDs allow-owner, deny-nonowner, required-ci, respectively reuse/extend/run. A stable deny-nonowner RED is independently selected; do not turn it off because tests are reduced. No other automated scopes are needed. Commands in /workspace/filter: pytest tests/test_owner.py::test_allow_owner; pytest tests/test_owner.py::test_deny_nonowner; bash ci.sh.",
-        "No observations have run for the changed predicate or CI. Packet filter-fix carries the unchanged decision. Review and resume retain its source/omissions/stop boundary. Expansion needs a named important uncovered failure and current selection/approval; generic coverage advice cannot expand it."
+        "No observations have run for the changed predicate or CI. Packet filter-fix carries the unchanged decision. Review and resume retain its source/omissions/stop boundary. Expansion needs a named important uncovered failure and current selection/approval; generic coverage advice cannot expand it.",
+        "Carry evidence_assessment unchanged in current_task_packet. Its planned scope_and_evidence_refs contains exactly this instruction row: {\"evidence_ref\":\"user:reduced-tests\",\"claim_kind\":\"other\",\"claim_scope\":[\"Reuse existing coverage; add tests only for important uncovered behavior (user:reduced-tests). Preserve controlling CI and independently selected TDD.\"],\"selected_check_ids\":[],\"binding_obligation_refs\":[],\"result_state\":\"not_applicable\",\"freshness\":\"current\",\"exclusions\":[]}. This records the current exact instruction source without claiming execution or closing any selected check; retain it when results are added and reconcile against the newest instruction on resume."
       ],
       "expected_behavior": [
         "Retain source-bound scope and adequate reuse while preserving the one important uncovered boundary, controlling suite and meaningful selected TDD."
@@ -36504,10 +36505,44 @@
             "expected": "planned"
           },
           {
-            "operator": "empty_array",
+            "operator": "array_object_values_exact",
             "path": [
               "evidence_assessment",
               "scope_and_evidence_refs"
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "claim_scope",
+              "selected_check_ids",
+              "binding_obligation_refs",
+              "result_state",
+              "freshness",
+              "exclusions"
+            ],
+            "expected_objects": [
+              {
+                "evidence_ref": "user:reduced-tests",
+                "claim_kind": "other",
+                "claim_scope": [
+                  "Reuse existing coverage; add tests only for important uncovered behavior (user:reduced-tests). Preserve controlling CI and independently selected TDD."
+                ],
+                "selected_check_ids": [],
+                "binding_obligation_refs": [],
+                "result_state": "not_applicable",
+                "freshness": "current",
+                "exclusions": []
+              }
+            ]
+          },
+          {
+            "operator": "equals_path",
+            "path": [
+              "current_task_packet",
+              "evidence_assessment"
+            ],
+            "other_path": [
+              "evidence_assessment"
             ]
           }
         ]

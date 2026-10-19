@@ -10,7 +10,13 @@ Exact text/schema checks are appropriate when those bytes/shapes are contractual
 
 For an applicable finding, use its maintenance record rather than a per-test
 ledger: identify test/family, important claim, plausible detected defect,
-remaining unique protection, and `keep`, `consolidate`, `rewrite` or `remove`.
+remaining unique protection, evidence_state, and `keep`, `consolidate`, `rewrite`
+or `remove`. Use `source_confirmed` only when finding.evidence_refs establish the
+inspected assertion, accepted behavior and retained protection or obsolete rationale.
+Use `unresolved` with an explicit gap for unknown protection. The four finding kinds
+remain unchanged: `hypothesis` can describe an unexecuted effect/disposition without
+downgrading established source facts; source inspection alone establishes neither
+`reproduced_defect` nor `supported_cost`.
 Assess duplicate behavior, mutable inventories, internal call coupling, obsolete
 expectations, speculative cases and expensive fixtures in the relevant flow.
 Similar code or many tests proves no waste. Two similar authorization tests may

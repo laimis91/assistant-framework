@@ -6,7 +6,7 @@ gates:
   - phase: CAPTURE
     exit_assertions:
       - id: C1
-        check: "Goal, AuditScope repository/revision/dirty state, included/excluded paths, stable questions and AuditConstraints are captured; unknowns stay explicit."
+        check: "Goal, AuditScope repository/revision_ref/dirty_state/content_ref, included/excluded paths, stable questions and AuditConstraints are captured; content_ref is immutable bounded relevant staged/unstaged/untracked/generated content or literal unknown. HEAD/status/equal unknown never establish equivalence/freshness; unknown identity permits harmless inspect_only."
         on_fail: "Inspect supplied/local source or ask only for material unavailable scope. Default inspect_only without diagnostic authority."
   - phase: INVESTIGATE
     entry_assertions:
@@ -23,10 +23,10 @@ gates:
   - phase: ASSESS
     exit_assertions:
       - id: A1
-        check: "Finding kinds match evidence: reproduced defects have actual reproduction, supported costs have measurements, and unexecuted possibilities stay hypotheses/gaps."
-        on_fail: "Downgrade the kind and name the missing observation; valid schemas/planned probes prove no execution."
+        check: "Finding kinds match evidence: reproduced defects have actual reproduction, supported costs have measurements, and unexecuted effects/dispositions stay hypotheses/gaps without downgrading source-confirmed maintenance facts."
+        on_fail: "Correct unsupported kind/evidence_state without downgrading established source facts; name the missing observation. Valid schemas/planned probes prove no execution."
       - id: A2
-        check: "Maintenance dispositions establish accepted behavior, important claim/plausible defect and remaining unique protection; consolidate/remove maps to retained adequate protection or source-backed invalid/obsolete expectations. Counts/similarity alone never justify deletion."
+        check: "Maintenance dispositions establish accepted behavior, important claim/plausible defect and remaining unique protection; consolidate/remove maps to retained adequate protection or source-backed invalid/obsolete expectations. maintenance.evidence_state=source_confirmed resolves finding.evidence_refs for inspected assertion, accepted behavior and retained protection/obsolete rationale; unknown protection is unresolved with a gap. Counts/similarity alone never justify deletion."
         on_fail: "Keep important protection, expose uncertainty as a gap, and recommend only a bounded next check."
       - id: A3
         check: "Comparisons use actual measurements, equivalent completed accepted obligations/protection and comparable preparation/instrumentation/cache conditions, units/variability and unmeasured work. Failed, missing-evidence or reduced-obligation work supports no savings."
@@ -34,7 +34,7 @@ gates:
   - phase: REPORT
     exit_assertions:
       - id: R1
-        check: "Summary, question coverage, bounded trace, actual-only runs/findings, conditional probes/comparisons, gaps and next action agree. Material unanswered questions forbid complete; empty findings/runs are valid."
+        check: "Summary inspected revision_ref/dirty_state/content_ref and each actual run identity remain explicit; historical/probe/candidate runs may legitimately differ and unavailable historical identity stays unknown with limits. Question coverage, bounded trace, actual-only runs/findings, conditional probes/comparisons, gaps and next action agree. Material unanswered questions forbid complete; empty findings/runs are valid."
         on_fail: "Correct contradictions and return partial or blocked; complete means this scoped audit only."
       - id: R2
         check: "Attempted probes include control, expected/observed detection, cleanup and original pre/post hash evidence; unchanged originals and cleanup are observed, not promised."
