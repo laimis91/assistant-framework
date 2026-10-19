@@ -91,7 +91,7 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 
 ## Agent Dispatch Log
 [subagent evidence required by completion gates]
-- Required roles: bounded executor during ordinary medium Build; Code Writer + Builder/Tester during separated Build; Code Reviewer during Review for both standard/strict lanes; QA Evaluator when required; Code Mapper/Explorer/Architect by size/risk; Reviewer for legacy compatibility.
+- Required roles: bounded executor during ordinary medium Build; Code Writer + Builder/Tester during separated Build; Code Reviewer during Review for both standard/strict lanes; QA Evaluator when required; Code Mapper/Explorer/Architect only for concrete mapping/lifecycle/design uncertainty; Reviewer for legacy compatibility.
 - Build execution lane: [prepare_only: none | execution_intent != prepare_only: inline_direct | bounded_executor | separated_workers]
 - Execution mode: delegated | direct_fallback | not_applicable
 - Native dispatch evidence: delegated roles reference the agent id, task name, thread, or tool result exposed by the runtime and bind it to this journal's `Created:` identity.
@@ -109,7 +109,7 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 - QA Evaluator dispatch/result/direct evidence: [delegated QA refs | direct evidence | N/A when not required]
 - Per-slice Build ref: N/A for prepare_only; typed execution ref otherwise.
 - Per-slice Review ref: N/A for prepare_only; typed execution ref otherwise.
-- Per-slice Build dispatch evidence: [execution_intent != prepare_only: slice_id -> bounded executor ref, or Code Writer + Builder/Tester refs for separated_workers]
+- Per-slice Build dispatch evidence: [execution_intent != prepare_only: packet_id -> bounded executor ref, or Code Writer + Builder/Tester refs for separated_workers]
 - Review-owned independent evidence: [execution_intent != prepare_only: Code Reviewer dispatch/result or fresh direct-fallback ref, created after Build]
 
 ## Constraints
@@ -118,7 +118,7 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 - [scope limits, e.g. "Backend only, no UI changes"]
 
 ## Plan
-[prepare_only: with plan_mode=none, retain readiness evidence/context only through Preparation Completion and do not create downstream task/review refs; an explicitly requested readiness plan is inline/no-wait and records implications, open decisions, and next state without executable steps. existing_system carries the exact unchanged feature-preparation evidence ref; not_applicable records preparation_basis=not_applicable and no feature-evidence ref. Files: N/A for prepare_only. Tasks: N/A for prepare_only. Plan/task/review refs: absent for prepare_only; typed execution refs otherwise. Plan/task packet/review refs: absent for prepare_only; typed execution refs otherwise. execution_intent != prepare_only: paste the approved implementation plan verbatim — include slice manifest for medium+ tasks, plus task packets with slice_id and file paths and downstream task/review refs.]
+[prepare_only: with plan_mode=none, retain readiness evidence/context only through Preparation Completion and do not create downstream task/review refs; an explicitly requested readiness plan is inline/no-wait and records implications, open decisions, and next state without executable steps. existing_system carries the exact unchanged feature-preparation evidence ref; not_applicable records preparation_basis=not_applicable and no feature-evidence ref. Files: N/A for prepare_only. Tasks: N/A for prepare_only. Plan/task/review refs: absent for prepare_only; typed execution refs otherwise. Plan/task packet/review refs: absent for prepare_only; typed execution refs otherwise. execution_intent != prepare_only: paste the approved implementation plan verbatim — include the canonical implementation_steps once with packet_id, file scope, approved definition identity and execution evidence and downstream task/review refs.]
 
 ## Preparation Readiness
 [prepare_only: completion_policy, validation_results, and feature_preparation_evidence plus feature_preparation_result; execution remains not_started, Pack handoff stays discover_only, and no downstream task/review refs exist. execution_intent != prepare_only: use downstream implementation refs before Build.]
@@ -197,13 +197,20 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 - terminal_route: [N/A | debugging | replan | restart_with_reapproval | block_for_user | block_for_environment]
 - Evidence ref: [validation output or carried-forward evidence]
 
-## Slice Verification Ledger
-[required for medium+ tasks; update after each slice and before starting a dependent slice or another source-changing slice in a shared or unknown workspace]
-[applies only when `execution_intent != prepare_only`; prepare_only has no slices]
-do not start a dependent slice until every `depends_on` prerequisite is `VERIFIED`; source-changing slices may overlap only with runtime-proven isolated workspaces
-| Slice | Task Packet | TDD/RED | Implementation Status | Selected Check or Procedure/Result | Criteria Checked | Self-Check Result | Final Status |
-|-----------|-------------|---------|-----------------------|------------------------------------|------------------|-------------------|--------------|
-| 1. [slice_id] [name] | [packet id] | [pass/fail when active; otherwise N/A] | [done/blocked] | [check id, exact argv/cwd or procedure, result/evidence] | [X/Y passed] | [pass/fail + note] | [VERIFIED/BLOCKED] |
+## Canonical Packet Progress View
+
+[Read-only display derived from implementation_steps[].execution; never maintain a
+second mutable collection. Resolve approved_plan_identity and packet_id exactly.
+prepare_only has no executable packets.]
+
+| Packet ref | Coordinator state | Evidence refs | Relevant input identity | Spent recovery |
+|---|---|---|---|---|
+| [implementation_steps packet_id] | [PENDING/RUNNING/VERIFIED/BLOCKED/INVALIDATED] | [canonical refs] | [identity] | [attempt/no-progress counters] |
+
+Before resume, dispatch, verification and completion, run the installed pure packet
+admission helper with separately resolved authority. Preserve history/counters;
+invalidate changed relevant evidence and result-consuming dependents. Worker DONE
+alone is insufficient; all prerequisites must be current evidence-bound VERIFIED.
 
 ## Selected Verification Evidence
 - Selected check ids, methods, and outcomes: [current evidence]
@@ -327,8 +334,8 @@ do not start a dependent slice until every `depends_on` prerequisite is `VERIFIE
 1. **Create** during Discover only when `workflow_state_mode=journal`; otherwise keep state inline. Record task and repository identity.
 2. **Triage** records task/risk/QA/harness/lane/state/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
 3. **Clarification** has no numeric cap or quota. Automatically apply only source-backed technical defaults, record source/rationale, and derive the applied flag from those entries. Convention or reversibility alone cannot settle material product choices. Ask every remaining admissible question by topic and wait for explicit answers where required. A `defaults` reply is an explicit user answer accepting displayed recommendations, not an automatic default.
-4. **Decompose/Plan** persists the slice manifest for medium+ work only when `execution_intent != prepare_only`. For `prepare_only`, retain readiness context and optionally record an inline no-wait Plan; do not create or persist Decompose slices. Plan is omitted only for eligible `plan_mode=none`; `approval_required` captures approval only when `execution_intent != prepare_only`.
-5. **Build** (`execution_intent != prepare_only`) updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Slice Verification Ledger before starting a dependent slice or another source-changing slice in a shared or unknown workspace.
+4. **Decompose/Plan** persists the canonical packet collection for medium+ work only when `execution_intent != prepare_only`. For `prepare_only`, retain readiness context and optionally record an inline no-wait Plan; do not create or persist Decompose slices. Plan is omitted only for eligible `plan_mode=none`; `approval_required` captures approval only when `execution_intent != prepare_only`.
+5. **Build** (`execution_intent != prepare_only`) updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Canonical Packet Progress View before starting a dependent slice or another source-changing slice in a shared or unknown workspace.
 6. **Review** (`execution_intent != prepare_only`) owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.
 7. **Document/Handoff** (`execution_intent != prepare_only`) solely creates the developer handoff and fills Verification Summary, conditional Manual Verification Result, and Review Notes.
 8. **Preparation Completion** (`execution_intent=prepare_only`) records readiness only, then proceeds directly to Done without Build, Review, or developer handoff.

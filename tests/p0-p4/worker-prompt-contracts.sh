@@ -228,12 +228,12 @@ test_start "Codex architect requires executable task packet fields"
 missing_codex_architect_packet_terms=()
 for term in \
     "executable task packets" \
-    "slice_id/slice_name" \
+    "packet_id" \
     "observable increment" \
     "deliverable type" \
     "exact files" \
     "acceptance criteria" \
-    "carried verification_decision and current evidence_assessment" \
+    "materialize unchanged verification_decision and current evidence_assessment only at worker dispatch" \
     "conditional TDD expectation" \
     "exact argv/cwd or concrete selected-check procedure" \
     "expected success signal" \
@@ -253,12 +253,12 @@ test_start "Claude architect requires executable task packet fields"
 missing_claude_architect_packet_terms=()
 for term in \
     "executable task packets" \
-    "slice_id/slice_name" \
+    "packet_id" \
     "observable increment" \
     "deliverable type" \
     "exact files" \
     "acceptance criteria" \
-    "carried verification_decision and current evidence_assessment" \
+    "materialize unchanged verification_decision and current evidence_assessment only at worker dispatch" \
     "conditional TDD expectation" \
     "exact argv/cwd or concrete selected-check procedure" \
     "expected success signal" \

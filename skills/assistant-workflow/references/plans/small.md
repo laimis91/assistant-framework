@@ -64,3 +64,7 @@ No separate plan document needed. Include directly in your response:
 - Canonical pattern used: [real repo path, or N/A with no-pattern rationale]
 - Counterexample/edge case checked: [real repo path, or N/A with explanation]
 - No-pattern rationale: [when no local pattern exists]
+
+### Current-cycle stage ordering
+
+The caller resolves existing current-cycle progress under the same approval, packet/input identity and cycle reference. New test_authoring or pre_production_red cannot replay an existing cycle; production cannot replay passed GREEN or a started REFACTOR, and no dispatch stage may reuse a fully passed REFACTOR cycle. Failed incomplete GREEN can return to production only within the unchanged approved recovery allowance/current cycle. This adds no stage ledger. In bounded_executor the internal pre_production_red/green phases materialize public production and refactor_verification materializes public refactor; the one executor owns the actual internal invocations, and these aliases grant no premature production edit. Stored work remains stage-neutral.

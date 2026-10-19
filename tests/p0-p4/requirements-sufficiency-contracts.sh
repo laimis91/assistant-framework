@@ -393,8 +393,8 @@ if ruby -ryaml -e '
   step5 = phases.lines.find { |line| line.start_with?("5. Preserve applicable authoritative existing behavior") }
   root_requirements = [
     "enter Discover requirements check",
-    "Explicit user or repository artifact schemas override workflow-internal shapes",
-    "Apply source-backed defaults and ask precise questions for material product choices",
+    "Honor user/repository schemas",
+    "Apply source-backed defaults; ask material product questions",
     "Plan approval cannot settle intent",
     "assistant-clarify owns prompt-level ambiguity"
   ]

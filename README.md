@@ -123,7 +123,7 @@ Core development pipeline: idea-to-action decomposition, discover, proportional 
 |---|---|---|
 | Linear | One focused change with dependent steps; scale planning and review to risk. | Goal-driven checks and fresh review; a low-risk local change may use the direct lightweight path. |
 | Skill-driven | A recurring task has a matching installed skill and contract. | Any other pattern; the skill supplies the method. |
-| Parallel | Independent work can progress together. Source-changing packets remain sequential in a shared or unknown workspace; overlap requires runtime-proven isolated workspaces. | Goal-driven integration: dependents wait for VERIFIED prerequisites, then full-scope validation precedes fresh review; cross-slice validation applies to multi-slice manifests. |
+| Parallel | Independent work can progress together. Source-changing packets remain sequential in a shared or unknown workspace; overlap requires runtime-proven isolated workspaces. | Goal-driven integration: dependents wait for VERIFIED prerequisites, then full-scope validation precedes fresh review; due integration checks remain mandatory for one or multiple canonical packets. |
 | Goal-driven | Acceptance checks must remain the completion condition through repair. | Linear, skill-driven, or parallel execution; bounded repair escalates instead of claiming false completion. |
 
 For dependency-shaped uncertainty, the workflow defaults to
@@ -158,7 +158,7 @@ runtime dependency graph. Shared fanout alone does not add Architecture Decision
 Pack, strict-lane, or QA requirements.
 
 For multi-slice work, Assistant Workflow uses descriptive outcome-oriented
-slice identifiers rather than ordinal-only labels, explicit dependencies, and
+packet identifiers rather than ordinal-only labels, explicit dependencies, and
 native subagents only for independent packets.
 
 The architecture is an adaptive loop implemented through native skill routing;
@@ -199,12 +199,12 @@ important changed areas, architecture decisions, verification evidence, manual
 test steps, deviations, and remaining risks without claiming checks that did
 not run.
 
-Each executable slice carries an explicit verification command and evidence
-requirement. Dependent slices wait for verified prerequisites. Read-only analysis
+Each canonical executable packet carries its exact selected verification procedure
+(literal command argv/cwd or non-command method) and evidence requirement. Dependent slices wait for verified prerequisites. Read-only analysis
 may run in parallel for independent packets with non-overlapping ownership.
 Source-changing packets in a shared or unknown workspace remain sequential;
 parallel source-changing packets require runtime proof of isolated workspaces.
-After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code. After these integration checks, perform a fresh review before completion.
+Canonical v14 Plans use one implementation_steps collection with descriptive packet_id values. Coherent work defaults to one packet; additional boundaries require acceptance, ownership/context, prerequisite, recovery/rollout or binding protocol purpose. Stored packets reference one unchanged specialist decision and carry coordinator execution evidence. Deep worker projections cannot redefine approved work. All due integrated selected/binding checks precede fresh independent review for one or multiple packets; conditional QA/harness and exact final snapshot binding remain. The pure shipped admission helper checks current approval, graph, evidence, isolation and explicit v12 migration facts. Local checks do not establish native runtime consumption or efficiency; default promotion and a bounded comparative pilot remain separately gated.
 
 For compression-safe work, the orchestrator keeps concise, root-scoped task and
 session state under `.codex/`. Resume reconciles that journal with the newest

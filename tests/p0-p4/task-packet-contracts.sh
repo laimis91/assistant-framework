@@ -3,25 +3,584 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-test_start "workflow plan template defines executable task packet fields"
-missing_packet_terms=()
-for term in \
-    "## Slice manifest from Decompose" \
-    "- slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]" \
-    "- verification_decision: [unchanged canonical decision and selected CheckSpecs]" \
-    "- evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]" \
-    "- tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]" \
-    "- verification_command: [legacy singular literal argv projection only when selected_check_ids resolves exactly one matching command-based CheckSpec; otherwise omit and use each check's canonical command or concrete non-command procedure]" \
-    "## Task packets"; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"; then
-        missing_packet_terms+=("$term")
-    fi
-done
-if [[ "${#missing_packet_terms[@]}" -eq 0 ]]; then
+handoff_context_field_has_direct_line() {
+    local file="$1"
+    local handoff="$2"
+    local field="$3"
+    local expected="$4"
+    awk -v handoff="$handoff" -v field="$field" -v expected="$expected" '
+        $0 == "  - name: " handoff { in_handoff = 1; next }
+        in_handoff && /^  - name: / { exit }
+        in_handoff && /^    context_fields:/ { in_context = 1; next }
+        in_context && /^    return_fields:/ { exit }
+        in_context && $0 == "      - name: " field { in_field = 1; next }
+        in_field && /^        object_fields:/ { exit }
+        in_field && index($0, expected) { found = 1; exit }
+        in_field && /^      - name: / { exit }
+        END { exit found ? 0 : 1 }
+    ' "$file"
+}
+handoff_object_required_fields() {
+    local file="$1"
+    local handoff="$2"
+    local section="$3"
+    local object_field="$4"
+
+    awk -v handoff="$handoff" -v section="$section" -v object_field="$object_field" '
+        $0 == "  - name: " handoff { in_handoff = 1; next }
+        in_handoff && /^  - name: / { exit }
+        in_handoff && $0 == "    " section ":" { in_section = 1; next }
+        in_section && /^    (context_fields|return_fields):/ { exit }
+        in_section && $0 == "      - name: " object_field { in_object = 1; current = ""; next }
+        in_object && /^      - name: / { exit }
+        in_object && /^          - name: / {
+            current = $0
+            sub(/^          - name: /, "", current)
+            next
+        }
+        in_object && current != "" && /^            required: true/ {
+            print current
+            current = ""
+        }
+    ' "$file"
+}
+field_in_required_list() {
+    local needle="$1"
+    shift
+
+    local field
+    for field in "$@"; do
+        if [[ "$field" == "$needle" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+reuse_search_schema_signature() {
+    local file="$1"
+    local handoff="$2"
+    local section="$3"
+    local container="$4"
+
+    awk -v handoff="$handoff" -v section="$section" -v container="$container" '
+        function indent(line) { match(line, /^ */); return RLENGTH }
+        $0 == "  - name: " handoff { in_handoff = 1; next }
+        in_handoff && /^  - name: / { exit }
+        in_handoff && $0 == "    " section ":" { in_section = 1; next }
+        in_section && /^    (context_fields|return_fields):/ && $0 != "    " section ":" { exit }
+        !in_section { next }
+        container == "" && $0 == "      - name: reuse_search" { in_target = 1; target_indent = indent($0); next }
+        container != "" && $0 == "      - name: " container { in_container = 1; next }
+        in_container && /^      - name: / && $0 != "      - name: " container { exit }
+        in_container && $0 == "          - name: reuse_search" { in_target = 1; target_indent = indent($0); next }
+        !in_target { next }
+        indent($0) == target_indent && /^ *- name: / { exit }
+        /^ *- name: / {
+            value = $0
+            sub(/^ *- name: /, "", value)
+            print "field|" (indent($0) - target_indent) "|" value
+            next
+        }
+        /^ *(type|required|condition|enum_values|min_items): / {
+            key = $0
+            sub(/^ */, "", key)
+            value = key
+            sub(/^[^:]+: /, "", value)
+            sub(/: .*/, "", key)
+            print "attribute|" (indent($0) - target_indent) "|" key "|" value
+        }
+    ' "$file"
+}
+
+test_start "original untagged v12 packets normalize through verified producer provenance"
+if python3 - "$FRAMEWORK_DIR" <<'PYORIGINAL'
+from copy import deepcopy
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import sys
+root = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("original_v12_controls", root / "tests/p0-p4/lib/task-packet-admission-controls.py")
+controls = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = controls
+spec.loader.exec_module(controls)
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+for many in (False, True):
+    for active in (False, True):
+        request = controls.legacy_request(many, active, tagged=False)
+        original = deepcopy(request)
+        require("schema_version" not in request["plan"] and "plan_schema_version" not in request["plan"], "Original v12 source was rewritten with a version tag")
+        result = subprocess.run(["python3", "-B", str(root / "skills/assistant-workflow/scripts/task-packet-admission.py")], input=json.dumps(request), text=True, capture_output=True)
+        answer = json.loads(result.stdout)
+        require(result.returncode == 0 and answer["status"] == "accepted", "Verified original untagged v12 request was blocked instead of normalized")
+        require(request == original and answer["canonical_plan"]["reconciliation_provenance"]["source_sha256"] == controls.API.digest(original["plan"]), "Original source/provenance changed during normalization")
+        for packet in answer["canonical_plan"]["implementation_steps"]:
+            require("red_evidence" not in packet and "tdd_cycle_log_ref" not in packet["execution"], "Planned RED was promoted to actual evidence")
+PYORIGINAL
+then pass; else fail "original untagged v12 public admission failed"; fi
+
+test_start "admission CLI rejects exponent overflow with one complete structured result"
+if python3 - "$FRAMEWORK_DIR" <<'PYJSON'
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+root = Path(sys.argv[1])
+helper = root / "skills/assistant-workflow/scripts/task-packet-admission.py"
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+for number in ("1e309", "-1e309"):
+    raw = '{"boundary":"plan","context":{"readiness":{"execution_intent":"end_to_end","ready":true,"route_clear":true}},"plan":{"plan_schema_version":"15.0","extra":' + number + '}}'
+    result = subprocess.run(["python3", "-B", str(helper)], input=raw, text=True, capture_output=True)
+    try:
+        answer = json.loads(result.stdout)
+    except ValueError as error:
+        raise ValueError("Admission CLI returned incomplete JSON for exponent overflow") from error
+    require(result.returncode == 1 and answer["status"] == "blocked" and answer["code"] == "malformed",
+            "Exponent overflow must return a structured malformed rejection")
+    require(not result.stderr and result.stdout.endswith("\n"), "CLI rejection must not leak a serialization traceback")
+spec = importlib.util.spec_from_file_location("cli_controls", root / "tests/p0-p4/lib/task-packet-admission-controls.py")
+controls = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = controls
+spec.loader.exec_module(controls)
+for number, expected_status, expected_exit in (("1e309", "blocked", 1), ("-1e309", "blocked", 1), ("1e308", "accepted", 0)):
+    request = controls.valid_request(boundary="plan")
+    request["plan"]["implementation_steps"][0]["execution"]["history"] = [{"finite_metadata": "number-marker"}]
+    raw = json.dumps(request).replace('"number-marker"', number)
+    result = subprocess.run(["python3", "-B", str(helper)], input=raw, text=True, capture_output=True)
+    answer = json.loads(result.stdout)
+    require(result.returncode == expected_exit and answer["status"] == expected_status and not result.stderr,
+            "CLI history must reject overflow while preserving finite JSON numbers")
+# Deliberately exercise output encoding failure before any stdout write.
+program = "import importlib.util,sys; s=importlib.util.spec_from_file_location('serialization_probe',sys.argv[1]); m=importlib.util.module_from_spec(s); sys.modules[s.name]=m; s.loader.exec_module(m); m.admission=lambda request: {'status':'accepted','retained':float('inf')}; sys.exit(m.main())"
+result = subprocess.run(["python3", "-B", "-c", program, str(helper)], input="{}", text=True, capture_output=True)
+answer = json.loads(result.stdout)
+require(result.returncode == 1 and answer["status"] == "blocked" and answer["code"] == "malformed" and not result.stderr,
+        "Output encoding failure must emit one complete blocked object")
+PYJSON
+then pass; else fail "JSON ingress/output did not reject exponent overflow atomically"; fi
+
+test_start "public packet-admission prompts contain exact fixed requests without grader answers"
+packet_prompt_controls="$(mktemp -d "${TMPDIR:-/tmp}/workflow-packet-prompts.XXXXXX")"
+p0p4_register_cleanup "$packet_prompt_controls"
+packet_prompt_cases=()
+while IFS= read -r case_id; do
+    packet_prompt_cases+=(--case "$case_id")
+done < <(jq -r '.cases[] | select(.semantic_validator == "assistant-workflow.packet_admission_v14") | .id' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json")
+if bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --emit-prompts "$packet_prompt_controls" --skill assistant-workflow \
+    "${packet_prompt_cases[@]}" --case clarification-is-material-not-capped >/dev/null \
+    && python3 - "$FRAMEWORK_DIR" "$packet_prompt_controls" <<'PYPROMPTS'
+import json
+from pathlib import Path
+import re
+import sys
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+root, output = Path(sys.argv[1]), Path(sys.argv[2])
+fixture = json.loads((root / "skills/assistant-workflow/evals/cases.json").read_text())
+cases = [case for case in fixture["cases"] if case.get("semantic_validator") == "assistant-workflow.packet_admission_v14"]
+require(cases, "No fixed packet-admission cases exercised")
+requests, prompts = [], []
+for case in cases:
+    prompt = (output / "assistant-workflow" / (case["id"] + ".md")).read_text()
+    sections = re.findall(r"^## Fixed Packet Admission Request\n\n```json\n(.*?)\n```(?:\n|$)", prompt, re.MULTILINE | re.DOTALL)
+    require(len(sections) == 1, "Prompt lacks exact fixed request: " + case["id"])
+    request = json.loads(sections[0])
+    require(request == case["semantic_context"]["packet_admission"]["request"], "Emitted request changed fixed inputs: " + case["id"])
+    require("expected_status" not in prompt and "expected_code" not in prompt, "Prompt leaked grader answers: " + case["id"])
+    requests.append(json.dumps(request, sort_keys=True))
+    prompts.append(prompt)
+for index, request in enumerate(requests):
+    for other in range(index):
+        if request != requests[other]:
+            require(prompts[index] != prompts[other], "Different fixed requests emitted indistinguishable prompts")
+require({case["semantic_context"]["packet_admission"]["expected_status"] for case in cases} == {"accepted", "blocked"}, "Prompt controls must exercise valid and unsafe inputs")
+clarification = next(case for case in fixture["cases"] if case["id"] == "clarification-is-material-not-capped")
+require((output / "assistant-workflow/task-01.md").read_text() == "# User Request\n\n" + clarification["prompt"] + "\n\n", "Unrelated task-only clarification output changed")
+PYPROMPTS
+then pass; else fail "public prompt emission omitted or changed fixed request inputs, leaked grader answers, or changed unrelated task-only output"; fi
+
+test_start "fixed packet requests and projections satisfy canonical direct fields"
+if ruby -ryaml -rjson -ropen3 - "$FRAMEWORK_DIR" <<'RUBYDIRECT'
+root = ARGV.fetch(0)
+handoffs = YAML.load_file("#{root}/skills/assistant-workflow/contracts/handoffs.yaml").fetch('handoffs')
+producer = handoffs.find { |h| h['name'] == 'orchestrator_to_architect' }.fetch('return_fields').find { |f| f['name'] == 'implementation_steps' }.fetch('object_fields')
+output = YAML.load_file("#{root}/skills/assistant-workflow/contracts/output.yaml").fetch('artifacts').find { |f| f['name'] == 'implementation_steps' }.fetch('object_fields')
+raise 'canonical packet owner drift' unless producer == output
+check_direct = lambda do |packet, request|
+  producer.each do |field|
+    name, kind = field.values_at('name', 'type')
+    required = field['required'] == true || (name == 'boundary_reason' && request.fetch('plan').fetch('implementation_steps').length > 1) || (%w[red_check_id red_command red_cwd expected_red_failure].include?(name) && packet['tdd_applies'])
+    commands = request.fetch('context').fetch('verification_decision').fetch('checks').select { |c| packet.fetch('selected_check_ids').include?(c['check_id']) && c.key?('command') }
+    required ||= name == 'verification_command' && commands.length == 1
+    next unless required
+    raise "Fixed packet lacks canonical direct field: #{name}" unless packet.key?(name)
+    value = packet[name]
+    valid = case kind
+    when 'string' then value.is_a?(String) && !value.strip.empty?
+    when 'boolean' then value == true || value == false
+    when 'enum' then field.fetch('enum_values').include?(value)
+    when 'object' then value.is_a?(Hash)
+    when 'string[]' then value.is_a?(Array) && value.all? { |x| x.is_a?(String) }
+    when 'object[]' then value.is_a?(Array) && value.all? { |x| x.is_a?(Hash) }
+    else raise "Unhandled applicable direct kind: #{kind}"
+    end
+    raise "Invalid canonical direct field: #{name}" unless valid
+    raise "Canonical direct minimum violated: #{name}" if field.key?('min_items') && value.length < field['min_items']
+  end
+end
+fixture = JSON.parse(File.read("#{root}/skills/assistant-workflow/evals/cases.json"))
+cases = fixture.fetch('cases').select { |c| c['semantic_validator'] == 'assistant-workflow.packet_admission_v14' }
+raise 'no fixed packet requests' if cases.empty?
+cases.each do |item|
+  fixed = item.fetch('semantic_context').fetch('packet_admission'); request = fixed.fetch('request')
+  request.fetch('plan').fetch('implementation_steps').each { |p| check_direct.call(p, request) }
+  stdout, stderr, status = Open3.capture3('python3','-B',"#{root}/skills/assistant-workflow/scripts/task-packet-admission.py", stdin_data: JSON.generate(request))
+  actual = JSON.parse(stdout)
+  raise 'fixed admission outcome changed' unless actual['status'] == fixed.fetch('expected_status') && actual['code'] == fixed.fetch('expected_code') && stderr.empty? && status.exitstatus == (actual['status'] == 'accepted' ? 0 : 1)
+  actual.fetch('canonical_plan').fetch('implementation_steps').each { |p| check_direct.call(p, request) }
+  check_direct.call(actual.fetch('current_task_packet'), request) if actual['status'] == 'accepted'
+end
+RUBYDIRECT
+then pass; else fail "fixed canonical packet direct shape or intended outcome changed"; fi
+
+test_start "canonical admission accepts valid work and rejects unsafe evidence and migration"
+if python3 "$FRAMEWORK_DIR/tests/p0-p4/lib/task-packet-admission-controls.py"; then
     pass
 else
-    fail "plan-template.md missing executable task packet terms: ${missing_packet_terms[*]}"
+    fail "actual packet admission behavior controls failed"
 fi
+
+test_start "stored packets and worker materialization keep one approved definition"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+root = ARGV.fetch(0)
+h = YAML.load_file("#{root}/skills/assistant-workflow/contracts/handoffs.yaml").fetch('handoffs')
+o = YAML.load_file("#{root}/skills/assistant-workflow/contracts/output.yaml")
+f = ->(fields,name) { fields.find { |item| item['name'] == name } || raise("missing #{name}") }
+producer = f.call(h.find { |x| x['name'] == 'orchestrator_to_architect' }.fetch('return_fields'),'implementation_steps')
+fields = producer.fetch('object_fields')
+raise 'stored mutable specialist copy' if fields.any? { |x| %w[verification_decision evidence_assessment slice_id slice_name task_id].include?(x['name']) }
+raise 'missing reference digest' unless f.call(fields,'verification_decision_ref').fetch('object_fields').map { |x| x['name'] } == %w[artifact_ref sha256]
+state = f.call(f.call(fields,'execution').fetch('object_fields'),'state')
+raise 'open coordinator state vocabulary' unless state['enum_values'] == %w[PENDING RUNNING VERIFIED BLOCKED INVALIDATED]
+%w[orchestrator_to_code_writer orchestrator_to_builder_tester].each do |name|
+  consumer = f.call(h.find { |x| x['name'] == name }.fetch('context_fields'),'current_task_packet').fetch('object_fields')
+  fields.each { |field| raise "projection drift #{name} #{field['name']}" unless f.call(consumer,field['name']) == field }
+  %w[verification_decision evidence_assessment approved_plan_identity].each { |key| raise 'materialization field missing' unless f.call(consumer,key)['required'] == true }
+end
+raise 'duplicate live execution artifact' if o.fetch('artifacts').any? { |x| %w[slice_manifest single_slice_rationale decomposition_plan_review slice_verification_summary].include?(x['name']) }
+RUBY
+then pass; else fail "canonical stored/deep projection contracts drifted"; fi
+
+test_start "public evaluator rejects type-altered accepted packet answers"
+typed_answers="$(mktemp -d "${TMPDIR:-/tmp}/workflow-packet-types.XXXXXX")"
+p0p4_register_cleanup "$typed_answers"
+if python3 - "$FRAMEWORK_DIR" "$typed_answers" <<'PYTYPES'
+from copy import deepcopy
+import importlib.util
+import json
+from pathlib import Path
+import sys
+root, out = Path(sys.argv[1]), Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("typed_admission", root / "skills/assistant-workflow/scripts/task-packet-admission.py")
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+fixture = json.loads((root / "skills/assistant-workflow/evals/cases.json").read_text())
+case = next(c for c in fixture["cases"] if c["id"] == "packet-admission-coherent-medium-v14")
+actual = module.admission(case["semantic_context"]["packet_admission"]["request"])
+for variant in ("valid", "type-altered", "missing-required"):
+    answer = deepcopy(actual)
+    if variant == "type-altered":
+        answer["canonical_plan"]["implementation_steps"][0]["tdd_applies"] = 0
+        answer["current_task_packet"]["tdd_applies"] = 0
+    elif variant == "missing-required":
+        for packet in (answer["canonical_plan"]["implementation_steps"][0], answer["current_task_packet"]):
+            for field in ("description", "reuse_search", "test_criteria", "implementation_notes", "verification_command"):
+                packet.pop(field, None)
+    folder = out / variant / "assistant-workflow"
+    folder.mkdir(parents=True)
+    (folder / (case["id"] + ".txt")).write_text(json.dumps({"packet_admission": answer}))
+PYTYPES
+then
+    typed_answers_failed=false
+    for optimization in 0 1; do
+        if ! PYTHONOPTIMIZE="$optimization" bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$typed_answers/valid" --skill assistant-workflow --case packet-admission-coherent-medium-v14 >/dev/null 2>&1; then typed_answers_failed=true; fi
+        for variant in type-altered missing-required; do
+            if PYTHONOPTIMIZE="$optimization" bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$typed_answers/$variant" --skill assistant-workflow --case packet-admission-coherent-medium-v14 >/dev/null 2>&1; then typed_answers_failed=true; fi
+        done
+    done
+    if [[ "$typed_answers_failed" == false ]]; then pass; else fail "public grader accepted changed JSON scalar types or rejected a valid answer"; fi
+else
+    fail "could not construct public evaluator type controls"
+fi
+
+test_start "workflow semantic grading recomputes actual helper with fixed independent authority"
+semantic_controls="$(mktemp -d "${TMPDIR:-/tmp}/workflow-packet-semantic.XXXXXX")"
+p0p4_register_cleanup "$semantic_controls"
+if python3 - "$FRAMEWORK_DIR" "$semantic_controls" <<'PYCONTROL'
+from copy import deepcopy
+import importlib.util,json,sys
+from pathlib import Path
+root=Path(sys.argv[1]);out=Path(sys.argv[2])
+spec=importlib.util.spec_from_file_location('packet_controls',root/'tests/p0-p4/lib/task-packet-admission-controls.py')
+m=importlib.util.module_from_spec(spec);sys.modules[spec.name]=m;spec.loader.exec_module(m)
+fixture=json.loads((root/'skills/assistant-workflow/evals/cases.json').read_text())
+controls=[]
+def record(case_id,name,response,expected):
+ filename=case_id+'.'+name+'.json'
+ (out/filename).write_text(json.dumps(response))
+ controls.append((case_id,filename,str(expected)))
+for case in fixture['cases']:
+ if case.get('semantic_validator')!='assistant-workflow.packet_admission_v14':continue
+ actual=m.API.admission(case['semantic_context']['packet_admission']['request'])
+ answer={key:value for key,value in actual.items() if key in ('status','code','canonical_plan','current_task_packet')}
+ if actual['status']=='blocked':answer.pop('canonical_plan',None)
+ response={'packet_admission':answer}
+ record(case['id'],'correct',response,0)
+ # A label-only readiness answer must fail even when its vocabulary matches.
+ record(case['id'],'unsafe',{'packet_admission':{'status':'accepted','code':'accepted'}},1)
+ forged=deepcopy(response)
+ forged['packet_admission']['status']='blocked' if actual['status']=='accepted' else 'accepted'
+ record(case['id'],'forged-status',forged,1)
+ if actual['status']=='accepted':
+  for field in ('description','reuse_search','test_criteria','implementation_notes','verification_command'):
+   for owner in ('canonical_plan','current_task_packet','both'):
+    forged=deepcopy(response)
+    for target in (('canonical_plan','current_task_packet') if owner=='both' else (owner,)):
+     packet=forged['packet_admission'][target]
+     if target=='canonical_plan':packet=packet['implementation_steps'][0]
+     packet.pop(field,None)
+    record(case['id'],'missing-'+field+'-'+owner,forged,1)
+  for owner in ('canonical_plan','current_task_packet','both'):
+   for mutation in ('boolean-to-number','number-to-boolean'):
+    forged=deepcopy(response)
+    targets=('canonical_plan','current_task_packet') if owner=='both' else (owner,)
+    for target in targets:
+     packet=forged['packet_admission'][target]
+     if target=='canonical_plan':packet=packet['implementation_steps'][0]
+     if mutation=='boolean-to-number':packet['tdd_applies']=0
+     else:packet['execution']['recovery']['attempt_count']=False
+    record(case['id'],owner+'-'+mutation,forged,1)
+  forged=deepcopy(response)
+  forged['packet_admission']['canonical_plan']['implementation_steps'][0]['files_to_modify']=['/unauthorized/override.py']
+  record(case['id'],'forged-scope',forged,1)
+  forged=deepcopy(response)
+  forged['packet_admission']['current_task_packet']['packet_id']='unapproved-outcome'
+  record(case['id'],'forged-projection',forged,1)
+ else:
+  claims={'ready':True,'verified':True,'current_task_packet':{'packet_id':'integrated-outcome'}}
+  for owner in ('root','nested'):
+   for name,claim in list((key,{key:value}) for key,value in claims.items())+[('combined',claims)]:
+    forged=deepcopy(response)
+    (forged if owner=='root' else forged['packet_admission']).update(claim)
+    record(case['id'],owner+'-'+name,forged,1)
+(out/'controls.tsv').write_text(''.join('\t'.join(row)+'\n' for row in controls))
+PYCONTROL
+then
+    source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"
+    semantic_failed=false
+    for optimization in 0 1; do
+        while IFS=$'\t' read -r case_id response_file expected; do
+            if PYTHONOPTIMIZE="$optimization" run_semantic_validator assistant-workflow.packet_admission_v14 "$semantic_controls/$response_file" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$case_id" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" >/dev/null 2>&1; then observed=0; else observed=1; fi
+            if [[ "$observed" != "$expected" ]]; then
+                semantic_failed=true
+                printf 'Semantic control failed: %s PYTHONOPTIMIZE=%s expected=%s observed=%s\n' "$response_file" "$optimization" "$expected" "$observed" >&2
+            fi
+        done < "$semantic_controls/controls.tsv"
+    done
+    if [[ "$semantic_failed" == false ]]; then pass; else fail "shared helper semantic seam accepted unsafe or rejected correct answers"; fi
+else
+    fail "could not construct independent semantic controls"
+fi
+
+test_start "selected Workflow helper identity survives trusted layouts and rejects code escapes"
+layout_controls="$(mktemp -d "${TMPDIR:-/tmp}/workflow-selected-helper.XXXXXX")"
+p0p4_register_cleanup "$layout_controls"
+if python3 - "$FRAMEWORK_DIR" "$layout_controls" <<'PYLAYOUT'
+from copy import deepcopy
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+root = Path(sys.argv[1]); out = Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("layout_packet_controls", root / "tests/p0-p4/lib/task-packet-admission-controls.py")
+controls = importlib.util.module_from_spec(spec); sys.modules[spec.name] = controls; spec.loader.exec_module(controls)
+fixture = json.loads((root / "skills/assistant-workflow/evals/cases.json").read_text())
+case = next(c for c in fixture["cases"] if c["id"] == "packet-admission-coherent-medium-v14")
+actual = controls.API.admission(case["semantic_context"]["packet_admission"]["request"])
+if actual["status"] != "accepted": raise ValueError("Fixed selected-helper control must be valid")
+answer = {"packet_admission": {k:v for k,v in actual.items() if k in ("status", "code", "canonical_plan", "current_task_packet")}}
+responses = out / "responses"; responses.mkdir(); response = responses / (case["id"] + ".txt"); response.write_text(json.dumps(answer))
+# Reuse the registered review factory; no expected artifact is copied into this control.
+review_case = next(c for c in fixture["cases"] if c["id"] == "standard-pack-review-result-retains-checklist")
+review_requirement = fixture["canonical_review_batch_expectations"]["case_requirements"][review_case["id"]]
+if review_requirement["required_envelope_alias"] != "canonical_final_summary": raise ValueError("Registered review-envelope fixture changed")
+review_response = responses / (review_case["id"] + ".txt")
+review_summary = " ".join(review_case["machine_expectations"]["required_substrings"])
+subprocess.run(["bash", "-c", 'source "$1"; build_workflow_review_lifecycle_eval_response "$2" "$3" "$4"', "review-layout-response", str(root / "tests/p0-p4/lib/feature-preparation-response-fixtures.sh"), review_case["id"], str(review_response), review_summary], check=True, text=True, capture_output=True)
+marker = out / "untrusted-imported"
+evil = "from pathlib import Path\nPath(" + repr(str(marker)) + ").write_text('UNTRUSTED')\nraise RuntimeError('wrong helper imported')\n"
+def require(value, message):
+    if not value: raise ValueError(message)
+def install_runner(target):
+    shutil.copytree(root / "tools/evals", target / "tools/evals")
+def install_workflow(target):
+    target.mkdir(parents=True, exist_ok=True)
+    for relative in ("SKILL.md", "evals/cases.json", "scripts/task-packet-admission.py"):
+        destination = target / relative; destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / "skills/assistant-workflow" / relative, destination)
+    shutil.copytree(root / "skills/assistant-workflow/contracts", target / "contracts", dirs_exist_ok=True)
+    for companion in ("assistant-verification", "assistant-review"):
+        shutil.copytree(root / "skills" / companion / "contracts", target.parent / companion / "contracts", dirs_exist_ok=True)
+    return target / "SKILL.md"
+def grade(runner, selected, environment):
+    return subprocess.run(["bash", str(runner / "tools/evals/run-skill-evals.sh"), "--responses", str(responses), "--skill", str(selected), "--case", case["id"]], env=environment, text=True, capture_output=True)
+def grade_review(runner, selected, environment):
+    return subprocess.run(["bash", str(runner / "tools/evals/run-skill-evals.sh"), "--responses", str(responses), "--skill", str(selected), "--case", review_case["id"]], env=environment, text=True, capture_output=True)
+def review_reader(runner, selected, environment, reader):
+    commands = {
+        "schema": 'source "$1"; REPO_ROOT="$2"; assistant_review_artifact_schema_valid "$3" "$4" final_summary canonical_final_summary "$5"',
+        "lifecycle": 'source "$1"; REPO_ROOT="$2"; assistant_review_lifecycle_semantics_valid "$3" "$4" final_summary canonical_final_summary "$5"',
+    }
+    return subprocess.run(["bash", "-c", commands[reader], "review-layout-reader", str(runner / "tools/evals/lib/skill-eval-grade.sh"), str(runner), review_case["id"], str(review_response), str(selected.parent / "evals/cases.json")], env=environment, text=True, capture_output=True)
+def registered_split_review_envelope_current_owner(runner, selected, environment):
+    validation = subprocess.run(["bash", str(runner / "tools/evals/run-skill-evals.sh"), "--validate-fixture", "--skill", str(selected)], env=environment, text=True, capture_output=True)
+    require(validation.returncode == 0, "Registered split review setup must validate before grading")
+    result = grade_review(runner, selected, environment)
+    if result.returncode == 0: return
+    summary = next((line for line in result.stdout.splitlines() if line.startswith("Summary: ")), "")
+    counts = dict(part.split("=", 1) for part in summary.removeprefix("Summary: ").split() if "=" in part)
+    zero_counts = ("unavailable", "incomplete", "missing", "empty", "fail_signal_hits", "missing_required_substrings", "forbidden_substring_hits", "ordered_substring_failures", "seeded_defect_failures", "false_positive_marker_failures", "semantic_validation_failures")
+    envelope_only = result.returncode == 1 and not result.stderr.strip() and ("FAIL\tassistant-workflow\t" + review_case["id"] + "\t") in result.stdout and counts.get("total") == "1" and counts.get("passed") == "0" and counts.get("failed") == "1" and counts.get("structured_json_assertion_failures") == "1" and all(counts.get(name) == "0" for name in zero_counts)
+    require(not envelope_only, "Valid registered split review envelope was rejected by runner-sibling producer schemas")
+    raise ValueError("Unexpected registered split review grading failure: " + result.stdout + result.stderr)
+def semantic(runner, selected, environment, response_file=response, fixture_file=None, validator="assistant-workflow.packet_admission_v14", case_id=None):
+    fixture_file = fixture_file or selected.parent / "evals/cases.json"
+    command = 'source "$1"; run_semantic_validator "$2" "$3" "$4" "$5" "$6"'
+    return subprocess.run(["bash", "-c", command, "selected-helper", str(runner / "tools/evals/lib/skill-eval-semantic-validators.sh"), validator, str(response_file), str(fixture_file), case_id or case["id"], str(selected)], env=environment, text=True, capture_output=True)
+colocated = out / "co located"; install_runner(colocated); colocated_skill = install_workflow(colocated / "skills/assistant-workflow")
+custom = out / "custom contract data mirror"; install_runner(custom); custom_skill = install_workflow(custom / "skills/assistant-workflow")
+shutil.rmtree(custom_skill.parent / "contracts")
+(custom_skill.parent / "contracts").symlink_to(root / "skills/assistant-workflow/contracts", target_is_directory=True)
+profile = out / "profile with spaces"; configured = profile / "custom codex home"; install_runner(configured)
+split_skill = install_workflow(profile / ".agents/skills/assistant-workflow")
+default_home = profile / ".codex"; install_runner(default_home)
+# A selected split helper must never be replaced by a stale tools-sibling copy.
+stale = configured / "skills/assistant-workflow"; stale_skill = install_workflow(stale); (stale / "scripts/task-packet-admission.py").write_text(evil)
+base = os.environ.copy(); base.pop("USERPROFILE", None); base.pop("CODEX_HOME", None)
+for optimization in ("0", "1"):
+    env = {**base, "PYTHONOPTIMIZE": optimization}
+    require(grade(root, root / "skills/assistant-workflow/SKILL.md", env).returncode == 0, "Repository public grading failed")
+    require(grade_review(root, root / "skills/assistant-workflow/SKILL.md", env).returncode == 0, "Repository registered review envelope failed")
+    require(grade(colocated, colocated_skill, env).returncode == 0, "Co-located public grading failed")
+    require(grade_review(colocated, colocated_skill, env).returncode == 0, "Co-located registered review envelope failed")
+    require(grade(custom, custom_skill, env).returncode == 0, "Existing external consumer-contract data mirror failed")
+    require(grade_review(custom, custom_skill, env).returncode == 0, "Custom consumer-contract review envelope failed")
+    split_env = {**env, "USERPROFILE": str(profile), "HOME": str(out / "wrong home"), "CODEX_HOME": str(configured)}
+    for companion in ("assistant-verification", "assistant-review"):
+        (configured / "skills" / companion / "contracts/output.yaml").write_text("invalid: [stale schema")
+    require(grade(configured, split_skill, split_env).returncode == 0, "Configured split public grading failed or selected stale sibling")
+    stale_review_index = configured / "skills/assistant-review/contracts/index.yaml"
+    stale_review_index_bytes = stale_review_index.read_bytes()
+    stale_review_index.write_text('schema_version: "stale-tools-sibling"\n')
+    registered_split_review_envelope_current_owner(configured, split_skill, split_env)
+    default_env = {**env, "HOME": str(profile)}
+    require(grade(default_home, split_skill, default_env).returncode == 0, "Default split public grading failed")
+    require(grade_review(default_home, split_skill, default_env).returncode == 0, "Default split registered review envelope failed")
+    require(not marker.exists(), "Stale helper was imported")
+    # Full selected fixture validation must use split fixed schemas, never valid stale siblings.
+    for companion in ("assistant-verification", "assistant-review"):
+        selected_output = split_skill.parent.parent / companion / "contracts/output.yaml"
+        stale_output = configured / "skills" / companion / "contracts/output.yaml"
+        shutil.copy2(root / "skills" / companion / "contracts/output.yaml", stale_output)
+        original_schema = selected_output.read_bytes(); selected_output.unlink()
+        require(grade(configured, split_skill, split_env).returncode != 0, "Missing split producer fell back: " + companion)
+        selected_output.write_bytes(original_schema)
+        outside = out / (companion + "-outside.yaml"); outside.write_bytes(original_schema)
+        selected_output.unlink(); selected_output.symlink_to(outside)
+        require(grade(configured, split_skill, split_env).returncode != 0, "Escaping split producer schema accepted: " + companion)
+        selected_output.unlink(); selected_output.write_bytes(original_schema)
+    # Exercise producer readers directly so fixture rejection cannot hide a stale output reader.
+    stale_review_index.write_bytes(stale_review_index_bytes)
+    for reader in ("schema", "lifecycle"):
+        require(review_reader(configured, split_skill, split_env, reader).returncode == 0, "Selected split review reader failed: " + reader)
+    for contract_name in ("index.yaml", "output.yaml"):
+        selected_contract = split_skill.parent.parent / "assistant-review/contracts" / contract_name
+        original_contract = selected_contract.read_bytes(); selected_contract.unlink()
+        require(grade_review(configured, split_skill, split_env).returncode != 0, "Missing split review contract fell back: " + contract_name)
+        if contract_name == "output.yaml":
+            for reader in ("schema", "lifecycle"):
+                require(review_reader(configured, split_skill, split_env, reader).returncode != 0, "Missing split output reader fell back: " + reader)
+        selected_contract.write_bytes(original_contract)
+        outside_contract = out / ("review-outside-" + contract_name); outside_contract.write_bytes(original_contract)
+        selected_contract.unlink(); selected_contract.symlink_to(outside_contract)
+        require(grade_review(configured, split_skill, split_env).returncode != 0, "Escaping split review contract accepted: " + contract_name)
+        if contract_name == "output.yaml":
+            for reader in ("schema", "lifecycle"):
+                require(review_reader(configured, split_skill, split_env, reader).returncode != 0, "Escaping split output reader accepted: " + reader)
+        selected_contract.unlink(); selected_contract.write_bytes(original_contract)
+    # A recognized split consumer cannot redirect contract data outside its owner.
+    split_contracts = split_skill.parent / "contracts"
+    saved_contracts = split_skill.parent / "contracts-kept"
+    split_contracts.rename(saved_contracts)
+    split_contracts.symlink_to(root / "skills/assistant-workflow/contracts", target_is_directory=True)
+    require(grade(configured, split_skill, split_env).returncode != 0, "Escaping split consumer contracts fell back to stale schemas")
+    split_contracts.unlink(); saved_contracts.rename(split_contracts)
+    # Fixture validation itself must reject a selected split Workflow-parent escape.
+    outside_workflow = out / "outside split workflow"; install_workflow(outside_workflow)
+    selected_workflow = split_skill.parent; saved_workflow = selected_workflow.with_name("assistant-workflow-kept")
+    selected_workflow.rename(saved_workflow); selected_workflow.symlink_to(outside_workflow, target_is_directory=True)
+    escaped_validation = subprocess.run(["bash", str(configured / "tools/evals/run-skill-evals.sh"), "--validate-fixture", "--skill", str(split_skill)], env=split_env, text=True, capture_output=True)
+    require(escaped_validation.returncode != 0 and "consumer contracts escape the trusted skills owner" in escaped_validation.stderr, "Escaping split Workflow parent bypassed fixture ownership validation")
+    selected_workflow.unlink(); saved_workflow.rename(selected_workflow)
+    # Explicit fixture selection outside a recognized code root is only data authority.
+    external = out / "external/assistant-workflow"; external_skill = install_workflow(external)
+    (external / "scripts/task-packet-admission.py").write_text(evil)
+    require(semantic(configured, external_skill, split_env).returncode != 0, "Arbitrary selected helper gained code authority")
+    lookalike = out / "other profile/.agents/skills/assistant-workflow"; lookalike_skill = install_workflow(lookalike)
+    (lookalike / "scripts/task-packet-admission.py").write_text(evil)
+    require(semantic(configured, lookalike_skill, split_env).returncode != 0, "Lookalike profile gained code authority")
+    require(grade(configured, lookalike_skill, split_env).returncode != 0, "Lookalike profile passed public grading")
+    # Child symlink escape is rejected before import, with no stale sibling fallback.
+    helper = split_skill.parent / "scripts/task-packet-admission.py"; helper.unlink(); helper.symlink_to(external / "scripts/task-packet-admission.py")
+    require(semantic(configured, split_skill, split_env).returncode != 0, "Escaping helper symlink was imported")
+    helper.unlink(); shutil.copy2(root / "skills/assistant-workflow/scripts/task-packet-admission.py", helper)
+    selected_bytes = split_skill.read_bytes(); split_skill.unlink(); split_skill.symlink_to(external_skill)
+    require(semantic(configured, split_skill, split_env).returncode != 0, "Escaping selected SKILL identity was accepted")
+    split_skill.unlink(); split_skill.write_bytes(selected_bytes)
+    helper.unlink()
+    require(semantic(configured, split_skill, split_env).returncode != 0, "Missing selected helper fell back to stale sibling")
+    shutil.copy2(root / "skills/assistant-workflow/scripts/task-packet-admission.py", helper)
+    require(semantic(configured, "", split_env, fixture_file=split_skill.parent / "evals/cases.json").returncode != 0, "Unresolved selected identity gained code authority")
+    # Code-root claims stay data; a correct answer still uses the selected trusted helper.
+    claimed = deepcopy(fixture)
+    selected_case = next(c for c in claimed["cases"] if c["id"] == case["id"])
+    selected_case["semantic_context"]["packet_admission"].update(helper_path=str(external / "scripts/task-packet-admission.py"), code_root=str(external))
+    claimed_fixture = out / "claimed-fixture.json"; claimed_fixture.write_text(json.dumps(claimed))
+    claimed_answer = deepcopy(answer); claimed_answer.update(helper_path=str(external / "scripts/task-packet-admission.py"), code_root=str(external))
+    claimed_response = out / "claimed-response.json"; claimed_response.write_text(json.dumps(claimed_answer))
+    require(semantic(configured, split_skill, split_env, claimed_response, claimed_fixture).returncode == 0, "Data code claims replaced the trusted helper")
+    for validator, case_id in (("unknown.validator", case["id"]), ("assistant-workflow.packet_admission_v14", "unknown-case")):
+        require(semantic(configured, split_skill, split_env, validator=validator, case_id=case_id).returncode != 0, "Unknown closed dispatch was accepted")
+    require(not marker.exists(), "Untrusted helper code executed")
+PYLAYOUT
+then pass; else fail "selected Workflow helper identity/layout controls failed"; fi
 
 test_start "workflow executable task packet carries conditional feature-preparation bindings in its own section"
 plan_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
@@ -33,483 +592,6 @@ else
     fail "plan-template executable task packet omits conditional feature-preparation scope or evidence bindings"
 fi
 
-test_start "workflow phase gates enforce executable task packet planning checks"
-missing_phase_gate_terms=()
-for term in \
-    "- id: P9" \
-    "For medium+ end-to-end/implement-only tasks: implementation work is represented as executable task packets using plan-template.md" \
-    "- id: P10" \
-    "Each command-based check retains its literal command.argv and explicit command.cwd by check_id; the singular verification_command compatibility projection is present only when selected_check_ids resolves exactly one command-based check. Otherwise omit it and keep each concrete non-command procedure. Missing or ambiguous context requires refresh or a blocked packet; never flatten commands, infer cwd, reconstruct shell text, or misattribute a command." \
-    "- id: P11" \
-    "deviation/rollback rule" \
-    "- id: B12" \
-    "every slice's acceptance and selected verification criteria from DECOMPOSE phase are independently checked, passing"; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        missing_phase_gate_terms+=("$term")
-    fi
-done
-if [[ "${#missing_phase_gate_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "phase-gates.yaml missing executable task packet gates: ${missing_phase_gate_terms[*]}"
-fi
-
-test_start "workflow build worker protocol enforces dependency-aware slice verification"
-missing_slice_phase_terms=()
-build_worker_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"
-for term in \
-    "source-changing slices sequentially in a shared or unknown workspace" \
-    "Independently executable source-changing slices may overlap only when runtime evidence proves isolated workspaces" \
-    "including slice_id, observable increment, deliverable type, files, acceptance criteria, unchanged verification" \
-    "Check constraints from the task journal against the slice files and criteria" \
-    "Record verification evidence in the task journal slice verification ledger" \
-    "When TDD is active, establish meaningful RED before" \
-    "otherwise follow the selected checks without adding a RED step" \
-    "After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite."; do
-    if ! p0p4_contains_text "$build_worker_ref" "$term"; then
-        missing_slice_phase_terms+=("$term")
-    fi
-done
-if ! grep -Fq -- "Load \`references/build-worker-protocol.md\` for source-changing Build work" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
-    missing_slice_phase_terms+=("phases.md missing build-worker-protocol loader")
-fi
-if [[ "${#missing_slice_phase_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "build-worker-protocol.md missing dependency-aware slice verification terms: ${missing_slice_phase_terms[*]}"
-fi
-
-test_start "workflow task journal template includes slice verification ledger fields"
-missing_slice_ledger_terms=()
-for term in \
-    "## Slice Verification Ledger" \
-    "[required for medium+ tasks; update after each slice and before starting a dependent slice or another source-changing slice in a shared or unknown workspace]" \
-    "| Slice | Task Packet | TDD/RED | Implementation Status | Selected Check or Procedure/Result | Criteria Checked | Self-Check Result | Final Status |" \
-    "[X/Y passed]" \
-    "[pass/fail + note]" \
-    "[VERIFIED/BLOCKED]" \
-    "do not start a dependent slice until every \`depends_on\` prerequisite is \`VERIFIED\`; source-changing slices may overlap only with runtime-proven isolated workspaces"; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
-        missing_slice_ledger_terms+=("$term")
-    fi
-done
-if [[ "${#missing_slice_ledger_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "task-journal-template.md missing slice verification ledger terms: ${missing_slice_ledger_terms[*]}"
-fi
-
-test_start "workflow output contract requires slice verification summary for medium tasks"
-missing_slice_output_terms=()
-for term in \
-    "- name: slice_verification_summary" \
-    "- name: slice_manifest" \
-    "condition: \"execution_intent != prepare_only and size in [medium, large, mega]\"" \
-    "slice_id" \
-    "slice_name" \
-    "task_packet_id" \
-    "red_status" \
-    "verification_result" \
-    "criteria_checked" \
-    "self_check_result" \
-    "final_status" \
-    "enum_values: [BLOCKED, VERIFIED]" \
-    "final status must be VERIFIED before WORKFLOW COMPLETE."; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-        missing_slice_output_terms+=("$term")
-    fi
-done
-if ! awk '
-    /- name: slice_verification_summary/ { in_summary = 1; next }
-    in_summary && /^  - name: / { exit }
-    in_summary && /required: true/ { found = 1; exit }
-    END { exit found ? 0 : 1 }
-' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-    missing_slice_output_terms+=("slice_verification_summary required: true")
-fi
-if [[ "${#missing_slice_output_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "output.yaml missing medium slice_verification_summary contract terms: ${missing_slice_output_terms[*]}"
-fi
-
-test_start "workflow output contract requires single-slice rationale for one-slice medium plans"
-missing_single_slice_terms=()
-for file in "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; do
-    for term in \
-        "- name: single_slice_rationale" \
-        "condition: \"execution_intent != prepare_only and size in [medium, large, mega] and slice_manifest has exactly one item\"" \
-        "proves the one slice is the smallest iterable decomposition and not a broad fallback" \
-        "single_slice_rationale must be present and non-blank"; do
-        if ! grep -Fq -- "$term" "$file"; then
-            missing_single_slice_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-done
-if [[ "${#missing_single_slice_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "output.yaml missing single-slice rationale contract terms: ${missing_single_slice_terms[*]}"
-fi
-
-test_start "workflow output contract requires safe unique slice ids and declared dependencies"
-missing_safe_slice_contract_terms=()
-for file in "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; do
-    for term in \
-        "slice_id values are unique path-safe" \
-        "depends_on entries reference only declared slice_id values" \
-        "without self dependencies or circular dependencies" \
-        "Stable descriptive outcome-oriented slice identifier reused in task packets and depends_on references" \
-        "Must be unique within slice_manifest; use only lowercase letters, digits, and hyphens; start and end with a letter or digit; no slashes, whitespace, or path traversal" \
-        "Every dependency is the slice_id of another declared slice in this manifest; no self dependency or circular dependency is allowed; use an empty array when there are no dependencies"; do
-        if ! grep -Fq -- "$term" "$file"; then
-            missing_safe_slice_contract_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-done
-if [[ "${#missing_safe_slice_contract_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "output.yaml missing safe slice_id/dependency contract terms: ${missing_safe_slice_contract_terms[*]}"
-fi
-
-test_start "workflow verification command is conditional on selected CheckSpec procedure"
-if ! ruby -ryaml -e '
-  output = YAML.load_file(ARGV.fetch(0))
-  manifest = output.fetch("artifacts").find { |artifact| artifact["name"] == "slice_manifest" }
-  command = manifest.fetch("object_fields").find { |field| field["name"] == "verification_command" }
-  valid = command["type"] == "string[]" && command["required"] == "conditional" && command["min_items"] == 1 &&
-    command.fetch("condition").include?("exactly one matching command-based CheckSpec") &&
-    command.fetch("description").include?("Omit for zero or multiple matching commands") &&
-    command.fetch("validation").include?("Execute item 0 directly") &&
-    command.fetch("validation").include?("literal argument") &&
-    command.fetch("validation").include?("never flatten") && command.fetch("validation").include?("default cwd")
-  exit(valid ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-    fail "slice verification_command must be present for command-based CheckSpecs while allowing concrete non-command procedures"
-elif ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "only a compatibility projection when the selected IDs resolve exactly one" \
-    || ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "When executing argv, item 0 is the executable and each remaining item is one literal argument; never reconstruct a shell command"; then
-    fail "Build protocol does not execute the slice verification argv using the schema contract"
-elif rg -n -i 'run-agents\.sh|check-integration\.sh|worktree' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" >/tmp/p0p4-native-verification-runner.out; then
-    fail "native verification contract still depends on retired runner mechanics; see /tmp/p0p4-native-verification-runner.out"
-else
-    pass
-fi
-
-test_start "canonical commands retain CheckSpec identity and task packets never flatten or default cwd"
-if ! ruby -ryaml -e '
-  verification = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").find { |artifact| artifact["name"] == "verification_decision" }
-  check = verification.fetch("object_fields").find { |field| field["name"] == "checks" }
-  command = check && check.fetch("object_fields").find { |field| field["name"] == "command" }
-  command_fields = (command && command.fetch("object_fields", []).to_h { |field| [field.fetch("name"), field] }) || {}
-  workflow = YAML.load_file(ARGV.fetch(1)).fetch("artifacts")
-  manifest = workflow.find { |artifact| artifact["name"] == "slice_manifest" }
-  legacy = manifest && manifest.fetch("object_fields").find { |field| field["name"] == "verification_command" }
-  results = workflow.find { |artifact| artifact["name"] == "validation_results" }
-  executed = results && results.fetch("object_fields").find { |field| field["name"] == "executed_command" }
-  executed_fields = (executed && executed.fetch("object_fields", []).to_h { |field| [field.fetch("name"), field] }) || {}
-  valid = command && legacy && executed && command["required"] == "conditional" && command.fetch("condition").include?("this CheckSpec has a command to execute") &&
-    command_fields.keys.sort == %w[argv cwd] && command_fields.fetch("argv")["type"] == "string[]" &&
-    command_fields.fetch("argv")["min_items"] == 1 && command_fields.fetch("cwd")["type"] == "string" &&
-    command_fields.fetch("cwd")["required"] == true && command.fetch("validation").include?("literal") &&
-    legacy["required"] == "conditional" && legacy.fetch("condition").include?("exactly one matching") &&
-    legacy.fetch("description").include?("Omit for zero or multiple matching commands") && legacy.fetch("validation").include?("unchanged verification_decision") &&
-    legacy.fetch("validation").include?("never flatten") && legacy.fetch("validation").include?("default cwd") &&
-    executed["required"] == "conditional" && executed_fields.keys.sort == %w[argv check_id cwd] &&
-    executed.fetch("validation").include?("selected_check_ids") && executed.fetch("validation").include?("CheckSpec.command.argv") &&
-    executed.fetch("validation").include?("CheckSpec.command.cwd")
-  exit(valid ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-verification/contracts/output.yaml" \
-  "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-    fail "canonical command context or exact-one task-packet compatibility contract is incomplete"
-else
-    pass
-fi
-
-test_start "source-changing slice packets distinguish shared sequencing from isolated overlap"
-workspace_isolation_failures=()
-for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md::shared or unknown workspace" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/mega-and-patterns.md::runtime explicitly proves isolated workspaces" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::Parallel read-only analysis remains allowed" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::runtime-proven isolated workspaces" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-roles.md::shared or unknown workspace"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! grep -Fq -- "$term" "$file"; then
-        workspace_isolation_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if ! ruby -rjson -e '
-  cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
-  shared = cases.find { |entry| entry["id"] == "native-slice-execution-uses-dependencies-not-runner-topology" }
-  isolated = cases.find { |entry| entry["id"] == "isolated-independent-slices-integrate-before-review" }
-  shared_expected = shared.fetch("expected_behavior").join(" ")
-  shared_failures = shared.fetch("fail_signals").join(" ")
-  isolated_expected = isolated.fetch("expected_behavior").join(" ")
-  isolated_setup = isolated.fetch("setup_context").join(" ")
-  isolated_failures = isolated.fetch("fail_signals").join(" ")
-  expected_decisions = [
-    {"a_status" => "PENDING", "c_decision" => "blocked"},
-    {"a_status" => "RUNNING", "c_decision" => "blocked"},
-    {"a_status" => "VERIFIED", "c_decision" => "ready"}
-  ]
-  structured = lambda { |entry| entry.fetch("machine_expectations").fetch("structured_json_assertions") }
-  equals = lambda do |assertions, path, expected|
-    assertions.any? { |assertion| assertion["operator"] == "equals" && assertion["path"] == path && assertion["expected"] == expected }
-  end
-  decisions = lambda do |assertions|
-    assertions.any? do |assertion|
-      assertion["operator"] == "array_object_values_exact" && assertion["path"] == ["execution_policy", "c_start_decisions"] &&
-        assertion["fields"] == ["a_status", "c_decision"] && assertion["expected_objects"] == expected_decisions
-    end
-  end
-  exact_keys = lambda do |assertions, path, fields|
-    assertions.any? { |assertion| assertion["operator"] == "object_keys_exact" && assertion["path"] == path && assertion["fields"] == fields }
-  end
-  policy_fields = %w[source_writer_policy read_only_analysis_policy isolation_evidence_ref c_start_decisions per_slice_verification integration_validation integration_checks fresh_review fresh_review_after]
-  decision_key_assertions = lambda do |assertions|
-    (0..2).all? { |index| exact_keys.call(assertions, ["execution_policy", "c_start_decisions", index], %w[a_status c_decision]) }
-  end
-  shared_assertions = structured.call(shared)
-  isolated_assertions = structured.call(isolated)
-  valid = shared_expected.include?("Sequences source-changing A and B because the workspace is shared or isolation is unknown") &&
-    shared_expected.include?("read-only analysis in parallel") &&
-    shared_failures.include?("parallel source-changing A/B in a shared or unknown workspace") &&
-    isolated_expected.include?("runtime-proven isolated workspaces") &&
-    isolated_setup.include?("isolation_evidence_ref=fixture-runtime-isolation-A-B-v1") &&
-    isolated_expected.include?("A and B may overlap") &&
-    isolated_expected.include?("C blocked until A is VERIFIED") &&
-    isolated_expected.include?("cross-slice and full-scope validation") &&
-    isolated_expected.include?("fresh review") &&
-    isolated_failures.include?("Starts C before A is VERIFIED") &&
-    equals.call(shared_assertions, ["execution_policy", "source_writer_policy"], "sequential_shared_or_unknown") &&
-    equals.call(shared_assertions, ["execution_policy", "isolation_evidence_ref"], "not_available") &&
-    equals.call(isolated_assertions, ["execution_policy", "source_writer_policy"], "isolated_A_B_overlap_permitted") &&
-    equals.call(isolated_assertions, ["execution_policy", "isolation_evidence_ref"], "fixture-runtime-isolation-A-B-v1") &&
-    exact_keys.call(shared_assertions, [], ["execution_policy"]) &&
-    exact_keys.call(shared_assertions, ["execution_policy"], policy_fields) &&
-    exact_keys.call(isolated_assertions, [], ["execution_policy"]) &&
-    exact_keys.call(isolated_assertions, ["execution_policy"], policy_fields) &&
-    decision_key_assertions.call(shared_assertions) && decision_key_assertions.call(isolated_assertions) &&
-    decisions.call(shared_assertions) && decisions.call(isolated_assertions)
-  exit(valid ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"; then
-    workspace_isolation_failures+=("workflow eval does not distinguish shared/unknown sequential, isolated parallel, and read-only parallel boundaries")
-fi
-if rg -qi 'parallel writers[^\n]*(independently executable slices|concrete triggers)' \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md"; then
-    workspace_isolation_failures+=("subagent dispatch still authorizes parallel Writers from independence alone")
-fi
-if [[ "${#workspace_isolation_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workspace isolation routing is incomplete: ${workspace_isolation_failures[*]}"
-fi
-
-test_start "task-only policy packets omit grading oracles while annotated packets retain legacy rendering"
-policy_packet_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-eval-policy-packets.XXXXXX")"
-policy_packet_explicit_skill="$policy_packet_root/assistant-workflow"
-policy_packet_invalid_skill="$policy_packet_root/invalid-assistant-workflow"
-p0p4_register_cleanup "$policy_packet_root"
-mkdir -p "$policy_packet_explicit_skill/evals" "$policy_packet_invalid_skill/evals"
-cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$policy_packet_explicit_skill/SKILL.md"
-cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$policy_packet_invalid_skill/SKILL.md"
-ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$policy_packet_explicit_skill/contracts"
-ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$policy_packet_invalid_skill/contracts"
-jq '(.cases[] | select(.id == "medium-task-plans-before-build") | .prompt_packet_mode) = "annotated"' \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$policy_packet_explicit_skill/evals/cases.json"
-policy_packet_failures=()
-for policy_case in native-slice-execution-uses-dependencies-not-runner-topology isolated-independent-slices-integrate-before-review; do
-    policy_packet_output="$policy_packet_root/$policy_case"
-    if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --emit-prompts "$policy_packet_output" --skill assistant-workflow --case "$policy_case" >/dev/null; then
-        policy_packet_failures+=("$policy_case:emit")
-        continue
-    fi
-    policy_packet_path="$policy_packet_output/assistant-workflow/$policy_case.md"
-    policy_packet_expected="$(jq -r --arg id "$policy_case" '
-        def bullets($items):
-          if ($items | length) > 0 then $items | map("- " + .) | join("\n")
-          else "- (none)" end;
-        .cases[] | select(.id == $id)
-        | "# Task Packet\n\n"
-          + "Skill: assistant-workflow\n\n"
-          + "Skill Path: skills/assistant-workflow/SKILL.md\n\n"
-          + "## Setup Context\n\n" + bullets(.setup_context) + "\n\n"
-          + "## Prompt\n\n" + .prompt + "\n"
-    ' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json")"
-    if [[ "$(<"$policy_packet_path")" != "$policy_packet_expected" ]]; then
-        policy_packet_failures+=("$policy_case:task-only-content")
-    fi
-done
-policy_packet_default_output="$policy_packet_root/default"
-policy_packet_explicit_output="$policy_packet_root/explicit"
-if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --emit-prompts "$policy_packet_default_output" --skill assistant-workflow --case medium-task-plans-before-build >/dev/null \
-    || ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --emit-prompts "$policy_packet_explicit_output" --skill "$policy_packet_explicit_skill" --case medium-task-plans-before-build >/dev/null \
-    || ! cmp -s \
-        <(sed 's|^Skill Path: .*|Skill Path: <path>|' "$policy_packet_default_output/assistant-workflow/medium-task-plans-before-build.md") \
-        <(sed 's|^Skill Path: .*|Skill Path: <path>|' "$policy_packet_explicit_output/assistant-workflow/medium-task-plans-before-build.md"); then
-    policy_packet_failures+=("annotated-default-or-explicit")
-fi
-for invalid_mode in '"task-only"' 'null' '""'; do
-    jq --argjson invalid_mode "$invalid_mode" '(.cases[] | select(.id == "medium-task-plans-before-build") | .prompt_packet_mode) = $invalid_mode' \
-        "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$policy_packet_invalid_skill/evals/cases.json"
-    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$policy_packet_invalid_skill" >/dev/null 2>&1; then
-        policy_packet_failures+=("invalid-mode:$invalid_mode")
-    fi
-done
-if [[ "${#policy_packet_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "policy prompt packet rendering or mode validation is incorrect: ${policy_packet_failures[*]}"
-fi
-
-test_start "workflow eval grading enforces structured dependency scheduling and seeded isolation evidence"
-workflow_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-eval-grading.XXXXXX")"
-p0p4_register_cleanup "$workflow_eval_root"
-workflow_eval_responses="$workflow_eval_root/positive"
-workflow_eval_unsafe_responses="$workflow_eval_root/unsafe"
-workflow_eval_missing_seed_responses="$workflow_eval_root/missing-seed"
-workflow_eval_wrong_writer_responses="$workflow_eval_root/wrong-writer"
-workflow_eval_wrong_integration_responses="$workflow_eval_root/wrong-integration"
-workflow_eval_wrong_review_responses="$workflow_eval_root/wrong-review"
-workflow_eval_extra_responses="$workflow_eval_root/extra-keys"
-mkdir -p "$workflow_eval_responses/assistant-workflow" "$workflow_eval_unsafe_responses/assistant-workflow" "$workflow_eval_missing_seed_responses/assistant-workflow" "$workflow_eval_wrong_writer_responses/assistant-workflow" "$workflow_eval_wrong_integration_responses/assistant-workflow" "$workflow_eval_wrong_review_responses/assistant-workflow" "$workflow_eval_extra_responses/assistant-workflow"
-cat >"$workflow_eval_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" <<'EOF'
-{"execution_policy":{"source_writer_policy":"sequential_shared_or_unknown","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
-EOF
-cat >"$workflow_eval_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
-{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
-EOF
-cat >"$workflow_eval_unsafe_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" <<'EOF'
-{"execution_policy":{"source_writer_policy":"sequential_shared_or_unknown","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"ready"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
-EOF
-cat >"$workflow_eval_unsafe_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
-{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"ready"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
-EOF
-cat >"$workflow_eval_missing_seed_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
-{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
-EOF
-cat >"$workflow_eval_wrong_writer_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" <<'EOF'
-{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
-EOF
-cat >"$workflow_eval_wrong_integration_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
-{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"per_slice_only","integration_checks":["per-slice"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
-EOF
-cat >"$workflow_eval_wrong_review_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
-{"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"per_slice_verification"}}
-EOF
-cp "$workflow_eval_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" "$workflow_eval_extra_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt"
-workflow_eval_grading_failures=()
-for workflow_case in native-slice-execution-uses-dependencies-not-runner-topology isolated-independent-slices-integrate-before-review; do
-    if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_responses" --skill assistant-workflow --case "$workflow_case" >"$workflow_eval_root/$workflow_case-positive.out"; then
-        workflow_eval_grading_failures+=("$workflow_case:positive")
-    fi
-    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_unsafe_responses" --skill assistant-workflow --case "$workflow_case" >"$workflow_eval_root/$workflow_case-unsafe.out" 2>&1 \
-        || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/$workflow_case-unsafe.out"; then
-        workflow_eval_grading_failures+=("$workflow_case:unsafe-dependent-start")
-    fi
-done
-for extra_key_mutation in \
-    'setpath(["unsafe_override"]; true)' \
-    'setpath(["execution_policy","unsafe_override"]; true)' \
-    'setpath(["execution_policy","c_start_decisions",0,"unsafe_override"]; true)'; do
-    extra_key_response="$workflow_eval_extra_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt"
-    jq "$extra_key_mutation" "$workflow_eval_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" >"$workflow_eval_root/extra-key-mutated.json"
-    mv "$workflow_eval_root/extra-key-mutated.json" "$extra_key_response"
-    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_extra_responses" --skill assistant-workflow --case native-slice-execution-uses-dependencies-not-runner-topology >"$workflow_eval_root/extra-key.out" 2>&1 \
-        || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/extra-key.out"; then
-        workflow_eval_grading_failures+=("extra-key:$extra_key_mutation")
-    fi
-done
-if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$workflow_eval_missing_seed_responses" --skill assistant-workflow --case isolated-independent-slices-integrate-before-review >"$workflow_eval_root/isolated-missing-seed.out" 2>&1 \
-    || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/isolated-missing-seed.out"; then
-    workflow_eval_grading_failures+=("isolated-independent-slices-integrate-before-review:missing-seeded-isolation-evidence")
-fi
-for policy_negative in \
-    "wrong-writer:$workflow_eval_wrong_writer_responses:native-slice-execution-uses-dependencies-not-runner-topology" \
-    "wrong-integration:$workflow_eval_wrong_integration_responses:isolated-independent-slices-integrate-before-review" \
-    "wrong-review:$workflow_eval_wrong_review_responses:isolated-independent-slices-integrate-before-review"; do
-    IFS=':' read -r policy_negative_name policy_negative_responses policy_negative_case <<< "$policy_negative"
-    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$policy_negative_responses" --skill assistant-workflow --case "$policy_negative_case" >"$workflow_eval_root/$policy_negative_name.out" 2>&1 \
-        || ! grep -Fq -- "structured JSON assertion failure" "$workflow_eval_root/$policy_negative_name.out"; then
-        workflow_eval_grading_failures+=("$policy_negative_name")
-    fi
-done
-if [[ "${#workflow_eval_grading_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow eval grading accepted unsafe dependency scheduling or missing seeded isolation evidence: ${workflow_eval_grading_failures[*]}"
-fi
-
-test_start "workflow fixture schema rejects undeclared execution-policy children and invalid decisions"
-workflow_policy_schema_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-eval-policy-schema.XXXXXX")"
-workflow_policy_schema_skill="$workflow_policy_schema_root/assistant-workflow"
-workflow_policy_schema_err="$workflow_policy_schema_root/validation.err"
-p0p4_register_cleanup "$workflow_policy_schema_root"
-mkdir -p "$workflow_policy_schema_skill/evals"
-cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$workflow_policy_schema_skill/SKILL.md"
-ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$workflow_policy_schema_skill/contracts"
-workflow_policy_schema_failures=()
-if ! "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill assistant-workflow >/dev/null; then
-    workflow_policy_schema_failures+=("valid-fixture")
-fi
-jq '(.cases[] | select(.id == "native-slice-execution-uses-dependencies-not-runner-topology") | .machine_expectations.structured_json_assertions) += [{"operator":"equals","path":["execution_policy","invented_child"],"expected":"x"}]' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$workflow_policy_schema_skill/evals/cases.json"
-if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$workflow_policy_schema_skill" >/dev/null 2>"$workflow_policy_schema_err" \
-    || ! grep -Fq -- "undeclared assertion path" "$workflow_policy_schema_err"; then
-    workflow_policy_schema_failures+=("undeclared-child")
-fi
-jq '(.cases[] | select(.id == "native-slice-execution-uses-dependencies-not-runner-topology") | .machine_expectations.structured_json_assertions) |= map(if .operator == "array_object_values_exact" and .path == ["execution_policy", "c_start_decisions"] then .expected_objects[0].c_decision = "unsafe" else . end)' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$workflow_policy_schema_skill/evals/cases.json"
-if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --validate-fixture --skill "$workflow_policy_schema_skill" >/dev/null 2>"$workflow_policy_schema_err" \
-    || ! grep -Fq -- "assertion literal outside contract schema" "$workflow_policy_schema_err"; then
-    workflow_policy_schema_failures+=("invalid-decision-enum")
-fi
-if [[ "${#workflow_policy_schema_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow fixture schema accepted invalid execution-policy structure: ${workflow_policy_schema_failures[*]}"
-fi
-
-test_start "workflow slice identities are descriptive while ordering stays display-only"
-missing_descriptive_slice_terms=()
-for skill_root in "$FRAMEWORK_DIR/skills/assistant-workflow"; do
-    output_contract="$skill_root/contracts/output.yaml"
-    phase_gates="$skill_root/contracts/phase-gates.yaml"
-    plan_template="$skill_root/references/plan-template.md"
-    journal_template="$skill_root/references/task-journal-template.md"
-
-    for term in \
-        "Stable descriptive outcome-oriented slice identifier" \
-        "Ordinal-only or generic sequence labels such as s1, slice-2, or step-3 are invalid; manifest order and depends_on carry sequencing"; do
-        if ! grep -Fq -- "$term" "$output_contract"; then
-            missing_descriptive_slice_terms+=("${output_contract#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-    for term in \
-        "- id: DC_SLICE_IDENTITY" \
-        "Every slice_id names its observable increment or verified deliverable" \
-        "- id: DC_SLICE_SEQUENCE_LABEL" \
-        "No slice_id is an ordinal-only or generic sequence label"; do
-        if ! grep -Fq -- "$term" "$phase_gates"; then
-            missing_descriptive_slice_terms+=("${phase_gates#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-    if ! grep -Fq -- "- slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]" "$plan_template"; then
-        missing_descriptive_slice_terms+=("${plan_template#$FRAMEWORK_DIR/}: descriptive slice_id template")
-    fi
-    if ! grep -Fq -- "| 1. [slice_id] [name] |" "$journal_template" \
-        || grep -Fq -- "| S1: [slice_id] [name] |" "$journal_template"; then
-        missing_descriptive_slice_terms+=("${journal_template#$FRAMEWORK_DIR/}: ordinal must be display-only and separate from slice_id")
-    fi
-done
-if ! grep -Fq -- "descriptive outcome-oriented" "$FRAMEWORK_DIR/README.md"; then
-    missing_descriptive_slice_terms+=("README.md: descriptive outcome-oriented slice identifier guidance")
-fi
-if [[ "${#missing_descriptive_slice_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow descriptive slice identity contract is incomplete: ${missing_descriptive_slice_terms[*]}"
-fi
 
 test_start "workflow task journal template anchors native dispatch evidence to Created identity"
 missing_task_identity_terms=()
@@ -548,6 +630,7 @@ if [[ "${#missing_task_identity_terms[@]}" -eq 0 ]]; then
 else
     fail "task-journal-template.md must anchor native dispatch evidence to Created identity: ${missing_task_identity_terms[*]}"
 fi
+
 
 test_start "workflow subagent policy state dispatches from instruction triggers before fallback"
 missing_workflow_subagent_gate=()
@@ -645,6 +728,7 @@ else
     fail "assistant-workflow must resolve subagent policy state before delegated or direct fallback execution: ${missing_workflow_subagent_gate[*]}"
 fi
 
+
 test_start "workflow delegation fallback requires trigger evidence or policy block"
 workflow_delegation_proof_failures=()
 workflow_delegation_proof_terms=(
@@ -682,6 +766,7 @@ else
     fail "workflow delegation fallback must carry trigger or policy-block evidence: ${workflow_delegation_proof_failures[*]}"
 fi
 
+
 test_start "workflow loads the delegation trigger invariant"
 workflow_trigger_invariant_failures=()
 for surface_and_term in \
@@ -704,6 +789,7 @@ else
     fail "workflow must load a trigger-state invariant for every phase: ${workflow_trigger_invariant_failures[*]}"
 fi
 
+
 test_start "delegation recovery preserves evidenced fallback and dispatches only from triggers"
 delegation_recovery_failures=()
 for file_and_term in \
@@ -724,6 +810,7 @@ if [[ "${#delegation_recovery_failures[@]}" -eq 0 ]]; then
 else
     fail "delegation recovery can overwrite opt-out or dispatch without a trigger: ${delegation_recovery_failures[*]}"
 fi
+
 
 test_start "active delegation surfaces exclude retired state identifiers"
 retired_delegation_identifiers=(
@@ -757,6 +844,7 @@ else
     fail "retired delegation identifiers remain on active surfaces: ${retired_delegation_matches[*]}"
 fi
 
+
 test_start "workflow Codex subagent docs do not require stale multi_agent feature flag"
 missing_codex_subagent_doc_terms=()
 for term in \
@@ -777,397 +865,6 @@ else
     fail "Codex subagent docs should match current native subagent behavior: ${missing_codex_subagent_doc_terms[*]}"
 fi
 
-test_start "workflow live output plan and decomposition review reject stale sub-task framing"
-live_slice_framing_surfaces=(
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/decomposition-plan-review.md"
-)
-missing_live_slice_framing_surfaces=()
-for file in "${live_slice_framing_surfaces[@]}"; do
-    if [[ ! -f "$file" ]]; then
-        missing_live_slice_framing_surfaces+=("${file#$FRAMEWORK_DIR/}")
-    fi
-done
-stale_live_slice_framing_file="$(mktemp "${TMPDIR:-/tmp}/workflow-live-slice-framing-stale.XXXXXX")"
-p0p4_register_cleanup "$stale_live_slice_framing_file"
-if [[ "${#missing_live_slice_framing_surfaces[@]}" -gt 0 ]]; then
-    fail "live slice framing surfaces missing: ${missing_live_slice_framing_surfaces[*]}"
-elif rg -n --ignore-case "sub-task|subtask" "${live_slice_framing_surfaces[@]}" >"$stale_live_slice_framing_file"; then
-    fail "live output/plan/decomposition review surfaces contain stale sub-task/subtask framing; see $stale_live_slice_framing_file"
-else
-    pass
-fi
-
-test_start "workflow decomposition review requires broad-split rejection proof"
-missing_broad_split_review_terms=()
-plan_broad_split_count="$(grep -Fc -- "- Broad-split rejection:" "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md" || true)"
-if [[ "$plan_broad_split_count" -lt 2 ]]; then
-    missing_broad_split_review_terms+=("plan-template.md medium/full Broad-split rejection lines")
-fi
-for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; do
-    for term in \
-        "- id: DC8" \
-        "broad_split_rejection proof" \
-        "broad layer/module/folder/feature/setup/contract/component splits were rejected"; do
-        if ! grep -Fq -- "$term" "$file"; then
-            missing_broad_split_review_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-done
-for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; do
-    for term in \
-        "Broad-split rejection" \
-        "Broad-split rejection must explicitly prove broad layer/module/folder/feature/setup/contract/component splits were rejected"; do
-        if ! grep -Fq -- "$term" "$file"; then
-            missing_broad_split_review_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-done
-for term in \
-    "- name: broad_split_rejection" \
-    "feature-only, setup-only, contract-only" \
-    "broad component-style splits were rejected"; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-        missing_broad_split_review_terms+=("output.yaml: $term")
-    fi
-done
-if ! awk '
-    $0 == "  - name: decomposition_plan_review" { in_review = 1; next }
-    in_review && /^  - name: / { exit }
-    in_review && $0 == "      - name: broad_split_rejection" { in_field = 1; next }
-    in_field && /required: true/ { found = 1; exit }
-    in_field && /^      - name: / { in_field = 0 }
-    END { exit found ? 0 : 1 }
-' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-    missing_broad_split_review_terms+=("output.yaml decomposition_plan_review.broad_split_rejection required: true")
-fi
-if [[ "${#missing_broad_split_review_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "broad-split rejection proof contract missing terms: ${missing_broad_split_review_terms[*]}"
-fi
-
-test_start "workflow phase gates require dependency-aware recorded slice evidence"
-missing_slice_gate_terms=()
-for term in \
-    "- id: B12" \
-    "independently checked, passing, and recorded with method-appropriate result evidence in the task journal, validation_results, or equivalent carried-forward slice ledger" \
-    "record method-appropriate results in the configured task journal or equivalent carried-forward state" \
-    "- id: B13" \
-    "Full-scope validation using the selected checks and binding project checks is required before fresh Review" \
-    "not an unselected full test suite" \
-    "Cross-slice validation applies only when slice_manifest contains more than one item" \
-    "record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale" \
-    "Single-slice full-scope validation still covers integration with existing code" \
-    "shared or unknown workspace are VERIFIED, including self-check result, before another source-changing slice starts" \
-    "runtime evidence proves isolated workspaces" \
-    "every depends_on prerequisite has final status VERIFIED before a dependent slice starts" \
-    "Cross-slice validation applies only when slice_manifest contains more than one item"; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        missing_slice_gate_terms+=("$term")
-    fi
-done
-if [[ "${#missing_slice_gate_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "phase-gates.yaml missing dependency-aware slice verification gate terms: ${missing_slice_gate_terms[*]}"
-fi
-
-test_start "workflow integration prompts apply selected checks and cross-slice checks by manifest cardinality"
-slice_integration_rule="After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice validation still covers the selected integration claim. Per-slice verification does not satisfy a distinct selected integration check."
-slice_integration_failures=()
-for slice_integration_file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/build.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"; do
-    if ! p0p4_contains_text "$slice_integration_file" "Cross-slice validation applies only when slice_manifest contains more than one item"; then
-        slice_integration_failures+=("$slice_integration_file")
-    fi
-done
-if ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md" "After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review" \
-    || ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/build.md" "After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review"; then
-    slice_integration_failures+=("canonical Build instructions omit selected-check integration coverage")
-fi
-if [[ "${#slice_integration_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "integration guidance is missing the single/multiple-slice applicability rule: ${slice_integration_failures[*]}"
-fi
-
-test_start "Decompose guidance permits isolated overlap while rejecting stale next-slice sequencing"
-decompose_source="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
-decompose_view="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases/decompose.md"
-if grep -Fq "every \`depends_on\` prerequisite is \`VERIFIED\` before starting a dependent slice" "$decompose_source" \
-    && grep -Fq "integrated output is validated before Review" "$decompose_source" \
-    && grep -Fq "every \`depends_on\` prerequisite is \`VERIFIED\` before starting a dependent slice" "$decompose_view" \
-    && ! grep -Fq "every slice is verified before moving to the next slice" "$decompose_source" \
-    && ! grep -Fq "every slice is verified before moving to the next slice" "$decompose_view"; then
-    pass
-else
-    fail "Decompose source or generated view still imposes stale unconditional next-slice sequencing"
-fi
-
-test_start "workflow handoffs pass current task packets to CodeWriter and BuilderTester"
-handoffs_file="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
-task_packet_handoffs="$(count_occurrences "name: current_task_packet" "$handoffs_file")"
-missing_task_packet_fields=()
-for field in \
-    slice_id \
-    slice_name \
-    name \
-    acceptance_criteria \
-    files_to_test \
-    evidence_to_record \
-    verification_command \
-    expected_success_signal; do
-    if ! grep -Fq -- "name: $field" "$handoffs_file"; then
-        missing_task_packet_fields+=("$field")
-    fi
-done
-if [[ "$task_packet_handoffs" -ge 2 && "${#missing_task_packet_fields[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "handoffs.yaml must define CodeWriter and BuilderTester current_task_packet fields; count=$task_packet_handoffs missing=${missing_task_packet_fields[*]}"
-fi
-
-handoff_context_field_has_direct_line() {
-    local file="$1"
-    local handoff="$2"
-    local field="$3"
-    local expected="$4"
-    awk -v handoff="$handoff" -v field="$field" -v expected="$expected" '
-        $0 == "  - name: " handoff { in_handoff = 1; next }
-        in_handoff && /^  - name: / { exit }
-        in_handoff && /^    context_fields:/ { in_context = 1; next }
-        in_context && /^    return_fields:/ { exit }
-        in_context && $0 == "      - name: " field { in_field = 1; next }
-        in_field && /^        object_fields:/ { exit }
-        in_field && index($0, expected) { found = 1; exit }
-        in_field && /^      - name: / { exit }
-        END { exit found ? 0 : 1 }
-    ' "$file"
-}
-
-test_start "workflow handoffs require conditional slice manifest and current task packets"
-missing_conditional_handoff_terms=()
-for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; do
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_architect" "slice_manifest" "required: conditional"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: architect slice_manifest required: conditional")
-    fi
-    if handoff_context_field_has_direct_line "$file" "orchestrator_to_architect" "slice_manifest" "required: false"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: architect slice_manifest must not be required: false")
-    fi
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_architect" "slice_manifest" "size in [medium, large, mega] or the approved plan will use executable task packets"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: architect slice_manifest condition")
-    fi
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_architect" "slice_manifest" "on_missing: re-dispatch"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: architect slice_manifest on_missing")
-    fi
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_architect" "slice_manifest" "Block Architect dispatch"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: architect slice_manifest corrective text")
-    fi
-
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_code_writer" "current_task_packet" "required: conditional"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: CodeWriter current_task_packet required: conditional")
-    fi
-    if handoff_context_field_has_direct_line "$file" "orchestrator_to_code_writer" "current_task_packet" "required: false"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: CodeWriter current_task_packet must not be required: false")
-    fi
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_code_writer" "current_task_packet" "current build step executes a slice or the approved plan uses executable task packets"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: CodeWriter current_task_packet condition")
-    fi
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_code_writer" "current_task_packet" "on_missing: fail"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: CodeWriter current_task_packet on_missing")
-    fi
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_code_writer" "current_task_packet" "Block CodeWriter dispatch"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: CodeWriter current_task_packet corrective text")
-    fi
-
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_builder_tester" "current_task_packet" "required: conditional"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: BuilderTester current_task_packet required: conditional")
-    fi
-    if handoff_context_field_has_direct_line "$file" "orchestrator_to_builder_tester" "current_task_packet" "required: false"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: BuilderTester current_task_packet must not be required: false")
-    fi
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_builder_tester" "current_task_packet" "current verification step executes a slice or the approved plan uses executable task packets"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: BuilderTester current_task_packet condition")
-    fi
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_builder_tester" "current_task_packet" "on_missing: fail"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: BuilderTester current_task_packet on_missing")
-    fi
-    if ! handoff_context_field_has_direct_line "$file" "orchestrator_to_builder_tester" "current_task_packet" "Block BuilderTester dispatch"; then
-        missing_conditional_handoff_terms+=("${file#$FRAMEWORK_DIR/}: BuilderTester current_task_packet corrective text")
-    fi
-done
-if [[ "${#missing_conditional_handoff_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "handoffs.yaml must conditionally require slice/task packet handoff fields: ${missing_conditional_handoff_terms[*]}"
-fi
-
-test_start "workflow architect plan handoff requires task packet execution fields"
-missing_required_fields=()
-for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; do
-    for field in \
-        slice_id \
-        slice_name \
-        name \
-        observable_increment \
-        deliverable_type \
-        files_to_create \
-        files_to_modify \
-        files_to_test \
-        enabling_changes_included \
-        depends_on \
-        tdd_applies \
-        evidence_assessment \
-        acceptance_criteria \
-        implementation_notes \
-        expected_success_signal \
-        evidence_to_record \
-        deviation_rollback_rule; do
-        if ! field_required_true_after_anchor "$file" "- name: implementation_steps" "$field"; then
-            missing_required_fields+=("${file#$FRAMEWORK_DIR/}: $field")
-        fi
-    done
-done
-if ! ruby -ryaml -e '
-  h = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
-  a = h.find { |x| x["name"] == "orchestrator_to_architect" }.fetch("return_fields").find { |x| x["name"] == "implementation_steps" }
-  fields = a.fetch("object_fields")
-  command = fields.find { |x| x["name"] == "verification_command" }
-  valid = command["required"] == "conditional" && command.fetch("condition").include?("exactly one matching command-based CheckSpec") && fields.count { |x| x["name"] == "tdd_applies" } == 1
-  exit(valid ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
-    fail "Architect command is conditional and task packet has one canonical TDD projection"
-else
-    pass
-fi
-if [[ "${#missing_required_fields[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "architect implementation_steps must require executable task packet fields: ${missing_required_fields[*]}"
-fi
-
-handoff_object_required_fields() {
-    local file="$1"
-    local handoff="$2"
-    local section="$3"
-    local object_field="$4"
-
-    awk -v handoff="$handoff" -v section="$section" -v object_field="$object_field" '
-        $0 == "  - name: " handoff { in_handoff = 1; next }
-        in_handoff && /^  - name: / { exit }
-        in_handoff && $0 == "    " section ":" { in_section = 1; next }
-        in_section && /^    (context_fields|return_fields):/ { exit }
-        in_section && $0 == "      - name: " object_field { in_object = 1; current = ""; next }
-        in_object && /^      - name: / { exit }
-        in_object && /^          - name: / {
-            current = $0
-            sub(/^          - name: /, "", current)
-            next
-        }
-        in_object && current != "" && /^            required: true/ {
-            print current
-            current = ""
-        }
-    ' "$file"
-}
-
-field_in_required_list() {
-    local needle="$1"
-    shift
-
-    local field
-    for field in "$@"; do
-        if [[ "$field" == "$needle" ]]; then
-            return 0
-        fi
-    done
-
-    return 1
-}
-
-test_start "workflow Architect implementation_steps cover consumer current_task_packet required fields"
-missing_packet_coverage=()
-for file in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; do
-    architect_required=()
-    while IFS= read -r field; do
-        architect_required+=("$field")
-    done < <(handoff_object_required_fields "$file" "orchestrator_to_architect" "return_fields" "implementation_steps")
-    if [[ "${#architect_required[@]}" -eq 0 ]]; then
-        missing_packet_coverage+=("${file#$FRAMEWORK_DIR/}: Architect implementation_steps required field set is empty")
-        continue
-    fi
-
-    for consumer in \
-        "orchestrator_to_code_writer:CodeWriter" \
-        "orchestrator_to_builder_tester:BuilderTester"; do
-        IFS=':' read -r handoff consumer_name <<< "$consumer"
-        consumer_required=()
-        while IFS= read -r field; do
-            consumer_required+=("$field")
-        done < <(handoff_object_required_fields "$file" "$handoff" "context_fields" "current_task_packet")
-        if [[ "${#consumer_required[@]}" -eq 0 ]]; then
-            missing_packet_coverage+=("${file#$FRAMEWORK_DIR/}: ${consumer_name} current_task_packet required field set is empty")
-            continue
-        fi
-
-        for field in "${consumer_required[@]}"; do
-            if ! field_in_required_list "$field" "${architect_required[@]}"; then
-                missing_packet_coverage+=("${file#$FRAMEWORK_DIR/}: Architect implementation_steps missing required ${consumer_name} current_task_packet.$field")
-            fi
-        done
-    done
-done
-if [[ "${#missing_packet_coverage[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "Architect implementation_steps producer must cover consumer current_task_packet required fields: ${missing_packet_coverage[*]}"
-fi
-
-reuse_search_schema_signature() {
-    local file="$1"
-    local handoff="$2"
-    local section="$3"
-    local container="$4"
-
-    awk -v handoff="$handoff" -v section="$section" -v container="$container" '
-        function indent(line) { match(line, /^ */); return RLENGTH }
-        $0 == "  - name: " handoff { in_handoff = 1; next }
-        in_handoff && /^  - name: / { exit }
-        in_handoff && $0 == "    " section ":" { in_section = 1; next }
-        in_section && /^    (context_fields|return_fields):/ && $0 != "    " section ":" { exit }
-        !in_section { next }
-        container == "" && $0 == "      - name: reuse_search" { in_target = 1; target_indent = indent($0); next }
-        container != "" && $0 == "      - name: " container { in_container = 1; next }
-        in_container && /^      - name: / && $0 != "      - name: " container { exit }
-        in_container && $0 == "          - name: reuse_search" { in_target = 1; target_indent = indent($0); next }
-        !in_target { next }
-        indent($0) == target_indent && /^ *- name: / { exit }
-        /^ *- name: / {
-            value = $0
-            sub(/^ *- name: /, "", value)
-            print "field|" (indent($0) - target_indent) "|" value
-            next
-        }
-        /^ *(type|required|condition|enum_values|min_items): / {
-            key = $0
-            sub(/^ */, "", key)
-            value = key
-            sub(/^[^:]+: /, "", value)
-            sub(/: .*/, "", key)
-            print "attribute|" (indent($0) - target_indent) "|" key "|" value
-        }
-    ' "$file"
-}
 
 test_start "reuse-search schema is identical across mapper, task-packet, build, and review boundaries"
 reuse_search_packet_failures=()
@@ -1195,53 +892,6 @@ else
     fail "reuse-search schema parity failed: ${reuse_search_packet_failures[*]}"
 fi
 
-test_start "workflow mega sub-task brief uses strict slice packet contract"
-sub_task_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"
-missing_sub_task_packet_terms=()
-for term in \
-    "### Strict slice packet (execution contract)" \
-    "- slice_id:" \
-    "- slice_name:" \
-    "- observable_increment:" \
-    "- deliverable_type:" \
-    "- files_to_create:" \
-    "- files_to_modify:" \
-    "- files_to_test:" \
-    "- enabling_changes_included:" \
-    "- depends_on:" \
-    "- worker_stage:" \
-    "- build_execution_lane:" \
-    "- writer_selection: [new Claude or Codex:" \
-    "- red_check_id:" \
-    "- red_command:" \
-    "- red_cwd:" \
-    "- expected_red_failure:" \
-    "- tdd_cycle_log_ref:" \
-    "- acceptance_criteria:" \
-    "- selected_check_procedure: [for each CheckSpec, exact argv and cwd if command-based; otherwise concrete procedure and observable result; do not invent a command]" \
-    "- expected_success_signal:" \
-    "- evidence_to_record:" \
-    "- deviation_rollback_rule:" \
-    "DEVIATED" \
-    "Source-changing packets in a shared or unknown workspace run sequentially"; do
-    if ! grep -Fq -- "$term" "$sub_task_template"; then
-        missing_sub_task_packet_terms+=("$term")
-    fi
-done
-strict_slice_packet="$(awk '/^### Strict slice packet \(execution contract\)$/{capture=1; next} capture && /^### Supporting context/{exit} capture{print}' "$sub_task_template")"
-if [[ "$strict_slice_packet" != *"- feature_preparation_scope:"* ]] \
-    || [[ "$strict_slice_packet" != *"- feature_preparation_evidence_ref:"* ]] \
-    || [[ "$strict_slice_packet" != *"- feature_preparation_harness_obligation:"* ]]; then
-    missing_sub_task_packet_terms+=("strict slice packet missing feature-preparation scope, evidence ref, or harness obligation")
-fi
-if rg -n "^### (Goal|Scope)$" "$sub_task_template" >/dev/null; then
-    missing_sub_task_packet_terms+=("loose Goal/Scope execution sections must be absent")
-fi
-if [[ "${#missing_sub_task_packet_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "sub-task-brief-template.md missing strict slice packet contract terms: ${missing_sub_task_packet_terms[*]}"
-fi
 
 test_start "workflow reference templates reject stale sub-task branch and brief examples"
 reference_template_surfaces=(
@@ -1257,57 +907,6 @@ else
     pass
 fi
 
-test_start "workflow architect plan keeps optional display files summary non-contractual"
-missing_architect_display_files_terms=()
-if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_architect" "implementation_steps" "Optional display summaries may exist only for human readability"; then
-    missing_architect_display_files_terms+=("implementation_steps description marks display summaries optional")
-fi
-if ! handoff_return_field_has_line "$handoffs_file" "orchestrator_to_architect" "implementation_steps" "cannot satisfy or replace exact slice and files_to_* fields"; then
-    missing_architect_display_files_terms+=("implementation_steps description says display summaries cannot satisfy task packet contract")
-fi
-if ! field_required_true_after_anchor "$handoffs_file" "- name: implementation_steps" "files"; then
-    :
-else
-    missing_architect_display_files_terms+=("implementation_steps.files must not be required")
-fi
-for term in \
-    "          - name: files" \
-    "            required: false" \
-    "Optional display summary of file paths this step touches; cannot satisfy or replace executable files_to_* contract"; do
-    if ! awk -v term="$term" '
-        $0 == "  - name: orchestrator_to_architect" { in_handoff = 1; next }
-        in_handoff && /^  - name: / { exit }
-        in_handoff && $0 == "      - name: implementation_steps" { in_steps = 1; next }
-        in_steps && index($0, term) { found = 1; exit }
-        in_steps && $0 == "      - name: files_to_create" { exit }
-        END { exit found ? 0 : 1 }
-    ' "$handoffs_file"; then
-        missing_architect_display_files_terms+=("$term")
-    fi
-done
-if [[ "${#missing_architect_display_files_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "architect implementation_steps must use files_to_* as required fields and keep display summaries optional: ${missing_architect_display_files_terms[*]}"
-fi
-
-test_start "workflow live slicing surfaces reject stale component execution artifacts"
-stale_component_artifacts_file="$(mktemp "${TMPDIR:-/tmp}/workflow-stale-component-artifacts.XXXXXX")"
-p0p4_register_cleanup "$stale_component_artifacts_file"
-if rg -n "component_manifest|component_verification_summary|component_name|component_id|Component Verification Ledger|per-component verification|component/subagent count|component verification criteria|per-component evidence" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/decomposition-plan-review.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/spec-review.md" \
-    "$FRAMEWORK_DIR/agents/codex/architect.toml" \
-    "$FRAMEWORK_DIR/agents/claude/architect.md" >"$stale_component_artifacts_file"; then
-    fail "found stale component execution artifacts; see $stale_component_artifacts_file"
-else
-    pass
-fi
 
 test_start "workflow pivot restart controller records decision packets and recovery refs"
 missing_pivot_restart_terms=()
@@ -1344,6 +943,7 @@ else
     fail "workflow pivot/restart controller missing decision packet terms: ${missing_pivot_restart_terms[*]}"
 fi
 
+
 test_start "workflow CodeWriter unexpected blockers classify and route recovery"
 missing_codewriter_blocker_terms=()
 for file_and_term in \
@@ -1375,6 +975,7 @@ else
     fail "CodeWriter blocker classification and orchestrator routing terms missing: ${missing_codewriter_blocker_terms[*]}"
 fi
 
+
 test_start "assistant-review stagnation and QA pivot escalate to pivot restart decision"
 missing_review_pivot_terms=()
 for file_and_term in \
@@ -1401,6 +1002,7 @@ else
     fail "assistant-review pivot/restart stagnation escalation terms missing: ${missing_review_pivot_terms[*]}"
 fi
 
+
 test_start "assistant-review removes stale loose stagnation and drift exits"
 stale_pivot_restart_terms=()
 for file_and_term in \
@@ -1418,34 +1020,6 @@ else
     fail "stale loose stagnation/drift exits remain: ${stale_pivot_restart_terms[*]}"
 fi
 
-test_start "workflow decompose surfaces reject broad layer module folder strategies"
-missing_slice_rejection_terms=()
-for term in \
-    "layer-only, module-only, folder-only" \
-    "Contract-only/setup-only work is valid only when it is the deliverable artifact slice" \
-    "Broad feature-only splits are invalid live decomposition output" \
-    "by_layer" \
-    "by_module" \
-    "by_feature" \
-    "contracts_first"; do
-    case "$term" in
-        by_layer|by_module|by_feature|contracts_first)
-            if ! rg -n "$term" "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >/dev/null; then
-                missing_slice_rejection_terms+=("eval forbidden substring: $term")
-            fi
-            ;;
-        *)
-            if ! rg -n "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" >/dev/null; then
-                missing_slice_rejection_terms+=("$term")
-            fi
-            ;;
-    esac
-done
-if [[ "${#missing_slice_rejection_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "strict slice broad-split rejection terms missing: ${missing_slice_rejection_terms[*]}"
-fi
 
 test_start "workflow Build repair is bounded persistent and routes unknown or terminal failures"
 repair_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
@@ -1492,6 +1066,7 @@ else
 fi
 
 
+
 test_start "writer_selection is identical across six packet projections and inline CodeWriter context"
 if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
 root = ARGV.fetch(0)
@@ -1501,18 +1076,18 @@ packets = []
 h.fetch('handoffs').each do |handoff|
   %w[context_fields return_fields].each do |direction|
     Array(handoff[direction]).each do |field|
-      packets << field if %w[slice_manifest implementation_steps current_task_packet].include?(field['name'])
+      packets << field if %w[implementation_steps current_task_packet].include?(field['name'])
     end
   end
 end
-packets << o.fetch('artifacts').find { |f| f['name'] == 'slice_manifest' }
+packets << o.fetch('artifacts').find { |f| f['name'] == 'implementation_steps' }
 raise 'six packet projections required' unless packets.length == 6
 inline = h.fetch('handoffs').find { |f| f['name'] == 'orchestrator_to_code_writer' }.fetch('context_fields').find { |f| f['name'] == 'writer_selection' }
 shapes = packets.map { |f| f.fetch('object_fields').find { |x| x['name'] == 'writer_selection' } } + [inline]
 raise 'selection drift/missing' if shapes.any?(&:nil?) || shapes.uniq.length != 1
 shape = shapes.first
 raise 'legacy omission broken' unless shape['required'] == 'conditional' && shape['condition'].include?('legacy packets')
-raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '13.0' }
+raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '14.0' }
 fields = shape.fetch('object_fields').to_h { |f| [f['name'],f] }
 raise 'normal identity widened' unless fields.fetch('agent')['enum_values'] == %w[intelligent-writer mechanical-writer]
 eligibility = fields.fetch('mechanical_eligibility')
@@ -1544,5 +1119,53 @@ raise 'legacy runtime identity allowed as normal selection' if accept.call({'wri
 raise 'default intelligent rejected' unless accept.call({'writer_selection'=>{'agent'=>'intelligent-writer','rationale'=>'grader oracle judgment'}})
 RUBY
 then pass; else fail "writer selection projection/compatibility/evidence contract drift"; fi
+
+
+test_start "workflow mega sub-task brief uses canonical task packet contract"
+sub_task_template="$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md"
+missing_sub_task_packet_terms=()
+for term in \
+    "### Strict slice packet (execution contract)" \
+    "- packet_id:" \
+    "- observable_increment:" \
+    "- deliverable_type:" \
+    "- files_to_create:" \
+    "- files_to_modify:" \
+    "- files_to_test:" \
+    "- enabling_changes_included:" \
+    "- depends_on:" \
+    "- worker_stage:" \
+    "- build_execution_lane:" \
+    "- writer_selection: [new Claude or Codex:" \
+    "- red_check_id:" \
+    "- red_command:" \
+    "- red_cwd:" \
+    "- expected_red_failure:" \
+    "- tdd_cycle_log_ref:" \
+    "- acceptance_criteria:" \
+    "- selected_check_procedure: [for each CheckSpec, exact argv and cwd if command-based; otherwise concrete procedure and observable result; do not invent a command]" \
+    "- expected_success_signal:" \
+    "- evidence_to_record:" \
+    "- deviation_rollback_rule:" \
+    "DEVIATED" \
+    "Source-changing packets in a shared or unknown workspace run sequentially"; do
+    if ! grep -Fq -- "$term" "$sub_task_template"; then
+        missing_sub_task_packet_terms+=("$term")
+    fi
+done
+strict_slice_packet="$(awk '/^### Strict slice packet \(execution contract\)$/{capture=1; next} capture && /^### Supporting context/{exit} capture{print}' "$sub_task_template")"
+if [[ "$strict_slice_packet" != *"- feature_preparation_scope:"* ]] \
+    || [[ "$strict_slice_packet" != *"- feature_preparation_evidence_ref:"* ]] \
+    || [[ "$strict_slice_packet" != *"- feature_preparation_harness_obligation:"* ]]; then
+    missing_sub_task_packet_terms+=("canonical task packet missing feature-preparation scope, evidence ref, or harness obligation")
+fi
+if rg -n "^### (Goal|Scope)$" "$sub_task_template" >/dev/null; then
+    missing_sub_task_packet_terms+=("loose Goal/Scope execution sections must be absent")
+fi
+if [[ "${#missing_sub_task_packet_terms[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "sub-task-brief-template.md missing canonical task packet contract terms: ${missing_sub_task_packet_terms[*]}"
+fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

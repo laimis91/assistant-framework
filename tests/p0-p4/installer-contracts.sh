@@ -956,6 +956,13 @@ worker_stage_protocol:
       completes_build: false
 PROTOCOL
     case "$variant" in
+        current14|unknown-version)
+            local target_version=14.0
+            [[ "$variant" != unknown-version ]] || target_version=15.0
+            for file in "$workflow/contracts/index.yaml" "$workflow/contracts/handoffs.yaml"; do
+                sed "s/13.0/$target_version/" "$file" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$file"
+            done ;;
+        mixed-version) sed 's/13.0/14.0/' "$workflow/contracts/index.yaml" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$workflow/contracts/index.yaml" ;;
         old|recovery|full|gemini) printf '%s\n' 'schema_version: "12.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
         no-stages) sed '/^worker_stage_protocol:/,$d' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         stage-mismatch) sed 's/current_matching_red/none/' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
@@ -986,7 +993,7 @@ ownership_install_compatibility_matrix() {
     local matrix_root="$1" agent variant mode case_home agent_home skills workflow before after workflow_before status log
     local -a args
     for agent in codex claude; do
-        for variant in old no-stages stage-mismatch early-completion missing-index duplicate-index duplicate-handoffs malformed wrong-identity unsafe-workflow unsafe-skill unsafe-index absent current bom-crlf recovery full; do
+        for variant in old no-stages stage-mismatch early-completion missing-index duplicate-index duplicate-handoffs malformed wrong-identity unsafe-workflow unsafe-skill unsafe-index absent current current14 unknown-version mixed-version bom-crlf recovery full; do
             for mode in normal dry-run; do
                 [[ "$mode" == dry-run && ( "$variant" == recovery || "$variant" == full ) ]] && continue
                 case_home="$matrix_root/$agent-$variant-$mode"
@@ -1017,11 +1024,11 @@ ownership_install_compatibility_matrix() {
                 HOME="$case_home" CODEX_HOME="$([[ "$agent" == codex ]] && printf '%s' "$agent_home" || printf /)" bash "$FRAMEWORK_DIR/install.sh" "${args[@]}" >"$log" 2>&1 || status=$?
                 after="$(ownership_install_fingerprint "$case_home")"
                 case "$variant" in
-                    absent|current|bom-crlf|recovery|full)
+                    absent|current|current14|bom-crlf|recovery|full)
                         if [[ "$status" != 0 ]]; then ownership_matrix_failure="$agent/$variant/$mode unexpectedly rejected; $log"; return 1; fi
                         if [[ "$mode" == dry-run && "$before" != "$after" ]]; then ownership_matrix_failure="$agent/$variant dry-run mutated managed tree"; return 1; fi
                         if [[ "$variant" == absent && -e "$workflow" ]]; then ownership_matrix_failure="$agent selective absent install added workflow"; return 1; fi
-                        if [[ "$variant" == current || "$variant" == bom-crlf ]]; then
+                        if [[ "$variant" == current || "$variant" == current14 || "$variant" == bom-crlf ]]; then
                             if [[ "$workflow_before" != "$(ownership_install_fingerprint "$workflow")" ]]; then ownership_matrix_failure="$agent selective install refreshed retained compatible controller"; return 1; fi
                         fi
                         if [[ "$variant" == recovery || "$variant" == full ]]; then

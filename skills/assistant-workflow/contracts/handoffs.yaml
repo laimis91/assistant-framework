@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "13.0"
+schema_version: "14.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -48,7 +48,7 @@ worker_status_protocol:
 
 # Writer stages are semantic selectors on the existing CodeWriter handoff.
 worker_stage_protocol:
-  description: "One selected writer owns tests and implementation; BuilderTester executes already authored checks. Stage completion never closes Build."
+  description: "One selected writer owns tests and implementation; BuilderTester executes already authored checks. Stage completion never closes Build. Canonical v14 stored implementation_steps are stage-neutral. The caller overlay materializes worker_stage/verification_stage and matching inline aliases; changing stage never changes definition or packet_definition. Native actor and authored/reused test proofs are caller-resolved, not a second plan or execution attestation."
   stages:
     - value: test_authoring
       mutation_scope: tests_only
@@ -785,7 +785,7 @@ handoffs:
         type: enum
         required: true
         enum_values: [medium, large, mega]
-        description: "Determines slice depth; produce one or more smallest iterable slices and justify a single-slice manifest when correct"
+        description: "Context for effort and approval; size alone does not require decomposition or Architect"
       - name: search_mode
         type: enum
         required: false
@@ -854,20 +854,12 @@ handoffs:
         required: false
         condition: "status is DEVIATED"
         description: "What the decomposition had to change from the requested scope or approved direction"
-      - name: slice_manifest
+      - name: implementation_steps
         type: object[]
         required: true
-        description: "Ordered list of smallest iterable slices. Layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits are invalid unless the slice itself produces a verified deliverable artifact."
+        description: "Canonical ordered packets; one coherent increment defaults to one packet. Stored Plan keeps specialist references; worker projections materialize unchanged decisions. Optional display summaries may exist only for human readability and cannot replace exact packet and files_to_* fields."
         min_items: 1
         object_fields:
-          - name: worker_stage
-            type: enum
-            required: conditional
-            condition: "new CodeWriter dispatch or active separated TDD"
-            enum_values: [test_authoring, production, refactor]
-            description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
-            validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
-            on_missing: fail
           - name: writer_selection
             type: object
             required: conditional
@@ -899,48 +891,303 @@ handoffs:
                   - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
                   - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
                   - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
-          - name: slice_id
+          - name: packet_id
             type: string
             required: true
-            description: "Stable slice identifier used by Plan, Build, Review, and Document"
+            description: "Unique descriptive path-safe canonical packet identity; never ordinal-only. All consumers resolve implementation_steps exactly once."
           - name: name
             type: string
             required: true
-            description: "Short descriptive slice name"
+            description: "Human-readable task packet name passed directly as current_task_packet.name"
+          - name: description
+            type: string
+            required: true
           - name: observable_increment
             type: string
             required: true
-            description: "The user-visible, tool-visible, or artifact-visible increment this slice delivers"
+            description: "Observable increment owned by this packet"
           - name: deliverable_type
             type: enum
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
-            description: "The kind of deliverable produced by this slice"
+            description: "Deliverable owned by this packet"
           - name: requirement_ids
             type: string[]
             required: true
             min_items: 1
-            description: "Accepted requirement ids advanced by this slice"
+            description: "Requirement Acceptance Map ids implemented by this packet"
+          - name: architecture_decision_pack_ref
+            type: string
+            required: conditional
+            condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Fresh Architecture Decision Pack reference carried into this executable packet"
+            validation: "Resolves to the selected design's owned boundary, design-pressure checks, Type Ledger, quality verification, and deviation conditions"
+          - name: feature_preparation_evidence_ref
+            type: string
+            required: conditional
+            condition: "feature_preparation_scope == existing_system"
+            description: "Completed or approved evidence ref carried unchanged into this executable packet"
+            validation: "Resolves to the classifications and implementation implications this packet implements"
+          - name: approved_feature_preparation_result
+            type: object
+            required: conditional
+            condition: "execution_intent == implement_only"
+            validation: "Equals the approved input result and Plan handoff unchanged."
+            object_fields:
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - {name: scope, type: string, required: true}
+              - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: evidence_gaps, type: "string[]", required: true}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - name: readiness_plan
+                type: object
+                required: false
+                object_fields:
+                  - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+                  - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+                  - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+                  - {name: open_decisions, type: "string[]", required: true}
+                  - {name: recommended_next_state, type: string, required: true}
+                  - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - name: future_qa_acceptance_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - name: future_harness_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - {name: recommended_next_step, type: string, required: true}
+          - name: feature_preparation_harness_obligation
+            type: object
+            required: conditional
+            condition: "the approved feature-preparation result contains future_harness_obligation"
+            description: "Accepted future harness obligation carried unchanged into this executable packet"
+            validation: "Binds to feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable without an evidence ref, then activates the existing pre-Build harness entry gate"
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+              - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+              - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+          - name: feature_preparation_qa_acceptance_obligation
+            type: object
+            required: conditional
+            condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
+            description: "Accepted future QA/acceptance obligation carried unchanged into this executable packet"
+            validation: "Binds to feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable without an evidence ref, sets qa_evaluation_mode=required, and requires the existing post-Build Code Reviewer then QA Evaluator lane"
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+              - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+              - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+          - name: architecture_test_obligations
+            type: object[]
+            required: conditional
+            condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Testable Architecture Decision Pack obligations carried unchanged into the TDD Build handoff"
+            validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
+            min_items: 1
+            object_fields:
+              - name: obligation_id
+                type: string
+                required: true
+                description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+              - name: architecture_decision_pack_ref
+                type: string
+                required: true
+              - name: obligation_kind
+                type: enum
+                required: true
+                enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+              - name: behavior
+                type: string
+                required: true
+              - name: verification
+                type: string
+                required: true
+          - name: files
+            type: string[]
+            required: false
+            description: "Optional display summary of file paths this step touches; cannot satisfy or replace executable files_to_* contract"
+          - name: red_check_id
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals the sole ID in selected_check_ids intersect applicable_check_ids; multiple IDs require packet splitting. Resolve its exact command.argv and command.cwd in the unchanged CheckSpec."
+          - name: red_command
+            type: string[]
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact literal command.argv for red_check_id; never shell reconstruction."
+          - name: red_cwd
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact explicit CheckSpec command.cwd."
+          - name: expected_red_failure
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals meaningful_failure for red_check_id in the unchanged CheckSpec; planned oracle only, never actual RED evidence."
+          - name: files_to_create
+            type: string[]
+            required: true
+            description: "Exact files CodeWriter is expected to create for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
+          - name: files_to_modify
+            type: string[]
+            required: true
+            description: "Exact existing files CodeWriter is expected to modify for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
+          - name: files_to_test
+            type: string[]
+            required: true
+            description: "Exact test files or verification targets for execution only: BuilderTester executes and diagnoses selected checks; CodeWriter owns test authoring listed in files_to_create and files_to_modify. Use an empty array only when no test file applies"
+          - name: enabling_changes_included
+            type: string[]
+            required: true
+            description: "Setup, contracts, wiring, or config included inside this packet"
+          - name: depends_on
+            type: string[]
+            required: true
+            description: "Approved slice dependencies"
           - name: acceptance_criteria
             type: string[]
             required: true
-            description: "Binary pass/fail statements for the slice"
-            min_items: 1
-          - name: verification_decision
+            description: "Observable behavior this task packet must deliver"
+          - name: reuse_search
             type: object
             required: true
-            description: "Canonical decision supplied by the existing assistant-verification Analysis owner and carried into this slice before DC2."
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and equals context_fields.verification_decision; carry unchanged and do not select or rewrite it in Architect."
+            description: "CodeMapper reuse-search result carried unchanged into the executable task packet"
+            object_fields:
+              - name: applicability
+                type: enum
+                required: true
+                enum_values: [applicable, not_applicable]
+              - name: applicability_reason
+                type: string
+                required: true
+              - name: searches
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                min_items: 1
+                object_fields:
+                  - name: query_or_path
+                    type: string
+                    required: true
+                  - name: scope
+                    type: string
+                    required: true
+                  - name: outcome
+                    type: string
+                    required: true
+              - name: candidates
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                object_fields:
+                  - name: name
+                    type: string
+                    required: true
+                  - name: location
+                    type: string
+                    required: true
+                  - name: disposition
+                    type: enum
+                    required: true
+                    enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]
+                  - name: rationale
+                    type: string
+                    required: true
+              - name: no_candidate_reason
+                type: string
+                required: conditional
+                condition: "applicability == applicable and candidates is empty"
+              - name: decision
+                type: enum
+                required: conditional
+                condition: "applicability == applicable"
+                enum_values: [reuse, extend, new, intentional_duplicate]
+              - name: decision_rationale
+                type: string
+                required: conditional
+                condition: "applicability == applicable"
+              - name: divergence_control
+                type: string
+                required: conditional
+                condition: "decision == intentional_duplicate"
+          - name: done_contract_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the accepted Done Contract containing done_when, not_done_when, verification, owner_consumer, acceptance_criteria, and debate_record"
+          - name: harness_recipe_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the selected Harness Recipe based on task/model/risk/context profile"
+          - name: artifact_refs
+            type: object[]
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            min_items: 5
+            description: "Typed Artifact Reference entries that the task packet passes to CodeWriter and BuilderTester; include Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, verification evidence, and plan deviation refs when applicable."
+            object_fields:
+              - name: artifact_id
+                type: string
+                required: true
+              - name: artifact_type
+                type: enum
+                required: true
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, verification_decision, evidence_assessment, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
+              - name: producer
+                type: string
+                required: true
+              - name: consumer
+                type: string
+                required: true
+              - name: location_ref
+                type: string
+                required: true
+                description: "Typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable artifact ref"
+              - name: schema_or_contract
+                type: string
+                required: true
+              - name: validation_status
+                type: enum
+                required: true
+                enum_values: [pending, valid, invalid, stale, not_applicable]
+              - name: summary
+                type: string
+                required: true
+          - name: test_criteria
+            type: string[]
+            required: true
+            description: "Selected test or verification criteria for this step; describe a discriminating behavior oracle only when an automated_test CheckSpec is selected."
+            min_items: 1
+          - name: verification_decision_ref
+            type: object
+            required: true
+            description: "Stable reference and SHA-256 of the full unchanged task-level specialist decision; no mutable stored copy."
+            object_fields:
+              - {name: artifact_ref, type: string, required: true}
+              - {name: sha256, type: string, required: true}
           - name: selected_check_ids
             type: string[]
             required: true
-            description: "Selected CheckSpec IDs due for this slice; each resolves exactly once in the unchanged decision"
-            validation: "An ordered unique subset covering the slice acceptance criteria and risks; task-wide integration checks remain due at their existing completion boundary."
+            description: "Selected CheckSpec IDs due for this task packet"
+            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering the packet acceptance criteria and risks."
           - name: binding_obligation_refs
             type: object[]
             required: true
-            description: "Exact applicable binding tuples due for this slice"
-            validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; allocate applicable obligations to their owner or keep them at their existing task-wide boundary."
+            description: "Exact applicable binding tuples due for this task packet"
+            validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; task-wide obligations remain due at their existing completion boundary."
             object_fields:
               - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
               - {name: value, type: string, required: true}
@@ -948,28 +1195,12 @@ handoffs:
           - name: tdd_applies
             type: boolean
             required: true
-            description: "Slice-local projection of selected checks with meaningful RED oracles."
-            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; for an active slice that intersection must contain exactly one ID, otherwise split it before dispatch. Preserve the task decision unchanged."
-          - name: files_to_create
+            description: "Whether meaningful RED is active for this task packet."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the decision unchanged."
+          - name: implementation_notes
             type: string[]
             required: true
-            description: "Exact files to create; empty array when none"
-          - name: files_to_modify
-            type: string[]
-            required: true
-            description: "Exact existing files to modify; empty array when none"
-          - name: files_to_test
-            type: string[]
-            required: true
-            description: "Exact test files or verification targets for this slice; empty array only with a stated non-test verification path"
-          - name: enabling_changes_included
-            type: string[]
-            required: true
-            description: "Setup, contracts, wiring, or config included inside this slice so no unverified setup-only slice is needed"
-          - name: depends_on
-            type: string[]
-            required: true
-            description: "Slice ids that must be VERIFIED first, or empty array if independent"
+            description: "Existing patterns, constraints, non-goals, or boundaries CodeWriter must follow"
           - name: verification_command
             type: string[]
             required: conditional
@@ -980,21 +1211,45 @@ handoffs:
           - name: expected_success_signal
             type: string
             required: true
-            description: "Specific pass signal for verification"
+            description: "Observable pass signal for the selected command or non-command check"
           - name: evidence_to_record
             type: string[]
             required: true
-            description: "Evidence fields or artifacts to record before marking the slice VERIFIED"
-            min_items: 1
+            description: "Evidence that must be recorded before the slice is VERIFIED"
           - name: deviation_rollback_rule
             type: string
             required: true
-            description: "What to do if the implementation cannot follow this slice exactly"
-      - name: single_slice_rationale
-        type: string
-        required: conditional
-        condition: "required when slice_manifest has exactly one slice"
-        description: "Why one slice is the smallest correct iterable decomposition"
+            description: "What to do if the implementation cannot follow this step exactly"
+          - name: boundary_reason
+            type: object
+            required: conditional
+            condition: "implementation_steps has more than one item"
+            description: "Concrete execution purpose; size or file/layer counts alone are insufficient."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [acceptance, ownership_context, prerequisite, recovery_rollout, binding_protocol]}
+              - {name: reason, type: string, required: true}
+          - name: execution
+            type: object
+            required: true
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            object_fields:
+              - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
+              - {name: evidence_refs, type: "string[]", required: true}
+              - {name: input_identity, type: object, required: true, description: "Separately resolved relevant-input identities; changes invalidate affected evidence and result-consuming dependents."}
+              - name: tdd_cycle_log_ref
+                type: string
+                required: conditional
+                condition: "tdd_applies is true and the actual canonical cycle_log has started"
+                validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
+              - {name: history, type: "object[]", required: true}
+              - name: recovery
+                type: object
+                required: true
+                object_fields:
+                  - {name: attempt_count, type: int, required: true}
+                  - {name: no_progress_count, type: int, required: true}
+
+
       - name: broad_split_rejection
         type: string
         required: true
@@ -1010,7 +1265,7 @@ handoffs:
           - name: mitigation
             type: string
             required: true
-    on_missing_field: "Re-dispatch Architect requesting the missing strict slice decomposition field"
+    on_missing_field: "Repair canonical packet boundaries; use Architect only for concrete design uncertainty"
 
   # ─────────────────────────────────────────────
   # Orchestrator → Architect (PLAN)
@@ -1238,207 +1493,12 @@ handoffs:
         required: false
         condition: "search_mode == candidate_search"
         description: "Goal tree summary, selected candidate, scoring rationale, archive location, and any plan_deviation status"
-      - name: slice_manifest
-        type: object[]
-        required: conditional
-        condition: "size in [medium, large, mega] or the approved plan will use executable task packets"
-        description: "Strict slice manifest from DECOMPOSE phase — Architect consumes these boundaries directly and must not rediscover or broaden them"
-        on_missing: re-dispatch
-        notes: "Block Architect dispatch; Orchestrator must supply the approved DECOMPOSE slice_manifest or re-run DECOMPOSE before Plan."
-        object_fields:
-          - name: worker_stage
-            type: enum
-            required: conditional
-            condition: "new CodeWriter dispatch or active separated TDD"
-            enum_values: [test_authoring, production, refactor]
-            description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
-            validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
-            on_missing: fail
-          - name: writer_selection
-            type: object
-            required: conditional
-            condition: "new Claude or Codex writer dispatch; legacy packets and Gemini native fallback may omit"
-            description: "Orchestrator-owned concrete Claude or Codex writer choice; Architect proposals require Orchestrator validation."
-            validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
-            on_missing: fail
-            object_fields:
-              - name: agent
-                type: enum
-                required: true
-                enum_values: [intelligent-writer, mechanical-writer]
-                description: "Normal new Claude or Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
-                on_missing: fail
-              - name: rationale
-                type: string
-                required: true
-                description: "Reason tied to remaining judgment and consequences; intelligent-writer is the default."
-                on_missing: fail
-              - name: mechanical_eligibility
-                type: object
-                required: conditional
-                condition: "agent == mechanical-writer"
-                description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
-                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Evidence covers BOTH tests and implementation: fully specified cases, expected values/oracles, negative cases, assertion/fixture patterns and implementation recipe; unresolved test judgment requires intelligent-writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
-                on_missing: fail
-                object_fields:
-                  - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
-                  - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
-                  - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
-                  - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
-          - name: slice_id
-            type: string
-            required: true
-            description: "Build sequence key — plan packets must use this id"
-          - name: name
-            type: string
-            required: true
-          - name: observable_increment
-            type: string
-            required: true
-          - name: deliverable_type
-            type: enum
-            required: true
-            enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
-          - name: requirement_ids
-            type: string[]
-            required: true
-            min_items: 1
-          - name: acceptance_criteria
-            type: string[]
-            required: true
-          - name: verification_decision
-            type: object
-            required: true
-            description: "The unchanged canonical assistant-verification producer artifact for this approved slice."
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and equals the top-level Plan decision."
-          - name: selected_check_ids
-            type: string[]
-            required: true
-            description: "Selected CheckSpec IDs due for this implementation step"
-            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering this step's acceptance criteria and risks."
-          - name: binding_obligation_refs
-            type: object[]
-            required: true
-            description: "Exact applicable binding tuples due for this implementation step"
-            validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; task-wide obligations remain due at their existing completion boundary."
-            object_fields:
-              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
-              - {name: value, type: string, required: true}
-              - {name: source_ref, type: string, required: true}
-          - name: tdd_applies
-            type: boolean
-            required: true
-            description: "Whether this slice participates in the active TDD choice."
-            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; for an active implementation step that intersection must contain exactly one ID, otherwise split it before dispatch. False never creates RED duties."
-          - name: files_to_create
-            type: string[]
-            required: true
-          - name: files_to_modify
-            type: string[]
-            required: true
-          - name: files_to_test
-            type: string[]
-            required: true
-          - name: enabling_changes_included
-            type: string[]
-            required: true
-          - name: depends_on
-            type: string[]
-            required: true
-            description: "Slice ids that must be VERIFIED first"
-          - name: verification_command
-            type: string[]
-            required: conditional
-            condition: "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
-            min_items: 1
-            description: "Legacy singular projection of the sole matching CheckSpec.command.argv; its explicit cwd remains in the canonical CheckSpec. Omit for zero or multiple matching commands; non-command checks use their concrete procedure."
-            validation: "When present, resolve exactly one selected CheckSpec by ID in the unchanged verification_decision and require exact equality with its literal command.argv. Execute item 0 directly and each remaining item as one literal argument; never flatten, misattribute, reconstruct shell text, or use a default cwd. Missing or ambiguous command context requires refresh or a blocked packet."
-          - name: expected_success_signal
-            type: string
-            required: true
-          - name: evidence_to_record
-            type: string[]
-            required: true
-          - name: deviation_rollback_rule
-            type: string
-            required: true
-    return_fields:
-      - name: architecture_decision_pack_update
-        type: object
-        required: conditional
-        condition: "architecture_design_mode in [lightweight, required, review_intensive] and refreshed source evidence changes the Pack"
-        description: "Mergeable canonical Architecture Decision Pack update/ref returned when PLAN refreshes source evidence"
-        validation: "References the complete refreshed canonical Pack and records its source Pack, freshness basis, changed source-backed sections, evidence refs, and independent challenge evidence when mode=review_intensive"
-        on_missing: re-dispatch
-        object_fields:
-          - name: source_pack_ref
-            type: string
-            required: true
-          - name: updated_pack_ref
-            type: string
-            required: true
-            description: "Reference to the complete refreshed canonical Pack"
-          - name: freshness_basis
-            type: string
-            required: true
-          - name: changed_sections
-            type: string[]
-            required: true
-            min_items: 1
-          - name: evidence_refs
-            type: string[]
-            required: true
-            min_items: 1
-          - name: merge_action
-            type: enum
-            required: true
-            enum_values: [replace_current_pack]
-      - name: status
-        type: enum
-        required: true
-        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED]
-        description: "Worker status packet result"
-      - name: evidence
-        type: object[]
-        required: true
-        description: "Files, patterns, or searches that support the blueprint"
-        min_items: 1
-        object_fields:
-          - name: source
-            type: string
-            required: true
-          - name: detail
-            type: string
-            required: true
-      - name: open_questions
-        type: string[]
-        required: false
-        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
-        description: "Questions or blocker details the orchestrator must resolve before planning can continue"
-      - name: deviation_details
-        type: string
-        required: false
-        condition: "status is DEVIATED"
-        description: "What the blueprint had to change from the requested scope or approved direction"
-      - name: candidate_search_result
-        type: object
-        required: false
-        condition: "search_mode == candidate_search"
-        description: "Pre-code candidate selection result matching workflow output contract fields: goal_tree, candidate_archive, scoring_rubric, selected_candidate, selection_reason, archive_location, and plan_deviation when applicable"
       - name: implementation_steps
         type: object[]
         required: true
-        description: "Ordered executable task packets with exact slice_id, create/modify/test file lists, acceptance criteria, the unchanged verification_decision and conditional TDD choice, and exact command argv or concrete selected-check procedures. Optional display summaries may exist only for human readability; they cannot satisfy or replace exact slice and files_to_* fields."
+        description: "Canonical ordered packets; one coherent increment defaults to one packet. Stored Plan keeps specialist references; worker projections materialize unchanged decisions. Optional display summaries may exist only for human readability and cannot replace exact packet and files_to_* fields."
         min_items: 1
         object_fields:
-          - name: worker_stage
-            type: enum
-            required: conditional
-            condition: "new CodeWriter dispatch or active separated TDD"
-            enum_values: [test_authoring, production, refactor]
-            description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
-            validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
-            on_missing: fail
           - name: writer_selection
             type: object
             required: conditional
@@ -1470,37 +1530,26 @@ handoffs:
                   - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
                   - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
                   - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
-          - name: order
-            type: int
-            required: true
-          - name: slice_id
+          - name: packet_id
             type: string
             required: true
-            description: "The approved Decompose slice id this packet implements"
-          - name: slice_name
-            type: string
-            required: true
-            description: "The approved Decompose slice name this packet implements"
+            description: "Unique descriptive path-safe canonical packet identity; never ordinal-only. All consumers resolve implementation_steps exactly once."
           - name: name
             type: string
             required: true
             description: "Human-readable task packet name passed directly as current_task_packet.name"
-          - name: task_id
-            type: string
-            required: false
-            description: "Optional provider-local packet id; slice_id remains the execution boundary for medium+ work"
           - name: description
             type: string
             required: true
           - name: observable_increment
             type: string
             required: true
-            description: "The approved slice observable increment"
+            description: "Observable increment owned by this packet"
           - name: deliverable_type
             type: enum
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
-            description: "The approved slice deliverable type"
+            description: "Deliverable owned by this packet"
           - name: requirement_ids
             type: string[]
             required: true
@@ -1606,6 +1655,26 @@ handoffs:
             type: string[]
             required: false
             description: "Optional display summary of file paths this step touches; cannot satisfy or replace executable files_to_* contract"
+          - name: red_check_id
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals the sole ID in selected_check_ids intersect applicable_check_ids; multiple IDs require packet splitting. Resolve its exact command.argv and command.cwd in the unchanged CheckSpec."
+          - name: red_command
+            type: string[]
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact literal command.argv for red_check_id; never shell reconstruction."
+          - name: red_cwd
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact explicit CheckSpec command.cwd."
+          - name: expected_red_failure
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals meaningful_failure for red_check_id in the unchanged CheckSpec; planned oracle only, never actual RED evidence."
           - name: files_to_create
             type: string[]
             required: true
@@ -1621,7 +1690,7 @@ handoffs:
           - name: enabling_changes_included
             type: string[]
             required: true
-            description: "Setup, contracts, wiring, or config included inside this slice"
+            description: "Setup, contracts, wiring, or config included inside this packet"
           - name: depends_on
             type: string[]
             required: true
@@ -1741,11 +1810,13 @@ handoffs:
             required: true
             description: "Selected test or verification criteria for this step; describe a discriminating behavior oracle only when an automated_test CheckSpec is selected."
             min_items: 1
-          - name: verification_decision
+          - name: verification_decision_ref
             type: object
             required: true
-            description: "Canonical assistant-verification decision consumed by this task packet."
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and preserves its selected scope and CheckSpec entries unchanged."
+            description: "Stable reference and SHA-256 of the full unchanged task-level specialist decision; no mutable stored copy."
+            object_fields:
+              - {name: artifact_ref, type: string, required: true}
+              - {name: sha256, type: string, required: true}
           - name: selected_check_ids
             type: string[]
             required: true
@@ -1760,11 +1831,6 @@ handoffs:
               - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
               - {name: value, type: string, required: true}
               - {name: source_ref, type: string, required: true}
-          - name: evidence_assessment
-            type: object
-            required: true
-            description: "Current canonical assessment carried into both Build lanes; planned evidence is not execution evidence."
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; refresh from actual selected-check results before Review."
           - name: tdd_applies
             type: boolean
             required: true
@@ -1793,6 +1859,495 @@ handoffs:
             type: string
             required: true
             description: "What to do if the implementation cannot follow this step exactly"
+          - name: boundary_reason
+            type: object
+            required: conditional
+            condition: "implementation_steps has more than one item"
+            description: "Concrete execution purpose; size or file/layer counts alone are insufficient."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [acceptance, ownership_context, prerequisite, recovery_rollout, binding_protocol]}
+              - {name: reason, type: string, required: true}
+          - name: execution
+            type: object
+            required: true
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            object_fields:
+              - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
+              - {name: evidence_refs, type: "string[]", required: true}
+              - {name: input_identity, type: object, required: true, description: "Separately resolved relevant-input identities; changes invalidate affected evidence and result-consuming dependents."}
+              - name: tdd_cycle_log_ref
+                type: string
+                required: conditional
+                condition: "tdd_applies is true and the actual canonical cycle_log has started"
+                validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
+              - {name: history, type: "object[]", required: true}
+              - name: recovery
+                type: object
+                required: true
+                object_fields:
+                  - {name: attempt_count, type: int, required: true}
+                  - {name: no_progress_count, type: int, required: true}
+
+
+    return_fields:
+      - name: architecture_decision_pack_update
+        type: object
+        required: conditional
+        condition: "architecture_design_mode in [lightweight, required, review_intensive] and refreshed source evidence changes the Pack"
+        description: "Mergeable canonical Architecture Decision Pack update/ref returned when PLAN refreshes source evidence"
+        validation: "References the complete refreshed canonical Pack and records its source Pack, freshness basis, changed source-backed sections, evidence refs, and independent challenge evidence when mode=review_intensive"
+        on_missing: re-dispatch
+        object_fields:
+          - name: source_pack_ref
+            type: string
+            required: true
+          - name: updated_pack_ref
+            type: string
+            required: true
+            description: "Reference to the complete refreshed canonical Pack"
+          - name: freshness_basis
+            type: string
+            required: true
+          - name: changed_sections
+            type: string[]
+            required: true
+            min_items: 1
+          - name: evidence_refs
+            type: string[]
+            required: true
+            min_items: 1
+          - name: merge_action
+            type: enum
+            required: true
+            enum_values: [replace_current_pack]
+      - name: status
+        type: enum
+        required: true
+        enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED]
+        description: "Worker status packet result"
+      - name: evidence
+        type: object[]
+        required: true
+        description: "Files, patterns, or searches that support the blueprint"
+        min_items: 1
+        object_fields:
+          - name: source
+            type: string
+            required: true
+          - name: detail
+            type: string
+            required: true
+      - name: open_questions
+        type: string[]
+        required: false
+        condition: "status in [NEEDS_CONTEXT, BLOCKED]"
+        description: "Questions or blocker details the orchestrator must resolve before planning can continue"
+      - name: deviation_details
+        type: string
+        required: false
+        condition: "status is DEVIATED"
+        description: "What the blueprint had to change from the requested scope or approved direction"
+      - name: candidate_search_result
+        type: object
+        required: false
+        condition: "search_mode == candidate_search"
+        description: "Pre-code candidate selection result matching workflow output contract fields: goal_tree, candidate_archive, scoring_rubric, selected_candidate, selection_reason, archive_location, and plan_deviation when applicable"
+      - name: implementation_steps
+        type: object[]
+        required: true
+        description: "Canonical ordered packets; one coherent increment defaults to one packet. Stored Plan keeps specialist references; worker projections materialize unchanged decisions. Optional display summaries may exist only for human readability and cannot replace exact packet and files_to_* fields."
+        min_items: 1
+        object_fields:
+          - name: writer_selection
+            type: object
+            required: conditional
+            condition: "new Claude or Codex writer dispatch; legacy packets and Gemini native fallback may omit"
+            description: "Orchestrator-owned concrete Claude or Codex writer choice; Architect proposals require Orchestrator validation."
+            validation: "Packet selection is authoritative when supplied; conflicting inline selection blocks dispatch. Old packets omitting this object remain valid with intelligent compatibility semantics. Before dispatch, the Orchestrator resolves actual current evidence, not merely nonempty strings or self-asserted labels. Never select by edit size, file type/count, or simple labels."
+            on_missing: fail
+            object_fields:
+              - name: agent
+                type: enum
+                required: true
+                enum_values: [intelligent-writer, mechanical-writer]
+                description: "Normal new Claude or Codex dispatch identity; explicit legacy code-writer and bootstrap identities are recorded separately."
+                on_missing: fail
+              - name: rationale
+                type: string
+                required: true
+                description: "Reason tied to remaining judgment and consequences; intelligent-writer is the default."
+                on_missing: fail
+              - name: mechanical_eligibility
+                type: object
+                required: conditional
+                condition: "agent == mechanical-writer"
+                description: "All four evidence-backed eligibility conditions; unresolved semantic, grader, oracle or compatibility judgment cannot qualify."
+                validation: "Each ref resolves to actual applicable current packet, approved preparation, source or selected-check evidence. Independently fixed expectations cannot be chosen by the mechanical writer. Evidence covers BOTH tests and implementation: fully specified cases, expected values/oracles, negative cases, assertion/fixture patterns and implementation recipe; unresolved test judgment requires intelligent-writer. Stale or missing evidence stops dependent mutations and returns truthful status, blocker evidence and all actual partial changes."
+                on_missing: fail
+                object_fields:
+                  - {name: recipe_or_example_ref, type: string, required: true, description: "Concrete approved applicable recipe, exact wording or transformation example", on_missing: fail}
+                  - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
+                  - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
+                  - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
+          - name: packet_id
+            type: string
+            required: true
+            description: "Unique descriptive path-safe canonical packet identity; never ordinal-only. All consumers resolve implementation_steps exactly once."
+          - name: name
+            type: string
+            required: true
+            description: "Human-readable task packet name passed directly as current_task_packet.name"
+          - name: description
+            type: string
+            required: true
+          - name: observable_increment
+            type: string
+            required: true
+            description: "Observable increment owned by this packet"
+          - name: deliverable_type
+            type: enum
+            required: true
+            enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+            description: "Deliverable owned by this packet"
+          - name: requirement_ids
+            type: string[]
+            required: true
+            min_items: 1
+            description: "Requirement Acceptance Map ids implemented by this packet"
+          - name: architecture_decision_pack_ref
+            type: string
+            required: conditional
+            condition: "architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Fresh Architecture Decision Pack reference carried into this executable packet"
+            validation: "Resolves to the selected design's owned boundary, design-pressure checks, Type Ledger, quality verification, and deviation conditions"
+          - name: feature_preparation_evidence_ref
+            type: string
+            required: conditional
+            condition: "feature_preparation_scope == existing_system"
+            description: "Completed or approved evidence ref carried unchanged into this executable packet"
+            validation: "Resolves to the classifications and implementation implications this packet implements"
+          - name: approved_feature_preparation_result
+            type: object
+            required: conditional
+            condition: "execution_intent == implement_only"
+            validation: "Equals the approved input result and Plan handoff unchanged."
+            object_fields:
+              - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - {name: scope, type: string, required: true}
+              - {name: feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+              - {name: evidence_gaps, type: "string[]", required: true}
+              - {name: open_decisions, type: "string[]", required: true}
+              - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+              - name: readiness_plan
+                type: object
+                required: false
+                object_fields:
+                  - {name: evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system"}
+                  - {name: preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable]}
+                  - {name: implementation_implications, type: "string[]", required: true, min_items: 1}
+                  - {name: open_decisions, type: "string[]", required: true}
+                  - {name: recommended_next_state, type: string, required: true}
+                  - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
+              - name: future_qa_acceptance_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - name: future_harness_obligation
+                type: object
+                required: false
+                object_fields:
+                  - {name: requested_scope, type: string, required: true}
+                  - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+                  - {name: execution_prerequisite, type: string, required: true}
+              - {name: recommended_next_step, type: string, required: true}
+          - name: feature_preparation_harness_obligation
+            type: object
+            required: conditional
+            condition: "the approved feature-preparation result contains future_harness_obligation"
+            description: "Accepted future harness obligation carried unchanged into this executable packet"
+            validation: "Binds to feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable without an evidence ref, then activates the existing pre-Build harness entry gate"
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
+              - {name: execution_prerequisite, type: string, required: true}
+              - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+              - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+          - name: feature_preparation_qa_acceptance_obligation
+            type: object
+            required: conditional
+            condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
+            description: "Accepted future QA/acceptance obligation carried unchanged into this executable packet"
+            validation: "Binds to feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable without an evidence ref, sets qa_evaluation_mode=required, and requires the existing post-Build Code Reviewer then QA Evaluator lane"
+            object_fields:
+              - {name: requested_scope, type: string, required: true}
+              - {name: execution_prerequisite, type: string, required: true}
+              - {name: source_feature_preparation_evidence_ref, type: string, required: conditional, condition: "feature_preparation_scope == existing_system", validation: "Equals feature_preparation_evidence_ref unchanged."}
+              - {name: source_preparation_basis, type: enum, required: conditional, condition: "feature_preparation_scope == not_applicable", enum_values: [not_applicable], validation: "Equals not_applicable and source_feature_preparation_evidence_ref is absent."}
+          - name: architecture_test_obligations
+            type: object[]
+            required: conditional
+            condition: "tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]"
+            description: "Testable Architecture Decision Pack obligations carried unchanged into the TDD Build handoff"
+            validation: "Ordered unique obligation_id values carry every applicable Pack obligation exactly once; do not invent obligations not present in the Pack."
+            min_items: 1
+            object_fields:
+              - name: obligation_id
+                type: string
+                required: true
+                description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+              - name: architecture_decision_pack_ref
+                type: string
+                required: true
+              - name: obligation_kind
+                type: enum
+                required: true
+                enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+              - name: behavior
+                type: string
+                required: true
+              - name: verification
+                type: string
+                required: true
+          - name: files
+            type: string[]
+            required: false
+            description: "Optional display summary of file paths this step touches; cannot satisfy or replace executable files_to_* contract"
+          - name: red_check_id
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals the sole ID in selected_check_ids intersect applicable_check_ids; multiple IDs require packet splitting. Resolve its exact command.argv and command.cwd in the unchanged CheckSpec."
+          - name: red_command
+            type: string[]
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact literal command.argv for red_check_id; never shell reconstruction."
+          - name: red_cwd
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact explicit CheckSpec command.cwd."
+          - name: expected_red_failure
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals meaningful_failure for red_check_id in the unchanged CheckSpec; planned oracle only, never actual RED evidence."
+          - name: files_to_create
+            type: string[]
+            required: true
+            description: "Exact files CodeWriter is expected to create for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
+          - name: files_to_modify
+            type: string[]
+            required: true
+            description: "Exact existing files CodeWriter is expected to modify for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
+          - name: files_to_test
+            type: string[]
+            required: true
+            description: "Exact test files or verification targets for execution only: BuilderTester executes and diagnoses selected checks; CodeWriter owns test authoring listed in files_to_create and files_to_modify. Use an empty array only when no test file applies"
+          - name: enabling_changes_included
+            type: string[]
+            required: true
+            description: "Setup, contracts, wiring, or config included inside this packet"
+          - name: depends_on
+            type: string[]
+            required: true
+            description: "Approved slice dependencies"
+          - name: acceptance_criteria
+            type: string[]
+            required: true
+            description: "Observable behavior this task packet must deliver"
+          - name: reuse_search
+            type: object
+            required: true
+            description: "CodeMapper reuse-search result carried unchanged into the executable task packet"
+            object_fields:
+              - name: applicability
+                type: enum
+                required: true
+                enum_values: [applicable, not_applicable]
+              - name: applicability_reason
+                type: string
+                required: true
+              - name: searches
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                min_items: 1
+                object_fields:
+                  - name: query_or_path
+                    type: string
+                    required: true
+                  - name: scope
+                    type: string
+                    required: true
+                  - name: outcome
+                    type: string
+                    required: true
+              - name: candidates
+                type: object[]
+                required: conditional
+                condition: "applicability == applicable"
+                object_fields:
+                  - name: name
+                    type: string
+                    required: true
+                  - name: location
+                    type: string
+                    required: true
+                  - name: disposition
+                    type: enum
+                    required: true
+                    enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]
+                  - name: rationale
+                    type: string
+                    required: true
+              - name: no_candidate_reason
+                type: string
+                required: conditional
+                condition: "applicability == applicable and candidates is empty"
+              - name: decision
+                type: enum
+                required: conditional
+                condition: "applicability == applicable"
+                enum_values: [reuse, extend, new, intentional_duplicate]
+              - name: decision_rationale
+                type: string
+                required: conditional
+                condition: "applicability == applicable"
+              - name: divergence_control
+                type: string
+                required: conditional
+                condition: "decision == intentional_duplicate"
+          - name: done_contract_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the accepted Done Contract containing done_when, not_done_when, verification, owner_consumer, acceptance_criteria, and debate_record"
+          - name: harness_recipe_ref
+            type: string
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            description: "Pointer to the selected Harness Recipe based on task/model/risk/context profile"
+          - name: artifact_refs
+            type: object[]
+            required: conditional
+            condition: "required when size in [medium, large, mega] and harness_capable == true"
+            min_items: 5
+            description: "Typed Artifact Reference entries that the task packet passes to CodeWriter and BuilderTester; include Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, verification evidence, and plan deviation refs when applicable."
+            object_fields:
+              - name: artifact_id
+                type: string
+                required: true
+              - name: artifact_type
+                type: enum
+                required: true
+                enum_values: [done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, changed_files, verification_evidence, verification_decision, evidence_assessment, plan_deviation, task_packet, context_map, architecture_decision_pack, change_impact_evidence, test_result, review_result, qa_evaluation_result]
+              - name: producer
+                type: string
+                required: true
+              - name: consumer
+                type: string
+                required: true
+              - name: location_ref
+                type: string
+                required: true
+                description: "Typed location/ref pointer: file path, section heading, dispatch id, command ref, or stable artifact ref"
+              - name: schema_or_contract
+                type: string
+                required: true
+              - name: validation_status
+                type: enum
+                required: true
+                enum_values: [pending, valid, invalid, stale, not_applicable]
+              - name: summary
+                type: string
+                required: true
+          - name: test_criteria
+            type: string[]
+            required: true
+            description: "Selected test or verification criteria for this step; describe a discriminating behavior oracle only when an automated_test CheckSpec is selected."
+            min_items: 1
+          - name: verification_decision_ref
+            type: object
+            required: true
+            description: "Stable reference and SHA-256 of the full unchanged task-level specialist decision; no mutable stored copy."
+            object_fields:
+              - {name: artifact_ref, type: string, required: true}
+              - {name: sha256, type: string, required: true}
+          - name: selected_check_ids
+            type: string[]
+            required: true
+            description: "Selected CheckSpec IDs due for this task packet"
+            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering the packet acceptance criteria and risks."
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            description: "Exact applicable binding tuples due for this task packet"
+            validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; task-wide obligations remain due at their existing completion boundary."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
+          - name: tdd_applies
+            type: boolean
+            required: true
+            description: "Whether meaningful RED is active for this task packet."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the decision unchanged."
+          - name: implementation_notes
+            type: string[]
+            required: true
+            description: "Existing patterns, constraints, non-goals, or boundaries CodeWriter must follow"
+          - name: verification_command
+            type: string[]
+            required: conditional
+            condition: "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
+            min_items: 1
+            description: "Legacy singular projection of the sole matching CheckSpec.command.argv; its explicit cwd remains in the canonical CheckSpec. Omit for zero or multiple matching commands; non-command checks use their concrete procedure."
+            validation: "When present, resolve exactly one selected CheckSpec by ID in the unchanged verification_decision and require exact equality with its literal command.argv. Execute item 0 directly and each remaining item as one literal argument; never flatten, misattribute, reconstruct shell text, or use a default cwd. Missing or ambiguous command context requires refresh or a blocked packet."
+          - name: expected_success_signal
+            type: string
+            required: true
+            description: "Observable pass signal for the selected command or non-command check"
+          - name: evidence_to_record
+            type: string[]
+            required: true
+            description: "Evidence that must be recorded before the slice is VERIFIED"
+          - name: deviation_rollback_rule
+            type: string
+            required: true
+            description: "What to do if the implementation cannot follow this step exactly"
+          - name: boundary_reason
+            type: object
+            required: conditional
+            condition: "implementation_steps has more than one item"
+            description: "Concrete execution purpose; size or file/layer counts alone are insufficient."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [acceptance, ownership_context, prerequisite, recovery_rollout, binding_protocol]}
+              - {name: reason, type: string, required: true}
+          - name: execution
+            type: object
+            required: true
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            object_fields:
+              - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
+              - {name: evidence_refs, type: "string[]", required: true}
+              - {name: input_identity, type: object, required: true, description: "Separately resolved relevant-input identities; changes invalidate affected evidence and result-consuming dependents."}
+              - name: tdd_cycle_log_ref
+                type: string
+                required: conditional
+                condition: "tdd_applies is true and the actual canonical cycle_log has started"
+                validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
+              - {name: history, type: "object[]", required: true}
+              - name: recovery
+                type: object
+                required: true
+                object_fields:
+                  - {name: attempt_count, type: int, required: true}
+                  - {name: no_progress_count, type: int, required: true}
+
+
       - name: files_to_create
         type: object[]
         required: false
@@ -1835,11 +2390,11 @@ handoffs:
       - name: test_plan
         type: object[]
         required: conditional
-        condition: "at least one slice's canonical verification_decision selects method == automated_test"
-        description: "Automated test plans are required only for slices with selected automated_test CheckSpecs; omit them for slices whose selected methods are non-test."
+        condition: "at least one packet's selected CheckSpec in the canonical verification_decision has method == automated_test"
+        description: "Automated test plans are required only for packets with selected automated_test CheckSpecs; omit them for packets whose selected methods are non-test."
         min_items: 1
         object_fields:
-          - name: slice_id
+          - name: packet_id
             type: string
             required: true
           - name: test_type
@@ -2027,10 +2582,8 @@ handoffs:
       - name: current_task_packet
         type: object
         required: conditional
-        condition: "current build step executes a slice or the approved plan uses executable task packets"
-        description: "Executable task packet for the current build step; overrides any ambiguous prose in the plan"
-        on_missing: fail
-        notes: "Block CodeWriter dispatch; Orchestrator must select the matching implementation_steps packet or re-dispatch Architect to produce executable task packets before Build."
+        condition: "execution_intent != prepare_only and approved Plan uses executable packets"
+        description: "Canonical ordered packets; one coherent increment defaults to one packet. Stored Plan keeps specialist references; worker projections materialize unchanged decisions. Optional display summaries may exist only for human readability and cannot replace exact packet and files_to_* fields."
         object_fields:
           - name: worker_stage
             type: enum
@@ -2071,43 +2624,48 @@ handoffs:
                   - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
                   - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
                   - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
-          - name: slice_id
+          - name: packet_id
             type: string
             required: true
-          - name: slice_name
-            type: string
-            required: true
+            description: "Unique descriptive path-safe canonical packet identity; never ordinal-only. All consumers resolve implementation_steps exactly once."
           - name: name
+            type: string
+            required: true
+            description: "Human-readable task packet name passed directly as current_task_packet.name"
+          - name: description
             type: string
             required: true
           - name: observable_increment
             type: string
             required: true
+            description: "Observable increment owned by this packet"
           - name: deliverable_type
             type: enum
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
+            description: "Deliverable owned by this packet"
           - name: requirement_ids
             type: string[]
             required: true
             min_items: 1
+            description: "Requirement Acceptance Map ids implemented by this packet"
           - name: architecture_decision_pack_ref
             type: string
             required: conditional
             condition: "architecture_design_mode in [lightweight, required, review_intensive]"
-            description: "Current Architecture Decision Pack reference that constrains this Build step"
-            validation: "Resolves to the current design, including design-pressure checks, and must be refreshed before deviation"
+            description: "Fresh Architecture Decision Pack reference carried into this executable packet"
+            validation: "Resolves to the selected design's owned boundary, design-pressure checks, Type Ledger, quality verification, and deviation conditions"
           - name: feature_preparation_evidence_ref
             type: string
             required: conditional
             condition: "feature_preparation_scope == existing_system"
-            description: "Completed or approved feature-preparation evidence ref constraining this Build step"
-            validation: "Resolves to the preserved behavior, explicit changes, conflicts, gaps, and implementation implications for this packet"
+            description: "Completed or approved evidence ref carried unchanged into this executable packet"
+            validation: "Resolves to the classifications and implementation implications this packet implements"
           - name: approved_feature_preparation_result
             type: object
             required: conditional
             condition: "execution_intent == implement_only"
-            validation: "Equals the approved input result and Plan projection unchanged."
+            validation: "Equals the approved input result and Plan handoff unchanged."
             object_fields:
               - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
               - {name: scope, type: string, required: true}
@@ -2143,8 +2701,8 @@ handoffs:
             type: object
             required: conditional
             condition: "the approved feature-preparation result contains future_harness_obligation"
-            description: "Accepted future harness obligation carried by this Build task packet"
-            validation: "Matches the enriched Build handoff unchanged: the three original payload fields remain exact and exactly one evidence-ref or not_applicable source binding is present"
+            description: "Accepted future harness obligation carried unchanged into this executable packet"
+            validation: "Binds to feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable without an evidence ref, then activates the existing pre-Build harness entry gate"
             object_fields:
               - {name: requested_scope, type: string, required: true}
               - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
@@ -2155,8 +2713,8 @@ handoffs:
             type: object
             required: conditional
             condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
-            description: "Accepted future QA/acceptance obligation carried by this Build task packet"
-            validation: "Matches the enriched Build handoff unchanged: requested_scope and execution_prerequisite remain exact and exactly one applicable preparation-source binding is present; this task retains qa_evaluation_mode=required and the post-Build QA route"
+            description: "Accepted future QA/acceptance obligation carried unchanged into this executable packet"
+            validation: "Binds to feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable without an evidence ref, sets qa_evaluation_mode=required, and requires the existing post-Build Code Reviewer then QA Evaluator lane"
             object_fields:
               - {name: requested_scope, type: string, required: true}
               - {name: execution_prerequisite, type: string, required: true}
@@ -2187,13 +2745,58 @@ handoffs:
               - name: verification
                 type: string
                 required: true
+          - name: files
+            type: string[]
+            required: false
+            description: "Optional display summary of file paths this step touches; cannot satisfy or replace executable files_to_* contract"
+          - name: red_check_id
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals the sole ID in selected_check_ids intersect applicable_check_ids; multiple IDs require packet splitting. Resolve its exact command.argv and command.cwd in the unchanged CheckSpec."
+          - name: red_command
+            type: string[]
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact literal command.argv for red_check_id; never shell reconstruction."
+          - name: red_cwd
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact explicit CheckSpec command.cwd."
+          - name: expected_red_failure
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals meaningful_failure for red_check_id in the unchanged CheckSpec; planned oracle only, never actual RED evidence."
+          - name: files_to_create
+            type: string[]
+            required: true
+            description: "Exact files CodeWriter is expected to create for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
+          - name: files_to_modify
+            type: string[]
+            required: true
+            description: "Exact existing files CodeWriter is expected to modify for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
+          - name: files_to_test
+            type: string[]
+            required: true
+            description: "Exact test files or verification targets for execution only: BuilderTester executes and diagnoses selected checks; CodeWriter owns test authoring listed in files_to_create and files_to_modify. Use an empty array only when no test file applies"
+          - name: enabling_changes_included
+            type: string[]
+            required: true
+            description: "Setup, contracts, wiring, or config included inside this packet"
+          - name: depends_on
+            type: string[]
+            required: true
+            description: "Approved slice dependencies"
           - name: acceptance_criteria
             type: string[]
             required: true
+            description: "Observable behavior this task packet must deliver"
           - name: reuse_search
             type: object
             required: true
-            description: "Task-packet reuse-search result; implement its reuse, extend, new, or intentional_duplicate decision"
+            description: "CodeMapper reuse-search result carried unchanged into the executable task packet"
             object_fields:
               - name: applicability
                 type: enum
@@ -2267,7 +2870,7 @@ handoffs:
             required: conditional
             condition: "required when size in [medium, large, mega] and harness_capable == true"
             min_items: 5
-            description: "Typed Artifact Reference entries CodeWriter receives before implementation; include Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, verification evidence, and plan deviation refs when applicable."
+            description: "Typed Artifact Reference entries that the task packet passes to CodeWriter and BuilderTester; include Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, verification evidence, and plan deviation refs when applicable."
             object_fields:
               - name: artifact_id
                 type: string
@@ -2296,36 +2899,23 @@ handoffs:
               - name: summary
                 type: string
                 required: true
-          - name: files_to_create
+          - name: test_criteria
             type: string[]
             required: true
-          - name: files_to_modify
-            type: string[]
-            required: true
-          - name: files_to_test
-            type: string[]
-            required: true
-          - name: enabling_changes_included
-            type: string[]
-            required: true
-          - name: depends_on
-            type: string[]
-            required: true
-          - name: tdd_applies
-            type: boolean
-            required: true
-            description: "Whether selected checks for this task packet require meaningful RED."
-            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; an active workflow packet must have exactly one intersecting ID, otherwise split the packet before dispatch."
-          - name: verification_decision
+            description: "Selected test or verification criteria for this step; describe a discriminating behavior oracle only when an automated_test CheckSpec is selected."
+            min_items: 1
+          - name: verification_decision_ref
             type: object
             required: true
-            description: "Canonical assistant-verification decision carried unchanged from Plan."
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision."
+            description: "Stable reference and SHA-256 of the full unchanged task-level specialist decision; no mutable stored copy."
+            object_fields:
+              - {name: artifact_ref, type: string, required: true}
+              - {name: sha256, type: string, required: true}
           - name: selected_check_ids
             type: string[]
             required: true
             description: "Selected CheckSpec IDs due for this task packet"
-            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering this packet's acceptance criteria and risks."
+            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering the packet acceptance criteria and risks."
           - name: binding_obligation_refs
             type: object[]
             required: true
@@ -2335,83 +2925,15 @@ handoffs:
               - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
               - {name: value, type: string, required: true}
               - {name: source_ref, type: string, required: true}
-          - name: evidence_assessment
-            type: object
+          - name: tdd_applies
+            type: boolean
             required: true
-            description: "Current canonical evidence assessment; planned before execution and refreshed from actual results before Review."
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; preserve gaps and freshness limitations."
-          - name: red_command
-            type: string[]
-            required: conditional
-            condition: "tdd_applies is true"
-            min_items: 1
-            description: "Planned RED argv; bounded_executor runs it after dispatch and before production edits, while separated_workers assigns RED to BuilderTester. This field is not RED evidence."
-            validation: "When present, argv[0] is the executable and each remaining item is one literal argument; the array exactly equals the command.argv of the uniquely resolved red_check_id CheckSpec."
-          - name: red_check_id
-            type: string
-            required: conditional
-            condition: "tdd_applies is true"
-            description: "The sole due selected CheckSpec that requires meaningful RED for this packet."
-            validation: "Equals the sole ID in the intersection of selected_check_ids and the unchanged verification_decision.tdd_choice.applicable_check_ids, resolving exactly once in each; multiple IDs require packet splitting before dispatch. The CheckSpec has command.argv and explicit command.cwd, and this ID remains the same for all planned and incoming RED fields."
-          - name: red_cwd
-            type: string
-            required: conditional
-            condition: "tdd_applies is true"
-            description: "Working directory for the planned RED argv."
-            validation: "Exactly equals the command.cwd of the uniquely resolved red_check_id CheckSpec."
-          - name: expected_red_failure
-            type: string
-            required: conditional
-            condition: "tdd_applies is true"
-            description: "Expected meaningful RED behavior for the selected lane; exactly equals the red_check_id CheckSpec's meaningful_failure, is not RED evidence, and is not sufficient to pass the implementation gate."
-            validation: "Exactly equals meaningful_failure from the uniquely resolved red_check_id CheckSpec."
-          - name: red_evidence
-            type: object
-            required: conditional
-            condition: "tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production"
-            description: "Incoming BuilderTester RED evidence required before production edits only in separated_workers. In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits. No active TDD lane may proceed with production without valid RED evidence."
-            object_fields:
-              - name: check_id
-                type: string
-                required: true
-                description: "The applicable selected CheckSpec that produced this RED evidence."
-                validation: "Exactly equals current_task_packet.red_check_id and resolves once in both selected_check_ids and applicable_check_ids; for inline context, equals the top-level red_check_id."
-              - name: test_file
-                type: string
-                required: true
-                description: "Test file authored by the selected writer and executed unchanged by BuilderTester for RED"
-              - name: test_name
-                type: string
-                required: true
-                description: "Specific failing test that proves the desired behavior is not implemented yet"
-              - name: command
-                type: string[]
-                required: true
-                description: "Exact argv BuilderTester ran to produce the RED failure"
-                validation: "argv[0] is the executable and each remaining item is one literal argument; exactly equals red_command for check_id."
-              - name: cwd
-                type: string
-                required: true
-                description: "Working directory used for the RED argv."
-                validation: "Exactly equals red_cwd for check_id."
-              - name: failure_summary
-                type: string
-                required: true
-                description: "Concise failure evidence from the RED run, not raw logs"
-              - name: right_reason
-                type: string
-                required: true
-                description: "What observed failure demonstrates that check_id produced the expected_red_failure oracle, rather than a syntax, setup, or unrelated error."
-                validation: "Explains the observed failure as the matching expected_red_failure oracle for check_id; syntax, setup, or unrelated failures do not qualify."
-          - name: tdd_cycle_log_ref
-            type: string
-            required: conditional
-            condition: "tdd_applies is true and the canonical cycle_log has started"
-            description: "Current canonical assistant-tdd cycle_log reference carried across Build dispatches and retries."
-            validation: "Resolves to the same task-journal or workflow-output cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log. The first RED owner creates the in-progress entry when no ref exists; CodeWriter records actual production_file, then only after current GREEN passes records actual refactor.changes_made or none needed. Preserve every prior invocation and never infer a phase."
+            description: "Whether meaningful RED is active for this task packet."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the decision unchanged."
           - name: implementation_notes
             type: string[]
             required: true
+            description: "Existing patterns, constraints, non-goals, or boundaries CodeWriter must follow"
           - name: verification_command
             type: string[]
             required: conditional
@@ -2422,12 +2944,76 @@ handoffs:
           - name: expected_success_signal
             type: string
             required: true
+            description: "Observable pass signal for the selected command or non-command check"
           - name: evidence_to_record
             type: string[]
             required: true
+            description: "Evidence that must be recorded before the slice is VERIFIED"
           - name: deviation_rollback_rule
             type: string
             required: true
+            description: "What to do if the implementation cannot follow this step exactly"
+          - name: boundary_reason
+            type: object
+            required: conditional
+            condition: "implementation_steps has more than one item"
+            description: "Concrete execution purpose; size or file/layer counts alone are insufficient."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [acceptance, ownership_context, prerequisite, recovery_rollout, binding_protocol]}
+              - {name: reason, type: string, required: true}
+          - name: execution
+            type: object
+            required: true
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            object_fields:
+              - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
+              - {name: evidence_refs, type: "string[]", required: true}
+              - {name: input_identity, type: object, required: true, description: "Separately resolved relevant-input identities; changes invalidate affected evidence and result-consuming dependents."}
+              - name: tdd_cycle_log_ref
+                type: string
+                required: conditional
+                condition: "tdd_applies is true and the actual canonical cycle_log has started"
+                validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
+              - {name: history, type: "object[]", required: true}
+              - name: recovery
+                type: object
+                required: true
+                object_fields:
+                  - {name: attempt_count, type: int, required: true}
+                  - {name: no_progress_count, type: int, required: true}
+
+          - name: verification_decision
+            type: object
+            required: true
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision. Full unchanged object resolved by verification_decision_ref; projection cannot redefine approved work."
+          - name: evidence_assessment
+            type: object
+            required: true
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; current canonical assessment."
+          - name: tdd_cycle_log_ref
+            type: string
+            required: conditional
+            condition: "tdd_applies is true and execution.tdd_cycle_log_ref exists"
+            validation: "Equals execution.tdd_cycle_log_ref and resolves assistant-tdd/contracts/output.yaml#artifacts/cycle_log; the first RED owner creates the in-progress entry only upon an actual invocation. Projection only, never an approved definition field."
+          - name: red_evidence
+            type: object
+            required: conditional
+            condition: "tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production"
+            description: "Incoming BuilderTester RED evidence required before production edits only in separated_workers. An admitted separated_workers refactor projection retains the unchanged actual RED as metadata after current GREEN; refactor requires the same canonical cycle. In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits. No active TDD lane may proceed with production without valid RED evidence."
+            validation: "Deep-copy the unchanged observed authorizing BuilderTester cycle.red only after current identity, lane and actual-RED admission. Runtime projection only; omit before actual RED and from stored definitions."
+            object_fields:
+              - {name: check_id, type: string, required: true, validation: "Exactly equals red_check_id."}
+              - {name: test_file, type: string, required: true}
+              - {name: test_name, type: string, required: true}
+              - {name: command, type: "string[]", required: true, validation: "Exactly equals the planned red_command argv."}
+              - {name: cwd, type: string, required: true, validation: "Exactly equals red_cwd."}
+              - {name: failure_summary, type: string, required: true}
+              - {name: right_reason, type: string, required: true, description: "Why the observed failure is the authorizing assertion.", validation: "Explains the observed failure matching expected_red_failure; setup failures cannot authorize edits."}
+          - name: approved_plan_identity
+            type: object
+            required: true
+            validation: "Exact task identity, plan_version, approval_ref and definition_digest."
+
       - name: context_map
         type: string
         required: true
@@ -2986,19 +3572,15 @@ handoffs:
       - name: current_task_packet
         type: object
         required: conditional
-        condition: "current verification step executes a slice or the approved plan uses executable task packets"
-        description: "Executable task packet being verified, including command and success signal"
-        on_missing: fail
-        notes: "Block BuilderTester dispatch; Orchestrator must pass the slice task packet being verified or re-dispatch Architect to produce executable task packets before verification."
+        condition: "execution_intent != prepare_only and approved Plan uses executable packets"
+        description: "Canonical ordered packets; one coherent increment defaults to one packet. Stored Plan keeps specialist references; worker projections materialize unchanged decisions. Optional display summaries may exist only for human readability and cannot replace exact packet and files_to_* fields."
         object_fields:
-          - name: worker_stage
+          - name: verification_stage
             type: enum
             required: conditional
-            condition: "new CodeWriter dispatch or active separated TDD"
-            enum_values: [test_authoring, production, refactor]
-            description: "Semantic stage of the same selected writer; test_authoring is tests-only without incoming RED, production requires current RED when TDD applies, refactor requires current passing GREEN."
-            validation: "Conforms to worker_stage_protocol. Packet and inline values must agree. Stage-only DONE never completes Build or permits Review. Legacy inactive/bounded packets may infer production; active separated packets must refresh the explicit stage before mutation. Reused checks need no test_authoring. Refactor redispatch preserves writer identity and canonical cycle ref."
-            on_missing: fail
+            condition: "tdd_applies is true"
+            enum_values: [pre_production_red, final_verification]
+            description: "Caller materialized verifier stage; GREEN and distinct REFACTOR follow current cycle evidence, never a CodeWriter stage."
           - name: writer_selection
             type: object
             required: conditional
@@ -3030,49 +3612,48 @@ handoffs:
                   - {name: resolved_decisions_ref, type: string, required: true, description: "Resolved semantic, edge-case and compatibility decisions", on_missing: fail}
                   - {name: scope_and_dependencies_ref, type: string, required: true, description: "Understood ownership, scope, dependencies and baseline assumptions", on_missing: fail}
                   - {name: correctness_expectations_ref, type: string, required: true, description: "Independently fixed expectations checking actual correctness", on_missing: fail}
-          - name: slice_id
+          - name: packet_id
             type: string
             required: true
-          - name: slice_name
-            type: string
-            required: true
+            description: "Unique descriptive path-safe canonical packet identity; never ordinal-only. All consumers resolve implementation_steps exactly once."
           - name: name
+            type: string
+            required: true
+            description: "Human-readable task packet name passed directly as current_task_packet.name"
+          - name: description
             type: string
             required: true
           - name: observable_increment
             type: string
             required: true
+            description: "Observable increment owned by this packet"
           - name: deliverable_type
             type: enum
             required: true
             enum_values: [behavior, artifact, contract, docs, eval, config, migration, refactor]
-          - name: verification_decision
-            type: object
+            description: "Deliverable owned by this packet"
+          - name: requirement_ids
+            type: string[]
             required: true
-            description: "Canonical assistant-verification decision carried unchanged from the approved Plan/task packet."
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision."
-          - name: evidence_assessment
-            type: object
-            required: true
-            description: "Current canonical evidence assessment; planned before execution and refreshed from actual results before Review."
-            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; preserve gaps and freshness limitations."
+            min_items: 1
+            description: "Requirement Acceptance Map ids implemented by this packet"
           - name: architecture_decision_pack_ref
             type: string
             required: conditional
             condition: "architecture_design_mode in [lightweight, required, review_intensive]"
-            description: "Architecture Decision Pack reference whose design-pressure, quality, and type commitments this verification checks"
-            validation: "Resolves to the fresh selected-design pack"
+            description: "Fresh Architecture Decision Pack reference carried into this executable packet"
+            validation: "Resolves to the selected design's owned boundary, design-pressure checks, Type Ledger, quality verification, and deviation conditions"
           - name: feature_preparation_evidence_ref
             type: string
             required: conditional
             condition: "feature_preparation_scope == existing_system"
-            description: "Completed or approved evidence ref whose preservation and gap classifications verification must check"
-            validation: "Resolves to the same feature-preparation evidence ref consumed by CodeWriter"
+            description: "Completed or approved evidence ref carried unchanged into this executable packet"
+            validation: "Resolves to the classifications and implementation implications this packet implements"
           - name: approved_feature_preparation_result
             type: object
             required: conditional
             condition: "execution_intent == implement_only"
-            validation: "Equals the approved input result and CodeWriter task packet unchanged."
+            validation: "Equals the approved input result and Plan handoff unchanged."
             object_fields:
               - {name: execution_status, type: enum, required: true, enum_values: [not_started]}
               - {name: scope, type: string, required: true}
@@ -3108,8 +3689,8 @@ handoffs:
             type: object
             required: conditional
             condition: "the approved feature-preparation result contains future_harness_obligation"
-            description: "Accepted future harness obligation carried by the verification task packet"
-            validation: "Matches the enriched CodeWriter packet unchanged: the three original payload fields remain exact and exactly one evidence-ref or not_applicable source binding is present"
+            description: "Accepted future harness obligation carried unchanged into this executable packet"
+            validation: "Binds to feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable without an evidence ref, then activates the existing pre-Build harness entry gate"
             object_fields:
               - {name: requested_scope, type: string, required: true}
               - {name: evidence_basis, type: "string[]", required: true, min_items: 1}
@@ -3120,8 +3701,8 @@ handoffs:
             type: object
             required: conditional
             condition: "the approved feature-preparation result contains future_qa_acceptance_obligation"
-            description: "Accepted future QA/acceptance obligation carried by the verification task packet"
-            validation: "Matches the enriched CodeWriter packet unchanged: requested_scope and execution_prerequisite remain exact and exactly one applicable preparation-source binding is present; this task retains qa_evaluation_mode=required and the post-Build QA route"
+            description: "Accepted future QA/acceptance obligation carried unchanged into this executable packet"
+            validation: "Binds to feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable without an evidence ref, sets qa_evaluation_mode=required, and requires the existing post-Build Code Reviewer then QA Evaluator lane"
             object_fields:
               - {name: requested_scope, type: string, required: true}
               - {name: execution_prerequisite, type: string, required: true}
@@ -3152,13 +3733,58 @@ handoffs:
               - name: verification
                 type: string
                 required: true
+          - name: files
+            type: string[]
+            required: false
+            description: "Optional display summary of file paths this step touches; cannot satisfy or replace executable files_to_* contract"
+          - name: red_check_id
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals the sole ID in selected_check_ids intersect applicable_check_ids; multiple IDs require packet splitting. Resolve its exact command.argv and command.cwd in the unchanged CheckSpec."
+          - name: red_command
+            type: string[]
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact literal command.argv for red_check_id; never shell reconstruction."
+          - name: red_cwd
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Exact explicit CheckSpec command.cwd."
+          - name: expected_red_failure
+            type: string
+            required: conditional
+            condition: "tdd_applies is true"
+            validation: "Equals meaningful_failure for red_check_id in the unchanged CheckSpec; planned oracle only, never actual RED evidence."
+          - name: files_to_create
+            type: string[]
+            required: true
+            description: "Exact files CodeWriter is expected to create for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
+          - name: files_to_modify
+            type: string[]
+            required: true
+            description: "Exact existing files CodeWriter is expected to modify for this task packet, including authored tests, fixtures, helpers and test/build configuration when needed; use an empty array when none"
+          - name: files_to_test
+            type: string[]
+            required: true
+            description: "Exact test files or verification targets for execution only: BuilderTester executes and diagnoses selected checks; CodeWriter owns test authoring listed in files_to_create and files_to_modify. Use an empty array only when no test file applies"
+          - name: enabling_changes_included
+            type: string[]
+            required: true
+            description: "Setup, contracts, wiring, or config included inside this packet"
+          - name: depends_on
+            type: string[]
+            required: true
+            description: "Approved slice dependencies"
           - name: acceptance_criteria
             type: string[]
             required: true
+            description: "Observable behavior this task packet must deliver"
           - name: reuse_search
             type: object
             required: true
-            description: "Task-packet reuse-search result validated alongside the verified increment"
+            description: "CodeMapper reuse-search result carried unchanged into the executable task packet"
             object_fields:
               - name: applicability
                 type: enum
@@ -3232,7 +3858,7 @@ handoffs:
             required: conditional
             condition: "required when size in [medium, large, mega] and harness_capable == true"
             min_items: 5
-            description: "Typed Artifact Reference entries BuilderTester receives before verification; include Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, verification evidence, and plan deviation refs when applicable."
+            description: "Typed Artifact Reference entries that the task packet passes to CodeWriter and BuilderTester; include Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, changed files, verification evidence, and plan deviation refs when applicable."
             object_fields:
               - name: artifact_id
                 type: string
@@ -3261,31 +3887,41 @@ handoffs:
               - name: summary
                 type: string
                 required: true
-          - name: files_to_test
+          - name: test_criteria
             type: string[]
             required: true
-          - name: tdd_applies
-            type: boolean
+            description: "Selected test or verification criteria for this step; describe a discriminating behavior oracle only when an automated_test CheckSpec is selected."
+            min_items: 1
+          - name: verification_decision_ref
+            type: object
             required: true
-            description: "Whether this verification packet selects checks with meaningful RED oracles"
-            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; an active workflow packet must have exactly one intersecting ID, otherwise split the packet before dispatch."
+            description: "Stable reference and SHA-256 of the full unchanged task-level specialist decision; no mutable stored copy."
+            object_fields:
+              - {name: artifact_ref, type: string, required: true}
+              - {name: sha256, type: string, required: true}
           - name: selected_check_ids
             type: string[]
             required: true
-            description: "Selected CheckSpec IDs due for this verification packet"
-            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering this packet's acceptance criteria and risks."
+            description: "Selected CheckSpec IDs due for this task packet"
+            validation: "An ordered unique subset resolving exactly once in the unchanged decision and covering the packet acceptance criteria and risks."
           - name: binding_obligation_refs
             type: object[]
             required: true
-            description: "Exact applicable binding tuples due for this verification packet"
+            description: "Exact applicable binding tuples due for this task packet"
             validation: "Each {kind,value,source_ref} exactly equals a canonical policy tuple; task-wide obligations remain due at their existing completion boundary."
             object_fields:
               - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
               - {name: value, type: string, required: true}
               - {name: source_ref, type: string, required: true}
-          - name: evidence_to_record
+          - name: tdd_applies
+            type: boolean
+            required: true
+            description: "Whether meaningful RED is active for this task packet."
+            validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the decision unchanged."
+          - name: implementation_notes
             type: string[]
             required: true
+            description: "Existing patterns, constraints, non-goals, or boundaries CodeWriter must follow"
           - name: verification_command
             type: string[]
             required: conditional
@@ -3296,33 +3932,62 @@ handoffs:
           - name: expected_success_signal
             type: string
             required: true
-          - name: red_check_id
-            type: string
-            required: conditional
-            condition: "tdd_applies is true"
-            validation: "Equals the sole ID in selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; multiple IDs require packet splitting, and the ID resolves once in each set and the unchanged decision."
-          - name: red_command
+            description: "Observable pass signal for the selected command or non-command check"
+          - name: evidence_to_record
             type: string[]
-            required: conditional
-            condition: "tdd_applies is true"
-            min_items: 1
-            validation: "Exactly equals the literal command.argv for red_check_id in the unchanged decision."
-          - name: red_cwd
+            required: true
+            description: "Evidence that must be recorded before the slice is VERIFIED"
+          - name: deviation_rollback_rule
             type: string
+            required: true
+            description: "What to do if the implementation cannot follow this step exactly"
+          - name: boundary_reason
+            type: object
             required: conditional
-            condition: "tdd_applies is true"
-            validation: "Exactly equals the explicit command.cwd for red_check_id in the unchanged decision."
-          - name: expected_red_failure
-            type: string
-            required: conditional
-            condition: "tdd_applies is true"
-            validation: "Exactly equals meaningful_failure for red_check_id in the unchanged decision; this is an oracle expectation, not RED evidence."
+            condition: "implementation_steps has more than one item"
+            description: "Concrete execution purpose; size or file/layer counts alone are insufficient."
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [acceptance, ownership_context, prerequisite, recovery_rollout, binding_protocol]}
+              - {name: reason, type: string, required: true}
+          - name: execution
+            type: object
+            required: true
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            object_fields:
+              - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
+              - {name: evidence_refs, type: "string[]", required: true}
+              - {name: input_identity, type: object, required: true, description: "Separately resolved relevant-input identities; changes invalidate affected evidence and result-consuming dependents."}
+              - name: tdd_cycle_log_ref
+                type: string
+                required: conditional
+                condition: "tdd_applies is true and the actual canonical cycle_log has started"
+                validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
+              - {name: history, type: "object[]", required: true}
+              - name: recovery
+                type: object
+                required: true
+                object_fields:
+                  - {name: attempt_count, type: int, required: true}
+                  - {name: no_progress_count, type: int, required: true}
+
+          - name: verification_decision
+            type: object
+            required: true
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision. Full unchanged object resolved by verification_decision_ref; projection cannot redefine approved work."
+          - name: evidence_assessment
+            type: object
+            required: true
+            validation: "Conforms exactly to assistant-verification/contracts/output.yaml#evidence_assessment; current canonical assessment."
           - name: tdd_cycle_log_ref
             type: string
             required: conditional
-            condition: "tdd_applies is true and the canonical cycle_log has started"
-            description: "Current canonical assistant-tdd cycle_log reference carried across Build dispatches and retries."
-            validation: "Resolves to the same task-journal or workflow-output cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log. The first RED owner creates its in-progress entry if absent; update it only with actual phase evidence and retain all prior cycles and invocations."
+            condition: "tdd_applies is true and execution.tdd_cycle_log_ref exists"
+            validation: "Equals execution.tdd_cycle_log_ref and resolves assistant-tdd/contracts/output.yaml#artifacts/cycle_log; the first RED owner creates its in-progress entry only upon an actual invocation. Projection only, never an approved definition field."
+          - name: approved_plan_identity
+            type: object
+            required: true
+            validation: "Exact task identity, plan_version, approval_ref and definition_digest."
+
       - name: build_repair_state
         type: object
         required: conditional

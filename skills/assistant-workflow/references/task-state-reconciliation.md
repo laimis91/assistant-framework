@@ -57,3 +57,17 @@ Record or recover:
 If repository identity is unavailable, reconcile against the newest user
 request and available artifact evidence, state the limitation, and lower
 confidence rather than pretending the journal is current.
+
+## Canonical packet resumption
+
+Resolve the exact approved_plan_identity and canonical implementation_steps by
+packet_id before resume. Use scripts/task-packet-admission.py with the independently
+retained previous_plan, current relevant-input identities and resolved current
+owner evidence. Relevant changes invalidate affected packets and dependents that
+consume their results; preserve historical evidence and spent repair counters.
+A journal display or worker DONE cannot override coordinator execution state.
+Read-old/write-new v12 input requires verified producer/version provenance,
+immutable source identity, complete source-bound mapping/allocation and conservative
+all-prerequisite expansion described in plan-template.md. Block unknown/mixed/stale,
+unsafe or ambiguous forms; retain original artifacts/results unchanged and record
+normalization mapping in this reconciliation provenance, never a permanent ledger.

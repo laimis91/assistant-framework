@@ -286,7 +286,7 @@ fields:
     type: string[]
     required: conditional
     condition: "qa_evaluation_mode == required"
-    description: "Binary acceptance criteria from the user request, approved plan, slice manifest, or Done Contract"
+    description: "Binary acceptance criteria from the user request, approved canonical plan/packet scope, or Done Contract"
     validation: "At least one criterion is present and each criterion is independently evaluable"
     min_items: 1
     on_missing: fail

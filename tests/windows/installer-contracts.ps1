@@ -2471,6 +2471,9 @@ worker_stage_protocol:
 '@
             $handoffsText = $handoffsText.Replace("`r`n", "`n") + "`n"
             switch ($Variant) {
+                'current14' { $indexText = $indexText.Replace('13.0', '14.0'); $handoffsText = $handoffsText.Replace('13.0', '14.0') }
+                'unknown-version' { $indexText = $indexText.Replace('13.0', '15.0'); $handoffsText = $handoffsText.Replace('13.0', '15.0') }
+                'mixed-version' { $indexText = $indexText.Replace('13.0', '14.0') }
                 { $_ -in @('old', 'recovery', 'full', 'gemini') } { $indexText = $indexText.Replace('13.0', '12.0') }
                 'no-stages' { $handoffsText = $handoffsText.Substring(0, $handoffsText.IndexOf('worker_stage_protocol:')) }
                 'stage-mismatch' { $handoffsText = $handoffsText.Replace('current_matching_red', 'none') }
@@ -2507,7 +2510,7 @@ worker_stage_protocol:
         }
 
         foreach ($agent in @('codex', 'claude')) {
-            foreach ($variant in @('old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'bom-crlf', 'recovery', 'full')) {
+            foreach ($variant in @('old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'current14', 'unknown-version', 'mixed-version', 'bom-crlf', 'recovery', 'full')) {
                 foreach ($mode in @('normal', 'dry-run')) {
                     if ($mode -eq 'dry-run' -and $variant -in @('recovery', 'full')) { continue }
                     Use-IsolatedEnvironment ("ownership-$agent-$variant-$mode") {
@@ -2555,11 +2558,11 @@ worker_stage_protocol:
                         $result = Invoke-Installer -Arguments $installArguments
                         $after = Get-TreeFingerprint -LiteralPath $root
                         $label = "$agent/$variant/$mode"
-                        if ($variant -in @('absent', 'current', 'bom-crlf', 'recovery', 'full')) {
+                        if ($variant -in @('absent', 'current', 'current14', 'bom-crlf', 'recovery', 'full')) {
                             Assert-Equal 0 $result.ExitCode "$label unexpectedly rejected: $($result.Output)"
                             if ($mode -eq 'dry-run') { Assert-Equal $before $after "$label dry-run mutated scratch tree" }
                             if ($variant -eq 'absent') { Assert-False (Test-Path -LiteralPath $workflow) "$label added unselected workflow" }
-                            if ($variant -in @('current', 'bom-crlf')) {
+                            if ($variant -in @('current', 'current14', 'bom-crlf')) {
                                 Assert-Equal $workflowBefore (Get-TreeFingerprint -LiteralPath $workflow) "$label refreshed retained compatible controller"
                             }
                             if ($variant -in @('recovery', 'full')) {

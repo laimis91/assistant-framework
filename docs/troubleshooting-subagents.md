@@ -27,7 +27,7 @@ scope.
 `INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE` means a selective Claude or Codex install
 would replace writer/verifier profiles while retaining an old or unknown
 workflow controller. The installer stops before changing files, including in
-dry-run mode. It checks the retained controller’s declared v13 ownership stage
+dry-run mode. It checks the retained controller’s declared matching v13 or v14 ownership stage
 protocol using its regular `SKILL.md`, `contracts/index.yaml`, and
 `contracts/handoffs.yaml` files.
 

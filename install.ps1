@@ -2240,7 +2240,7 @@ function Test-WorkflowDeclaredScalar {
 }
 
 function Test-DeclaredWorkflowContract {
-    param([string]$Text, [string]$ExpectedContract)
+    param([string]$Text, [string]$ExpectedContract, [string]$ExpectedVersion = '13.0')
     $metadata = New-OrdinalDictionary
     $sections = New-OrdinalDictionary
     $stages = New-Object 'System.Collections.Generic.List[object]'
@@ -2304,7 +2304,7 @@ function Test-DeclaredWorkflowContract {
     foreach ($key in @('schema_version', 'contract', 'skill')) {
         if (-not $metadata.ContainsKey($key)) { return $false }
     }
-    if (-not (Test-WorkflowDeclaredScalar -Raw $metadata['schema_version'] -Expected '13.0') -or
+    if (-not (Test-WorkflowDeclaredScalar -Raw $metadata['schema_version'] -Expected $ExpectedVersion) -or
         -not (Test-WorkflowDeclaredScalar -Raw $metadata['contract'] -Expected $ExpectedContract) -or
         -not (Test-WorkflowDeclaredScalar -Raw $metadata['skill'] -Expected 'assistant-workflow')) { return $false }
     if ($ExpectedContract -ceq 'handoffs') {
@@ -2358,9 +2358,12 @@ function Assert-WorkflowRoleCompatibility {
         }
         $index = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/index.yaml')
         $handoffs = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/handoffs.yaml')
-        if (-not (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index') -or
-            -not (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs')) {
-            throw 'Retained index/handoffs do not uniquely declare schema 13.0 and the supported ownership stage tuples.'
+        $compatible13 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '13.0') -and
+            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '13.0')
+        $compatible14 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '14.0') -and
+            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '14.0')
+        if (-not ($compatible13 -or $compatible14)) {
+            throw 'Retained index/handoffs do not uniquely declare matching schema 13.0 or 14.0 and the supported ownership stage tuples.'
         }
     }
     catch {

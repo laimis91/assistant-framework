@@ -347,8 +347,16 @@ if ruby -ryaml -e '
   architect = handoffs.find { |h| h["name"] == "orchestrator_to_architect" }
   plan = architect.fetch("return_fields").find { |f| f["name"] == "test_plan" }
   exit 1 unless plan && plan["required"] == "conditional" &&
-    plan["condition"] == "at least one slice\u0027s canonical verification_decision selects method == automated_test" &&
-    plan.fetch("description").include?("required only for slices with selected automated_test CheckSpecs")
+    plan["condition"] == "at least one packet\u0027s selected CheckSpec in the canonical verification_decision has method == automated_test" &&
+    plan.fetch("description").include?("required only for packets with selected automated_test CheckSpecs")
+  fields = plan.fetch("object_fields")
+  exit 1 unless fields.any? { |f| f["name"] == "packet_id" && f["type"] == "string" && f["required"] == true }
+  exit 1 if fields.any? { |f| f["name"] == "slice_id" }
+  # The test-plan fixture uses the same foreign key as its canonical work packet.
+  packet = { "packet_id" => "accepted-outcome", "selected_check_ids" => ["focused"] }
+  test_plan = { "packet_id" => packet.fetch("packet_id"), "test_type" => "integration", "description" => "Exercise the accepted behavior" }
+  exit 1 unless fields.select { |f| f["required"] == true }.all? { |f| test_plan.key?(f.fetch("name")) }
+  exit 1 unless test_plan.fetch("packet_id") == packet.fetch("packet_id")
 ' "$handoffs_file"; then
     pass
 else
@@ -363,9 +371,9 @@ if ruby -ryaml -e '
   context_decision = field.call(decompose.fetch("context_fields"), "verification_decision")
   context_tdd_mode = field.call(decompose.fetch("context_fields"), "tdd_mode")
   return_fields = decompose.fetch("return_fields")
-  manifest = field.call(return_fields, "slice_manifest")
+  manifest = field.call(return_fields, "implementation_steps")
   slice_fields = manifest.fetch("object_fields")
-  slice_decision = field.call(slice_fields, "verification_decision")
+  slice_decision = field.call(slice_fields, "verification_decision_ref")
   selected_ids = field.call(slice_fields, "selected_check_ids")
   binding_refs = field.call(slice_fields, "binding_obligation_refs")
   slice_tdd = field.call(slice_fields, "tdd_applies")
@@ -374,7 +382,7 @@ if ruby -ryaml -e '
     context_tdd_mode.fetch("validation").include?("Equals verification_decision.tdd_choice.mode") &&
     manifest["required"] == true && manifest["type"] == "object[]" &&
     slice_decision["required"] == true && selected_ids["required"] == true && binding_refs["required"] == true && slice_tdd["required"] == true &&
-    slice_decision.fetch("validation").include?("equals context_fields.verification_decision") &&
+    slice_decision.fetch("object_fields").map { |item| item["name"] } == %w[artifact_ref sha256] &&
     selected_ids.fetch("validation").include?("An ordered unique subset") &&
     binding_refs.fetch("validation").include?("Each {kind,value,source_ref} exactly equals a canonical policy tuple") &&
     %w[kind value source_ref].all? { |name| binding_names.count(name) == 1 } &&

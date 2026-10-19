@@ -194,3 +194,5 @@ Decompose, Plan, or Build.
 After the predecessor resolves enough context to state the unknown precisely,
 return to bounded Discover and continue through the existing clarification and
 planning flow.
+
+Canonical v14 execution uses implementation_steps/current_task_packet only after all existing readiness and retained route-clear consumption gates pass. Unresolved progressive discovery cannot manufacture executable packets or admission execution outputs.

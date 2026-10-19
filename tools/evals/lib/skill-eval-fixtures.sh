@@ -1,3 +1,65 @@
+# Emit the fixed tool-owned companion schema policy for fixture and grade readers.
+skill_eval_companion_contracts_ruby() {
+    cat <<'RUBY'
+class SkillEvalCompanionContracts
+  def initialize(repo_root, fixture_file, skill_name = nil)
+    contracts_dir = File.expand_path("../contracts", File.dirname(fixture_file))
+    skill_name ||= File.basename(File.dirname(contracts_dir))
+    runner_root = File.realpath(repo_root)
+    consumer_contracts = File.directory?(contracts_dir) ? File.realpath(contracts_dir) : nil
+    contained = ->(child, parent) { child && (child == parent || child.start_with?(parent + File::SEPARATOR)) }
+    trusted_roots = [[File.join(runner_root, "skills"), runner_root, false]]
+    profile_text = %w[USERPROFILE HOME].map { |name| ENV[name] }.find { |value| value.is_a?(String) && !value.strip.empty? }
+    if profile_text && File.directory?(profile_text)
+      profile = File.realpath(profile_text)
+      configured = ENV["CODEX_HOME"]
+      codex_home = File.expand_path(configured.is_a?(String) && !configured.strip.empty? ? configured : File.join(profile, ".codex"))
+      codex_home = File.realpath(codex_home) if File.exist?(codex_home)
+      trusted_roots << [File.join(profile, ".agents", "skills"), profile, true] if runner_root == codex_home
+    end
+    skills_owner, owner_boundary = trusted_roots.first
+    trusted_roots.each do |base, boundary, split|
+      expected_consumer = File.join(base, skill_name, "contracts")
+      expected_parent = File.dirname(expected_consumer)
+      logical_match = File.directory?(expected_parent) &&
+        File.join(File.realpath(File.dirname(contracts_dir)), File.basename(contracts_dir)) == File.join(File.realpath(expected_parent), File.basename(expected_consumer))
+      physical_match = File.directory?(base) && consumer_contracts == File.join(File.realpath(base), skill_name, "contracts")
+      # Co-located symlinked/external consumer contracts remain custom data.
+      # A recognized split path must instead reject escape, never fall back.
+      next unless physical_match || (split && logical_match)
+
+      physical_base = File.realpath(base)
+      consumer_skill = File.realpath(File.join(base, skill_name))
+      unless contained.call(physical_base, boundary) && consumer_skill == File.join(physical_base, skill_name) && contained.call(consumer_contracts, consumer_skill)
+        raise "consumer contracts escape the trusted skills owner"
+      end
+      skills_owner, owner_boundary = physical_base, boundary
+      break
+    end
+    @skills_owner, @owner_boundary, @contained = skills_owner, owner_boundary, contained
+  end
+
+  def path(producer_skill, contract_file, required = true)
+    registered = (producer_skill == "assistant-verification" && contract_file == "output.yaml") ||
+      (producer_skill == "assistant-review" && %w[index.yaml output.yaml].include?(contract_file))
+    raise "unregistered fixed producer contract" unless registered
+    base = File.realpath(@skills_owner)
+    raise "producer skills base escapes its owner" unless @contained.call(base, @owner_boundary)
+    producer = File.join(base, producer_skill)
+    output = File.join(producer, "contracts", contract_file)
+    return output unless required || File.exist?(output) || File.symlink?(output)
+
+    physical_producer = File.realpath(producer)
+    physical_output = File.realpath(output)
+    unless physical_producer == producer && @contained.call(physical_output, physical_producer) && File.file?(physical_output)
+      raise "fixed producer schema escapes its owner"
+    end
+    physical_output
+  end
+end
+RUBY
+}
+
 validate_assertion_contract_paths() {
     local fixture_file="$1"
     local skill_name="$2"
@@ -7,11 +69,19 @@ validate_assertion_contract_paths() {
     contracts_dir="$(cd "$(dirname "$fixture_file")/.." && pwd)/contracts"
     [[ -d "$contracts_dir" ]] || return 0
 
-    contract_error="$(ruby -rjson -ryaml - "$fixture_file" "$skill_name" "$contracts_dir" "$REPO_ROOT" 2>&1 <<'RUBY'
+    contract_error="$({
+        skill_eval_companion_contracts_ruby
+        cat <<'RUBY'
 fixture = JSON.parse(File.read(ARGV.fetch(0)))
 skill_name = ARGV.fetch(1)
 contracts_dir = ARGV.fetch(2)
 repo_root = ARGV.fetch(3)
+
+companion_contracts = SkillEvalCompanionContracts.new(repo_root, ARGV.fetch(0), skill_name)
+fixed_producer_output = lambda do |producer_skill, required|
+  companion_contracts.path(producer_skill, "output.yaml", required)
+end
+
 load_contract_yaml = lambda do |path|
   YAML.safe_load(File.read(path), permitted_classes: [], permitted_symbols: [], aliases: false)
 end
@@ -28,7 +98,7 @@ expand_verification_aliases = lambda do |field|
       field["type"] == "object" &&
       field.fetch("validation", "").include?("assistant-verification/contracts/output.yaml##{name}")
     verification_producer_artifacts ||= load_contract_yaml.call(
-      File.join(repo_root, "skills", "assistant-verification", "contracts", "output.yaml")
+      fixed_producer_output.call("assistant-verification", true)
     ).fetch("artifacts")
     matches = verification_producer_artifacts.select { |artifact| artifact["name"] == name }
     unless matches.length == 1 && matches.first["type"] == "object" && matches.first["object_fields"].is_a?(Array)
@@ -98,7 +168,7 @@ eval_only_root_registry = {
     { "kind" => "input_field", "name" => "execution_intent" },
     { "kind" => "input_field", "name" => "feature_preparation_scope" },
     { "kind" => "handoff_field", "name" => "architecture_mapping_evidence" },
-    { "kind" => "handoff_field", "name" => "implementation_steps" },
+    { "kind" => "handoff_field", "name" => "current_task_packet", "handoff" => "orchestrator_to_code_writer" },
     { "kind" => "output_child", "artifact" => "triage_result", "name" => "size" },
     { "kind" => "output_array_item", "artifact" => "decision_item" },
     { "kind" => "output_array_item", "artifact" => "decision_resolution" }
@@ -122,7 +192,9 @@ eval_only_root_registry.fetch(skill_name, []).each do |selector|
                input.fetch("fields", []).select { |field| field["name"] == selector.fetch("name") }
              when "handoff_field"
                matches = []
-               find_named_fields.call(load_contract_yaml.call(File.join(contracts_dir, "handoffs.yaml")), selector.fetch("name"), matches)
+               document = load_contract_yaml.call(File.join(contracts_dir, "handoffs.yaml"))
+               document = document.fetch("handoffs").find { |handoff| handoff["name"] == selector["handoff"] }.fetch("context_fields") if selector["handoff"]
+               find_named_fields.call(document, selector.fetch("name"), matches)
                matches
              when "output_child"
                output = load_contract_yaml.call(File.join(contracts_dir, "output.yaml"))
@@ -202,6 +274,13 @@ inline_eval_only_roots = {
         final_snapshot_identity_schema.merge("name" => "post_fix_snapshot_identity", "required" => false)
       ]
     },
+    # Retired execution roots remain recognizable only as preparation absences.
+    { "name" => "slice_manifest", "type" => "object[]", "required" => false },
+    { "name" => "slice_verification_summary", "type" => "object[]", "required" => false },
+    { "name" => "single_slice_rationale", "type" => "string", "required" => false },
+    { "name" => "decomposition_plan_review", "type" => "object", "required" => false },
+    { "name" => "packet_admission", "type" => "object", "required" => false },
+    { "name" => "canonical_plan", "type" => "object", "required" => false },
     { "name" => "task_packet", "type" => "object", "required" => false },
     { "name" => "task_packets", "type" => "object[]", "required" => false },
     {
@@ -280,7 +359,7 @@ end
 external_producer_root_aliases.fetch(skill_name, {}).each do |alias_name, alias_config|
   producer_skill = alias_config.fetch("producer_skill")
   artifact_name = alias_config.fetch("artifact")
-  producer_output = File.join(repo_root, "skills", producer_skill, "contracts", "output.yaml")
+  producer_output = fixed_producer_output.call(producer_skill, false)
   next unless File.file?(producer_output)
 
   artifact = load_contract_yaml.call(producer_output).fetch("artifacts", []).find { |item| item["name"] == artifact_name }
@@ -352,6 +431,10 @@ end
       end
       unless path.is_a?(Array) && path.first.is_a?(String)
         warn "case #{test_case.fetch("id")}.machine_expectations.structured_json_assertions[#{index}] invalid assertion path #{operand}: #{path.to_json}"
+        exit 1
+      end
+      if skill_name == "assistant-workflow" && %w[slice_manifest slice_verification_summary single_slice_rationale decomposition_plan_review].include?(path.first) && assertion["operator"] != "path_absent"
+        warn "retired execution roots support absence assertions only"
         exit 1
       end
       unless roots.key?(path.first)
@@ -427,7 +510,7 @@ end
   end
 end
 RUBY
-)" || true
+    } | ruby -rjson -ryaml - "$fixture_file" "$skill_name" "$contracts_dir" "$REPO_ROOT" 2>&1)" || true
 
     if [[ -n "$contract_error" ]]; then
         echo "$(display_path "$fixture_file"): $contract_error" >&2
@@ -1122,7 +1205,16 @@ validate_fixture() {
           end;
 
         def case_semantic_context($index):
-          if has("semantic_context") and $skill_name == "assistant-skill-creator" then
+          if has("semantic_context") and $skill_name == "assistant-workflow" then
+            .semantic_context as $context
+            | if ($context | type) != "object" or ($context | keys) != ["packet_admission"] then
+                "case[\($index)].semantic_context must contain only packet_admission"
+              elif ($context.packet_admission | type) != "object" or ($context.packet_admission | keys | sort) != ["expected_code", "expected_status", "request"] then
+                "case[\($index)].packet_admission has invalid fields"
+              elif ($context.packet_admission.request | type) != "object" or ($context.packet_admission.request.context | type) != "object" or ($context.packet_admission.request.plan | type) != "object" or ($context.packet_admission.expected_status as $status | ["accepted", "blocked"] | index($status) == null) or ($context.packet_admission.expected_code | nonempty_string | not) then
+                "case[\($index)].packet_admission requires fixed authority, plan and expected admission"
+              else empty end
+          elif has("semantic_context") and $skill_name == "assistant-skill-creator" then
             creator_context_valid(.semantic_context; $index; .id; .prompt)
           elif has("semantic_context") and $skill_name == "assistant-research" then
             .semantic_context as $context
@@ -1212,17 +1304,22 @@ validate_fixture() {
     validation_error="$(jq -r --arg skill_name "$skill_name" '
         def five_lens_case_ids:
           ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-delegated-lenses-sequential-peer-fallback", "five-lens-quick-normalizes-to-standard", "five-lens-retains-all-material-follow-ups", "five-lens-sequential-fallback-preserves-process-evidence"];
+        def packet_case_ids:
+          ["packet-admission-coherent-medium-v14", "native-slice-execution-uses-dependencies-not-runner-topology", "isolated-independent-slices-integrate-before-review"];
         def creator_case_ids:
           ["new-process-skill-designs-contracts-before-build", "narrow-existing-skill-update-preserves-metadata-and-agent-policy", "create-minimal-utility-validates-label-to-slug-contract", "assess-existing-skill-without-authoring", "refresh-guidance-is-read-only-and-provenance-bound", "assess-skill-contracts-under-frozen-comparison"];
         [ .cases[] | .id ] as $case_ids
         | [ .cases[] | select(has("semantic_validator")) | {id, semantic_validator} ] as $declared
         | if $skill_name == "assistant-research" and (five_lens_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "five-lens assistant-research cases must declare their semantic validator"
           elif $skill_name == "assistant-skill-creator" and (creator_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "creator behavior cases must declare their semantic validator"
+          elif $skill_name == "assistant-workflow" and (packet_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "packet admission cases must declare their semantic validator"
           elif ($declared | length) == 0 then empty
           elif $skill_name == "assistant-research" and ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the five five-lens assistant-research cases"
           elif $skill_name == "assistant-research" and ($declared | all(.semantic_validator == "assistant-research.five_lens_v3")) then empty
           elif $skill_name == "assistant-skill-creator" and ($declared | map(.id) | sort) != (creator_case_ids | sort) then "semantic_validator must be declared by exactly the six fixed assistant-skill-creator cases"
           elif $skill_name == "assistant-skill-creator" and ($declared | all(.semantic_validator == "assistant-skill-creator.behavior_v1")) then empty
+          elif $skill_name == "assistant-workflow" and ($declared | map(.id) | sort) != (packet_case_ids | sort) then "semantic_validator must be declared by exactly the three fixed packet-admission cases"
+          elif $skill_name == "assistant-workflow" and ($declared | all(.semantic_validator == "assistant-workflow.packet_admission_v14")) then empty
           else "semantic_validator is only supported by its exact assistant-research or assistant-skill-creator case allowlist" end
     ' "$fixture_file")" || die "Fixture is not valid JSON: $(display_path "$fixture_file")"
     [[ -z "$validation_error" ]] || die "$validation_error"

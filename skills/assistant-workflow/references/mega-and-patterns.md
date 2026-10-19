@@ -2,13 +2,13 @@
 
 ## Mega Task Decomposition
 
-Use the strict slice packet fields from `slice_manifest` for every executable brief.
+Use the strict slice packet fields from `implementation_steps` for every executable brief.
 
-- One or more slices; use a single slice when it is the smallest iterable increment and record the rationale
+- Default to one coherent packet; additional packets require a concrete acceptance, ownership/context, prerequisite, recovery/rollout or binding protocol purpose
 - Contract-only/setup-only work is valid only when it is the verified deliverable artifact slice; otherwise include enabling changes in the slice that first uses them
 - Each slice: Plan --> [Design] --> Build
 - Keep slice ownership explicit through task packets. Source-changing packets in a shared or unknown workspace are sequential. Parallel source-changing packets require the runtime explicitly proves isolated workspaces; independent read-only analysis may run in parallel.
-- Verify each completed slice before dependent work starts. After all slices are integrated, full-scope validation is required before fresh Review. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code.
+- Verify each completed slice before dependent work starts. After all slices are integrated, full-scope validation is required before fresh Review. Integrated selected and binding checks remain due for one or multiple packets before fresh independent Review; packet-local evidence cannot waive them.
 
 ## Agent Portability
 
@@ -31,7 +31,7 @@ Agent definitions are per-platform: Claude uses `.md` files in `agents/claude/`,
 
 - **Guess:** Ask when ambiguous, state assumptions when clear
 - **Skip Discovery:** Even small tasks get quick validation
-- **Skip Decompose:** Medium+ implementation/execution work MUST decompose into strict slices. "It's straightforward" is not an excuse — decomposition reveals hidden complexity. `prepare_only` uses Discover -> PREPARATION_COMPLETION with optional Plan readiness and no slices.
+- **Conditional Decompose:** skip for coherent work; refine the same canonical implementation_steps collection only when an execution purpose needs another boundary. Preparation-only produces no execution.
 - **Mega-step:** One plan step at a time
 - **Silent drift:** Stop and flag plan deviations
 - **Tests after:** Write tests alongside each step

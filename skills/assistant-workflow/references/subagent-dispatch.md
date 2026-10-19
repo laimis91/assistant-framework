@@ -77,7 +77,7 @@ intelligent-writer. Writers cannot invent desired behavior or replace specialist
 ownership; missing requirements return `NEEDS_CONTEXT` to the Orchestrator.
 
 Carry the identical object in each packet projection and inline CodeWriter
-context. `current_task_packet` wins when supplied; packet/inline conflicts block
+context. The materialized canonical `current_task_packet` wins over ambiguous inline prose when supplied; it never overrides the approved stored definition; packet/inline conflicts block
 instead of being merged. Old packets without selection remain valid and use
 intelligent compatibility semantics. Both writers retain exact scope, selected
 checks and binding tuples, unchanged verification/TDD, statuses, partial changes,
@@ -124,7 +124,7 @@ its compact validation plus fresh-review evidence instead.
 | **TRIAGE** | — (Orchestrator direct) | All sizes | Too lightweight for dispatch — single classification decision |
 | **DISCOVER** | Code Mapper | Current file/boundary cannot be resolved directly | Produces a compact context map only when it reduces uncertainty |
 | **DISCOVER** | Explorer | Unresolved lifecycle/failure/coupling/behavior question after mapping | Traces only the needed execution path |
-| **DECOMPOSE** | Architect | Pack or slice boundary has genuine uncertainty | Analyzes the current boundary and proposes the smallest usable slice manifest |
+| **DECOMPOSE** | Architect | Pack or slice boundary has genuine uncertainty | Analyzes the current boundary and proposes the smallest usable canonical packet collection |
 | **PLAN** | Architect | `architecture_design_mode` is `required`/`review_intensive` or an ordinary plan cannot resolve a concrete boundary | Produces a bounded blueprint from current evidence |
 | **DESIGN** | Architect | UI tasks | Proposes design direction; Orchestrator creates mockup |
 | **BUILD** | Code Writer / bounded executor | Standard/strict | Owns implementation and selected verification; RED/GREEN/REFACTOR only when TDD is active |

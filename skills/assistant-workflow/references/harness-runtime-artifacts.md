@@ -165,3 +165,5 @@ Routing rules:
   Trace Ledger entries for review/document decisions, include Pivot/Restart
   Decision refs when triggered, and update Replay Packet validation_state plus
   exact_next_action before completion or handoff.
+
+Legacy recovery display keys such as slice and affected_slice_or_round retain their public shape. Project an explicit resolved canonical packet reference into them; they create no separate slice authority.

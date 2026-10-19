@@ -636,7 +636,7 @@ p0p4_write_skill_eval_responses() {
             response_path="$output_dir/$skill_name/$id.txt"
             required_summary="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$fixture_file" | paste -sd ' ' -)"
             if [[ "$skill_name" == "assistant-workflow" ]] \
-                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | ((.machine_expectations.structured_json_assertions? // [] | length > 0) or .semantic_validator != null)' "$fixture_file" >/dev/null; then
                 case "$id" in
                     ownership-*)
                         write_ownership_response "$id" "$response_path"
@@ -704,17 +704,21 @@ p0p4_write_skill_eval_responses() {
                           }
                         }' >"$response_path"
                         ;;
+                    packet-admission-coherent-medium-v14)
+                        write_packet_admission_response "$response_path" "$fixture_file" "$id"
+                        ;;
                     build-derives-tdd-from-selected-slice-checks)
                         write_tdd_slice_projection_response "$response_path" "$required_summary"
                         ;;
                     build-phase-verifies-selected-check-before-advancing)
-                        jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria.",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[]}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
+                        jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},implementation_steps:[{packet_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria.",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[]}]} | .current_task_packet.verification_decision = .verification_decision' >"$response_path"
+                        p0p4_normalize_packet_projection "$response_path"
                         ;;
                     native-slice-execution-uses-dependencies-not-runner-topology)
-                        jq -n '{execution_policy:{source_writer_policy:"sequential_shared_or_unknown",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"not_available",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
+                        write_packet_admission_response "$response_path" "$fixture_file" "$id"
                         ;;
                     isolated-independent-slices-integrate-before-review)
-                        jq -n '{execution_policy:{source_writer_policy:"isolated_A_B_overlap_permitted",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"fixture-runtime-isolation-A-B-v1",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
+                        write_packet_admission_response "$response_path" "$fixture_file" "$id"
                         ;;
                     verification-reuse-current-scenario-matrix|verification-reuse-preserves-independent-review)
                         write_verification_reuse_response "$id" "$response_path" "$required_summary"
@@ -819,7 +823,7 @@ p0p4_write_skill_eval_responses() {
                 continue
             fi
             if [[ "$skill_name" == "assistant-debugging" ]] \
-                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | ((.machine_expectations.structured_json_assertions? // [] | length > 0) or .semantic_validator != null)' "$fixture_file" >/dev/null; then
                 case "$id" in
                     local-debugging-retains-compact-causal-impact)
                         build_local_debugging_compact_causal_response "$response_path" "$required_summary"
@@ -831,7 +835,7 @@ p0p4_write_skill_eval_responses() {
                 continue
             fi
             if [[ "$skill_name" == "assistant-review" ]] \
-                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | ((.machine_expectations.structured_json_assertions? // [] | length > 0) or .semantic_validator != null)' "$fixture_file" >/dev/null; then
                 case "$id" in
                     standalone-high-risk-record-without-challenge-remains-review-intensive)
                         p0p4_write_assistant_review_architecture_pack_response "$response_path" "$required_summary" "Blocked: independent_challenge_evidence is missing for review_intensive mode." true
@@ -1031,7 +1035,7 @@ p0p4_write_skill_eval_responses() {
                 esac
                 continue
             fi
-            if jq -e --arg id "$id" '.cases[] | select(.id == $id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture_file" >/dev/null; then
+            if jq -e --arg id "$id" '.cases[] | select(.id == $id) | ((.machine_expectations.structured_json_assertions? // [] | length > 0) or .semantic_validator != null)' "$fixture_file" >/dev/null; then
                 case "$skill_name:$id" in
                     assistant-tdd:ownership-separated-stage-order)
                         write_ownership_response "$id" "$response_path"
@@ -2326,13 +2330,13 @@ if ! p0p4_write_skill_eval_responses "$slice_tdd_grade_root/factory" "" "" "" as
     exit 1
 fi
 mkdir -p "$slice_tdd_grade_root/wrong-local-projection/assistant-workflow" "$slice_tdd_grade_root/wrong-applicability/assistant-workflow" "$slice_tdd_grade_root/missing-defining-checks/assistant-workflow"
-jq '.slice_manifest[0].tdd_applies = false | .slice_manifest[1].tdd_applies = true' \
+jq '.implementation_steps[0].tdd_applies = false | .implementation_steps[1].tdd_applies = true' \
     "$slice_tdd_grade_root/factory/assistant-workflow/$slice_tdd_case.txt" \
     >"$slice_tdd_grade_root/wrong-local-projection/assistant-workflow/$slice_tdd_case.txt"
-jq '.slice_manifest[1].verification_decision.tdd_choice.applicable_check_ids = ["docs-content-inspection"]' \
+jq '.current_task_packet.verification_decision.tdd_choice.applicable_check_ids = ["docs-content-inspection"]' \
     "$slice_tdd_grade_root/factory/assistant-workflow/$slice_tdd_case.txt" \
     >"$slice_tdd_grade_root/wrong-applicability/assistant-workflow/$slice_tdd_case.txt"
-jq '.verification_decision.checks = [] | .slice_manifest[0].verification_decision.checks = [] | .slice_manifest[1].verification_decision.checks = []' \
+jq '.verification_decision.checks = [] | .current_task_packet.verification_decision.checks = [] | .current_task_packet.verification_decision.checks = []' \
     "$slice_tdd_grade_root/factory/assistant-workflow/$slice_tdd_case.txt" \
     >"$slice_tdd_grade_root/missing-defining-checks/assistant-workflow/$slice_tdd_case.txt"
 slice_tdd_grade_failures=()
@@ -2371,25 +2375,25 @@ mkdir -p "$slice_grade_root/correct/assistant-workflow" "$slice_grade_root/wrong
     "$slice_grade_root/wrong-result-reference/assistant-workflow"
 cp "$slice_grade_root/factory/assistant-workflow/$slice_grade_case.txt" \
     "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt"
-jq '.verification_decision.tdd_choice.mode = true | .slice_manifest[0].verification_decision.tdd_choice.mode = true' \
+jq '.verification_decision.tdd_choice.mode = true | .current_task_packet.verification_decision.tdd_choice.mode = true' \
     "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
     >"$slice_grade_root/wrong/assistant-workflow/$slice_grade_case.txt"
 jq '.validation_results[0].result = "failed"' \
     "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
     >"$slice_grade_root/wrong-result/assistant-workflow/$slice_grade_case.txt"
-jq '.slice_manifest[0].verification_command = ["echo", "unselected-command"]' \
+jq '.implementation_steps[0].verification_command = ["echo", "unselected-command"]' \
     "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
     >"$slice_grade_root/wrong-command/assistant-workflow/$slice_grade_case.txt"
-jq '.verification_decision.checks[0].method = "automated_test" | .verification_decision.checks[0].test_scope = "unit" | .slice_manifest[0].verification_decision.checks[0].method = "automated_test" | .slice_manifest[0].verification_decision.checks[0].test_scope = "unit"' \
+jq '.verification_decision.checks[0].method = "automated_test" | .verification_decision.checks[0].test_scope = "unit" | .current_task_packet.verification_decision.checks[0].method = "automated_test" | .current_task_packet.verification_decision.checks[0].test_scope = "unit"' \
     "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
     >"$slice_grade_root/wrong-selected-test/assistant-workflow/$slice_grade_case.txt"
-jq '.slice_manifest[0].verification_decision.checks[0].check_id = "unselected-check"' \
+jq '.current_task_packet.verification_decision.checks[0].check_id = "unselected-check"' \
     "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
     >"$slice_grade_root/wrong-slice-selection/assistant-workflow/$slice_grade_case.txt"
-jq '.verification_decision.checks[0].check_id = "unselected-check" | .slice_manifest[0].verification_decision = .verification_decision | .validation_results[0].command_or_check = "unselected-check"' \
+jq '.verification_decision.checks[0].check_id = "unselected-check" | .current_task_packet.verification_decision = .verification_decision | .validation_results[0].command_or_check = "unselected-check"' \
     "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
     >"$slice_grade_root/wrong-both-selections/assistant-workflow/$slice_grade_case.txt"
-jq '.verification_decision.checks[0].check_ref_or_method.expected_success = "Any existing file is sufficient." | .slice_manifest[0].verification_decision = .verification_decision' \
+jq '.verification_decision.checks[0].check_ref_or_method.expected_success = "Any existing file is sufficient." | .current_task_packet.verification_decision = .verification_decision' \
     "$slice_grade_root/correct/assistant-workflow/$slice_grade_case.txt" \
     >"$slice_grade_root/wrong-both-oracles/assistant-workflow/$slice_grade_case.txt"
 jq '.validation_results[0].command_or_check = "unselected-check"' \
@@ -3720,8 +3724,12 @@ run_prepare_only_representative_path_probe \
     medium-prepare-only-readiness-plan '["feature_preparation_result", "readiness_plan", "preparation_basis"]'
 run_prepare_only_representative_path_probe \
     medium-prepare-only-not-applicable-readiness-plan '["feature_preparation_result", "readiness_plan", "evidence_ref"]'
+# Original 409 root/forbidden probes remain; four new canonical execution roots
+# (implementation_steps,current_task_packet,packet_admission,canonical_plan)
+# add exactly four absence injections in each of twelve preparation cases.
+# Keep CLI invocation counts unchanged; these are direct production-grader calls.
 if [[ ${#workflow_core_failures[@]} -eq 0 \
-    && "$prepare_only_direct_structured_probe_count" -eq 409 \
+    && "$prepare_only_direct_structured_probe_count" -eq $((409 + 12 * 4)) \
     && "$prepare_only_representative_cli_probe_count" -eq 3 ]]; then
     pass
 else
@@ -4279,6 +4287,9 @@ if run_isolated_workflow_routing_mutations \
     '.artifact_contract = {}' \
     '.task_packet = {}' \
     '.decomposition_plan_review = {}' \
+    '.implementation_steps = []' \
+    '.current_task_packet = {}' \
+    '.packet_admission = {}' \
     '.slice_manifest = []' \
     '.changed_files = {}' \
     '.test_results = {}' \
@@ -4329,6 +4340,9 @@ if run_isolated_workflow_routing_mutations \
     'del(.task_journal)' \
     'del(.context_map)' \
     '.artifact_contract = {}' \
+    '.implementation_steps = []' \
+    '.current_task_packet = {}' \
+    '.packet_admission = {}' \
     '.slice_manifest = []' \
     '.task_packet = {}' \
     '.changed_files = {}' \
@@ -4396,6 +4410,9 @@ if run_isolated_workflow_routing_mutations \
     '.artifact_contract = {}' \
     '.task_packet = {}' \
     '.decomposition_plan_review = {}' \
+    '.implementation_steps = []' \
+    '.current_task_packet = {}' \
+    '.packet_admission = {}' \
     '.slice_manifest = []' \
     '.single_slice_rationale = {}' \
     '.slice_verification_summary = {}' \
@@ -4515,11 +4532,11 @@ if ! run_isolated_workflow_routing_mutations \
     'del(.implementation_steps[0].feature_preparation_harness_obligation)' \
     '(.implementation_steps[0].feature_preparation_harness_obligation.requested_scope) = "broadened"' \
     '(.implementation_steps[0].feature_preparation_harness_obligation.source_preparation_basis) = "not_applicable"' \
-    'del(.implementation_steps[0].slice_id)' \
-    'del(.implementation_steps[0].order)' \
-    'del(.implementation_steps[0].slice_name)' \
+    'del(.implementation_steps[0].packet_id)' \
+    '(.implementation_steps[0].packet_id) = "foreign-outcome"' \
+    'del(.current_task_packet.verification_decision)' \
     'del(.implementation_steps[0].name)' \
-    'del(.implementation_steps[0].task_id)' \
+    'del(.current_task_packet.evidence_assessment)' \
     'del(.implementation_steps[0].description)' \
     'del(.implementation_steps[0].observable_increment)' \
     'del(.implementation_steps[0].deliverable_type)' \
@@ -4691,7 +4708,7 @@ for approved_qa_case_and_builder in \
         '(.triage_result.subagent_trigger_scope) = ["Build bounded executor"]'
         '(.implementation_steps[0].feature_preparation_harness_obligation) = {requested_scope:"invented"}'
         'del(.implementation_steps[0].feature_preparation_qa_acceptance_obligation)'
-        '.implementation_steps += [{slice_id:"unbound-step"}]'
+        '.implementation_steps += [{packet_id:"unbound-step"}]'
     )
     if [[ "$approved_qa_route" == "existing_system" ]]; then
         approved_qa_mutations+=(
@@ -4763,14 +4780,14 @@ for implementation_packet_case in \
     if ! run_isolated_workflow_routing_mutations \
         "$implementation_packet_case_id" \
         "$implementation_packet_builder" \
-        'del(.implementation_steps[0].verification_decision)' \
-        '.implementation_steps[0].verification_decision.scope = "rewritten packet decision"' \
+        'del(.current_task_packet.verification_decision)' \
+        '.current_task_packet.verification_decision.scope = "rewritten packet decision"' \
         'del(.implementation_steps[0].selected_check_ids)' \
         '.implementation_steps[0].selected_check_ids = ["unselected-check"]' \
         'del(.implementation_steps[0].binding_obligation_refs)' \
         '.implementation_steps[0].binding_obligation_refs = [{kind:"required_check",value:"rewritten binding",source_ref:"rewritten"}]' \
-        'del(.implementation_steps[0].evidence_assessment)' \
-        '.implementation_steps[0].evidence_assessment.status = "sufficient"' \
+        'del(.current_task_packet.evidence_assessment)' \
+        '.current_task_packet.evidence_assessment.status = "sufficient"' \
         ".implementation_steps[0].tdd_applies = $implementation_packet_wrong_tdd"; then
         implementation_packet_failures+=("$implementation_packet_case_id:$WORKFLOW_ROUTING_MUTATION_FAILURE")
     fi
@@ -4778,19 +4795,19 @@ done
 if ! run_isolated_workflow_routing_mutations \
     "medium-implement-only-consumes-preparation-harness-obligation" \
     "build_medium_implement_only_harness_handoff_response" \
-    'del(.slice_manifest[0].verification_decision)' \
-    'del(.slice_manifest[0].selected_check_ids)' \
-    'del(.slice_manifest[0].binding_obligation_refs)' \
-    'del(.slice_manifest[0].tdd_applies)' \
+    'del(.current_task_packet.verification_decision)' \
+    'del(.implementation_steps[0].selected_check_ids)' \
+    'del(.implementation_steps[0].binding_obligation_refs)' \
+    'del(.implementation_steps[0].tdd_applies)' \
     'del(.validation_results[0].selected_check_ids)' \
     'del(.validation_results[0].binding_obligation_refs)' \
-    '.slice_manifest[0].tdd_applies = true'; then
+    '.implementation_steps[0].tdd_applies = true'; then
     implementation_packet_failures+=("harness-companion:$WORKFLOW_ROUTING_MUTATION_FAILURE")
 fi
 if ! run_isolated_workflow_routing_mutations \
     "medium-implement-only-consumes-preparation-qa-obligation" \
     "build_medium_implement_only_qa_handoff_response" \
-    '.slice_manifest[0].binding_obligation_refs = [{kind:"required_check",value:"Run the explicitly requested QA/acceptance evaluation.",source_ref:"prep/medium-feature"}]'; then
+    '.implementation_steps[0].binding_obligation_refs = [{kind:"required_check",value:"Run the explicitly requested QA/acceptance evaluation.",source_ref:"prep/medium-feature"}]'; then
     implementation_packet_failures+=("qa-companion:$WORKFLOW_ROUTING_MUTATION_FAILURE")
 fi
 if [[ ${#implementation_packet_failures[@]} -eq 0 ]]; then
@@ -5372,19 +5389,48 @@ fi
 
 test_start "object_keys_exact rejects extra and missing root and nested keys"
 object_keys_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-object-keys.XXXXXX")"
-object_keys_skill="$object_keys_root/assistant-workflow"
+object_keys_skill="$object_keys_root/assistant-eval-object-keys"
 object_keys_responses="$object_keys_root/responses"
 object_keys_err="$object_keys_root/validation.err"
 object_keys_output="$object_keys_root/grading.out"
 p0p4_register_cleanup "$object_keys_root"
-mkdir -p "$object_keys_skill/evals" "$object_keys_responses/assistant-workflow"
-cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$object_keys_skill/SKILL.md"
-ln -s "$FRAMEWORK_DIR/skills/assistant-workflow/contracts" "$object_keys_skill/contracts"
+mkdir -p "$object_keys_responses/assistant-eval-object-keys" "$object_keys_skill/contracts"
+p0p4_write_skill_eval_fixture "$object_keys_skill"
+# Generic object-key controls own a synthetic schema, independent of packet admission.
+cat >"$object_keys_skill/contracts/output.yaml" <<'OBJECTKEYSCHEMA'
+schema_version: "1.0"
+contract: output
+skill: assistant-eval-object-keys
+artifacts:
+  - name: execution_policy
+    type: object
+    required: true
+    object_fields:
+      - {name: source_writer_policy, type: string, required: true}
+      - {name: read_only_analysis_policy, type: string, required: true}
+      - {name: isolation_evidence_ref, type: string, required: true}
+      - name: c_start_decisions
+        type: object[]
+        required: true
+        object_fields:
+          - {name: a_status, type: string, required: true}
+          - {name: c_decision, type: string, required: true}
+      - {name: per_slice_verification, type: string, required: true}
+      - {name: integration_validation, type: string, required: true}
+      - {name: integration_checks, type: "string[]", required: true}
+      - {name: fresh_review, type: string, required: true}
+      - {name: fresh_review_after, type: string, required: true}
+OBJECTKEYSCHEMA
 jq '
-  .cases |= map(
-    if .id == "native-slice-execution-uses-dependencies-not-runner-topology"
-      or .id == "isolated-independent-slices-integrate-before-review" then
-      .machine_expectations.structured_json_assertions += [
+  .cases[0] as $base
+  | .cases = [
+      ($base | .id = "object-keys-shared-policy"),
+      ($base | .id = "object-keys-isolated-policy")
+    ]
+  | .cases |= map(
+      .prompt = "Return exactly one execution_policy matching the declared synthetic output schema."
+      | .machine_expectations = {required_substrings:["execution_policy"],forbidden_substrings:["__object_keys_forbidden_fixture_sentinel__"]}
+      | .machine_expectations.structured_json_assertions = [
         {operator:"object_keys_exact",path:[],fields:["execution_policy"]},
         {operator:"object_keys_exact",path:["execution_policy"],fields:["source_writer_policy","read_only_analysis_policy","isolation_evidence_ref","c_start_decisions","per_slice_verification","integration_validation","integration_checks","fresh_review","fresh_review_after"]},
         {operator:"object_keys_exact",path:["execution_policy","c_start_decisions",0],fields:["a_status","c_decision"]},
@@ -5393,26 +5439,26 @@ jq '
         {operator:"equals",path:["execution_policy","c_start_decisions",0,"a_status"],expected:"PENDING"},
         {operator:"equals",path:["execution_policy","integration_checks",0],expected:"cross-slice"}
       ]
-    else . end
   )
-' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" >"$object_keys_skill/evals/cases.json"
+' "$object_keys_skill/evals/cases.json" >"$object_keys_root/synthetic-cases.json"
+mv "$object_keys_root/synthetic-cases.json" "$object_keys_skill/evals/cases.json"
 cp "$object_keys_skill/evals/cases.json" "$object_keys_root/base-cases.json"
-cat >"$object_keys_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt" <<'EOF'
+cat >"$object_keys_responses/assistant-eval-object-keys/object-keys-shared-policy.txt" <<'EOF'
 {"execution_policy":{"source_writer_policy":"sequential_shared_or_unknown","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"not_available","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
 EOF
-cat >"$object_keys_responses/assistant-workflow/isolated-independent-slices-integrate-before-review.txt" <<'EOF'
+cat >"$object_keys_responses/assistant-eval-object-keys/object-keys-isolated-policy.txt" <<'EOF'
 {"execution_policy":{"source_writer_policy":"isolated_A_B_overlap_permitted","read_only_analysis_policy":"parallel_permitted","isolation_evidence_ref":"fixture-runtime-isolation-A-B-v1","c_start_decisions":[{"a_status":"PENDING","c_decision":"blocked"},{"a_status":"RUNNING","c_decision":"blocked"},{"a_status":"VERIFIED","c_decision":"ready"}],"per_slice_verification":"required","integration_validation":"required","integration_checks":["cross-slice","full-scope"],"fresh_review":"required","fresh_review_after":"integration_validation"}}
 EOF
 object_keys_failures=()
 if ! "$skill_eval_runner" --validate-fixture --skill "$object_keys_skill" >/dev/null 2>"$object_keys_err"; then
     object_keys_failures+=("valid fixture: $(cat "$object_keys_err")")
 else
-    for object_keys_case in native-slice-execution-uses-dependencies-not-runner-topology isolated-independent-slices-integrate-before-review; do
+    for object_keys_case in object-keys-shared-policy object-keys-isolated-policy; do
         if ! "$skill_eval_runner" --responses "$object_keys_responses" --skill "$object_keys_skill" --case "$object_keys_case" >"$object_keys_output" 2>&1; then
             object_keys_failures+=("valid response:$object_keys_case")
         fi
     done
-    object_keys_baseline="$object_keys_responses/assistant-workflow/native-slice-execution-uses-dependencies-not-runner-topology.txt"
+    object_keys_baseline="$object_keys_responses/assistant-eval-object-keys/object-keys-shared-policy.txt"
     cp "$object_keys_baseline" "$object_keys_root/valid-response.json"
     for object_keys_mutation in \
         'setpath(["unsafe_override"]; true)' \
@@ -5424,7 +5470,7 @@ else
         '.execution_policy = "unsafe"' \
         '.execution_policy.c_start_decisions[0] = "ready"'; do
         jq "$object_keys_mutation" "$object_keys_root/valid-response.json" >"$object_keys_baseline"
-        if "$skill_eval_runner" --responses "$object_keys_responses" --skill "$object_keys_skill" --case native-slice-execution-uses-dependencies-not-runner-topology >"$object_keys_output" 2>&1 \
+        if "$skill_eval_runner" --responses "$object_keys_responses" --skill "$object_keys_skill" --case object-keys-shared-policy >"$object_keys_output" 2>&1 \
             || ! grep -Fq "structured JSON assertion failure" "$object_keys_output"; then
             object_keys_failures+=("response mutation:$object_keys_mutation")
         fi
@@ -5441,7 +5487,7 @@ for object_keys_invalid in \
     '{"operator":"object_keys_exact","path":["execution_policy","c_start_decisions",0,0,0],"fields":["a_status","c_decision"]}' \
     '{"operator":"equals","path":["execution_policy","c_start_decisions","a_status"],"expected":"PENDING"}' \
     '{"operator":"object_keys_exact","path":["execution_policy","source_writer_policy",0],"fields":["value"]}'; do
-    jq --argjson assertion "$object_keys_invalid" '(.cases[] | select(.id == "native-slice-execution-uses-dependencies-not-runner-topology") | .machine_expectations.structured_json_assertions) += [$assertion]' "$object_keys_root/base-cases.json" >"$object_keys_root/invalid.json"
+    jq --argjson assertion "$object_keys_invalid" '(.cases[] | select(.id == "object-keys-shared-policy") | .machine_expectations.structured_json_assertions) += [$assertion]' "$object_keys_root/base-cases.json" >"$object_keys_root/invalid.json"
     mv "$object_keys_root/invalid.json" "$object_keys_skill/evals/cases.json"
     if "$skill_eval_runner" --validate-fixture --skill "$object_keys_skill" >/dev/null 2>"$object_keys_err"; then
         object_keys_failures+=("invalid assertion accepted:$object_keys_invalid")
@@ -6605,11 +6651,11 @@ dependent-extra-newline|.dependent_output += "\n"
 wrong-status|.status = (if .status == "DONE" then "BLOCKED" else "DONE" end)
 wrong-failure-class|.failure_class = (if .failure_class == "none" then "broken_baseline" else "none" end)
 wrong-next-action|.next_action = (if .next_action == "review" then "orchestrator" else "review" end)
-wrong-binding-kind|.slice_manifest[0].binding_obligation_refs[0].kind = "prohibited_scope"
-wrong-binding-value|.slice_manifest[0].binding_obligation_refs[0].value = "include dependent.txt"
-wrong-binding-source|.slice_manifest[0].binding_obligation_refs[0].source_ref = "untrusted.md"
-missing-binding-tuple|.slice_manifest[0].binding_obligation_refs = []
-extra-binding-tuple|.slice_manifest[0].binding_obligation_refs += [{kind:"required_scope",value:"only output.txt",source_ref:"scope.md"}]
+wrong-binding-kind|.implementation_steps[0].binding_obligation_refs[0].kind = "prohibited_scope"
+wrong-binding-value|.implementation_steps[0].binding_obligation_refs[0].value = "include dependent.txt"
+wrong-binding-source|.implementation_steps[0].binding_obligation_refs[0].source_ref = "untrusted.md"
+missing-binding-tuple|.implementation_steps[0].binding_obligation_refs = []
+extra-binding-tuple|.implementation_steps[0].binding_obligation_refs += [{kind:"required_scope",value:"only output.txt",source_ref:"scope.md"}]
 WRITER_PROXY_MUTATIONS
 if [[ ${#writer_proxy_failures[@]} -eq 0 ]]; then pass; else fail "${writer_proxy_failures[*]}"; fi
 

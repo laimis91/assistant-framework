@@ -1,4 +1,4 @@
-schema_version: "13.0"
+schema_version: "14.0"
 contract: index
 skill: assistant-workflow
 
@@ -103,7 +103,18 @@ load_sets:
         section: artifacts
         key: name
         names: [evidence_assessment]
-    budget_words: 2200
+    budget_words: 2000
+  packet_admission:
+    references:
+      - references/plan-template.md
+      - scripts/task-packet-admission.py
+    selectors:
+      - id: workflow-canonical-packets
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation]
+    budget_words: 16000
   current_phase:
     selectors:
       - id: workflow-current-phase-gate
@@ -145,7 +156,7 @@ load_sets:
         section: artifacts
         key: name
         name_from: applicable_completion_artifact
-        allowed_names: [triage_result,completion_policy,phase_checkpoints,changed_files,verification_decision,tdd_cycle_log_ref,evidence_assessment,debugging_result,test_results, validation_results, fresh_review_result, review_result, qa_evaluation_result, spec_review_result, manual_test_steps, manual_verification_result, subagent_evidence, build_repair_state, task_state_reconciliation, task_journal, context_map, context_budget_note, pattern_retrieval_note, context_handoff_packet, requirement_acceptance_map, architecture_decision_pack, feature_preparation_evidence, feature_preparation_result, change_impact_applicability, change_impact_evidence, final_handoff, artifact_contract, artifact_reference_ledger, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, decomposition_plan_review, slice_manifest, single_slice_rationale, slice_verification_summary, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, plan_document, user_approval, verified_skill_distillation]
+        allowed_names: [triage_result,completion_policy,phase_checkpoints,changed_files,verification_decision,tdd_cycle_log_ref,evidence_assessment,debugging_result,test_results, validation_results, fresh_review_result, review_result, qa_evaluation_result, spec_review_result, manual_test_steps, manual_verification_result, subagent_evidence, build_repair_state, task_state_reconciliation, task_journal, context_map, context_budget_note, pattern_retrieval_note, context_handoff_packet, requirement_acceptance_map, architecture_decision_pack, feature_preparation_evidence, feature_preparation_result, change_impact_applicability, change_impact_evidence, final_handoff, artifact_contract, artifact_reference_ledger, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, metrics_entry, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, plan_document, user_approval, verified_skill_distillation]
     budget_words: 12000
 
 fallback:

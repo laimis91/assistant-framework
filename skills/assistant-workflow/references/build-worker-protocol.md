@@ -163,7 +163,7 @@ For medium+ tasks with slices, execute source-changing slices sequentially in a 
 
 Before starting a slice:
 
-1. Load the approved task packet for the slice, including slice_id, observable
+1. Load the approved task packet for the slice, including packet_id, observable
     increment, deliverable type, files, acceptance criteria, unchanged verification
    decision, selected checks, each command's literal argv/cwd bound by its
    check_id or its concrete non-command procedure, expected
@@ -239,7 +239,7 @@ with reapproval, user input, or environment recovery through
 `pivot_restart_decision` when applicable. A changed plan version starts a new
 path only after required reapproval; it must not disguise a same-scope retry.
 
-After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice validation still covers the selected integration claim. Per-slice verification does not satisfy a distinct selected integration check.
+After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite. Integrated selected and binding checks remain due for one or multiple packets before fresh independent Review; packet-local evidence cannot waive them. Single-slice validation still covers the selected integration claim. Per-slice verification does not satisfy a distinct selected integration check.
 
 After each implementation step, apply the relevant SOLID check from
 `references/prompts/solid-principles.md` and fix material violations before
@@ -354,9 +354,9 @@ Decompose criteria before moving on:
    the decision to reuse; do not claim a newly executed verification. Dispatch
    Builder/Tester only when `build_execution_lane=separated_workers`; direct
    fallback performs the same selected-lane verification responsibility.
-2. Check each acceptance criterion from the slice manifest independently; mark
+2. Check each acceptance criterion from the canonical packet collection independently; mark
    pass/fail with command, result, or inspection evidence.
-3. Record verification evidence in the task journal slice verification ledger,
+3. Record verification evidence on the same canonical packet execution record; the journal displays those refs,
    including RED status when TDD was active, implementation status,
    command/result, criteria checked, self-check result, and final status.
 4. For harness-capable work, update Harness Run State, append Trace Ledger
@@ -385,13 +385,13 @@ its `depends_on` prerequisites are verified.
 
 After all slices are verified and concurrent outputs are integrated, run the
 selected checks and binding project checks over the completed scope before
-fresh Review; do not add an unselected full suite. Cross-slice validation
-applies only when slice_manifest contains more than one item, and for one item
-is recorded as not_applicable using the one-item manifest and
-single_slice_rationale. A selected single-slice integration check covers its
-claim; per-slice evidence does not satisfy a distinct selected integration
+fresh Review; do not add an unselected full suite. Integrated selected and binding checks remain due for one or multiple packets before fresh independent Review; packet-local evidence cannot waive them.  per-slice evidence does not satisfy a distinct selected integration
 check.
 If implementation reveals a plan problem, print `>> PLAN DEVIATION DETECTED`,
 record `pivot_restart_decision.reapproval_required=true` when scope/files/
 behavior/risk/verification/acceptance changes, and wait for approval before
 continuing the changed path.
+
+## Canonical packet admission
+
+Use the installed scripts/task-packet-admission.py at dispatch, resume, verification and completion with independently resolved authority described in plan-template.md. Resolve one packet_id in implementation_steps; stored references materialize the full unchanged decision and current assessment. Record coordinator state/evidence on that same packet execution; the journal is a derived display. Unknown/stale identity, projection mutation, incomplete evidence or non-VERIFIED prerequisites block. Relevant changes invalidate affected evidence and result-consuming dependents; preserve spent recovery counters/history. Native attestation remains caller-owned and unavailable telemetry cannot be invented.

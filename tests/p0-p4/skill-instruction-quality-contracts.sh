@@ -197,9 +197,9 @@ fi
 
 test_start "assistant-workflow routes clear repository changes through requirements discovery"
 workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
-if grep -Fq -- "Clear implementation requests" "$workflow_skill" \
+if grep -Fq -- "Implementation requests" "$workflow_skill" \
     && grep -Fq -- "backlog items" "$workflow_skill" \
-    && grep -Fq -- "ideas with an intended change" "$workflow_skill" \
+    && grep -Fq -- "intended-change ideas" "$workflow_skill" \
     && grep -Fq -- "Discover requirements check" "$workflow_skill"; then
     pass
 else

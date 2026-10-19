@@ -9,11 +9,11 @@ requires:
 
 # Development Workflow
 
-Clear implementation requests, backlog items, and ideas with an intended change enter Discover requirements check.
+Implementation requests and intended-change ideas enter Discover requirements check.
 
 ## Goal
 
-Move repository work from request to a verified outcome through the applicable workflow phases.
+Verify outcomes.
 
 ## Success Criteria
 
@@ -21,25 +21,29 @@ Move repository work from request to a verified outcome through the applicable w
 - Run Decompose, Design, and durable state only when triggered. `prepare_only` runs Discover -> Preparation Completion; readiness planning is optional, implementation gates do not apply, and no execution is claimed.
 - `plan_mode`: bounded small uses no-wait `inline`; for `execution_intent != prepare_only`, `approval_required` applies to medium+, risk, destructive, and scope changes. In `prepare_only`, use `inline` only for explicitly requested readiness planning; otherwise `none`.
 - Ordinary medium+ work stays standard, non-harness, and non-QA unless controller criteria apply. Harness-capable work carries required artifacts; preparation records harness/QA requests as typed future obligations with capability inactive.
-- Use Candidate Search only for explicit alternatives, open-ended design, optimization, high uncertainty, repeated failures, unclear/flaky bugs, or a reviewer-requested pivot.
+- Candidate Search needs alternatives, design/optimization uncertainty, repeated failures, unclear/flaky bugs or reviewer-requested pivots.
 - Triggered Architecture Decision Packs use fresh source evidence. Preparation retains Discover-only context through Preparation Completion; implementation binds the Pack through Plan, packets, Build, handoff, and Review.
-- Use `assistant-verification` before Plan fixes checks or no-plan Build; carry decision/TDD unchanged and assess actual results before review/completion. TDD is independent of scope/method; active TDD requires meaningful RED, otherwise never fabricate RED.
 - Existing-system preparation inspects sources, code, and tests. Carry the exact typed approved result into `implement_only` with existing-system evidence or a typed `not_applicable` basis and inactive future obligations. Product questions need evidence.
 - Behavior-bearing work records compact change-impact applicability. Shared, materially unresolved, or carried expanded impact uses the common pre-Build/completion checker; carry its identity through planning, Build, and assistant-review. Resolve it from the active installation, never repository cwd.
 - Review, QA, and security apply when triggered; assistant-review owns Reviewer/QAEvaluator handoffs. Medium+ completion binds canonical review/QA state and exact snapshot; remaining work, incomplete coverage, or rejected/blocked QA prevents completion. Medium+ uses `references/final-handoff.md`; `prepare_only` returns readiness and next state.
 
 ## Constraints
 
-Explicit user or repository artifact schemas override workflow-internal shapes; preserve exact paths, keys, types, ids, and supplied literals. Apply source-backed defaults and ask precise questions for material product choices; Plan approval cannot settle intent. assistant-clarify owns prompt-level ambiguity; workflow owns answerable, evidence-backed questions and defaults. Skip Plan only when eligible.
+Honor user/repository schemas: preserve paths, keys, types, ids and literals. Apply source-backed defaults; ask material product
+questions. Plan approval cannot settle intent. assistant-clarify owns prompt-level ambiguity; workflow owns evidence-backed questions. Skip Plan only when eligible.
 
-Progressive Discover's no-execution boundary applies; mutating prerequisites require a separate approved workflow and returned evidence before gates continue. Tie scope changes to correctness, security, safety, or verification. Installs, uploads, external calls, or sharing proprietary content with third parties need explicit approval. Prefer repo-native commands; for external services, installs, or sensitive data, load `references/ai-usage-policy.md`.
+Progressive Discover: no-execution boundary. Mutating prerequisites need a separate approved workflow and returned evidence. Scope changes require correctness,
+security, safety or verification grounds. Installs, uploads, external calls and
+third-party proprietary sharing need explicit approval. Prefer repo-native tools;
+load `references/ai-usage-policy.md` for external services, installs or sensitive data.
+
 
 ## Contracts
 
-Read `contracts/index.yaml`; load progressively; do not load every contract. Load current selector; validate against canonical content at enforcement. Reuse an already-loaded exact canonical selector section while source/task identity and context
-remain faithful; recheck its gates and load only missing or new selectors. Reread on source/task
-identity change, missing/compacted context, or unresolved resolution. Index never replaces
-canonical contracts.
+Read `contracts/index.yaml`; load progressively by current selector and enforce
+canonical gates. Reuse exact sections while source/task identity and context match. Load missing selectors; reread after identity change,
+compaction or unresolved resolution.
+
 
 - `entry`: load entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is its only entry reference.
 - `architecture_design`: load `references/architecture-decision-pack.md` when `architecture_design_mode != not_applicable`; use the typed Pack before Decompose/Plan and retain its reference through Review.
@@ -53,14 +57,15 @@ canonical contracts.
   task-wide `tdd_mode` unchanged into packet/lane; carry due `selected_check_ids`
   and exact binding tuple refs. Derive packet-local `tdd_applies` from the
   intersection with `tdd_choice.applicable_check_ids`; assess actual evidence
-  before review/completion.
+  before review/completion. TDD is independent of scope/method; active TDD requires meaningful RED, otherwise never fabricate RED.
+- `packet_admission`: load its selector before canonical Plan/resume/dispatch/verification/completion; run the shipped pure helper with independently resolved authority. Native adoption/benefit remains gated.
 - `current_phase`: load active `contracts/phase-gates.yaml` at transition. Before dispatch and return, load `contracts/handoffs.yaml` through `build_handoff` only for CodeWriter/BuilderTester; other roles use `selected_handoff`. `completion`: load `contracts/output.yaml` before final exit.
 
-Selectors resolve by unique id plus canonical path, section, key, and explicit names; runtime `name_from` resolves only declared `allowed_names`. Missing or invalid selectors use `load_full_authoritative_file`; validate the full named canonical contract and record recovery.
+Resolve selectors by unique id, canonical path, section, key and explicit names; `name_from` uses declared `allowed_names` only. Missing/invalid selectors require `load_full_authoritative_file`, full-contract validation and recorded recovery.
 
-Migration note: v12 -> v13 introduces writer-owned tests and worker_stage test_authoring/production/refactor. Refresh active separated TDD packets: author tests without incoming RED, then independently execute RED, SAME writer production, GREEN, SAME writer refactor and distinct REFACTOR verification. Earlier verifier-authored RED remains historical attribution; never relabel it or infer current authorizing evidence. Builder/Tester is execution-only; selected writer owns all authored test repairs. Claude and Codex require the same new writer_selection; Gemini keeps native fallback. Missing/unknown stage or stale RED blocks dependent production.
+Migration v12 -> v13: Refresh active separated TDD through `references/build-worker-protocol.md` and current handoff stage/selection contracts. Earlier verifier-authored RED stays historical: never relabel it or infer current authorization.
 
-Migration note: assistant-workflow contracts are v13.0 and require assistant-verification while preserving assistant-review. Refresh older packets without a current verification decision and matching TDD projection before Build; never infer historical checks or RED. Pack alternatives bind stable `selected_alternative_id`; verified `quality_scenario_id` binds resolvable verification identity; Pack `review_result` retains canonical refs. Before Build, Plan binds task/review refs as `downstream_bound` (inline at pre-Build when `plan_mode=none`); material invalidation clears refs through refresh, re-plan, and reapproval.
+Migration: v14.0 requires assistant-verification and preserves assistant-review. Load packet_admission for verified v12/v13 slices; released13 and unreleased canonical13 are not interchangeable. Before Build, older packets need a current verification decision and matching TDD projection; never infer historical checks or RED. Pack `selected_alternative_id` stays stable; verified `quality_scenario_id` resolves verification identity; `review_result` retains canonical refs. Plan binds task/review refs as `downstream_bound` before Build (inline at pre-Build if `plan_mode=none`); material invalidation clears refs through refresh, re-plan and reapproval.
 
 ## Visible Checkpoints
 
@@ -76,25 +81,24 @@ When required, use this exact format:
 ## Refactor Guidance
 
 - Justify it with a concrete risk only: correctness, security, unsafe change surface, ownership, brittle testing, or extension seam.
-- Tie incidental or scope-expanding refactors to concrete risk.
 - Choose the smallest useful, durable fix; keep cleanup scoped.
 
 ## Triage
 
-Start Triage with a concise update; strict uses `--- PHASE: TRIAGE ---`. Load the triage rubric; scan Candidate scope read-only and assess type/risk/size/gates/agents/intensity/plan/subagent state/search. Ideas need binary criteria.
+Start Triage: update; strict uses `--- PHASE: TRIAGE ---`. Load triage rubric; scan Candidate scope read-only and assess type/risk/size/gates/agents/intensity/plan/subagent state/search. Ideas need binary criteria.
 
-Prepare-only: Discover -> [readiness] -> Preparation Completion; no implementation. Small: Discover quick -> [Plan] -> Build -> Review -> Document; `plan_mode=none` only for trivial safe work. Medium: Discover -> Decompose -> Plan -> [Design] -> Build -> Review -> Document. Large/Mega: Discover -> Decompose -> Plan -> Design -> Build -> Review -> Document.
+Prepare-only: Discover -> [readiness] -> Preparation Completion; no implementation. Small: Discover quick -> [Plan] -> Build -> Review -> Document; `plan_mode=none` only for trivial safe work. Medium: Discover -> [Decompose] -> Plan -> [Design] -> Build -> Review -> Document. Large/Mega: Discover -> [Decompose] -> Plan -> Design -> Build -> Review -> Document. Decompose refines canonical packets only for concrete execution purpose; size forces neither additional packets nor Architect.
 
 [Design] is UI only. Print `>> Triaged as: [SIZE] — phases: [list]` and `>> Triage metadata: type=[TASK_TYPE] | risk=[RISK_TIER] | intensity=[controller_intensity] | architecture=[architecture_design_mode] | plan=[plan_mode] | gates=[count] | agents=[count] | search=[search_mode] | scope_confidence=[low|medium|high]`. If scope expands, stop and re-triage. Load `references/candidate-search.md` only when `search_mode: candidate_search`.
 
 ## Phase Routing
 
-Load generated `references/phases/<current-phase>.md` (lowercase; Preparation Completion is `preparation-completion`). Missing or unknown view: load authoritative `references/phases.md`. Load `references/workflow-controller.md` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions. `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation. Load `references/architecture-decision-pack.md` only when architecture mode applies. For large material/patterns use `references/context-budget-and-pattern-retrieval.md`; before Plan use `references/artifact-first-output-contract.md` only outside `prepare_only`; before medium+ Decompose exits use `references/decomposition-plan-review.md`. During Plan use `references/plans/<size>.md` (`mega` uses `large`, `prepare_only` uses `prepare-only`); missing or unknown view loads authoritative `references/plan-template.md`. Non-standard continuation uses `references/context-handoff-templates.md`. Optional `prepare_only` readiness Plans omit Artifact Contracts and executable slices.
+Load generated `references/phases/<current-phase>.md` (lowercase; Preparation Completion: `preparation-completion`); missing/unknown views load authoritative `references/phases.md`. Load `references/workflow-controller.md` only for shared routing/defaults, movement, controller intensity, workflow state, manual verification, harness/QA, subagent separation or review-role separation; it remains canonical. For large material/patterns load `references/context-budget-and-pattern-retrieval.md`; Before Plan outside `prepare_only`, load `references/artifact-first-output-contract.md`. Ordinary Plan review uses `references/decomposition-plan-review.md` as questions, without a standalone artifact. Plan loads `references/plans/<size>.md` (`mega` uses `large`, `prepare_only` uses `prepare-only`); missing/unknown views load authoritative `references/plan-template.md`. Nonstandard continuation loads `references/context-handoff-templates.md`. Optional `prepare_only` readiness Plans omit Artifact Contracts and executable packets.
 
 | Phase | When | Key action |
 |---|---|---|
 | Discover | All | Inspect request/repo/unknowns; map only unresolved file boundaries; unknown-cause bugs load assistant-debugging. |
-| Decompose | Medium+ implementation | Smallest slices with acceptance and verification. |
+| Decompose | Concrete execution purpose only | Refine canonical packet boundaries; no second manifest. |
 | Plan | `plan_mode != none`; optional readiness | Route inline/approval. |
 | Design | UI only; not `prepare_only` | Direction, checklist, approval. |
 | Build | Not `prepare_only` | Run approved checks; active TDD adds meaningful RED/GREEN/REFACTOR. Separate only high-risk or broad/noisy/environment-heavy verification; retain results and exclusions. |
@@ -108,7 +112,7 @@ Load `references/harness-controller.md` only for non-`prepare_only` work with `h
 
 ## Output
 
-Return status, changed files/purpose, verification and skipped-check reasons, applicable review/spec/quality/QA/security, residual risks, and next step; qualify claims with evidence.
+Return status, changed files/purpose, verification/skipped-check reasons, applicable review/spec/quality/QA/security, residual risks and next step; qualify claims with evidence.
 
 ## Stop Rules
 

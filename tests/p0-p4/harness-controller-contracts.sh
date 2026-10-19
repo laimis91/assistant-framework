@@ -204,7 +204,7 @@ if ruby -ryaml -e '
     harness.fetch("infer_from").include?("implement_only plus accepted approved_feature_preparation_harness_obligation -> true before Build")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/contracts/input.yaml" \
-    && [[ "$(rg -c -- '^- name: feature_preparation_harness_obligation$|^      - name: feature_preparation_harness_obligation$|^          - name: feature_preparation_harness_obligation$' "$workflow_dir/contracts/handoffs.yaml")" -eq 7 ]] \
+    && [[ "$(rg -c -- '^- name: feature_preparation_harness_obligation$|^      - name: feature_preparation_harness_obligation$|^          - name: feature_preparation_harness_obligation$' "$workflow_dir/contracts/handoffs.yaml")" -eq 9 ]] \
     && grep -Fq -- '- feature_preparation_harness_obligation:' "$workflow_dir/references/sub-task-brief-template.md" \
     && grep -Fq -- '`approved_feature_preparation_harness_obligation`' "$workflow_dir/references/feature-preparation-evidence.md" \
     && grep -Fq -- '`harness_capable=true`' "$workflow_dir/references/feature-preparation-evidence.md"; then

@@ -53,7 +53,7 @@ if [[ -x "$generator" ]] \
     && grep -Fq "## Small Tasks — Inline Plan" "$fixture_root/views/plans/small.md" \
     && ! grep -Fq "## Executable Task Packet" "$fixture_root/views/plans/small.md" \
     && grep -Fq "## Executable Task Packet" "$fixture_root/views/plans/medium.md" \
-    && grep -Fq "## Slice Manifest" "$fixture_root/views/plans/medium.md" \
+    && grep -Fq "## Canonical Packet Plan" "$fixture_root/views/plans/medium.md" \
     && grep -Fq "## Large / Mega Tasks — Full Plan" "$fixture_root/views/plans/large.md"; then
     pass
 else
@@ -117,11 +117,11 @@ for filename, heading in {
     "preparation-completion": "Phase: Preparation Completion",
 }.items():
     assert_view(root / f"views/phases/{filename}.md", phases, shared + (heading,))
-assert "## Slice Manifest" in document(phases)[1]["Phase: Decompose"]
+assert "Refine `implementation_steps` directly" in document(phases)[1]["Phase: Decompose"]
 common = ("Which tier to use", "Context Budget", "Pattern Retrieval")
 assert_view(root / "views/plans/prepare-only.md", plans, common)
 assert_view(root / "views/plans/small.md", plans, ("Small Tasks — Inline Plan (`plan_mode=inline`, `execution_intent != prepare_only`)",) + common)
-medium = ("Executable Task Packet (`execution_intent != prepare_only`)", "Slice Manifest (`execution_intent != prepare_only`)", "Medium Tasks — Standard Plan (`execution_intent != prepare_only`)")
+medium = ("Executable Task Packet (`execution_intent != prepare_only`)", "Canonical Packet Plan (`execution_intent != prepare_only`)", "Medium Tasks — Standard Plan (`execution_intent != prepare_only`)")
 assert_view(root / "views/plans/medium.md", plans, medium + common)
 assert_view(root / "views/plans/large.md", plans, medium + ("Large / Mega Tasks — Full Plan (`execution_intent != prepare_only`)",) + common)
 PY

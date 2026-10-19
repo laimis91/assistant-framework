@@ -201,8 +201,9 @@ gates.
 
 ## Subagent, Review, and QA Separation
 
-- For ordinary medium standard work, Code Mapper maps context, one bounded
-  executor owns selected implementation and verification work in Build. TDD
+- For ordinary medium standard work, use Code Mapper only when current files
+  or boundaries cannot be resolved directly. One bounded executor owns selected
+  implementation and verification work in Build. TDD
   adds RED/GREEN/REFACTOR only when the canonical decision activates it. After Build, Review
   owns independent Code Reviewer dispatch/result evidence. Code Reviewer
   reviews code quality, defects, security, architecture, and test coverage.
