@@ -1,6 +1,10 @@
 # Triage Rubric And Gate Packs
 
-## Required Triage Output
+## Routing decisions
+
+Resolve only routing that affects the current work. Ordinary human updates do not
+print a field inventory. Canonical plan/packet and persisted-state consumers retain
+the existing routing fields unchanged:
 
 Record `task_type`, `risk_tier`, `size`, `controller_intensity`, `plan_mode`,
 `execution_intent`, `qa_evaluation_mode`, `harness_capable`,
@@ -108,7 +112,8 @@ Discover/preparation roles; no execution/task-category gates.
 ## Task Category Gate Packs
 
 ### Bugfix
-Capture reproduction/root cause; add regression assertion; keep scope tied.
+Capture reproduction/root cause; add a regression assertion only when selected
+by verification policy; keep scope tied.
 
 ### Feature
 Make acceptance binary; test new behavior; check contract/config/telemetry/docs.

@@ -42,4 +42,9 @@ Defer or reject when:
 
 ## Output expectation
 
-For every blocker or must-fix finding, include at least a short classification. `Finding` is the canonical `aggregate_finding_id` from active `aggregated_findings` or `fixed_items`; when a fixed item regresses, keep one deduplicated mapping for that same id. For lower-severity findings, classify only when the issue is recurring or framework-level.
+Classify only an evidenced recurring process gap or high-impact repeatable failure; severity alone does not require a classification or permanent rule. `Finding` is the canonical `aggregate_finding_id` from active `aggregated_findings` or `fixed_items`; when a fixed item regresses, keep one deduplicated mapping for that same id. For lower-severity findings, classify only when the issue is recurring or framework-level.
+
+The existing mapped `canonical_review_finding_rule_distillation_expectations`
+fixtures are a retained structured compatibility consumer: preserve their all-ID
+classification envelope, including each unique active/fixed must-fix ID exactly
+once. That fixture requirement does not make every ordinary finding a new rule.

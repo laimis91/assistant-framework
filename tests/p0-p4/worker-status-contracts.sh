@@ -268,8 +268,8 @@ for term in \
         missing_typed_artifact_terms+=("task-journal-harness-appendix.md/task-journal-template.md: $term")
     fi
 done
-if ! grep -Fq -- "Artifact Reference Ledger refs before task packets" "$phases_ref"; then
-    missing_typed_artifact_terms+=("phases.md: Artifact Reference Ledger refs before task packets")
+if ! p0p4_contains_text "$phases_ref" "Artifact Reference Ledger before dispatching Code Writer or Builder/Tester"; then
+    missing_typed_artifact_terms+=("phases.md: Artifact Reference Ledger must precede worker dispatch")
 fi
 for term in \
     'typed `artifact_refs`' \

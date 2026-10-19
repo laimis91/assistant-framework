@@ -67,6 +67,11 @@ markdown_references_from_loader_lines() {
                 print ref
                 line = substr(line, RSTART + RLENGTH)
             }
+            line = $0
+            while (match(line, /\]\(references\/[^)]+[.]md\)/)) {
+                print substr(line, RSTART + 2, RLENGTH - 3)
+                line = substr(line, RSTART + RLENGTH)
+            }
         }
     '
 }
@@ -80,7 +85,7 @@ first_review_mandatory_reference_paths() {
         awk '
             {
                 low = tolower($0)
-                if (low ~ /load/ && low ~ /(before the first review|before each review|before declaring clean)/) print
+                if (low ~ /load/ && low ~ /(before the first review|before the first batch|before each review|before declaring clean)/) print
             }
         ' "$skill_dir/SKILL.md" | markdown_references_from_loader_lines | sort -u
     )"
@@ -192,7 +197,7 @@ fi
 if ! printf '%s\n' "$standalone_routing_text" | rg -qi 'standalone.{0,500}spec review|spec review.{0,500}standalone'; then
     standalone_failures+=("standalone review has no explicit Spec Review preparation path")
 fi
-if ! printf '%s\n' "$standalone_routing_text" | rg -qi 'spec review.{0,500}(user scope|user request).{0,500}(before|prior to).{0,120}reviewer|user (scope|request).{0,500}spec review.{0,500}(before|prior to).{0,120}reviewer'; then
+if ! printf '%s\n' "$standalone_handoff_text" | rg -qi 'spec_review_pass_ref.{0,400}user request/review scope before batch planning'; then
     standalone_failures+=("standalone Spec Review is not recorded against user scope before Reviewer dispatch")
 fi
 if ! printf '%s\n' "$standalone_handoff_text" | rg -qi 'build_test_verification_ref.{0,500}not[_ -]?applicable'; then
@@ -201,15 +206,10 @@ fi
 if ! printf '%s\n' "$standalone_handoff_text" | rg -qi 'enum_values.{0,240}(audit_only_or_no_build_scope|audit[_ -]?only|no[_ -]?build[_ -]?scope|read[_ -]?only[_ -]?scope)'; then
     standalone_failures+=("handoff lacks an enumerated audit/no-build/read-only not-applicable reason")
 fi
-if ! printf '%s\n' "$standalone_routing_text" | rg -qi 'after any source fix.{0,400}subsequent reviewer dispatch requires fresh current passed selected/binding evidence.{0,300}not_applicable admission is forbidden'; then
-    standalone_failures+=("post-fix Reviewer dispatch does not require fresh current selected/binding evidence")
-fi
-if ! printf '%s\n' "$standalone_routing_text" | rg -qi 'workflow-composed review consumes carried spec review pass and current passed verification for every due selected checkspec and resolved binding check'; then
-    standalone_failures+=("workflow-composed review does not consume carried Spec PASS and current selected/binding verification")
-fi
 if ! ruby -ryaml -e '
   handoffs, output, gates = ARGV.map { |path| YAML.load_file(path) }
   reviewer = handoffs.fetch("handoffs").find { |item| item.fetch("name") == "orchestrator_to_reviewer" }
+  spec_ref = reviewer.fetch("context_fields").find { |field| field.fetch("name") == "spec_review_pass_ref" }
   verification_ref = reviewer.fetch("context_fields").find { |field| field.fetch("name") == "build_test_verification_ref" }
   ref_fields = verification_ref.fetch("object_fields").to_h { |field| [field.fetch("name"), field] }
   assertions = gates.fetch("gates").flat_map { |gate| gate.fetch("exit_assertions", []) }
@@ -225,7 +225,11 @@ if ! ruby -ryaml -e '
   no_build_condition = ref_fields.fetch("not_applicable").fetch("condition")
   build_validation = build_verification.fetch("validation")
   test_condition = test_summary.fetch("condition")
-  valid = verification_ref.fetch("required") == true &&
+  valid = spec_ref.fetch("required") == true &&
+    spec_ref.fetch("description").include?("user request/review scope before batch planning") &&
+    spec_ref.fetch("validation").include?("Standalone points to Spec Review against user request/review scope") &&
+    spec_ref.fetch("validation").include?("workflow_composed points to carried Spec PASS") &&
+    verification_ref.fetch("required") == true &&
     ref_fields.fetch("evidence_ref").fetch("required") == "conditional" &&
     evidence_condition.include?("due selected check") &&
     evidence_condition.include?("applicable due/executable binding check") &&
@@ -560,10 +564,11 @@ fi
 test_start "README and contract design guide define metrics as optional non-blocking observability"
 metrics_doc_failures=()
 for doc in "$FRAMEWORK_DIR/README.md" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md"; do
-    if ! rg -qi 'metrics.{0,120}(optional|non-blocking|not a completion blocker|must not block)' "$doc"; then
+    metrics_doc_text="$(tr '\n\t' '  ' < "$doc" | tr -s '[:space:]' ' ')"
+    if ! printf '%s\n' "$metrics_doc_text" | rg -qi 'metrics.{0,120}(optional|non-blocking|not a completion blocker|must not block)'; then
         metrics_doc_failures+=("$(basename "$doc") lacks optional/non-blocking metrics guidance")
     fi
-    if rg -qi '(strict stop gate|before task handoff).{0,120}metrics|metrics.{0,120}(strict stop gate|before task handoff)' "$doc"; then
+    if printf '%s\n' "$metrics_doc_text" | rg -qi '(strict stop gate|before task handoff).{0,120}metrics|metrics.{0,120}(strict stop gate|before task handoff)'; then
         metrics_doc_failures+=("$(basename "$doc") still describes metrics as a completion gate")
     fi
 done

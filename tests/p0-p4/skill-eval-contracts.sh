@@ -5888,13 +5888,11 @@ if grep -Fq "default eval inventory is 15 first-class \`assistant-*\` skills wit
     && ! grep -Fq "5 of 15 first-class skills remain" "$FRAMEWORK_DIR/README.md" \
     && ! grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && ! grep -Fq "skills/assistant-reflexion/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "The default per-skill eval inventory is 15 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq 'Every first-class schema `2.0` `evals/cases.json` fixture declares top-level' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq -- '--activation-results FILE' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq "The default per-skill eval inventory is 15 first-class \`skills/assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
-    && grep -Fq "complete first-class per-skill eval fixtures" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && ! grep -Fq "Level 4 is future work" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
+    && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" 'For first-class schema `2.0` `evals/cases.json`, `activation_cases` contains exact' \
+    && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" '--activation-results FILE' \
+    && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" '../../docs/evals/README.md#per-skill-eval-fixtures' \
+    && cmp -s "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-diagrams/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
@@ -5923,13 +5921,6 @@ if grep -Fq "default eval inventory is 15 first-class \`assistant-*\` skills wit
     && grep -Fq '`one_of` permits at most 32 scalar values. `array_object_values_exact` permits' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'at most 16 unique fields and 32 expected objects; absent projected fields fail,' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'while a present `null` matches only a present `null`.' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`path_absent` accepts only absence; present `null` fails.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq '`absent_or_empty_array` accepts only absence or `[]`; `null` and other values fail.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq '`array_object_values_exact` projects every target-array object' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq '`object_keys_exact` requires an object whose keys exactly match' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq 'at most 16 unique projected fields and 32 expected objects' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq 'unordered multiset, preserves field correlation, and treats' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
-    && grep -Fq 'an absent field differently from a present `null`.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" \
     && grep -Fq -- '--activation-results /tmp/skill-activation-results.json' "$FRAMEWORK_DIR/docs/evals/README.md" \
     && grep -Fq 'exactly one result' "$FRAMEWORK_DIR/docs/evals/README.md"; then
     pass
@@ -5949,11 +5940,6 @@ structured_operator_list_is_exact() {
                 capture { print }
             ' "$document")"
             ;;
-        contract-guide)
-            paragraph="$(awk '
-                /Use only the fixed provider-neutral operators/ { print; exit }
-            ' "$document" | perl -pe 's/(\x60array_items_nonempty_array_fields\x60).*/$1/')"
-            ;;
         *)
             return 2
             ;;
@@ -5965,25 +5951,36 @@ docs_operator_oracle_failures=()
 if ! structured_operator_list_is_exact "$FRAMEWORK_DIR/docs/evals/README.md" evals-readme; then
     docs_operator_oracle_failures+=("evals-readme-current")
 fi
-if ! structured_operator_list_is_exact "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" contract-guide; then
-    docs_operator_oracle_failures+=("contract-guide-current")
-fi
+contract_guide_operator_route_is_current() {
+    local guide="$1"
+    local skill_dir="$FRAMEWORK_DIR/skills/assistant-skill-creator"
+    p0p4_contains_text "$guide" '`../../docs/evals/README.md#per-skill-eval-fixtures`' \
+        && p0p4_contains_text "$guide" 'containing the active creator `SKILL.md`' \
+        && p0p4_contains_text "$guide" '`../../tools/evals/lib/skill-eval-fixtures.sh`' \
+        && p0p4_contains_text "$guide" 'For Windows Codex shared skills, resolve these docs/tools under configured `CODEX_HOME`' \
+        && [[ -f "$skill_dir/../../tools/evals/lib/skill-eval-fixtures.sh" ]] \
+        && structured_operator_list_is_exact "$skill_dir/../../docs/evals/README.md" evals-readme
+}
+for guide in "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md"; do
+    if ! contract_guide_operator_route_is_current "$guide"; then
+        docs_operator_oracle_failures+=("${guide#$FRAMEWORK_DIR/}:operator-route")
+    fi
+done
 docs_operator_mutation_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-operator-list.XXXXXX")"
 p0p4_register_cleanup "$docs_operator_mutation_root"
-for operator_document in evals-readme contract-guide; do
-    case "$operator_document" in
-        evals-readme) source_document="$FRAMEWORK_DIR/docs/evals/README.md" ;;
-        contract-guide) source_document="$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" ;;
-    esac
-    for removed_operator in one_of array_object_values_exact array_items_nonempty_array_fields; do
-        mutant_document="$docs_operator_mutation_root/$operator_document-$removed_operator.md"
-        cp "$source_document" "$mutant_document"
-        perl -0pi -e "s/\x60$removed_operator\x60,? ?//" "$mutant_document"
-        if structured_operator_list_is_exact "$mutant_document" "$operator_document"; then
-            docs_operator_oracle_failures+=("$operator_document-$removed_operator-mutation-accepted")
-        fi
-    done
+for removed_operator in one_of array_object_values_exact array_items_nonempty_array_fields; do
+    mutant_document="$docs_operator_mutation_root/evals-readme-$removed_operator.md"
+    cp "$FRAMEWORK_DIR/docs/evals/README.md" "$mutant_document"
+    perl -0pi -e "s/\x60$removed_operator\x60,? ?//" "$mutant_document"
+    if structured_operator_list_is_exact "$mutant_document" evals-readme; then
+        docs_operator_oracle_failures+=("evals-readme-$removed_operator-mutation-accepted")
+    fi
 done
+missing_operator_route="$docs_operator_mutation_root/missing-operator-route.md"
+sed 's|../../docs/evals/README.md#per-skill-eval-fixtures|../../docs/evals/missing.md|' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" >"$missing_operator_route"
+if contract_guide_operator_route_is_current "$missing_operator_route"; then
+    docs_operator_oracle_failures+=("missing-operator-route-accepted")
+fi
 if [[ ${#docs_operator_oracle_failures[@]} -eq 0 ]]; then
     pass
 else

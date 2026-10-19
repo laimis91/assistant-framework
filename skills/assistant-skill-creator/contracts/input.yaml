@@ -47,10 +47,10 @@ fields:
     required: conditional
     condition: "operation in [create, update]"
     enum_values: [process, analysis, utility]
-    description: "Contract tier for the target skill"
+    description: "Descriptive category for the target work; not a contract-file quota"
     validation: "Process-first inference: workflow, pipeline, multi-phase, subagent, dispatch, or handoffs selects process; otherwise analyze, analysis, reason, research, diverge, or converge selects analysis; else utility"
     on_missing: infer
-    infer_from: "Infer from the skill purpose using Process-first category inference"
+    infer_from: "Infer from the skill purpose using Process-first category inference; add contract files only for actual consumers or explicit schema requests"
 
   - name: skill_value_kind
     type: enum

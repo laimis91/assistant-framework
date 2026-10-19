@@ -68,7 +68,7 @@ file centralizes decision boundaries that cut across phase details while
   scope choices, repository approval policy, or an explicit user request. Wait
   for approval before Build.
 
-- Before Plan or plan_mode=none dependent work, confirm a sufficient intended outcome and material behavior from relevant evidence. Use references/phases.md step 5 for defaults and choice answers; missing or conflicting controlling authority remains evidence_gap/source_conflict, and an empty question list alone is not proof. Record the basis in existing criteria/map and task journal or carried state; keep small-work checks inline.
+- Before Plan or plan_mode=none dependent work, confirm a sufficient intended outcome and material behavior from relevant evidence. Use the Requirements sufficiency heading in references/phases.md for defaults and choice answers; missing or conflicting controlling authority remains evidence_gap/source_conflict, and an empty question list alone is not proof. Record the basis in existing criteria/map and task journal or carried state; keep small-work checks inline.
 
 - `light`: small, low-risk, localized work with no public behavior, data, security,
   harness, or QA acceptance risk. It may run inline/direct with relevant

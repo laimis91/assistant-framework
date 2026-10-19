@@ -30,19 +30,17 @@
         "The user gives urgency and multiple possible deliverables but no target files or priority order."
       ],
       "expected_behavior": [
-        "Reflects the likely goal without calling the prompt messy or blaming the user.",
-        "Identifies that the request contains multiple possible outcomes and still needs clarification.",
-        "Produces a structured brief with knowns, unknowns, assumptions, constraints, and likely deliverables.",
-        "Asks every unresolved material clarification question, grouped by topic, with bounded choices or a recommended default.",
-        "States a provisional execution target and marks the status as needs clarification.",
-        "Does not begin implementation, documentation edits, or broad refactoring before the ambiguity is reduced."
+        "Reflects the likely goal without blaming the user.",
+        "Separates known constraints from unresolved outcomes and priority choices.",
+        "Asks every material non-discoverable question, grouped by topic, explaining impact, risk if guessed, and bounded choices or a recommendation.",
+        "Treats the recommended priority as a proposal, not consent.",
+        "Does not begin dependent implementation or arbitrary documentation edits before the user resolves the material choices."
       ],
       "pass_criteria": [
-        "The response includes a concise interpretation or likely goal.",
-        "The structured brief separates known facts from unknowns and assumptions.",
-        "Each clarifying question names a topic, impact, risk if guessed, and concrete options or recommendation instead of a generic request for clarification.",
-        "The response preserves momentum by recommending a default or next target.",
-        "No file edits or irreversible work are proposed as already started."
+        "The likely goal and unresolved decisions are clear without a mandatory brief or status envelope.",
+        "Questions cover every material choice and do not repeat discoverable context.",
+        "Recommendations are clearly distinguished from user choices.",
+        "No unapproved work is claimed as started."
       ],
       "fail_signals": [
         "Asks only an open-ended clarification with no options.",
@@ -52,15 +50,10 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "likely goal",
-          "structured brief",
-          "knowns",
-          "unknowns",
-          "assumptions",
-        "clarifying questions",
-        "risk if guessed",
-          "execution target",
-          "needs clarification"
+          "onboarding",
+          "docs",
+          "priority",
+          "recommend"
         ],
         "forbidden_substrings": [
           "What do you mean?",
@@ -87,7 +80,7 @@
         "Separates the refactor and research-note possibilities so the user can choose a primary outcome.",
         "Asks every material clarification question and includes a recommendation, safe default, or explicit none for each.",
         "Identifies the execution target as provisional until the user confirms the priority.",
-        "Reports status as needs clarification rather than ready to implement."
+        "Makes clear which priority choice is still unresolved before dependent implementation."
       ],
       "pass_criteria": [
         "The response contains a structured brief with distinct sections for knowns and unknowns.",

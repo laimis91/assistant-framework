@@ -1,54 +1,9 @@
-# Ideation Mode Selector
+# Right-Size Ideation
 
-Load this reference for every assistant-ideate request. It selects the smallest
-pipeline that supports the decision. Light mode stops here; deep mode also loads
-`references/deep-ideation.md`.
+Use a quick comparison for a quick scan. State the goal only if needed, generate distinct alternatives, rank them against the material constraints, explain trade-offs, and recommend the smallest useful next step. Do not require mode labels, numeric scores, phase transcripts, or a fixed number of ideas.
 
-## Pinned Behavior
+Inspect local source only where it changes the option set. Respect existing capabilities and prior attempts. Ask when a missing goal or hard constraint would change the recommendation; do not run a ritual repository scan.
 
-- Light mode: 3-5 options, a qualitative quick ranking, and one `recommended_next_step`.
-- Deep mode is reserved for explicit brainstorming, broad exploration, many ideas, or comprehensive comparison.
-- Never rank a single option.
-- Respect hard constraints and `prior_attempts`; do not repeat a rejected approach unchanged.
-- Capture `user_decision` only after an explicit user choice.
+For explicit broad exploration, read `deep-ideation.md` and use the techniques that help. Separate generation from evaluation long enough to avoid narrowing prematurely. Compare meaningful alternatives rather than padding the list.
 
-## UNDERSTAND
-
-State the goal and material constraints in a 1-3 sentence `problem_statement`.
-Infer safe defaults; ask only when missing information changes the useful option
-set or ranking.
-
-For codebase-aware ideation, inspect only the local evidence needed to shape
-options: current architecture, existing capabilities, relevant hotspots, recent
-direction, and applicable preferences or constraints. Do not perform a ritual
-repository scan.
-
-## Light Pipeline
-
-Use for quick improvement scans, "what else" questions, or a small set of
-alternatives.
-
-1. DIVERGE: generate 3-5 distinct options with name, description, and rationale.
-2. CONVERGE: order them without a numeric matrix. For each, give the main reason,
-   trade-off, and `first_step`.
-3. DECIDE: give one `recommended_next_step`. Do not force a decision packet or
-   another user turn unless requested.
-
-Compact shape:
-
-```markdown
-Mode: light
-Problem: [goal and constraints]
-
-1. **[Option]** — [description]
-   - Why: [ranking reason]
-   - Trade-off: [main cost]
-   - First step: [small action]
-
-Recommended next step: [best immediate action]
-```
-
-## Deep Route
-
-When mode inference selects deep, load and apply
-`references/deep-ideation.md`. Do not load it for light mode.
+A recommendation does not record a user decision. Offer a choice packet only when requested or needed to resolve a material choice. Stop before implementation or persistence unless authorized.

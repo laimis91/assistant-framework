@@ -72,14 +72,17 @@ require_terms "docs eval README" "$eval_readme" \
 
 test_start "skill contract guide describes process harness controller contracts"
 require_terms "skill contract guide" "$contract_guide" \
-    "Contract and Harness Recipe before Build" \
-    "typed Artifact References" \
-    "run-state, trace, replay, review, QA, and pivot/restart" \
-    "artifacts when the controller requires them" \
-    "Code Reviewer and QA Evaluator" \
-    "handoffs stay separate" \
-    "max 10" \
-    "pivot_restart_decision"
+    "For actual long-running controllers" \
+    "Done Contract" \
+    "Harness Recipe" \
+    "typed references" \
+    "trace/replay" \
+    "pivot/restart" \
+    'references/harness-patterns.md' \
+    "Do not add this machinery to single-pass work" \
+    "Keep review and QA responsibilities distinct" \
+    "at most 10 rounds" \
+    "an explicit pivot or restart decision"
 
 test_start "skill-creator harness patterns cover controller artifacts and loop safety"
 require_terms "skill creator harness patterns" "$skill_creator_patterns" \

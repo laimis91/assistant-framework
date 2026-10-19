@@ -14,7 +14,7 @@
   ],
   "recommended_use": [
     "Run each case with the assistant-onboard skill instructions loaded.",
-    "Compare the local response against surface scan, architecture map, pattern recognition, output contract, and gap handling requirements.",
+    "Compare the local response against scoped mapping, source evidence, relevant observations, gap handling, and persistence authorization.",
     "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
   ],
   "cases": [
@@ -31,25 +31,19 @@
         "No focus_area or depth was specified."
       ],
       "expected_behavior": [
-        "Requires or infers project_path and defaults depth to standard when unspecified.",
-        "Returns project_size=medium.",
-        "Prints onboarding progress steps for Surface scan, Architecture mapping, Pattern recognition, Identifying unknowns, and Generating project orientation.",
-        "Reads README, agent instructions, gitignore, root listing, build files, and CI/CD config before deeper mapping.",
-        "Builds the architecture map from local evidence and uses Code Mapper only when the user or an applicable instruction specifically requires delegated mapping.",
-        "Identifies evidence-backed ownership/lifecycle boundaries and semantic type candidates or explicit primitive-boundary exceptions without redesigning the project.",
-        "Samples representative files for conventions instead of reading every file.",
-        "Returns project_summary, key_files, conventions, artifacts, gaps, and status.",
-        "Uses project-local orientation as an artifact."
+        "Infers the current project and an appropriate scope from context.",
+        "Reads project instructions, README, build manifests, and relevant CI before tracing representative paths.",
+        "Builds a scoped map from local evidence, including entry points, commands, conventions, relevant risks, and coverage gaps.",
+        "Reports ownership, lifecycle, type, or design-pressure observations only when inspected evidence makes them relevant.",
+        "Samples representative source and tests rather than claiming to read every file.",
+        "Returns orientation in the conversation without unauthorized persistence or production edits."
       ],
       "pass_criteria": [
-        "The response includes the required onboarding phases.",
-        "The response outputs key_files with path and purpose.",
-        "The response outputs conventions with pattern and example.",
-        "The response outputs semantic_type_candidates with evidence or an inspected empty list.",
-        "The response outputs design_pressure_candidates with evidence or an inspected empty list.",
-        "Returns inspected semantic_type_candidates and design_pressure_candidates for the medium project.",
-        "The response records artifact_updated accurately.",
-        "The response lists specific gaps or questions."
+        "Key paths have concrete roles and conventions have source examples.",
+        "Build/test/run commands are source-backed where discoverable.",
+        "Relevant risks and specific gaps are reported.",
+        "Project size does not force empty architecture arrays, phase transcripts, or a status envelope.",
+        "No unauthorized files are written."
       ],
       "fail_signals": [
         "Starts editing project files before onboarding.",
@@ -59,32 +53,23 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "Surface scan",
-          "Architecture mapping",
-          "local evidence",
-          "Pattern recognition",
-          "key_files",
+          "entry points",
+          "commands",
           "conventions",
-          "semantic_type_candidates",
-          "design_pressure_candidates",
-          "project_size=medium",
-          "artifact_updated",
-          "questions",
-          "Status"
+          "gaps"
         ],
         "forbidden_substrings": [
           "I will edit files now",
           "read every file",
-          "No key_files needed",
           "Any questions?"
         ]
       }
     },
     {
       "id": "medium-onboarding-requires-inspected-architecture-candidates",
-      "title": "Medium onboarding requires inspected architecture candidates",
+      "title": "Medium onboarding omits irrelevant architecture arrays",
       "category": "project_size_architecture_mapping",
-      "purpose": "Checks that medium and large onboarding does not silently omit architecture candidate evidence.",
+      "purpose": "Checks that repository size does not create architecture ceremony when inspected evidence has no relevant candidates.",
       "prompt": "Onboard this medium repository and return the orientation.",
       "setup_context": [
         "The assistant-onboard skill instructions are active.",
@@ -92,30 +77,27 @@
         "Architecture inspection found no semantic-type or design-pressure candidates."
       ],
       "expected_behavior": [
-        "Returns project_size=medium.",
-        "Returns explicit inspected empty arrays for semantic_type_candidates and design_pressure_candidates.",
-        "Does not silently default or omit either array."
+        "Returns a useful scoped map after inspection.",
+        "Omits irrelevant semantic-type and design-pressure candidate arrays.",
+        "Reports coverage limits without inventing redesign work."
       ],
       "pass_criteria": [
-        "The response includes project_size=medium.",
-        "The response includes semantic_type_candidates=[] and design_pressure_candidates=[] after inspection."
+        "The orientation describes entry points, commands, and conventions.",
+        "No candidate arrays are required solely because of project size."
       ],
       "fail_signals": [
-        "Omits a medium or large candidate array.",
-        "Claims an empty array without inspection.",
-        "Uses an implicit or silent default."
+        "Invents a redesign to fill candidate arrays.",
+        "Claims broad coverage without inspection."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "project_size=medium",
-          "semantic_type_candidates=[]",
-          "design_pressure_candidates=[]",
-          "after inspection"
+          "entry points",
+          "commands",
+          "conventions"
         ],
         "forbidden_substrings": [
-          "silent default",
-          "omit semantic_type_candidates",
-          "omit design_pressure_candidates"
+          "medium must return semantic_type_candidates",
+          "medium must return design_pressure_candidates"
         ]
       }
     },
@@ -130,8 +112,8 @@
         "The surface scan classifies the repository as small."
       ],
       "expected_behavior": [
-        "Returns project_size=small.",
-        "May omit semantic_type_candidates and design_pressure_candidates."
+        "Returns a concise scoped map of the small project.",
+        "Omits irrelevant architecture candidate arrays."
       ],
       "pass_criteria": [
         "The response keeps the orientation proportional to a small project."
@@ -141,7 +123,7 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "project_size=small"
+          "commands"
         ],
         "forbidden_substrings": [
           "small must return semantic_type_candidates",
@@ -161,19 +143,15 @@
         "The user asks for an incremental refresh rather than first-time onboarding."
       ],
       "expected_behavior": [
-        "Reads the existing project orientation artifact if present.",
-        "Checks git history since the last session date or a reasonable refresh boundary.",
-        "Updates changed sections instead of regenerating or overwriting the full orientation blindly.",
-        "Reports how many changes or areas were refreshed.",
-        "Records artifacts as updated or none, depending on whether files changed.",
-        "Lists specific unknowns and questions tied to the changed areas."
+        "Reads the existing orientation when policy allows.",
+        "Checks relevant source and git history against the recorded refresh basis.",
+        "Reports stable changes and specific gaps.",
+        "Preserves existing notes and writes only when persistence is authorized; otherwise returns refreshed context in conversation."
       ],
       "pass_criteria": [
-        "The response identifies this as incremental onboarding.",
-        "The response reads existing orientation before updating.",
-        "The response checks recent git changes.",
-        "The response says update, not overwrite.",
-        "The response reports specific gaps or questions."
+        "Uses the existing orientation and recent changes as evidence.",
+        "Preserves user notes and does not infer write authorization merely from a refresh request.",
+        "Reports material gaps."
       ],
       "fail_signals": [
         "Regenerates the orientation from scratch without reading the existing artifact.",
@@ -183,14 +161,9 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "Incremental onboarding",
           "existing",
-          "git log",
-          "update",
-          "artifacts",
-          "gaps",
-          "questions",
-          "Status"
+          "git",
+          "gaps"
         ],
         "forbidden_substrings": [
           "overwrite from scratch",

@@ -1,3 +1,8 @@
+# Applicability: structured review batches, worker handoffs, persisted results,
+# and workflow/QA consumers use the canonical v8 protocol. Human summaries may
+# omit empty/internal sections; frozen snapshots, independent passes, coverage,
+# verification, authorization, and round caps apply to every selected review.
+
 # Review Phase Gate Contracts
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
@@ -170,7 +175,7 @@ gates:
         on_fail: "Review the Pack's source/revision freshness, material questions and invalidators, boundaries/lifecycle, control/early-exit and ownership/disposal decisions, resource envelope, extension-registration and representative-path checks, semantic type and primitive-exception ledger, falsifiable quality scenarios, compatibility/extension seam, and verification/rollback before declaring clean."
 
       - id: RS_RULE_DISTILLATION
-        check: "When blocker/must-fix findings or recurring contract/checklist/eval gaps exist: review_finding_rule_distillation classifies them as one_off_fix, permanent_rule_candidate, or no_action with evidence and promotion decision"
+        check: "When an evidenced recurring process gap or high-impact repeatable failure merits prevention: review_finding_rule_distillation classifies the applicable canonical findings with evidence and promotion decision; severity alone is no ordinary trigger. Existing mapped canonical_review_finding_rule_distillation_expectations fixtures still classify every unique active/fixed must-fix ID exactly once"
         on_fail: "Load references/review-finding-permanent-rule.md and classify applicable findings before final review output"
 
   # ─────────────────────────────────────────────

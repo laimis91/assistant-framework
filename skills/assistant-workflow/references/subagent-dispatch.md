@@ -25,14 +25,11 @@ with its provenance and covered roles/phases/actions, set
 `subagent_policy_state=delegation_triggered`, set
 `subagent_execution_mode=delegated`, and spawn the configured role agents
 without a separate permission question. An explicit user opt-out sets
-`subagent_policy_state=delegation_opted_out` and uses direct fallback. For Codex,
-current CLI/app releases support native subagent workflows by default; custom
-agents live in `~/.codex/agents/` or project `.codex/agents/` and are spawned by
-explicitly asking Codex to spawn an agent by name. Do not mark
-`subagents_unavailable` merely because the visible tool list lacks a tool named
-`Task`, `delegate`, or `subagent`; only use `subagents_unavailable` after a real
-spawn attempt fails or the adapter documentation/configuration proves no subagent
-mechanism exists. If the user explicitly opts out or policy disallows spawning for
+`subagent_policy_state=delegation_opted_out` and uses direct fallback. Use the
+active runtime's supported delegation mechanism and configured role. Determine
+availability from a real spawn attempt or supported runtime documentation and
+configuration. Record `subagents_unavailable`
+only after a real spawn failure or supported configuration proof of unavailability. If the user explicitly opts out or policy disallows spawning for
 standard/strict work, use `direct_fallback` and preserve the same phase gates,
 role separation, verification evidence, and review evidence.
 

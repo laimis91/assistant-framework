@@ -329,7 +329,7 @@ else
 fi
 
 test_start "impact selectors record cosmetic applicability and shared fanout keeps the light Build lane"
-if ruby - "$FRAMEWORK_DIR" <<'RUBY'
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
 framework = ARGV.fetch(0)
 section = lambda do |path, start_marker, end_marker|
   content = File.read(File.join(framework, path))
@@ -338,16 +338,23 @@ section = lambda do |path, start_marker, end_marker|
   tail.split(end_marker, 2).first
 end
 
-workflow_root = section.call("skills/assistant-workflow/SKILL.md", "## Contracts", "Selectors resolve")
+workflow_root = File.read(File.join(framework, "skills/assistant-workflow/SKILL.md")).gsub(/\s+/, " ")
 workflow_phases = section.call("skills/assistant-workflow/references/phases.md", "## Shared Controller Decisions", "## Progress Updates")
-debugging_root = section.call("skills/assistant-debugging/SKILL.md", "## Progressive Contract Loading", "## Ownership")
+debugging_root = File.read(File.join(framework, "skills/assistant-debugging/SKILL.md")).gsub(/\s+/, " ")
 debugging_ref = section.call("skills/assistant-debugging/references/change-impact.md", "# Change-impact during debugging", "##")
 review_ref = section.call("skills/assistant-review/references/change-impact.md", "# Change-impact review projection", "##")
-abort "workflow root selector omits cosmetic" unless workflow_root.include?("when behavior, cosmetic, or local/shared/unresolved impact")
+abort "workflow root omits behavior/cosmetic/locality routing" unless workflow_root.include?("references/change-impact.md") && workflow_root.match?(/behavior(?:\/| or )cosmetic/) && workflow_root.include?("locality")
 abort "workflow phase trigger omits cosmetic" unless workflow_phases.include?("behavior-bearing, cosmetic, or locality/shared-impact claim")
-abort "debugging root selector omits cosmetic" unless debugging_root.include?("repair, cosmetic, or locality claim")
+abort "debugging root omits repair-impact routing" unless debugging_root.include?("references/change-impact.md") && debugging_root.include?("diagnosis/repair")
 abort "debugging reference trigger omits cosmetic" unless debugging_ref.include?("fix, or cosmetic decision")
 abort "review reference trigger omits cosmetic" unless review_ref.include?("behavior or cosmetic change")
+%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
+  index = YAML.load_file(File.join(framework, "skills", skill, "contracts/index.yaml"))
+  load_set = index.fetch("load_sets").fetch("change_impact")
+  abort "#{skill} change-impact set omits guidance" unless load_set.fetch("references").include?("references/change-impact.md")
+  input = load_set.fetch("selectors").find { |item| item["path"] == "contracts/input.yaml" && item["section"] == "fields" }
+  abort "#{skill} selector omits applicability/context" unless input && %w[change_impact_applicability change_impact_context].all? { |name| input.fetch("names").include?(name) }
+end
 
 controller = section.call("skills/assistant-workflow/references/workflow-controller.md", "- `light`:", "- `standard`:")
 build = section.call("skills/assistant-workflow/references/build-worker-protocol.md", "## Adaptive Source-Changing Role Ownership", "## Expanded-impact mutation authorization")
@@ -651,8 +658,8 @@ checks.each do |path, phase_name, assertion_id|
   abort "#{phase_name} applicability has no pre-mutation recovery" unless applicability.fetch("on_fail").include?("Stop before")
 end
 
-guide = File.read(File.join(framework, "docs/skill-contract-design-guide.md"))
-abort "guide does not define mutation entry assertions" unless guide.include?("entry_assertions") && guide.include?("before any mutation or mutation dispatch")
+guide = File.read(File.join(framework, "docs/skill-contract-design-guide.md")).gsub(/\s+/, " ")
+abort "guide does not define mutation entry assertions" unless guide.include?("entry_assertions") && guide.match?(/(?:before any mutation or mutation dispatch|Check entry assertions before mutation or dispatch)/)
 RUBY
 then
     pass
@@ -807,14 +814,16 @@ fi
 test_start "assistant-review routes triggered change-impact before planning and excludes it from Reviewer bundles"
 if ruby - "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" <<'RUBY'
 source = File.read(ARGV.fetch(0))
-routing = source.split(/^Migration note:/, 2).first
-bullets = routing.scan(/^- .*?(?=^- |\z)/m).map { |bullet| bullet.gsub(/\s+/, " ").strip }
-positive_routing = bullets.any? do |bullet|
-  bullet.match?(/\bTriggered\b/) && bullet.match?(/`change_impact`/) && bullet.match?(/\b(?:load|resolve)\b/) && bullet.match?(/before planning or dispatch/)
+routing = source.split(/\n\s*\n/).find { |paragraph| paragraph.include?("references/change-impact.md") }
+abort "missing change-impact guidance route" unless routing
+routing = routing.gsub(/\s+/, " ")
+%w[behavior cosmetic artifact locality shared unresolved].each do |trigger|
+  abort "missing #{trigger} change-impact trigger" unless routing.include?(trigger)
 end
-abort "missing triggered change-impact routing" unless positive_routing
-normalized_routing = routing.gsub(/\s+/, " ")
-abort "missing Reviewer-bundle change-impact exclusion" unless normalized_routing.match?(/keep change-impact guidance out of Reviewer bundles/)
+abort "missing active change-impact selector" unless routing.include?("`change_impact`") && routing.match?(/\bload\b/i)
+abort "change-impact routing runs after planning/dispatch" unless routing.include?("before planning or dispatch")
+abort "missing Reviewer-bundle change-impact exclusion" unless routing.match?(/(?:outside|out of) Reviewer bundles/)
+
 RUBY
 then
     pass

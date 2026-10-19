@@ -730,13 +730,14 @@ for surface in "${workflow_subagent_gate_surfaces[@]}"; do
     fi
 done
 workflow_subagent_gate_terms=(
-    "skills/assistant-workflow/SKILL.md|subagent_policy_state"
-    "skills/assistant-workflow/SKILL.md|subagent_execution_mode"
-    "skills/assistant-workflow/SKILL.md|subagent_trigger_scope"
-    "skills/assistant-workflow/SKILL.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
-    "skills/assistant-workflow/SKILL.md|dispatch the configured role agents without a separate permission question"
-    "skills/assistant-workflow/SKILL.md|delegation_triggered"
-    "skills/assistant-workflow/SKILL.md|do not infer unavailability merely because no visible tool is named \`Task\`, \`delegate\`, or \`subagent\`"
+    "skills/assistant-workflow/SKILL.md|references/subagent-dispatch.md"
+    "skills/assistant-workflow/SKILL.md|Required delegation follows"
+    "skills/assistant-workflow/SKILL.md|without a separate spawn permission question"
+    "skills/assistant-workflow/SKILL.md|permitted fallback needs actual opt-out, policy, or unavailability evidence"
+    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_policy_state"
+    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_execution_mode"
+    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_trigger_scope"
+    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_policy_state=delegation_triggered"
     "skills/assistant-workflow/contracts/index.yaml|id: workflow-delegation-fields"
     "skills/assistant-workflow/contracts/index.yaml|names: [required_agents, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source]"
     "skills/assistant-workflow/contracts/input.yaml|subagent_policy_state"
@@ -764,15 +765,11 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/subagent-dispatch.md|Delegation Policy State"
     "skills/assistant-workflow/references/subagent-dispatch.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
     "skills/assistant-workflow/references/subagent-dispatch.md|without a separate permission question"
-    "skills/assistant-workflow/references/subagent-dispatch.md|For Codex, current CLI/app releases support native subagent workflows by default"
-    "skills/assistant-workflow/references/subagent-dispatch.md|Do not mark \`subagents_unavailable\` merely because the visible tool list lacks a tool named \`Task\`, \`delegate\`, or \`subagent\`"
     "skills/assistant-workflow/references/subagent-dispatch.md|MUST dispatch that role"
     "skills/assistant-workflow/references/subagent-dispatch.md|MUST NOT spawn subagents"
     "skills/assistant-workflow/references/subagent-dispatch.md|direct fallback evidence"
-    "skills/assistant-workflow/references/subagent-roles.md|Current Codex CLI/app releases support native subagent workflows by default"
-    "skills/assistant-workflow/references/subagent-roles.md|Spawn the selected intelligent-writer (default) or evidence-qualified mechanical-writer agent"
-    "skills/assistant-workflow/references/subagent-roles.md|do not look for a visible Claude-style \`Agent\` tool"
-    "skills/assistant-workflow/references/subagent-roles.md|optional limits; absence of those settings is not proof that subagents are unavailable"
+    "skills/assistant-workflow/references/subagent-roles.md|subagent-dispatch.md#delegation-policy-state"
+    "skills/assistant-workflow/references/subagent-roles.md|subagent-dispatch.md#concrete-writer-selection"
     "skills/assistant-workflow/references/subagent-dispatch.md|Evidence gate for standard/strict work"
     "skills/assistant-workflow/references/task-journal-template.md|Agent Dispatch Log"
     "skills/assistant-workflow/references/task-journal-template.md|Code Mapper dispatch"
@@ -781,13 +778,13 @@ workflow_subagent_gate_terms=(
     "skills/assistant-workflow/references/task-journal-template.md|Code Writer dispatch"
     "skills/assistant-workflow/references/task-journal-template.md|Builder/Tester dispatch/result/direct evidence"
     "skills/assistant-workflow/references/task-journal-template.md|Direct fallback reason"
-    "skills/assistant-workflow/references/phases.md|Resolve \`subagent_policy_state\`, \`subagent_execution_mode\`, and \`subagent_trigger_scope\` before any requested/required subagent spawn"
-    "skills/assistant-workflow/references/phases.md|Create a **Code Mapper** context map"
-    "skills/assistant-workflow/references/phases.md|otherwise create the same compact map directly"
+    "skills/assistant-workflow/references/phases.md|Before any required dispatch, resolve subagent policy/execution/trigger scope through \`references/subagent-dispatch.md\`"
+    "skills/assistant-workflow/references/phases.md|Map files directly when possible"
+    "skills/assistant-workflow/references/phases.md|Use Code Mapper only for unresolved scope/ownership boundaries"
     "skills/assistant-workflow/references/phases.md|Add Code Reviewer to \`Required agents\` before Stage 2"
     "skills/assistant-workflow/references/phases.md|\`assistant-review\` SKILL.md and contracts"
     "skills/assistant-workflow/references/phases.md|any Reviewer compatibility routing"
-    "skills/assistant-workflow/references/phases.md|subagent_execution_mode=delegated"
+    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_execution_mode=delegated"
     "skills/assistant-workflow/references/build-worker-protocol.md|Direct fallback mode"
     "skills/assistant-workflow/references/build-worker-protocol.md|Silent fallback cannot complete"
 )
@@ -1059,8 +1056,12 @@ fi
 test_start "assistant-review stagnation and QA pivot escalate to pivot restart decision"
 missing_review_pivot_terms=()
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::pivot_restart_signal" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::orchestrator records \`pivot_restart_decision\`" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/review-loop.md" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/score-tracking.md" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/qa-evaluation-loop.md" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::and a recorded pivot/restart decision before another pass" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::pivot_restart_signal" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::orchestrator records pivot_restart_decision" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::- name: pivot_restart_decision" \

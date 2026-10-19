@@ -30,20 +30,16 @@
         "No existing diagram file path was requested."
       ],
       "expected_behavior": [
-        "Resolves diagram_type as architecture and format as mermaid.",
-        "Reads the named runner and helper files before drawing relationships.",
-        "Outputs diagram_code as a Mermaid fenced code block.",
-        "Uses real file and function names rather than aspirational components.",
-        "Returns Evidence with source files or symbols used.",
-        "Returns Placement as inline only when no output file was requested.",
-        "Returns Gaps for any source file or relationship that could not be verified."
+        "Chooses an architecture diagram and reads the named runner and helpers.",
+        "Returns a Mermaid fenced diagram using real files and relationships.",
+        "Explains the diagram with source references and material coverage gaps.",
+        "Uses inline output because no file was requested.",
+        "Does not require a per-element ledger for this ordinary diagram."
       ],
       "pass_criteria": [
-        "The response includes diagram_type and diagram_code.",
-        "The response includes a Mermaid diagram.",
-        "The response cites source evidence from tools/evals files.",
-        "The response states placement and gaps.",
-        "The response does not invent components absent from source."
+        "The diagram is Mermaid and reflects inspected source.",
+        "Sources and unresolved relationships are clear.",
+        "No unsupported current components are introduced."
       ],
       "fail_signals": [
         "Draws from memory without reading source files.",
@@ -53,14 +49,8 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "diagram_type",
-          "architecture",
-          "diagram_code",
           "mermaid",
-          "Evidence",
-          "tools/evals/run-skill-evals.sh",
-          "Placement",
-          "Gaps"
+          "tools/evals/run-skill-evals.sh"
         ],
         "forbidden_substrings": [
           "drawn from memory",
@@ -82,17 +72,15 @@
         "The current project has multiple plausible diagram targets."
       ],
       "expected_behavior": [
-        "Recognizes that required diagram_type and scope are unresolved.",
-        "Asks a concise clarification with a small set of diagram type choices.",
-        "Mentions scope or source_files needed to avoid guessing.",
-        "Does not generate a diagram before input contract fields are resolved.",
-        "Groups every material question concisely rather than asking broad open-ended questions."
+        "Inspects available context before asking about unresolved scope or diagram type.",
+        "Asks concise grouped questions only when the choices materially change the inspection or result.",
+        "Offers useful diagram types or a safe inferred choice.",
+        "Does not invent project behavior without source evidence."
       ],
       "pass_criteria": [
-        "The response asks for diagram_type and scope or equivalent choices.",
-        "The response offers supported diagram types such as architecture, sequence, flow, or ER.",
-        "The response does not output diagram_code yet.",
-        "The response explains that source files or scope drive accuracy."
+        "Material scope/type uncertainty is resolved without ritual questions.",
+        "Questions explain why source or scope changes the diagram.",
+        "No guessed architecture is presented as observed."
       ],
       "fail_signals": [
         "Generates a diagram without resolving type or scope.",
@@ -102,16 +90,10 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "diagram_type",
           "scope",
-          "ask",
-          "architecture",
-          "sequence",
-          "flow",
-          "source_files"
+          "architecture"
         ],
         "forbidden_substrings": [
-          "I generated the diagram",
           "without reading code",
           "No source evidence needed",
           "guess the architecture"

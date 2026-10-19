@@ -65,6 +65,7 @@ p0p4_reference_section_has_term() {
 }
 
 review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
+review_legacy="$FRAMEWORK_DIR/skills/assistant-review/references/legacy-compatibility.md"
 review_checklists="$FRAMEWORK_DIR/skills/assistant-review/references/review-checklists.md"
 review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
 review_index="$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"
@@ -121,7 +122,7 @@ if ! ruby -ryaml -e '
     review_due_evidence_failures+=("conditional evidence/no_build_scope schema no longer distinguishes due evidence from a genuine no-check case")
 fi
 for file_and_term in \
-    "$review_skill::Workflow-composed fixes enforce \`F_REVIEW_VERIFICATION_SELECTION\`" \
+    "$review_skill::under \`F_REVIEW_VERIFICATION_SELECTION\`" \
     "$review_phase_gates::F_REVIEW_VERIFICATION_SELECTION" \
     "$review_phase_gates::the composing workflow invokes assistant-verification" \
     "$review_phase_gates::packet-local tdd_applies" \
@@ -131,7 +132,7 @@ for file_and_term in \
     "$review_loop::Standalone review-fix runs build and tests"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         review_due_evidence_failures+=("${file#$FRAMEWORK_DIR/}: missing pre-mutation selection rule $term")
     fi
 done
@@ -191,14 +192,14 @@ done
 
 for file_and_term in \
     "$review_skill::references/review-checklists.md" \
-    "$review_skill::fresh Reviewer context bundle points to \`references/review-checklists.md\`" \
-    "$review_skill::load \`references/review-loop.md\` before the first REVIEW step" \
+    "$review_index::id: fresh-reviewer-context-bundle" \
+    "$review_loop::Load this reference before the first REVIEW step" \
     "$review_loop::triggered checklist sections" \
     "$review_index::references/review-checklists.md" \
-    "$review_skill::Agentic Loop Safety Checklist" \
-    "$review_skill::Behavioral Contract Review Checklist" \
-    "$review_skill::Semantic Contract Review Checklist" \
-    "$review_skill::Architecture Decision Pack Review Checklist" \
+    "$review_checklists::Agentic Loop Safety Checklist" \
+    "$review_checklists::Behavioral Contract Review Checklist" \
+    "$review_checklists::Semantic Contract Review Checklist" \
+    "$review_checklists::Architecture Decision Pack Review Checklist" \
     "$review_evals::review-checklists-reference-is-mandatory" \
     "$review_evals::references/review-checklists.md" \
     "$review_evals::Agentic Loop Safety Checklist" \
@@ -209,7 +210,7 @@ for file_and_term in \
     "$review_evals::template-contract alignment"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         review_checklist_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -262,7 +263,7 @@ for file_and_term in \
     "$review_evals::review-design-coherence-avoids-structural-heuristic"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         design_coherence_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -335,7 +336,7 @@ for file_and_term in \
     "$review_evals::architecture-decision-pack-review-is-fresh-and-falsifiable"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         architecture_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -455,12 +456,12 @@ elif ! grep -Fq $'FAIL\tassistant-review\tstandalone-high-risk-record-without-ch
     architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response did not fail structured assertions")
 fi
 for file_and_term in \
-    "$review_skill::Migration note: assistant-review contracts are v8.0" \
+    "$review_legacy::Current v8 field definitions" \
     "$review_phase_gates::architecture_design_mode" \
     "$review_handoffs::architecture_decision_pack.mode must equal canonical architecture_design_mode"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         architecture_pack_mode_consumer_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -496,7 +497,7 @@ for file_and_term in \
     "$review_rubric::A score below threshold alone does not authorize round 3 or later."; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         review_threshold_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -513,9 +514,9 @@ review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
 review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
 
 for file_and_term in \
-    "$review_skill::Audit mode stops after one review batch." \
-    "$review_skill::After entry, load \`references/review-loop.md\` before the first REVIEW step." \
-    "$review_skill::Review-fix resolves or explicitly defers must-fix/should-fix findings, validates, then re-reviews." \
+    "$review_loop::Audit exits after one started terminal batch" \
+    "$review_loop::Load this reference before the first REVIEW step" \
+    "$review_skill::After a fix, verify due selected/binding checks against the new source, freeze a fresh snapshot, and run a fresh complete review batch" \
     "$review_loop::Incomplete coverage -> \`HAS_REMAINING_ITEMS\`, never CLEAN/ISSUES_FIXED" \
     "$review_loop::Audit exits after one started terminal batch; retry exhaustion never starts another." \
     "$review_loop::After round 1 fixes, start fresh round 2." \
@@ -532,7 +533,7 @@ for file_and_term in \
     "$review_evals::additional_round_reason"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         review_round_policy_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -554,14 +555,14 @@ for file_and_term in \
     "$review_output::$bounded_claim" \
     "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml::$bounded_claim" \
     "$FRAMEWORK_DIR/agents/claude/code-reviewer.md::$bounded_claim" \
-    "$review_skill::QA evaluation separate from code review" \
+    "$review_skill::QA stays separate from code review" \
     "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml::Do not replace the separate QA Evaluator" \
     "$FRAMEWORK_DIR/agents/claude/code-reviewer.md::Do not replace the separate QA Evaluator" \
     "$review_evals::evidence-bounded-review-claim" \
     "$review_evals::$bounded_claim"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         review_claim_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -630,7 +631,7 @@ for file_and_term in \
     "$review_phase_gates::cannot return clean"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         reuse_search_return_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -651,7 +652,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md::Carried Mapper/task-packet evidence alone cannot satisfy review"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         independent_reuse_search_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -699,8 +700,8 @@ if ! ruby -ryaml -e '
 ' "$review_input" "$review_output" "$review_phase_gates" "$review_handoffs" "$review_index"; then
     pack_projection_cardinality_failures+=("v7 input does not preserve recoverable selected design, rationale, viable alternative dispositions, non-empty boundaries, and exact five-concern pressure coverage")
 fi
-if ! grep -Fq 'Migration note: assistant-review contracts are v8.0' "$review_skill" \
-    || ! grep -Fq 'recoverable selected design, rationale, and viable alternatives/dispositions' "$review_skill"; then
+if ! p0p4_contains_text "$review_legacy" 'Current v8 field definitions' \
+    || ! p0p4_contains_text "$review_legacy" 'recoverable selected design, rationale, viable alternatives/dispositions'; then
     pack_projection_cardinality_failures+=("8.0 migration note does not describe recoverable selected design evidence")
 fi
 if ! jq -e '
@@ -791,7 +792,7 @@ for file_and_term in \
     "$review_evals::post-fix-review-uses-fresh-snapshot-batch"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         review_batch_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -1010,13 +1011,14 @@ test_start "assistant-review models batch lifecycle, overlapping manifest covera
 if ruby -ryaml -rjson -e '
   input, handoffs, output, gates = ARGV.take(4).map { |path| YAML.load_file(path) }
   evals = JSON.parse(File.read(ARGV.fetch(4)))
-  root = File.read(ARGV.fetch(5)).split("## Success Criteria", 2).last.split("## Constraints", 2).first.gsub(/\s+/, " ")
+  root = File.read(ARGV.fetch(5)).gsub(/\s+/, " ")
   abort "root requires completed passes before an incomplete audit can exit" if root.include?("at least two COMPLETED passes")
-  %w[failed timed-out blocked].each do |state|
-    abort "root omits terminally incomplete #{state} audit path" unless root.include?(state)
+  current_checks = gates.fetch("gates").flat_map { |gate| gate.fetch("exit_assertions", []) }.map { |assertion| assertion.fetch("check") }.join(" ")
+  %w[needs_context blocked timed_out failed invalidated].each do |state|
+    abort "canonical gates omit terminally incomplete #{state} audit path" unless current_checks.include?(state)
   end
-  abort "root loses planned pass minimum or terminal barrier" unless root.include?("plans and attempts at least two independent passes") && root.include?("All expected passes reach terminal accounting before aggregation, fix, or exit")
-  abort "root loses clean coverage or bounded audit exit" unless root.include?("`CLEAN`/`ISSUES_FIXED` require complete coverage") && root.include?("Audit exits after one started batch") && root.include?("`HAS_REMAINING_ITEMS`")
+  abort "root loses planned pass minimum or terminal barrier" unless root.include?("plans and attempts at least two independent, sibling-blind passes") && root.include?("Account for every expected pass")
+  abort "root loses clean coverage or bounded audit exit" unless root.include?("`CLEAN`/`ISSUES_FIXED` require complete current coverage") && root.include?("Audit stops after its first started batch") && root.include?("`HAS_REMAINING_ITEMS`")
   reviewer = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
   context = reviewer.fetch("context_fields").to_h { |field| [field["name"], field] }
   batch = context.fetch("review_batch").fetch("object_fields").to_h { |field| [field["name"], field] }
@@ -1385,7 +1387,7 @@ fi
 test_start "assistant-review audit, repair, small-scope, and prompt routes preserve complete batches"
 route_failures=()
 for file_and_term in \
-    "$review_skill::audit retains the Spec Review mismatch as an aggregate finding and continues a frozen read-only multi-pass batch" \
+    "$review_phase_gates::mode=audit exits repair/Build/source-mutation dispatch, retains the mismatch as a pre-batch aggregate finding" \
     "$review_loop::stay read-only" \
     "$review_phase_gates::continues the frozen read-only multi-pass batch" \
     "$review_handoffs::at most one transient/schema repair" \
@@ -1397,7 +1399,7 @@ for file_and_term in \
     "$review_evals::trivial-audit-uses-two-isolated-passes"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         route_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -1954,7 +1956,7 @@ for file in \
     "$FRAMEWORK_DIR/agents/claude/reviewer.md" \
     "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml" \
     "$FRAMEWORK_DIR/agents/claude/code-reviewer.md"; do
-    if ! grep -Fq -- "\"$clean_claim\"" "$file" || grep -Fq -- "\"$clean_claim.\"" "$file"; then
+    if ! p0p4_contains_text "$file" "\"$clean_claim\"" || p0p4_contains_text "$file" "\"$clean_claim.\""; then
         clean_claim_failures+=("${file#$FRAMEWORK_DIR/}: quoted canonical clean literal")
     fi
 done

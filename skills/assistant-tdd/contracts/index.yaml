@@ -9,8 +9,6 @@ authoritative_contracts:
     contract: output
   - path: contracts/phase-gates.yaml
     contract: phase-gates
-  - path: contracts/handoffs.yaml
-    contract: handoffs
 
 load_sets:
   entry:

@@ -49,10 +49,10 @@ fi
 test_start "review delegation dispatches from applicable instruction triggers"
 review_trigger_failures=()
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::assistant-review contracts are v8.0" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md::assistant-review owns Reviewer/QAEvaluator handoffs" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::load \`contracts/input.yaml\` review-entry fields selected by \`review-entry-fields\` in \`contracts/index.yaml\`" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::consumers can use the producer packet" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::schema_version: \"8.0\"" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::sole owner of Reviewer and QAEvaluator worker packet schemas" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::id: review-entry-fields" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::reviewed_scope" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::subagent_trigger_scope" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::policy_blocking_source" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::qa_evaluation_mode" \
@@ -64,7 +64,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::without a separate permission question"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         review_trigger_failures+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done
@@ -110,7 +110,7 @@ for file in \
         missing_loop_safety_terms+=("$file")
     fi
 done
-if ! grep -Fq 'Agentic loop flag -> Agentic Loop Safety Checklist' "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" \
+if ! grep -Fq 'Agentic Loop Safety Checklist' "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml" \
     || ! grep -Fq 'references/review-checklists.md' "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"; then
     missing_loop_safety_terms+=("assistant-review root/index worker-bundle routing")
 fi
@@ -135,7 +135,7 @@ test_start "workflow triage rubric defines structured metadata and task gate pac
 missing_triage_terms=()
 triage_file="$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md"
 for term in \
-    "Required Triage Output" \
+    "Routing decisions" \
     "Bugfix" \
     "Feature" \
     "Refactor / Migration / Rewrite" \
@@ -148,8 +148,7 @@ for term in \
 done
 for term in \
     "references/triage-rubric.md" \
-    "Triage metadata" \
-    "intensity=[controller_intensity]"; do
+    "Select only the needed machinery"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"; then
         missing_triage_terms+=("SKILL.md: $term")
     fi
@@ -202,18 +201,18 @@ else
     fail "workflow triage rubric missing terms: ${missing_triage_terms[*]}"
 fi
 
-test_start "triage output lists every required triage_result routing field"
+test_start "canonical triage routing retains every required consumer field"
 if ruby -ryaml -e '
   output = YAML.load_file(ARGV.fetch(0))
   triage = File.read(ARGV.fetch(1))
   result = output.fetch("artifacts").find { |artifact| artifact.fetch("name") == "triage_result" }
-  section = triage[/^## Required Triage Output\n(.*?)(?=^## |\z)/m, 1]
+  section = triage[/^## Routing decisions\n(.*?)(?=^## |\z)/m, 1]
   required = result.fetch("object_fields").select { |field| field.fetch("required") == true }.map { |field| field.fetch("name") }
   exit(section && required.all? { |name| section.include?("`#{name}`") } ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" "$triage_file"; then
     pass
 else
-    fail "triage Required Triage Output omits a required triage_result routing field"
+    fail "triage routing guidance omits a required canonical triage_result field"
 fi
 
 test_start "Docs-Only gate does not require code or test changes absent runnable behavior"
@@ -296,7 +295,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md::decision_rationale"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         reuse_search_workflow_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
@@ -360,13 +359,13 @@ for copied_matrix_phrase in \
     fi
 done
 for term in \
-    "Apply \`references/workflow-controller.md\` for shared routing/default decisions." \
-    "When \`harness_capable=true\`, load \`references/harness-controller.md\` plus \`references/plan-harness-appendix.md\`" \
-    "Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets" \
-    "Load \`references/build-worker-protocol.md\` for source-changing Build work" \
+    "Use \`references/workflow-controller.md\` for routing." \
+    "Only \`harness_capable=true\` loads \`references/harness-controller.md\` and \`references/plan-harness-appendix.md\`" \
+    "retain accepted Done Contract, Harness Recipe, runtime state/trace/replay, and Artifact Reference Ledger before Build" \
+    "Load \`references/build-worker-protocol.md\` for canonical packet or worker Build execution" \
     "Load \`references/review-qa-router.md\`" \
     "Load \`references/completion-controller.md\`"; do
-    if ! grep -Fq "$term" "$phases_ref"; then
+    if ! p0p4_contains_text "$phases_ref" "$term"; then
         controller_link_failures+=("phases.md missing controller handoff term: $term")
     fi
 done
@@ -376,9 +375,9 @@ if ! grep -Fq "references/harness-runtime-artifacts.md" "$phases_ref" \
 fi
 skill_entrypoint="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
 for term in \
-    "Load \`references/workflow-controller.md\` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions." \
-    "\`references/workflow-controller.md\` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation."; do
-    if ! grep -Fq "$term" "$skill_entrypoint"; then
+    "references/workflow-controller.md" \
+    "when risk, approval, state, delegation, harness, or QA routing needs resolution"; do
+    if ! p0p4_contains_text "$skill_entrypoint" "$term"; then
         controller_link_failures+=("SKILL.md missing lean controller term: $term")
     fi
 done
@@ -431,7 +430,7 @@ done
 for term in \
     "references/candidate-search.md" \
     "Candidate Search"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"; then
+    if ! grep -Fqi "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"; then
         missing_candidate_terms+=("SKILL.md: $term")
     fi
     if [[ ! -f "$FRAMEWORK_DIR/skills/assistant-workflow/references/candidate-search.md" ]] || ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/candidate-search.md"; then
@@ -519,13 +518,15 @@ fi
 
 test_start "workflow state artifacts are orchestrator-owned and ignored"
 missing_state_terms=()
-for term in \
-    "framework-owned, ignored state" \
-    "The orchestrator may create and update them directly" \
-    "This exception never applies to project source" \
-    "If state files are unavailable, carry the equivalent state in the response/plan packet."; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
-        missing_state_terms+=("phases.md: $term")
+for file_and_term in \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::framework-owned ignored artifact" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::may be updated by the orchestrator" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::Framework-owned ignored state never authorizes project mutations" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::When state files are unavailable or policy disallows them, retain equivalent carried state"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        missing_state_terms+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done
 if ! ruby -ryaml -e '
@@ -574,7 +575,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Future harness obligation"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         preparation_routing_failures+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done

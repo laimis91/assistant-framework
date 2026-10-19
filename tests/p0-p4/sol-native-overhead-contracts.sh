@@ -345,28 +345,25 @@ fi
 if rg -qi 'read (all |the )?contract files in .contracts/.+before|load and follow .+contracts before' "$review_skill"; then
     progressive_failures+=("review still eagerly requires every contract")
 fi
-if ! rg -qi 'load only .+contract.+(current|active|applicable|when needed)|do not load (all|every) contract|load progressively by current selector' "$workflow_skill"; then
-    progressive_failures+=("workflow lacks an explicit progressive contract-loading rule")
-fi
-if ! rg -qi 'load only .+contract.+(current|active|applicable|when needed)|do not load (all|every) contract|load progressively by current selector' "$review_skill"; then
-    progressive_failures+=("review lacks an explicit progressive contract-loading rule")
-fi
-if ! grep -Fq 'contracts/index.yaml' "$workflow_skill"; then
-    progressive_failures+=("workflow does not load contracts/index.yaml as its selector index")
-fi
-if ! grep -Fq 'contracts/index.yaml' "$review_skill"; then
-    progressive_failures+=("review does not load contracts/index.yaml as its selector index")
-fi
-for scoped_rule in \
-    'input.yaml.*(Triage|Discover|entry)' \
-    'handoffs.yaml.*(delegat|dispatch|handoff)' \
-    'phase-gates.yaml.*(current|active|transition|round)' \
-    'output.yaml.*(final|completion|exit)'; do
-    if ! rg -qi "$scoped_rule" "$workflow_skill"; then
-        progressive_failures+=("workflow missing scoped rule: $scoped_rule")
+# Roots route to the index and relevant sets. The index owns the actual file
+# mapping; duplicating that mapping in root prose is not a loading requirement.
+for skill_name in assistant-workflow assistant-review; do
+    skill_file="$FRAMEWORK_DIR/skills/$skill_name/SKILL.md"
+    if ! grep -Fq 'contracts/index.yaml' "$skill_file"; then
+        progressive_failures+=("$skill_name does not route through its selector index")
     fi
-    if ! rg -qi "$scoped_rule" "$review_skill"; then
-        progressive_failures+=("review missing scoped rule: $scoped_rule")
+    if ! tr '\n' ' ' < "$skill_file" | grep -Eq 'relevant|applicable|only as needed'; then
+        progressive_failures+=("$skill_name lacks conditional loading guidance")
+    fi
+    if ! ruby -ryaml -e '
+      index = YAML.load_file(ARGV.fetch(0)).fetch("load_sets")
+      current = ARGV.fetch(1) == "assistant-workflow" ? "current_phase" : "current_round"
+      {"entry" => "input", "selected_handoff" => "handoffs", current => "phase-gates", "completion" => "output"}.each do |name, file|
+        selectors = index.fetch(name).fetch("selectors")
+        abort "#{name} has no #{file} selector" unless selectors.any? { |selector| selector["path"] == "contracts/#{file}.yaml" }
+      end
+    ' "$FRAMEWORK_DIR/skills/$skill_name/contracts/index.yaml" "$skill_name"; then
+        progressive_failures+=("$skill_name index lost a boundary-specific canonical file mapping")
     fi
 done
 if [[ "${#progressive_failures[@]}" -eq 0 ]]; then

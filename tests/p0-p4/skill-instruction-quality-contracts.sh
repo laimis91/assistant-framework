@@ -10,71 +10,6 @@ p0p4_root_skill_files() {
     find "$FRAMEWORK_DIR/skills" -mindepth 2 -maxdepth 2 -type f -name SKILL.md -path "$FRAMEWORK_DIR/skills/assistant-*/SKILL.md" -print | sort
 }
 
-p0p4_section_has_term() {
-    local file="$1"
-    local heading="$2"
-    local term="$3"
-
-    awk -v heading="$heading" -v term="$term" '
-        $0 == heading { in_section = 1; next }
-        in_section && /^## / { exit }
-        in_section && index($0, term) { found = 1; exit }
-        END { exit found ? 0 : 1 }
-    ' "$file"
-}
-
-p0p4_required_fields_missing_behavior_count() {
-    local file="$1"
-
-    awk '
-        /^  - name:/ {
-            if (in_required && !has_on_missing) {
-                missing++
-            }
-            in_required = 0
-            has_on_missing = 0
-        }
-        /^    required:[[:space:]]*true[[:space:]]*$/ {
-            in_required = 1
-        }
-        /^    on_missing:/ {
-            has_on_missing = 1
-        }
-        END {
-            if (in_required && !has_on_missing) {
-                missing++
-            }
-            print missing + 0
-        }
-    ' "$file"
-}
-
-p0p4_required_artifacts_failure_behavior_count() {
-    local file="$1"
-
-    awk '
-        /^  - name:/ {
-            if (in_required && !has_failure_behavior) {
-                missing++
-            }
-            in_required = 0
-            has_failure_behavior = 0
-        }
-        /^    required:[[:space:]]*true[[:space:]]*$/ {
-            in_required = 1
-        }
-        /^    (on_fail:|validation:)/ {
-            has_failure_behavior = 1
-        }
-        END {
-            if (in_required && !has_failure_behavior) {
-                missing++
-            }
-            print missing + 0
-        }
-    ' "$file"
-}
-
 test_start "root skill inventory is filesystem based and limited to assistant skills"
 skill_inventory="$(p0p4_root_skill_files)"
 non_assistant_inventory_skills=()
@@ -96,114 +31,44 @@ else
     fail "root skill inventory should include only assistant-* skills: ${non_assistant_inventory_skills[*]}"
 fi
 
-test_start "root skills declare outcome-shaped sections"
-missing_skill_sections=()
-required_skill_sections=(
-    "## Goal"
-    "## Success Criteria"
-    "## Constraints"
-    "## Output"
-    "## Stop Rules"
-)
-while IFS= read -r skill_file; do
-    rel_path="${skill_file#$FRAMEWORK_DIR/}"
-    for heading in "${required_skill_sections[@]}"; do
-        if ! grep -Eq "^${heading}[[:space:]]*$" "$skill_file"; then
-            missing_skill_sections+=("$rel_path: $heading")
-        fi
-    done
-done < <(p0p4_root_skill_files)
-if [[ "${#missing_skill_sections[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "root SKILL.md files need outcome-shaped root sections: ${missing_skill_sections[*]}"
-fi
+# Root headings and prompt-only YAML envelopes are not public interfaces.
+# The skill validator covers metadata and referenced contracts; preserve behavior here.
 
-test_start "assistant-clarify declares utility input and output contracts"
-clarify_skill="$FRAMEWORK_DIR/skills/assistant-clarify/SKILL.md"
-clarify_input="$FRAMEWORK_DIR/skills/assistant-clarify/contracts/input.yaml"
-clarify_output="$FRAMEWORK_DIR/skills/assistant-clarify/contracts/output.yaml"
-clarify_contract_failures=()
-
-for contract_file in "$clarify_input" "$clarify_output"; do
-    if [[ ! -f "$contract_file" ]]; then
-        clarify_contract_failures+=("${contract_file#$FRAMEWORK_DIR/}: missing")
-    fi
-done
-
-if [[ -f "$clarify_input" ]]; then
-    for term in \
-        'schema_version: "2.0"' \
-        "contract: input" \
-        "skill: assistant-clarify" \
-        "on_missing:"; do
-        if ! grep -Fq "$term" "$clarify_input"; then
-            clarify_contract_failures+=("skills/assistant-clarify/contracts/input.yaml missing $term")
-        fi
-    done
-
-    if [[ "$(p0p4_required_fields_missing_behavior_count "$clarify_input")" -ne 0 ]]; then
-        clarify_contract_failures+=("skills/assistant-clarify/contracts/input.yaml has required fields without on_missing")
-    fi
-fi
-
-if [[ -f "$clarify_output" ]]; then
-    for term in \
-        'schema_version: "2.0"' \
-        "contract: output" \
-        "skill: assistant-clarify" \
-        "on_fail:"; do
-        if ! grep -Fq "$term" "$clarify_output"; then
-            clarify_contract_failures+=("skills/assistant-clarify/contracts/output.yaml missing $term")
-        fi
-    done
-
-    if [[ "$(p0p4_required_artifacts_failure_behavior_count "$clarify_output")" -ne 0 ]]; then
-        clarify_contract_failures+=("skills/assistant-clarify/contracts/output.yaml has required artifacts without validation or on_fail")
-    fi
-fi
-
-for term in \
-    "## Contracts" \
-    'contracts/input.yaml' \
-    'contracts/output.yaml' \
-    "Utility skill" \
-    "no phase gates or sub-agent handoffs"; do
-    if ! grep -Fq "$term" "$clarify_skill"; then
-        clarify_contract_failures+=("skills/assistant-clarify/SKILL.md missing $term")
-    fi
-done
-
-if [[ "${#clarify_contract_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-clarify utility contract requirements failed: ${clarify_contract_failures[*]}"
-fi
-
-test_start "assistant-clarify requires evidence for defaults and explicit product decisions"
+test_start "assistant-clarify preserves material questions, explicit choices, and partial answers"
 clarify_skill="$FRAMEWORK_DIR/skills/assistant-clarify/SKILL.md"
 chaotic_prompts="$FRAMEWORK_DIR/skills/assistant-clarify/chaotic-prompts.md"
-clarify_output="$FRAMEWORK_DIR/skills/assistant-clarify/contracts/output.yaml"
-if grep -Fq -- "Reversibility alone, convention, or a plausible preference does not establish user intent." "$clarify_skill" \
-    && grep -Fq -- "A proposed product choice requires a question and an explicit user answer before dependent work proceeds; a recommendation is not an answer." "$clarify_skill" \
-    && grep -Fq -- "Ask all currently material questions that still change execution, grouped by decision topic. There is no numeric question quota; keep each round concise and avoid asking questions that context can resolve." "$chaotic_prompts" \
-    && grep -Fq -- "After each response, reassess unresolved decisions and treat only explicitly answered choices as resolved;" "$chaotic_prompts" \
-    && grep -Fq -- "Proposed product choices require a question and explicit user answer before dependent work." "$clarify_output" \
-    && ! grep -Fq -- 'Ask **1-3 questions max**.' "$chaotic_prompts"; then
+clarify_failures=()
+for file_and_term in \
+    "$clarify_skill::Ask every material question that cannot be discovered and lacks an evidence-backed safe default" \
+    "$clarify_skill::Reversibility, convention, and a plausible preference alone do not establish product intent" \
+    "$clarify_skill::A recommendation is not consent" \
+    "$clarify_skill::wait for an explicit answer before work that depends on a proposed product choice" \
+    "$clarify_skill::After a partial answer, carry forward the answered decisions and reassess the rest" \
+    "$clarify_skill::Continue clear, independent work while a decision remains open" \
+    "$chaotic_prompts::Do not silently resolve unanswered choices"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        clarify_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if grep -Eiq 'ask.{0,20}[1-3].{0,20}questions max|recommendation (is|means) consent' "$chaotic_prompts"; then
+    clarify_failures+=("numeric question cap or inferred consent")
+fi
+if [[ ${#clarify_failures[@]} -eq 0 ]]; then
     pass
 else
-    fail "assistant-clarify must avoid quota limits, reassess partial answers, and require explicit product decisions"
+    fail "clarification decision safeguards failed: ${clarify_failures[*]}"
 fi
 
-test_start "assistant-workflow routes clear repository changes through requirements discovery"
+test_start "assistant-workflow routes repository changes through requirements discovery"
 workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
-if grep -Fq -- "Implementation requests" "$workflow_skill" \
-    && grep -Fq -- "backlog items" "$workflow_skill" \
+if grep -Fq -- "backlog items" "$workflow_skill" \
     && grep -Fq -- "intended-change ideas" "$workflow_skill" \
-    && grep -Fq -- "Discover requirements check" "$workflow_skill"; then
+    && p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" "Requirements sufficiency"; then
     pass
 else
-    fail "assistant-workflow must route clear requests, backlog items, and change-bearing ideas through Discover requirements check"
+    fail "workflow must retain change-bearing activation and its requirements discovery guidance"
 fi
 
 test_start "assistant-review resolves mode from authorization and asks on ambiguity"
@@ -348,8 +213,7 @@ workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
 workflow_phase_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
 
 for file_and_term in \
-    "$workflow_skill::no-wait" \
-    "$workflow_phases::print the inline plan and continue directly to Build" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::Record the compact plan and continue without waiting" \
     "$workflow_output::not_required_small" \
     "$workflow_phase_gates::no-wait eligibility was recorded"; do
     file="${file_and_term%%::*}"
@@ -365,63 +229,37 @@ else
     fail "assistant-workflow small plans must support no-wait approval: ${workflow_small_failures[*]}"
 fi
 
-test_start "high-control skills pair restrictions with actionable guidance"
+test_start "control guidance retains actionable evidence and recovery"
 missing_paired_guidance=()
-
 review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
-for term in \
-    "Allowed risk categories:" \
-    "Every refactor-related finding MUST state" \
-    "Use concrete risk framing instead" \
-    "smallest durable fix"; do
-    if ! p0p4_section_has_term "$review_skill" "## Refactor-Related Findings" "$term"; then
-        missing_paired_guidance+=("assistant-review Refactor-Related Findings: $term")
-    fi
-done
-
+review_principles="$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md"
 tdd_skill="$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md"
-for term in \
-    "one bounded executor owns RED, production, GREEN, and REFACTOR verification" \
-    "Separated_workers: SAME writer authors tests" \
-    "Builder/Tester only executes RED/GREEN/REFACTOR" \
-    "Stage-only DONE cannot complete Build or Review" \
-    "Required RED evidence before production implementation:"; do
-    if ! p0p4_section_has_term "$tdd_skill" "## Ownership" "$term"; then
-        missing_paired_guidance+=("assistant-tdd Ownership: $term")
-    fi
-done
-for term in \
-    "RED" \
-    "passes unexpectedly" \
-    "Repair regressions before continuing"; do
-    if ! p0p4_section_has_term "$tdd_skill" "## Cycle" "$term"; then
-        missing_paired_guidance+=("assistant-tdd Cycle recovery: $term")
-    fi
-done
-
+tdd_gates="$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml"
 workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
-for term in \
-    "Justify it with a concrete risk only" \
-    "Tie incidental or scope-expanding refactors to concrete risk" \
-    "Choose the smallest useful, durable fix"; do
-    if ! p0p4_section_has_term "$workflow_skill" "## Refactor Guidance" "$term"; then
-        missing_paired_guidance+=("assistant-workflow Refactor Guidance: $term")
+workflow_phases="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
+for file_and_term in \
+    "$review_principles::specific observation to concrete risk and the smallest durable fix" \
+    "$review_principles::Do not infer a finding from code size" \
+    "$tdd_gates::RED" \
+    "$tdd_gates::REFACTOR" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/refactor-safety.md::Public API signatures unchanged" \
+    "$workflow_phases::controller_intensity=strict"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        missing_paired_guidance+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
-for term in \
-    "When required, use this exact format:" \
-    'Use exact markers only for `controller_intensity=strict`, explicit policy, or user request' \
-    "--- PHASE: [name] ---" \
-    "--- PHASE: [name] COMPLETE ---"; do
-    if ! p0p4_section_has_term "$workflow_skill" "## Visible Checkpoints" "$term"; then
-        missing_paired_guidance+=("assistant-workflow Visible Checkpoints: $term")
+# TDD ownership and meaningful RED are consumed interfaces, not root heading names.
+for term in bounded_executor separated_workers test_authoring production refactor; do
+    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"; then
+        missing_paired_guidance+=("build-worker-protocol: missing $term")
     fi
 done
-
-if [[ "${#missing_paired_guidance[@]}" -eq 0 ]]; then
+if [[ ${#missing_paired_guidance[@]} -eq 0 ]]; then
     pass
 else
-    fail "high-control skill restrictions need nearby paired guidance: ${missing_paired_guidance[*]}"
+    fail "control guidance needs actionable evidence/recovery: ${missing_paired_guidance[*]}"
 fi
 
 test_start "assistant-review applies clean-code principles with evidence"
@@ -435,8 +273,7 @@ review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
 
 for file_and_term in \
     "$review_skill::references/review-principles.md" \
-    "$review_skill::Principle and Readability Lens" \
-    "$review_skill::SOLID, KISS, DRY, YAGNI, and readability" \
+    "$review_rubric::SOLID, KISS, DRY, YAGNI, and readability" \
     "$review_principles::duplicated knowledge, not merely similar-looking code" \
     "$review_principles::YAGNI is not permission to neglect code health" \
     "$review_principles::Readability is a human judgment" \
@@ -538,7 +375,7 @@ review_fallback_failures=()
 review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
 
 for file_and_term in \
-    "$review_skill::load \`references/review-loop.md\` before the first REVIEW step" \
+    "$review_loop::Infer review mode before review or mutation" \
     "$review_loop::In direct fallback, start a fresh isolated pass with the same bounded bundle" \
     "$review_input::subagent_execution_mode" \
     "$review_input::direct_fallback" \
@@ -565,8 +402,10 @@ fi
 test_start "assistant-thinking dispatches from applicable delegation triggers and records evidenced fallback"
 thinking_delegation_proof_failures=()
 thinking_delegation_proof_terms=(
-    "$thinking_skill::direct user request or applicable \`AGENTS.md\` or active-skill instruction"
-    "$thinking_skill::policy_blocking_source"
+    "$thinking_skill::A direct user request or applicable AGENTS.md or active-skill instruction"
+    "$thinking_skill::contracts/input.yaml"
+    "$thinking_skill::contracts/output.yaml"
+    "$thinking_skill::contracts/phase-gates.yaml"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegation_triggered"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegated requires subagent_policy_state=delegation_triggered"
@@ -575,10 +414,10 @@ thinking_delegation_proof_terms=(
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml::sequential_fallback"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::dispatch without a separate permission question"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::delegated requires subagent_policy_state=delegation_triggered"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::delegated requires subagent_policy_state=delegation_triggered"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::SKILL.md#independence-and-delegation"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::SKILL.md#integrated-and-structured-output"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::SKILL.md#independence-and-delegation"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::SKILL.md#integrated-and-structured-output"
     "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::thinking-required-roles-dispatch-from-instruction-trigger"
     "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::delegation_triggered"
     "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::policy_blocking_source"
@@ -638,12 +477,11 @@ for reviewer_agent in \
     done
 done
 for review_term in \
-    "assistant-review contracts are v8.0" \
-    "Persisted 6.0/7.0/7.1/7.2 batch packets are invalidated and rebuilt from a fresh 8.0 snapshot" \
+    'schema_version: "8.0"' \
     "risk_selected_specialist" \
-    "assistant-security checklist/perspective"; do
-    if ! grep -Fq "$review_term" "$review_skill"; then
-        review_v7_prompt_failures+=("skills/assistant-review/SKILL.md: missing $review_term")
+    "assistant-security"; do
+    if ! grep -Fq "$review_term" "$review_handoffs"; then
+        review_v7_prompt_failures+=("skills/assistant-review/contracts/handoffs.yaml: missing $review_term")
     fi
 done
 if [[ "$(grep -F 'weighted_score = ' "$review_rubric" | wc -l | tr -d ' ')" -ne 1 ]] \

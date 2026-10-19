@@ -20,13 +20,9 @@ Run a problem through multiple analytical lenses to surface candidate concerns, 
 | 7 | **Analogical** | What patterns from other domains apply here? |
 | 8 | **Meta** | Are we solving the right problem? Should we reframe the question? |
 
-## How many lenses to use
+## Select useful lenses
 
-| Depth | Lenses | Time | When |
-|---|---|---|---|
-| **Fast** | 1 + 3 (Literal + Failure) | ~1 min | Quick sanity check |
-| **Standard** | 1 + 2 + 3 + 5 (Literal + Stakeholder + Failure + Experiential) | ~3 min | Most tasks |
-| **Deep** | All 8 | ~8 min | High-stakes, complex, or novel problems |
+Choose only lenses that can reveal material concerns for this question. Stop when additional passes no longer change the result; no fixed lens count or time quota is required.
 
 ## Process
 
@@ -58,5 +54,5 @@ Candidate concerns or criteria discovered: [count]
 - [candidate 2]
 - ...
 Refined criteria: [which existing criteria got sharper]
-Risks to mitigate: [top 3]
+Risks to mitigate: [material risks]
 ```

@@ -334,9 +334,9 @@ if ! ruby -ryaml -e '
     workflow_integrity_missing+=("v14 workflow contracts do not enforce all-excluded map eligibility, stable alternative identity, or verified quality evidence identity")
 fi
 for file_and_term in \
-    "$workflow_skill::Migration: v14.0" \
-    "$workflow_skill::selected_alternative_id" \
-    "$workflow_skill::quality_scenario_id" \
+    "$workflow_skill::references/legacy-compatibility.md" \
+    "$workflow_dir/references/legacy-compatibility.md::selected_alternative_id" \
+    "$workflow_dir/references/legacy-compatibility.md::quality_scenario_id" \
     "$workflow_dir/references/architecture-decision-pack.md::alternative_id" \
     "$workflow_dir/references/architecture-decision-pack.md::verification_id" \
     "$workflow_dir/references/progressive-discovery.md::all-excluded route"; do
@@ -494,17 +494,8 @@ fi
 if ! grep -Fq 'schema_version: "4.0"' "$docs_input_contract"; then
     docs_architecture_missing+=("assistant-docs input v4 schema_version")
 fi
-for term in \
-    'v4 replaces the v3 `feature_preparation_evidence_refs: string[]` transport' \
-    '`{evidence_ref, item_id, claim_or_question}` bindings' \
-    'v3 consumers must migrate each carried behavior claim or Product question' \
-    'v3 adds feature-preparation completeness for ordinary and Pack-backed documentation' \
-    'Existing v2 behavior keeps files_updated required/non-empty for ordinary and current-Pack documentation' \
-    'permits omission for typed no-write recovery' \
-    'Pack projections require non-empty boundaries and exact five-concern design-pressure coverage' \
-    'v1 consumers must adapt before accepting v2'; do
-    if ! grep -Fq -- "$term" "$docs_skill"; then docs_architecture_missing+=("assistant-docs v3 migration note: $term"); fi
-done
+# Schema v4 and exact projection/recovery checks above preserve the consumed interface.
+# Ordinary documentation roots no longer carry the full v1-v4 migration history.
 for case_and_term in \
     'architecture-doc-missing-pack-recovery|architecture_decision_pack_status=missing' \
     'architecture-doc-missing-pack-recovery|outcome=blocked_missing_pack' \
@@ -537,7 +528,6 @@ for forbidden in 'outcome=documented' 'source_pack_ref=' documented_decision_ref
 done
 for file_and_term in \
     "$docs_skill::architecture_decision_pack_trace" \
-    "$docs_skill::Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack" \
     "$docs_architecture_reference::architecture_decision_pack_trace" \
     "$docs_architecture_reference::Never reconstruct, infer, or invent a missing or stale Architecture Decision Pack" \
     "$docs_evals::architecture-doc-pack-backed-decision-trace" \
@@ -691,21 +681,16 @@ else
     pass
 fi
 
-test_start "workflow v14 migration preserves current decisions and inherited producer contracts"
-migration_note="$(awk '
-    /^Migration: v14[.]0([[:space:]]|$)/ { inside = 1 }
-    inside && /^## / { exit }
-    inside { print }
-' "$workflow_skill")"
-if ! grep -Fq 'Migration: v14.0' <<<"$migration_note" \
-    || ! grep -Fq 'Before Build, older packets need a current verification decision and matching TDD projection' <<<"$migration_note" \
-    || ! grep -Fq 'never infer historical checks or RED' <<<"$migration_note" \
-    || ! grep -Fq 'Pack `selected_alternative_id` stays stable' <<<"$migration_note" \
-    || ! grep -Fq 'verified `quality_scenario_id` resolves verification identity' <<<"$migration_note" \
-    || ! grep -Fq '`review_result` retains canonical refs' <<<"$migration_note" \
-    || ! grep -Fq '`downstream_bound` before Build' <<<"$migration_note" \
-    || ! grep -Fq 'material invalidation clears refs through refresh, re-plan and reapproval' <<<"$migration_note"; then
-    fail "v14 migration note omits current decision, TDD, or historical-evidence boundaries"
+test_start "workflow v14 compatibility preserves current decisions and inherited producer contracts"
+workflow_compatibility="$workflow_dir/references/legacy-compatibility.md"
+if ! p0p4_contains_text "$workflow_skill" "references/legacy-compatibility.md" \
+    || ! p0p4_contains_text "$workflow_compatibility" "current verification decision and matching TDD projection, never inferred checks or RED" \
+    || ! p0p4_contains_text "$workflow_compatibility" 'Pack `selected_alternative_id` remains stable' \
+    || ! p0p4_contains_text "$workflow_compatibility" 'verified `quality_scenario_id` resolves verification identity' \
+    || ! p0p4_contains_text "$workflow_compatibility" '`review_result` retains canonical references' \
+    || ! p0p4_contains_text "$workflow_compatibility" '`downstream_bound` before Build' \
+    || ! p0p4_contains_text "$workflow_compatibility" 'Material invalidation clears them through refresh, re-plan, and reapproval'; then
+    fail "workflow compatibility omits current decision, TDD, or historical-evidence boundaries"
 elif ! ruby -ryaml -e '
     expected = YAML.load_file(ARGV.first).fetch("schema_version")
     ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == expected }
@@ -741,9 +726,9 @@ elif ! ruby -ryaml -e '
     end
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
     fail "v14 migration loses canonical header, semantic-inspection, contributor, or argv contracts"
-elif ! grep -Fq 'assistant-review owns Reviewer/QAEvaluator handoffs' "$workflow_skill" \
-    || ! grep -Fq 'subagent_trigger_scope' "$workflow_skill"; then
-    fail "workflow root loses review ownership or trigger-based delegation"
+elif ! grep -Fq 'assistant-review/contracts/handoffs.yaml' "$workflow_handoffs" \
+    || ! grep -Fq 'subagent_trigger_scope' "$input_contract"; then
+    fail "workflow consumer contracts lose review ownership or trigger-based delegation"
 else
     pass
 fi
@@ -1047,7 +1032,7 @@ if ! p0p4_contains_text_ci "$architecture_pack_reference" \
     || ! p0p4_contains_text_ci "$architecture_pack_reference" \
         'explicitly accepting a displayed recommendation counts as a user answer' \
     || ! p0p4_contains_text_ci "$phases_reference" \
-    'automatically apply only source-backed technical defaults; record topic, value, source, and rationale' \
+    'Apply only source-backed technical defaults automatically, retaining topic, value, source, and rationale in existing criteria/state.' \
     || ! grep -Fq -- 'auto-apply source-backed technical defaults; never default new material choices.' <<<"$discover_block" \
     || ! grep -Fq -- 'Apply evidenced defaults without confirmation; ask and await explicit answers for new material choices.' <<<"$discover_block"; then
     fail "Discover omits recorded source-backed technical defaults or its no-confirmation and explicit-choice boundary"
@@ -1087,7 +1072,7 @@ if grep -Fq "$old_pipeline" "$FRAMEWORK_DIR/README.md"; then
     fail "README still advertises the obsolete linear workflow"
 elif [[ "${#missing_readme_terms[@]}" -ne 0 ]]; then
     fail "README lacks adaptive workflow terms: ${missing_readme_terms[*]}"
-elif ! grep -Fq 'there is no separate runtime router or lifecycle enforcement layer' "$FRAMEWORK_DIR/README.md"; then
+elif ! tr '\n' ' ' < "$FRAMEWORK_DIR/README.md" | sed 's/[[:space:]][[:space:]]*/ /g' | grep -Fq 'there is no separate runtime router or lifecycle enforcement layer'; then
     fail "README does not preserve the provider-native routing boundary"
 else
     pass
@@ -1122,7 +1107,7 @@ test_start "workflow architecture decision pack is conditional, typed, fresh, an
 architecture_pack="$workflow_dir/references/architecture-decision-pack.md"
 architecture_pack_failures=()
 for file_and_term in \
-    "$workflow_skill::architecture_design_mode" \
+    "$workflow_dir/references/architecture-decision-pack.md::architecture_design_mode" \
     "$workflow_index::architecture_design" \
     "$input_contract::architecture_design_trigger_reasons" \
     "$output_contract::- name: architecture_decision_pack" \
@@ -1140,7 +1125,7 @@ for file_and_term in \
     "$workflow_dir/references/task-journal-template.md::Architecture Decision Pack" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/review-checklists.md::Architecture Decision Pack Review Checklist" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json::architecture-pack-resists-premature-abstraction" \
-    "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md::Architecture Decision Pack and skill surface audit"; do
+    "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md::When architecture decisions are material"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
@@ -1490,106 +1475,93 @@ else
     fail "plan-mode-none Discover transition gaps: ${discover_no_plan_binding_failures[*]}"
 fi
 
-test_start "onboarding project size gates inspected architecture candidates"
-onboard_input="$FRAMEWORK_DIR/skills/assistant-onboard/contracts/input.yaml"
-onboard_output="$FRAMEWORK_DIR/skills/assistant-onboard/contracts/output.yaml"
-onboard_size_failures=()
-ruby -ryaml -e '
-    input = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |field| [field["name"], field] }
-    output = YAML.load_file(ARGV.fetch(1)).fetch("artifacts").to_h { |artifact| [artifact["name"], artifact] }
-    input_has_project_size = input.key?("project_size")
-    project_size = output["project_size"]
-    candidates = %w[semantic_type_candidates design_pressure_candidates].map { |name| output[name] }
-    valid = !input_has_project_size && project_size && project_size["required"] == true && project_size["enum_values"] == %w[small medium large] && candidates.all? do |field|
-      field && field["required"] == "conditional" && field["condition"] == "project_size in [medium, large]" && field["on_fail"] && field["validation"].include?("explicit []")
-    end
-    exit valid ? 0 : 1
-' "$onboard_input" "$onboard_output" || onboard_size_failures+=("scan-derived output project_size and medium/large inspected candidate requirements")
-if ! ruby -e '
-    def valid?(project_size, candidates_present)
-      return true if project_size == "small"
-      candidates_present
-    end
-    exit valid?("medium", false) || !valid?("medium", true) || valid?("large", false) || !valid?("large", true) || !valid?("small", false) ? 1 : 0
-'; then
-    onboard_size_failures+=("medium/large omission, inspected empty, and small omission lifecycle")
-fi
-if ! rg -Fq -- 'discover_only with context_or_journal_ref only and forbids future refs' "$workflow_dir/references/phases.md"; then
-    onboard_size_failures+=("Discover reference requires discover_only context-only binding")
-fi
-if [[ ${#onboard_size_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "assistant-onboard project-size contract gaps: ${onboard_size_failures[*]}"
-fi
-
-test_start "onboarding project size is surface-scan-derived and generic medium eval is coherent"
-onboard_project_size_failures=()
-if ! rg -Fq -- 'surface-scan-derived' "$onboard_output"; then
-    onboard_project_size_failures+=("output project_size must be surface-scan-derived")
-fi
-if ! jq -e '
-    .cases[] | select(.id == "new-repo-onboarding-produces-orientation") |
-    (.setup_context | index("The surface scan classifies the repository as medium.")) and
-    (.expected_behavior | index("Returns project_size=medium.")) and
-    (.machine_expectations.required_substrings | index("project_size=medium")) and
-    ([.pass_criteria[], .expected_behavior[]] | join(" ") | contains("small projects") | not)
-' "$FRAMEWORK_DIR/skills/assistant-onboard/evals/cases.json" >/dev/null; then
-    onboard_project_size_failures+=("generic medium onboarding eval must not use small-project candidate semantics")
-fi
-if [[ ${#onboard_project_size_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "onboarding surface-derived project-size regressions: ${onboard_project_size_failures[*]}"
-fi
-
-onboard_small_eval_runner_proof() {
-    local temporary_skill_dir="$1"
-    local responses_dir="$2"
-    local response="$3"
-    local response_path="$responses_dir/assistant-onboard/small-onboarding-may-omit-architecture-candidates.txt"
-    local runner_output
-
-    printf '%s\n' "$response" >"$response_path"
-    if ! runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill_dir" 2>&1)"; then
-        return 1
-    fi
-
-    grep -Fq $'PASS\tassistant-onboard\tsmall-onboarding-may-omit-architecture-candidates' <<<"$runner_output" \
-        && grep -Fq 'Summary: total=1 passed=1 failed=0' <<<"$runner_output"
-}
-
-test_start "small onboarding eval accepts omitted or inspected candidate arrays"
-onboard_small_eval="$FRAMEWORK_DIR/skills/assistant-onboard/evals/cases.json"
-onboard_small_eval_failures=()
-if ! jq -e '
-    .cases[] | select(.id == "small-onboarding-may-omit-architecture-candidates") |
-    (.machine_expectations.required_substrings | index("may omit") | not) and
-    (.expected_behavior | index("May omit semantic_type_candidates and design_pressure_candidates.")) and
-    (.pass_criteria | index("The response keeps the orientation proportional to a small project."))
-' "$onboard_small_eval" >/dev/null; then
-    onboard_small_eval_failures+=("small fixture turns optional candidate arrays into a required literal")
-fi
-onboard_small_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/onboard-small-eval.XXXXXX")"
-p0p4_register_cleanup "$onboard_small_eval_root"
-onboard_small_temp_skill="$onboard_small_eval_root/assistant-onboard"
-onboard_small_responses="$onboard_small_eval_root/responses"
-mkdir -p "$onboard_small_temp_skill/evals" "$onboard_small_responses/assistant-onboard"
-cp "$FRAMEWORK_DIR/skills/assistant-onboard/SKILL.md" "$onboard_small_temp_skill/SKILL.md"
-jq '
-    .cases = [.cases[] | select(.id == "small-onboarding-may-omit-architecture-candidates")]
-' "$onboard_small_eval" >"$onboard_small_temp_skill/evals/cases.json"
-for response in \
-    'project_size=small' \
-    $'project_size=small\nsemantic_type_candidates=[{"concept":"OrderId","evidence_ref":"src/order.rb"}]\ndesign_pressure_candidates=[{"concern":"representative_path","evidence_ref":"src/order.rb"}]'; do
-    if ! onboard_small_eval_runner_proof "$onboard_small_temp_skill" "$onboard_small_responses" "$response"; then
-        onboard_small_eval_failures+=("actual eval runner rejects a compliant small response")
+test_start "onboarding keeps scoped evidence and persistence authorization"
+onboard_skill="$FRAMEWORK_DIR/skills/assistant-onboard/SKILL.md"
+onboard_scope_failures=()
+for term in \
+    "Keep onboarding read-only for production code" \
+    "key paths and their roles, entry points, commands, conventions" \
+    "do not claim full coverage from a sample" \
+    "Do not create orientation or memory files unless the user or applicable project policy authorizes persistence" \
+    "project size does not require candidate arrays or a redesign"; do
+    if ! p0p4_contains_text "$onboard_skill" "$term"; then
+        onboard_scope_failures+=("missing onboarding safeguard: $term")
     fi
 done
-if [[ ${#onboard_small_eval_failures[@]} -eq 0 ]]; then
+# This is a workflow consumer requirement, independent of optional onboarding output.
+if ! p0p4_contains_text "$workflow_dir/references/architecture-decision-pack.md" '`context_or_journal_ref`; discover_only forbids invented `plan_or_task_packet_ref` and `review_scope_ref`'; then
+    onboard_scope_failures+=("Discover reference requires discover_only context-only binding")
+fi
+if [[ ${#onboard_scope_failures[@]} -eq 0 ]]; then
     pass
 else
-    fail "small onboarding eval grader semantics regressions: ${onboard_small_eval_failures[*]}"
+    fail "onboarding scope/evidence gaps: ${onboard_scope_failures[*]}"
+fi
+
+test_start "onboarding fixtures require useful maps rather than size-driven arrays"
+onboard_eval="$FRAMEWORK_DIR/skills/assistant-onboard/evals/cases.json"
+if jq -e '
+    [.cases[] | select(.id == "new-repo-onboarding-produces-orientation" or
+                      .id == "medium-onboarding-requires-inspected-architecture-candidates" or
+                      .id == "small-onboarding-may-omit-architecture-candidates")] |
+    length == 3 and all(.[];
+        (.machine_expectations.required_substrings | index("commands")) and
+        (.machine_expectations.required_substrings | all(.[];
+            test("^(project_size=|semantic_type_candidates|design_pressure_candidates)") | not)))
+' "$onboard_eval" >/dev/null; then
+    pass
+else
+    fail "onboarding fixtures must require scoped map content without mandatory size or candidate arrays"
+fi
+
+onboard_eval_runner_proof() {
+    local temporary_skill_dir="$1"
+    local responses_dir="$2"
+    local case_id="$3"
+    local response="$4"
+    local expected_status="$5"
+    local runner_output
+
+    printf '%s\n' "$response" >"$responses_dir/assistant-onboard/$case_id.txt"
+    if runner_output="$("$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$responses_dir" --skill "$temporary_skill_dir" --case "$case_id" 2>&1)"; then
+        [[ "$expected_status" == PASS ]] || return 1
+    else
+        [[ "$expected_status" == FAIL ]] || return 1
+    fi
+    grep -Fq "$expected_status"$'\tassistant-onboard\t'"$case_id" <<<"$runner_output"
+}
+
+test_start "onboarding grader accepts scoped maps and rejects missing evidence or forced arrays"
+onboard_eval_failures=()
+onboard_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/onboard-map-eval.XXXXXX")"
+p0p4_register_cleanup "$onboard_eval_root"
+onboard_temp_skill="$onboard_eval_root/assistant-onboard"
+onboard_responses="$onboard_eval_root/responses"
+mkdir -p "$onboard_temp_skill/evals" "$onboard_responses/assistant-onboard"
+cp "$onboard_skill" "$onboard_temp_skill/SKILL.md"
+jq '.cases = [.cases[] | select(.id == "medium-onboarding-requires-inspected-architecture-candidates" or .id == "small-onboarding-may-omit-architecture-candidates")]' \
+    "$onboard_eval" >"$onboard_temp_skill/evals/cases.json"
+onboard_map='Purpose: a local order CLI. entry points: src/main.rb parses arguments and calls src/orders.rb. commands: ruby src/main.rb --help; ruby tests/orders_test.rb (from README). conventions: snake_case methods and result objects, seen in src/orders.rb. Risks: persistence writes require care. Gaps: deployment configuration was not inspected. No files written.'
+for case_id in medium-onboarding-requires-inspected-architecture-candidates small-onboarding-may-omit-architecture-candidates; do
+    if [[ "$case_id" == medium-* ]]; then
+        forbidden_claim='medium must return semantic_type_candidates'
+    else
+        forbidden_claim='small must return semantic_type_candidates'
+    fi
+    if ! onboard_eval_runner_proof "$onboard_temp_skill" "$onboard_responses" "$case_id" "$onboard_map" PASS; then
+        onboard_eval_failures+=("$case_id: useful scoped map rejected")
+    fi
+    if ! onboard_eval_runner_proof "$onboard_temp_skill" "$onboard_responses" "$case_id" 'project_size=small' FAIL; then
+        onboard_eval_failures+=("$case_id: size-only response accepted without map evidence")
+    fi
+    if ! onboard_eval_runner_proof "$onboard_temp_skill" "$onboard_responses" "$case_id" "$onboard_map $forbidden_claim" FAIL; then
+        onboard_eval_failures+=("$case_id: forced-array claim accepted")
+    fi
+done
+if [[ ${#onboard_eval_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "onboarding fixture controls failed: ${onboard_eval_failures[*]}"
 fi
 
 run_standard_pack_review_eval() {
@@ -1671,10 +1643,6 @@ for file_and_term in \
         standard_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
-if ! grep -Fq 'Migration: v14.0' "$workflow_skill" \
-    || ! grep -Fq '`review_result` retains canonical refs' "$workflow_skill"; then
-    standard_pack_review_failures+=("workflow v14 migration note does not describe standard Pack review retention")
-fi
 if ! jq -e '
     .cases[] | select(.id == "standard-pack-review-result-retains-checklist") |
     (.prompt | contains("Return the complete response as one valid JSON object")) and

@@ -44,7 +44,7 @@ For each threat found:
 - **Residual risk**: What remains after mitigation?
 
 ### Step 5: Detailed walkthrough (optional)
-For deeper analysis, load `references/prompts/threat-model.md` — it covers data flow, auth boundaries, input validation, secrets management, dependencies, and OWASP common vulnerabilities in detail.
+For deeper analysis, load `prompts/threat-model.md` — it covers data flow, auth boundaries, input validation, secrets management, dependencies, and OWASP common vulnerabilities in detail.
 
 ## Output format
 

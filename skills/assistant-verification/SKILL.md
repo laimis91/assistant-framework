@@ -5,54 +5,56 @@ description: "Analyze proportionate testing, validation, or evaluation for a cha
 
 # Verification Selection And Evidence Assessment
 
-## Contracts
+Choose the smallest credible checks for the requested outcome, or assess whether
+supplied evidence supports it. This skill selects and assesses; it does not run,
+dispatch, repair, retry, edit, or approve delivery.
 
-Read contracts/index.yaml first and load matching selectors. Canonical Analysis contracts are contracts/input.yaml, contracts/output.yaml, and contracts/phase-gates.yaml; they remain authoritative. Missing or invalid selectors require the full named contract. Load shared invariants at entry.
+## Method
 
-## Goal
+1. Identify the change, acceptance claims, affected boundaries, and plausible
+   wrong outcomes. Read relevant existing checks and results before adding work.
+2. Separate binding requirements, preferences, and capability limits. Preserve
+   exact mandate sources; do not waive a required check or invent a universal
+   count, ratio, coverage target, or test quota.
+3. Choose checks for distinct material claims. Reuse adequate current evidence;
+   add tests only for a real uncovered behavior or failure. Zero new tests still
+   needs evidence and meaningful exclusions. Choose scope, technique, and TDD
+   independently; meaningful RED is required only when TDD is active.
+4. Assess actual assertions, source/config identity, freshness, results, and
+   limitations. A phrase/schema/file-existence pass is structural evidence,
+   not proof of behavior or model quality. Missing, failed, partial, stale,
+   skipped, and unavailable observations remain gaps.
+5. Stop when binding checks and material claims have credible evidence. Expand
+   only for a new gap, change, failure, material risk, request, or mandate.
 
-For a named change, choose credible verification for material claims or assess supplied evidence. Return the canonical evidence_assessment and include verification_decision only for an actionable selection or a carried decision; create no task-state file.
+Use [selection.md](references/selection.md) for disputed policy, coverage, cost,
+or TDD selection and [evidence-quality.md](references/evidence-quality.md) for
+reused, ambiguous, or incomplete evidence. Load only the method being considered:
+[unit](references/methods/unit.md), [integration](references/methods/integration.md),
+[end-to-end](references/methods/end-to-end.md),
+[artifact validation](references/methods/artifact-validation.md),
+[behavioral evaluation](references/methods/behavioral-evals.md),
+[property/mutation](references/methods/property-and-mutation.md), or
+[performance/resilience](references/methods/performance-and-resilience.md).
 
-## Success Criteria
+## Consumed results
 
-- Capture outcome, changes, criteria, boundaries, policy, coverage, and results.
-- Select checks for distinct claims and credible failures; name oracles, prerequisites, exclusions, and evidence gaps.
-- Assess evidence scope, identity, freshness, and limitations.
+An ordinary human-only assessment can state the selected checks or evidence,
+conclusion, gaps, and next action concisely; no serialized object is required.
+When workflow, skill-creator, a carried decision, or an executable consumer needs
+structured results, load `contracts/index.yaml` and the applicable entry,
+selection/assessment, current-phase, and completion sets. Missing/invalid selectors
+load the full named contract. Preserve canonical `verification_decision`
+(CheckSpec/TddChoice) and `evidence_assessment` unchanged; do not create a task-state
+file or replacement schema. Human summaries need not dump these full objects.
 
-## Constraints
+For command checks, retain exact ID/argv/cwd. Bind result rows only to the selected
+IDs and exact `{kind,value,source_ref}` obligations their observed procedure
+supports. Preserve explicit required metrics/scopes/thresholds through an enforcing
+CheckSpec or report a policy gap and block dependent Build.
 
-- Resolve binding requirements, preferences, and capabilities without waiving mandates. Select scope, technique, and TDD independently: restrictions exclude automated scopes; requirements alone do not.
-- Do not invent universal/default counts, ratios, coverage targets, or default TDD. Preserve an explicit binding metric, scope, threshold, and source through a concrete `required_check` and enforcing CheckSpec, or report the policy gap. Zero new tests still needs adequate current/direct evidence.
-- Never execute, dispatch, repair, edit, retry, create controllers/ledgers, or replace domain validation, workflow completion, TDD, debugging, independent review, or conditional QA.
-
-## Phases
-
-Use CAPTURE → SELECT → ASSESS → RETURN. Load current_phase at each gate, selection or assessment when needed, and completion before returning. Selection without results is planned; assessment without results remains explicit.
-
-Load only the selected method reference, before relying on it. Each method is linked directly with its trigger:
-
-- [Unit checks](references/methods/unit.md) — isolated behavior or boundary logic.
-- [Integration checks](references/methods/integration.md) — cooperating components or a real serialization, storage, configuration, or dependency boundary.
-- [End-to-end checks](references/methods/end-to-end.md) — a complete observable user or system journey.
-- [Artifact validation](references/methods/artifact-validation.md) — documents, data, configuration, media, or other generated outputs.
-- [Behavioral evaluations](references/methods/behavioral-evals.md) — prompts, skills, plugins, agents, or nondeterministic behavior.
-- [Property and mutation techniques](references/methods/property-and-mutation.md) — broad input invariants or a specific oracle-quality concern.
-- [Performance and resilience checks](references/methods/performance-and-resilience.md) — a stated quality target or credible load/failure concern.
-
-Use references/selection.md for policy, coverage, cost, and stop rules; references/evidence-quality.md for ambiguous, reused, or incomplete evidence. assistant-tdd owns active RED–GREEN–REFACTOR, assistant-debugging owns unknown-cause reproduction, and domain specialists own domain rules.
-
-## Output
-
-Return `verification_decision` only for an actionable selection or a carried decision.
-Before Build, visibly return the full actionable decision with CheckSpecs/TddChoice
-unchanged. If a binding mandate cannot be represented, omit the actionable decision,
-return `evidence_assessment.status=blocked` with the exact conflict, and prevent Build.
-Selection-only without results is `planned` with no refs; a requested assessment with
-missing or inadequate evidence is `insufficient` or `blocked`, never `planned`. After
-results, return actual refs, status, gaps, and exclusions. Workflow carries applicable
-keys inline through completion. Missing, failed, stale, partial, skipped, or unavailable
-evidence is insufficient or blocked as appropriate.
-
-## Stop Rules
-
-Stop when binding obligations and material claims have credible evidence. Expand for a new gap, change, failure, material risk, request, or binding check. Sufficient does not claim review, delivery approval, or proof of every possible fault.
+Selection without results is planned; a requested assessment without adequate
+results is insufficient or blocked. Sufficient closes the named scope and due
+checks, with exclusions; it does not establish independent review or delivery
+approval. assistant-debugging owns unknown causes, assistant-tdd owns active TDD,
+and domain specialists retain their rules.

@@ -1,6 +1,6 @@
 # Subagent Role Definitions
 
-Reference for dispatching subagents through the active runtime's agent mechanism. When the framework's custom agents are installed (`~/{agent_state_dir}/agents/`), dispatch by the configured agent name — each agent carries its own system prompt, tool restrictions, and provider-specific model settings when that runtime supports them. Do not assume every runtime exposes a Claude-style `Agent` tool or `subagent_type` parameter.
+Reference for dispatching subagents through the active runtime's agent mechanism. When the framework's custom agents are installed (`~/{agent_state_dir}/agents/`), dispatch by the configured agent name — each agent carries its own system prompt, tool restrictions, and provider-specific model settings when that runtime supports them.
 
 ## Model selection guidance
 
@@ -22,41 +22,7 @@ If the runtime does not expose model overrides for subagents, keep the role sepa
 
 ## Installed agents
 
-When custom agents are installed, dispatch by name. The agent's own configuration handles everything; the runtime syntax differs:
-
-### Claude Code
-
-Claude exposes the `Agent` tool with `subagent_type` values matching installed agent names:
-
-```
-Agent(subagent_type="code-reviewer", prompt="Review the changes in {files}. This is round {N}...")
-Agent(subagent_type="reviewer", prompt="Compatibility route: review the changes in {files}. This is round {N}...")
-Agent(subagent_type="qa-evaluator", prompt="Evaluate acceptance for {task}. This is QA round {N}...")
-Agent(subagent_type="explorer", prompt="Trace execution paths for {feature}...")
-Agent(subagent_type="architect", prompt="Design implementation for {feature}...")
-Agent(subagent_type="code-mapper", prompt="Map the structure around {area}...")
-Agent(subagent_type="intelligent-writer", prompt="Author selected tests and implement the following plan: {plan}...")
-Agent(subagent_type="mechanical-writer", prompt="Apply fully specified tests and implementation with validated eligibility: {plan}...")
-Agent(subagent_type="code-writer", prompt="Explicit deprecated intelligent compatibility request: {plan}...")
-Agent(subagent_type="builder-tester", prompt="Build and test the project...")
-```
-
-### Codex
-
-Current Codex CLI/app releases support native subagent workflows by default. Codex custom agents are standalone TOML files under `~/.codex/agents/` for personal agents or `.codex/agents/` for project-scoped agents. Ask Codex to spawn the configured agent by name; do not look for a visible Claude-style `Agent` tool or `subagent_type` parameter before deciding delegation is available:
-
-```
-Spawn the code-reviewer agent to review the changes in {files}. This is round {N}...
-Spawn the reviewer agent only as compatibility routing for existing handoffs...
-Spawn the qa-evaluator agent to evaluate acceptance for {task}. This is QA round {N}...
-Spawn the explorer agent to trace execution paths for {feature}...
-Spawn the architect agent to design implementation for {feature}...
-Spawn the code-mapper agent to map the structure around {area}...
-Spawn the selected intelligent-writer (default) or evidence-qualified mechanical-writer agent to implement the following plan: {plan}...
-Spawn the builder-tester agent to build and test the project...
-```
-
-Codex global `[agents]` settings such as `max_threads` and `max_depth` are optional limits; absence of those settings is not proof that subagents are unavailable.
+Dispatch the configured role through the active runtime's supported delegation mechanism. Resolve triggers and evidenced fallback through [Delegation Policy State](subagent-dispatch.md#delegation-policy-state).
 
 The prompt you provide is the **task context** — what to do, not how to do it. The agent's built-in system prompt handles the "how."
 
@@ -77,7 +43,7 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 
 | Size | Agents used | Flow |
 |---|---|---|
-| **Small** | Bounded executor → Code Reviewer, or separated workers when triggered | Sequential, minimal (no Decompose); QA only when explicitly requested |
+| **Small** | Light: direct implementation and fresh self-review; standard/strict: selected Build lane → Code Reviewer | No Decompose; expanded impact retains canonical review evidence; QA only when required |
 | **Medium** | Code Mapper when mapping is needed → Architect only for design uncertainty → bounded executor → Code Reviewer → QA Evaluator when required | Ordinary default; add Builder/Tester only for separated_workers triggers |
 | **Large** | Code Mapper/Explorer/Architect only for concrete uncertainty → selected Build lane → Code Reviewer → QA Evaluator when required | Use bounded_executor or separated_workers as selected, with slice verification; Reviewer is compatibility routing |
 | **Mega** | Code Mapper/Explorer/Architect only for concrete mapping/lifecycle/Pack uncertainty; Build roles follow the selected lane | Use the selected bounded_executor or separated_workers Build lane, then independent Code Reviewer, with QA Evaluator only when required at integration. Source-changing packets are sequential in shared or unknown workspaces; parallel Writers require runtime proof of isolated workspaces. Independent read-only analysis may run in parallel. |
@@ -96,12 +62,17 @@ Report at 80%+ confidence only.
 
 **Round N > 1:**
 ```
-Use the code-reviewer agent. This is review round {N}.
-The following {count} items were already found and fixed — do NOT re-report them:
-{previously_fixed list}
-Focus ONLY on NEW high-confidence findings.
+Use the code-reviewer agent. This is review round {N} of 10.
+Discovery passes receive the current snapshot and assigned scope with no prior findings.
+Only the designated closure_verification pass receives the immutable pre-fix ledger
+as previously_fixed and verifies those findings against the current snapshot.
+Keep discovery passes isolated from sibling results and return the canonical Reviewer schema.
 Confidence threshold: Round 1-3: 80%+ | Round 4-7: 85%+ | Round 8-10: 90%+
 ```
+
+Follow the [review loop](../../assistant-review/references/review-loop.md) and
+[review handoffs](../../assistant-review/contracts/handoffs.yaml) for discovery,
+closure, additional-round evidence, and return fields.
 
 ## QA Evaluator dispatch (QA rounds)
 
@@ -133,7 +104,7 @@ Round 10 is terminal; return the final verdict instead of implying round 11.
 
 For missing new Claude or Codex writer definitions, report a deployment mismatch and stop; never silently use a nearest generic worker. Explicit legacy `code-writer` requests and separately authorized bootstrap execution record their real runtime identity. For other supported provider fallbacks, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
 
-| Role | Fallback subagent_type | Recommended tier |
+| Role | Supported fallback role | Recommended tier |
 |---|---|---|
 | Code Mapper | `Explore` or nearest read-only explorer | Fast / economical |
 | Explorer | `Explore` or nearest read-only explorer | Balanced / standard |

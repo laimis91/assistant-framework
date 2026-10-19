@@ -1,12 +1,12 @@
 # Harness Patterns for Loop-Based Process Skills
 
-Reference pack for `assistant-skill-creator`. Load this when designing a
-**Process** skill that includes a long-running controller, subagent dispatch,
-multi-round review, QA/acceptance evaluation, retry loops, or autonomous
-fix-verify cycles.
+Reference pack for `assistant-skill-creator`. Load only patterns needed by an
+actual long-running controller, delegated consumer, or review/QA loop. These
+are existing producer formats to reuse when consumed, not an artifact checklist
+for every Process skill. Keep ordinary single-pass instructions small.
 
-Skip this reference for single-pass Utility skills or Analysis skills without
-delegation or loop control.
+Bounds, approval, error handling, and review/QA separation remain requirements
+when those operations occur; the category alone does not require a schema.
 
 ---
 

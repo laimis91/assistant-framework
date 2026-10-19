@@ -48,30 +48,15 @@ Track down a cross-cutting technical issue:
 
 1. **Define scope and question** — What specifically do we need to know? Why?
 2. **Plan sources** — Which sources are most likely to have answers?
-3. **Execute** — Search, read, cross-reference (use Research tool for parallel gathering)
+3. **Execute** — Search, read, and cross-reference relevant sources
 4. **Verify** — Cross-validate claims, verify URLs, check dates
 5. **Synthesize** — Answer the question with confidence levels
 6. **Document** — Present findings with their source evidence and confidence
 
-## Output format
+## Output
 
-```
-INVESTIGATION: [subject]
-Scope: [what and why]
-Date: [YYYY-MM-DD]
-
-SUMMARY
-[2-3 sentence executive summary]
-
-FINDINGS
-[Organized by sub-topic, each with confidence level]
-
-ASSESSMENT
-Strengths: [...]
-Risks: [...]
-Recommendation: [...]
-
-SOURCES
-- [source 1 — verified]
-- [source 2 — verified]
-```
+Answer the investigation question with the important findings, supporting sources,
+and material confidence limits. Include strengths, risks, and a recommendation
+only when relevant to the request; omit empty sections. An existing structured
+consumer still receives its declared output, rather than imposing that format
+on every human response.

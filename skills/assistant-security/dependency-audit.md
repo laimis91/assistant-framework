@@ -10,7 +10,9 @@ Analyze project dependencies for known vulnerabilities and supply chain risks.
 
 ## Process
 
-### Step 1: Run built-in scanners
+### Step 1: Use available relevant checks
+
+Choose installed/repo-native tools for the dependency scope. The examples below are alternatives, not required installs. Network access or a lock-file install must stay within authorization.
 
 **.NET:**
 ```bash
@@ -43,7 +45,7 @@ For each finding:
 
 ### Step 3: Assess supply chain risk
 
-For each critical dependency (top 10 by importance):
+For dependencies whose supply chain exposure matters to this scope:
 - **Maintainer activity**: Last commit, release frequency
 - **Bus factor**: How many active maintainers?
 - **Download trend**: Growing, stable, or declining?

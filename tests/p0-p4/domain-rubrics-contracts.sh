@@ -56,12 +56,12 @@ for file_and_term in \
     "$review_dir/references/qa-evaluation-loop.md::selected_domain_rubrics" \
     "$review_dir/references/qa-evaluation-loop.md::domain_quality_scores" \
     "$review_dir/references/qa-evaluation-loop.md::Do not invent domain rubrics" \
-    "$review_dir/SKILL.md::references/domain-rubrics.md\` only when" \
-    "$review_dir/SKILL.md::selected_domain_rubrics/domain_quality_scores when scoped" \
-    "$review_dir/SKILL.md::Code Reviewer still owns code defects"; do
+    "$review_dir/SKILL.md::[domain-rubrics.md](references/domain-rubrics.md) only for scoped domain quality" \
+    "$review_dir/contracts/handoffs.yaml::condition: \"selected_domain_rubrics is non-empty\"" \
+    "$workflow_dir/references/review-qa-router.md::Code Reviewer owns code defects, security, architecture, test coverage"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         domain_loop_failures+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done

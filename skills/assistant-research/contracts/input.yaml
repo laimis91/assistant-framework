@@ -1,5 +1,12 @@
+# Applicability: retained v3 structured consumers, persisted packets, handoffs,
+# and the existing five-lens audit/eval fixture. Numeric tier/source-count rules
+# below are compatibility-fixture rules, not ordinary claim-confidence policy.
+# Human-only source research uses claim-specific evidence and concise output.
+# Selected five-lens work still requires five sibling-blind lenses, root
+# synthesis, separate peer review, material follow-ups, and honest limits.
+
 # Research Input Contract
-# Resolve these fields before starting any research activity.
+# Resolve these fields for a structured v3 consumer or audit/eval fixture.
 
 schema_version: "3.0"
 contract: input
@@ -44,9 +51,10 @@ fields:
     description: "Method."
     on_missing: infer
     infer_from: >
-      Simple lookup, direct facts, or ordinary source collection → source_research.
-      Decision support, due diligence, strategy, investing/trading, architecture, vendor/tool evaluation,
-      unfamiliar domains, controversial/hyped topics, or prompts asking for deep understanding → five_lens_briefing.
+      Default factual research, comparisons, and deep understanding → source_research.
+      Explicit five-lens request, or a consequential contested decision whose independent
+      perspectives, contradiction mapping, and peer critique justify the cost → five_lens_briefing.
+      Broad topic labels or high stakes alone do not select this method.
 
   - name: user_role_or_goal
     type: string

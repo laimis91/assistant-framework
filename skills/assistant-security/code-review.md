@@ -15,7 +15,7 @@ Identify what to review:
 - Changed files (from git diff or plan steps)
 - Focus areas: input handling, auth checks, data access, output encoding, error handling
 
-### Step 2: Check each category
+### Step 2: Check relevant categories
 
 **Injection (SQL, Command, LDAP, XSS)**
 - Are all database queries parameterized? (No string concatenation in SQL)
@@ -55,7 +55,9 @@ Identify what to review:
 - Are secrets in environment variables, not code?
 - Is TLS enforced for all external communication?
 
-### Step 3: Report findings
+### Step 3: Report evidence-backed findings
+
+Use the root finding requirements: redacted evidence, reachable attack path, impact, severity, remediation, and verification. The table below is a presentation aid; include only assessed categories and material findings.
 
 ## Output format
 

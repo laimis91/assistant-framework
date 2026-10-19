@@ -13,7 +13,7 @@
     {"user_request": "Summarize already approved review findings without inspecting code.", "should_activate": false}
   ],
   "recommended_use": [
-    "Run each case with the assistant-review skill instructions loaded.",
+    "Run each case with the assistant-review skill instructions loaded. Cases mapped by canonical_review_finding_rule_distillation_expectations explicitly consume its retained all-ID compatibility envelope; ordinary human reviews distill only evidenced recurring/high-impact gaps.",
     "Compare the local response against the review loop entry, findings, fix, validate, and exit contracts.",
     "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
   ],
@@ -1897,7 +1897,7 @@
       "id": "review-finding-distills-permanent-rule-candidates",
       "title": "Review finding distills permanent rule candidates",
       "category": "review_finding_rule_distillation",
-      "purpose": "Checks that assistant-review classifies blocker and must-fix findings into one-off fixes versus permanent rule candidates instead of only patching the current PR.",
+      "purpose": "Checks that assistant-review classifies an evidenced recurring fake-pass gap as a permanent rule candidate without requiring rule distillation for every finding.",
       "prompt": "Review a framework PR where an eval passes with checklist headings only and misses a planted contract failure. Report blockers and whether any finding should become a permanent framework rule.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
@@ -1909,7 +1909,7 @@
       "expected_behavior": [
         "Loads or applies references/review-finding-permanent-rule.md.",
         "Reports the current blocker with evidence, impact, recommendation, and confidence.",
-        "Adds Review Finding Rule Distillation for blocker and must-fix findings.",
+        "Adds Review Finding Rule Distillation for the evidenced recurring fake-pass blocker; severity alone does not require classification.",
         "Classifies the fake-pass eval gap as permanent_rule_candidate rather than only one_off_fix.",
         "Classifies one-off issues as one_off_fix when they are not recurring rule candidates.",
         "Rejects or defers style nits instead of promoting them as permanent rules.",
@@ -1929,7 +1929,7 @@
         "Promotes a pure style nit as a permanent rule.",
         "Omits verification/eval update for the rule.",
         "Treats checklist-heading-only eval passing as acceptable.",
-        "Skips classification for blocker or must-fix findings."
+        "Skips classification of the evidenced recurring fake-pass gap."
       ],
       "machine_expectations": {
         "required_substrings": [

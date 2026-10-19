@@ -9,104 +9,55 @@ requires:
 
 # Evidence-First Debugging
 
-## Goal
-
-Find and fix the real cause of a failure with the smallest durable change and
-evidence that explains the symptom, cause, fix, and verification.
-
-## Success Criteria
-
-- The symptom and expected behavior are explicit.
-- Reproduction evidence exists, or an exact blocker explains why it cannot.
-- Competing hypotheses are tested and disconfirming evidence is retained.
-- Root cause is supported by code, config, or runtime evidence.
-- Verification covers the original failure path and every selected and binding check; a regression test is required only when selected by verification policy.
-- When a repair can affect another consumer, record compact change-impact
-  applicability evidence. Only shared, materially unresolved, or explicitly
-  carried expanded repairs use the bounded artifact through verification;
-  source fixes do not relabel a symptom-only assessment as completion evidence.
-
-## Constraints
-
-- Use local, company-safe diagnostics by default; redact secrets and private data.
-- Ask before destructive, production-affecting, network, migration, or sensitive-data diagnostics.
-- Do not patch from a guess or claim root cause when evidence supports only mitigation.
-- Ask for missing context only when it materially blocks safe reproduction or isolation.
-
-## Progressive Contract Loading
-
-Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`,
-`contracts/phase-gates.yaml`, and `contracts/handoffs.yaml`.
-
-Read `contracts/index.yaml` first. Canonical contracts remain authoritative, but
-load only the boundary currently being enforced:
-
-- `entry` for symptom, scope, reproduction target, safety, and edit permission;
-- `current_phase` for SCOPE, REPRODUCE, HYPOTHESIZE, ISOLATE, FIX, or VERIFY;
-- `fix_verification` before a code fix, for the canonical verification decision and FIX gate;
-- `change_impact` when a diagnosis, repair, cosmetic, or locality claim affects consumer
-  verification; and
-- `selected_handoff` only when investigation or fix delegation is selected; and
-- `completion` only for the artifact being returned.
-
-If a selector is missing or invalid, load the full named canonical contract.
-Do not load every contract at entry.
-
-Migration: debugging contracts are v2.0. Before resuming a persisted v1.1 fix,
-refresh its verification decision through `assistant-verification`; never infer
-the old check set or RED evidence.
-
-## Ownership
-
-assistant-debugging owns diagnosis until the failure mechanism is reproducible
-or bounded strongly enough for a fix. Generic workflow may coordinate planning,
-delegation, and review, but specialist gates are authoritative.
+Explain the failure with evidence, then make the smallest authorized durable fix.
+A diagnosis-only request authorizes investigation, not source changes.
 
 ## Method
 
-1. **SCOPE** — capture symptom, expected behavior, affected path, recent changes,
-   constraints, and severity.
-2. **REPRODUCE** — run the smallest safe failing test/command or record the exact
-   blocker with available log/code/config evidence.
-3. **HYPOTHESIZE** — keep at least three plausible causes unless evidence
-   justifies fewer. Rank by likelihood, diagnostic cost, and blast radius.
-4. **ISOLATE** — run the cheapest high-signal check first. Track supporting and
-   disconfirming evidence until one cause predicts the symptom and fix.
-5. **FIX** — resolve the unchanged decision through `assistant-verification`
-   before mutation; add or extend a test only when selected. Derive
-   `tdd_applies` from the selected/applicable ID intersection. When true, route
-   through `assistant-tdd` and its existing `execution_lane`; do not dispatch
-   the generic fixer or edit before authorizing RED. Only `tdd_applies=false`
-   permits the generic fix path. Label uncertain emergency changes as
-   mitigations.
-6. **VERIFY** — run every selected and binding check against the fix, including
-   the original failure path. Active TDD is fixed only after the complete
-   current canonical cycle and due checks pass. Preserve exclusions and
-   unresolved gaps; do not substitute an unselected full suite.
+1. **Bound and reproduce.** Establish observed versus expected behavior, affected
+   path, recent changes, and diagnostic safety. Run the smallest safe reproduction
+   or record the concrete blocker and available logs/code/config evidence.
+2. **Test plausible causes.** Rank causes by evidence, diagnostic value, cost,
+   and safety. Use checks that distinguish them; retain disconfirming results.
+   There is no hypothesis quota. If all are refuted, gather new evidence.
+3. **Fix when authorized.** Do not patch from a guess. Before a fix or mutation
+   dispatch, use assistant-verification and preserve its decision, selected IDs,
+   and binding obligations. Active TDD routes through assistant-tdd's execution
+   lane and meaningful authorizing RED; the generic fixer is only for inactive
+   TDD. Label an uncertain emergency change as mitigation.
+4. **Verify the original path.** Run the original reproduction and selected/
+   binding checks against the fix. Preserve unavailable, partial, failed, and
+   skipped results as gaps. Use assistant-review for non-trivial or risky fixes.
+   An active TDD fix needs the complete current canonical cycle.
 
-When change impact is triggered, load `references/change-impact.md`. The
-common checker is resolved from the active installation, so standalone
-debugging does not depend on assistant-workflow being installed.
+## Boundaries and handoffs
 
-For an unknown-cause failure, use `assistant-debugging` before verification
-selection. Once the mechanism is understood, resolve the check scope and TDD
-choice through `assistant-verification`. When the current fix's
-`selected_check_ids` intersect
-`verification_decision.tdd_choice.applicable_check_ids`, carry the unchanged
-decision, IDs, bindings, reproduction, cause, and scope through
-`assistant-tdd` before mutation; it selects its existing `execution_lane`.
-`debugging_fix` is only for `tdd_applies=false`. When inactive, follow selected
-checks without fabricating RED. Use `assistant-review` after non-trivial or
-risky fixes.
+Use local company-safe diagnostics; redact secrets and private data. Honor
+explicit authorization before destructive, production-affecting, network,
+migration, or sensitive diagnostics. Ask only for missing material information
+that cannot be discovered safely. Generic workflow coordinates plan, delegation,
+and review; this skill owns reproduction and cause evidence.
 
-## Output
+Load `contracts/index.yaml` for a structured diagnosis, fix/handoff, persisted
+continuation, or executable consumer. Load only the current boundary: `entry`,
+`current_phase`, `fix_verification` before mutation, `selected_handoff` before
+selected delegation, and `completion`. Missing/invalid selectors load the full
+named contract. Current v2 fix contracts preserve canonical verification/TDD
+bindings; a persisted v1.1 fix needs a refreshed decision, never inferred checks
+or RED.
 
-Return status, symptom, reproduction or blocker, ranked hypotheses, root cause
-and confidence, fix summary, verification results, and residual risks.
+Load [change-impact.md](references/change-impact.md) when diagnosis/repair
+consumer impact matters. Record compact applicability; shared, materially
+unresolved, or explicitly carried expanded repairs retain the common artifact
+and pre-Build/completion checks. Resolve the checker from the active installation.
 
-## Stop Rules
+## Result and stop rules
 
-- Stop before speculative edits when the failure is neither reproduced nor bounded.
-- Stop and ask before unsafe diagnostics.
-- If every hypothesis is refuted, gather new evidence instead of cycling guesses.
-- Use `mitigated` or `inconclusive` when proof is insufficient for root cause.
+Explain the symptom, reproduction or blocker, supported cause, authorized fix,
+verification, and remaining uncertainty. Include hypotheses that explain the
+reasoning, without a full empty report template. Structured consumers retain
+`contracts/output.yaml` fields and actual partial TDD logs.
+
+Stop speculative edits when the failure is neither reproduced nor sufficiently
+bounded. Say root_cause_found, mitigated, not_reproduced, blocked, or inconclusive
+when the evidence does not establish a verified fix; never overstate causality.

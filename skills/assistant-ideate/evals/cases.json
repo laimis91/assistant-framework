@@ -14,7 +14,7 @@
   ],
   "recommended_use": [
     "Run each case with the assistant-ideate skill instructions loaded.",
-    "Compare the response against the selected mode gates; REFINE and a decision packet apply only to deep mode.",
+    "Compare the response against the requested depth, material constraints, distinct alternatives, ranking, and authorization.",
     "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
   ],
   "cases": [
@@ -30,37 +30,29 @@
         "No user choice packet was requested."
       ],
       "expected_behavior": [
-        "Selects ideation_mode light.",
-        "Generates 3-5 distinct options before ranking.",
-        "Returns quick_ranking entries with reasons, trade-offs, and first steps.",
-        "Ends with recommended_next_step without forcing a user decision.",
-        "Does not emit a five-criterion weighted scoring matrix."
+        "Keeps the response concise for the quick scan.",
+        "Generates distinct options and ranks them qualitatively with useful trade-offs.",
+        "Recommends a next step without forcing a choice packet or implementation.",
+        "Avoids fixed idea quotas and unnecessary scoring."
       ],
       "pass_criteria": [
-        "The response labels light mode.",
-        "The response presents 3-5 options.",
-        "The response contains a quick ranking and recommended next step.",
-        "The response avoids deep-mode scoring ceremony."
+        "Several meaningful alternatives are compared.",
+        "The ranking explains trade-offs and the recommended next step.",
+        "No mandatory mode label, numeric matrix, or follow-up decision ritual is imposed."
       ],
       "fail_signals": [
-        "Generates eight or more ideas for the quick scan.",
-        "Builds a weighted scoring table.",
-        "Forces a follow-up decision packet."
+        "Pads the list to a fixed quota.",
+        "Builds an unnecessary weighted scoring table.",
+        "Forces a follow-up decision packet or starts implementation."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "ideation_mode: light",
-          "3-5 options",
-          "quick_ranking",
           "trade-off",
-          "first_step",
-          "recommended_next_step"
+          "next step"
         ],
         "forbidden_substrings": [
-          "weighted_score",
-          "impact*3",
-          "decision_options",
-          "user_decision:"
+          "user_decision: selected",
+          "I started implementing"
         ]
       }
     },
@@ -68,47 +60,37 @@
       "id": "explicit-brainstorm-uses-deep-mode",
       "title": "Explicit brainstorm uses deep mode",
       "category": "adaptive_ideation_depth",
-      "purpose": "Checks that an explicit broad brainstorm retains the full deep pipeline.",
+      "purpose": "Checks that an explicit broad brainstorm explores varied alternatives and compares them against relevant constraints.",
       "prompt": "Brainstorm broadly and compare many ways to make agent skill routing more precise.",
       "setup_context": [
         "The assistant-ideate skill instructions are active.",
         "The user explicitly requests broad brainstorming and comparison."
       ],
       "expected_behavior": [
-        "Selects ideation_mode deep.",
-        "Generates at least 8 ideas before scoring.",
-        "Uses the five deep scoring criteria and weighted_score.",
-        "Refines at least 3 candidates and presents a decision packet."
+        "Explores varied meaningful alternatives beyond a quick list.",
+        "Compares options using relevant benefits, feasibility, constraints, and risk.",
+        "Refines promising candidates with a validation step.",
+        "Stops after the requested analysis without inventing a user choice."
       ],
       "pass_criteria": [
-        "The response labels deep mode.",
-        "The response follows the full deep pipeline.",
-        "The response includes decision_point and decision_options."
+        "The broad comparison covers distinct approaches.",
+        "Rankings and trade-offs are explained without arbitrary idea counts or unjustified weights.",
+        "Promising candidates have practical next steps."
       ],
       "fail_signals": [
-        "Returns only a quick list.",
-        "Skips deep scoring.",
-        "Presents a single option."
+        "Returns one unexamined option.",
+        "Uses unsupported scores as precise evidence.",
+        "Claims the user selected a recommendation."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "ideation_mode: deep",
-          "DIVERGE",
-          "8 ideas",
-          "impact",
-          "feasibility",
-          "alignment",
-          "novelty",
           "risk",
-          "weighted_score",
-          "refined_candidates",
-          "decision_point",
-          "decision_options"
+          "trade-off",
+          "next step"
         ],
         "forbidden_substrings": [
-          "quick mode only",
-          "single option",
-          "user_decision:"
+          "user_decision: selected",
+          "only one idea is needed"
         ]
       }
     },
@@ -116,7 +98,7 @@
       "id": "brainstorm-diverges-before-ranking",
       "title": "Brainstorm diverges before ranking",
       "category": "diverge_converge_gate",
-      "purpose": "Checks that ideation understands the problem, generates at least eight ideas, then ranks all ideas before refinement.",
+      "purpose": "Checks that broad ideation generates distinct alternatives before narrowing and respects the no-provider-dependencies constraint.",
       "prompt": "Brainstorm ways to make the skill eval framework more useful for future agents without adding model provider dependencies.",
       "setup_context": [
         "The assistant-ideate skill instructions are active.",
@@ -124,54 +106,31 @@
         "No idea has been selected yet."
       ],
       "expected_behavior": [
-        "Selects ideation_mode deep because the prompt explicitly asks to brainstorm.",
-        "Starts with UNDERSTAND and writes a 1-3 sentence problem statement.",
-        "Records constraints, including no provider dependencies.",
-        "Runs DIVERGE before CONVERGE and produces at least 8 ideas.",
-        "Scores all ideas by impact, feasibility, alignment, novelty, and risk.",
-        "Calculates weighted_score for ranked ideas.",
-        "Advances at least the top 3 ideas to REFINE.",
-        "Ends with DECIDE and asks the user to choose, combine, reject, or request more ideas.",
-        "Produces decision_point and decision_options without fabricating user_decision before the user chooses."
+        "Frames the goal and respects the no-provider-dependencies constraint.",
+        "Generates varied options before narrowing to favorites.",
+        "Explains ranking against useful criteria and refines promising options.",
+        "Offers a recommendation without claiming an explicit user decision or starting implementation."
       ],
       "pass_criteria": [
-        "The response names all ideation phases in order.",
-        "The response includes at least 8 ideas before ranking.",
-        "The response scores ideas on all five criteria.",
-        "The response refines multiple candidates.",
-        "The response asks for a decision instead of presenting one option.",
-        "The response includes decision_point and decision_options for the initial choice."
+        "Multiple meaningful alternatives are compared.",
+        "Relevant trade-offs and risks guide ranking.",
+        "The constraint is preserved through refinement.",
+        "The response does not impose phase transcripts or numeric quotas."
       ],
       "fail_signals": [
-        "Presents only one idea.",
-        "Ranks before generating a broad idea set.",
-        "Skips scoring criteria.",
-        "Ignores the no-provider-dependencies constraint."
+        "Presents only one unexamined idea.",
+        "Ignores the no-provider-dependencies constraint.",
+        "Fabricates a user choice."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "ideation_mode: deep",
-          "UNDERSTAND",
-          "DIVERGE",
-          "CONVERGE",
-          "REFINE",
-          "DECIDE",
-          "8 ideas",
-          "impact",
-          "feasibility",
-          "alignment",
-          "novelty",
+          "provider dependencies",
           "risk",
-          "weighted_score",
-          "decision_point",
-          "decision_options"
+          "trade-off"
         ],
         "forbidden_substrings": [
-          "single option",
-          "skip scoring",
-          "only one idea",
           "provider dependency is fine",
-          "user_decision:"
+          "user_decision: selected"
         ]
       }
     },
@@ -179,7 +138,7 @@
       "id": "prior-attempts-constraints-shape-refinement",
       "title": "Prior attempts constraints shape refinement",
       "category": "constraint_respecting_refinement",
-      "purpose": "Checks that ideation incorporates prior attempts and constraints while producing refined candidates and a decision point.",
+      "purpose": "Checks that prior attempts shape distinct alternatives and useful refinement without an unrequested decision ritual.",
       "prompt": "Explore alternatives to another docs page for showing eval coverage. We already tried static README lists and they drift.",
       "setup_context": [
         "The assistant-ideate skill instructions are active.",
@@ -187,47 +146,33 @@
         "The goal is to reduce coverage drift."
       ],
       "expected_behavior": [
-        "States the problem as reducing eval coverage drift.",
-        "Captures prior_attempts and does not re-propose static README lists unchanged.",
-        "Generates multiple ideas across at least two approaches.",
-        "Ranks ideas using the full scoring criteria.",
-        "Provides refined_candidates with elevator_pitch, how_it_works, technical_needs, risks, and first_step.",
-        "Presents a decision point with multiple choices.",
-        "Produces decision_point and decision_options without fabricating user_decision before the user chooses."
+        "Frames the goal as reducing eval coverage drift.",
+        "Acknowledges the rejected static README approach and does not repeat it unchanged.",
+        "Compares distinct approaches against constraints and risks.",
+        "Includes a useful first validation step for the promising options.",
+        "Distinguishes recommendations from an actual user choice."
       ],
       "pass_criteria": [
-        "The response acknowledges prior_attempts.",
-        "The response avoids reusing the rejected approach unchanged.",
-        "The response includes refined_candidates with first_step and risks.",
-        "The response presents a user decision point.",
-        "The response includes decision_point and decision_options for the initial choice."
+        "Prior attempts change the recommendations.",
+        "Relevant risks and validation steps are explicit.",
+        "The response does not force a choice packet or implement an unselected idea."
       ],
       "fail_signals": [
-        "Recommends another static README list as the only answer.",
+        "Recommends another unchanged static README list as the only answer.",
         "Ignores the prior attempt.",
-        "Skips refinement details.",
-        "Fails to ask for a user decision."
+        "Starts implementing without authorization."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "problem_statement",
-          "prior_attempts",
-          "constraints",
-          "refined_candidates",
-          "elevator_pitch",
-          "technical_needs",
+          "drift",
           "risks",
-          "first_step",
-          "Decision point",
-          "decision_point",
-          "decision_options"
+          "step"
         ],
         "forbidden_substrings": [
           "static README list is enough",
           "ignore prior attempts",
-          "No risks",
           "I selected the only option",
-          "user_decision:"
+          "user_decision: selected"
         ]
       }
     }

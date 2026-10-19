@@ -80,10 +80,10 @@ fi
 test_start "workflow loads harness reference only for relevant medium+ work"
 missing_load_terms=()
 for term in \
-    "\`references/workflow-controller.md\` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation." \
-    "Ordinary medium+ work stays standard, non-harness, and non-QA unless controller criteria apply." \
-    "Load \`references/harness-controller.md\` only for non-\`prepare_only\` work with \`harness_capable=true\`."; do
-    if ! grep -Fq -- "$term" "$workflow_dir/SKILL.md"; then
+    "[workflow-controller.md](references/workflow-controller.md)" \
+    "ordinary medium+ work defaults to standard, non-harness, non-QA" \
+    "[harness control](references/harness-controller.md) only after its trigger."; do
+    if ! tr '\n' ' ' < "$workflow_dir/SKILL.md" | sed 's/[[:space:]][[:space:]]*/ /g' | grep -Fq -- "$term"; then
         missing_load_terms+=("SKILL.md: $term")
     fi
 done
@@ -101,9 +101,9 @@ if ! grep -Fq -- "references/harness-runtime-artifacts.md" "$harness_ref"; then
     missing_load_terms+=("harness-controller.md: references/harness-runtime-artifacts.md")
 fi
 for term in \
-    "When \`harness_capable=true\`, load \`references/harness-controller.md\` plus \`references/plan-harness-appendix.md\`" \
-    "compact Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger refs before task packets"; do
-    if ! grep -Fq -- "$term" "$workflow_dir/references/phases.md"; then
+    "Only \`harness_capable=true\` loads \`references/harness-controller.md\` and \`references/plan-harness-appendix.md\`" \
+    "retain accepted Done Contract, Harness Recipe, runtime state/trace/replay, and Artifact Reference Ledger before Build."; do
+    if ! tr '\n' ' ' < "$workflow_dir/references/phases.md" | sed 's/[[:space:]][[:space:]]*/ /g' | grep -Fq -- "$term"; then
         missing_load_terms+=("phases.md: $term")
     fi
 done

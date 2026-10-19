@@ -107,9 +107,8 @@ if ruby -ryaml -e '
       sections[1].include?(normalized.call(context_qualified)) &&
       sections[1].include?(normalized.call(scope_rules.last)) &&
       provisional_fragments.all? { |term| sections[1].include?(normalized.call(term)) } &&
-      sections[2].include?(normalized.call(context_qualified)) &&
-      sections[2].include?(normalized.call(scope_rules.last)) &&
-      provisional_fragments.all? { |term| sections[2].include?(normalized.call(term)) } &&
+      sections[2].include?("only within the actor, data, and authorization context supported by the evidence") &&
+      sections[2].include?("keep unanswered material choices and provisional recommendations out of applied defaults or confirmed criteria in responses and task state") &&
       sections[2].include?("source-backed technical defaults remain automatic") &&
       sections[3].include?(normalized.call(context_qualified)) &&
       sections[3].include?(normalized.call(scope_rules.last)) &&
@@ -121,7 +120,7 @@ if ruby -ryaml -e '
   valid = prep_gate.fetch("check").include?("INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY") && policy_valid.call(evidence, gate, docs, invariant_check)
   safe_evidence = "#{scope_rules.join(" ")} #{provisional_fragments.join(" ")} #{same_context_example}"
   safe_gate = "#{scope_rules.join(" ")} #{provisional_fragments.join(" ")}"
-  safe_docs = "#{context_qualified} #{scope_rules.last} #{provisional_fragments.join(" ")} source-backed technical defaults remain automatic"
+  safe_docs = "only within the actor, data, and authorization context supported by the evidence; keep unanswered material choices and provisional recommendations out of applied defaults or confirmed criteria in responses and task state; source-backed technical defaults remain automatic"
   safe_invariant = "#{context_qualified} #{scope_rules.last} #{provisional_fragments.join(" ")}"
   safe_fixture = [safe_evidence, safe_gate, safe_docs, safe_invariant]
   admits_safe_fixture = policy_valid.call(*safe_fixture)
@@ -231,6 +230,7 @@ if ruby -ryaml -e '
   builder_harness = builder_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_harness_obligation" }
   builder_qa = builder_packet.fetch("object_fields").find { |field| field["name"] == "feature_preparation_qa_acceptance_obligation" }
 
+  preparation = File.read(File.join(File.dirname(ARGV.fetch(5)), "references/feature-preparation-evidence.md"))
   valid = scope.fetch("validation").include?("prepare_only or end_to_end") &&
     approved_ref["required"] == "conditional" &&
     approved_ref["condition"] == "execution_intent == implement_only and feature_preparation_scope == existing_system" &&
@@ -270,8 +270,9 @@ if ruby -ryaml -e '
     preparation_names.include?("approved_feature_preparation_result") &&
     preparation_names.include?("approved_feature_preparation_harness_obligation") &&
     preparation_names.include?("approved_feature_preparation_qa_acceptance_obligation") &&
-    skill.include?("approved_feature_preparation_result") &&
-    skill.include?("Before Decompose, Plan, or Build, retain `approved_feature_preparation_result` unchanged plus its evidence ref or typed `not_applicable` source binding") &&
+    skill.include?("references/feature-preparation-evidence.md") &&
+    preparation.include?("consumes the approved result unchanged") &&
+    preparation.include?("Existing-system work also resolves its evidence ref; not_applicable retains its") &&
     invariant_names.include?("INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY") &&
     scoped_handoffs &&
     [architect_step_ref, code_writer_ref, builder_ref].all? { |field| field && field["condition"] == "feature_preparation_scope == existing_system" } &&
@@ -456,7 +457,7 @@ test_start "medium Plan carries four triage routing values as separate fields"
 if ruby -e '
   template = File.read(ARGV.fetch(0)); phases = File.read(ARGV.fetch(1))
   triage = template[/^## Triage result$.*?(?=^## )/m]
-  plan_step = phases.lines.find { |line| line.start_with?("10. ") }
+  plan_step = phases[/4\. Carry resolved routing fields.*?(?=5\.)/m]
   fields = [
     "- QA evaluation mode: [not_required | optional | required]",
     "- Harness capable: [true | false]",
@@ -464,7 +465,7 @@ if ruby -e '
     "- Workflow state mode: [inline | journal]"
   ]
   valid = triage && fields.all? { |field| triage.include?(field) } &&
-    plan_step && %w[qa_evaluation_mode harness_capable build_execution_lane workflow_state_mode].all? { |field| plan_step.include?(field) }
+    plan_step && plan_step.gsub(/\s+/, " ").include?("QA/harness, Build lane, state")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/references/plan-template.md" "$workflow_dir/references/phases.md"; then
     pass
@@ -573,8 +574,8 @@ if ruby -ryaml -rjson -e '
     plan_mode.fetch("on_fail").include?("execution_intent == prepare_only") &&
     plan_mode.fetch("on_fail").include?("set none unless the user explicitly requested a readiness Plan, then set inline") &&
     plan_mode.fetch("on_fail").include?("execution_intent != prepare_only") &&
-    skill.include?("In `prepare_only`, use `inline` only for explicitly requested readiness planning; otherwise `none`") &&
-    skill.include?("for `execution_intent != prepare_only`, `approval_required` applies to medium+") &&
+    skill.include?("references/feature-preparation-evidence.md") &&
+    skill.include?("approved plan before implementation") &&
     controller.match?(/`prepare_only` at any size may retain `plan_mode=none`\s+unless an optional readiness plan is specifically requested/) &&
     controller.include?("`prepare_only`: use `plan_mode=inline` only when an optional readiness plan") &&
     controller.match?(/For `execution_intent != prepare_only`, use\s+`plan_mode=approval_required` for medium+/) &&
@@ -669,8 +670,8 @@ fi
 test_start "active Decompose guidance excludes prepare-only work"
 if ruby -e '
   phases, patterns = ARGV.map { |path| File.read(path) }
-  valid = phases.include?("**Run condition:** `execution_intent != prepare_only`.") &&
-    phases.include?("Preparation-only and unresolved progressive discovery produce no executable work.") &&
+  decompose = phases.split("## Phase: Decompose", 2).last.split("## Phase: Plan", 2).first
+  valid = decompose.include?("Preparation-only and unresolved progressive discovery produce no executable work.") &&
     patterns.include?("**Conditional Decompose:** skip for coherent work") &&
     patterns.include?("Preparation-only produces no execution.")
   exit(valid ? 0 : 1)
@@ -687,8 +688,10 @@ if ruby -ryaml -e '
   artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
   valid = output.fetch("completion_tiers").fetch("preparation_only").fetch("conditional_artifacts").include?("task_journal") &&
     artifacts.fetch("task_journal").fetch("condition").include?("workflow_state_mode == journal") &&
-    skill.include?("before Plan use `references/artifact-first-output-contract.md` only outside `prepare_only`") &&
-    phases.include?("**Run condition:** `execution_intent != prepare_only`.") &&
+    skill.include?("Preparation-only work uses Discover → Preparation Completion without edits") &&
+    phases.include?("Omit\nArtifact Contracts, executable steps/packets, implementation blueprints, and\nDone/Harness artifacts.") &&
+    phases.include?("For `prepare_only`, Plan runs only when readiness planning was explicitly") &&
+    phases.include?("load `references/artifact-first-output-contract.md`") &&
     plan.include?("For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits.") &&
     plan.include?("It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests.") &&
     journal.include?("Read-only display derived from implementation_steps[].execution") &&
@@ -712,14 +715,12 @@ test_start "prepare-only plan readiness does not inherit approval wait or Build 
 if ruby -e '
   phases = File.read(ARGV.fetch(0))
   skill = File.read(ARGV.fetch(1))
-  valid = phases.include?("For `execution_intent=prepare_only`, record the optional readiness plan") &&
-    phases.include?("For `execution_intent != prepare_only` and `plan_mode=approval_required`, print:") &&
-    !phases.include?("For `plan_mode=approval_required`, print: `>> WAITING: Plan approval required`") &&
-    skill.include?("| Plan | `plan_mode != none`; optional readiness |") &&
-    skill.include?("| Design | UI only; not `prepare_only` |") &&
-    skill.include?("| Build | Not `prepare_only` |") &&
-    skill.include?("| Review | Not `prepare_only` |") &&
-    skill.include?("| Document | Not `prepare_only` |") &&
+  normalized = ->(text) { text.gsub(/\s+/, " ") }
+  plan = phases.split("## Phase: Plan", 2).last.split("## Phase: Design", 2).first
+  valid = normalized.call(plan).include?("For `prepare_only`, Plan runs only when readiness planning was explicitly requested, stays inline, and never waits for implementation approval.") &&
+    plan.include?("Preparation Completion.") &&
+    plan.include?("A readiness plan authorizes no implementation.") &&
+    skill.include?("Preparation-only work uses Discover → Preparation Completion without edits") &&
     !skill.include?("| Build | All |")
   exit valid ? 0 : 1
 ' "$workflow_dir/references/phases.md" "$workflow_dir/SKILL.md"; then
@@ -795,10 +796,10 @@ if ruby -ryaml -e '
     evidence_reference.fetch("on_fail").include?("prepare_only readiness") && evidence_reference.fetch("on_fail").include?("execution") &&
     pack_reference.fetch("on_fail").include?("prepare_only") && pack_reference.fetch("on_fail").include?("readiness") && pack_reference.fetch("on_fail").include?("execution") &&
     readiness_repair &&
-    phases.include?("Readiness plans omit Artifact Contracts, executable implementation steps/task packets, and Done/Harness artifacts") &&
-    phases.include?("For `execution_intent != prepare_only`, Artifact Contracts, implementation steps/task packets, and Done/Harness guidance apply") &&
-    phases.include?("Architect implementation blueprint and dispatch apply only when `execution_intent != prepare_only`") &&
-    phases.include?("prepare_only does not create an implementation blueprint")
+    phases.gsub(/\s+/, " ").include?("Omit Artifact Contracts, executable steps/packets, implementation blueprints, and Done/Harness artifacts.") &&
+    phases.include?("### Execution plan") &&
+    phases.include?("For `prepare_only`, Plan runs only when readiness planning was explicitly") &&
+    phases.include?("Preparation Completion.")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/references/phases.md"; then
     pass
@@ -957,7 +958,7 @@ if ruby -ryaml -e '
   readiness_plan = artifacts.fetch("feature_preparation_result").fetch("object_fields").find { |field| field["name"] == "readiness_plan" }
   handoff = artifacts.fetch("architecture_decision_pack").fetch("object_fields").find { |f| f["name"] == "handoff_refs" }
   readiness_fields = readiness_plan.fetch("object_fields").to_h { |field| [field["name"], field] }
-  valid = artifacts.fetch("artifact_contract")["condition"].include?("execution_intent != prepare_only") && artifacts.fetch("plan_document")["validation"].include?("not_applicable") && artifacts.fetch("plan_document")["on_fail"].include?("readiness") && readiness_plan.fetch("condition").include?("plan_mode == inline") && readiness_fields.keys.sort == %w[evidence_ref execution_status implementation_implications open_decisions preparation_basis recommended_next_state].sort && readiness_fields.fetch("evidence_ref").fetch("condition").include?("existing_system") && readiness_fields.fetch("preparation_basis").fetch("condition").include?("not_applicable") && %w[P5 P6].all? { |id| a.fetch(id)["condition"].include?("execution_intent != prepare_only") } && handoff.fetch("validation").include?("discover_only") && handoff.fetch("on_fail").include?("Preparation Completion") && pack.include?("discover_only") && skill.include?("prepare_only") && root.include?("prepare_only")
+  valid = artifacts.fetch("artifact_contract")["condition"].include?("execution_intent != prepare_only") && artifacts.fetch("plan_document")["validation"].include?("not_applicable") && artifacts.fetch("plan_document")["on_fail"].include?("readiness") && readiness_plan.fetch("condition").include?("plan_mode == inline") && readiness_fields.keys.sort == %w[evidence_ref execution_status implementation_implications open_decisions preparation_basis recommended_next_state].sort && readiness_fields.fetch("evidence_ref").fetch("condition").include?("existing_system") && readiness_fields.fetch("preparation_basis").fetch("condition").include?("not_applicable") && %w[P5 P6].all? { |id| a.fetch(id)["condition"].include?("execution_intent != prepare_only") } && handoff.fetch("validation").include?("discover_only") && handoff.fetch("on_fail").include?("Preparation Completion") && pack.include?("discover_only") && skill.include?("Preparation-only work uses Discover → Preparation Completion without edits") && root.include?("prepare_only")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/SKILL.md" "$workflow_dir/references/architecture-decision-pack.md" "$FRAMEWORK_DIR/README.md"; then pass; else fail "prepare-only optional Plan artifacts and Pack handoffs are not consistently readiness-bound"; fi
 
@@ -1233,7 +1234,7 @@ if ruby -ryaml -e '
     binding.call(trace_fields) &&
     !input_fields.any? { |field| field["name"] == "feature_preparation_evidence_ref" } &&
     !artifacts.key?("feature_preparation_evidence_ref") &&
-    skill.include?("Migration note: diagram contracts are v3") &&
+    skill.include?("contracts/input.yaml") && skill.include?("contracts/output.yaml") &&
     skill.include?("{evidence_ref, item_id}")
   exit(valid ? 0 : 1)
 ' "$diagrams_dir/contracts/input.yaml" "$diagrams_dir/contracts/output.yaml" "$diagrams_dir/SKILL.md"; then

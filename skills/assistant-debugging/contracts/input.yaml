@@ -1,3 +1,8 @@
+# Applicability: structured diagnosis/fix results, persisted continuations,
+# and selected handoffs. Human diagnosis may summarize evidence without empty
+# report slots. Fix authorization, reproduction, verification, and active TDD
+# prerequisites apply regardless of presentation.
+
 schema_version: "2.0"
 contract: input
 skill: assistant-debugging

@@ -1,3 +1,8 @@
+# Applicability: structured diagnosis/fix results, persisted continuations,
+# and selected handoffs. Human diagnosis may summarize evidence without empty
+# report slots. Fix authorization, reproduction, verification, and active TDD
+# prerequisites apply regardless of presentation.
+
 schema_version: "2.0"
 contract: phase-gates
 skill: assistant-debugging
@@ -36,8 +41,8 @@ gates:
     checkpoint_end: "--- PHASE: HYPOTHESIZE COMPLETE ---"
     exit_assertions:
       - id: HY1
-        check: "At least three plausible hypotheses are listed unless fewer_hypotheses_reason cites constraining evidence"
-        on_fail: "Add missing hypotheses across code, config, data, environment, and recent-change surfaces or justify fewer"
+        check: "Plausible causes are grounded in current evidence; their number follows the uncertainty, with no numeric quota"
+        on_fail: "Inspect relevant code, config, data, environment, or recent changes for a plausible cause and a distinguishing check; do not invent alternatives to fill a quota"
       - id: HY2
         check: "Every hypothesis has supporting evidence, disconfirming evidence or refutation signal, and next diagnostic check"
         on_fail: "Complete the hypothesis table before running more diagnostics"

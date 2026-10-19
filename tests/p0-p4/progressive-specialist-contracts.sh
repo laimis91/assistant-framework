@@ -93,9 +93,9 @@ validator_entry_closure_words() {
     sed -nE "s/.*load set 'entry' declared boundary closure is ([0-9]+) words.*/\\1/p" "$validator_err" | head -n 1
 }
 
-test_start "four heavy specialists define valid progressive contract indexes"
+test_start "specialists retain valid consumer-driven progressive contract indexes"
 index_failures=()
-if ! grep -Fq 'Non-trivial Process or Analysis skills MAY add `contracts/index.yaml`' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md"; then
+if ! grep -Fq '`contracts/index.yaml` is optional.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md"; then
     index_failures+=("contract guide does not allow progressive indexes for Analysis specialists")
 fi
 for skill_name in "${specialists[@]}"; do
@@ -203,36 +203,27 @@ test_start "specialist roots route contract loading by enforcement boundary"
 root_failures=()
 for skill_name in "${specialists[@]}"; do
     skill_file="$FRAMEWORK_DIR/skills/$skill_name/SKILL.md"
-    for term in \
-        "contracts/index.yaml" \
-        "load only"; do
+    for term in "contracts/index.yaml"; do
         if ! grep -Fqi "$term" "$skill_file"; then
             root_failures+=("$skill_name root missing $term")
         fi
     done
-    if [[ "$skill_name" == "assistant-verification" ]]; then
-        if ! grep -Fqi "remain authoritative" "$skill_file"; then
-            root_failures+=("$skill_name root does not preserve canonical contract authority")
-        fi
-    elif ! grep -Fqi "specialist gates are authoritative" "$skill_file"; then
-        root_failures+=("$skill_name root missing specialist gates are authoritative")
-    fi
     if rg -qi 'read and follow the contract files in .contracts/. before|read (all |the )?contract files.*before executing|all contracts are mandatory' "$skill_file"; then
         root_failures+=("$skill_name still eagerly loads every contract")
     fi
 done
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md::assistant-debugging owns diagnosis" \
-    "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md::assistant-tdd owns RED-GREEN-REFACTOR" \
-    "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::assistant-research owns source selection" \
-    "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::assistant-skill-creator owns skill contract design"; do
+    "$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md::this skill owns reproduction and cause evidence" \
+    "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md::Workflow owns dispatch" \
+    "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::The root alone maps contradictions" \
+    "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::Never change skills, registry dispositions, settings, or schedules"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if ! grep -Fq "$term" "$file"; then
+    if ! p0p4_contains_text "$file" "$term"; then
         root_failures+=("${file#$FRAMEWORK_DIR/} missing ownership boundary $term")
     fi
 done
-if ! grep -Fq 'Every URL presented is verified or omitted.' "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md"; then
+if ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md" 'Verify every URL presented or omit it'; then
     root_failures+=("assistant-research root weakened the every-URL verification invariant")
 fi
 if [[ "${#root_failures[@]}" -eq 0 ]]; then
@@ -244,21 +235,21 @@ fi
 test_start "compacted specialist roots retain strict behavioral anchors"
 anchor_failures=()
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md::at least three plausible causes" \
-    "$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md::Stop before speculative edits" \
+    "$FRAMEWORK_DIR/skills/assistant-debugging/contracts/phase-gates.yaml::with no numeric quota" \
+    "$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md::Stop speculative edits when the failure is neither reproduced nor sufficiently bounded" \
     "$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md::assistant-tdd" \
-    "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md::Do not write production code before RED evidence exists" \
-    "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md::selected production owner" \
-    "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::Every URL presented is verified or omitted" \
-    "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::candidate mechanisms with evidence" \
+    "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md::observe the intended missing-behavior failure before production edits" \
+    "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md::Missing or invalid required RED blocks production" \
+    "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::Verify every URL presented or omit it" \
+    "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::candidate mechanisms; retain their support, counterevidence, gaps, and validation method" \
     "$FRAMEWORK_DIR/skills/assistant-research/SKILL.md::five_lens_briefing" \
-    "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::user review before BUILD" \
-    "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::verifier_result: approved" \
+    "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::Present new or materially changed design for approval before BUILD" \
+    "$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/phase-gates.yaml::distillation_verification exists and verifier_result is approved before target skill files are written" \
     "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::references/harness-patterns.md" \
-    "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::15 applicable contract design guide rules"; do
+    "$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md::Preserve real consumer contracts and action permissions through simplification"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if ! grep -Fq -- "$term" "$file"; then
+    if ! p0p4_contains_text "$file" "$term"; then
         anchor_failures+=("${file#$FRAMEWORK_DIR/} missing $term")
     fi
 done
@@ -361,15 +352,18 @@ for leaked_term in \
         research_loading_failures+=("ordinary research still contains $leaked_term")
     fi
 done
-for preserved_term in \
-    "sibling-blind assignment packets" \
-    "accepted_lens_results" \
-    "ResearchPeerReviewer" \
-    "search resource budget" \
-    "tier_resolution.requested_tier" \
-    "normalization_disclosure"; do
-    if ! grep -Fq -- "$preserved_term" "$five_lens_reference"; then
-        research_loading_failures+=("five-lens reference missing $preserved_term")
+for file_and_term in \
+    "$five_lens_reference::five sibling-blind assignments" \
+    "$five_lens_reference::A distinct peer reviewer, separate from all five lens agents" \
+    "$FRAMEWORK_DIR/skills/assistant-research/contracts/output.yaml::accepted_lens_results" \
+    "$FRAMEWORK_DIR/skills/assistant-research/contracts/handoffs.yaml::ResearchPeerReviewer" \
+    "$FRAMEWORK_DIR/skills/assistant-research/contracts/input.yaml::search_resource_budget" \
+    "$FRAMEWORK_DIR/skills/assistant-research/contracts/phase-gates.yaml::tier_resolution retains requested_tier" \
+    "$FRAMEWORK_DIR/skills/assistant-research/contracts/output.yaml::normalization_disclosure"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        research_loading_failures+=("${file#$FRAMEWORK_DIR/} missing $term")
     fi
 done
 if [[ "${#research_loading_failures[@]}" -eq 0 ]]; then

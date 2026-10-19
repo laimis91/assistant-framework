@@ -23,7 +23,7 @@ List every element, requirement, constraint, and dependency.
 | **Assumption** | Unvalidated belief — may not be true | "Users won't need offline access", "This endpoint is low traffic" |
 
 ### Step 3: Reconstruct
-Build the solution using ONLY hard constraints. For each soft constraint, ask: "Does removing this open a simpler path?" For each assumption, ask: "What if this is wrong?"
+Explore whether a simpler solution follows from the hard constraints. Challenge soft constraints as proposals; keep applicable policy and user decisions binding until a permitted change is authorized. For each material assumption, identify what evidence would validate it.
 
 ## Output format
 

@@ -1,5 +1,10 @@
+# Applicability: canonical plans/task packets, persisted state, delegated handoffs,
+# and executable admission/evaluation use this existing protocol. Ordinary human
+# updates summarize decisions/evidence without serializing every internal field.
+# This boundary does not waive approval, verification, review, or active TDD.
+
 # Workflow Input Contract
-# All agents (Claude, Codex, Gemini) MUST resolve these fields before entering Triage.
+# Resolve these fields when the canonical workflow protocol is consumed.
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
