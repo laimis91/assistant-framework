@@ -1,3 +1,6 @@
+# Keep standalone grade-library callers on the same fixed schema-owner policy.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/skill-eval-fixtures.sh"
+
 first_response_path_for_case() {
     local skill_name="$1"
     local id="$2"
@@ -199,8 +202,11 @@ assistant_review_artifact_schema_valid() {
     local repository_root="${REPO_ROOT:-${FRAMEWORK_DIR:?FRAMEWORK_DIR or REPO_ROOT is required}}"
     local fixture_file="${5:-$repository_root/skills/assistant-review/evals/cases.json}"
 
-    ruby -rjson -ryaml - "$repository_root/skills/assistant-review/contracts/output.yaml" "$fixture_file" "$response_path" "$id" "$explicit_artifact_name" "$response_root" <<'RUBY'
-contract = YAML.load_file(ARGV.fetch(0))
+    {
+        skill_eval_companion_contracts_ruby
+        cat <<'RUBY'
+companion_contracts = SkillEvalCompanionContracts.new(ARGV.fetch(0), ARGV.fetch(1))
+contract = YAML.load_file(companion_contracts.path("assistant-review", "output.yaml"))
 fixture = JSON.parse(File.read(ARGV.fetch(1)))
 response = JSON.parse(File.read(ARGV.fetch(2)))
 case_id = ARGV.fetch(3)
@@ -257,6 +263,7 @@ valid_packet = artifact_names.all? do |name|
 end
 exit valid_packet ? 0 : 1
 RUBY
+    } | ruby -rjson -ryaml - "$repository_root" "$fixture_file" "$response_path" "$id" "$explicit_artifact_name" "$response_root"
 }
 
 assistant_review_lifecycle_semantics_valid() {
@@ -267,8 +274,11 @@ assistant_review_lifecycle_semantics_valid() {
     local repository_root="${REPO_ROOT:-${FRAMEWORK_DIR:?FRAMEWORK_DIR or REPO_ROOT is required}}"
     local fixture_file="${5:-$repository_root/skills/assistant-review/evals/cases.json}"
 
-    ruby -rjson -ryaml -rbigdecimal - "$repository_root/skills/assistant-review/contracts/output.yaml" "$fixture_file" "$response_path" "$id" "$explicit_artifact_name" "$response_root" <<'RUBY'
-contract = YAML.load_file(ARGV.fetch(0))
+    {
+        skill_eval_companion_contracts_ruby
+        cat <<'RUBY'
+companion_contracts = SkillEvalCompanionContracts.new(ARGV.fetch(0), ARGV.fetch(1))
+contract = YAML.load_file(companion_contracts.path("assistant-review", "output.yaml"))
 fixture = JSON.parse(File.read(ARGV.fetch(1)))
 response = JSON.parse(File.read(ARGV.fetch(2)), decimal_class: BigDecimal)
 case_id = ARGV.fetch(3)
@@ -932,6 +942,7 @@ end
 
 exit valid ? 0 : 1
 RUBY
+    } | ruby -rjson -ryaml -rbigdecimal - "$repository_root" "$fixture_file" "$response_path" "$id" "$explicit_artifact_name" "$response_root"
 }
 
 assistant_review_delegation_path_semantics_valid() {
@@ -986,7 +997,15 @@ assistant_review_external_alias_envelopes_valid() {
 
     producer_contract_root="${REPO_ROOT:-${FRAMEWORK_DIR:-}}"
     [[ -n "$producer_contract_root" ]] || return 1
-    producer_schema_version="$(ruby -ryaml -e 'value = YAML.load_file(ARGV.fetch(0)).fetch("schema_version"); abort unless value.is_a?(String) && !value.strip.empty?; print value' "$producer_contract_root/skills/assistant-review/contracts/index.yaml")" || return 1
+    producer_schema_version="$({
+        skill_eval_companion_contracts_ruby
+        cat <<'RUBY'
+companion_contracts = SkillEvalCompanionContracts.new(ARGV.fetch(0), ARGV.fetch(1))
+value = YAML.load_file(companion_contracts.path("assistant-review", "index.yaml")).fetch("schema_version")
+abort unless value.is_a?(String) && !value.strip.empty?
+print value
+RUBY
+    } | ruby -ryaml - "$producer_contract_root" "$fixture_file")" || return 1
 
     jq -e --arg producer_schema_version "$producer_schema_version" '
       def nonblank: type == "string" and test("[^[:space:]]");
@@ -1308,7 +1327,7 @@ count_structured_json_assertion_failures() {
             else { exists: false, value: null } end
           ) | .exists;
         def execution_paths: [
-          ["artifact_contract"], ["task_packet"], ["task_packets"], ["decomposition_plan_review"], ["slice_manifest"], ["single_slice_rationale"], ["slice_verification_summary"], ["changed_files"], ["test_results"], ["spec_review_result"], ["review_result"], ["qa_evaluation_result"], ["fresh_review_result"], ["manual_test_steps"], ["manual_verification_result"], ["subagent_evidence"], ["build_repair_state"], ["artifact_reference_ledger"], ["done_contract"], ["harness_recipe"], ["harness_run_state"], ["trace_ledger"], ["replay_packet"], ["final_handoff"], ["user_approval"]
+          ["implementation_steps"], ["current_task_packet"], ["packet_admission"], ["canonical_plan"], ["artifact_contract"], ["task_packet"], ["task_packets"], ["decomposition_plan_review"], ["slice_manifest"], ["single_slice_rationale"], ["slice_verification_summary"], ["changed_files"], ["test_results"], ["spec_review_result"], ["review_result"], ["qa_evaluation_result"], ["fresh_review_result"], ["manual_test_steps"], ["manual_verification_result"], ["subagent_evidence"], ["build_repair_state"], ["artifact_reference_ledger"], ["done_contract"], ["harness_recipe"], ["harness_run_state"], ["trace_ledger"], ["replay_packet"], ["final_handoff"], ["user_approval"]
         ];
         . as $response
         | if $response.execution_intent != "prepare_only" then true
@@ -1405,7 +1424,7 @@ grade_responses() {
                 structured_failures=$((structured_failures + canonical_envelope_failures))
                 semantic_validator="$(semantic_validator_id_for_case "$fixture_file" "$id")"
                 semantic_failures=0
-                if [[ -n "$semantic_validator" ]] && ! run_semantic_validator "$semantic_validator" "$response_path" "$fixture_file" "$id"; then
+                if [[ -n "$semantic_validator" ]] && ! run_semantic_validator "$semantic_validator" "$response_path" "$fixture_file" "$id" "${SKILL_FILES[$index]}"; then
                     semantic_failures=1
                 fi
                 if [[ "$fail_signal_hits" -gt 0 ]]; then

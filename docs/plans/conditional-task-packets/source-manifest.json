@@ -1,0 +1,326 @@
+{
+  "prepared_on": "2026-10-16",
+  "repository_revision": "622a58d493a3b17df0af9e632ba28287cdf41fd8",
+  "observed_branch": "feature/remove-temporary-game-skills",
+  "working_tree_status_at_discovery": " M .gitignore\n M CLAUDE.md\n M README.md\n M docs/cleanup-audit-2026-06-25.md\n M docs/evals/README.md\n M docs/skill-contract-design-guide.md\n M docs/v0.2.0-research.md\n M docs/v0.3.0-research-improvements.md\n M skills/assistant-skill-creator/references/skill-contract-design-guide.md\n D skills/assistant-workflow/playbooks/unity.md\n M tests/p0-p4/context-budget-report-contracts.sh\n M tests/p0-p4/docs-drift-contracts.sh\n M tests/p0-p4/installer-contracts.sh\n M tests/p0-p4/skill-eval-contracts.sh\n M tests/p0-p4/skill-validator-contracts.sh\n?? .p0p4-ambient-codex-home.lyHQ6E/\n?? .p0p4-cleanup-failure.8ePxZf/\n?? docs/plans/remove-temporary-game-skills/\n?? skills/custom-validator-local.epwkm5/\n",
+  "scope_note": "Existing dirty cleanup work is unrelated and preserved; this bundle alone is authored by this preparation.",
+  "inspected_source_inventory": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "3a34a4d7e39625b7b9bdb4c4e2d65038f93f06e9647c1b7955a12cb6e92223d2",
+      "bytes": 1723,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "README.md",
+      "sha256": "eaeda879e310d1ac5ac097bf947aeb9639622cc8d59a48c0260bf7bc3eb7aecf",
+      "bytes": 35552,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "agents/claude/architect.md",
+      "sha256": "64c19bbf1a7441f8fa434efe3ed1c1746535b290327243ea6e1b125d22db1341",
+      "bytes": 4362,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "agents/codex/architect.toml",
+      "sha256": "960dd42dbd6ced5d5b47b180b10b1bbedcd73453c8816dc44883ed7ea1e1168a",
+      "bytes": 4561,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "docs/evals/README.md",
+      "sha256": "e20d6a8e88492778418be695c76bf8177bcc553f8ef38ea2a1ce1aec996e56bb",
+      "bytes": 78728,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/SKILL.md",
+      "sha256": "a7ab999a725f91d8c7c6109f1545709ef27a9e54719cf670e7a802e4422f9b5f",
+      "bytes": 13394,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/contracts/handoffs.yaml",
+      "sha256": "709069dcd352271f3310000b019e70924f38891bc063c3f91c7764356982e58f",
+      "bytes": 214923,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/contracts/index.yaml",
+      "sha256": "0603a8082b0bd6c0efaee4bdec2c08ecf61ba291990d048a244432057b3d674a",
+      "bytes": 7083,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/contracts/input.yaml",
+      "sha256": "26ebff0f3510a05431208cf2f939b3d23750a90d14dab155dc5bd553b897ec81",
+      "bytes": 48249,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/contracts/output.yaml",
+      "sha256": "03c789896d8080494d847c6ae0148bbdebe554a543daf315f95647c7071461a8",
+      "bytes": 210942,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/contracts/phase-gates.yaml",
+      "sha256": "6529924a5eb281b0e34fb3ae57822a672a49af92804acb581bc03d4985efd658",
+      "bytes": 122842,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/evals/cases.json",
+      "sha256": "76312bb33b5f361551dc5a6558276e5f0265310a4eba41ad46bb283db123c4b9",
+      "bytes": 724747,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/build-worker-protocol.md",
+      "sha256": "0e8b1a7f1bae52f555958a7dc43848532fcd5d81551a4a0a8efaa8005942a5eb",
+      "bytes": 23627,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/context-handoff-templates.md",
+      "sha256": "d2d520c8938f467a76c72a1d412c5e2d375e07315558fb2560070e130d722812",
+      "bytes": 7320,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/feature-preparation-evidence.md",
+      "sha256": "d67b03aa82f6e7a81441c385d7d993153fb97c630471d9c7b93ad6fc407ad240",
+      "bytes": 6509,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/harness-controller.md",
+      "sha256": "4c1964961aca8cb0369fdeece45900f2916cf3441ebef795c17f6788bb2d3a25",
+      "bytes": 6170,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/mega-and-patterns.md",
+      "sha256": "e995716187d951fe78cc508d50334d64c5cf77723f6f69434f082d862a3731a5",
+      "bytes": 3575,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/phases.md",
+      "sha256": "8b5c29149621575b6500554c40be771b3badae991878a99b965fbf8d3a5c9766",
+      "bytes": 47832,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/phases/build.md",
+      "sha256": "e9a2b8794f07281ddc2c0249893166e65c38ed4d49c815df75a5aaa841c3f211",
+      "bytes": 7957,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/phases/decompose.md",
+      "sha256": "f018a4d47cf0b0332e3a9a8b3dc619c02a7e98c2842be4574df5b7a8a17aeb6e",
+      "bytes": 9231,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/phases/plan.md",
+      "sha256": "ca69ee1e7295bba90ecc943952ba6b461b4b404ca5252a868b7db2b88359a3b4",
+      "bytes": 10863,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/plan-template.md",
+      "sha256": "e9316c730a8b40f9c26f2aaff3731d1c467b2ba7a45ae5ea4c557a2638a7c48d",
+      "bytes": 30690,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/plans/large.md",
+      "sha256": "14ec1bc061a6b2cc3adc92ce9e93a69cd3d59323186817a681f80de83d8d2e77",
+      "bytes": 29077,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/plans/medium.md",
+      "sha256": "027c595d2342c11018a7de5027cd9d415621175f94eebad3e6d2d6cd06e3227f",
+      "bytes": 27395,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/progressive-discovery.md",
+      "sha256": "384012ae60ba0abf2b9b13e40eefbe5082c5f5c3a9fb7587e69d5f26228c3985",
+      "bytes": 14465,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/prompts/spec-review.md",
+      "sha256": "392e5a4b882bdcd8b8f50f4328def2645824de23070f1270fb02e50120418a96",
+      "bytes": 1675,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/sub-task-brief-template.md",
+      "sha256": "2f69ca3f0c34a4ce6a42ebc56aa41aa3c35325249d752363741d1828b35cb622",
+      "bytes": 14056,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/subagent-roles.md",
+      "sha256": "b838e9403a59e2a59bca164979d0b704356c9c5c5c4b3c6d29e163f1890afc77",
+      "bytes": 11256,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/task-journal-template.md",
+      "sha256": "eab0bd18c72c140c28c3e03e4d307235b4983acbb14c221e95cfddd14f7079f6",
+      "bytes": 33265,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/task-state-reconciliation.md",
+      "sha256": "9bca660f3d1773b160fa2a9dbccdd0ee4fb6bd47489938054941ff3454558852",
+      "bytes": 2880,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "skills/assistant-workflow/references/triage-rubric.md",
+      "sha256": "19840ffba6db3769b902d119eab4c42d381933ffba2147504efc4a1b038fa165",
+      "bytes": 5917,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/eval-contracts.sh",
+      "sha256": "07efcd1412adfa9bb5a57b43066baf034511e2cb6cf72198ba5b4668803994f7",
+      "bytes": 62039,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/feature-preparation-evidence-contracts.sh",
+      "sha256": "8c4f4c907d0a67d437ac69e4a13e78b5fdc2cbcae4edb0be7d35ae425d0b1c05",
+      "bytes": 152799,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/lib/feature-preparation-response-fixtures.sh",
+      "sha256": "8d87f543f0f45915d213e2b07500ef67b8d3e462be74ad9dd72858e9960c052c",
+      "bytes": 156536,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/lib/verification-reuse-response-fixtures.sh",
+      "sha256": "c3872f5ff72ba792c689952e5ca4350f856823adb92fb3f7e61acab42a3523fa",
+      "bytes": 5695,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/lib/writer-routing-response-fixtures.sh",
+      "sha256": "a3f6a049423b73d4b87fc2e397486e45c1133a192bec3c91fe30c425d3093e11",
+      "bytes": 3819,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/progressive-discovery-contracts.sh",
+      "sha256": "55f4b2dcc8eb996531d8ae8e7f166f22b6439470adad024456df4d7034b07abd",
+      "bytes": 202266,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/skill-eval-contracts.sh",
+      "sha256": "e13a7989b00bd5288a67ebd3180eab0a0336099d6c36cc58e010c0f79deb1707",
+      "bytes": 545229,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/task-packet-contracts.sh",
+      "sha256": "e2857cad018298aa7e0a13bf418da7c49999b4118823b4b42f2fad28aa2ccf76",
+      "bytes": 97929,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/worker-prompt-contracts.sh",
+      "sha256": "77f2fae068d4ca2895baf62c38ab3f7564b882f4131b747277ecadf8a60d6665",
+      "bytes": 11744,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/worker-status-contracts.sh",
+      "sha256": "99bcd0d0d297770efceeaccee37d19d47a3c031b799c6102df02e602952ae311",
+      "bytes": 70971,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/p0-p4/workflow-architecture-completion-contracts.sh",
+      "sha256": "920a4bf4519e452735324b64f446389eb8f646bb27af7a52843be80583c43153",
+      "bytes": 191804,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tests/test-p0-p4-contracts.sh",
+      "sha256": "08f41e8bf34fe744d999144aa681c3e49030ef4ed5c71e4958bd5284a3dac30a",
+      "bytes": 3498,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tools/evals/lib/skill-eval-grade.sh",
+      "sha256": "f2ad426a6e3b6543f5f609dc872ccc66a374ce99f312ae2fbab7b8423b592371",
+      "bytes": 96052,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tools/evals/run-codex-framework-evals.sh",
+      "sha256": "e796809c137d38e19ce6261f1795ad86d7ae66e4c21e3c3c9c5297108d8c33e4",
+      "bytes": 233298,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tools/evals/run-framework-instruction-evals.sh",
+      "sha256": "1a21042384d41452f9efde3014e92f3e859ce7b9bc0f9e4adfd8de838ef99118",
+      "bytes": 44232,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    },
+    {
+      "path": "tools/skills/sync-skill-contract-guide.sh",
+      "sha256": "6c789f35dc344a8c1698e0282272ef5ac8d3a23186f49b4511571c931ff8ce92",
+      "bytes": 1295,
+      "discovery_method": "bounded source search and adjacent-consumer inspection; hash is freshness evidence, not behavioral proof"
+    }
+  ],
+  "research_basis": {
+    "question": "Does mandatory planning-time slicing improve implementation quality or efficiency in an AI coding workflow, and when should it be removed, retained, or repurposed?",
+    "confidence": "medium",
+    "research_record_sha256": "9e63a4e2e375a93d36cee24961a0c566a64d22c82fccf3cf9e432beef0699f2f",
+    "packet_set_id": "slice-packets-20261016",
+    "packet_set_digest": "sha256:b672f90b2707edc1d7df206a22e30bd52fe29c0067c23b6787ebc3baac709850",
+    "final_synthesis_digest": "sha256:2bfb5668cb56f3f96a650309224b0063803e9fe288d62b510b174ac2a42e0923",
+    "method": "Five independent delegated lenses and a distinct peer; three required synthesis qualifications applied.",
+    "limitations": [
+      "No matched local ablation isolates mandatory slicing from model, delegation, verification and review.",
+      "The repository inspection traces contracts and handoff artifacts; native runtime compliance and time saved were not independently audited.",
+      "The 659-line example is one current task and cannot estimate representative overhead; some duplication may be intentional for handoffs.",
+      "External studies and vendor reports use different tasks, older models or bundled changes; transfer and effect size remain uncertain."
+    ],
+    "primary_sources": [
+      {
+        "url": "https://www.anthropic.com/engineering/harness-design-long-running-apps",
+        "verification": "Opened during preceding research in this chat; engineering report, not a same-model slicing ablation."
+      },
+      {
+        "url": "https://cursor.com/blog/self-driving-codebases",
+        "verification": "Opened during preceding research; dynamic planner-worker experience at much larger scale."
+      },
+      {
+        "url": "https://arxiv.org/html/2309.12499v1",
+        "verification": "Opened during preceding research; adaptive planning bundled with dependency/change-impact analysis."
+      }
+    ]
+  },
+  "observations": {
+    "one_slice_example_lines": 659,
+    "one_slice_example_bytes": 36193,
+    "identical_carried_verification_checks": 16,
+    "interpretation": "One observed artifact demonstrates overlap; avoidable overhead and comparative value remain unmeasured."
+  }
+}

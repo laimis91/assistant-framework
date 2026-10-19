@@ -355,7 +355,7 @@ write_workflow_eval_responses() {
     while IFS= read -r case_id; do
         response_path="$output_dir/assistant-workflow/$case_id.txt"
         required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$fixture" | paste -sd ' ' -)"
-        if jq -e --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | (.machine_expectations.structured_json_assertions? // []) | length > 0' "$fixture" >/dev/null; then
+        if jq -e --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | ((.machine_expectations.structured_json_assertions? // [] | length > 0) or .semantic_validator != null)' "$fixture" >/dev/null; then
             case "$case_id" in
                 ownership-*)
                     write_ownership_response "$case_id" "$response_path"
@@ -424,16 +424,20 @@ write_workflow_eval_responses() {
                     }' >"$response_path"
                     ;;
                 native-slice-execution-uses-dependencies-not-runner-topology)
-                    jq -n '{execution_policy:{source_writer_policy:"sequential_shared_or_unknown",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"not_available",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
+                    write_packet_admission_response "$response_path" "$fixture" "$case_id"
                     ;;
                 isolated-independent-slices-integrate-before-review)
-                    jq -n '{execution_policy:{source_writer_policy:"isolated_A_B_overlap_permitted",read_only_analysis_policy:"parallel_permitted",isolation_evidence_ref:"fixture-runtime-isolation-A-B-v1",c_start_decisions:[{a_status:"PENDING",c_decision:"blocked"},{a_status:"RUNNING",c_decision:"blocked"},{a_status:"VERIFIED",c_decision:"ready"}],per_slice_verification:"required",integration_validation:"required",integration_checks:["cross-slice","full-scope"],fresh_review:"required",fresh_review_after:"integration_validation"}}' >"$response_path"
+                    write_packet_admission_response "$response_path" "$fixture" "$case_id"
+                    ;;
+                packet-admission-coherent-medium-v14)
+                    write_packet_admission_response "$response_path" "$fixture" "$case_id"
                     ;;
                 build-derives-tdd-from-selected-slice-checks)
                     write_tdd_slice_projection_response "$response_path" "$required_summary"
                     ;;
                 build-phase-verifies-selected-check-before-advancing)
-                    jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},slice_manifest:[{slice_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria.",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[]}],slice_verification_summary:[{slice_id:"inspect-artifact",slice_name:"Inspect selected artifact",task_packet_id:"packet-inspect-artifact",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,implementation_status:"done",verification_result:"Inspected rendered content; passed because it matches approval.",criteria_checked:"Rendered content matches approval: pass.",self_check_result:"passed",final_status:"VERIFIED"}]} | .slice_manifest[0].verification_decision = .verification_decision' >"$response_path"
+                    jq -n --arg summary "$required_summary" '{summary:$summary,verification_decision:{scope:"Inspect the selected build artifact and record the observation before advancing the dependent slice.",policy_basis:{binding_constraints:[],preferences_applied:[],capability_limits:[]},test_change:"none",checks:[{check_id:"inspect-rendered-artifact",claim_or_risk:"The selected artifact contains the expected content.",action:"inspect",method:"artifact_inspection",technique:"exploratory",check_ref_or_method:{reference_or_procedure:"Open the produced artifact and compare the rendered content with the approved acceptance criteria.",prerequisites:["The artifact is produced."],exclusions:["Does not imply an automated test ran."],expected_success:"The rendered artifact matches the approved criteria.",meaningful_failure:"The artifact is empty, stale, or materially differs from the acceptance criteria."},rationale:"Directly observes the selected artifact claim without inventing a test command.",method_refs:[]}],tdd_choice:{mode:false,applicable_check_ids:[],basis:"not_selected",rationale:"The selected artifact inspection does not provide a stable RED cycle."},omitted_checks_and_rationale:["No automated test was selected for this artifact-only check."],stop_rule:"Advance only after recording the selected artifact inspection result."},implementation_steps:[{packet_id:"inspect-artifact",name:"Inspect selected artifact",observable_increment:"Artifact content is checked",deliverable_type:"artifact",acceptance_criteria:["Rendered content matches approval"],verification_decision:.verification_decision,selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:[],files_to_test:[],enabling_changes_included:[],depends_on:[],expected_success_signal:"Artifact matches criteria",evidence_to_record:["Inspection result"],deviation_rollback_rule:"Record deviation and stop before advancing"}],validation_results:[{command_or_check:"inspect-rendered-artifact",result:"passed",evidence:"Rendered content matches the approved acceptance criteria.",selected_check_ids:["inspect-rendered-artifact"],binding_obligation_refs:[]}]} | .current_task_packet.verification_decision = .verification_decision' >"$response_path"
+                    p0p4_normalize_packet_projection "$response_path"
                     ;;
                 verification-reuse-current-scenario-matrix|verification-reuse-preserves-independent-review)
                     write_verification_reuse_response "$case_id" "$response_path" "$required_summary"
@@ -3663,8 +3667,12 @@ fi
 
 test_start "workflow keeps full-corpus baselines and case-targeted mutation grading proportional"
 full_corpus_eval_call_sites="$(awk 'index($0, "--responses") && !/full_corpus_eval_call_sites=/ { count++ } END { print count + 0 }' "${BASH_SOURCE[0]}")"
+# Original 409 root/forbidden probes remain; four new canonical execution roots
+# (implementation_steps,current_task_packet,packet_admission,canonical_plan)
+# add exactly four absence injections in each of twelve preparation cases.
+# Keep CLI invocation counts unchanged; these are direct production-grader calls.
 if [[ "$workflow_eval_invocation_count" -eq 26 \
-    && "$prepare_only_direct_structured_probe_count" -eq 409 \
+    && "$prepare_only_direct_structured_probe_count" -eq $((409 + 12 * 4)) \
     && "$prepare_only_plan_mode_mutation_count" -eq 14 \
     && "$prepare_only_representative_cli_probe_count" -eq 3 \
     && "$prepare_only_mutation_invocation_count" -eq 17 \
@@ -3672,7 +3680,7 @@ if [[ "$workflow_eval_invocation_count" -eq 26 \
     && "$full_corpus_eval_call_sites" -eq 2 ]]; then
     pass
 else
-    fail "expected 26 bounded workflow evals, 409 independent direct production structured-grader probes, 14 plan-mode case CLI mutations, 3 representative branch CLI probes, and one full-corpus plus one case-targeted runner call site; found $workflow_eval_invocation_count workflow evals, $prepare_only_direct_structured_probe_count direct probes, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_representative_cli_probe_count representative, $prepare_only_mutation_invocation_count mutation CLI calls, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total CLI invocations across $full_corpus_eval_call_sites call sites"
+    fail "expected 26 bounded workflow evals, 457 (409 + 12*4) independent direct production structured-grader probes, 14 plan-mode case CLI mutations, 3 representative branch CLI probes, and one full-corpus plus one case-targeted runner call site; found $workflow_eval_invocation_count workflow evals, $prepare_only_direct_structured_probe_count direct probes, $prepare_only_plan_mode_mutation_count plan-mode, $prepare_only_representative_cli_probe_count representative, $prepare_only_mutation_invocation_count mutation CLI calls, $non_workflow_skill_eval_count non-workflow, and $actual_grader_invocation_count total CLI invocations across $full_corpus_eval_call_sites call sites"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

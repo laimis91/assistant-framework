@@ -48,9 +48,9 @@ fi
 test_start "workflow routing covers persisted continuation and exact external schemas"
 if p0p4_contains_text "$workflow_dir/SKILL.md" "resume repository task state" \
     && p0p4_contains_text "$candidate_workflow" "resume persisted task state" \
-    && p0p4_contains_text "$workflow_dir/SKILL.md" "Explicit user or repository artifact schemas override workflow-internal shapes" \
+    && p0p4_contains_text "$workflow_dir/SKILL.md" "Honor user/repository schemas" \
     && p0p4_contains_text "$candidate_workflow" "Explicit user or repository artifact schemas override workflow-internal shapes" \
-    && p0p4_contains_text "$workflow_dir/SKILL.md" "preserve exact paths, keys, types, ids, and supplied literals" \
+    && p0p4_contains_text "$workflow_dir/SKILL.md" "preserve paths, keys, types, ids and literals" \
     && p0p4_contains_text "$candidate_workflow" "preserve exact paths, keys, types, ids, and supplied literals"; then
     pass
 else

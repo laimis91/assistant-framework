@@ -57,3 +57,17 @@ Record or recover:
 If repository identity is unavailable, reconcile against the newest user
 request and available artifact evidence, state the limitation, and lower
 confidence rather than pretending the journal is current.
+
+## Canonical packet resumption
+
+Resolve the exact approved_plan_identity and canonical implementation_steps by
+packet_id before resume. Use scripts/task-packet-admission.py with the independently
+retained previous_plan, current relevant-input identities and resolved current
+owner evidence. Independently retained VERIFIED state cannot be downgraded by the caller; only helper reconciliation invalidates it when current inputs, prerequisites or evidence change. A helper-returned INVALIDATED snapshot can become the retained previous_plan for repeated resume without duplicating history. Relevant changes invalidate affected packets and dependents that
+consume their results; preserve historical evidence and spent repair counters.
+A journal display or worker DONE cannot override coordinator execution state.
+Read-old/write-new v12/released-v13 input requires verified producer/version provenance,
+immutable source identity, complete source-bound mapping/allocation and conservative
+all-prerequisite expansion described in plan-template.md. Block unknown/mixed/stale,
+unsafe or ambiguous forms; retain original artifacts/results unchanged and record
+normalization mapping in this reconciliation provenance, never a permanent ledger. Genuine verified normalization creates initial provenance. Later direct canonical Plan, resume, dispatch, verification and completion require the independently retained accepted previous_plan whenever either snapshot carries provenance; compare provenance presence and canonical JSON digest, including scalar types. Fresh canonical plans cannot invent it, and migrated canonical calls cannot alter or discard it.

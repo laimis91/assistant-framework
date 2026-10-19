@@ -181,7 +181,7 @@ Integrate:
 5. Execute the selected checks and binding project checks over the integrated scope; retain actual results and remaining gaps
 6. Fix integration mismatches
 
-After all slices are integrated, full-scope validation using the selected checks and binding project checks is required before fresh Review. Full-scope means coverage of the integrated acceptance and integration obligations; it does not select an otherwise unselected full test suite. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. Single-slice full-scope validation still covers integration with existing code.
+After all slices are integrated, full-scope validation using the selected checks and binding project checks is required before fresh Review. Full-scope means coverage of the integrated acceptance and integration obligations; it does not select an otherwise unselected full test suite. Integrated selected and binding checks remain due for one or multiple packets before fresh independent Review; packet-local evidence cannot waive them.
 
 [Include relevant file paths]
 ```

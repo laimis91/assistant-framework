@@ -47,7 +47,7 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 ```markdown
 ### Task [ID]: [short name]
 - name: [task packet name; must populate current_task_packet.name]
-- Slice: [slice_id] [slice_name, or "N/A for small task"]
+- packet_id: [stable descriptive canonical identity]
 - Observable increment: [what becomes visible/verifiable after this slice]
 - Deliverable type: [behavior | artifact | contract | docs | eval | config | migration | refactor]
 - Requirement ids: [R# ids from the Requirement Acceptance Map]
@@ -73,10 +73,10 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Test: [exact selected test paths or "none"]
 - Enabling changes included:
   - [setup, contracts, wiring, or "none"]
-- Depends on: [slice ids or "none"]
+- Depends on: [canonical packet_ids or empty array]
 - Verification / TDD decision:
-  - verification_decision: [canonical ref; preserve selected scope, CheckSpec entries, exclusions, and rationale unchanged]
-  - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
+  - verification_decision_ref: [{artifact_ref, sha256} of full unchanged task-level decision; materialize it for workers]
+  - evidence_assessment: [materialized for worker only; current canonical assessment, no stored packet copy]
   - selected_checks: [ids and method-specific evidence; each command-based CheckSpec retains its own literal argv and explicit cwd]
   - selected_check_ids: [due check IDs assigned to this packet]
   - binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
@@ -98,8 +98,8 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
   - decision_rationale: [why this is the bounded existing-capability decision]
   - divergence_control: [required for intentional_duplicate]
 - Verification:
-  - verification_decision: [canonical typed ref, unchanged]
-  - evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
+  - verification_decision_ref: [same stable artifact_ref and SHA-256; no second mutable decision]
+  - evidence_assessment: [materialized for worker only; current canonical assessment, no stored packet copy]
   - selected_check_refs: [the applicable CheckSpec ids]
   - command argv and cwd: [per command-based selected CheckSpec, bound by check_id; one literal argument per item and an explicit cwd]
   - non-command procedure: [concrete steps and observable result for selected checks without a command]
@@ -121,44 +121,295 @@ For Medium and Large/Mega plans, write implementation work as executable task pa
 - Harness routing: [N/A unless harness_capable=true or QA criteria independently apply; otherwise refs to appendix, Done Contract, Harness Recipe, run state, trace/replay, artifact ledger]
 - Deviation / rollback rule:
   - [what to do if required files/behavior differ from plan; include rollback/revert boundary]
-- Worker status / evidence:
-  - Status: [pending/in_progress/done/blocked]
-  - Evidence: [files changed, test result, review note, or "pending"]
+- Worker result refs: [actual status/evidence returned by the selected owner; display only]
+- Coordinator progress: [derive from this packet execution.state/evidence_refs; no second mutable record]
 ```
 
-## Slice Manifest (`execution_intent != prepare_only`)
+## Canonical Packet Plan (`execution_intent != prepare_only`)
 
-For Medium and Large/Mega plans, paste the approved Decompose slice manifest once and consume it directly in task packets. Do not rediscover boundaries in Plan; order packets from this manifest by dependency.
+One coherent increment defaults to one packet in `implementation_steps`. Decompose
+is optional boundary refinement of this same collection. Additional packets need
+an acceptance, ownership/context, prerequisite, recovery/rollout or binding
+protocol purpose. Size, file count and layer count alone select neither extra
+packets nor Architect. Use ordinary Plan review questions from
+`references/decomposition-plan-review.md`; no second manifest, one-item rationale,
+or standalone decomposition-review artifact is required.
 
-```markdown
-## Slice manifest from Decompose
+### Stored definition and authority
 
-[paste the approved strict slice manifest verbatim; Plan consumes these slice_ids and does not rediscover boundaries]
+New producers write `plan_schema_version: "14.0"`, `task_identity`, existing
+`plan_version`, `verification_decision_ref`, `implementation_steps`,
+`completion_allocation`, and `approved_plan_identity`. The latter is
+`{task_identity, plan_version, approval_ref, definition_digest}` and must equal
+separately resolved current approval. Store the full unchanged specialist decision
+once at task level. `verification_decision_ref` is `{artifact_ref, sha256}` where
+the digest covers the complete unchanged object, including exclusions, rationale,
+CheckSpecs and TddChoice. Every stored packet carries that same reference.
 
-- slice_id: [stable descriptive outcome/deliverable slug; never ordinal-only such as s1 or slice-2]
-- name:
-- worker_stage: [test_authoring | production | refactor; SAME writer owns tests plus code; test authoring needs no incoming RED and may change tests only; active production needs current matching RED; refactor needs current passing GREEN; stage-only DONE never completes Build]
-- writer_selection: [Orchestrator validates intelligent-writer default or mechanical-writer with rationale and recipe_or_example_ref, resolved_decisions_ref, scope_and_dependencies_ref, correctness_expectations_ref to actual current evidence covering BOTH tests and implementation, including fixed cases/expected values/assertion patterns; legacy packets may omit; packet/inline conflicts block]
-- observable_increment:
-- deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
-- requirement_ids:
-- acceptance_criteria:
-- files_to_create:
-- files_to_modify:
-- files_to_test:
-- enabling_changes_included:
-- depends_on:
-- verification_decision: [unchanged canonical decision and selected CheckSpecs]
-- evidence_assessment: [current canonical assessment; planned until actual check results, refreshed before Review]
-- selected_check_ids: [due CheckSpec IDs assigned to this slice]
-- binding_obligation_refs: [exact applicable due tuples `{kind,value,source_ref}`]
-- tdd_applies: [true only when selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
-- verification_command: [legacy singular literal argv projection only when selected_check_ids resolves exactly one matching command-based CheckSpec; otherwise omit and use each check's canonical command or concrete non-command procedure]
-- expected_success_signal:
-- evidence_to_record:
-- deviation_rollback_rule:
-- single_slice_rationale: [required only when exactly one slice exists]
-```
+The approved definition projection is the complete Plan object except its
+top-level `approved_plan_identity` and `reconciliation_provenance`, with only
+`execution` removed from each `implementation_steps` item. Encode as UTF-8 JSON,
+keys sorted, no whitespace separators (`(',', ':')`), `ensure_ascii=False`, no
+non-finite numbers; SHA-256 those bytes. Every other field participates in the
+approved digest. Excluded migration provenance is separately authenticated against an independently retained accepted `previous_plan`; its presence and canonical JSON digest cannot change on subsequent canonical calls. Fresh canonical plans cannot invent provenance. Progress does not change approval. Material definition changes
+follow deviation/reapproval policy; never re-sign a changed candidate from itself.
+
+Each packet stores its coordinator-owned `execution` on that same record:
+`state: PENDING|RUNNING|VERIFIED|BLOCKED|INVALIDATED`, `evidence_refs`,
+`input_identity` (object of relevant source/contract/requirement identities),
+`history` (retained evidence/invalidation entries), and
+`recovery: {attempt_count, no_progress_count}`. This supplements, rather than
+resets, the existing task-wide Build repair allowance (three attempts, two
+consecutive no-progress attempts). Journal tables are read-only displays of these
+records; they are never another mutable source. Worker statuses stay unchanged.
+`DONE` alone cannot produce coordinator `VERIFIED`.
+
+`completion_allocation` retains `requirement_ids`, `acceptance_criteria`,
+`selected_check_ids` and exact `binding_obligation_refs` due task-wide or deferred
+from packets. The accepted Requirement Acceptance Map remains authoritative for
+criteria. Every accepted requirement, selected check and canonical policy tuple
+retains an explicit packet or task-wide owner. A locally exercised integration
+check may remain due at completion. Every `tdd_choice.applicable_check_ids` member
+must occur in the union of `implementation_steps[].selected_check_ids`; allocation
+only to completion cannot replace an executable packet's TDD cycle. Each packet
+still has at most one applicable ID. An active ID may repeat across multiple
+packets and at completion, alongside unrelated inactive packets; this adds no
+global uniqueness rule. Packet count never waives integration with existing code,
+independent review, conditional QA/harness or final snapshot gates.
+
+### Packet admission wire boundary
+
+Before Plan acceptance, resume, dispatch, packet verification and integrated
+completion, invoke the installed `scripts/task-packet-admission.py` relative to
+this skill directory with Python 3.9+. Unix uses `python3 scripts/task-packet-admission.py`; native PowerShell uses the supported invocation reported by the installer (for example, `py -3 scripts/task-packet-admission.py` or `& 'C:\Path With Spaces\python.exe' scripts/task-packet-admission.py`). Do not rely on a `.py` file association. The helper and Workflow eval adapter require Python 3.9+; missing/unsupported runtime blocks admission, including manual installs or later runtime removal. Install a supported interpreter and rerun before continuing. Import-safe `admission(request)` and JSON stdin/stdout CLI
+use the same pure calculation. The CLI returns exit 0 for `accepted`, 1 for
+`blocked`. It reads at most 2 MiB, accepts at most 256 packets, uses only Python's
+standard library, and performs no network, command execution, arbitrary reference
+loading, persistence, retries, dispatch or scheduling. Readiness and runtime
+attestation remain existing owners' responsibilities; the helper checks supplied
+facts and cannot attest unavailable native isolation or actual worker behavior.
+
+Request fields are `boundary: plan|resume|dispatch|verification|completion`,
+`plan`, `context`, optional `target_packet_id` (required at dispatch/verification),
+and optional `current_task_packet` to compare a worker projection. Request
+`worker_stage` is the helper's internal dispatcher phase: inactive `implementation`
+(or public `production`), `test_authoring`, `final_verification`; active
+`test_authoring`, `pre_production_red`, `production`, `green`, `refactor`,
+`refactor_verification`. It is NOT the CodeWriter handoff enum. Accepted writer
+results materialize only `worker_stage: test_authoring|production|refactor` in the
+same `current_task_packet` and top-level inline alias. Builder results materialize
+only `verification_stage: pre_production_red|final_verification`; GREEN versus
+REFRACTOR follows actual cycle evidence. Optional `inline_worker_stage` must agree
+with that writer projection. Stored packets reject direct worker_stage; both
+approved definition digests remain unchanged between stages. Initial bounded
+production dispatch accepts the planned RED tuple; its SAME executor must capture
+current meaningful RED before the first production edit. Test authoring is tests-only,
+without incoming RED. Inactive TDD has no refactor dispatch stage; ordinary refactor deliverables use production followed by selected verification. Later active production/refactor retain their exact RED/GREEN gates.
+The prior source Writer must be terminal before same-packet redispatch, including
+verification. Current RUNNING production/refactor/verification stages can finish
+at attempt_count=3; a new implementation/RED attempt cannot start at that limit.
+Counts above 3 or no_progress_count=2 block all redispatch. Cumulative spent
+attempts never reset within the same plan version. The existing recovery owner
+may reset consecutive no_progress_count only when new evidence proves measurable
+progress; supplied counters must match that owner's current state.
+These are pure same-packet admission/projection gates; existing owners persist
+execution and cycle evidence without changing the approved definition. `context` is
+separately resolved by the Orchestrator from current authoritative artifacts;
+candidate assertions never supply their own approval or proof. It contains:
+
+- `task_identity`, `approved_plan_identity`, the full unchanged
+  `verification_decision`, `verification_decision_ref`, and current canonical
+  `evidence_assessment` from their existing owners;
+- `requirements: [{requirement_id, acceptance_criterion}]` for every accepted
+  map entry; `required_completion_allocation` with the same four allocation keys
+  fixing independently due integration/deferred obligations;
+- `readiness: {execution_intent, ready, route_clear}` projected only after existing
+  Discover and retained progressive route-clear/consumption/readiness gates pass;
+  preparation-only and unresolved progressive discovery admit no execution;
+- `current_input_identities: {packet_id: relevant_identity_object}` and
+  `packet_evidence: {packet_id: resolved_current_evidence}` and independently current
+  `recovery_counters: {packet_id: {attempt_count, no_progress_count}}`;
+- `test_applicability: {packet_id: resolved_projection}` from the existing
+  verification/binding applicability owner. Each row binds exact current
+  `approved_plan_identity`, `packet_definition_digest`, `input_identity`,
+  `build_execution_lane`, `verification_decision_ref`, ordered unique
+  `selected_check_ids` and exact due `binding_obligation_refs`; it carries
+  `status: required|not_applicable`, nonblank `resolution_ref` and `rationale`.
+  Resolve actual CheckSpec claims/oracles/procedures and binding obligations;
+  never infer no-tests from method, technique, command presence, file type or
+  inactive TDD. Missing/unresolved/stale/conflicting rows block dispatch and
+  verification, though pending Plan construction may remain unresolved.
+  This context-only projection adds no stored definition field or second ledger;
+- `build_execution_lane`; `workspace: {mode: shared|unknown|isolated,
+  active_source_writer_ids: [...]}` independently resolving active/unfinished dirty
+  writers (candidate state cannot remove them), with
+  `isolation: {packet_id: {current, input_identity, runtime_evidence_ref,
+  workspace_identity}}` only when independently current runtime evidence actually
+  supports isolation. Different files or branch names alone are insufficient;
+- `previous_plan` on resume and on every direct canonical Plan/dispatch/verification/completion carrying migration provenance (or following a snapshot that carried it): the independently retained last accepted snapshot of this approved definition. Provenance presence and canonical JSON digest must match it, including JSON scalar types. Genuine verified legacy normalization creates initial provenance; fresh canonical input cannot add it. Retain VERIFIED state until the helper invalidates changed current witnesses; caller-authored downgrades block. Preserve spent counters, evidence refs and history;
+- at completion, `current_snapshot_identity`, `required_terminal_gates` (includes
+  `independent_review`, plus QA/harness only when already triggered), and
+  `completion_evidence` from the existing completion/review/QA owners.
+
+Result always includes `status`, stable `code`, `path`, and `details`. Accepted
+results include `canonical_plan` and, at worker boundaries, the deep
+`current_task_packet`: exactly the resolved canonical packet plus the full
+unchanged `verification_decision`, current `evidence_assessment` and exact
+`approved_plan_identity`. Projections cannot redefine scope, decisions or state.
+Blocked results can retain a reconciled `canonical_plan`, including INVALIDATED
+state and historical evidence; it grants no dispatch authority. A graded blocked response has only optional string `summary` and `packet_admission: {status, code}`; optional `packet_admission.canonical_plan` must exactly equal the helper-returned blocked plan, including JSON types. Unknown fields/containers and readiness, verified or current-task-packet claims outside that exact retained plan are rejected. The caller
+persists admitted state on the same packet through existing state tooling.
+File scope preserves exact authorized path/verification-target strings, including
+absolute, relative and native Windows spellings. Admission does not resolve paths
+or grant filesystem access; existing approval and executor permissions remain
+caller-owned. Unapproved scope changes fail identity checks; NUL strings are malformed.
+Unknown versions/operations, unsafe packet IDs, malformed or mixed forms,
+ambiguous allocation/identity or graph cycles fail closed.
+
+Dispatch requires the target PENDING, current inputs, every prerequisite
+current/evidence-bound VERIFIED, and an unexhausted repair allowance. Shared or
+unknown source writers serialize. Overlap additionally needs independent current
+runtime facts proving distinct isolated workspaces. Relevant input changes
+invalidate the affected packet and transitive dependents that consume its result;
+keep previous evidence and counters. Unrelated branch/HEAD changes are inspected
+and reuse evidence only when relevant identities still match.
+
+For packet verification, `packet_evidence[packet_id]` binds the exact
+`approved_plan_identity`, `packet_definition_digest` (canonical packet without
+`execution`, same JSON encoding), `input_identity`, `build_execution_lane`,
+`implementation_evidence_ref`, `native_evidence_ref`, conditional independent
+`builder_evidence_ref`, and `self_check: {result: passed, evidence_ref}`. Its
+`acceptance_results` lists every exact criterion once with `result: passed` and
+`evidence_ref`. `validation_results` retain the actual selected-check rows:
+`selected_check_ids`, exact due `binding_obligation_refs`, `result: passed`,
+`evidence_ref`, and either `executed_command: {check_id, argv, cwd}` for a sole
+command CheckSpec or its unchanged concrete `procedure`. A binding with no check
+row uses `binding_results: [{binding_obligation_ref, result: passed, evidence_ref}]`.
+Missing, failed, partial, stale, wrong-command/cwd/procedure/binding/lane/self-check
+or omitted criteria evidence prevents VERIFIED; worker DONE cannot substitute.
+
+Active TDD additionally requires the exact `red_check_id`, `red_command`,
+`red_cwd` and `expected_red_failure` on the approved packet. Omit the actual cycle
+ref until RED starts; then retain it under `execution.tdd_cycle_log_ref` and expose
+its exact top-level alias only in the materialized worker projection.
+Exactly one due selected ID intersects the unchanged applicable IDs; split packets
+for multiple applicable IDs. The trusted caller resolves `tdd_cycle` from the same
+current canonical assistant-tdd `cycle_log` reference: its `red` is the unchanged
+Builder/Tester RED evidence with seven required fields (`check_id`, `test_file`,
+`test_name`, `command`, `cwd`, `failure_summary`, `right_reason`), preserving any
+producer metadata; its `red_phase` is the unchanged actual
+`cycle_log` entry's `red` object, including all retained invocations. Neither is
+an approved definition field: store them only in resolved caller evidence, never
+on the canonical Plan or packet. The helper neither loads refs nor establishes
+producer provenance; candidate assertions cannot supply their own proof. The trusted
+producer/resolver validates the COMPLETE canonical `red_phase`, including every
+supplied `check_id` resolving to a selected CheckSpec with exact selected `argv`/`cwd`.
+The helper checks retained invocation shape and exactly one matching authorizer's
+consistency; it does not revalidate other supplied IDs against selected CheckSpecs.
+
+`red_phase` requires `verified_failing: true`, nonblank `failure_reason`, and
+`test_file`/`test_name` equal to the handoff evidence. Every `command_results`
+entry retains a nonblank `target`, a nonempty literal string `argv` (nonblank
+executable), explicit nonblank `cwd`, `result: passed|failed|partial|unavailable`,
+and `freshness: current|stale|unknown`; optional `check_id`, `test_file`, and
+`test_name` values are nonblank strings when present. Exactly one invocation
+matches all of the sole selected/applicable `check_id`, planned `argv`/`cwd`,
+handed-off `test_file`/`test_name`, `result: failed`, and `freshness: current`.
+Other invocations validated by the trusted producer/resolver against the complete
+canonical contract, including unrelated current failures, remain unchanged and do
+not authorize edits; duplicate matching authorizers block.
+
+The planned packet's `expected_red_failure` still exactly equals its unchanged
+CheckSpec oracle. Actual `failure_summary`, `right_reason`, and producer
+`failure_reason` remain their observed diagnostic/explanation strings, not copies
+of that oracle. The TDD producer and trusted resolver adjudicate whether the
+failure proves the oracle; `verified_failing` records that decision. The helper
+checks typed/current invocation consistency without literal prose comparisons or
+inventing right-reason evidence. Before valid actual RED, production stays blocked.
+
+Only an admitted separated Code Writer production/refactor dispatch receives an
+unchanged deep copy of `red` evidence with seven required fields and any producer
+metadata as `red_evidence`; other stages/lanes and stored definitions omit it. The resolved `red_phase` is not a worker projection.
+Existing `green` with `all_tests_pass`, `production_file`, `command`, `cwd`, and
+`invocation_ref`, and `refactor` with `all_tests_pass`, `changes_made`, `command`,
+`cwd`, and a distinct `invocation_ref` remain consistency projections of actual
+owner evidence, never a substitute log or permission to fabricate phases. Preserve
+lane-specific RED/production/GREEN/refactor ownership. Inactive TDD creates no RED
+obligation. Existing identity, lane, input freshness, stage, and projection-equality
+guards remain required alongside this current producer proof.
+
+Completion evidence binds the exact approved identity and `snapshot_identity` and
+carries the same result/criterion/binding rows for `completion_allocation`. Each
+already-required terminal gate has `{passed, snapshot_identity,
+after_integration, evidence_ref}` under `terminal_gates`, resolved from canonical
+current review/QA/harness results. The Orchestrator validates integrated checks
+before fresh independent review and projects only real post-integration evidence.
+Helper consistency cannot replace canonical review contracts or waive a due gate.
+
+### Verified v12/v13 slice compatibility
+
+Read-old/write-new admission uses independently verified v12 or released-v13 slice producer/version
+provenance with original `slice_manifest` and `implementation_steps`. Original
+untagged objects need no rewrite; an optional embedded `schema_version`
+must agree with that provenance. The embedded tag must equal trusted producer.schema_version; contradictory tags, unknown versions, unreleased canonical13 and mixed canonical markers block.
+`context.legacy` contains verified `producer: {schema_version: "12.0"|"13.0",
+producer_ref, verified: true}`, `source_sha256` of the unchanged original object,
+`source_identity` equal to independently approved `approved_source_identity`,
+`completion_allocation`, and retained `source_evidence_refs`. Released-v13 additionally requires trusted `producer.runtime: claude|codex|gemini`; missing/unknown runtime blocks. Claude/Codex original records require writer_selection, while Gemini retains native fallback. Original supplied worker_stage must be a writer enum; active separated v13 requires it. Preserve source stage/selection metadata, runtime and exact original version in immutable provenance, never as current authorization. Preserve original
+bytes, hashes and results; no historical rewrite or permanent ledger.
+
+One packet per source slice maps its safe descriptive `slice_id` to `packet_id`.
+Multiple packets require unique safe stable `task_id` values or an exact-once
+source-bound `packet_mapping: [{source_packet_index, slice_id, packet_id}]` covering
+every original packet. Never guess producer/version, sanitize IDs, merge or drop
+work. Conserve slice-wide acceptance, requirement, CheckSpec and binding obligations
+through original packet allocations plus explicit task-wide completion allocation.
+Expand each prerequisite slice to ALL its mapped packets and conservatively chain
+packets within a source slice. Validate all resulting dependencies and conservation.
+Ambiguity, stale/conflicting source identities, missing allocation, unsafe mapping,
+mixed forms or cycles blocks. Old worker status never automatically verifies new
+work: historical refs/results are retained under reconciliation provenance and
+current owner evidence must be rebound before VERIFIED. Record the mapping under
+existing reconciliation provenance only; new producers emit only canonical v14. After normalization, every direct canonical boundary requires the independently retained accepted `previous_plan` whenever either snapshot carries provenance. Preserve provenance presence and canonical JSON digest exactly; do not delete it, add it to fresh v14, or use Python scalar equality to authenticate it.
+
+
+Caller-owned stage proof extends the existing context/evidence boundary only:
+`context.writer_actor_ids: {packet_id: native_actor_id}` contains independently
+observed current native identities when available. Existing
+`packet_evidence[packet_id]` retains its approved_plan_identity,
+packet_definition_digest, input_identity and lane, plus `writer_actor_id` and
+conditional `tests: {mode: authored|reuse, evidence_ref, writer_actor_id?}`.
+For resolved `required`, preserve the assertion-source proof; authored test proof
+requires exact actor equality with the trusted current actor; reuse explicitly
+retains existing assertions without fabricated authoring. For resolved
+`not_applicable`, omit `tests` entirely and require inactive local TDD. Native
+writer, identity, lane, self-check, acceptance and selected/binding result guards
+remain mandatory; no-tests does not waive build or terminal obligations.
+Test authoring/RED cannot use no-tests applicability. For initial new-agent
+test_authoring or genuine initial production with resolved no-tests, reused
+assertions or bounded execution, a prior actor may be unavailable before creation. The caller records the actual returned/observed
+actor; later production after authored tests and refactor require exact nonmissing
+actor equality. Same configured agent name is insufficient. Wrong/missing/stale
+proof blocks; pure consistency cannot attest dispatch or invent authorship. The
+proofs resolve existing native dispatch/cycle records and never form a new ledger.
+Earlier verifier-authored RED remains truthful historical evidence and cannot
+be relabelled current authorizing RED under writer-owned execution rules.
+
+### Candidate adoption
+
+Schema/prose consistency and local controls do not prove native consumption,
+isolation telemetry or total-cost benefit. Keep default installation/promotion
+gated pending current regression/obligation evidence and a separately approved
+native comparative pilot. Before calls, fix supported exact runtime/model,
+call/elapsed/token limits, stop conditions and benefit threshold. The proposed
+four paired scenarios cap discovery at eight top-level task runs; internal model
+turns/child calls count against the separately approved resources. Missing
+capability or resource approval remains an explicit gap. No ordinary task inherits
+this experiment and no static-byte/word-count result establishes efficiency.
+
+### Current-cycle stage ordering
+
+The caller resolves existing current-cycle progress under the same approval, packet/input identity and cycle reference. New test_authoring or pre_production_red cannot replay an existing cycle; production cannot replay passed GREEN or a started REFACTOR, and no dispatch stage may reuse a fully passed REFACTOR cycle. Failed incomplete GREEN can return to production only within the unchanged approved recovery allowance/current cycle. This adds no stage ledger. In bounded_executor the internal pre_production_red/green phases materialize public production and refactor_verification materializes public refactor; the one executor owns the actual internal invocations, and these aliases grant no premature production edit. Stored work remains stage-neutral.
 
 ## Medium Tasks — Standard Plan (`execution_intent != prepare_only`)
 
@@ -248,10 +499,10 @@ Covers the essentials without Security/Operability overhead. Fill this in during
 ### Risks / edge cases
 - [risk]: [mitigation]
 
-## Decomposition Plan Review
+## Plan review
 
 - Scope understanding: [pass/fix needed + evidence]
-- Slice/subagent count: [count + sanity rationale]
+- Packet/agent count: [smallest useful count and concrete purpose of extra packets]
 - Step/cost budget: [budget or direct-fallback rationale]
 - Dependency order: [summary]
 - Output-plan match: [artifact/verification alignment]
@@ -304,12 +555,12 @@ Load `references/plan-harness-appendix.md` for full harness and QA schemas.
 - qa_evaluation_mode: [required | optional | not_required + reason]
 - qa_trigger_reason: [QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.]
 
-## Slice manifest from Decompose
+## Canonical implementation_steps
 
-Use the shared Slice Manifest structure above. Paste the approved Decompose manifest verbatim and keep `single_slice_rationale` when exactly one slice exists.
+Store the canonical implementation_steps collection once using the approved definition and completion allocation above; reference it from every progress or worker view.
 
 ## Task packets
-Use the Executable Task Packet structure above for each approved slice. Order packets by dependency, consume the slice manifest directly, and do not rediscover boundaries in Plan.
+Use the Executable Task Packet structure above for each purpose-backed canonical packet. Order by dependencies; materialize deep worker projections from the approved definition.
 
 ## Existing-system feature preparation (when `feature_preparation_scope=existing_system`)
 - Feature-preparation evidence ref: [stable `feature_preparation_evidence.ref`]

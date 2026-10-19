@@ -121,3 +121,5 @@ pre-Build Done Contract, Harness Recipe, and runtime-ref gates, task packets,
 Build, and verification.
 It does not return invented changed files,
 Build, test-run, review, or final-handoff evidence.
+
+Preparation-only forbidden execution includes implementation_steps, current_task_packet and packet_admission execution outputs. Readiness evidence never creates an approved executable definition.

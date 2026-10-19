@@ -32,83 +32,34 @@ deviation, dispatch, and verification signals remain explicit when applicable.
 
 ## Phase: Decompose
 
-**Run condition:** `execution_intent != prepare_only`.
+Run only when a concrete acceptance, ownership/context, prerequisite,
+recovery/rollout or binding protocol purpose needs additional executable packets.
+Coherent medium+ work goes directly to Plan with one packet; size alone does not
+select multiple packets or Architect. Eligible light work remains direct.
+Preparation-only and unresolved progressive discovery produce no executable work.
 
-Print: `--- PHASE: DECOMPOSE ---`
+Resolve all applicable Discover exit assertions, the Requirement Acceptance Map,
+current specialist verification decision and conditional Architecture Decision Pack
+before refining boundaries. Every packet advances accepted requirement ids and
+has observable deliverable, exact file scope, binary criteria, due CheckSpec ids,
+exact binding tuples, success signal, evidence and deviation/rollback rule.
+Layer-only, module-only, folder-only and broad feature/setup/component splits need
+a concrete independently verifiable deliverable and execution purpose; enabling
+work otherwise stays with its consuming outcome.
 
-**Goal:** Break the problem into the smallest iterable slices that can each be built, tested, and reviewed against acceptance criteria. Slices are independently verifiable; every `depends_on` prerequisite is `VERIFIED` before starting a dependent slice, and integrated output is validated before Review.
+Refine `implementation_steps` directly using `references/plan-template.md`.
+Dependencies name canonical `packet_id` values in prerequisite order; cycles,
+unknown IDs and unresolved allocation block. Do not create a separate manifest,
+single-item rationale or decomposition-review artifact. Ordinary Plan review
+retains scope understanding, packet/agent count sanity, step/cost budget,
+dependency order, criterion/check alignment, output-plan match and fallback.
 
-A slice is not a layer, folder, module, broad feature bucket, setup step, or broad architectural component. It is the smallest deliverable increment that produces observable behavior, artifact output, contract surface, docs, eval coverage, config, migration, or refactor evidence.
+Use Architect only for a concrete Pack/design uncertainty and applicable role
+trigger; otherwise perform bounded refinement with equivalent evidence. Before
+Plan fixes checks, preserve the unchanged assistant-verification decision and its
+TDD choice. Store its stable ref/full-object digest once and derive local
+`tdd_applies` from due selected IDs; multiple applicable TDD IDs require separate
+packets. No boundary or packet count waives approval or downstream quality gates.
 
-**Skip condition:** Small tasks skip this phase entirely — they ARE the atomic unit. For `prepare_only`, skip Decompose and move from Discover to Preparation Completion; optional Plan readiness has no slices.
-
-**Entry rule:** Medium+ implementation/execution work does not enter Decompose until Discover has persisted `Clarification status: ready` and `Clarification defaults applied: true | false` is explicitly recorded.
-
-When decomposition is needed because the task has multiple coherent slices, a Pack-backed boundary, or unresolved cross-slice acceptance risk, produce bounded slice boundaries from the context map, Requirement Acceptance Map, risk tier, required gate packs, Context Budget note, and the Architecture Decision Pack when it applies. Every slice names the requirement ids it advances. Dispatch **Architect** only when `subagent_execution_mode=delegated`; otherwise perform the same direct design work with equivalent criteria and evidence. The Architect consumes the Pack rather than recreating its facts, and each affected slice carries the Pack reference. Task size can signal possible decomposition, but never creates an Architect role by itself. When editing framework skills, contracts, evals, runtime integrations, or workflow patterns, retrieve similar local patterns first and record the canonical pattern path plus any counterexample/edge case checked.
-
-Before Architect dispatch and the Decomposition Plan Review (DC2), resolve the canonical task decision through the existing `assistant-verification` Analysis owner. For each proposed slice, confirm that its selected CheckSpecs cover the slice's acceptance criteria and risks; if coverage must change, return through the same Analysis owner and reconcile one task-level decision before DC2. Carry the decision and selected check identities unchanged into every slice. Each slice's `selected_check_ids` is its due subset; `tdd_applies` is true only when that subset intersects `tdd_choice.applicable_check_ids`. The task-wide `tdd_mode` remains the canonical `tdd_choice.mode`; Architect does not choose or rewrite either value. If any slice lacks resolved coverage, return before Plan. Plan approval remains required before Build.
-
-Print: `>> Dispatching Architect → strict slice decomposition` (when `subagent_execution_mode=delegated`)
-Print: `>> Direct fallback Architect responsibility → strict slice decomposition` (when `subagent_execution_mode=direct_fallback`)
-
-### Decomposition rules
-
-1. **One or more valid slices** — use exactly one slice when that is the smallest iterable increment and record the single-slice rationale.
-2. **Reject broad splits** — layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style decomposition is invalid as live Decompose output unless the slice is a verified deliverable artifact.
-3. **No setup-only slices** — contract-only, config-only, migration-only, docs-only, eval-only, or refactor-only work is valid only when it is the deliverable artifact slice and has acceptance criteria plus verification evidence.
-4. **Each slice must be independently verifiable** — if you cannot write a binary pass/fail check and expected success signal for it, it is not a slice.
-5. **Order by dependency** — independent slices first, dependent slices after every `depends_on` prerequisite.
-6. **No circular dependencies** — if two slices require each other to become observable, merge them into the smallest single iterable slice.
-7. **Gate packs become criteria** — every required task-category gate must appear in at least one slice or in the plan-level verification criteria.
-
-### Slice manifest format
-
-```
-## Slice Manifest
-
-### Slice [slice_id]: [name]
-- **Observable increment:** [behavior, artifact, contract, docs, eval, config, migration, or refactor output this slice makes visible]
-- **Deliverable type:** behavior | artifact | contract | docs | eval | config | migration | refactor
-- **Acceptance criteria:**
-  - [ ] [Binary pass/fail statement]
-  - [ ] [Binary pass/fail statement]
-- **Files to create:** [exact paths or "none"]
-- **Files to modify:** [exact paths or "none"]
-- **Files to test:** [exact test paths or verification targets]
-- **Enabling changes included:** [setup, contracts, wiring, or "none"]
-- **Depends on:** [slice ids, or "none"]
-- **Verification decision:** [unchanged canonical decision and selected CheckSpecs]
-- **Selected check IDs:** [the due subset for this slice]
-- **Binding obligation refs:** [exact applicable due tuples `{kind,value,source_ref}`]
-- **TDD applies:** [whether selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids]
-- **Selected verification:** [exact argv/cwd for command checks; otherwise the concrete CheckSpec procedure and observable result; no dummy command]
-- **Expected success signal:** [specific passing output, file, or review signal]
-- **Evidence to record:** [ledger/eval/test/review artifacts]
-- **Deviation rollback rule:** [what to do if scope/files/behavior differ]
-
-Single-slice rationale: [required when the manifest has exactly one slice]
-```
-
-### Verification criteria rules
-
-Each criterion must be:
-- **Binary** — pass or fail, no "partially done"
-- **Observable** — can be checked by running a test, a build, or inspecting output
-- **Specific** — "endpoint returns 200 for valid input" not "endpoint works"
-
-Good: `[ ] GET /api/items returns 200 with JSON array`
-Bad: `[ ] API works correctly`
-
-### Decomposition Plan Review
-
-Before leaving Decompose for medium+ work, load `references/decomposition-plan-review.md` and review the slice/subagent plan. Record the Decomposition Plan Review packet: Broad-split rejection, scope understanding, slice/subagent count sanity, step/cost budget, dependency order, output-plan match, fallback path, and decision (`proceed`, `revise_decomposition`, or `return_to_discover`). Broad-split rejection must explicitly prove broad layer/module/folder/feature/setup/contract/component splits were rejected unless they are verified deliverable artifact slices. If the decision is not `proceed`, repair decomposition or return to Discover before Plan.
-
-### Plan handoff
-
-Persist the slice manifest and Decomposition Plan Review packet, then carry both into Plan. Do not wait for separate
-slice approval in Decompose; the Plan approval gate covers the slice
-manifest, decomposition review, implementation packets, file scope, verification criteria, and risks
-together. If decomposition exposes ambiguity, scope expansion, or competing
-valid approaches, return to Discover for clarification before planning.
-
-Print: `--- PHASE: DECOMPOSE COMPLETE ---`
+Carry the canonical collection into ordinary Plan approval; do not add a separate
+Decompose approval wait.

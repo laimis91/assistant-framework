@@ -85,6 +85,18 @@ array_contains() {
     return 1
 }
 
+preflight_workflow_python() {
+    array_contains assistant-workflow "${SKILLS[@]}" || return 0
+    local version=""
+    if ! command -v python3 >/dev/null 2>&1 \
+        || ! version="$(python3 -B -c 'import sys; print("%d.%d.%d" % sys.version_info[:3]); sys.exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null)" \
+        || [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] \
+        || ! (( 10#${BASH_REMATCH[1]} > 3 || (10#${BASH_REMATCH[1]} == 3 && 10#${BASH_REMATCH[2]} >= 9) )); then
+        fail "Python 3.9+ is required when the selected skill closure includes assistant-workflow. Install a supported python3 and rerun. No installation files have been changed."
+    fi
+    info "Workflow Python 3.9+ invocation: python3 (Python $version)"
+}
+
 validate_managed_skill_name() {
     local skill="$1"
 
@@ -156,8 +168,8 @@ preflight_managed_skill_closure() {
 # Unknown forms in these fields are incompatible; unrelated contract sections
 # remain owned by the workflow skill. Boolean false must stay an unquoted token.
 declared_workflow_contract_compatible() {
-    local contract_file="$1" expected_contract="$2"
-    LC_ALL=C awk -v expected_contract="$expected_contract" -v bom="$(printf '\357\273\277')" '
+    local contract_file="$1" expected_contract="$2" expected_version="${3:-13.0}"
+    LC_ALL=C awk -v expected_version="$expected_version" -v expected_contract="$expected_contract" -v bom="$(printf '\357\273\277')" '
         function reject() { invalid = 1; exit 1 }
         function trim(value) { sub(/^[ ]+/, "", value); sub(/[ ]+$/, "", value); return value }
         function scalar(value, expected) {
@@ -216,7 +228,7 @@ declared_workflow_contract_compatible() {
         }
         END {
             if (invalid || metadata_seen["schema_version"] != 1 || metadata_seen["contract"] != 1 || metadata_seen["skill"] != 1) exit 1
-            if (!scalar(metadata["schema_version"], "13.0") || !scalar(metadata["contract"], expected_contract) || !scalar(metadata["skill"], "assistant-workflow")) exit 1
+            if (!scalar(metadata["schema_version"], expected_version) || !scalar(metadata["contract"], expected_contract) || !scalar(metadata["skill"], "assistant-workflow")) exit 1
             if (expected_contract == "handoffs") {
                 if (protocols != 1 || sections["stages"] != 1 || stage != 3) exit 1
                 for (i = 1; i <= 3; i++) {
@@ -250,9 +262,11 @@ preflight_workflow_role_compatibility() {
         fi
     done
     if ! cat "$workflow/SKILL.md" >/dev/null \
-        || ! declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index \
-        || ! declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs; then
-        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare schema 13.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
+        || ! { { declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 13.0 \
+                  && declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 13.0; } \
+               || { declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 14.0 \
+                  && declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 14.0; }; }; then
+        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare matching schema 13.0 or 14.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
     fi
 }
 
@@ -788,6 +802,7 @@ fi
 # resolver preflights each member before it reads that member's metadata; this
 # second pass also covers full installs and catches changes before copying.
 preflight_managed_skill_closure "${SKILLS[@]}"
+preflight_workflow_python
 preflight_workflow_role_compatibility
 
 SETTINGS_FILE="$AGENT_HOME/settings.json"

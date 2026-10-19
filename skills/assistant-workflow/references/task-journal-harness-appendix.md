@@ -143,3 +143,5 @@ build/test evidence and Code Reviewer or Reviewer compatibility evidence.
   - [blocker|concern|observation] [criterion] - [evidence] -> [fix/defer/open question]
 
 [...repeat QA Evaluation until accepted, accepted_with_concerns, blocked, or max round 10 reached...]
+
+Legacy recovery display keys such as slice and affected_slice_or_round retain their public shape. Project an explicit resolved canonical packet reference into them; they create no separate slice authority.

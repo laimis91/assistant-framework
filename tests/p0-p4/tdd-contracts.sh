@@ -546,18 +546,6 @@ if ! ruby -ryaml -e '
 ' "$handoffs_file"; then
     missing_codewriter_red_evidence_terms+=("verification_command must be conditional on command-bearing selected CheckSpec")
 fi
-for field in \
-    check_id \
-    test_file \
-    test_name \
-    command \
-    cwd \
-    failure_summary \
-    right_reason; do
-    if ! codewriter_red_evidence_field_required "$handoffs_file" "$field"; then
-        missing_codewriter_red_evidence_terms+=("red_evidence.$field required")
-    fi
-done
 for term in \
     "condition: \"tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production\"" \
     "Incoming BuilderTester RED evidence required before production edits only in separated_workers" \
@@ -678,7 +666,8 @@ if ruby -ryaml -e '
     applies.fetch("required") == true &&
     planned_red_fields.all? { |field| field["required"] == "conditional" && field["condition"] == "tdd_applies is true" } &&
     red_check_valid && planned_bindings_valid && incoming_bindings_valid &&
-    (evidence_fields - actual_evidence_fields).empty? &&
+    actual_evidence_fields.sort == evidence_fields.sort &&
+    red.fetch("object_fields").all? { |field| field["required"] == true } &&
     red.fetch("description").include?("In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits")
   lane_cases = [
     applies_to.call(condition, "separated_workers", true),

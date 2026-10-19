@@ -4,7 +4,7 @@ Use this template when decomposing mega tasks into strict slice packets. Each ap
 
 ## Decomposition rules
 
-- Aim for one or more smallest iterable slice packets; use a single slice when correct and record the rationale
+- Default to one coherent packet; extra packets require execution purpose, independent of size
 - Do not split by layer, module, folder, broad feature bucket, setup step, or broad component unless that split is itself a verified deliverable artifact slice
 - Contract-only work is valid only when it is the verified deliverable artifact slice
 - Dependent slices start only after prerequisite slices are VERIFIED
@@ -30,10 +30,12 @@ Feature-preparation scope: [not_applicable | existing_system]
 Approved preparation result: [for implement_only, copy the complete typed approved_feature_preparation_result unchanged, including optional readiness/future obligations; otherwise N/A]
 
 ### Strict slice packet (execution contract)
-This strict slice packet is the authoritative packet and executable contract for the slice. Supporting context below cannot satisfy or override these fields. If any required field is missing, return `NEEDS_CONTEXT` instead of executing from loose Goal/Scope prose.
+This brief is a deep current_task_packet projection of the authoritative packet; it is a projection of the exact approved canonical packet; it cannot redefine the stored Plan. Supporting context below cannot satisfy or override these fields. If any required field is missing, return `NEEDS_CONTEXT` instead of executing from loose Goal/Scope prose.
 
-- slice_id: [approved slice id]
-- slice_name: [approved slice name]
+- packet_id: [exact canonical implementation_steps packet_id]
+- approved_plan_identity: [current task/plan/approval/definition identity]
+- verification_decision_ref: [stable ref and SHA-256 of full unchanged specialist decision]
+- name: [canonical packet name]
 - observable_increment: [what becomes visible/verifiable after this slice]
 - deliverable_type: behavior | artifact | contract | docs | eval | config | migration | refactor
 - files_to_create:
@@ -151,8 +153,9 @@ debugging, explorer, architect, candidate search, replan, or restart.
 - [file]: [what changed]
 
 ### Slice evidence
-- slice_id: [id]
-- worker_stage: [actual assigned stage]
+- packet_id: [id]
+- worker_stage: [test_authoring | production | refactor for the materialized writer only]
+- verification_stage: [pre_production_red | final_verification for Builder only]
 - writer_selection: [carried selection and actual runtime identity]
 - build_execution_lane: [selected lane]
 - tdd_cycle_log_ref: [same actual ref once RED starts; otherwise not_started]
@@ -197,11 +200,11 @@ All slice packets are verified. Now integrate:
 1. Integrate the completed slice changes and resolve conflicts
 2. Confirm verified prerequisite slice outputs are present and consumed
 3. Run selected integration checks and binding project checks over the integrated scope
-4. Run selected boundary tests when the manifest contains multiple items
+4. Run each due integrated selected/binding check irrespective of packet count
 5. Run a broader suite only when it is selected or binding
 6. Fix integration mismatches and request fresh review
 
-After integration, run selected checks and binding project checks over the completed scope before fresh Review; do not add an unselected full suite. Cross-slice validation applies only when slice_manifest contains more than one item; when it contains one item, record cross-slice validation as not_applicable using the one-item manifest and single_slice_rationale. A single-slice selected integration check still covers the integration claim.
+After integration, run selected checks and binding project checks over the completed scope before fresh Review; do not add an unselected full suite. Integrated selected and binding checks remain due for one or multiple packets before fresh independent Review; packet-local evidence cannot waive them.
 
 Verified slices completed:
 - [name]: [what was built and verified]

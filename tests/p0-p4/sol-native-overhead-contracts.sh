@@ -345,10 +345,10 @@ fi
 if rg -qi 'read (all |the )?contract files in .contracts/.+before|load and follow .+contracts before' "$review_skill"; then
     progressive_failures+=("review still eagerly requires every contract")
 fi
-if ! rg -qi 'load only .+contract.+(current|active|applicable|when needed)|do not load (all|every) contract' "$workflow_skill"; then
+if ! rg -qi 'load only .+contract.+(current|active|applicable|when needed)|do not load (all|every) contract|load progressively by current selector' "$workflow_skill"; then
     progressive_failures+=("workflow lacks an explicit progressive contract-loading rule")
 fi
-if ! rg -qi 'load only .+contract.+(current|active|applicable|when needed)|do not load (all|every) contract' "$review_skill"; then
+if ! rg -qi 'load only .+contract.+(current|active|applicable|when needed)|do not load (all|every) contract|load progressively by current selector' "$review_skill"; then
     progressive_failures+=("review lacks an explicit progressive contract-loading rule")
 fi
 if ! grep -Fq 'contracts/index.yaml' "$workflow_skill"; then

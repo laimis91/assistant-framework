@@ -190,14 +190,14 @@ while IFS='|' read -r ownership_skill ownership_case ownership_mutation; do
         ownership_eval_failures+=("$ownership_case failed without structured evidence")
     fi
 done <<'CASES'
-assistant-workflow|ownership-authoring-without-red|.slice_verification_summary[0].final_status="VERIFIED"
-assistant-workflow|ownership-authoring-without-red|.slice_manifest[0].worker_stage="production"
-assistant-workflow|ownership-production-invalid-red|.slice_verification_summary[0].implementation_status="done" | .status="DONE"
+assistant-workflow|ownership-authoring-without-red|.current_task_packet.execution.state="VERIFIED"
+assistant-workflow|ownership-authoring-without-red|.current_task_packet.worker_stage="production"
+assistant-workflow|ownership-production-invalid-red|.current_task_packet.execution.state="VERIFIED" | .status="DONE"
 assistant-workflow|ownership-verifier-prohibited-mutation|.changed_files=[]
 assistant-workflow|ownership-verifier-prohibited-mutation|.status="BLOCKED"
 assistant-workflow|ownership-verifier-prohibited-mutation|del(.status)
-assistant-workflow|ownership-mechanical-fixed-tests|del(.slice_manifest[0].writer_selection.mechanical_eligibility.correctness_expectations_ref)
-assistant-workflow|ownership-unresolved-test-oracle|.slice_manifest[0].writer_selection.agent="mechanical-writer"
+assistant-workflow|ownership-mechanical-fixed-tests|del(.current_task_packet.writer_selection.mechanical_eligibility.correctness_expectations_ref)
+assistant-workflow|ownership-unresolved-test-oracle|.current_task_packet.writer_selection.agent="mechanical-writer"
 CASES
 if [[ ${#ownership_eval_failures[@]} -eq 0 ]]; then pass; else fail "${ownership_eval_failures[*]}"; fi
 

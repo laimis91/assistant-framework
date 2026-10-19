@@ -1354,7 +1354,7 @@ handoffs:
       - name: acceptance_criteria
         type: string[]
         required: true
-        description: "Binary acceptance criteria from the user request, approved plan, slice manifest, or Done Contract"
+        description: "Binary acceptance criteria from the user request, approved canonical plan/packet scope, or Done Contract"
         validation: "At least one independently evaluable criterion is present"
         min_items: 1
 

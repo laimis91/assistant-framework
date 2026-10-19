@@ -38,7 +38,7 @@ PHASE_HEADINGS = (
 PLAN_HEADINGS = (
     "Small Tasks — Inline Plan (`plan_mode=inline`, `execution_intent != prepare_only`)",
     "Executable Task Packet (`execution_intent != prepare_only`)",
-    "Slice Manifest (`execution_intent != prepare_only`)",
+    "Canonical Packet Plan (`execution_intent != prepare_only`)",
     "Medium Tasks — Standard Plan (`execution_intent != prepare_only`)",
     "Large / Mega Tasks — Full Plan (`execution_intent != prepare_only`)",
     "Which tier to use",
@@ -154,12 +154,12 @@ def views(phases: MarkdownDocument, plans: MarkdownDocument) -> dict[Path, str]:
         ) + common),
         Path("plans/medium.md"): rendered_view(plans, (
             "Executable Task Packet (`execution_intent != prepare_only`)",
-            "Slice Manifest (`execution_intent != prepare_only`)",
+            "Canonical Packet Plan (`execution_intent != prepare_only`)",
             "Medium Tasks — Standard Plan (`execution_intent != prepare_only`)",
         ) + common),
         Path("plans/large.md"): rendered_view(plans, (
             "Executable Task Packet (`execution_intent != prepare_only`)",
-            "Slice Manifest (`execution_intent != prepare_only`)",
+            "Canonical Packet Plan (`execution_intent != prepare_only`)",
             "Medium Tasks — Standard Plan (`execution_intent != prepare_only`)",
             "Large / Mega Tasks — Full Plan (`execution_intent != prepare_only`)",
         ) + common),

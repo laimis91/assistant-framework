@@ -64,17 +64,17 @@ write_writer_routing_response() {
       dependent_output:"dependent must remain unchanged\n",
       failure_class:$failure_class,
       next_action:$next_action,
-      slice_manifest:[{
-        slice_id:$case_id,
+      implementation_steps:[{
+        packet_id:$case_id,
         writer_selection:({
           agent:$agent,
           rationale:(if $agent == "mechanical-writer" then "Concrete approved recipe with resolved decisions at initial selection; stale evidence stops dependent edits." else "Semantic/grader judgment or baseline classification requires intelligent handling." end)
         } + if $agent == "mechanical-writer" then {mechanical_eligibility:{recipe_or_example_ref:"recipe.md",resolved_decisions_ref:"decisions.md",scope_and_dependencies_ref:"scope.md",correctness_expectations_ref:"expectations.md"}} else {} end),
         selected_check_ids:["CHECK-OUTPUT"],
         binding_obligation_refs:[{kind:"required_scope",value:"only output.txt",source_ref:"scope.md"}],
-        tdd_applies:false
+        tdd_applies:false,
+        execution:{state:(if $implementation_status == "done" then "RUNNING" else "BLOCKED" end),evidence_refs:[],input_identity:{fixture:"current"},history:[],recovery:{attempt_count:0,no_progress_count:0}}
       }],
-      changed_files:(if $changed then [{path:"output.txt",change_type:"modified",description:(if $status == "NEEDS_CONTEXT" then "Preserved the actual partial approved wording after eligibility became stale." else "Applied the approved independently fixed output." end)}] else [] end),
-      slice_verification_summary:[{slice_id:$case_id,implementation_status:$implementation_status}]
+      changed_files:(if $changed then [{path:"output.txt",change_type:"modified",description:(if $status == "NEEDS_CONTEXT" then "Preserved the actual partial approved wording after eligibility became stale." else "Applied the approved independently fixed output." end)}] else [] end)
     }' >"$response_path"
 }

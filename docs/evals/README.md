@@ -1322,15 +1322,60 @@ selection remains an instruction contract with no executable routing controller.
 
 For skill-only response grading, `actual_output`, `dependent_output`, `status`,
 `failure_class` and `next_action` are bounded eval-only scalar projections; the
-binding tuple remains under `slice_manifest[0]`.
+binding tuple remains under canonical `implementation_steps[0]`; coordinator execution is separate from worker status.
 
 Claude and Codex intelligent/mechanical definitions and standalone deprecated code-writer retain the
 logical CodeWriter verification, TDD, status and independent review contract.
 Claude uses native Opus for intelligent-writer and Sonnet for fully specified mechanical-writer, retaining explicit deprecated code-writer intelligent compatibility. Gemini supported native/default tiers remain intact. Mechanical evidence must fix tests and implementation, including cases, expected values/oracles and assertion patterns.
 
-Workflow v13 adds writer worker_stage test_authoring before independent RED, production after matching current RED, and refactor after current GREEN. Stage-only DONE cannot complete Build; Builder/Tester authors no tests or fixtures/snapshots/configuration. The focused ownership suite mutates the structured stage contract and checks provider profiles; it does not claim native enforcement or model-quality evidence.
+Workflow v14 adds writer worker_stage test_authoring before independent RED, production after matching current RED, and refactor after current GREEN. Stage-only DONE cannot complete Build; Builder/Tester authors no tests or fixtures/snapshots/configuration. The focused ownership suite mutates the structured stage contract and checks provider profiles; it does not claim native enforcement or model-quality evidence.
 Metadata and phrase/schema matches alone cannot prove task success. Source
 migration, live installation and paid comparisons have separate authorization;
 total cost/value claims require accepted outcomes, correction/review effort,
 escalations, elapsed time and available whole-workflow usage. Missing telemetry
 stays unknown; the bounded synthetic pilot does not establish production savings.
+
+
+## Canonical packet admission controls
+
+The closed `assistant-workflow.packet_admission_v14` semantic validator reuses
+`skills/assistant-workflow/scripts/task-packet-admission.py`, the same install-portable
+pure helper used at Plan/resume/dispatch/verification/completion. Closed grading
+passes the inventory-selected `SKILL.md` separately from fixture and response
+content. The adapter authenticates the selected Workflow under its physical
+runner root's `skills` tree, or the current profile's `.agents/skills` only when
+the runner is that profile's configured `CODEX_HOME` or default `.codex`. Profile
+resolution uses nonblank `USERPROFILE`, then `HOME`, matching the PowerShell
+installer. It imports only that selected owner's contained regular helper;
+symlink escapes, arbitrary fixture adjacency, lookalike profile paths, missing
+helpers and unresolved authority fail without alternate/stale-sibling fallback.
+This does not expand default inventory or authorize fixture-selected code.
+The existing two verification producer aliases and seven Workflow review aliases
+load their unchanged safe-YAML schemas from the same recognized skills owner as
+the actual consumer contracts. Split consumers cannot fall back to stale sibling
+schemas when a companion is missing or escapes its owner. Existing temporary
+custom contract-data fixtures retain runner-owned co-located producer schemas;
+no new producer/alias or executable authority comes from fixture content.
+
+Three fixed
+workflow cases supply independent approval, requirement, obligation, input,
+evidence and workspace authority. Candidate answers cannot rewrite those facts;
+accepted answers include the exact admitted canonical Plan and deep projection,
+and correct rejection of unsafe dependency facts passes. Vocabulary-only readiness
+answers fail. Existing task-packet controls exercise current evidence, all five
+prerequisite states, isolation, immutable projections, exact command/cwd and
+non-command/TDD identity, caller-resolved test applicability, invalidation/recovery,
+completion and conservative v12
+one-to-one/one-to-many obligation conservation. Test-required applicability keeps
+`authored|reuse` assertion provenance and native author equality. A current
+independently resolved no-tests assessment permits an omitted `tests` object,
+never invented reused tests. Both branches retain current identity, lane,
+native writer, self-check, acceptance and all selected/binding result guards;
+missing/unresolved/stale applicability blocks and active TDD requires tests.
+
+These controls establish consistency of stated admission decisions. They do not
+prove native worker behavior, isolation/overlap telemetry, implicit activation,
+model quality or total-cost benefit. Missing native capability stays unavailable.
+Default installation/promotion and a comparative pilot require separate approval
+of exact runtime/model, call/elapsed/token limits, stop conditions and benefit
+threshold. No native/model calls or real-user installation are part of these checks.

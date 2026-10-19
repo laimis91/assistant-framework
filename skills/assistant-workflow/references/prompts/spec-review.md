@@ -6,10 +6,10 @@ Quality review cannot satisfy this review. Code style, architecture, and maintai
 
 ## Inputs
 
-- Approved plan or task packet/slice manifest
+- Approved plan or task packet/canonical packet collection
 - Changed files list and `git diff`
 - Build/test/verification evidence recorded during Build
-- Task journal slice verification ledger for medium+ tasks
+- Task journal canonical packet execution evidence for medium+ tasks
 
 ## Protocol
 

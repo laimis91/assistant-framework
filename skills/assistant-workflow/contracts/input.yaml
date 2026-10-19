@@ -3,7 +3,7 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "13.0"
+schema_version: "14.0"
 contract: input
 skill: assistant-workflow
 
@@ -700,3 +700,11 @@ fields:
 # 5. Clarification has no numeric cap or quota. Ask every admissible material question, grouped by topic; never ask a ritual question because of task size.
 # 6. Auto-apply only source-backed technical defaults; record topic/value/source/rationale; derive flag from entries. Convention/reversibility cannot settle product choices. Carry unanswered topics; `defaults` explicitly accepts displayed recommendations as an answer.
 # 7. Log resolved input as: >> Input: {task_type} | scope: {scope_hint or "auto"} | constraints: {count}
+
+  - name: decomposition_required
+    type: boolean
+    required: false
+    default: false
+    description: "True only for a concrete acceptance, ownership/context, prerequisite, recovery/rollout or binding protocol boundary; size alone does not select it. Coherent implementation defaults to one canonical packet."
+    validation: "prepare_only and unresolved progressive discovery have no executable packets; eligible light work stays direct."
+    on_missing: infer

@@ -74,7 +74,7 @@ For `execution_intent != prepare_only`:
 4. Identify risks and edge cases
 5. Put the Artifact Contract before task packets and map every medium+ task packet to at least one required artifact or acceptance criterion
 6. For medium+ harness-capable work, put compact refs for Done Contract, Harness Recipe, run-state/trace/replay artifacts, and Artifact Reference Ledger before Build; load `references/plan-harness-appendix.md` for the full schemas. The base plan keeps `N/A: [reason]` for non-harness work.
-7. For medium+ tasks: consume the Decompose slice manifest directly in the plan and align each task packet to exactly one slice_id without rediscovering boundaries
+7. Use one canonical implementation_steps collection; default coherent work to one packet, preserve any purpose-backed refinement from Decompose, bind the approved definition identity and run Plan admission with independently resolved authority
 8. Write ordered implementation steps with file paths
 9. For large/mega: fill in Security and Operability sections. For medium: only if the task touches auth, PII, payments, or infra (promote to Full tier per plan-template.md)
 10. Carry `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `qa_evaluation_mode`, `harness_capable`, `build_execution_lane`, `workflow_state_mode`, `Required gates`, `Required agents`, `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`, and `Search mode` into the plan. Each required gate must map to task packet criteria or explicit N/A rationale.

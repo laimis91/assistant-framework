@@ -325,7 +325,7 @@ if ruby -e '
   required = {
     3 => "spec_review_result.status == PASS",
     4 => "review_result contains validated canonical result",
-    6 => "slice_verification_summary has one VERIFIED entry per slice"
+    6 => "every canonical implementation_steps packet has current evidence-bound execution.state VERIFIED"
   }
   valid = required.all? do |number, phrase|
     line = checks.find { |candidate| candidate.start_with?("# #{number}. ") }
@@ -531,10 +531,16 @@ test_start "prepare-only excludes every implementation-only completion and harne
 if ruby -ryaml -e '
   output = YAML.load_file(ARGV.fetch(0))
   contents = File.read(ARGV.fetch(0))
-  implementation_artifacts = %w[changed_files test_results spec_review_result review_result qa_evaluation_result final_handoff subagent_evidence slice_manifest slice_verification_summary harness_run_state trace_ledger replay_packet artifact_reference_ledger]
+  implementation_artifacts = %w[implementation_steps changed_files test_results spec_review_result review_result qa_evaluation_result final_handoff subagent_evidence harness_run_state trace_ledger replay_packet artifact_reference_ledger]
   artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
   completeness = contents.lines.grep(/^# (2|3|4|5|6|10)\./)
-  valid = implementation_artifacts.all? { |name| artifacts.fetch(name).fetch("condition").include?("execution_intent != prepare_only") } &&
+  handoffs = YAML.load_file(File.join(File.dirname(ARGV.fetch(0)), "handoffs.yaml")).fetch("handoffs")
+  projection_guarded = %w[orchestrator_to_code_writer orchestrator_to_builder_tester].all? do |name|
+    packet = handoffs.find { |handoff| handoff["name"] == name }.fetch("context_fields").find { |field| field["name"] == "current_task_packet" }
+    packet.fetch("condition").include?("execution_intent != prepare_only")
+  end
+  retired_absent = %w[slice_manifest slice_verification_summary single_slice_rationale decomposition_plan_review].none? { |name| artifacts.key?(name) }
+  valid = projection_guarded && retired_absent && implementation_artifacts.all? { |name| artifacts.fetch(name).fetch("condition").include?("execution_intent != prepare_only") } &&
     completeness.length == 6 && completeness.all? { |line| line.include?("execution_intent != prepare_only") }
   exit(valid ? 0 : 1)
 ' "$workflow_dir/contracts/output.yaml"; then
@@ -618,7 +624,7 @@ if ruby -ryaml -rjson -e '
   completion = gate_map.fetch("PREPARATION_COMPLETION")
   completion_ids = completion.fetch("exit_assertions").map { |item| item["id"] }
   artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
-  preparation_forbidden = %w[fresh_review_result review_result qa_evaluation_result spec_review_result manual_test_steps manual_verification_result subagent_evidence build_repair_state final_handoff artifact_reference_ledger done_contract harness_recipe harness_run_state trace_ledger replay_packet decomposition_plan_review slice_manifest single_slice_rationale slice_verification_summary user_approval]
+  preparation_forbidden = %w[implementation_steps fresh_review_result review_result qa_evaluation_result spec_review_result manual_test_steps manual_verification_result subagent_evidence build_repair_state final_handoff artifact_reference_ledger done_contract harness_recipe harness_run_state trace_ledger replay_packet user_approval]
   current_phase_names = index.fetch("load_sets").fetch("current_phase").fetch("selectors").find { |item| item["id"] == "workflow-current-phase-gate" }.fetch("allowed_names")
   tier = output.fetch("completion_tiers").fetch("preparation_only")
   eval_ids = %w[medium-prepare-only-terminal-route large-prepare-only-terminal-route]
@@ -664,9 +670,9 @@ test_start "active Decompose guidance excludes prepare-only work"
 if ruby -e '
   phases, patterns = ARGV.map { |path| File.read(path) }
   valid = phases.include?("**Run condition:** `execution_intent != prepare_only`.") &&
-    phases.include?("For `prepare_only`, skip Decompose and move from Discover to Preparation Completion; optional Plan readiness has no slices.") &&
-    patterns.include?("**Skip Decompose:** Medium+ implementation/execution work MUST decompose into strict slices.") &&
-    patterns.include?("`prepare_only` uses Discover -> PREPARATION_COMPLETION with optional Plan readiness and no slices.")
+    phases.include?("Preparation-only and unresolved progressive discovery produce no executable work.") &&
+    patterns.include?("**Conditional Decompose:** skip for coherent work") &&
+    patterns.include?("Preparation-only produces no execution.")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/references/phases.md" "$workflow_dir/references/mega-and-patterns.md"; then
     pass
@@ -685,8 +691,8 @@ if ruby -ryaml -e '
     phases.include?("**Run condition:** `execution_intent != prepare_only`.") &&
     plan.include?("For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits.") &&
     plan.include?("It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests.") &&
-    journal.include?("[required for medium+ tasks; update after each slice and before starting a dependent slice or another source-changing slice in a shared or unknown workspace]") &&
-    journal.include?("[applies only when `execution_intent != prepare_only`; prepare_only has no slices]") &&
+    journal.include?("Read-only display derived from implementation_steps[].execution") &&
+    journal.include?("prepare_only has no executable packets.") &&
     journal.include?("**Preparation Completion** (`execution_intent=prepare_only`) records readiness only, then proceeds directly to Done without Build, Review, or developer handoff.") &&
     roles.include?("## Dispatch rules by task size (`execution_intent != prepare_only`)") &&
     roles.include?("For `prepare_only`, dispatch only concretely triggered Discover or preparation roles") &&
@@ -868,11 +874,52 @@ if ruby -e '
 ' "$workflow_dir/references/task-journal-template.md"; then pass; else fail "task journal detailed labels do not discriminate prepare-only N/A fields from typed execution refs"; fi
 
 test_start "plan-none preparation evals assert triage and completion values and reject wrong plan modes"
-if grep -Fq '"completion_policy", "plan_mode"' "$workflow_dir/evals/cases.json" && grep -Fq '"triage_result", "plan_mode"' "$workflow_dir/evals/cases.json" && grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "plan-none preparation evals do not mutate and reject wrong triage/completion plan modes in both graders"; fi
+if python3 - "$workflow_dir/evals/cases.json" "$(feature_prep_expected_case_records)" <<'PYPLANMODE'
+from copy import deepcopy
+import json
+from pathlib import Path
+import sys
+fixture = json.loads(Path(sys.argv[1]).read_text())
+
+def declares(case, path):
+    return any(item.get("path") == path and item.get("operator") == "equals" and item.get("expected") == "none"
+               for item in case.get("machine_expectations", {}).get("structured_json_assertions", []))
+
+for record in sys.argv[2].splitlines():
+    case_id, group, mode = record.split("|")
+    if mode != "none":
+        continue
+    cases = [case for case in fixture["cases"] if case["id"] == case_id]
+    if len(cases) != 1:
+        raise ValueError("Expected one preparation case: " + case_id)
+    case = cases[0]
+    paths = [["completion_policy", "plan_mode"]]
+    if group != "light":
+        paths.append(["triage_result", "plan_mode"])
+    for path in paths:
+        if not declares(case, path):
+            raise ValueError("Missing exact equals/none declaration: " + case_id + " " + repr(path))
+        for mutation in ("removed", "wrong_value", "wrong_operator"):
+            altered = deepcopy(case)
+            assertions = altered["machine_expectations"]["structured_json_assertions"]
+            if mutation == "removed":
+                altered["machine_expectations"]["structured_json_assertions"] = [item for item in assertions if item.get("path") != path]
+            else:
+                for item in assertions:
+                    if item.get("path") == path and item.get("operator") == "equals":
+                        item["expected" if mutation == "wrong_value" else "operator"] = "inline" if mutation == "wrong_value" else "nonempty_string"
+            if declares(altered, path):
+                raise ValueError("Plan-mode declaration counterexample accepted: " + mutation)
+PYPLANMODE
+then
+    if grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "plan-none preparation evals do not mutate and reject wrong triage/completion plan modes in both graders"; fi
+else
+    fail "plan-none preparation evals lack exact path/operator/value assertions"
+fi
 
 test_start "shared helper owns executable case-root manifest and bounded grader-call accounting"
 helper="$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
-if [[ -f "$helper" ]] && grep -Fq 'case_roots' "$helper" && grep -Fq 'forbidden_paths' "$helper" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq 409' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_plan_mode_mutation_count" -eq 14' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_mutation_invocation_count" -eq 17' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq 409' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh"; then pass; else fail "grader suites duplicate case mappings, omit direct structured probes, or overcount bounded full CLI calls"; fi
+if [[ -f "$helper" ]] && grep -Fq 'case_roots' "$helper" && grep -Fq 'forbidden_paths' "$helper" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'count_structured_json_assertion_failures' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq $((409 + 12 * 4))' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_plan_mode_mutation_count" -eq 14' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_mutation_invocation_count" -eq 17' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh" && grep -Fq 'prepare_only_direct_structured_probe_count" -eq $((409 + 12 * 4))' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Fq 'prepare_only_representative_cli_probe_count" -eq 3' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh"; then pass; else fail "grader suites duplicate case mappings, omit direct structured probes, or overcount bounded full CLI calls"; fi
 
 test_start "actual graders mutate every prepare-only active root, forbid plan documents, and journal branches detailed refs"
 if ruby -ryaml -e '
@@ -1461,7 +1508,7 @@ if ruby -rjson -ryaml -e '
       fields.fetch("source_preparation_basis")["condition"] == "feature_preparation_scope == not_applicable" &&
       fields.fetch("source_preparation_basis")["enum_values"] == ["not_applicable"]
   end
-  carried_bindings_valid = carried.length == 7 && carried.all? do |entry|
+  carried_bindings_valid = carried.length == 9 && carried.all? do |entry|
     source_binding_valid.call(entry.fetch("object_fields").to_h { |field| [field.fetch("name"), field] })
   end
   done_fields = artifacts.fetch("done_contract").fetch("object_fields").map { |entry| entry.fetch("name") }
@@ -1664,7 +1711,7 @@ if ruby -rjson -ryaml -e '
   cases = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases")
   gates = YAML.load_file(ARGV.fetch(1))
   invariant = gates.fetch("invariants").find { |item| item["id"] == "INV3" }
-  expected_absent = %w[changed_files test_results spec_review_result review_result qa_evaluation_result fresh_review_result manual_test_steps manual_verification_result subagent_evidence build_repair_state final_handoff artifact_reference_ledger done_contract harness_recipe harness_run_state trace_ledger replay_packet decomposition_plan_review slice_manifest single_slice_rationale slice_verification_summary user_approval]
+  expected_absent = %w[implementation_steps current_task_packet changed_files test_results spec_review_result review_result qa_evaluation_result fresh_review_result manual_test_steps manual_verification_result subagent_evidence build_repair_state final_handoff artifact_reference_ledger done_contract harness_recipe harness_run_state trace_ledger replay_packet decomposition_plan_review slice_manifest single_slice_rationale slice_verification_summary user_approval]
   phase_names = %w[TRIAGE DISCOVER PREPARATION_COMPLETION]
   declared = phase_names.flat_map do |name|
     gate = gates.fetch("gates").find { |entry| entry["phase"] == name }
@@ -1868,7 +1915,7 @@ if ruby -e '
     "- approved_feature_preparation_result: [required exact complete typed approved_feature_preparation_result unchanged when execution_intent=implement_only; otherwise N/A]"
   ]
   inline_packet = plan_template[/^## Small Tasks .*?(?=^## Executable Task Packet)/m]
-  executable_packet = plan_template[/^## Executable Task Packet .*?(?=^## Slice Manifest)/m]
+  executable_packet = plan_template[/^## Executable Task Packet .*?(?=^## Canonical Packet Plan)/m]
   strict_slice_packet = sub_task_template[/^### Strict slice packet .*?(?=^### Supporting context)/m]
   valid = [inline_packet, executable_packet, strict_slice_packet].all? do |packet|
     packet && packet.downcase.include?("authoritative packet") && fields.all? { |field| packet.include?(field) }

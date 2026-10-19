@@ -22,6 +22,7 @@ write_verification_reuse_response() {
         independent_review_status:"required"
       }]}
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 write_tdd_slice_projection_response() {
@@ -44,10 +45,11 @@ write_tdd_slice_projection_response() {
         summary:$summary,
         verification_decision:$decision,
         evidence_assessment:{status:"planned",scope_and_evidence_refs:[],gaps_and_limitations:["The calculation RED and documentation inspection have not yet run."],next_action:"Run the selected calculation RED before repair and inspect the documentation deliverable."},
-        slice_manifest:[
-          {slice_id:"calculation-fix",name:"Repair calculation boundary",observable_increment:"The 199-cent calculation boundary is fixed",deliverable_type:"behavior",acceptance_criteria:["10 percent of 199 cents returns 19 cents."],verification_decision:$decision,selected_check_ids:["calculation-boundary"],binding_obligation_refs:[],tdd_applies:true,files_to_create:[],files_to_modify:["src/calculation"],files_to_test:["tests/calculation"],enabling_changes_included:[],depends_on:[],expected_success_signal:"The focused boundary test passes after meaningful RED",evidence_to_record:["Pre-fix RED and post-fix GREEN result refs"],deviation_rollback_rule:"Stop and refresh the plan if the selected boundary or oracle changes."},
-          {slice_id:"documentation-update",name:"Document calculation behavior",observable_increment:"The docs describe integer-cent truncation",deliverable_type:"docs",acceptance_criteria:["The documented example matches the accepted calculation behavior."],verification_decision:$decision,selected_check_ids:["docs-content-inspection"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:["docs/calculation.md"],files_to_test:[],enabling_changes_included:[],depends_on:["calculation-fix"],expected_success_signal:"The doc inspection matches the accepted calculation behavior",evidence_to_record:["Documentation inspection result"],deviation_rollback_rule:"Stop and refresh the plan if the documented behavior changes."}
+        implementation_steps:[
+          {packet_id:"calculation-fix",name:"Repair calculation boundary",observable_increment:"The 199-cent calculation boundary is fixed",deliverable_type:"behavior",acceptance_criteria:["10 percent of 199 cents returns 19 cents."],verification_decision:$decision,selected_check_ids:["calculation-boundary"],binding_obligation_refs:[],tdd_applies:true,files_to_create:[],files_to_modify:["src/calculation"],files_to_test:["tests/calculation"],enabling_changes_included:[],depends_on:[],expected_success_signal:"The focused boundary test passes after meaningful RED",evidence_to_record:["Pre-fix RED and post-fix GREEN result refs"],deviation_rollback_rule:"Stop and refresh the plan if the selected boundary or oracle changes."},
+          {packet_id:"documentation-update",name:"Document calculation behavior",observable_increment:"The docs describe integer-cent truncation",deliverable_type:"docs",acceptance_criteria:["The documented example matches the accepted calculation behavior."],verification_decision:$decision,selected_check_ids:["docs-content-inspection"],binding_obligation_refs:[],tdd_applies:false,files_to_create:[],files_to_modify:["docs/calculation.md"],files_to_test:[],enabling_changes_included:[],depends_on:["calculation-fix"],expected_success_signal:"The doc inspection matches the accepted calculation behavior",evidence_to_record:["Documentation inspection result"],deviation_rollback_rule:"Stop and refresh the plan if the documented behavior changes."}
         ]
       }
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }

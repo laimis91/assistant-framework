@@ -5,6 +5,54 @@ if [[ -n "${FEATURE_PREPARATION_RESPONSE_FIXTURES_LOADED:-}" ]]; then
 fi
 readonly FEATURE_PREPARATION_RESPONSE_FIXTURES_LOADED=1
 
+
+# Fixture projection only. This does not admit or attest execution; independent
+# admission controls exercise approval/evidence authority and actual unsafe cases.
+p0p4_normalize_packet_projection() {
+    local response_path="$1"
+    python3 - "$response_path" <<'PYNORMALIZE'
+from copy import deepcopy
+import hashlib,json,sys
+path=sys.argv[1]
+try:
+    with open(path) as stream: response=json.load(stream)
+except (ValueError,OSError):
+    sys.exit(0)
+packets=response.get('implementation_steps')
+if not isinstance(packets,list) or not packets:sys.exit(0)
+decision=response.get('verification_decision')
+if not isinstance(decision,dict):sys.exit(0)
+sha=hashlib.sha256(json.dumps(decision,sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False).encode()).hexdigest()
+ref={'artifact_ref':'fixture:canonical-verification','sha256':sha}
+response['verification_decision_ref']=deepcopy(ref)
+for packet in packets:
+    packet.pop('verification_decision',None)
+    packet.pop('evidence_assessment',None)
+    packet['verification_decision_ref']=deepcopy(ref)
+    packet.setdefault('execution',{'state':'PENDING','evidence_refs':[], 'input_identity':{'fixture':'current'}, 'history':[], 'recovery':{'attempt_count':0,'no_progress_count':0}})
+projection=deepcopy(packets[0])
+projection['verification_decision']=deepcopy(decision)
+projection['evidence_assessment']=deepcopy(response.get('evidence_assessment',{'status':'planned'}))
+response['current_task_packet']=projection
+with open(path,'w') as stream:json.dump(response,stream,indent=2);stream.write('\n')
+PYNORMALIZE
+}
+
+
+write_packet_admission_response() {
+    local response_path="$1" fixture_file="$2" case_id="$3"
+    python3 - "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/task-packet-admission.py" "$response_path" "$fixture_file" "$case_id" <<'PYADMISSION'
+import importlib.util,json,sys
+spec=importlib.util.spec_from_file_location('workflow_packet',sys.argv[1]);module=importlib.util.module_from_spec(spec);sys.modules[spec.name]=module;spec.loader.exec_module(module)
+with open(sys.argv[3]) as stream:fixture=json.load(stream)
+case=next(case for case in fixture['cases'] if case['id']==sys.argv[4])
+actual=module.admission(case['semantic_context']['packet_admission']['request'])
+answer={key:value for key,value in actual.items() if key in ('status','code','canonical_plan','current_task_packet')}
+if actual['status']=='blocked':answer.pop('canonical_plan',None)
+with open(sys.argv[2],'w') as stream:json.dump({'packet_admission':answer},stream);stream.write('\n')
+PYADMISSION
+}
+
 readonly FEATURE_PREP_MEDIUM_REQUIRED_ROOTS=(completion_policy triage_result validation_results context_budget_note requirement_acceptance_map feature_preparation_evidence feature_preparation_result)
 readonly FEATURE_PREP_SMALL_REQUIRED_ROOTS=(completion_policy artifact_contract plan_document feature_preparation_evidence changed_files test_results validation_results fresh_review_result)
 readonly FEATURE_PREP_LARGE_REQUIRED_ROOTS=(completion_policy triage_result phase_checkpoints task_journal context_map validation_results context_budget_note requirement_acceptance_map feature_preparation_evidence feature_preparation_result)
@@ -14,6 +62,7 @@ readonly FEATURE_PREP_LARGE_READINESS_PLAN_REQUIRED_ROOTS=(completion_policy tri
 readonly FEATURE_PREP_TERMINAL_CASES=(medium-prepare-only-terminal-route large-prepare-only-terminal-route)
 readonly FEATURE_PREP_LIGHT_REQUIRED_ROOTS=(completion_policy validation_results feature_preparation_evidence feature_preparation_result)
 readonly FEATURE_PREP_EXECUTION_FORBIDDEN_PATHS=(
+    '["implementation_steps"]' '["current_task_packet"]' '["packet_admission"]' '["canonical_plan"]'
     '["artifact_contract"]' '["task_packet"]' '["task_packets"]'
     '["decomposition_plan_review"]' '["slice_manifest"]' '["single_slice_rationale"]'
     '["slice_verification_summary"]' '["changed_files"]' '["test_results"]'
@@ -400,6 +449,7 @@ build_medium_prepare_only_response() {
           plan_document: "Readiness only: evidence ref prep/medium-feature; preserve the traced route effects; record the open implementation approval decision; recommended next state is execution not started. Future QA/acceptance obligation: N/A. Future harness obligation: N/A. No executable task packet, files, tests, or Build handoff."
         } else {} end)
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_prepare_only_terminal_response() {
@@ -432,6 +482,7 @@ build_medium_prepare_only_shared_impact_response() {
         }
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_local_debugging_compact_causal_response() {
@@ -469,6 +520,7 @@ build_local_debugging_compact_causal_response() {
           }
         }
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_prepare_only_readiness_plan_response() {
@@ -487,6 +539,7 @@ build_medium_prepare_only_readiness_plan_response() {
         }
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_prepare_only_not_applicable_readiness_plan_response() {
@@ -543,6 +596,7 @@ build_medium_prepare_only_not_applicable_readiness_plan_response() {
         | .plan_document = "Readiness only: preparation basis not_applicable; define the new feature behavior; record the open implementation approval decision; recommended next state is execution not started. Future QA/acceptance obligation: N/A. Future harness obligation: Run the explicitly requested trace/replay harness during future implementation; evidence basis: the user explicitly requested trace/replay harness evidence for future implementation; execution prerequisite: activate in an approved implementation workflow after the pre-Build Done Contract and Harness Recipe are accepted. No executable task packet, files, tests, or Build handoff."
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_prepare_only_qa_request_response() {
@@ -558,6 +612,7 @@ build_medium_prepare_only_qa_request_response() {
         }
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_prepare_only_harness_request_response() {
@@ -574,6 +629,7 @@ build_medium_prepare_only_harness_request_response() {
         }
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_implement_only_harness_handoff_response() {
@@ -742,37 +798,6 @@ build_medium_implement_only_harness_handoff_response() {
             status: "pending"
           }]
         },
-        decomposition_plan_review: {
-          scope_understanding: "One observable route-behavior increment consumes the approved preservation evidence.",
-          slice_subagent_count: "One bounded behavior slice and one independent reviewer.",
-          step_cost_budget: "One implementation packet plus focused verification and review.",
-          dependency_order: "Accept harness gate, then execute the single route-behavior packet.",
-          output_plan_match: "The packet delivers R1 and no broader behavior.",
-          fallback_path: "Return to Discover if the approved evidence ref is stale.",
-          broad_split_rejection: "Layer/module/setup splits would not be independently observable; the one behavior slice is the smallest verifiable increment.",
-          decision: "proceed"
-        },
-        slice_manifest: [{
-          slice_id: "viewing-route-effects",
-          name: "Preserve VIEWING route effects",
-          observable_increment: "VIEWING selects, highlights, and focuses while remaining read-only.",
-          deliverable_type: "behavior",
-          acceptance_criteria: ["VIEWING applies selection, highlight, and viewport focus without enabling editing."],
-          verification_decision: verification_decision,
-          selected_check_ids: selected_check_ids,
-          binding_obligation_refs: (verification_decision | .policy_basis.binding_constraints),
-          tdd_applies: tdd_applies(selected_check_ids; verification_decision),
-          files_to_create: [],
-          files_to_modify: ["src/route.ts"],
-          files_to_test: ["test/route_test.ts"],
-          enabling_changes_included: ["none"],
-          depends_on: [],
-          verification_command: ["bash", "tests/route-behavior-contracts.sh"],
-          expected_success_signal: "Focused route behavior verification passes.",
-          evidence_to_record: ["Focused test result and changed-file evidence."],
-          deviation_rollback_rule: "Stop and return to Plan if the approved evidence or file scope differs."
-        }],
-        single_slice_rationale: "Selection, highlight, and focus are one tested route-effect increment and cannot be split without losing observable parity.",
         artifact_contract: {
           artifact_type: "code",
           required_files_or_deliverables: ["src/route.ts", "test/route_test.ts"],
@@ -807,11 +832,8 @@ build_medium_implement_only_harness_handoff_response() {
           corrective_action: "Block Build and repair any missing, stale, or broadened harness evidence."
         },
         implementation_steps: [{
-          order: 1,
-          slice_id: "viewing-route-effects",
-          slice_name: "Preserve VIEWING route effects",
+          packet_id: "viewing-route-effects",
           name: "Adapt ACTIVE effects to read-only VIEWING",
-          task_id: "implementation-transition-1",
           description: "Consume the approved preparation evidence and implement only the bounded route-effects gap.",
           observable_increment: "VIEWING selects, highlights, and focuses while remaining read-only.",
           deliverable_type: "behavior",
@@ -843,7 +865,6 @@ build_medium_implement_only_harness_handoff_response() {
         }],
         artifact_reference_ledger: artifact_refs,
         harness_run_state: {
-          task_id: "implementation-transition",
           task_name: "Consume deferred route harness obligation",
           phase: "PLAN",
           slice: "viewing-route-effects",
@@ -867,6 +888,7 @@ build_medium_implement_only_harness_handoff_response() {
         phase_checkpoints: ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]
       }
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_implement_only_not_applicable_harness_handoff_response() {
@@ -892,16 +914,9 @@ build_medium_implement_only_not_applicable_harness_handoff_response() {
         | .requirement_acceptance_map.entries[0].evidence_ref = "preparation/not-applicable"
         | .implementation_steps[0].implementation_notes = ["Use the approved not_applicable preparation basis and do not invent an existing-system evidence ref."]
         | .replay_packet.pinned_context[0] = "approved preparation basis: not_applicable"
-        | .verification_decision as $decision
-        | .implementation_steps[0].selected_check_ids as $selected_ids
-        | .implementation_steps[0].binding_obligation_refs as $binding_refs
-        | .implementation_steps[0].tdd_applies as $slice_tdd_applies
-        | .slice_manifest[0].verification_decision = $decision
-        | .slice_manifest[0].selected_check_ids = $selected_ids
-        | .slice_manifest[0].binding_obligation_refs = $binding_refs
-        | .slice_manifest[0].tdd_applies = $slice_tdd_applies
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_implement_only_qa_handoff_response() {
@@ -999,7 +1014,7 @@ build_medium_implement_only_qa_handoff_response() {
         | del(.implementation_steps[0].feature_preparation_harness_obligation, .implementation_steps[0].done_contract_ref, .implementation_steps[0].harness_recipe_ref)
         | .completion_policy.selection_reason = "The accepted deferred QA obligation activates the existing post-Build acceptance route."
         | .triage_result.harness_capable = false
-        | .decomposition_plan_review.dependency_order = "Build -> Code Reviewer -> QA Evaluator."
+        | .implementation_steps[0].implementation_notes[0] = "Build -> Code Reviewer -> QA Evaluator."
         | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "approved feature-preparation evidence", "post-Build Code Reviewer evidence", "QA Evaluator acceptance evidence"]
         | .plan_document = "Approved implementation plan plan/implementation-transition: execute the single viewing-route-effects packet, then run Code Reviewer and QA Evaluator evidence; Build not started."
         | .artifact_reference_ledger |= map(select(.artifact_id == "task-packet" or .artifact_id == "verification-evidence"))
@@ -1012,14 +1027,11 @@ build_medium_implement_only_qa_handoff_response() {
         | .implementation_steps[0].test_criteria = ["The focused route behavior test proves all preserved effects and read-only scope."]
         | .implementation_steps[0].binding_obligation_refs as $binding_refs
         | .implementation_steps[0].tdd_applies as $slice_tdd_applies
-        | .slice_manifest[0].verification_decision = $decision
-        | .slice_manifest[0].selected_check_ids = $selected_ids
-        | .slice_manifest[0].binding_obligation_refs = $binding_refs
-        | .slice_manifest[0].tdd_applies = $slice_tdd_applies
         | .validation_results = [{command_or_check:"approved deferred QA routing",result:"passed",evidence:"QA obligation is source-bound and routed after Build and Code Reviewer evidence.",selected_check_ids:[],binding_obligation_refs:[]}]
         | .phase_checkpoints = ["--- PHASE: TRIAGE ---", "--- PHASE: DISCOVER ---", "--- PHASE: DISCOVER COMPLETE ---", "--- PHASE: DECOMPOSE ---", "--- PHASE: DECOMPOSE COMPLETE ---", "--- PHASE: PLAN ---", "--- PHASE: PLAN COMPLETE ---"]
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_implement_only_not_applicable_qa_handoff_response() {
@@ -1036,16 +1048,9 @@ build_medium_implement_only_not_applicable_qa_handoff_response() {
         | .verification_decision.policy_basis.binding_constraints[0].source_ref = "preparation/not-applicable"
         | .implementation_steps[0].verification_decision = .verification_decision
         | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "approved not_applicable preparation basis", "post-Build Code Reviewer evidence", "QA Evaluator acceptance evidence"]
-        | .verification_decision as $decision
-        | .implementation_steps[0].selected_check_ids as $selected_ids
-        | .implementation_steps[0].binding_obligation_refs as $binding_refs
-        | .implementation_steps[0].tdd_applies as $slice_tdd_applies
-        | .slice_manifest[0].verification_decision = $decision
-        | .slice_manifest[0].selected_check_ids = $selected_ids
-        | .slice_manifest[0].binding_obligation_refs = $binding_refs
-        | .slice_manifest[0].tdd_applies = $slice_tdd_applies
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_implement_only_not_applicable_preparation_result_response() {
@@ -1162,11 +1167,8 @@ build_medium_implement_only_not_applicable_preparation_result_response() {
         },
         plan_document: "Approved implementation plan: execute the bounded new-route packet and retain the approved preparation result unchanged.",
         implementation_steps: [{
-          order: 1,
-          slice_id: "new-route",
-          slice_name: "Create new read-only route",
+          packet_id: "new-route",
           name: "Implement the approved new route",
-          task_id: "new-route-1",
           description: "Implement only the approved new route behavior.",
           observable_increment: "The new route returns the approved read-only result.",
           deliverable_type: "behavior",
@@ -1193,6 +1195,7 @@ build_medium_implement_only_not_applicable_preparation_result_response() {
         }]
       }
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_implement_only_not_applicable_preparation_readiness_result_response() {
@@ -1219,6 +1222,7 @@ build_medium_implement_only_existing_system_preparation_readiness_result_respons
         | .triage_result.required_gates = ["requirements/scope/verification recorded", "tests/build executed", "spec review completed", "quality review completed", "approved feature-preparation evidence"]
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_viewing_route_prepare_only_response() {
@@ -1253,6 +1257,7 @@ build_viewing_route_prepare_only_response() {
         | del(.triage_result, .context_budget_note, .requirement_acceptance_map, .plan_document)
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_feature_preparation_countercase_response() {
@@ -1273,6 +1278,7 @@ build_feature_preparation_countercase_response() {
         feature_preparation_result: {execution_status: "not_started", scope: "existing_system countercase preparation", feature_preparation_evidence_ref: "prep/countercases", evidence_gaps: ["Relevant behavioral-test access for Case C"], open_decisions: ["Case A product decision", "Case B source-conflict resolution"], implementation_implications: ["Do not implement Case A or B before their recorded resolution."], recommended_next_step: "Resolve the evidence gap and open decisions before implementation."}
       }
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_large_prepare_only_terminal_response() {
@@ -1306,6 +1312,7 @@ build_large_prepare_only_terminal_response() {
           ]
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_large_strict_prepare_only_readiness_plan_response() {
@@ -1342,6 +1349,7 @@ build_large_strict_prepare_only_readiness_plan_response() {
           ]
     ' "$response_path" >"$temporary_response"
     mv "$temporary_response" "$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_ordinary_medium_triage_response() {
@@ -1382,6 +1390,7 @@ build_ordinary_medium_triage_response() {
         }
       }
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_existing_system_architecture_pack_binding_response() {
@@ -1482,6 +1491,7 @@ build_existing_system_architecture_pack_binding_response() {
         }
       }
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_medium_plan_triage_routing_response() {
@@ -1502,6 +1512,7 @@ build_medium_plan_triage_routing_response() {
         }
       }
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_small_end_to_end_response() {
@@ -1554,6 +1565,7 @@ build_small_end_to_end_response() {
           fresh_review_result: {result: "PASS", reviewed_scope: "src/route.ts and test/route_test.ts", findings: [], evidence: "Fresh focused review found no remaining issues."}
         }
     ' >"$response_path"
+    p0p4_normalize_packet_projection "$response_path"
 }
 
 build_workflow_review_lifecycle_eval_response() {

@@ -113,6 +113,41 @@ function Test-IsWindowsHost {
     return [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 }
 
+function Assert-WorkflowPythonRuntime {
+    param([string[]]$SelectedSkills)
+    if ($SelectedSkills -notcontains 'assistant-workflow') { return }
+    # Avoid embedded quotes so Windows PowerShell 5.1 preserves the literal -c argument.
+    $probe = 'import sys; print(chr(46).join(map(str, sys.version_info[:3]))); sys.exit(0 if sys.version_info >= (3, 9) else 1)'
+    $candidates = @(
+        @{ Name = 'py'; Prefix = @('-3') },
+        @{ Name = 'python3'; Prefix = @() },
+        @{ Name = 'python'; Prefix = @() }
+    )
+    foreach ($candidate in $candidates) {
+        $command = Get-Command -Name $candidate.Name -CommandType Application -ErrorAction SilentlyContinue
+        if ($null -eq $command) { continue }
+        $probeArguments = @($candidate.Prefix) + @('-B', '-c', $probe)
+        $savedErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $output = @(& $command.Source @probeArguments 2>$null)
+            $exitCode = $LASTEXITCODE
+        }
+        catch { continue }
+        finally { $ErrorActionPreference = $savedErrorActionPreference }
+        $version = $null
+        if ($exitCode -eq 0 -and $output.Count -eq 1 -and
+            [string]$output[0] -match '^\d+\.\d+\.\d+$' -and
+            [version]::TryParse([string]$output[0], [ref]$version) -and $version -ge [version]'3.9') {
+            $invocation = "& '" + $command.Source.Replace("'", "''") + "'"
+            if ($candidate.Prefix.Count -gt 0) { $invocation += ' ' + ($candidate.Prefix -join ' ') }
+            Write-Info "Workflow Python 3.9+ invocation: $invocation (Python $version)"
+            return
+        }
+    }
+    throw 'Python 3.9+ is required when the selected skill closure includes assistant-workflow. Install a supported py -3, python3 or python interpreter and rerun. No installation files have been changed.'
+}
+
 function Assert-CodexStopped {
     if (-not (Test-IsWindowsHost)) { return }
     # Enumerate without -Name so an absent process is a normal empty result,
@@ -2240,7 +2275,7 @@ function Test-WorkflowDeclaredScalar {
 }
 
 function Test-DeclaredWorkflowContract {
-    param([string]$Text, [string]$ExpectedContract)
+    param([string]$Text, [string]$ExpectedContract, [string]$ExpectedVersion = '13.0')
     $metadata = New-OrdinalDictionary
     $sections = New-OrdinalDictionary
     $stages = New-Object 'System.Collections.Generic.List[object]'
@@ -2304,7 +2339,7 @@ function Test-DeclaredWorkflowContract {
     foreach ($key in @('schema_version', 'contract', 'skill')) {
         if (-not $metadata.ContainsKey($key)) { return $false }
     }
-    if (-not (Test-WorkflowDeclaredScalar -Raw $metadata['schema_version'] -Expected '13.0') -or
+    if (-not (Test-WorkflowDeclaredScalar -Raw $metadata['schema_version'] -Expected $ExpectedVersion) -or
         -not (Test-WorkflowDeclaredScalar -Raw $metadata['contract'] -Expected $ExpectedContract) -or
         -not (Test-WorkflowDeclaredScalar -Raw $metadata['skill'] -Expected 'assistant-workflow')) { return $false }
     if ($ExpectedContract -ceq 'handoffs') {
@@ -2358,9 +2393,12 @@ function Assert-WorkflowRoleCompatibility {
         }
         $index = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/index.yaml')
         $handoffs = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/handoffs.yaml')
-        if (-not (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index') -or
-            -not (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs')) {
-            throw 'Retained index/handoffs do not uniquely declare schema 13.0 and the supported ownership stage tuples.'
+        $compatible13 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '13.0') -and
+            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '13.0')
+        $compatible14 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '14.0') -and
+            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '14.0')
+        if (-not ($compatible13 -or $compatible14)) {
+            throw 'Retained index/handoffs do not uniquely declare matching schema 13.0 or 14.0 and the supported ownership stage tuples.'
         }
     }
     catch {
@@ -2436,6 +2474,7 @@ function Invoke-AssistantFrameworkInstall {
     $skillSelection = Resolve-BundledSkillClosure -RootSkills $selectedSkills -Inventory $inventory -SourceRoot $skillsSource -TargetRoot $skillsTarget
     $selectedSkills = @($skillSelection.SkillNames)
     $preflightedSkills = @($skillSelection.PreflightedNames)
+    Assert-WorkflowPythonRuntime -SelectedSkills $selectedSkills
     $toolsTarget = Join-Path $agentHome 'tools'
     $evalDocsTarget = Join-Path (Join-Path $agentHome 'docs') 'evals'
     $hooksRoot = Join-Path $agentHome 'hooks'

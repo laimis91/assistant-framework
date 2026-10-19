@@ -305,7 +305,7 @@ for term in \
 done
 if [[ ${#workflow_missing[@]} -eq 0 ]]; then pass; else fail "architecture Pack propagation/traceability contract gaps: ${workflow_missing[*]}"; fi
 
-test_start "workflow v13 Pack and route-clear contracts retain stable decision and verification identity"
+test_start "workflow v14 Pack and route-clear contracts retain stable decision and verification identity"
 workflow_integrity_missing=()
 if ! ruby -ryaml -e '
     contracts = ARGV.map { |path| YAML.load_file(path) }
@@ -331,10 +331,10 @@ if ! ruby -ryaml -e '
       maps.all? { |map| entries = map.fetch("object_fields").find { |field| field["name"] == "entries" }; entries["min_items"] == 0 && entries.fetch("validation").include?("all-excluded") }
     exit valid ? 0 : 1
   ' "$output_contract" "$input_contract" "$phase_gates" "$workflow_handoffs"; then
-    workflow_integrity_missing+=("v13 workflow contracts do not enforce all-excluded map eligibility, stable alternative identity, or verified quality evidence identity")
+    workflow_integrity_missing+=("v14 workflow contracts do not enforce all-excluded map eligibility, stable alternative identity, or verified quality evidence identity")
 fi
 for file_and_term in \
-    "$workflow_skill::Migration note: assistant-workflow contracts are v13.0" \
+    "$workflow_skill::Migration: v14.0" \
     "$workflow_skill::selected_alternative_id" \
     "$workflow_skill::quality_scenario_id" \
     "$workflow_dir/references/architecture-decision-pack.md::alternative_id" \
@@ -344,7 +344,7 @@ for file_and_term in \
     term="${file_and_term#*::}"
     if ! grep -Fq -- "$term" "$file"; then workflow_integrity_missing+=("${file#$FRAMEWORK_DIR/}: $term"); fi
 done
-if [[ ${#workflow_integrity_missing[@]} -eq 0 ]]; then pass; else fail "workflow v13 integrity contract gaps: ${workflow_integrity_missing[*]}"; fi
+if [[ ${#workflow_integrity_missing[@]} -eq 0 ]]; then pass; else fail "workflow v14 integrity contract gaps: ${workflow_integrity_missing[*]}"; fi
 
 test_start "workflow grader independently rejects each Pack identity invariant"
 workflow_identity_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-identity-integrity.XXXXXX")"
@@ -595,13 +595,34 @@ else
 fi
 
 test_start "Build gates defer independent Code Reviewer evidence to Review"
-build_block="$(phase_block BUILD)"
-if [[ -z "$build_block" ]]; then
-    fail "BUILD phase gate block is missing"
-elif grep -Eiq 'independent (Code )?Reviewer|Code Reviewer evidence|independent review' <<<"$build_block"; then
-    fail "BUILD requires independent Code Reviewer evidence even though Review owns that responsibility"
-else
+if ruby -ryaml -e '
+  phases = YAML.load_file(ARGV.fetch(0)).fetch("gates")
+  separate = lambda do |entries|
+    build = entries.find { |p| p["phase"] == "BUILD" }
+    review = entries.find { |p| p["phase"] == "REVIEW" }
+    next false unless build && review
+    # Actual consumed review results belong to Review. Future sequencing such as
+    # "integrated checks before fresh independent Review" is valid in Build.
+    build_checks = %w[entry_assertions exit_assertions guidance_assertions].flat_map { |key| build.fetch(key, []) }
+    next false if build_checks.any? { |gate| gate.to_s.match?(/\b(review_result|fresh_review_result|code_reviewer_evidence)\b/) }
+    owner = review.fetch("exit_assertions").find { |gate| gate["id"] == "R2A_CODE_REVIEWER_DISTINCT" }
+    quality = review.fetch("exit_assertions").find { |gate| gate["id"] == "R2" }
+    owner && owner.fetch("check").include?("After Build completes, Review owns") &&
+      owner.fetch("on_fail").include?("subagent_evidence.code_reviewer_evidence") &&
+      quality && quality.fetch("check").include?("review_result")
+  end
+  exit 1 unless separate.call(phases)
+  premature = Marshal.load(Marshal.dump(phases))
+  premature.find { |p| p["phase"] == "BUILD" }.fetch("exit_assertions") <<
+    { "id" => "UNSAFE_PREMATURE_REVIEW", "check" => "Current code_reviewer_evidence must pass before leaving Build" }
+  exit 1 if separate.call(premature)
+  missing_owner = Marshal.load(Marshal.dump(phases))
+  missing_owner.find { |p| p["phase"] == "REVIEW" }.fetch("exit_assertions").reject! { |g| g["id"] == "R2A_CODE_REVIEWER_DISTINCT" }
+  exit 1 if separate.call(missing_owner)
+' "$phase_gates"; then
     pass
+else
+    fail "Build/Review evidence ownership is missing or the premature/missing-owner negative control was accepted"
 fi
 
 test_start "Document is the sole final_handoff phase owner"
@@ -670,16 +691,21 @@ else
     pass
 fi
 
-test_start "workflow v13 migration preserves current decisions and inherited producer contracts"
+test_start "workflow v14 migration preserves current decisions and inherited producer contracts"
 migration_note="$(awk '
-    /^Migration note:/ { inside = 1 }
+    /^Migration: v14[.]0([[:space:]]|$)/ { inside = 1 }
     inside && /^## / { exit }
     inside { print }
 ' "$workflow_skill")"
-if ! grep -Fq 'assistant-workflow contracts are v13.0' <<<"$migration_note" \
-    || ! grep -Fq 'current verification decision and matching TDD projection before Build' <<<"$migration_note" \
-    || ! grep -Fq 'never infer historical checks or RED' <<<"$migration_note"; then
-    fail "v13 migration note omits current decision, TDD, or historical-evidence boundaries"
+if ! grep -Fq 'Migration: v14.0' <<<"$migration_note" \
+    || ! grep -Fq 'Before Build, older packets need a current verification decision and matching TDD projection' <<<"$migration_note" \
+    || ! grep -Fq 'never infer historical checks or RED' <<<"$migration_note" \
+    || ! grep -Fq 'Pack `selected_alternative_id` stays stable' <<<"$migration_note" \
+    || ! grep -Fq 'verified `quality_scenario_id` resolves verification identity' <<<"$migration_note" \
+    || ! grep -Fq '`review_result` retains canonical refs' <<<"$migration_note" \
+    || ! grep -Fq '`downstream_bound` before Build' <<<"$migration_note" \
+    || ! grep -Fq 'material invalidation clears refs through refresh, re-plan and reapproval' <<<"$migration_note"; then
+    fail "v14 migration note omits current decision, TDD, or historical-evidence boundaries"
 elif ! ruby -ryaml -e '
     expected = YAML.load_file(ARGV.first).fetch("schema_version")
     ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == expected }
@@ -700,8 +726,8 @@ elif ! ruby -ryaml -e '
       field.call(contributors.fetch("object_fields"), "contributor_role")["enum_values"] == %w[agent human_or_user] &&
       %w[contribution evidence_ref].all? { |name| field.call(contributors.fetch("object_fields"), name)["required"] == true }
     command_owners = [
-      ["orchestrator_to_architect_decompose", "return_fields", "slice_manifest", "conditional"],
-      ["orchestrator_to_architect", "context_fields", "slice_manifest", "conditional"],
+      ["orchestrator_to_architect_decompose", "return_fields", "implementation_steps", "conditional"],
+      ["orchestrator_to_architect", "context_fields", "implementation_steps", "conditional"],
       ["orchestrator_to_architect", "return_fields", "implementation_steps", "conditional"],
       ["orchestrator_to_code_writer", "context_fields", "current_task_packet", "conditional"],
       ["orchestrator_to_builder_tester", "context_fields", "current_task_packet", "conditional"]
@@ -714,7 +740,7 @@ elif ! ruby -ryaml -e '
         command["condition"] == "selected_check_ids resolves exactly one matching command-based CheckSpec in the unchanged verification_decision"
     end
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
-    fail "v13 migration loses canonical header, semantic-inspection, contributor, or argv contracts"
+    fail "v14 migration loses canonical header, semantic-inspection, contributor, or argv contracts"
 elif ! grep -Fq 'assistant-review owns Reviewer/QAEvaluator handoffs' "$workflow_skill" \
     || ! grep -Fq 'subagent_trigger_scope' "$workflow_skill"; then
     fail "workflow root loses review ownership or trigger-based delegation"
@@ -1622,7 +1648,7 @@ run_workflow_case_eval() {
         && grep -Fq "Summary: total=1 passed=$([[ "$expected_status" == "PASS" ]] && echo 1 || echo 0) failed=$([[ "$expected_status" == "PASS" ]] && echo 0 || echo 1)" <<<"$runner_output"
 }
 
-test_start "workflow v13 standard reviews retain validated Pack checklist references"
+test_start "workflow v14 standard reviews retain validated Pack checklist references"
 standard_pack_review_failures=()
 review_result_block="$(contract_field_block "$output_contract" review_result)"
 for field in architecture_decision_pack_review_ref architecture_decision_pack_review_contract; do
@@ -1645,9 +1671,9 @@ for file_and_term in \
         standard_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
     fi
 done
-if ! grep -Fq 'assistant-workflow contracts are v13.0' "$workflow_skill" \
-    || ! grep -Fq 'Pack `review_result` retains canonical refs' "$workflow_skill"; then
-    standard_pack_review_failures+=("workflow v13 migration note does not describe standard Pack review retention")
+if ! grep -Fq 'Migration: v14.0' "$workflow_skill" \
+    || ! grep -Fq '`review_result` retains canonical refs' "$workflow_skill"; then
+    standard_pack_review_failures+=("workflow v14 migration note does not describe standard Pack review retention")
 fi
 if ! jq -e '
     .cases[] | select(.id == "standard-pack-review-result-retains-checklist") |
@@ -1669,7 +1695,7 @@ if ! ruby -ryaml -e '
     expected = YAML.load_file(ARGV.first).fetch("schema_version")
     ARGV.each { |path| exit 1 unless YAML.load_file(path).fetch("schema_version") == expected }
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/contracts/index.yaml"; then
-    standard_pack_review_failures+=("workflow v13 does not cover every canonical contract header")
+    standard_pack_review_failures+=("workflow v14 does not cover every canonical contract header")
 fi
 standard_review_required_summary="$(jq -r '.cases[] | select(.id == "standard-pack-review-result-retains-checklist") | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
 standard_review_response_file="$(mktemp)"
@@ -2645,7 +2671,7 @@ if ruby -ryaml -e '
     prohibited = tier.fetch("prohibited_artifacts")
     expected_required = %w[phase_checkpoints review_result final_handoff]
     expected_conditional = %w[qa_evaluation_result]
-    expected_prohibited = %w[decomposition_plan_review slice_manifest single_slice_rationale slice_verification_summary]
+    expected_prohibited = %w[fresh_review_result]
     valid = tier.fetch("condition").include?("size == small") &&
       tier.fetch("condition").include?("controller_intensity == strict or qa_evaluation_mode == required") &&
       expected_required.all? { |name| required.include?(name) } &&
@@ -2797,7 +2823,7 @@ for case_and_builder in \
         qa_handoff_route_failures+=("$qa_handoff_case_id rejects the Build -> Code Reviewer -> QA Evaluator route")
         continue
     fi
-    unsafe_response="$(jq '.decomposition_plan_review.dependency_order = "Accept harness gate, then execute the single route-behavior packet."' <<<"$qa_handoff_response")"
+    unsafe_response="$(jq '.implementation_steps[0].implementation_notes[0] = "Accept harness gate, then execute the single route-behavior packet."' <<<"$qa_handoff_response")"
     if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$qa_handoff_case_id" "$unsafe_response" FAIL; then
         qa_handoff_route_failures+=("$qa_handoff_case_id accepts inherited harness dependency order")
     fi

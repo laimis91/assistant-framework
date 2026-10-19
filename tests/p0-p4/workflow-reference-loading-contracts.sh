@@ -53,7 +53,7 @@ if [[ -x "$generator" ]] \
     && grep -Fq "## Small Tasks — Inline Plan" "$fixture_root/views/plans/small.md" \
     && ! grep -Fq "## Executable Task Packet" "$fixture_root/views/plans/small.md" \
     && grep -Fq "## Executable Task Packet" "$fixture_root/views/plans/medium.md" \
-    && grep -Fq "## Slice Manifest" "$fixture_root/views/plans/medium.md" \
+    && grep -Fq "## Canonical Packet Plan" "$fixture_root/views/plans/medium.md" \
     && grep -Fq "## Large / Mega Tasks — Full Plan" "$fixture_root/views/plans/large.md"; then
     pass
 else
@@ -117,11 +117,11 @@ for filename, heading in {
     "preparation-completion": "Phase: Preparation Completion",
 }.items():
     assert_view(root / f"views/phases/{filename}.md", phases, shared + (heading,))
-assert "## Slice Manifest" in document(phases)[1]["Phase: Decompose"]
+assert "Refine `implementation_steps` directly" in document(phases)[1]["Phase: Decompose"]
 common = ("Which tier to use", "Context Budget", "Pattern Retrieval")
 assert_view(root / "views/plans/prepare-only.md", plans, common)
 assert_view(root / "views/plans/small.md", plans, ("Small Tasks — Inline Plan (`plan_mode=inline`, `execution_intent != prepare_only`)",) + common)
-medium = ("Executable Task Packet (`execution_intent != prepare_only`)", "Slice Manifest (`execution_intent != prepare_only`)", "Medium Tasks — Standard Plan (`execution_intent != prepare_only`)")
+medium = ("Executable Task Packet (`execution_intent != prepare_only`)", "Canonical Packet Plan (`execution_intent != prepare_only`)", "Medium Tasks — Standard Plan (`execution_intent != prepare_only`)")
 assert_view(root / "views/plans/medium.md", plans, medium + common)
 assert_view(root / "views/plans/large.md", plans, medium + ("Large / Mega Tasks — Full Plan (`execution_intent != prepare_only`)",) + common)
 PY
@@ -130,6 +130,46 @@ then
 else
     fail "focused workflow references do not exactly contain their selected source sections"
 fi
+
+test_start "preparation and small views exclude executable cycle staging while executable views retain it"
+if python3 - "$fixture_root/views/plans" <<'PYSTAGING'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+marker = "### Current-cycle stage ordering"
+for name in ("prepare-only", "small"):
+    if marker in (root / (name + ".md")).read_text():
+        raise ValueError(name + " view leaks executable cycle staging")
+for name in ("medium", "large"):
+    text = (root / (name + ".md")).read_text()
+    canonical = text.split("## Canonical Packet Plan", 1)[1].split("\n## ", 1)[0]
+    if marker not in canonical:
+        raise ValueError(name + " view lost canonical executable cycle staging")
+PYSTAGING
+then pass; else fail "executable cycle staging crossed the preparation boundary"; fi
+
+test_start "entry selector resolves decomposition policy before triage without changing its safe default"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBYENTRY'
+root = ARGV.fetch(0)
+index = YAML.load_file("#{root}/skills/assistant-workflow/contracts/index.yaml")
+input = YAML.load_file("#{root}/skills/assistant-workflow/contracts/input.yaml")
+entry = index.fetch('load_sets').fetch('entry')
+resolve = lambda do |selectors|
+  selectors.flat_map do |selector|
+    next [] unless selector['path'] == 'contracts/input.yaml' && selector['section'] == 'fields' && selector['key'] == 'name'
+    selector.fetch('names', []).map { |name| input.fetch('fields').find { |field| field['name'] == name } || raise("missing entry field #{name}") }
+  end
+end
+fields = resolve.call(entry.fetch('selectors'))
+policy = fields.find { |field| field['name'] == 'decomposition_required' }
+raise 'decomposition_required is unavailable at entry/triage' unless policy
+raise 'decomposition safe default changed' unless policy['default'] == false && policy['on_missing'] == 'infer'
+# The same resolution oracle must catch omission rather than just field existence.
+missing = Marshal.load(Marshal.dump(entry.fetch('selectors')))
+missing.each { |selector| selector.fetch('names', []).delete('decomposition_required') }
+raise 'entry omission counterexample was accepted' if resolve.call(missing).any? { |field| field['name'] == 'decomposition_required' }
+RUBYENTRY
+then pass; else fail "entry selector does not expose the purpose-based decomposition policy"; fi
 
 test_start "workflow focused-reference generator rejects drift and malformed source structure"
 failure_cases=()

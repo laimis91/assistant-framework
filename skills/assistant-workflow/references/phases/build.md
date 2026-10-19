@@ -68,12 +68,12 @@ For medium+ tasks with slices, source-changing packets run sequentially in a
 shared or unknown workspace. Independently executable source-changing packets
 may overlap only with runtime-proven isolated workspaces; dependent packets wait
 for every `depends_on` prerequisite to be `VERIFIED`. Print `>> Slice
-[S]/[total]: [slice_id] [name]`. In `bounded_executor`, the bounded executor
+[S]/[total]: [packet_id] [name]`. In `bounded_executor`, the bounded executor
 owns selected implementation and verification; RED/GREEN/REFACTOR apply only
 when the canonical decision activates TDD. In `separated_workers`, active TDD
-runs SAME selected Code Writer `worker_stage=test_authoring` (tests only, no incoming RED), then Builder/Tester `pre_production_red`, forwards unchanged current typed RED to that writer `worker_stage=production`, then Builder/Tester GREEN; only after current GREEN passes does that writer `worker_stage=refactor` return before distinct Builder/Tester REFACTOR verification. Stage-only DONE never completes Build or permits Review; inactive TDD runs
+runs SAME selected Code Writer `worker_stage=test_authoring` when selected assertions need authoring or repair (tests only, no incoming RED), then execution-only Builder/Tester `pre_production_red`; explicit reuse of unchanged assertions skips authoring without fabricated edits. It forwards unchanged current typed RED to that SAME actual writer `worker_stage=production`, then runs Builder/Tester GREEN. Only after current GREEN passes does that writer `worker_stage=refactor` return before distinct Builder/Tester REFACTOR verification. Stage-only DONE never completes Build or permits Review; inactive TDD runs
 Code Writer tests plus code then execution-only Builder/Tester `final_verification`. Verify each acceptance
-criterion, record lane-matched slice ledger evidence, and mark the slice
+criterion, record lane-matched canonical packet execution evidence, and mark the slice
 `VERIFIED` before a dependent packet starts.
 
 For `controller_intensity=light`, implementation may run inline/direct. Use the
@@ -106,11 +106,7 @@ result evidence.
 
 After all slices are integrated, run the selected checks and binding project
 checks over the completed scope before fresh Review; do not add an unselected
-full suite. Cross-slice validation applies only
-when slice_manifest contains more than one item; when it contains one item,
-record cross-slice validation as not_applicable using the one-item manifest and
-single_slice_rationale. Single-slice full-scope validation still covers
-integration with existing code.
+full suite. Packet-local passes never waive integrated acceptance, selected and binding checks, fresh independent review, conditional QA/harness or the exact final snapshot. Packet count creates no exemption.
 Apply the current-verification reuse rules in
 `references/build-worker-protocol.md`: reuse only full matching
 identity/coverage evidence and rerun every invalidated case. Per-slice evidence

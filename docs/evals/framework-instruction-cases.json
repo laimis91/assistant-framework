@@ -423,7 +423,7 @@
       "purpose": "Checks that each slice records its unchanged selected procedure and observed result before dependent work advances, without inventing tests or RED.",
       "setup_context": [
         "Assistant Framework workflow instructions are active.",
-        "A medium task has a slice manifest with ordered slices.",
+        "A medium task has a canonical packet collection with ordered slices.",
         "Slice S2 implementation has finished, but its acceptance criteria have not been checked."
       ],
       "prompt": "Slice S2 is coded. Start slice S3 now; we can verify everything at the end.",
@@ -437,7 +437,7 @@
       ],
       "pass_criteria": [
         "The response blocks S3 until the selected S2 procedure and result are recorded.",
-        "Verification is tied to the slice manifest criteria and unchanged CheckSpec.",
+        "Verification is tied to the canonical packet collection criteria and unchanged CheckSpec.",
         "No command or test is invented for a non-command selected method.",
         "The response records S2 status before advancing.",
         "RED is conditional on the canonical TDD choice."

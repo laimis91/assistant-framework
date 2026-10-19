@@ -1,0 +1,1026 @@
+{
+  "prepared_on": "2026-10-16",
+  "execution_intent": "prepare_only",
+  "feature_preparation_scope": "existing_system",
+  "repository_revision": "622a58d493a3b17df0af9e632ba28287cdf41fd8",
+  "source_manifest_ref": "docs/plans/conditional-task-packets/source-manifest.json",
+  "task_state_reconciliation": {
+    "classification": "new_preparation",
+    "reason": "New user request creates preparation artifacts only; existing .codex/task.md and dirty cleanup belong to another task.",
+    "next_action": "Complete and validate this preparation bundle; no prior execution resumed."
+  },
+  "triage_result": {
+    "task_type": "refactor",
+    "risk_tier": "moderate",
+    "size": "large",
+    "controller_intensity": "standard",
+    "plan_mode": "inline",
+    "execution_intent": "prepare_only",
+    "qa_evaluation_mode": "not_required",
+    "harness_capable": false,
+    "architecture_design_mode": "required",
+    "architecture_design_trigger_reasons": [
+      "Proposed serialized workflow contract and execution-state ownership change across producer/consumer boundaries."
+    ],
+    "build_execution_lane": "none",
+    "workflow_state_mode": "inline",
+    "manual_verification_mode": "not_required",
+    "required_gates": [
+      "feature-preparation evidence"
+    ],
+    "required_agents": [],
+    "subagent_policy_state": "not_required",
+    "subagent_execution_mode": "not_applicable",
+    "subagent_trigger_scope": [],
+    "search_mode": "none",
+    "candidate_scope_scan": {
+      "likely_touched_paths": [
+        "skills/assistant-workflow",
+        "agents/claude/architect.md",
+        "agents/codex/architect.toml",
+        "tools/skills/sync-workflow-references.py",
+        "tools/evals",
+        "tests/p0-p4",
+        "README.md",
+        "docs/evals/README.md"
+      ],
+      "symbols_or_terms_searched": [
+        "slice_manifest|single_slice_rationale|slice_verification_summary|decomposition_plan_review|slice_id|Slice Verification|slice boundaries|smallest iterable slices",
+        "implementation_steps",
+        "current_task_packet",
+        "INV_TDD_PROJECTION",
+        "adapter_unavailable"
+      ],
+      "adjacent_surfaces": [
+        "Generated focused references",
+        "Review/QA/harness projections",
+        "Progressive discovery and verification reuse",
+        "Legacy artifacts and provider role prompts"
+      ],
+      "confidence": "medium",
+      "unknowns": [
+        "Runtime comparative benefit and native trace capability."
+      ]
+    }
+  },
+  "completion_policy": {
+    "controller_intensity": "standard",
+    "build_execution_lane": "none",
+    "plan_mode": "inline",
+    "architecture_design_mode": "required",
+    "workflow_state_mode": "inline",
+    "manual_verification_mode": "not_required",
+    "selection_reason": "Explicit readiness plan; preparation ends after Discover without execution/delegation roles or implementation approval waiting."
+  },
+  "feature_preparation_evidence": {
+    "ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+    "items": [
+      {
+        "item_id": "CP-E1",
+        "requirements_evidence": [
+          "conversation: user requests specification and plan for the preceding conditional packet recommendation",
+          "Medium+ currently requires a separate slice manifest, including single-slice rationale."
+        ],
+        "design_evidence": {
+          "status": "provided",
+          "source_refs": [
+            "conversation: preceding research recommendation and peer-qualified synthesis"
+          ],
+          "rationale": "Proposed design direction; no implementation authorization or performance proof."
+        },
+        "implementation_evidence": {
+          "status": "inspected",
+          "traces": [
+            {
+              "file": "skills/assistant-workflow/contracts/output.yaml",
+              "symbols": [
+                "slice_manifest / single_slice_rationale"
+              ],
+              "execution_behavior": "Requires medium+ execution manifests and rationale even for one increment.",
+              "content_sha256": "03c789896d8080494d847c6ae0148bbdebe554a543daf315f95647c7071461a8"
+            },
+            {
+              "file": "skills/assistant-workflow/references/phases.md",
+              "symbols": [
+                "Phase: Decompose"
+              ],
+              "execution_behavior": "Skips small/prepare-only work and prescribes decomposition for implementation.",
+              "content_sha256": "8b5c29149621575b6500554c40be771b3badae991878a99b965fbf8d3a5c9766"
+            }
+          ],
+          "search_or_access_refs": [],
+          "rationale": "Current source and serialized artifact inspection; prescribed behavior is distinguished from native execution."
+        },
+        "behavioral_test_evidence": {
+          "status": "inspected",
+          "assertions_or_search_refs": [
+            "tests/p0-p4/task-packet-contracts.sh: workflow output contract requires slice verification summary for medium tasks",
+            "tests/p0-p4/task-packet-contracts.sh: workflow output contract requires single-slice rationale for one-slice medium plans"
+          ],
+          "rationale": "Existing assertion bodies/structured controls inspected; no test was executed during preparation."
+        },
+        "conflict_analysis": "The proposed intentional change is separate from current authority; current rules remain binding until approved implementation.",
+        "evidence_gaps": [],
+        "behavior_status": "explicit_change",
+        "work_status": "technical_design_decision",
+        "rationale": "Medium+ currently requires a separate slice manifest, including single-slice rationale.",
+        "implementation_implication": "Make decomposition conditional; coherent execution uses one existing packet record without a second manifest or rationale."
+      },
+      {
+        "item_id": "CP-E2",
+        "requirements_evidence": [
+          "conversation: user requests specification and plan for the preceding conditional packet recommendation",
+          "Executable task packets already carry overlapping outcome, scope, dependency and verification information."
+        ],
+        "design_evidence": {
+          "status": "provided",
+          "source_refs": [
+            "conversation: preceding research recommendation and peer-qualified synthesis"
+          ],
+          "rationale": "Proposed design direction; no implementation authorization or performance proof."
+        },
+        "implementation_evidence": {
+          "status": "inspected",
+          "traces": [
+            {
+              "file": "skills/assistant-workflow/references/plan-template.md",
+              "symbols": [
+                "Executable Task Packet / Slice Manifest"
+              ],
+              "execution_behavior": "Plan repeats slice data in executable packets.",
+              "content_sha256": "e9316c730a8b40f9c26f2aaff3731d1c467b2ba7a45ae5ea4c557a2638a7c48d"
+            },
+            {
+              "file": "skills/assistant-workflow/contracts/handoffs.yaml",
+              "symbols": [
+                "implementation_steps / current_task_packet"
+              ],
+              "execution_behavior": "Writer and verifier receive packet projections; optional task_id is currently provider-local.",
+              "content_sha256": "709069dcd352271f3310000b019e70924f38891bc063c3f91c7764356982e58f"
+            }
+          ],
+          "search_or_access_refs": [],
+          "rationale": "Current source and serialized artifact inspection; prescribed behavior is distinguished from native execution."
+        },
+        "behavioral_test_evidence": {
+          "status": "inspected",
+          "assertions_or_search_refs": [
+            "tests/p0-p4/task-packet-contracts.sh: workflow Architect implementation_steps cover consumer current_task_packet required fields",
+            "tests/p0-p4/task-packet-contracts.sh: workflow handoffs pass current task packets to CodeWriter and BuilderTester"
+          ],
+          "rationale": "Existing assertion bodies/structured controls inspected; no test was executed during preparation."
+        },
+        "conflict_analysis": "The proposed intentional change is separate from current authority; current rules remain binding until approved implementation.",
+        "evidence_gaps": [],
+        "behavior_status": "explicit_change",
+        "work_status": "technical_design_decision",
+        "rationale": "Executable task packets already carry overlapping outcome, scope, dependency and verification information.",
+        "implementation_implication": "Use implementation_steps as one canonical packet collection; promote a stable packet_id and materialize self-contained worker projections."
+      },
+      {
+        "item_id": "CP-E3",
+        "requirements_evidence": [
+          "conversation: user requests specification and plan for the preceding conditional packet recommendation",
+          "Verification selection, binding tuples, exact command identity and packet-local TDD are independent existing controls."
+        ],
+        "design_evidence": {
+          "status": "provided",
+          "source_refs": [
+            "conversation: preceding research recommendation and peer-qualified synthesis"
+          ],
+          "rationale": "Proposed design direction; no implementation authorization or performance proof."
+        },
+        "implementation_evidence": {
+          "status": "inspected",
+          "traces": [
+            {
+              "file": "skills/assistant-workflow/contracts/phase-gates.yaml",
+              "symbols": [
+                "INV_VERIFICATION_SELECTION / INV_TDD_PROJECTION"
+              ],
+              "execution_behavior": "Selected checks and binding constraints must resolve; active packets require exactly one applicable TDD check.",
+              "content_sha256": "6529924a5eb281b0e34fb3ae57822a672a49af92804acb581bc03d4985efd658"
+            },
+            {
+              "file": "skills/assistant-workflow/references/build-worker-protocol.md",
+              "symbols": [
+                "Per-Slice Verification"
+              ],
+              "execution_behavior": "Requires current results and a self-check; stale/missing evidence cannot establish verified status.",
+              "content_sha256": "0e8b1a7f1bae52f555958a7dc43848532fcd5d81551a4a0a8efaa8005942a5eb"
+            }
+          ],
+          "search_or_access_refs": [],
+          "rationale": "Current source and serialized artifact inspection; prescribed behavior is distinguished from native execution."
+        },
+        "behavioral_test_evidence": {
+          "status": "inspected",
+          "assertions_or_search_refs": [
+            "tests/p0-p4/task-packet-contracts.sh: canonical commands retain CheckSpec identity and task packets never flatten or default cwd",
+            "tests/p0-p4/worker-status-contracts.sh: Decompose slices preserve task TDD choice and derive local applicability from selected checks"
+          ],
+          "rationale": "Existing assertion bodies/structured controls inspected; no test was executed during preparation."
+        },
+        "conflict_analysis": "Preserve the inspected contract; no contrary authoritative instruction found.",
+        "evidence_gaps": [],
+        "behavior_status": "existing_behavior_to_preserve",
+        "work_status": "implementation_gap",
+        "rationale": "Verification selection, binding tuples, exact command identity and packet-local TDD are independent existing controls.",
+        "implementation_implication": "Move evidence to packet records while preserving canonical decisions, exact tuples, selected checks and meaningful TDD boundaries."
+      },
+      {
+        "item_id": "CP-E4",
+        "requirements_evidence": [
+          "conversation: user requests specification and plan for the preceding conditional packet recommendation",
+          "Dependencies wait for VERIFIED prerequisites; shared or unknown workspaces serialize source changes."
+        ],
+        "design_evidence": {
+          "status": "provided",
+          "source_refs": [
+            "conversation: preceding research recommendation and peer-qualified synthesis"
+          ],
+          "rationale": "Proposed design direction; no implementation authorization or performance proof."
+        },
+        "implementation_evidence": {
+          "status": "inspected",
+          "traces": [
+            {
+              "file": "skills/assistant-workflow/references/phases.md",
+              "symbols": [
+                "Phase: Build"
+              ],
+              "execution_behavior": "Requires verified prerequisites and runtime-proven isolation for overlapping source work.",
+              "content_sha256": "8b5c29149621575b6500554c40be771b3badae991878a99b965fbf8d3a5c9766"
+            },
+            {
+              "file": "skills/assistant-workflow/references/build-worker-protocol.md",
+              "symbols": [
+                "Per-Slice Verification"
+              ],
+              "execution_behavior": "Integration checks precede fresh review and use selected/binding scope.",
+              "content_sha256": "0e8b1a7f1bae52f555958a7dc43848532fcd5d81551a4a0a8efaa8005942a5eb"
+            }
+          ],
+          "search_or_access_refs": [],
+          "rationale": "Current source and serialized artifact inspection; prescribed behavior is distinguished from native execution."
+        },
+        "behavioral_test_evidence": {
+          "status": "inspected",
+          "assertions_or_search_refs": [
+            "tests/p0-p4/task-packet-contracts.sh: workflow eval grading enforces structured dependency scheduling and seeded isolation evidence",
+            "skills/assistant-workflow/evals/cases.json: native-slice-execution-uses-dependencies-not-runner-topology / isolated-independent-slices-integrate-before-review"
+          ],
+          "rationale": "Existing assertion bodies/structured controls inspected; no test was executed during preparation."
+        },
+        "conflict_analysis": "Preserve the inspected contract; no contrary authoritative instruction found.",
+        "evidence_gaps": [],
+        "behavior_status": "existing_behavior_to_preserve",
+        "work_status": "implementation_gap",
+        "rationale": "Dependencies wait for VERIFIED prerequisites; shared or unknown workspaces serialize source changes.",
+        "implementation_implication": "Bind ordering and verification to packet IDs; retain integration validation regardless of packet count."
+      },
+      {
+        "item_id": "CP-E5",
+        "requirements_evidence": [
+          "conversation: user requests specification and plan for the preceding conditional packet recommendation",
+          "Approval scope, bounded repair and progressive route-clear boundaries already constrain adaptation."
+        ],
+        "design_evidence": {
+          "status": "provided",
+          "source_refs": [
+            "conversation: preceding research recommendation and peer-qualified synthesis"
+          ],
+          "rationale": "Proposed design direction; no implementation authorization or performance proof."
+        },
+        "implementation_evidence": {
+          "status": "inspected",
+          "traces": [
+            {
+              "file": "AGENTS.md",
+              "symbols": [
+                "Workflow"
+              ],
+              "execution_behavior": "Approval carries through bounded reversible recovery; material changes need a new decision.",
+              "content_sha256": "3a34a4d7e39625b7b9bdb4c4e2d65038f93f06e9647c1b7955a12cb6e92223d2"
+            },
+            {
+              "file": "skills/assistant-workflow/references/progressive-discovery.md",
+              "symbols": [
+                "route_clear / retained lifecycle"
+              ],
+              "execution_behavior": "Progressive discovery remains non-executing until its existing route-clear requirements are satisfied.",
+              "content_sha256": "384012ae60ba0abf2b9b13e40eefbe5082c5f5c3a9fb7587e69d5f26228c3985"
+            },
+            {
+              "file": "skills/assistant-workflow/references/task-state-reconciliation.md",
+              "symbols": [
+                "state freshness"
+              ],
+              "execution_behavior": "Persisted state must be reconciled before resumption.",
+              "content_sha256": "9bca660f3d1773b160fa2a9dbccdd0ee4fb6bd47489938054941ff3454558852"
+            }
+          ],
+          "search_or_access_refs": [],
+          "rationale": "Current source and serialized artifact inspection; prescribed behavior is distinguished from native execution."
+        },
+        "behavioral_test_evidence": {
+          "status": "inspected",
+          "assertions_or_search_refs": [
+            "tests/p0-p4/task-packet-contracts.sh: workflow Build repair is bounded persistent and routes unknown or terminal failures",
+            "tests/p0-p4/progressive-discovery-contracts.sh: workflow gates progressive safety recomputation and route clearance"
+          ],
+          "rationale": "Existing assertion bodies/structured controls inspected; no test was executed during preparation."
+        },
+        "conflict_analysis": "Preserve the inspected contract; no contrary authoritative instruction found.",
+        "evidence_gaps": [],
+        "behavior_status": "existing_behavior_to_preserve",
+        "work_status": "implementation_gap",
+        "rationale": "Approval scope, bounded repair and progressive route-clear boundaries already constrain adaptation.",
+        "implementation_implication": "Packet elaboration stays inside approved boundaries; no progressive-discovery shortcut or reset of recovery budgets."
+      },
+      {
+        "item_id": "CP-E6",
+        "requirements_evidence": [
+          "conversation: user requests specification and plan for the preceding conditional packet recommendation",
+          "Review, preparation-only completion and optional harness/QA consumers refer to existing scope and evidence identities."
+        ],
+        "design_evidence": {
+          "status": "provided",
+          "source_refs": [
+            "conversation: preceding research recommendation and peer-qualified synthesis"
+          ],
+          "rationale": "Proposed design direction; no implementation authorization or performance proof."
+        },
+        "implementation_evidence": {
+          "status": "inspected",
+          "traces": [
+            {
+              "file": "skills/assistant-workflow/contracts/output.yaml",
+              "symbols": [
+                "completion_tiers / feature_preparation_result"
+              ],
+              "execution_behavior": "Preparation has no executable slices; completion binds review and task evidence.",
+              "content_sha256": "03c789896d8080494d847c6ae0148bbdebe554a543daf315f95647c7071461a8"
+            },
+            {
+              "file": "skills/assistant-workflow/references/task-journal-template.md",
+              "symbols": [
+                "Slice Verification Ledger"
+              ],
+              "execution_behavior": "Maintains a second per-slice ledger today.",
+              "content_sha256": "eab0bd18c72c140c28c3e03e4d307235b4983acbb14c221e95cfddd14f7079f6"
+            },
+            {
+              "file": "skills/assistant-review/contracts/input.yaml",
+              "symbols": [
+                "acceptance_criteria"
+              ],
+              "execution_behavior": "Accepts criteria from user, approved plan, slice manifest or Done Contract.",
+              "content_sha256": "4cbeffcc78dd378b7964117ed0dfa4c3e7201046855f87dfeba53c514338ff35"
+            }
+          ],
+          "search_or_access_refs": [],
+          "rationale": "Current source and serialized artifact inspection; prescribed behavior is distinguished from native execution."
+        },
+        "behavioral_test_evidence": {
+          "status": "inspected",
+          "assertions_or_search_refs": [
+            "tests/p0-p4/feature-preparation-evidence-contracts.sh: existing preparation-only routing and readiness evidence assertions",
+            "tests/p0-p4/workflow-architecture-completion-contracts.sh: canonical review/QA completion and freshness assertions"
+          ],
+          "rationale": "Existing assertion bodies/structured controls inspected; no test was executed during preparation."
+        },
+        "conflict_analysis": "Preserve the inspected contract; no contrary authoritative instruction found.",
+        "evidence_gaps": [],
+        "behavior_status": "existing_behavior_to_preserve",
+        "work_status": "implementation_gap",
+        "rationale": "Review, preparation-only completion and optional harness/QA consumers refer to existing scope and evidence identities.",
+        "implementation_implication": "Replace live slice-specific projections with packet evidence references; preserve all independent review/QA/harness activation and completion rules."
+      },
+      {
+        "item_id": "CP-E7",
+        "requirements_evidence": [
+          "conversation: user requests specification and plan for the preceding conditional packet recommendation",
+          "There is no current canonical packet_id/plan_schema_version migration contract in the searched workflow contracts."
+        ],
+        "design_evidence": {
+          "status": "provided",
+          "source_refs": [
+            "conversation: preceding research recommendation and peer-qualified synthesis"
+          ],
+          "rationale": "Proposed design direction; no implementation authorization or performance proof."
+        },
+        "implementation_evidence": {
+          "status": "inspected",
+          "traces": [
+            {
+              "file": "skills/assistant-workflow/contracts/handoffs.yaml",
+              "symbols": [
+                "implementation_steps.task_id / slice_id"
+              ],
+              "execution_behavior": "task_id is optional provider-local; slice_id is the current execution boundary.",
+              "content_sha256": "709069dcd352271f3310000b019e70924f38891bc063c3f91c7764356982e58f"
+            },
+            {
+              "file": "tools/evals/lib/skill-eval-fixtures.sh",
+              "symbols": [
+                "execution_policy"
+              ],
+              "execution_behavior": "Structured policy fixtures use existing slice-era wire fields.",
+              "content_sha256": "91dbf367a011ba4ed7aea1de0c079447c369dbe308500f6795e5e62fd58f4c6b"
+            }
+          ],
+          "search_or_access_refs": [],
+          "rationale": "Current source and serialized artifact inspection; prescribed behavior is distinguished from native execution."
+        },
+        "behavioral_test_evidence": {
+          "status": "inspected",
+          "assertions_or_search_refs": [
+            "tests/p0-p4/task-packet-contracts.sh: workflow output contract requires safe unique slice ids and declared dependencies",
+            "tests/p0-p4/task-packet-contracts.sh: workflow fixture schema rejects undeclared execution-policy children and invalid decisions"
+          ],
+          "rationale": "Existing assertion bodies/structured controls inspected; no test was executed during preparation."
+        },
+        "conflict_analysis": "Preserve the inspected contract; no contrary authoritative instruction found.",
+        "evidence_gaps": [],
+        "behavior_status": "new_behavior",
+        "work_status": "technical_design_decision",
+        "rationale": "There is no current canonical packet_id/plan_schema_version migration contract in the searched workflow contracts.",
+        "implementation_implication": "Version the changed workflow contract and define explicit legacy input normalization; reject ambiguous mappings instead of silently discarding old obligations."
+      },
+      {
+        "item_id": "CP-E8",
+        "requirements_evidence": [
+          "conversation: user requests specification and plan for the preceding conditional packet recommendation",
+          "Comparative efficiency, representative runtime consumption and control equivalence have not been established."
+        ],
+        "design_evidence": {
+          "status": "provided",
+          "source_refs": [
+            "conversation: preceding research recommendation and peer-qualified synthesis"
+          ],
+          "rationale": "Proposed design direction; no implementation authorization or performance proof."
+        },
+        "implementation_evidence": {
+          "status": "inspected",
+          "traces": [
+            {
+              "file": "docs/evals/README.md",
+              "symbols": [
+                "Trace import and A/B comparison / native execution limits"
+              ],
+              "execution_behavior": "Paired comparisons exist, but worker-isolation/overlap telemetry is not authoritative for a documented native case.",
+              "content_sha256": "e20d6a8e88492778418be695c76bf8177bcc553f8ef38ea2a1ce1aec996e56bb"
+            },
+            {
+              "file": "tools/evals/run-codex-framework-evals.sh",
+              "symbols": [
+                "plan-only default / execute opt-in"
+              ],
+              "execution_behavior": "Live execution is separate from deterministic preparation and needs capability/cost checks.",
+              "content_sha256": "e796809c137d38e19ce6261f1795ad86d7ae66e4c21e3c3c9c5297108d8c33e4"
+            }
+          ],
+          "search_or_access_refs": [],
+          "rationale": "Current source and serialized artifact inspection; prescribed behavior is distinguished from native execution."
+        },
+        "behavioral_test_evidence": {
+          "status": "inspected",
+          "assertions_or_search_refs": [
+            "tests/p0-p4/task-packet-contracts.sh: workflow eval grading enforces structured dependency scheduling and seeded isolation evidence",
+            "docs/evals/README.md: adapter_unavailable is excluded incomplete evidence, not proof of native execution"
+          ],
+          "rationale": "Existing assertion bodies/structured controls inspected; no test was executed during preparation."
+        },
+        "conflict_analysis": "Preserve the inspected contract; no contrary authoritative instruction found.",
+        "evidence_gaps": [
+          "No matched local performance ablation or trusted native execution audit was run.",
+          "Actual capability and cost limits for a comparative pilot must be resolved before calls."
+        ],
+        "behavior_status": "materially_unknown",
+        "work_status": "evidence_gap",
+        "rationale": "Comparative efficiency, representative runtime consumption and control equivalence have not been established.",
+        "implementation_implication": "Use bounded paired evaluation only after approval; do not claim savings or scheduler correctness from prose/static checks."
+      }
+    ]
+  },
+  "feature_preparation_result": {
+    "execution_status": "not_started",
+    "scope": "Prepare a specification and readiness plan for conditional decomposition and canonical executable task packets.",
+    "feature_preparation_evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+    "evidence_gaps": [
+      "Comparative benefit, native runtime consumption and complete migration equivalence remain future acceptance claims."
+    ],
+    "open_decisions": [
+      "User authorization of the proposed specification/plan before implementation.",
+      "Before any native comparative calls: supported exact model/runtime, observable boundaries, elapsed/token caps and materiality threshold."
+    ],
+    "implementation_implications": [
+      "Replace duplicate live slice artifacts with canonical packet records and conditional decomposition.",
+      "Preserve all approval, verification/TDD, dependency, workspace-isolation, recovery, progressive-discovery and review/QA controls.",
+      "Version and validate legacy input migration; update affected producers, consumers, generators and owned coverage together.",
+      "Keep cost/quality equivalence and native scheduling claims pending until actual evidence is available."
+    ],
+    "readiness_plan": {
+      "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+      "implementation_implications": [
+        "Replace duplicate live slice artifacts with canonical packet records and conditional decomposition.",
+        "Preserve all approval, verification/TDD, dependency, workspace-isolation, recovery, progressive-discovery and review/QA controls.",
+        "Version and validate legacy input migration; update affected producers, consumers, generators and owned coverage together.",
+        "Keep cost/quality equivalence and native scheduling claims pending until actual evidence is available."
+      ],
+      "open_decisions": [
+        "User authorization of the proposed specification/plan before implementation.",
+        "Before any native comparative calls: supported exact model/runtime, observable boundaries, elapsed/token caps and materiality threshold."
+      ],
+      "recommended_next_state": "User reviews proposed design; approved implement_only workflow refreshes source identity, obligations, verification and implementation approval before Build.",
+      "execution_status": "not_started"
+    },
+    "recommended_next_step": "Review specification.md and plan.md; authorize a separate implementation workflow when ready."
+  },
+  "architecture_decision_pack": {
+    "pack_id": "conditional-task-packets-20261016",
+    "feature_preparation_evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+    "feature_preparation_evidence_bindings": [
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E1",
+        "claim_or_question": "Medium+ currently requires a separate slice manifest, including single-slice rationale."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E2",
+        "claim_or_question": "Executable task packets already carry overlapping outcome, scope, dependency and verification information."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E3",
+        "claim_or_question": "Verification selection, binding tuples, exact command identity and packet-local TDD are independent existing controls."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E4",
+        "claim_or_question": "Dependencies wait for VERIFIED prerequisites; shared or unknown workspaces serialize source changes."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E5",
+        "claim_or_question": "Approval scope, bounded repair and progressive route-clear boundaries already constrain adaptation."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E6",
+        "claim_or_question": "Review, preparation-only completion and optional harness/QA consumers refer to existing scope and evidence identities."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E7",
+        "claim_or_question": "There is no current canonical packet_id/plan_schema_version migration contract in the searched workflow contracts."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E8",
+        "claim_or_question": "Comparative efficiency, representative runtime consumption and control equivalence have not been established."
+      }
+    ],
+    "mode": "required",
+    "single_goal": "Replace mandatory duplicate slice records with conditional, execution-relevant task packets while preserving current controls.",
+    "freshness": {
+      "basis_kind": "repository",
+      "branch_or_project_state": "feature/remove-temporary-game-skills; existing unrelated cleanup changes preserved",
+      "revision_or_context_ref": "622a58d493a3b17df0af9e632ba28287cdf41fd8",
+      "evidence_refs": [
+        "docs/plans/conditional-task-packets/source-manifest.json",
+        "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence"
+      ],
+      "invalidated_by": [
+        "Changed workflow contracts, role consumers, generators, evaluator behavior or requirements.",
+        "A legacy plan cannot be normalized without altering obligations or identity.",
+        "The source hash universe or explicit pilot resource/acceptance limits change."
+      ]
+    },
+    "facts": [
+      {
+        "claim": "Medium+ currently requires a separate slice manifest, including single-slice rationale.",
+        "source_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; item=CP-E1",
+        "verified_against": "622a58d493a3b17df0af9e632ba28287cdf41fd8 plus inspected working-tree hashes in source-manifest.json"
+      },
+      {
+        "claim": "Executable task packets already carry overlapping outcome, scope, dependency and verification information.",
+        "source_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; item=CP-E2",
+        "verified_against": "622a58d493a3b17df0af9e632ba28287cdf41fd8 plus inspected working-tree hashes in source-manifest.json"
+      },
+      {
+        "claim": "Verification selection, binding tuples, exact command identity and packet-local TDD are independent existing controls.",
+        "source_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; item=CP-E3",
+        "verified_against": "622a58d493a3b17df0af9e632ba28287cdf41fd8 plus inspected working-tree hashes in source-manifest.json"
+      },
+      {
+        "claim": "Dependencies wait for VERIFIED prerequisites; shared or unknown workspaces serialize source changes.",
+        "source_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; item=CP-E4",
+        "verified_against": "622a58d493a3b17df0af9e632ba28287cdf41fd8 plus inspected working-tree hashes in source-manifest.json"
+      },
+      {
+        "claim": "Approval scope, bounded repair and progressive route-clear boundaries already constrain adaptation.",
+        "source_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; item=CP-E5",
+        "verified_against": "622a58d493a3b17df0af9e632ba28287cdf41fd8 plus inspected working-tree hashes in source-manifest.json"
+      },
+      {
+        "claim": "Review, preparation-only completion and optional harness/QA consumers refer to existing scope and evidence identities.",
+        "source_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; item=CP-E6",
+        "verified_against": "622a58d493a3b17df0af9e632ba28287cdf41fd8 plus inspected working-tree hashes in source-manifest.json"
+      },
+      {
+        "claim": "There is no current canonical packet_id/plan_schema_version migration contract in the searched workflow contracts.",
+        "source_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; item=CP-E7",
+        "verified_against": "622a58d493a3b17df0af9e632ba28287cdf41fd8 plus inspected working-tree hashes in source-manifest.json"
+      },
+      {
+        "claim": "Comparative efficiency, representative runtime consumption and control equivalence have not been established.",
+        "source_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; item=CP-E8",
+        "verified_against": "622a58d493a3b17df0af9e632ba28287cdf41fd8 plus inspected working-tree hashes in source-manifest.json"
+      }
+    ],
+    "assumptions": [
+      {
+        "statement": "Canonical packet consolidation may reduce overhead.",
+        "status": "deferred",
+        "rationale_or_impact": "Hypothesis only; no native or comparative effect has been measured."
+      },
+      {
+        "statement": "One coherent increment normally needs one packet, except where existing TDD/protocol rules require more.",
+        "status": "safe_default",
+        "rationale_or_impact": "Preserves accepted user recommendation and current protocol obligations without forcing independently shippable units."
+      }
+    ],
+    "material_questions": [
+      {
+        "question_id": "CP-D1",
+        "topic": "authorization",
+        "question": "Approve the proposed shared contract migration and subsequent implementation scope?",
+        "why_needed": "The user requested preparation only.",
+        "risk_if_guessed": "Would execute an unapproved medium+ shared change.",
+        "recommended_default_or_none": "Keep implementation not started until the user authorizes it.",
+        "source_checked": [
+          "conversation: latest user request",
+          "AGENTS.md"
+        ],
+        "status": "open"
+      },
+      {
+        "question_id": "CP-D2",
+        "topic": "comparative pilot",
+        "question": "Which supported runtime/model and bounded elapsed/token budget may the pilot use?",
+        "why_needed": "Paid/native execution capabilities and cost limits are not established by preparation.",
+        "risk_if_guessed": "Quota/cost overrun or unsupported native-execution claims.",
+        "recommended_default_or_none": "Plan at most eight top-level native task runs covering four paired scenarios; freeze exact overall model-turn/child-agent/review call, elapsed and token limits before execution and make no calls now.",
+        "source_checked": [
+          "docs/evals/README.md",
+          "tools/evals/run-codex-framework-evals.sh"
+        ],
+        "status": "deferred"
+      }
+    ],
+    "boundaries": [
+      {
+        "boundary": "Routing and plan ownership",
+        "owner": "assistant-workflow Orchestrator",
+        "lifecycle_or_data_flow": "Discover/readiness -> optional decomposition -> canonical Plan -> current packet projection",
+        "dependency_direction": "Requirements and verification owner feed workflow; workers consume snapshots.",
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; items=CP-E1,CP-E2"
+      },
+      {
+        "boundary": "Verification/TDD and completion",
+        "owner": "assistant-verification, assistant-tdd, workflow execution, assistant-review in their current roles",
+        "lifecycle_or_data_flow": "Selected checks -> current evidence -> integration -> independent review -> completion",
+        "dependency_direction": "Workflow consumes specialist contracts unchanged.",
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; items=CP-E3,CP-E4,CP-E6"
+      },
+      {
+        "boundary": "Persistence and compatibility",
+        "owner": "Workflow resume/Plan boundary and existing evaluator admission",
+        "lifecycle_or_data_flow": "Versioned legacy input -> validated canonical packet projection -> current freshness checks",
+        "dependency_direction": "Old artifacts remain immutable evidence; only new producers emit the new form.",
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; items=CP-E5,CP-E7"
+      }
+    ],
+    "design_pressure_checks": [
+      {
+        "concern": "control_and_early_exit",
+        "status": "resolved",
+        "evidence_or_material_question": "Current approval/recovery gates and worker statuses control mutation and early stop.",
+        "decision_implication": "Preserve stop, cancellation and bounded recovery; no generic scheduler or new execution permission.",
+        "revalidation_point": "Future approved implementation and the corresponding acceptance controls in specification.md."
+      },
+      {
+        "concern": "ownership_and_disposal",
+        "status": "resolved",
+        "evidence_or_material_question": "Orchestrator owns canonical plan/state; workers receive an immutable current_task_packet projection.",
+        "decision_implication": "Keep one authoritative record and references; preserve user files and unrelated sessions.",
+        "revalidation_point": "Future approved implementation and the corresponding acceptance controls in specification.md."
+      },
+      {
+        "concern": "resource_envelope",
+        "status": "resolved",
+        "evidence_or_material_question": "Only artifact size overlap is measured; runtime savings are unknown.",
+        "decision_implication": "Bound any pilot separately; no asserted speedup, new daemon, standing ledger or mandatory benchmark for normal tasks.",
+        "revalidation_point": "Future approved implementation and the corresponding acceptance controls in specification.md."
+      },
+      {
+        "concern": "extension_registration",
+        "status": "resolved",
+        "evidence_or_material_question": "Existing skill contracts, generated views and provider role prompts are registration boundaries.",
+        "decision_implication": "Update existing owners and generator headings; preserve native role identities and custom model/effort settings.",
+        "revalidation_point": "Future approved implementation and the corresponding acceptance controls in specification.md."
+      },
+      {
+        "concern": "representative_path",
+        "status": "resolved",
+        "evidence_or_material_question": "Discover -> optional decomposition -> Plan implementation_steps -> current_task_packet -> selected verification -> integration -> fresh Review.",
+        "decision_implication": "Revalidate this path with coherent, dependent, independent and interrupted work; uncertainty remains non-executing until ready.",
+        "revalidation_point": "Future approved implementation and the corresponding acceptance controls in specification.md."
+      }
+    ],
+    "type_ledger": [
+      {
+        "concept": "ExecutionPacketId",
+        "representation_policy": "semantic_type",
+        "representation": "packet_id: descriptive path-safe stable identifier",
+        "boundary": "Plan, dependency references, worker projections, evidence and recovery",
+        "semantics_or_exception_reason": "Names the execution boundary, replacing the overloaded slice identifier.",
+        "conversion_or_validation_point": "Validate uniqueness, declared references and cycle freedom at Plan/resume/dispatch.",
+        "extension_seam": "Existing implementation_steps and current_task_packet contracts."
+      },
+      {
+        "concept": "Canonical verification identity",
+        "representation_policy": "semantic_type",
+        "representation": "Existing verification_decision plus stable source/snapshot identity and selected_check_ids",
+        "boundary": "Specialist producer -> canonical Plan -> materialized worker context",
+        "semantics_or_exception_reason": "Must preserve exact CheckSpecs, binding tuples, TddChoice and freshness.",
+        "conversion_or_validation_point": "Resolve and validate before dispatch; blocked when missing/stale/conflicting.",
+        "extension_seam": "Existing assistant-verification output; no parallel verification schema."
+      },
+      {
+        "concept": "Serialized IDs and version",
+        "representation_policy": "primitive_exception",
+        "representation": "JSON/YAML strings and enum discriminators",
+        "boundary": "Persisted plan and legacy wire input",
+        "semantics_or_exception_reason": "Serialized transport primitives convert to validated semantic identities at admission.",
+        "conversion_or_validation_point": "Explicit version and legacy ID-map validation; reject unknown or ambiguous input.",
+        "extension_seam": "Existing YAML contracts/eval admission.",
+        "primitive_exception_kind": "wire_or_storage"
+      }
+    ],
+    "interface_contracts": [
+      {
+        "consumer_or_owner": "Plan and worker dispatch",
+        "exposure": "wire",
+        "input_type": "Versioned implementation_steps packet collection and canonical verification identity",
+        "output_or_failure_type": "Materialized current_task_packet with exact existing specialist projections, or truthful blocked context",
+        "evolution_strategy": "Workflow contract major version 13; bounded v12 read normalization and v13 writes only.",
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; items=CP-E2,CP-E3,CP-E7"
+      },
+      {
+        "consumer_or_owner": "Review/completion and resume",
+        "exposure": "storage",
+        "input_type": "Canonical packet state/evidence and current integrated snapshot",
+        "output_or_failure_type": "Existing review/QA and completion results or explicit gap/blocker",
+        "evolution_strategy": "Replace slice foreign keys with packet references; preserve all independent trigger and evidence checks.",
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence; items=CP-E4,CP-E5,CP-E6"
+      }
+    ],
+    "quality_scenarios": [
+      {
+        "quality_scenario_id": "CP-Q1",
+        "attribute": "reliability",
+        "scenario": "Admit a coherent packet and gate dependent work without a separate manifest.",
+        "workload": "Single-unit, A/B/C dependencies, shared/isolated workspaces and interrupted/resumed work.",
+        "budget_or_explicit_unknown": "Zero known lost mandatory obligations or accepted unsafe controls in the bounded acceptance set; general reliability remains unknown.",
+        "measurement": "Obligation mapping, positive/negative behavioral controls and observed native traces where exposed.",
+        "failure_condition": "A required approval, check, prerequisite, recovery or review obligation is lost or bypassed.",
+        "status": "pending"
+      },
+      {
+        "quality_scenario_id": "CP-Q2",
+        "attribute": "performance",
+        "scenario": "Compare current slicing and conditional packet representations at equal acceptance quality.",
+        "workload": "Four representative paired pilot scenarios; actual model/runtime limits resolved before calls.",
+        "budget_or_explicit_unknown": "Unknown runtime/token benefit; elapsed/token limits and materiality threshold must be agreed before pilot execution.",
+        "measurement": "Paired total planning, execution, recovery and review tokens/time, acceptance, defects and rework.",
+        "failure_condition": "Quality regresses, native evidence is missing, or no material total-cost benefit is observed under the predeclared threshold.",
+        "status": "unknown"
+      }
+    ],
+    "alternatives": [
+      {
+        "alternative_id": "retain-manifests",
+        "option": "Keep mandatory manifest plus task packets.",
+        "tradeoffs": "Least migration work; retains duplicate authoring/state obligations.",
+        "disposition": "rejected"
+      },
+      {
+        "alternative_id": "packet-owned-conditional-boundaries",
+        "option": "Use the existing task-packet collection as canonical execution state and decompose only for a demonstrated execution need.",
+        "tradeoffs": "Reduces duplicate representation by design, but needs complete obligation mapping, legacy handling and conditional adoption evidence.",
+        "disposition": "selected"
+      },
+      {
+        "alternative_id": "remove-explicit-boundaries",
+        "option": "Remove all explicit execution boundaries and rely on one unconstrained loop.",
+        "tradeoffs": "Cannot express required prerequisite, TDD, ownership and recovery controls reliably.",
+        "disposition": "rejected"
+      }
+    ],
+    "selected_alternative_id": "packet-owned-conditional-boundaries",
+    "selected_design": "Conditional decomposition with implementation_steps as the canonical collection, materialized current_task_packet projections and existing specialist controls.",
+    "selected_design_rationale": "Implements the accepted research recommendation while explicitly preserving control ownership and treating efficiency as unverified.",
+    "verification": [
+      {
+        "verification_id": "CP-V1",
+        "claim_or_constraint": "Every old mandatory obligation has a preserved consumer and discriminating acceptance check.",
+        "method": "Read-only obligation/consumer comparison now; future schema and behavioral negative controls after approved implementation.",
+        "success_signal": "Complete mapping, explicit retired duplicates, unchanged authority boundaries and no known missing mandatory control.",
+        "failure_condition": "Missing owner, ambiguous legacy identity or a check that only recognizes vocabulary."
+      },
+      {
+        "verification_id": "CP-V2",
+        "claim_or_constraint": "The candidate improves total delivery cost without observed acceptance/control regressions.",
+        "method": "Future bounded paired pilot after runtime/cost approval; absent telemetry remains a gap.",
+        "success_signal": "Current trace evidence supports the predeclared materiality threshold at matched quality.",
+        "failure_condition": "Regression, missing provenance, unobserved execution boundary or exhausted budget."
+      }
+    ],
+    "handoff_refs": {
+      "handoff_binding_state": "discover_only",
+      "context_or_journal_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence"
+    }
+  },
+  "change_impact_applicability": {
+    "impact_scope": "shared",
+    "applicability_reason": "Future contract changes affect routing, dispatch, state, evals, generated views and provider prompts.",
+    "expanded_artifact_carried": true
+  },
+  "change_impact_evidence": {
+    "artifact_identity": "conditional-task-packets-impact-20261016",
+    "phase": "discovery",
+    "impact_scope": "shared",
+    "status": "gaps_reported",
+    "gap_or_blocker_ref": "docs/plans/conditional-task-packets/specification.md#remaining-evidence-and-approval"
+  },
+  "requirement_acceptance_map_ref": "docs/plans/conditional-task-packets/specification.md#requirements-and-acceptance",
+  "validation_results": [
+    {
+      "command_or_check": "Preparation artifact field/type/enum validation and semantic identity checks",
+      "result": "passed",
+      "evidence": "Temporary validation procedure in this chat checked canonical preparation artifact fields, eight evidence rows/claim bindings, fourteen requirement rows, discover-only Pack state and no execution activation. Final rerun follows this metadata update.",
+      "selected_check_ids": [],
+      "binding_obligation_refs": []
+    },
+    {
+      "command_or_check": "Source freshness, saved document local links, JSON parsing and whitespace inspection",
+      "result": "passed",
+      "evidence": "All 47 inventoried source hashes matched during preparation validation; local document links resolved, JSON parsed and no trailing whitespace was found.",
+      "selected_check_ids": [],
+      "binding_obligation_refs": []
+    },
+    {
+      "command_or_check": "Implementation/native comparative verification",
+      "result": "not_applicable",
+      "evidence": "Only preparation artifacts are authorized. No framework implementation, test run, native pilot, installation, independent code review or performance claim is part of this completed preparation.",
+      "selected_check_ids": [],
+      "binding_obligation_refs": []
+    }
+  ],
+  "preparation_validation_status": "passed",
+  "authored_preparation_artifacts": [
+    {
+      "path": "docs/plans/conditional-task-packets/specification.md",
+      "sha256": "a2deb1754a5d77856a018d197369997933da9496787a75896dd4067fb7bc815a"
+    },
+    {
+      "path": "docs/plans/conditional-task-packets/plan.md",
+      "sha256": "7a8ecdb9e92b8795ee669434bca05c33a7b6f74b0978a38c5ebb11f2215a7d5c"
+    },
+    {
+      "path": "docs/plans/conditional-task-packets/source-manifest.json",
+      "sha256": "d0b3d70b4a5cd1c47c104aed7d2a27b607e6c8ae1ab00aa348605060a8b7245c"
+    }
+  ],
+  "preparation_self_review": {
+    "result": "passed",
+    "scope": "Saved specification, readiness plan, typed evidence/Pack, source freshness and exact preparation-only boundaries.",
+    "corrections": [
+      "Qualified one-packet acceptance to preserve existing TDD/protocol allocation requirements.",
+      "Changed the pilot unit to top-level native task runs and included internal model/child/review resources in the future budget.",
+      "Made the required major-version root migration note explicit."
+    ],
+    "limitations": [
+      "This is a preparation admissibility/content review, not an independent code review or implementation acceptance result."
+    ]
+  },
+  "evidence_assessment": {
+    "status": "sufficient",
+    "scope_and_evidence_refs": [
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/specification.md",
+        "claim_kind": "other",
+        "claim_scope": [
+          "Specified conditional routes, preserved controls, versioned migration, affected boundaries, acceptance and evidence limits."
+        ],
+        "selected_check_ids": [],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No implemented behavior, native runtime consumption, comparative benefit or selected-check closure claimed."
+        ]
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/plan.md",
+        "claim_kind": "other",
+        "claim_scope": [
+          "Saved readiness sequence, bounded recovery, future decision/cost gates and no-execution next state."
+        ],
+        "selected_check_ids": [],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No executable implementation packets or implementation-test selection."
+        ]
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "claim_kind": "structural_validity",
+        "claim_scope": [
+          "Typed existing-system evidence, exact claim bindings, discover-only Architecture Decision Pack and preparation completion."
+        ],
+        "selected_check_ids": [],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "Selected-check closure is unknown: no actionable implementation verification decision was selected for this preparation."
+        ]
+      }
+    ],
+    "gaps_and_limitations": [
+      "Sufficiency applies only to requested preparation. Implementation/migration equivalence, native behavior and comparative value remain unverified.",
+      "A future implementation must refresh sources, resolve expanded-impact gates, select canonical CheckSpecs/TDD and obtain required approval before Build."
+    ],
+    "next_action": "User reviews the proposed specification/plan; workflow owns any later authorized implementation."
+  },
+  "documentation_evidence": {
+    "doc_type": "architecture",
+    "audience": "maintainers",
+    "scope": "Proposed conditional decomposition and packet-owned work/state, with migration and readiness plan.",
+    "feature_preparation_evidence_bindings": [
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E1",
+        "claim_or_question": "Medium+ currently requires a separate slice manifest, including single-slice rationale."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E2",
+        "claim_or_question": "Executable task packets already carry overlapping outcome, scope, dependency and verification information."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E3",
+        "claim_or_question": "Verification selection, binding tuples, exact command identity and packet-local TDD are independent existing controls."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E4",
+        "claim_or_question": "Dependencies wait for VERIFIED prerequisites; shared or unknown workspaces serialize source changes."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E5",
+        "claim_or_question": "Approval scope, bounded repair and progressive route-clear boundaries already constrain adaptation."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E6",
+        "claim_or_question": "Review, preparation-only completion and optional harness/QA consumers refer to existing scope and evidence identities."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E7",
+        "claim_or_question": "There is no current canonical packet_id/plan_schema_version migration contract in the searched workflow contracts."
+      },
+      {
+        "evidence_ref": "docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence",
+        "item_id": "CP-E8",
+        "claim_or_question": "Comparative efficiency, representative runtime consumption and control equivalence have not been established."
+      }
+    ],
+    "documented_decision_refs": [
+      "docs/plans/conditional-task-packets/preparation.json#architecture_decision_pack; selected_alternative_id=packet-owned-conditional-boundaries"
+    ],
+    "review_items": [
+      "Proposed design requires implementation authorization; performance and native behavior claims remain pending."
+    ]
+  }
+}
