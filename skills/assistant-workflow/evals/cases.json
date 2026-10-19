@@ -36544,6 +36544,15 @@
             "other_path": [
               "evidence_assessment"
             ]
+          },
+          {
+            "operator": "path_absent",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              0,
+              "executed_command"
+            ]
           }
         ]
       }
