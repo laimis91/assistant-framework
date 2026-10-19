@@ -22,6 +22,8 @@ A Personal AI Assistant framework for developers. 15 first-class `assistant-*` s
 
 ## Installation
 
+Installations whose selected bundled closure includes `assistant-workflow` require Python 3.9+ for its packet-admission helper and Workflow eval adapter. Both installers probe a usable supported interpreter before writes, including dry-run; closures without Workflow remain Python-independent. Install the runtime yourself, then rerun the installer. Unix probes `python3`; native Windows probes `py -3`, `python3`, then `python` and reports the supported invocation. No runtime is downloaded.
+
 Install all skills for any supported agent:
 
 ```bash
@@ -54,7 +56,7 @@ For one compatibility release, a normal install retires only older Assistant Fra
 
 ### Native Windows installation
 
-Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7.
+Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7. Workflow requires Python 3.9+ even when previewing with `-DryRun`; merely finding a launcher or app alias is insufficient. Use the interpreter invocation reported by preflight explicitly for `scripts/task-packet-admission.py`, for example `py -3 <skill-directory>\scripts\task-packet-admission.py`, rather than relying on `.py` file association. If Python is removed later or a manual install lacks it, stop at the admission gate, install a supported interpreter, and rerun before continuing.
 
 Close Codex App and any Codex CLI sessions before installing or updating Codex so they release `AGENTS.md` and managed framework files. On Windows, the installer rejects Codex installs (including `-DryRun`) before any writes when a `Codex` process is running; it does not terminate processes. Keep Codex closed until installation finishes. The installer leaves `config.toml` untouched and does not invoke the Codex CLI. If a managed file is locked, close Codex App and rerun the same command. If a file becomes unavailable after preflight, the installer reports a partial installation; resolve the cause and rerun because reinstall is safe.
 

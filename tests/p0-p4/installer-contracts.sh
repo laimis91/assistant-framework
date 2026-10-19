@@ -989,6 +989,123 @@ ownership_install_fingerprint() {
     find "$1" -type d -print -o -type l -exec ls -ld {} \; -o -type f -exec shasum -a 256 {} \; | LC_ALL=C sort
 }
 
+ownership_install_fingerprint_difference() {
+    local label="$1" before="$2" after="$3"
+    [[ "$before" != "$after" ]] || return 0
+    printf 'Fingerprint difference: %s (first 120 diff lines)\n' "$label" >&2
+    diff -u <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -n 120 >&2 || true
+}
+
+test_start "selected Workflow closure preflights supported Python before real and dry-run writes"
+runtime_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-runtime.XXXXXX")"
+p0p4_register_cleanup "$runtime_root"
+runtime_source="$runtime_root/source"
+runtime_bin="$runtime_root/runtime bin"
+runtime_host_python="$(command -v python3)"
+mkdir -p "$runtime_source/skills" "$runtime_bin"
+cp "$FRAMEWORK_DIR/install.sh" "$runtime_source/install.sh"
+for runtime_skill in assistant-workflow assistant-docs assistant-runtime-dependent; do
+    mkdir -p "$runtime_source/skills/$runtime_skill"
+    printf '%s\n' '---' "name: $runtime_skill" 'description: Isolated interpreter preflight fixture.' >"$runtime_source/skills/$runtime_skill/SKILL.md"
+    if [[ "$runtime_skill" == assistant-runtime-dependent ]]; then
+        printf '%s\n' 'requires:' '  - assistant-workflow' >>"$runtime_source/skills/$runtime_skill/SKILL.md"
+    fi
+    printf '%s\n' '---' >>"$runtime_source/skills/$runtime_skill/SKILL.md"
+done
+# Preserve ordinary installer dependencies while making Python truly absent
+# from this PATH. Supported proxies below use an independently captured binary.
+for runtime_directory in /bin /usr/bin /sbin /usr/sbin; do
+    for runtime_tool in "$runtime_directory"/*; do
+        runtime_name="${runtime_tool##*/}"
+        case "$runtime_name" in python*|py) continue ;; esac
+        [[ -e "$runtime_bin/$runtime_name" ]] || ln -s "$runtime_tool" "$runtime_bin/$runtime_name" 2>/dev/null || true
+    done
+done
+for runtime_name in rsync jq; do
+    runtime_tool="$(command -v "$runtime_name")"
+    [[ -e "$runtime_bin/$runtime_name" ]] || ln -s "$runtime_tool" "$runtime_bin/$runtime_name"
+done
+runtime_failures=()
+for runtime_variant in missing old broken supported; do
+    rm -f "$runtime_bin/python3"
+    if [[ "$runtime_variant" != missing ]]; then
+        # The old-runtime proxy executes the real -c version probe with a 3.8
+        # version tuple; it cannot pass merely because a command exists.
+        "$runtime_host_python" - "$runtime_bin/python3" "$runtime_host_python" "$runtime_variant" <<'PYPROXY'
+from pathlib import Path
+import sys
+path, host, variant = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+# Suppress only fixture bootstrap bytecode; the supported child below still
+# receives the exact installer arguments, so its cache behavior remains observable.
+source = "#!" + host + " -B\nimport os, sys\n"
+if variant == "broken":
+    source += "sys.exit(86)\n"
+elif variant == "supported":
+    source += "os.execv(" + repr(host) + ", [" + repr(host) + "] + sys.argv[1:])\n"
+else:
+    source += """from collections import namedtuple
+sys.version_info = namedtuple('VersionInfo', 'major minor micro releaselevel serial')(3, 8, 20, 'final', 0)
+arguments = sys.argv[1:]
+if arguments[:1] == ['-B']:
+    if arguments[1:2] != ['-c']:
+        sys.exit(87)
+    arguments = arguments[1:]
+if arguments in (['--version'], ['-V']):
+    print('Python 3.8.20')
+elif len(arguments) >= 2 and arguments[0] == '-c':
+    code = arguments[1]
+    sys.argv = ['-c'] + arguments[2:]
+    exec(compile(code, '<isolated-python38-probe>', 'exec'))
+else:
+    sys.exit(87)
+"""
+path.write_text(source)
+path.chmod(0o755)
+PYPROXY
+    fi
+    for runtime_selection in workflow dependent docs full; do
+        # One positive full-closure run is enough; the negative closure controls
+        # cover full installs and transitive selection separately.
+        if [[ "$runtime_variant" != missing && ( "$runtime_selection" == full || "$runtime_selection" == dependent ) ]]; then continue; fi
+        for runtime_mode in normal dry-run; do
+            runtime_home="$runtime_root/$runtime_variant-$runtime_selection-$runtime_mode"
+            mkdir -p "$runtime_home/.gemini"
+            printf 'personal sentinel\n' >"$runtime_home/.gemini/GEMINI.md"
+            runtime_before="$(ownership_install_fingerprint "$runtime_home")"
+            runtime_args=(--agent gemini --no-hooks)
+            case "$runtime_selection" in
+                workflow) runtime_args+=(--skill assistant-workflow) ;;
+                dependent) runtime_args+=(--skill assistant-runtime-dependent) ;;
+                docs) runtime_args+=(--skill assistant-docs) ;;
+            esac
+            [[ "$runtime_mode" != dry-run ]] || runtime_args+=(--dry-run)
+            if HOME="$runtime_home" PATH="$runtime_bin" /bin/bash "$runtime_source/install.sh" "${runtime_args[@]}" >"$runtime_root/last.out" 2>"$runtime_root/last.err"; then runtime_status=0; else runtime_status=$?; fi
+            runtime_after="$(ownership_install_fingerprint "$runtime_home")"
+            runtime_expected=blocked
+            [[ "$runtime_selection" != docs && "$runtime_variant" != supported ]] || runtime_expected=accepted
+            runtime_label="$runtime_variant/$runtime_selection/$runtime_mode"
+            if [[ "$runtime_expected" == blocked || "$runtime_mode" == dry-run ]]; then
+                ownership_install_fingerprint_difference "$runtime_label" "$runtime_before" "$runtime_after"
+            fi
+            if [[ "$runtime_expected" == blocked ]]; then
+                if [[ "$runtime_status" == 0 ]]; then runtime_failures+=("$runtime_label accepted unusable Python"); fi
+                if [[ "$runtime_before" != "$runtime_after" ]]; then runtime_failures+=("$runtime_label changed home before interpreter refusal"); fi
+                if ! grep -Eqi 'Python.*3\.9|3\.9.*Python' "$runtime_root/last.err" "$runtime_root/last.out"; then runtime_failures+=("$runtime_label lacks Python 3.9+ recovery guidance"); fi
+            else
+                if [[ "$runtime_status" != 0 ]]; then runtime_failures+=("$runtime_label rejected a supported closure"); fi
+                if [[ "$runtime_mode" == dry-run && "$runtime_before" != "$runtime_after" ]]; then runtime_failures+=("$runtime_label dry-run wrote files"); fi
+                if [[ "$runtime_mode" == normal ]]; then
+                    runtime_installed=assistant-workflow
+                    [[ "$runtime_selection" != docs ]] || runtime_installed=assistant-docs
+                    if [[ ! -f "$runtime_home/.gemini/skills/$runtime_installed/SKILL.md" ]]; then runtime_failures+=("$runtime_label did not install selected skill"); fi
+                fi
+                if [[ "$runtime_variant" == supported && "$runtime_selection" == workflow ]] && ! grep -Fq 'python3' "$runtime_root/last.out"; then runtime_failures+=("$runtime_label omitted supported invocation"); fi
+            fi
+        done
+    done
+done
+if [[ "${#runtime_failures[@]}" == 0 ]]; then pass; else fail "Workflow interpreter preflight: ${runtime_failures[*]}"; fi
+
 ownership_install_compatibility_matrix() {
     local matrix_root="$1" agent variant mode case_home agent_home skills workflow before after workflow_before status log
     local -a args
@@ -1091,7 +1208,10 @@ ownership_install_compatibility_matrix() {
         HOME="$case_home" CODEX_HOME="$([[ "$agent" == codex ]] && printf '%s' "$agent_home" || printf /)" bash "$source_root/install.sh" "${args[@]}" >"$log" 2>&1 || status=$?
         after="$(ownership_install_fingerprint "$case_home")"
         if [[ "$status" == 0 ]]; then ownership_matrix_failure="$row accepted missing mandatory writer source; $log"; return 1; fi
-        if [[ "$before" != "$after" ]]; then ownership_matrix_failure="$row missing-source refusal mutated managed tree"; return 1; fi
+        if [[ "$before" != "$after" ]]; then
+            ownership_install_fingerprint_difference "$row missing-source refusal" "$before" "$after"
+            ownership_matrix_failure="$row missing-source refusal mutated managed tree"; return 1
+        fi
         if ! grep -Fq 'required writer definition' "$log" || ! grep -Fq "$expected_definition" "$log" || ! grep -Fq 'No installation files have been changed' "$log"; then
             ownership_matrix_failure="$row lacks actionable missing-definition diagnostic; $log"; return 1
         fi

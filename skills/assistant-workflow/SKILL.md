@@ -40,9 +40,7 @@ load `references/ai-usage-policy.md` for external services, installs or sensitiv
 
 ## Contracts
 
-Read `contracts/index.yaml`; load progressively by current selector and enforce
-canonical gates. Reuse exact sections while source/task identity and context match. Load missing selectors; reread after identity change,
-compaction or unresolved resolution.
+Read `contracts/index.yaml`; load progressively by current selector; enforce canonical gates. Reuse sections only with matching source/task identity/context; reload after identity change, compaction or unresolved selectors.
 
 
 - `entry`: load entry fields declared by `contracts/index.yaml` from `contracts/input.yaml`; `references/triage-rubric.md` is its only entry reference.
@@ -51,14 +49,8 @@ compaction or unresolved resolution.
 - `change_impact`: load `references/change-impact.md` when behavior, cosmetic, or local/shared/unresolved impact affects verification. Record compact applicability; shared, materially unresolved, or explicitly carried expanded work requires common pre-Build/completion.
 - `progressive_discovery`: load `references/progressive-discovery.md` when `uncertainty_shape=progressive`, route-clear state is `pending`/`consumed`, sequence readiness is `active`/`closed`, or retention is `terminally_archived`. Durable markers still require validation with missing/invalid retention or `not_applicable`/retained state; fail closed. Retained artifacts remain active after bounded shape. Terminal archival needs a typed `progressive_terminal_archival` tombstone and final evidence; completed alone is insufficient and archive cannot revert. Fully specified `not_applicable` tasks stay bounded; size alone is no trigger.
 - `delegation`: load role/trigger fields and `references/subagent-dispatch.md` before dispatch.
-- `verification`: run `assistant-verification` before Plan fixes checks or no-plan Build.
-  Show unchanged `verification_decision` before Build and both `verification_decision`
-  and `evidence_assessment` at completion, including light. Carry the decision and
-  task-wide `tdd_mode` unchanged into packet/lane; carry due `selected_check_ids`
-  and exact binding tuple refs. Derive packet-local `tdd_applies` from the
-  intersection with `tdd_choice.applicable_check_ids`; assess actual evidence
-  before review/completion. TDD is independent of scope/method; active TDD requires meaningful RED, otherwise never fabricate RED.
-- `packet_admission`: load its selector before canonical Plan/resume/dispatch/verification/completion; run the shipped pure helper with independently resolved authority. Native adoption/benefit remains gated.
+- `verification`: run `assistant-verification` before Plan fixes checks or no-plan Build. Show unchanged `verification_decision` before Build and at completion alongside `evidence_assessment`, including light. Preserve decision/task-wide `tdd_mode`, due `selected_check_ids` and exact binding tuples through packets/lanes. Derive `tdd_applies` from selected IDs intersecting unchanged `tdd_choice.applicable_check_ids`; assess actual evidence before review/completion. TDD is scope/method-independent: require meaningful RED only when active; never fabricate it.
+- `packet_admission`: Python 3.9+ required. Load selector before canonical Plan/resume/dispatch/verification/completion. Run pure helper using independent authority; block missing/unsupported runtime, follow selector recovery. Native adoption/benefit gated.
 - `current_phase`: load active `contracts/phase-gates.yaml` at transition. Before dispatch and return, load `contracts/handoffs.yaml` through `build_handoff` only for CodeWriter/BuilderTester; other roles use `selected_handoff`. `completion`: load `contracts/output.yaml` before final exit.
 
 Resolve selectors by unique id, canonical path, section, key and explicit names; `name_from` uses declared `allowed_names` only. Missing/invalid selectors require `load_full_authoritative_file`, full-contract validation and recorded recovery.
@@ -81,6 +73,7 @@ When required, use this exact format:
 ## Refactor Guidance
 
 - Justify it with a concrete risk only: correctness, security, unsafe change surface, ownership, brittle testing, or extension seam.
+- Tie incidental or scope-expanding refactors to concrete risk.
 - Choose the smallest useful, durable fix; keep cleanup scoped.
 
 ## Triage
@@ -93,7 +86,7 @@ Prepare-only: Discover -> [readiness] -> Preparation Completion; no implementati
 
 ## Phase Routing
 
-Load generated `references/phases/<current-phase>.md` (lowercase; Preparation Completion: `preparation-completion`); missing/unknown views load authoritative `references/phases.md`. Load `references/workflow-controller.md` only for shared routing/defaults, movement, controller intensity, workflow state, manual verification, harness/QA, subagent separation or review-role separation; it remains canonical. For large material/patterns load `references/context-budget-and-pattern-retrieval.md`; Before Plan outside `prepare_only`, load `references/artifact-first-output-contract.md`. Ordinary Plan review uses `references/decomposition-plan-review.md` as questions, without a standalone artifact. Plan loads `references/plans/<size>.md` (`mega` uses `large`, `prepare_only` uses `prepare-only`); missing/unknown views load authoritative `references/plan-template.md`. Nonstandard continuation loads `references/context-handoff-templates.md`. Optional `prepare_only` readiness Plans omit Artifact Contracts and executable packets.
+Load generated `references/phases/<current-phase>.md` (lowercase; Preparation Completion is `preparation-completion`). Missing or unknown view: load authoritative `references/phases.md`. Load `references/workflow-controller.md` only when resolving shared routing/default, movement, harness, review, QA, or subagent-separation decisions. `references/workflow-controller.md` is the canonical source for controller intensity, workflow state, manual verification, harness/QA routing, and review-role separation. For large material/patterns load `references/context-budget-and-pattern-retrieval.md`; before Plan use `references/artifact-first-output-contract.md` only outside `prepare_only`. Ordinary Plan review: `references/decomposition-plan-review.md` questions; no standalone artifact. Plan loads `references/plans/<size>.md` (`mega` uses `large`, `prepare_only` uses `prepare-only`); missing or unknown view loads authoritative `references/plan-template.md`. Nonstandard continuation loads `references/context-handoff-templates.md`. Optional `prepare_only` readiness Plans omit Artifact Contracts and executable packets.
 
 | Phase | When | Key action |
 |---|---|---|

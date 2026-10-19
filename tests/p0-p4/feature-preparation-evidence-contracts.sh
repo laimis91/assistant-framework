@@ -874,7 +874,48 @@ if ruby -e '
 ' "$workflow_dir/references/task-journal-template.md"; then pass; else fail "task journal detailed labels do not discriminate prepare-only N/A fields from typed execution refs"; fi
 
 test_start "plan-none preparation evals assert triage and completion values and reject wrong plan modes"
-if grep -Fq '"completion_policy", "plan_mode"' "$workflow_dir/evals/cases.json" && grep -Fq '"triage_result", "plan_mode"' "$workflow_dir/evals/cases.json" && grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "plan-none preparation evals do not mutate and reject wrong triage/completion plan modes in both graders"; fi
+if python3 - "$workflow_dir/evals/cases.json" "$(feature_prep_expected_case_records)" <<'PYPLANMODE'
+from copy import deepcopy
+import json
+from pathlib import Path
+import sys
+fixture = json.loads(Path(sys.argv[1]).read_text())
+
+def declares(case, path):
+    return any(item.get("path") == path and item.get("operator") == "equals" and item.get("expected") == "none"
+               for item in case.get("machine_expectations", {}).get("structured_json_assertions", []))
+
+for record in sys.argv[2].splitlines():
+    case_id, group, mode = record.split("|")
+    if mode != "none":
+        continue
+    cases = [case for case in fixture["cases"] if case["id"] == case_id]
+    if len(cases) != 1:
+        raise ValueError("Expected one preparation case: " + case_id)
+    case = cases[0]
+    paths = [["completion_policy", "plan_mode"]]
+    if group != "light":
+        paths.append(["triage_result", "plan_mode"])
+    for path in paths:
+        if not declares(case, path):
+            raise ValueError("Missing exact equals/none declaration: " + case_id + " " + repr(path))
+        for mutation in ("removed", "wrong_value", "wrong_operator"):
+            altered = deepcopy(case)
+            assertions = altered["machine_expectations"]["structured_json_assertions"]
+            if mutation == "removed":
+                altered["machine_expectations"]["structured_json_assertions"] = [item for item in assertions if item.get("path") != path]
+            else:
+                for item in assertions:
+                    if item.get("path") == path and item.get("operator") == "equals":
+                        item["expected" if mutation == "wrong_value" else "operator"] = "inline" if mutation == "wrong_value" else "nonempty_string"
+            if declares(altered, path):
+                raise ValueError("Plan-mode declaration counterexample accepted: " + mutation)
+PYPLANMODE
+then
+    if grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/skill-eval-contracts.sh" && grep -Eq 'sub\("none"; "inline"\)|approval_required' "$FRAMEWORK_DIR/tests/p0-p4/progressive-discovery-contracts.sh"; then pass; else fail "plan-none preparation evals do not mutate and reject wrong triage/completion plan modes in both graders"; fi
+else
+    fail "plan-none preparation evals lack exact path/operator/value assertions"
+fi
 
 test_start "shared helper owns executable case-root manifest and bounded grader-call accounting"
 helper="$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"

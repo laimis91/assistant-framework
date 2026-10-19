@@ -63,6 +63,14 @@ function Assert-NotContains {
     if ($null -ne $Text -and $Text.Contains($Unexpected)) { throw $Message }
 }
 
+function Write-FingerprintDifference {
+    param([string]$Label, [string]$Before, [string]$After)
+    if ($Before -ceq $After) { return }
+    Write-Host ("Fingerprint difference: $Label (first 120 changed rows)")
+    Compare-Object -ReferenceObject @($Before -split "`n") -DifferenceObject @($After -split "`n") -CaseSensitive |
+        Select-Object -First 120 | ForEach-Object { Write-Host ($_.SideIndicator + ' ' + $_.InputObject) }
+}
+
 function Get-TestDaclBinaryFingerprint {
     param([Parameter(Mandatory = $true)][System.Security.AccessControl.RawAcl]$Dacl)
     $binary = [byte[]]::new($Dacl.BinaryLength)
@@ -491,6 +499,125 @@ try {
                 try { Invoke-AssistantFrameworkInstall } catch { $caught = $_.Exception.Message }
                 Assert-Equal 'Passed process preflight' $caught 'Codex process preflight must not block another agent'
             }
+        }
+    }
+
+    Invoke-Contract 'Workflow closure probes fixed Python candidates before normal and dry-run writes' {
+        & {
+            # Load the real entry and its functions without running the top-level
+            # installer. Only runtime discovery/execution are controlled doubles.
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:InstallerPath, [ref]$tokens, [ref]$errors)
+            Assert-Equal 0 @($errors).Count 'Installer must parse before interpreter controls'
+            foreach ($statement in $ast.EndBlock.Statements) {
+                if ($statement -is [System.Management.Automation.Language.FunctionDefinitionAst] -or
+                    ($statement -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                     $statement.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                     $statement.Left.VariablePath.UserPath.StartsWith('script:'))) {
+                    . ([scriptblock]::Create($statement.Extent.Text))
+                }
+            }
+            function Get-Command {
+                param([string[]]$Name, $CommandType, $ErrorAction)
+                foreach ($candidate in $Name) {
+                    Assert-True ($candidate -in @('py', 'python3', 'python')) 'Runtime discovery used an unapproved command candidate'
+                    if ($available.ContainsKey($candidate)) {
+                        # A trusted discovered command path may contain spaces.
+                        $source = if ($candidate -eq 'python3') { 'Runtime Python' } else { $candidate }
+                        return [pscustomobject]@{ Name = $candidate; Source = $source; Path = $source; CommandType = 'Application' }
+                    }
+                }
+            }
+            function Invoke-TestPythonCandidate {
+                param([string]$Candidate, [object[]]$ProbeArguments)
+                $runtimeCalls.Add([pscustomobject]@{ Name = $Candidate; Arguments = @($ProbeArguments) })
+                Assert-True ($available.ContainsKey($Candidate)) 'Installer invoked an absent runtime'
+                $probeIndex = 0
+                if ($Candidate -eq 'py') {
+                    Assert-True ($ProbeArguments.Count -ge 3 -and $ProbeArguments[0] -eq '-3') 'py must use explicit -3 and a literal version probe'
+                    $probeIndex = 1
+                }
+                if ($ProbeArguments.Count -gt $probeIndex -and $ProbeArguments[$probeIndex] -eq '-B') { $probeIndex++ }
+                Assert-True ($ProbeArguments.Count -eq ($probeIndex + 2) -and $ProbeArguments[$probeIndex] -eq '-c') 'Python invocation permits only fixed launcher prefix, optional -B and a literal version probe'
+                switch ($available[$Candidate]) {
+                    'supported' { $global:LASTEXITCODE = 0; '3.9.0' }
+                    'old' { $global:LASTEXITCODE = 1; '3.8.20' }
+                    'broken' { $global:LASTEXITCODE = 86 }
+                    'alias' { $global:LASTEXITCODE = 0; 'Open the app store to install Python' }
+                }
+            }
+            function py { Invoke-TestPythonCandidate -Candidate 'py' -ProbeArguments $args }
+            function python3 { Invoke-TestPythonCandidate -Candidate 'python3' -ProbeArguments $args }
+            function python { Invoke-TestPythonCandidate -Candidate 'python' -ProbeArguments $args }
+            Set-Item -LiteralPath 'Function:\Runtime Python' -Value { Invoke-TestPythonCandidate -Candidate 'python3' -ProbeArguments $args }
+            $runtimeFailures = New-Object System.Collections.Generic.List[string]
+            $scenarios = @(
+                @{ Name = 'missing'; Available = @{}; Expected = $null },
+                @{ Name = 'old'; Available = @{ py = 'old'; python3 = 'old'; python = 'old' }; Expected = $null },
+                @{ Name = 'broken'; Available = @{ py = 'broken'; python3 = 'broken'; python = 'broken' }; Expected = $null },
+                @{ Name = 'alias'; Available = @{ python3 = 'alias' }; Expected = $null },
+                @{ Name = 'py-only'; Available = @{ py = 'supported' }; Expected = 'py' },
+                @{ Name = 'python3-only'; Available = @{ python3 = 'supported' }; Expected = 'python3' },
+                @{ Name = 'fallback'; Available = @{ py = 'broken'; python3 = 'old'; python = 'supported' }; Expected = 'python' }
+            )
+            foreach ($scenario in $scenarios) {
+                foreach ($selection in @('workflow', 'dependent', 'docs', 'full')) {
+                    if ($scenario.Name -ne 'missing' -and $selection -in @('dependent', 'full')) { continue }
+                    foreach ($preview in @($false, $true)) {
+                        $label = "$($scenario.Name)/$selection/$preview"
+                        Use-IsolatedEnvironment ('python-' + $scenario.Name + '-' + $selection + '-' + $preview) {
+                            param($root, $isolatedUserProfile)
+                            $sourceRoot = Join-Path $root 'source'
+                            foreach ($name in @('assistant-workflow', 'assistant-docs', 'assistant-runtime-dependent')) {
+                                $skillRoot = Join-Path (Join-Path $sourceRoot 'skills') $name
+                                [void][System.IO.Directory]::CreateDirectory($skillRoot)
+                                $dependency = if ($name -eq 'assistant-runtime-dependent') { "requires:`n  - assistant-workflow`n" } else { '' }
+                                [System.IO.File]::WriteAllText((Join-Path $skillRoot 'SKILL.md'), "---`nname: $name`ndescription: Isolated interpreter fixture.`n${dependency}---`n")
+                            }
+                            $script:FrameworkDir = $sourceRoot
+                            $script:UserHome = $isolatedUserProfile
+                            $Agent = 'gemini'
+                            $NoHooks = $false
+                            $DryRun = $preview
+                            $Skill = if ($selection -eq 'full') { '' } elseif ($selection -eq 'dependent') { 'assistant-runtime-dependent' } else { 'assistant-' + $selection }
+                            $available = $scenario.Available
+                            $runtimeCalls = New-Object System.Collections.Generic.List[object]
+                            $before = Get-TreeFingerprint -LiteralPath $root
+                            $caught = ''
+                            $messages = @()
+                            try { $messages = @(Invoke-AssistantFrameworkInstall 6>&1) } catch { $caught = $_.Exception.Message }
+                            $after = Get-TreeFingerprint -LiteralPath $root
+                            $expectedSuccess = $selection -eq 'docs' -or $null -ne $scenario.Expected
+                            if (-not $expectedSuccess -or $preview) {
+                                Write-FingerprintDifference -Label $label -Before $before -After $after
+                            }
+                            if (-not $expectedSuccess) {
+                                if (-not $caught) { $runtimeFailures.Add("$label accepted unusable Python") }
+                                if ($before -cne $after) { $runtimeFailures.Add("$label wrote before interpreter refusal") }
+                                if ($caught -notmatch 'Python.*3\.9|3\.9.*Python') { $runtimeFailures.Add("$label lacks Python 3.9+ recovery guidance: $caught") }
+                            }
+                            else {
+                                if ($caught) { $runtimeFailures.Add("$label rejected supported closure: $caught") }
+                                if ($preview -and $before -cne $after) { $runtimeFailures.Add("$label dry-run wrote files") }
+                                if ($selection -eq 'docs') {
+                                    if ($runtimeCalls.Count -ne 0) { $runtimeFailures.Add("$label unnecessarily probed Python") }
+                                }
+                                else {
+                                    if ($runtimeCalls.Count -eq 0 -or $runtimeCalls[$runtimeCalls.Count - 1].Name -ne $scenario.Expected) { $runtimeFailures.Add("$label did not use the supported interpreter") }
+                                    $expectedInvocation = if ($scenario.Expected -eq 'python3') { 'Runtime Python' } else { $scenario.Expected }
+                                    if (($messages -join "`n") -notlike ('*' + $expectedInvocation + '*')) { $runtimeFailures.Add("$label omitted supported invocation") }
+                                }
+                                if (-not $preview) {
+                                    $installedName = if ($selection -eq 'docs') { 'assistant-docs' } else { 'assistant-workflow' }
+                                    if (-not (Test-Path -LiteralPath (Join-Path $isolatedUserProfile ('.gemini/skills/' + $installedName + '/SKILL.md')) -PathType Leaf)) { $runtimeFailures.Add("$label omitted selected installed skill") }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Assert-Equal 0 $runtimeFailures.Count ("Workflow interpreter preflight failures:`n" + ($runtimeFailures -join "`n"))
         }
     }
 
@@ -1670,7 +1797,9 @@ requires:
                 Assert-Contains $result.Output 'Close Codex App' "Locked $targetName diagnostic lacked close guidance"
                 Assert-Contains $result.Output 'rerun' "Locked $targetName diagnostic lacked rerun guidance"
                 Assert-Contains $result.Output 'No installation changes were made' "Locked $targetName diagnostic did not state the pre-mutation guarantee"
-                Assert-Equal $before (Get-TreeFingerprint -LiteralPath $root) "Locked $targetName preflight changed the isolated install tree"
+                $after = Get-TreeFingerprint -LiteralPath $root
+                Write-FingerprintDifference -Label "locked $targetName preflight" -Before $before -After $after
+                Assert-Equal $before $after "Locked $targetName preflight changed the isolated install tree"
             }
         }
     }
@@ -1965,6 +2094,7 @@ requires:
             $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-DryRun')
             Assert-Equal 0 $result.ExitCode "Dry-run failed: $($result.Output)"
             $after = Get-TreeFingerprint -LiteralPath $root
+            Write-FingerprintDifference -Label 'Workflow dry-run' -Before $before -After $after
             Assert-Equal $before $after 'Dry-run changed the isolated filesystem'
             Assert-Contains $result.Output '[dry-run]' 'Dry-run output does not identify planned operations'
         }
@@ -2653,6 +2783,7 @@ worker_stage_protocol:
                 $after = Get-TreeFingerprint -LiteralPath $root
                 $label = "$agent/$($sourceCase.Missing)/$($sourceCase.Selection)/$($sourceCase.Preview)"
                 Assert-True ($result.ExitCode -ne 0) "$label accepted missing mandatory writer source"
+                Write-FingerprintDifference -Label "$label missing-source refusal" -Before $before -After $after
                 Assert-Equal $before $after "$label missing-source refusal mutated managed tree"
                 Assert-Contains $result.Output 'required writer definition' "$label lacks missing-definition diagnostic"
                 Assert-Contains $result.Output $expectedDefinition "$label lacks missing source path"

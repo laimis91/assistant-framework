@@ -387,6 +387,28 @@ for case in fixture['cases']:
     forged=deepcopy(response)
     (forged if owner=='root' else forged['packet_admission']).update(claim)
     record(case['id'],owner+'-'+name,forged,1)
+  record(case['id'],'summary',dict(response,summary='Blocked; retain current authority.'),0)
+  for invalid_summary in (None, True, 0, [], {'ready':True}):
+   record(case['id'],'invalid-summary-'+repr(invalid_summary),dict(response,summary=invalid_summary),1)
+  null_plan=deepcopy(response)
+  null_plan['packet_admission']['canonical_plan']=None
+  record(case['id'],'blocked-null-plan',null_plan,1)
+  for owner in ('root','nested'):
+   for container in ({'ready':True},{'verified':True},{'current_task_packet':{'packet_id':'integrated-outcome'}},[{'ready':True}],[{'layers':[{'verified':True}]}],{'unrecognized':'extra data'}):
+    forged=deepcopy(response)
+    (forged if owner=='root' else forged['packet_admission'])['details']=deepcopy(container)
+    record(case['id'],owner+'-deep-'+str(len(controls)),forged,1)
+  if 'canonical_plan' in actual:
+   exact=deepcopy(response)
+   exact['packet_admission']['canonical_plan']=deepcopy(actual['canonical_plan'])
+   record(case['id'],'blocked-exact-plan',exact,0)
+   forged=deepcopy(exact)
+   forged['packet_admission']['canonical_plan']['implementation_steps'][0]['files_to_modify']=['/unauthorized/override.py']
+   record(case['id'],'blocked-altered-plan',forged,1)
+  else:
+   forged=deepcopy(response)
+   forged['packet_admission']['canonical_plan']={'implementation_steps':[]}
+   record(case['id'],'blocked-added-plan',forged,1)
 (out/'controls.tsv').write_text(''.join('\t'.join(row)+'\n' for row in controls))
 PYCONTROL
 then
@@ -404,6 +426,64 @@ then
     if [[ "$semantic_failed" == false ]]; then pass; else fail "shared helper semantic seam accepted unsafe or rejected correct answers"; fi
 else
     fail "could not construct independent semantic controls"
+fi
+
+test_start "public grader rejects nested blocked readiness and substituted plan authority"
+blocked_answers="$(mktemp -d "${TMPDIR:-/tmp}/workflow-blocked-envelope.XXXXXX")"
+p0p4_register_cleanup "$blocked_answers"
+if python3 - "$FRAMEWORK_DIR" "$blocked_answers" <<'PYBLOCKED'
+from copy import deepcopy
+import importlib.util
+import json
+from pathlib import Path
+import sys
+root, out = Path(sys.argv[1]), Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("blocked_envelope_controls", root / "tests/p0-p4/lib/task-packet-admission-controls.py")
+controls = importlib.util.module_from_spec(spec); sys.modules[spec.name] = controls; spec.loader.exec_module(controls)
+fixture = json.loads((root / "skills/assistant-workflow/evals/cases.json").read_text())
+case = next(case for case in fixture["cases"] if case.get("semantic_validator") == "assistant-workflow.packet_admission_v14"
+            and case["semantic_context"]["packet_admission"]["expected_status"] == "blocked"
+            and "canonical_plan" in controls.API.admission(case["semantic_context"]["packet_admission"]["request"]))
+actual = controls.API.admission(case["semantic_context"]["packet_admission"]["request"])
+base = {"summary": "Blocked; preserve the retained authority.", "packet_admission": {"status": actual["status"], "code": actual["code"]}}
+variants = {"valid": deepcopy(base), "valid-plan": deepcopy(base)}
+variants["valid-plan"]["packet_admission"]["canonical_plan"] = deepcopy(actual["canonical_plan"])
+for name, owner, payload in (("root-object", "root", {"ready": True}), ("nested-list", "answer", [{"layers": [{"verified": True}]}]),
+                             ("nested-packet", "answer", {"current_task_packet": {"packet_id": "invented"}}),
+                             ("unknown-container", "root", {"harmless": "unknown"})):
+    answer = deepcopy(base)
+    (answer if owner == "root" else answer["packet_admission"])["details"] = payload
+    variants[name] = answer
+variants["null-plan"] = deepcopy(base)
+variants["null-plan"]["packet_admission"]["canonical_plan"] = None
+variants["invalid-summary"] = deepcopy(base)
+variants["invalid-summary"]["summary"] = {"ready": True}
+variants["altered-plan"] = deepcopy(variants["valid-plan"])
+variants["altered-plan"]["packet_admission"]["canonical_plan"]["implementation_steps"][0]["files_to_modify"] = ["/unauthorized/override.py"]
+variants["typed-plan"] = deepcopy(variants["valid-plan"])
+variants["typed-plan"]["packet_admission"]["canonical_plan"]["implementation_steps"][0]["execution"]["recovery"]["attempt_count"] = False
+for name, response in variants.items():
+    target = out / name; target.mkdir()
+    (target / (case["id"] + ".txt")).write_text(json.dumps(response))
+(out / "case-id").write_text(case["id"])
+PYBLOCKED
+then
+    blocked_case="$(cat "$blocked_answers/case-id")"
+    blocked_failed=false
+    for optimization in 0 1; do
+        for variant in valid valid-plan root-object nested-list nested-packet unknown-container null-plan invalid-summary altered-plan typed-plan; do
+            expected=1
+            [[ "$variant" != valid && "$variant" != valid-plan ]] || expected=0
+            if PYTHONOPTIMIZE="$optimization" bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$blocked_answers/$variant" --skill assistant-workflow --case "$blocked_case" >/dev/null 2>&1; then observed=0; else observed=1; fi
+            if [[ "$observed" != "$expected" ]]; then
+                blocked_failed=true
+                printf 'Blocked public envelope failed: %s PYTHONOPTIMIZE=%s expected=%s observed=%s\n' "$variant" "$optimization" "$expected" "$observed" >&2
+            fi
+        done
+    done
+    if [[ "$blocked_failed" == false ]]; then pass; else fail "public grader accepted nested blocked readiness or substituted authority"; fi
+else
+    fail "could not construct blocked public envelope controls"
 fi
 
 test_start "selected Workflow helper identity survives trusted layouts and rejects code escapes"

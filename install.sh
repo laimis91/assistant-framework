@@ -85,6 +85,18 @@ array_contains() {
     return 1
 }
 
+preflight_workflow_python() {
+    array_contains assistant-workflow "${SKILLS[@]}" || return 0
+    local version=""
+    if ! command -v python3 >/dev/null 2>&1 \
+        || ! version="$(python3 -B -c 'import sys; print("%d.%d.%d" % sys.version_info[:3]); sys.exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null)" \
+        || [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] \
+        || ! (( 10#${BASH_REMATCH[1]} > 3 || (10#${BASH_REMATCH[1]} == 3 && 10#${BASH_REMATCH[2]} >= 9) )); then
+        fail "Python 3.9+ is required when the selected skill closure includes assistant-workflow. Install a supported python3 and rerun. No installation files have been changed."
+    fi
+    info "Workflow Python 3.9+ invocation: python3 (Python $version)"
+}
+
 validate_managed_skill_name() {
     local skill="$1"
 
@@ -790,6 +802,7 @@ fi
 # resolver preflights each member before it reads that member's metadata; this
 # second pass also covers full installs and catches changes before copying.
 preflight_managed_skill_closure "${SKILLS[@]}"
+preflight_workflow_python
 preflight_workflow_role_compatibility
 
 SETTINGS_FILE="$AGENT_HOME/settings.json"

@@ -5,6 +5,11 @@ See references/plan-template.md, Packet admission wire boundary. CLI reads one J
 request from stdin and writes one result. It cannot attest the caller's runtime facts.
 """
 
+import sys
+
+if sys.version_info < (3, 9):
+    raise SystemExit("Python 3.9+ is required for Workflow packet admission. Install a supported interpreter and rerun before continuing.")
+
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
@@ -12,7 +17,6 @@ import hashlib
 import json
 import math
 import re
-import sys
 
 
 MAX_BYTES = 2 * 1024 * 1024
@@ -721,7 +725,7 @@ def worker_stage(request, packet, context, plan):
     tdd = packet["tdd_applies"]
     require(stage not in {"test_authoring", "pre_production_red"} or applicability.status == "required",
             "test_applicability", pid, "Test authoring/RED requires applicable tests")
-    allowed = {"test_authoring", "pre_production_red", "production", "green", "refactor", "refactor_verification"} if tdd else {"test_authoring", "implementation", "production", "refactor", "final_verification"}
+    allowed = {"test_authoring", "pre_production_red", "production", "green", "refactor", "refactor_verification"} if tdd else {"test_authoring", "implementation", "production", "final_verification"}
     require(stage in allowed, "worker_stage", pid, "Select a concrete existing role/protocol stage")
     role = "builder_tester" if lane == "separated_workers" and stage in {"pre_production_red", "green", "refactor_verification", "final_verification"} else "code_writer"
     require(request.get("worker_role", role) == role, "worker_stage", pid, "Stage must retain selected-lane role ownership")
@@ -819,6 +823,8 @@ def reconcile_execution(plan, context, checks):
         require(bool(current[pid]), "input_identity", pid, "Current relevant-input identity required")
         if pid in previous_packets:
             old = previous_packets[pid]["execution"]
+            require(old["state"] != "VERIFIED" or execution["state"] == "VERIFIED",
+                    "invalid_state", pid, "Caller cannot downgrade retained VERIFIED work; only helper reconciliation invalidates it")
             # The current recovery owner above attests measurable-progress resets
             # of no_progress_count; cumulative spent attempts never reset.
             require(execution["recovery"]["attempt_count"] >= old["recovery"]["attempt_count"]
@@ -844,6 +850,22 @@ def reconcile_execution(plan, context, checks):
     return invalid
 
 
+def authenticate_provenance(plan, context):
+    """Only trusted normalization creates provenance; later calls retain it exactly."""
+    previous = context.get("previous_plan")
+    present = "reconciliation_provenance" in plan
+    previous_present = isinstance(previous, dict) and "reconciliation_provenance" in previous
+    if not present and not previous_present:
+        return
+    require(isinstance(previous, dict), "legacy_provenance", "context.previous_plan",
+            "Canonical migration provenance requires an independently retained accepted snapshot")
+    require(digest(previous.get("approved_plan_identity")) == digest(plan.get("approved_plan_identity")),
+            "resume_identity", "previous_plan", "Retained migration snapshot must bind the same approved plan")
+    require(present == previous_present and
+            digest(plan.get("reconciliation_provenance")) == digest(previous.get("reconciliation_provenance")),
+            "legacy_provenance", "reconciliation_provenance", "Canonical calls cannot add, alter or discard retained migration provenance")
+
+
 def admission(request):
     """Calculate an admission result without mutating the request or external state."""
     snapshot = None
@@ -861,6 +883,7 @@ def admission(request):
             snapshot = normalize_legacy(source, context)
         else:
             require("schema_version" not in source, "mixed_schema", "plan", "Explicit verified legacy admission required")
+            authenticate_provenance(source, context)
             snapshot = deepcopy(source)
         checks, _ = validate_plan(snapshot, context)
         if boundary == "resume":

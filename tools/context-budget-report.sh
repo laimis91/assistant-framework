@@ -521,10 +521,18 @@ trap safe_cleanup EXIT INT TERM
 INSTALL_HOME="$WORK_ROOT/home"
 mkdir -p "$INSTALL_HOME"
 
+# This install supplies only generated global instructions. Selected instructions
+# and catalog descriptions are measured from source below. Root overlays use
+# a Python-independent bootstrap skill for this standing instruction artifact.
+GLOBAL_INSTRUCTIONS_SKILL="$SKILL"
+if [[ -n "$SKILL_OVERLAY" ]]; then
+    GLOBAL_INSTRUCTIONS_SKILL="assistant-clarify"
+fi
+
 if ! HOME="$INSTALL_HOME" CODEX_HOME="$INSTALL_HOME/.codex" \
     bash "$REPO_ROOT/install.sh" \
         --agent "$AGENT" \
-        --skill "$SKILL" \
+        --skill "$GLOBAL_INSTRUCTIONS_SKILL" \
         >"$WORK_ROOT/install.out" 2>"$WORK_ROOT/install.err"; then
     die "Isolated framework install failed; context inventory was not emitted."
 fi

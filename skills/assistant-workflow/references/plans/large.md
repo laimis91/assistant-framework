@@ -124,7 +124,7 @@ top-level `approved_plan_identity` and `reconciliation_provenance`, with only
 `execution` removed from each `implementation_steps` item. Encode as UTF-8 JSON,
 keys sorted, no whitespace separators (`(',', ':')`), `ensure_ascii=False`, no
 non-finite numbers; SHA-256 those bytes. Every other field participates in the
-approved digest. Progress does not change approval. Material definition changes
+approved digest. Excluded migration provenance is separately authenticated against an independently retained accepted `previous_plan`; its presence and canonical JSON digest cannot change on subsequent canonical calls. Fresh canonical plans cannot invent provenance. Progress does not change approval. Material definition changes
 follow deviation/reapproval policy; never re-sign a changed candidate from itself.
 
 Each packet stores its coordinator-owned `execution` on that same record:
@@ -154,7 +154,7 @@ independent review, conditional QA/harness or final snapshot gates.
 
 Before Plan acceptance, resume, dispatch, packet verification and integrated
 completion, invoke the installed `scripts/task-packet-admission.py` relative to
-this skill directory. Import-safe `admission(request)` and JSON stdin/stdout CLI
+this skill directory with Python 3.9+. Unix uses `python3 scripts/task-packet-admission.py`; native PowerShell uses the supported invocation reported by the installer (for example, `py -3 scripts/task-packet-admission.py` or `& 'C:\Path With Spaces\python.exe' scripts/task-packet-admission.py`). Do not rely on a `.py` file association. The helper and Workflow eval adapter require Python 3.9+; missing/unsupported runtime blocks admission, including manual installs or later runtime removal. Install a supported interpreter and rerun before continuing. Import-safe `admission(request)` and JSON stdin/stdout CLI
 use the same pure calculation. The CLI returns exit 0 for `accepted`, 1 for
 `blocked`. It reads at most 2 MiB, accepts at most 256 packets, uses only Python's
 standard library, and performs no network, command execution, arbitrary reference
@@ -177,7 +177,7 @@ with that writer projection. Stored packets reject direct worker_stage; both
 approved definition digests remain unchanged between stages. Initial bounded
 production dispatch accepts the planned RED tuple; its SAME executor must capture
 current meaningful RED before the first production edit. Test authoring is tests-only,
-without incoming RED. Later active production/refactor retain their exact RED/GREEN gates.
+without incoming RED. Inactive TDD has no refactor dispatch stage; ordinary refactor deliverables use production followed by selected verification. Later active production/refactor retain their exact RED/GREEN gates.
 The prior source Writer must be terminal before same-packet redispatch, including
 verification. Current RUNNING production/refactor/verification stages can finish
 at attempt_count=3; a new implementation/RED attempt cannot start at that limit.
@@ -219,8 +219,7 @@ candidate assertions never supply their own approval or proof. It contains:
   `isolation: {packet_id: {current, input_identity, runtime_evidence_ref,
   workspace_identity}}` only when independently current runtime evidence actually
   supports isolation. Different files or branch names alone are insufficient;
-- `previous_plan` on resume: the independently retained last snapshot of this
-  approved definition. Preserve spent counters, evidence refs and history;
+- `previous_plan` on resume and on every direct canonical Plan/dispatch/verification/completion carrying migration provenance (or following a snapshot that carried it): the independently retained last accepted snapshot of this approved definition. Provenance presence and canonical JSON digest must match it, including JSON scalar types. Genuine verified legacy normalization creates initial provenance; fresh canonical input cannot add it. Retain VERIFIED state until the helper invalidates changed current witnesses; caller-authored downgrades block. Preserve spent counters, evidence refs and history;
 - at completion, `current_snapshot_identity`, `required_terminal_gates` (includes
   `independent_review`, plus QA/harness only when already triggered), and
   `completion_evidence` from the existing completion/review/QA owners.
@@ -231,7 +230,7 @@ results include `canonical_plan` and, at worker boundaries, the deep
 unchanged `verification_decision`, current `evidence_assessment` and exact
 `approved_plan_identity`. Projections cannot redefine scope, decisions or state.
 Blocked results can retain a reconciled `canonical_plan`, including INVALIDATED
-state and historical evidence; it grants no dispatch authority. The caller
+state and historical evidence; it grants no dispatch authority. A graded blocked response has only optional string `summary` and `packet_admission: {status, code}`; optional `packet_admission.canonical_plan` must exactly equal the helper-returned blocked plan, including JSON types. Unknown fields/containers and readiness, verified or current-task-packet claims outside that exact retained plan are rejected. The caller
 persists admitted state on the same packet through existing state tooling.
 File scope preserves exact authorized path/verification-target strings, including
 absolute, relative and native Windows spellings. Admission does not resolve paths
@@ -344,7 +343,7 @@ Ambiguity, stale/conflicting source identities, missing allocation, unsafe mappi
 mixed forms or cycles blocks. Old worker status never automatically verifies new
 work: historical refs/results are retained under reconciliation provenance and
 current owner evidence must be rebound before VERIFIED. Record the mapping under
-existing reconciliation provenance only; new producers emit only canonical v14.
+existing reconciliation provenance only; new producers emit only canonical v14. After normalization, every direct canonical boundary requires the independently retained accepted `previous_plan` whenever either snapshot carries provenance. Preserve provenance presence and canonical JSON digest exactly; do not delete it, add it to fresh v14, or use Python scalar equality to authenticate it.
 
 
 Caller-owned stage proof extends the existing context/evidence boundary only:
@@ -380,6 +379,10 @@ four paired scenarios cap discovery at eight top-level task runs; internal model
 turns/child calls count against the separately approved resources. Missing
 capability or resource approval remains an explicit gap. No ordinary task inherits
 this experiment and no static-byte/word-count result establishes efficiency.
+
+### Current-cycle stage ordering
+
+The caller resolves existing current-cycle progress under the same approval, packet/input identity and cycle reference. New test_authoring or pre_production_red cannot replay an existing cycle; production cannot replay passed GREEN or a started REFACTOR, and no dispatch stage may reuse a fully passed REFACTOR cycle. Failed incomplete GREEN can return to production only within the unchanged approved recovery allowance/current cycle. This adds no stage ledger. In bounded_executor the internal pre_production_red/green phases materialize public production and refactor_verification materializes public refactor; the one executor owns the actual internal invocations, and these aliases grant no premature production edit. Stored work remains stage-neutral.
 
 ## Medium Tasks — Standard Plan (`execution_intent != prepare_only`)
 
@@ -610,7 +613,3 @@ Start with the Medium template, then add the sections below.
 - Canonical pattern used: [real repo path, or N/A with no-pattern rationale]
 - Counterexample/edge case checked: [real repo path, or N/A with explanation]
 - No-pattern rationale: [when no local pattern exists]
-
-### Current-cycle stage ordering
-
-The caller resolves existing current-cycle progress under the same approval, packet/input identity and cycle reference. New test_authoring or pre_production_red cannot replay an existing cycle; production cannot replay passed GREEN or a started REFACTOR, and no dispatch stage may reuse a fully passed REFACTOR cycle. Failed incomplete GREEN can return to production only within the unchanged approved recovery allowance/current cycle. This adds no stage ledger. In bounded_executor the internal pre_production_red/green phases materialize public production and refactor_verification materializes public refactor; the one executor owns the actual internal invocations, and these aliases grant no premature production edit. Stored work remains stage-neutral.

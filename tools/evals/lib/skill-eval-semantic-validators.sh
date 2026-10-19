@@ -34,6 +34,10 @@ assistant_workflow_packet_admission_v14_valid() {
     local fixture_file="$2"
     local case_id="$3"
     local selected_skill_file="${4:-}"
+    if ! command -v python3 >/dev/null 2>&1; then
+        printf '%s\n' 'Python 3.9+ is required for Workflow grading. Install a supported python3 and rerun.' >&2
+        return 1
+    fi
     # Fixed fixture context supplies independent authority. The response is only
     # the proposed answer; never let it replace approval/evidence/runtime facts.
     python3 - "$semantic_validator_dir" "$selected_skill_file" \
@@ -42,6 +46,10 @@ import importlib.util
 import os
 from pathlib import Path
 import sys
+
+if sys.version_info < (3, 9):
+    print("Python 3.9+ is required for Workflow grading. Install a supported python3 and rerun.", file=sys.stderr)
+    sys.exit(1)
 
 try:
     # Code authority comes only from the runner and its inventory selection.
@@ -101,9 +109,17 @@ try:
             raise ValueError("Canonical plan contradicts current authority")
         if module.digest(answer.get("current_task_packet")) != module.digest(actual.get("current_task_packet")):
             raise ValueError("Worker projection contradicts current authority")
-    elif any(key in owner for owner in (response, answer)
-             for key in ("current_task_packet", "ready", "verified")):
-        raise ValueError("Blocked work cannot claim executable readiness")
+    else:
+        # Bounded envelope leaves no unvalidated nested container for a claim.
+        if not isinstance(response, dict) or set(response) - {"summary", "packet_admission"}:
+            raise ValueError("Blocked response has unknown fields")
+        if "summary" in response and not isinstance(response["summary"], str):
+            raise ValueError("Blocked summary must be a string")
+        if not isinstance(answer, dict) or set(answer) - {"status", "code", "canonical_plan"}:
+            raise ValueError("Blocked admission has unknown fields")
+        if "canonical_plan" in answer and ("canonical_plan" not in actual or
+                module.digest(answer["canonical_plan"]) != module.digest(actual["canonical_plan"])):
+            raise ValueError("Blocked plan contradicts retained authority")
 except (AssertionError, KeyError, TypeError, ValueError, OSError, ImportError, SyntaxError):
     print("Packet admission answer contradicts fixed current authority", file=sys.stderr)
     sys.exit(1)

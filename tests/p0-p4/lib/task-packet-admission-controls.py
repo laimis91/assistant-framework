@@ -338,7 +338,146 @@ def active_writer_verification_barrier():
         raise AssertionError("Active-Writer verification mutated caller state")
 
 
+def terminal_stage_and_provenance_controls():
+    """Retained snapshots authenticate progress and migration independently of approval."""
+    failures = []
+
+    def check(request, status, name):
+        before = deepcopy(request)
+        result = API.admission(request)
+        if result["status"] != status:
+            failures.append((name, status, result))
+        if API.digest(request) != API.digest(before):
+            failures.append((name, "caller state mutated"))
+        return result
+
+    retained = verify_all(valid_request(boundary="resume"))
+    retained["context"]["previous_plan"] = deepcopy(retained["plan"])
+    check(retained, "accepted", "unchanged VERIFIED snapshot remains accepted")
+    for state in ("PENDING", "RUNNING", "BLOCKED", "INVALIDATED"):
+        for boundary in ("resume", "dispatch"):
+            trial = deepcopy(retained)
+            trial["boundary"] = boundary
+            trial["plan"]["implementation_steps"][0]["execution"]["state"] = state
+            if state == "RUNNING":
+                trial.update(worker_stage="production", worker_role="code_writer")
+            check(trial, "blocked", "retained VERIFIED cannot downgrade to " + state + " at " + boundary)
+    for changed in ("input", "evidence", "workspace", "prerequisite"):
+        trial = verify_all(valid_request(2, "resume"))
+        first, dependent = trial["plan"]["implementation_steps"]
+        first["execution"]["evidence_refs"] = ["retained:verification"]
+        trial["context"]["previous_plan"] = deepcopy(trial["plan"])
+        if changed == "input":
+            trial["context"]["current_input_identities"][first["packet_id"]] = {"source": "new"}
+        elif changed == "evidence":
+            trial["context"]["packet_evidence"][first["packet_id"]]["validation_results"][0]["result"] = "failed"
+        elif changed == "workspace":
+            trial["context"]["workspace"]["active_source_writer_ids"] = [first["packet_id"]]
+        else:
+            # The ancestor was already unfinished in the independently retained
+            # snapshot; the helper invalidates the formerly VERIFIED dependent.
+            first["execution"]["state"] = "BLOCKED"
+            trial["context"]["previous_plan"] = deepcopy(trial["plan"])
+        result = check(trial, "accepted", "helper invalidates changed " + changed)
+        if result["status"] == "accepted":
+            canonical = result["canonical_plan"]
+            affected = canonical["implementation_steps"][1:]
+            if changed != "prerequisite":
+                affected = canonical["implementation_steps"]
+            if any(p["execution"]["state"] != "INVALIDATED" or not p["execution"]["history"] for p in affected):
+                failures.append((changed, "helper must retain invalidation history"))
+            if canonical["implementation_steps"][0]["execution"]["evidence_refs"] != ["retained:verification"]:
+                failures.append((changed, "invalidation discarded retained evidence"))
+            continuation = deepcopy(trial)
+            continuation["plan"] = deepcopy(canonical)
+            continuation["context"]["previous_plan"] = deepcopy(canonical)
+            again = check(continuation, "accepted", "helper INVALIDATED snapshot remains resumable")
+            if again["status"] == "accepted" and again["canonical_plan"] != canonical:
+                failures.append((changed, "repeated resume duplicated invalidation history"))
+
+    for lane in ("bounded_executor", "separated_workers"):
+        inactive = valid_request()
+        packet = inactive["plan"]["implementation_steps"][0]
+        packet["execution"]["state"] = "RUNNING"
+        inactive["context"]["build_execution_lane"] = lane
+        inactive["context"]["test_applicability"][packet["packet_id"]] = applicability(inactive, packet)
+        proof = evidence(inactive, packet)
+        proof["build_execution_lane"] = lane
+        inactive["context"]["packet_evidence"][packet["packet_id"]] = proof
+        for stage in ("production", "final_verification", "refactor"):
+            trial = deepcopy(inactive)
+            trial.update(worker_stage=stage, worker_role="builder_tester" if lane == "separated_workers" and stage == "final_verification" else "code_writer")
+            check(trial, "blocked" if stage == "refactor" else "accepted", "inactive " + lane + " " + stage)
+        inactive["plan"]["implementation_steps"][0]["execution"]["state"] = "PENDING"
+        inactive.update(worker_stage="refactor", worker_role="code_writer")
+        check(inactive, "blocked", "PENDING inactive refactor remains blocked")
+        active = current_authored_dispatch("refactor")
+        active["context"]["build_execution_lane"] = lane
+        packet = active["plan"]["implementation_steps"][0]
+        active["context"]["test_applicability"][packet["packet_id"]] = applicability(active, packet)
+        active["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = lane
+        check(active, "accepted", "active " + lane + " current GREEN permits refactor")
+        for mutation in ("missing", "failed", "command", "cwd"):
+            trial = deepcopy(active)
+            cycle = trial["context"]["packet_evidence"][packet["packet_id"]]["tdd_cycle"]
+            if mutation == "missing": cycle.pop("green")
+            elif mutation == "failed": cycle["green"]["all_tests_pass"] = False
+            elif mutation == "command": cycle["green"]["command"] = ["wrong"]
+            else: cycle["green"]["cwd"] = "/wrong"
+            check(trial, "blocked", "active refactor rejects " + mutation + " GREEN")
+
+    check(valid_request(boundary="plan"), "accepted", "fresh canonical plan has no invented provenance")
+    for forged in ({"source_sha256": "invented"}, None, 42, False, []):
+        trial = valid_request(boundary="plan")
+        trial["plan"]["reconciliation_provenance"] = forged
+        check(trial, "blocked", "fresh canonical plan cannot introduce provenance " + repr(forged))
+        trial["context"]["previous_plan"] = deepcopy(valid_request(boundary="plan")["plan"])
+        check(trial, "blocked", "retained fresh snapshot cannot authenticate added provenance")
+    for legacy in (legacy_request(), released_v13_request()):
+        result = check(legacy, "accepted", "genuine legacy normalization establishes provenance")
+        if result["status"] != "accepted":
+            continue
+        canonical = result["canonical_plan"]
+        for boundary in ("plan", "resume", "dispatch", "verification", "completion"):
+            trial = deepcopy(legacy)
+            trial.update(plan=deepcopy(canonical), boundary=boundary, target_packet_id=canonical["implementation_steps"][0]["packet_id"])
+            trial["context"].pop("legacy")
+            if boundary == "verification":
+                packet = trial["plan"]["implementation_steps"][0]
+                packet["execution"]["state"] = "RUNNING"
+                trial["context"]["packet_evidence"][packet["packet_id"]] = evidence(trial, packet)
+            if boundary == "completion":
+                verify_all(trial)
+                trial["context"].update(current_snapshot_identity="snapshot:migrated", required_terminal_gates=["independent_review"])
+                trial["context"]["completion_evidence"] = {
+                    "approved_plan_identity": deepcopy(trial["plan"]["approved_plan_identity"]), "snapshot_identity": "snapshot:migrated",
+                    "acceptance_results": [], "validation_results": [{"selected_check_ids": ["integrated"], "binding_obligation_refs": [],
+                        "result": "passed", "evidence_ref": "integration:migrated", "procedure": "Inspect the current integrated acceptance evidence"}],
+                    "terminal_gates": {"independent_review": {"passed": True, "after_integration": True,
+                        "snapshot_identity": "snapshot:migrated", "evidence_ref": "review:migrated"}}}
+            trial["context"]["previous_plan"] = deepcopy(trial["plan"])
+            check(trial, "accepted", "retained migrated provenance at " + boundary)
+            missing = deepcopy(trial)
+            missing["context"].pop("previous_plan")
+            check(missing, "blocked", "migrated " + boundary + " requires retained snapshot")
+            for field in ("source_sha256", "source_identity", "producer", "packet_mapping", "source_evidence_refs", "original_result_allocation", "original_writer_context", "deleted", "type"):
+                if field == "original_writer_context" and field not in canonical["reconciliation_provenance"]:
+                    continue
+                tampered = deepcopy(trial)
+                provenance = tampered["plan"]["reconciliation_provenance"]
+                if field == "deleted":
+                    tampered["plan"].pop("reconciliation_provenance")
+                elif field == "type":
+                    provenance["producer"]["verified"] = 1  # True and 1 compare equal in Python, not JSON.
+                else:
+                    provenance[field] = {"forged": "authority"}
+                check(tampered, "blocked", "migrated provenance " + field + " altered at " + boundary)
+    if failures:
+        raise AssertionError(("Terminal/stage/provenance regression controls", failures))
+
+
 def run_controls():
+    terminal_stage_and_provenance_controls()
     total = 0
 
     def expect(request, status, code=None, name=None):
@@ -1019,10 +1158,12 @@ def run_controls():
                     case["plan"]["implementation_steps"][0]["files_to_modify"] = []
                     seal(case)
                 verify_all(case)
-                case["context"]["previous_plan"] = deepcopy(case["plan"])
                 first, middle, last = case["plan"]["implementation_steps"]
                 first["execution"]["state"] = ancestor_state
                 last["execution"]["state"] = "PENDING"
+                # These states were persisted before resume, not caller downgrades
+                # from a different independently retained VERIFIED snapshot.
+                case["context"]["previous_plan"] = deepcopy(case["plan"])
                 if failed_evidence:
                     case["context"]["packet_evidence"][first["packet_id"]]["validation_results"][0]["result"] = "failed"
                 if writer:
