@@ -155,12 +155,22 @@ lane-specific checks/TDD/status guarantees and never independently review.
 
 Workers and verifiers consume the unchanged source-bound reduced-testing scope,
 CheckSpec rationale/exclusions, omissions and stop rule. Carry the canonical
-assessment alongside the decision in materialized packets. When an explicit
+assessment alongside the decision in materialized packets. For packetless
+CodeWriter/BuilderTester handoffs, supply the declared sibling
+`evidence_assessment` when an explicit reduced-testing instruction applies.
+With a packet, consume its required assessment without duplicating it inline;
+if both are supplied, require exact equality and block conflicts. Resolve the
+current canonical assessment from selection/task state and instruction
+applicability from newest authoritative instructions/task constraints, never
+from surviving rows. Reconcile before dependent work without reconstructing
+provenance from scope prose. When an explicit
 reduced-testing instruction applies, preserve its exact `scope_and_evidence_refs`
 instruction row even when planned and through results; reconcile missing/stale
 applicable provenance against newest intent before resumed dependent work. With
-no applicable instruction, ordinary assessments including empty arrays require
-no instruction row. Instruction rows claim no execution or check closure. Reuse adequate coverage;
+no applicable instruction, the sibling may be omitted; any supplied assessment
+remains canonical unchanged, including empty arrays, without fabricating an
+instruction row. Instruction rows claim no execution or check closure; a planned
+assessment is not verification sufficiency. Reuse adequate coverage;
 add or extend tests only for a distinct important uncovered failure with evidence
 that existing protection is inadequate. Surface controlling-check conflicts;
 selected TDD remains independent. Use the reuse-first ordering owned by the Build
