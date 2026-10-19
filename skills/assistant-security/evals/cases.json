@@ -74,7 +74,7 @@
       "title": "Findings include severity impact remediation",
       "category": "security_report_contract",
       "purpose": "Checks that security findings are actionable, evidence-based, consistently ranked, and paired with remediation and prioritized action items.",
-      "prompt": "Audit this diff for SQL injection and auth bypass risks. Report anything medium or higher.",
+      "prompt": "Audit this diff for SQL injection and auth bypass risks. Report anything medium or higher using structured findings, summary, risk_level, and action_items.",
       "setup_context": [
         "The assistant-security skill instructions are active.",
         "The review scope contains a supplied diff with authentication and database access changes.",

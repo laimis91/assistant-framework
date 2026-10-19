@@ -1,43 +1,25 @@
-contract_ref_exists() {
-    local skill_file="$1"
-    local contract_name="$2"
-
-    grep -Eq "contracts/${contract_name}[.]yaml" "$skill_file"
-}
-
-infer_contract_tier() {
-    local skill_file="$1"
-
-    if contract_ref_exists "$skill_file" "handoffs"; then
-        printf '%s\n' "Process"
-    elif contract_ref_exists "$skill_file" "phase-gates"; then
-        printf '%s\n' "Analysis"
-    else
-        printf '%s\n' "Utility"
-    fi
+# Only literal skill-local contract paths declare local files. Cross-skill paths
+# such as assistant-verification/contracts/output.yaml remain producer references.
+skill_contract_references() {
+    ruby -e '
+        text = File.read(ARGV.fetch(0))
+        puts text.scan(%r{(?<![[:alnum:]_./-])(?:\./)?(contracts/[[:alnum:]_.-]+\.ya?ml)(?![[:alnum:]_.-])}).flatten.uniq.sort
+    ' "$1"
 }
 
 validate_required_contract_files() {
     local skill_file="$1"
     local contract_dir="$2"
-    local tier
-    local contract_name
-    local required_contracts
+    local relative_path
 
-    tier="$(infer_contract_tier "$skill_file")"
-    required_contracts="input output"
-
-    if [[ "$tier" == "Analysis" ]]; then
-        required_contracts="$required_contracts phase-gates"
-    elif [[ "$tier" == "Process" ]]; then
-        required_contracts="$required_contracts phase-gates handoffs"
-    fi
-
-    for contract_name in $required_contracts; do
-        if [[ ! -f "$contract_dir/$contract_name.yaml" ]]; then
-            record_error "CONTRACT_MISSING" "$contract_dir/$contract_name.yaml" "$tier skill requires contracts/$contract_name.yaml"
+    while IFS= read -r relative_path; do
+        [[ -n "$relative_path" ]] || continue
+        if [[ ! -f "$(dirname -- "$contract_dir")/$relative_path" ]]; then
+            record_error "CONTRACT_MISSING" "$contract_dir/$(basename -- "$relative_path")" "SKILL.md explicitly references missing $relative_path"
+        elif [[ "$relative_path" == *.yml ]]; then
+            record_error "CONTRACT_EXTENSION" "$contract_dir/$(basename -- "$relative_path")" "unsupported contract extension .yml; use .yaml"
         fi
-    done
+    done < <(skill_contract_references "$skill_file")
 }
 
 validate_contract_header() {

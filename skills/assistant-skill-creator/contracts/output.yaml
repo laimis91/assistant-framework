@@ -25,7 +25,7 @@ artifacts:
   - name: input_contract
     type: file
     required: conditional
-    condition: "operation in [create, update] and authoring is complete"
+    condition: "operation in [create, update] and authoring is complete and (a named consumer needs typed inputs or the user explicitly requests an input schema)"
     description: "Target input contract containing only outcome-relevant fields"
     path: "skills/{skill_name}/contracts/input.yaml"
     validation: "Include headers, explicit enums, conditional requiredness, and recovery for required fields; do not add fields to meet a count"
@@ -34,7 +34,7 @@ artifacts:
   - name: output_contract
     type: file
     required: conditional
-    condition: "operation in [create, update] and authoring is complete"
+    condition: "operation in [create, update] and authoring is complete and (a named consumer needs typed outputs or the user explicitly requests an output schema)"
     description: "Target output contract containing only required outcome artifacts"
     path: "skills/{skill_name}/contracts/output.yaml"
     validation: "Include headers and actionable on_fail recovery for every required artifact; do not add artifacts to meet a count"
@@ -43,7 +43,7 @@ artifacts:
   - name: phase_gates_contract
     type: file
     required: conditional
-    condition: "operation in [create, update] and skill_category is process or analysis and authoring is complete"
+    condition: "operation in [create, update] and authoring is complete and (a real transition consumer needs structured gates or the user explicitly requests a gate schema)"
     description: "Target phase gates for a multi-step Process or Analysis skill"
     path: "skills/{skill_name}/contracts/phase-gates.yaml"
     validation: "Use binary assertions, explicit conditions, and actionable recovery"
@@ -52,10 +52,10 @@ artifacts:
   - name: handoffs_contract
     type: file
     required: conditional
-    condition: "operation in [create, update] and skill_category is process and authoring is complete"
+    condition: "operation in [create, update] and authoring is complete and (a delegated consumer needs structured context and returns or the user explicitly requests a handoff schema)"
     description: "Target Process handoffs with matching typed producer and consumer fields"
     path: "skills/{skill_name}/contracts/handoffs.yaml"
-    validation: "Producer return fields satisfy consumer context fields; Analysis and Utility skills have no handoffs"
+    validation: "Producer return fields satisfy the actual delegated consumer context fields; categories alone do not require handoffs"
     on_fail: "Align the handoff fields or remove unsupported delegation"
 
   - name: validation_summary
@@ -63,7 +63,7 @@ artifacts:
     required: conditional
     condition: "operation in [create, update]"
     description: "Validation result for all applicable contract design rules and policy constraints"
-    validation: "Report applicable pass/fail outcomes, actual checks, and limits. Validate all 15 applicable guide rules. When a creator behavior fixture is evaluated, load the behavioral_evaluation set for its independent artifact/trace evidence; this does not replace canonical verification. For existing skills, inspect the existing description and activation evals first, derive structured activation examples from the existing description and activation evals when adequate, and ask only for remaining material gaps."
+    validation: "Report applicable pass/fail outcomes, actual checks, and limits. Validate the rules applicable to the changed boundary, without adding artifacts to satisfy a category. When a creator behavior fixture is evaluated, load the behavioral_evaluation set for its independent artifact/trace evidence; this does not replace canonical verification. For existing skills, inspect the existing description and activation evals first, derive structured activation examples from the existing description and activation evals when adequate, and ask only for remaining material gaps."
     on_fail: "Fix applicable failures, rerun the affected checks, and report unresolved limits"
 
   - name: policy_safety_summary

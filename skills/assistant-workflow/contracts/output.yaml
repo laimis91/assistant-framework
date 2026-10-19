@@ -1,7 +1,11 @@
+# Applicability: canonical plans/task packets, persisted state, delegated handoffs,
+# and executable admission/evaluation use this existing protocol. Ordinary human
+# updates summarize decisions/evidence without serializing every internal field.
+# This boundary does not waive approval, verification, review, or active TDD.
+
 # Workflow Output Contract
-# Defines what a completed workflow MUST produce.
-# Any agent executing this skill MUST verify all required artifacts exist
-# before printing --- WORKFLOW COMPLETE ---.
+# Defines required artifacts for consumed canonical workflow results.
+# Canonical completion verifies required artifacts before the completion marker.
 
 schema_version: "14.0"
 contract: output
@@ -25,7 +29,7 @@ completion_tiers:
     required_artifacts: [completion_policy, changed_files, verification_decision, evidence_assessment, validation_results, fresh_review_result]
     conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, tdd_cycle_log_ref, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_applicability, change_impact_evidence]
     review_gate: "fresh review after validation; Pack/expanded impact uses canonical assistant-review; full independent review only when risk promotes work"
-    checkpoint_policy: "Keep state inline. Before Build visibly return the full unchanged verification_decision; at completion return one inline JSON object with both existing output keys, verification_decision and evidence_assessment, preserving selected CheckSpecs/TddChoice and actual current evidence refs, status, gaps, and exclusions. Exact phase markers are required only by strict intensity, explicit project policy, or user request"
+    checkpoint_policy: "Keep state inline. Summarize selected checks before Build and actual evidence, gaps, and exclusions at completion. Retain unchanged verification_decision and evidence_assessment at actual consumer boundaries; no full JSON dump is required for a human update. Exact phase markers require strict intensity, explicit project policy, or user request"
   small_elevated:
     condition: "execution_intent != prepare_only and size == small and (controller_intensity == strict or qa_evaluation_mode == required)"
     controller_intensity: strict
@@ -340,7 +344,7 @@ artifacts:
       - name: hypotheses_count
         type: int
         required: true
-        validation: ">= 3 unless fewer_hypotheses_reason is populated in assistant-debugging output"
+        validation: "Non-negative actual number of evidence-grounded hypotheses; no numeric quota"
       - name: root_cause
         type: string
         required: true

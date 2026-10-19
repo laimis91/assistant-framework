@@ -1,5 +1,29 @@
 # Instruction Behavior Eval Fixtures
 
+## Evaluating framework simplification
+
+Keep task outcomes and supported consumer formats separate from conversational
+presentation. Removing a compulsory empty section, idea quota, or unused
+contract file intentionally retires that protocol assertion; it does not waive
+material clarification, accurate evidence, authorization, or a retained
+producer/consumer binding. Update only assertions for the approved removed
+requirement and preserve the behavioral oracle. Existing structured cases still
+exercise their explicitly requested interfaces.
+
+For comparisons, use the same task, model/effort, tools, starting files, and
+acceptance criteria for baseline and candidate. Check connected consumers and
+wrong-outcome controls. Report actual loaded instructions, work, corrections,
+and quality alongside size. Explicit skill loading, native activation, source
+validation, and task success are distinct evidence. Missing traces and
+unavailable platforms remain gaps.
+
+The per-skill runner below validates fixtures and grades supplied captures; it
+does not execute models. The paired Codex adapter is scoped to Workflow and
+cannot establish results for every other skill. No fixed live-model pilot is a
+prerequisite for a simplification PR. User feedback should name the skill,
+source revision, request, expected outcome, and actual result; a material
+regression calls for a focused reproduction and repair or rollback.
+
 This directory contains provider-neutral prompt and instruction evaluation fixtures
 for comparing framework behavior across model versions, including GPT 5.4 and
 GPT 5.5. These are not model-specific API calls and do not prescribe any

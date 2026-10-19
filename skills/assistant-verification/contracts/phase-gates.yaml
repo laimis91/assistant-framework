@@ -1,3 +1,7 @@
+# Applicability: workflow, skill-creator, carried-decision, and executable
+# consumers use these unchanged canonical shapes. Ordinary human-only assessment
+# may return concise prose; evidence quality and binding policy still apply.
+
 schema_version: "1.0"
 contract: phase-gates
 skill: assistant-verification

@@ -99,9 +99,8 @@ test_start "assistant-review routes independent QA evaluation to reference with 
 review_dir="$FRAMEWORK_DIR/skills/assistant-review"
 missing_review_terms=()
 for file_and_term in \
-    "$review_dir/SKILL.md::# Autonomous Review And QA Evaluation" \
-    "$review_dir/SKILL.md::QA evaluation runs after code-review/build evidence" \
-    "$review_dir/SKILL.md::Load \`references/qa-evaluation-loop.md\`" \
+    "$review_dir/SKILL.md::QA stays separate from code review and runs after Build and Code Reviewer evidence" \
+    "$review_dir/SKILL.md::Load [qa-evaluation-loop.md](references/qa-evaluation-loop.md) when required" \
     "$review_dir/references/review-loop.md::load \`qa-evaluation-loop.md\` before dispatching QAEvaluator" \
     "$review_dir/references/review-loop.md::That reference owns the detailed QA algorithm" \
     "$review_dir/references/qa-evaluation-loop.md::while round <= 10" \
@@ -132,7 +131,7 @@ for file_and_term in \
     "$review_dir/contracts/phase-gates.yaml::round 10 is terminal"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         missing_review_terms+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done
@@ -357,7 +356,6 @@ for file in \
     "$workflow_dir/references/subagent-dispatch.md" \
     "$workflow_dir/references/plan-template.md" \
     "$workflow_dir/references/task-journal-template.md" \
-    "$review_dir/SKILL.md" \
     "$review_dir/contracts/input.yaml" \
     "$review_dir/references/qa-evaluation-loop.md"; do
     for term in "$qa_positive_trigger_wording" "$qa_negative_trigger_wording"; do
@@ -365,6 +363,16 @@ for file in \
             qa_trigger_wording_missing+=("${file#$FRAMEWORK_DIR/}: $term")
         fi
     done
+done
+for term in \
+    "only when explicit QA/acceptance, accepted Done Contract, harness acceptance" \
+    "domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance requires it" \
+    "Size, delegation, source changes, and generic acceptance labels do not trigger QA" \
+    "Load [qa-evaluation-loop.md](references/qa-evaluation-loop.md) when required" \
+    "Carry approved preparation QA obligations and exact result/source bindings"; do
+    if ! p0p4_contains_text "$review_dir/SKILL.md" "$term"; then
+        qa_trigger_wording_missing+=("skills/assistant-review/SKILL.md: conditional routing missing $term")
+    fi
 done
 if [[ "${#qa_trigger_wording_missing[@]}" -eq 0 ]]; then
     pass
@@ -414,16 +422,16 @@ for file_and_term in \
     "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml::Stay in the QA lane" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::Code Reviewer" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md::QA Evaluator" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Keep QA evaluation separate from code review"; do
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::QA stays separate from code review"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
+    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
         distinct_terms_missing+=("${file#$FRAMEWORK_DIR/}: $term")
     fi
 done
-review_ownership_pattern='Code Reviewer (still owns|continues to own) code defects, security, architecture, and test-coverage review'
-if ! grep -Eq -- "$review_ownership_pattern" "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"; then
-    distinct_terms_missing+=("skills/assistant-review/SKILL.md: Code Reviewer code-review ownership")
+review_ownership='Code Reviewer owns code defects, security, architecture, test coverage'
+if ! p0p4_contains_text "$review_qa_router" "$review_ownership"; then
+    distinct_terms_missing+=("skills/assistant-workflow/references/review-qa-router.md: Code Reviewer code-review ownership")
 fi
 if [[ "${#distinct_terms_missing[@]}" -eq 0 ]]; then
     pass

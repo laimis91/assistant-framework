@@ -115,8 +115,6 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "Perspectives is not needed",
-          "architecture_design_mode",
           "semantic type",
           "conversion boundary"
         ],

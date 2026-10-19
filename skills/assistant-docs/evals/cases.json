@@ -30,21 +30,16 @@
         "The target module has source files and existing docs to inspect."
       ],
       "expected_behavior": [
-        "Resolves doc_type as architecture and scope as the skill eval runner.",
-        "Reads source_files and existing docs before describing architecture.",
-        "Updates or proposes documentation with files_updated entries.",
-        "Returns Evidence tied to source files, not memory.",
-        "Returns doc_coverage with documented areas and remaining gaps.",
-        "Lists inferred architecture claims in review_items and includes evidence_sources plus safety_notes.",
-        "When an Architecture Decision Pack applies, preserves its freshness, facts versus assumptions, design-pressure checks, semantic type or primitive-boundary rationale, and quality verification rather than asserting unmeasured benefits."
+        "Reads runner source and existing docs before describing architecture.",
+        "Creates or proposes the requested documentation in the existing style.",
+        "Cites inspected source for concrete claims and flags uncertain claims for review.",
+        "Explains coverage and material gaps without a mandatory serialized envelope.",
+        "Keeps quality claims evidence-bounded and does not manufacture a Pack."
       ],
       "pass_criteria": [
-        "The response names doc_type, scope, and source_files or evidence.",
-        "The response includes files_updated, evidence_sources, doc_coverage, review_items, and safety_notes.",
-        "The response cites actual tools/evals files.",
-        "The response flags inferred claims or gaps for review.",
-        "The response treats memory, performance, or extensibility claims as review-needed unless workload, budget or explicit unknown, measurement, and failure condition are documented.",
-        "The response does not document hallucinated features."
+        "Documentation reflects actual tools/evals source.",
+        "Evidence and material review needs are clear.",
+        "No hallucinated features or unmeasured benefits are claimed."
       ],
       "fail_signals": [
         "Writes docs from memory without reading code.",
@@ -54,21 +49,12 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "doc_type",
           "architecture",
-          "source_files",
-          "files_updated",
-          "doc_coverage",
-          "review_items",
-          "evidence_sources",
-          "workload",
-          "measurement",
           "tools/evals"
         ],
         "forbidden_substrings": [
           "from memory",
           "hallucinated feature",
-          "No review needed for inferred claims",
           "full coverage with no gaps"
         ]
       }
@@ -85,18 +71,15 @@
         "No commit range was explicitly supplied."
       ],
       "expected_behavior": [
-        "Resolves doc_type as changelog and identifies the scope.",
-        "Uses git history or asks for a range when latest work is ambiguous.",
-        "Returns files_updated with the changelog target path and change_type.",
-        "Returns doc_coverage with included and omitted changes.",
-        "Lists inferred release wording in review_items and includes evidence_sources plus safety_notes.",
-        "Does not invent issue numbers, versions, or features absent from evidence."
+        "Uses relevant git history and asks for a range only when material ambiguity remains.",
+        "Writes or proposes a source-backed entry in the existing changelog style.",
+        "Reports changed paths and material omissions or unresolved release wording.",
+        "Does not invent issue numbers, versions, or features or require empty response slots."
       ],
       "pass_criteria": [
-        "The response uses git log or requests a commit range.",
-        "The response includes files_updated, evidence_sources, doc_coverage, review_items, and safety_notes.",
-        "The response distinguishes evidence-backed entries from gaps.",
-        "The response does not invent versions or features."
+        "The entry comes from git history or the missing range is identified.",
+        "Unverified release wording is clearly marked.",
+        "No invented release facts appear."
       ],
       "fail_signals": [
         "Creates changelog text without commit or source evidence.",
@@ -106,20 +89,13 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "doc_type",
           "changelog",
-          "git log",
-          "files_updated",
-          "doc_coverage",
-          "review_items",
-          "evidence_sources",
-          "gaps"
+          "git"
         ],
         "forbidden_substrings": [
           "No git history needed",
           "invented version",
-          "made-up issue",
-          "review_items: [] for inferred"
+          "made-up issue"
         ]
       }
     },
@@ -371,12 +347,8 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "doc_type",
           "README",
-          "scope",
-          "source evidence",
-          "proceed",
-          "review needs"
+          "source"
         ],
         "forbidden_substrings": [
           "What documentation should I update?",

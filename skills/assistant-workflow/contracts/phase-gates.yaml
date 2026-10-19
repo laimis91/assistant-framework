@@ -1,3 +1,8 @@
+# Applicability: canonical plans/task packets, persisted state, delegated handoffs,
+# and executable admission/evaluation use this existing protocol. Ordinary human
+# updates summarize decisions/evidence without serializing every internal field.
+# This boundary does not waive approval, verification, review, or active TDD.
+
 # Phase Gate Contracts
 # Assertions that MUST be true before transitioning between phases.
 # Think of these as type checks at function boundaries — the output of phase N
@@ -111,8 +116,8 @@ gates:
 
       - id: T8
         severity: guidance
-        check: "'>> Triage metadata: type={TASK_TYPE} | risk={RISK_TIER} | intensity={controller_intensity} | gates={count} | agents={count}' message was printed to user"
-        on_fail: "Print structured triage metadata when medium+ complexity or user visibility needs it"
+        check: "Routing decisions are explained only when they help the user assess scope, approval, risk, or delegation; internal triage fields need not be printed"
+        on_fail: "Give a concise natural update for a material decision; exact metadata is only for strict control, explicit policy, or user request"
 
   # ─────────────────────────────────────────────
   # DISCOVER → DECOMPOSE (medium+) / PLAN (small)
@@ -143,7 +148,7 @@ gates:
       - id: D2
         check: "clarification_status=ready; each implementation-shaping field is explicit, source-backed-defaulted, accepted from displayed recommendations, or resolved; approval alone never resolves choices."
         condition: "execution_intent != prepare_only"
-        on_fail: "Follow Discover step 5. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
+        on_fail: "Follow the Requirements sufficiency heading in references/phases.md. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
 
       - id: D3
         check: "clarification_defaults_applied is true exactly when clarification_defaults contains automatically applied entries with topic, value, source, and rationale; for execution_intent != prepare_only, unresolved clarification topics are empty before Discover completes"

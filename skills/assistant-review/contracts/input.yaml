@@ -1,3 +1,8 @@
+# Applicability: structured review batches, worker handoffs, persisted results,
+# and workflow/QA consumers use the canonical v8 protocol. Human summaries may
+# omit empty/internal sections; frozen snapshots, independent passes, coverage,
+# verification, authorization, and round caps apply to every selected review.
+
 schema_version: "8.0"
 contract: input
 skill: assistant-review

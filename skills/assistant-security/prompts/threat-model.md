@@ -1,6 +1,6 @@
 # Threat Model Prompt
 
-Load this during Phase 2 (Plan) when the Security section flags any of: auth changes, PII handling, payment processing, or external input surfaces. Walk through each section and produce a structured threat summary for the plan.
+Load this during Phase 2 (Plan) when the Security section flags any of: auth changes, PII handling, payment processing, or external input surfaces. Use relevant sections to produce the requested threat summary.
 
 ## When to use
 
@@ -16,7 +16,7 @@ Skip for: internal tooling with no auth, pure UI styling, documentation-only cha
 
 ## Walkthrough
 
-Work through these sections in order. For each, state what applies and what doesn't. "N/A" is a valid answer — the goal is to think through each area, not to force-fit risks.
+Inspect only relevant sections. Omit irrelevant or empty categories; record important unassessed areas as gaps.
 
 ### 1. Data flow
 
@@ -110,5 +110,5 @@ Produce a threat summary block that drops into the plan's Security section:
 **Residual risks:**
 - [anything that can't be fully mitigated, with accepted risk rationale]
 
-**Requires human sign-off:** [yes/no] — [who, if yes]
+[Include any sign-off required by an applicable policy, with its source.]
 ```

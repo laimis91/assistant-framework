@@ -113,41 +113,7 @@ else
     fail "skill activation inventory retains retired custom-memory routes"
 fi
 
-test_start "assistant-ideate contracts distinguish light and deep modes"
-ideate_input="$FRAMEWORK_DIR/skills/assistant-ideate/contracts/input.yaml"
-ideate_output="$FRAMEWORK_DIR/skills/assistant-ideate/contracts/output.yaml"
-ideate_gates="$FRAMEWORK_DIR/skills/assistant-ideate/contracts/phase-gates.yaml"
-ideate_reference="$FRAMEWORK_DIR/skills/assistant-ideate/references/ideation-pipeline.md"
-ideate_deep_reference="$FRAMEWORK_DIR/skills/assistant-ideate/references/deep-ideation.md"
-ideate_evals="$FRAMEWORK_DIR/skills/assistant-ideate/evals/cases.json"
-ideate_failures=()
-for file_and_term in \
-    "$ideate_skill::Light mode" \
-    "$ideate_skill::Deep mode" \
-    "$ideate_skill::Contract v2 makes the former deep-only ranking, refinement, and decision" \
-    "$ideate_input::schema_version: \"2.0\"" \
-    "$ideate_input::- name: ideation_mode" \
-    "$ideate_input::enum_values: [light, deep]" \
-    "$ideate_output::- name: quick_ranking" \
-    "$ideate_output::- name: recommended_next_step" \
-    "$ideate_output::schema_version: \"2.0\"" \
-    "$ideate_gates::when ideation_mode is light" \
-    "$ideate_gates::when ideation_mode is deep" \
-    "$ideate_gates::schema_version: \"2.0\"" \
-    "$ideate_reference::Light mode: 3-5 options" \
-    "$ideate_deep_reference::Deep mode: 8-15 ideas" \
-    "$ideate_evals::quick-improvement-scan-uses-light-mode" \
-    "$ideate_evals::explicit-brainstorm-uses-deep-mode"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! grep -Fq -- "$term" "$file"; then
-        ideate_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if [[ "${#ideate_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "mode-aware ideation contract failed: ${ideate_failures[*]}"
-fi
+# Ideation depth and decision behavior are covered by assistant-ideate-reference-contracts.sh.
+# Numeric idea quotas and prompt-only YAML envelopes are retired, not activation rules.
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

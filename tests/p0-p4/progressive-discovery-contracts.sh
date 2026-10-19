@@ -750,13 +750,15 @@ else
 fi
 
 for file_and_term in \
-    "$workflow_dir/SKILL.md::assistant-clarify owns prompt-level ambiguity" \
+    "$workflow_dir/SKILL.md::Use assistant-clarify for unclear intent" \
+    "$progressive_ref::Prompt-level ambiguity belongs to \`assistant-clarify\`" \
     "$workflow_dir/SKILL.md::references/progressive-discovery.md" \
     "$workflow_dir/contracts/index.yaml::references/progressive-discovery.md" \
     "$workflow_dir/references/phases.md::references/progressive-discovery.md" \
-    "$workflow_dir/SKILL.md::uncertainty_shape=progressive" \
+    "$workflow_dir/SKILL.md::predecessor-unlocked unknowns or retained progressive markers" \
+    "$progressive_ref::uncertainty_shape=progressive" \
     "$workflow_dir/contracts/index.yaml::uncertainty_shape" \
-    "$workflow_dir/references/phases.md::uncertainty_shape=progressive"; do
+    "$workflow_dir/references/phases.md::Predecessor-unlocked outcome uncertainty"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if ! p0p4_contains_text "$file" "$term"; then
@@ -1069,7 +1071,6 @@ done
 
 for file in \
     "$progressive_ref" \
-    "$phases_reference" \
     "$workflow_root" \
     "$workflow_controller"; do
     for term in "no-execution boundary" "separate approved workflow"; do
@@ -1077,6 +1078,15 @@ for file in \
             safety_missing+=("${file#$FRAMEWORK_DIR/} missing $term")
         fi
     done
+done
+
+for term in \
+    "Its mapping/resolving/route-clear/blocked substates are no-execution boundaries" \
+    "only framework-owned state updates are allowed" \
+    "separate approved workflow"; do
+    if ! p0p4_contains_text "$phases_reference" "$term"; then
+        safety_missing+=("${phases_reference#$FRAMEWORK_DIR/} missing $term")
+    fi
 done
 
 if [[ "${#safety_missing[@]}" -eq 0 ]]; then
@@ -1198,7 +1208,7 @@ for term in \
     fi
 done
 
-if ! p0p4_contains_text "$phases_reference" "mapping, resolving, route_clear, or blocked"; then
+if ! p0p4_contains_text "$phases_reference" "Its mapping/resolving/route-clear/blocked substates are no-execution boundaries"; then
     route_clear_boundary_missing+=("${phases_reference#$FRAMEWORK_DIR/} omits route_clear from the no-execution boundary")
 fi
 
@@ -2720,14 +2730,16 @@ retained_state_route_terms=(
     "uncertainty_shape=bounded"
 )
 
-for term in \
-    'route-clear state is `pending`/`consumed`' \
-    'sequence readiness is `active`/`closed`' \
-    'Retained artifacts remain active after bounded shape'; do
-    if ! p0p4_contains_text "$workflow_dir/SKILL.md" "$term"; then
-        retained_state_missing+=("SKILL.md missing compact retained-state routing term $term")
-    fi
+for file in "$workflow_dir/SKILL.md" "$workflow_dir/references/phases.md"; do
+    for term in "references/progressive-discovery.md" "retained progressive markers"; do
+        if ! p0p4_contains_text "$file" "$term"; then
+            retained_state_missing+=("${file#$FRAMEWORK_DIR/} missing retained-state dispatch $term")
+        fi
+    done
 done
+if ! p0p4_contains_text "$progressive_ref" 'Retained state remains active/resumable after `uncertainty_shape=bounded`'; then
+    retained_state_missing+=("progressive-discovery.md does not preserve active/resumable bounded state")
+fi
 for file in "$progressive_ref"; do
     for term in "${retained_state_route_terms[@]}"; do
         if ! p0p4_contains_text "$file" "$term"; then
@@ -3099,12 +3111,20 @@ for file in \
 done
 
 for term in \
-    'retention is `terminally_archived`' \
-    'Durable markers still require validation with missing/invalid retention or `not_applicable`/retained state; fail closed' \
-    'Terminal archival needs a typed `progressive_terminal_archival` tombstone and final evidence' \
-    'completed alone is insufficient and archive cannot revert'; do
+    'references/progressive-discovery.md' \
+    'retained progressive markers' \
+    'Completed state alone does not archive its protocol'; do
     if ! p0p4_contains_text "$workflow_dir/SKILL.md" "$term"; then
-        archival_retention_missing+=("SKILL.md missing compact fail-closed retention guidance $term")
+        archival_retention_missing+=("SKILL.md missing archival-state dispatch $term")
+    fi
+done
+for term in \
+    'typed `progressive_terminal_archival`' \
+    'evidence refs proving continuation and reference resolution are impossible' \
+    'Missing, dangling, or mismatched tombstone evidence fails closed' \
+    'cannot revert to `retained`'; do
+    if ! p0p4_contains_text "$progressive_ref" "$term"; then
+        archival_retention_missing+=("progressive-discovery.md missing terminal archival invariant $term")
     fi
 done
 for file in "$progressive_ref"; do

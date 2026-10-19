@@ -1,3 +1,5 @@
+# Applies to integrated calls and explicitly requested supported structured output.
+# Ordinary conversation follows SKILL.md without this serialized envelope.
 schema_version: "6.0"
 contract: phase-gates
 skill: assistant-thinking

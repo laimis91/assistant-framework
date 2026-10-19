@@ -33,13 +33,13 @@ if [[ -x "$generator" ]] \
     && run_generator "$fixture_root" --check >/dev/null \
     && [[ ! -e "$fixture_root/views/phases/prepare-only.md" ]] \
     && grep -Fq "references/phases/<current-phase>.md" "$workflow_skill" \
-    && grep -Fq "references/plans/<size>.md" "$workflow_skill" \
-    && grep -Fq "Preparation Completion is \`preparation-completion\`" "$workflow_skill" \
+    && grep -Fq "references/plans/<size>.md" "$phases_source" \
+    && [[ -f "$fixture_root/views/phases/preparation-completion.md" ]] \
     && ! grep -Fq "prepare_only\` uses \`preparation-completion.md" "$workflow_skill" \
-    && grep -Fq "Missing or unknown view: load authoritative \`references/phases.md\`" "$workflow_skill" \
-    && grep -Fq "missing or unknown view loads authoritative \`references/plan-template.md\`" "$workflow_skill" \
+    && p0p4_contains_text "$workflow_skill" "use authoritative [phases.md](references/phases.md) if the view is missing or unknown" \
+    && p0p4_contains_text "$phases_source" "Missing/unknown views use authoritative \`references/plan-template.md\`" \
     && grep -Fq "references/plans/prepare-only.md" "$phases_source" \
-    && grep -Fq "Then load \`references/plans/<size>.md\`" "$phases_source" \
+    && grep -Fq "\`references/plans/<size>.md\`" "$phases_source" \
     && ! grep -Fq "Then read \`references/plan-template.md\`" "$phases_source" \
     && grep -Fq "## Shared Controller Decisions" "$fixture_root/views/phases/build.md" \
     && grep -Fq "## Phase: Discover" "$fixture_root/views/phases/discover.md" \

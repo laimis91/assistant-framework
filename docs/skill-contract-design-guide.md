@@ -4,525 +4,196 @@ docs/skill-contract-design-guide.md is canonical. The skill-local copy is
 generated for installed-skill portability; refresh it with
 `tools/skills/sync-skill-contract-guide.sh --apply` and verify it with `--check`.
 
-Guidance for strict skills with typed inputs, validated outputs, and structural gates, based on DSPy, CrewAI, Guardrails AI/RAIL, OpenAI Agents SDK, Google A2A, and Addy Osmani's agent specification.
+## Start with instructions
 
-## Core Principle
+A skill is instructions for a concrete job. A valid `SKILL.md` with precise
+routing and sufficient instructions can be the whole skill. Describe the outcome,
+necessary steps, constraints, output, and when to ask or stop. Use headings only
+when they help. Move detailed examples to references loaded when needed.
 
-A skill without contracts is a suggestion. A skill with contracts is a specification.
+Before adding a file, field, phase, controller, or dependency, name its consumer
+and the failure it prevents. Reuse an existing producer format or helper. Do not
+create contracts to satisfy a category, a field count, or a checklist. Utility,
+Analysis, and Process describe the work; they do not require two, three, or four
+contract files. Do not introduce an opt-in profile or metadata registry.
 
-Every skill MUST define accepted inputs, outputs, and what must be true at every transition point. Prose guides agents; typed schemas constrain them.
+Keep a contract when a tool validates it, another agent consumes its exact shape,
+or persisted state needs reconciliation. Preserve those interfaces, their
+consumers, and their compatibility rules. Human-only summaries can stay prose.
+An explicit user request for a schema is also a reason to author one.
 
-Keep root `SKILL.md` compact and outcome-shaped; complex skills include only behavior-changing sections:
+Ask only when missing information materially changes correctness, scope, public
+contract, security, data shape, rollout, or verification, cannot be discovered
+from supplied context or source, and has no safe default. Ask every remaining
+material question, grouped with its impact and risk if guessed. Otherwise proceed
+with stated assumptions; there is no question quota.
 
-- **Goal** — the user-visible outcome the skill exists to produce.
-- **Success criteria** — what must be true before the final response or artifact is complete.
-- **Constraints** — evidence, safety, side-effect, adapter, and scope limits.
-- **Output** — the required response or artifact shape.
-- **Stop rules** — when to ask, retry, fall back, abstain, or stop.
+## Routing and metadata
 
-### Ask/Proceed Policy
+Required discovery fields are `name` and a non-empty `description`. Names use
+1–64 ASCII lowercase letters, digits, and single hyphens, with no leading,
+trailing, or repeated hyphen. Descriptions use 1–1024 characters; optional
+compatibility uses 1–500 characters. Preserve supported metadata and invocation
+policy unless explicitly changed.
 
-Clarification questions are allowed only when the missing answer materially changes correctness, scope, public contract, security, data shape, rollout, or verification, cannot be discovered from provided context or local source, and has no safe default. Ask every such material question, grouped by topic and with its impact and risk if guessed; do not impose an arbitrary numeric question cap. When the prompt and context are sufficient, proceed and record assumptions or defaults instead of asking ritual questions.
+Repository `requires` is optional and declares validated hard dependencies only.
+Use ordered plain block-sequence items and omit the key when empty. On update,
+omitted dependencies preserve canonical `requires`; explicit dependencies,
+including an empty list, replace or remove them. Do not add dependencies merely
+because a skill can consult another skill. `allowed-tools` is experimental;
+distinguish host support from portable behavior. Top-level `effort` and `triggers`
+are deprecated and rejected. Do not weaken permissions or host safety settings.
 
----
+Activation examples shape descriptions and evals; they are not header metadata.
+For first-class schema `2.0` `evals/cases.json`, `activation_cases` contains exact
+`{user_request, should_activate}` objects: two normalized-distinct positives and
+one normalized-disjoint nearby negative. Schema `1.0` custom/local fixtures may
+omit them; validate them when present and reject other schema versions. Derive
+adequate examples from an existing description and evals before asking for gaps.
 
-## Research Findings
+## Optional contracts
 
-### 1. DSPy Signatures — Typed I/O as Contracts
+Supplied contracts remain authoritative at their actual boundary. Load only the
+needed input, output, phase, or handoff; a shorter loading path never relaxes its
+rules. Preserve producer outputs unchanged when carrying them to another skill.
+In particular, use `assistant-verification/contracts/output.yaml` for an actual
+verification selection or evidence assessment; do not invent a local replacement
+or require that object for every human-only assessment. Preserve its independent
+method, scope, TDD choice, literal commands, and source-bound obligations.
+Active TDD needs the selected meaningful RED before production edits.
 
-**Source:** [DSPy Signatures](https://dspy.ai/learn/programming/signatures/)
-
-DSPy replaces hand-written prompts with **signatures** — typed declarations of inputs and outputs. Instead of "write me a summary," you declare fields with types, descriptions, and constraints.
-
-**Key patterns:**
-- Every input and output is a named, typed field
-- Output fields can have `Literal` type constraints (enum values)
-- `InputField(desc=...)` and `OutputField(desc=...)` carry semantic descriptions
-- TypedPredictors enforce type constraints at runtime — mismatches trigger warnings
-- Assertions validate LLM output after generation, enabling re-ask loops
-
-**Enforcement for skills:**
-- Every skill MUST declare typed `InputField` and `OutputField` equivalents in YAML
-- Field types: `string`, `int`, `boolean`, `enum`, `string[]`, `object`, `object[]`, `float`, `file`, `jsonl_line`
-- Enum fields MUST list all valid values — no open-ended enums
-- Descriptions are not optional — they scope what the agent should produce
-
-### 2. CrewAI — Pydantic Output Models and Task Chaining
-
-These YAML field kinds are schema transport primitives. They do not authorize
-application or skill interfaces to erase domain meaning into generic strings,
-integers, callbacks, or collections.
-
-**Source:** [CrewAI Tasks](https://docs.crewai.com/en/concepts/tasks)
-
-CrewAI requires `expected_output` as a Pydantic model on every task. The output of Task 1 becomes the typed input of Task 2 — like Unix pipes, but schema-validated.
-
-**Key patterns:**
-- `output_pydantic` property defines the exact shape of task output
-- Output is validated against the Pydantic model — type mismatches fail
-- In Sequential Process, one task's output automatically becomes the next task's context
-- Structured fields are accessible via `result["field_name"]` or `result.pydantic`
-
-**Enforcement for skills:**
-- Subagent returns MUST define `return_fields` with typed schemas
-- When one subagent feeds another, the producer's `return_fields` must satisfy the consumer's `context_fields`
-- Missing required return fields trigger re-dispatch, not silent continuation
-
-### 3. Guardrails AI — RAIL Spec (Schema + Validators + Corrective Actions)
-
-**Source:** [Guardrails AI RAIL](https://github.com/guardrails-ai/guardrails/blob/main/docs/how_to_guides/rail.md)
-
-RAIL (Reliable AI markup Language) defines fields, types, validators, and corrective actions in XML. If the LLM output doesn't match, it re-asks automatically.
-
-**Key patterns:**
-- Every output field has: `name`, `description`, `type`, and `validators`
-- Validators are composable rules (e.g., length checks, format checks, content checks)
-- Corrective actions on failure: `reask` (re-prompt the LLM), `filter` (remove invalid), `fix` (auto-correct)
-- Guard objects compile the schema and inject it into the prompt automatically
-- Re-ask loops run until output passes validation or max retries
-
-**Enforcement for skills:**
-- Every field MUST have an `on_missing` or `on_fail` action — never silently skip
-- Valid actions: `ask` (prompt user), `infer` (state inference), `skip` (use default), `fail` (block), `re-dispatch` (retry subagent)
-- Validation rules are plain-English predicates, not code — agent-portable
-
-### 4. Addy Osmani — Conformance Suites as Agent Contracts
-
-**Source:** [How to Write a Good Spec for AI Agents](https://addyosmani.com/blog/good-spec/) (O'Reilly)
-
-Treating specs as formal contracts between you and the AI agent. Conformance suites — language-independent tests that any implementation must pass — act as a contract specifying expected inputs/outputs.
-
-**Key patterns:**
-- Specs should cover: commands, testing, project structure, code style, git workflow, boundaries
-- Organize prompts into distinct sections (`<background>`, `<instructions>`, `<tools>`, `<output_format>`)
-- Use "LLM-as-a-Judge" for subjective criteria — a second agent reviews the first agent's output against quality guidelines
-- Conformance suites are YAML-based, reusable across implementations
-
-**Enforcement for skills:**
-- Phase gate assertions are conformance tests — checkable conditions that must pass
-- Anti-patterns lists are negative conformance tests — things that must NOT happen
-- Output contracts define what "done" looks like — the agent cannot claim completion without meeting them
-
-### 5. OpenAI Agents SDK — Declared Handoff Targets
-
-**Source:** [OpenAI Agents SDK Handoffs](https://openai.github.io/openai-agents-python/handoffs/)
-
-Each agent declares its handoff targets, and the framework enforces that handoffs follow declared paths. Agents cannot hand off to undeclared targets.
-
-**Key patterns:**
-- Handoff targets are declared at agent creation time — not ad-hoc
-- Handoff behavior is controlled by parameters determining how much context flows
-- The framework enforces that handoffs follow declared paths
-
-**Enforcement for skills:**
-- Subagent dispatch MUST follow the handoffs contract — no ad-hoc agent creation
-- Context fields are explicit — the orchestrator decides what context flows, not the subagent
-- Return fields are validated — the orchestrator checks the return before using it
-
-### 6. Agent Interoperability Protocols (A2A, ACP, ANP)
-
-**Source:** [Agent Interoperability Survey](https://arxiv.org/html/2505.02279v1)
-
-Multiple open protocols define structured metadata for agent discovery, capability declaration, and task handoff.
-
-**Key patterns:**
-- Agents declare capabilities as structured metadata — not free-form descriptions
-- Task requests include structured fields, not prose
-- Responses are multimodal but schema-validated
-- Handoff requires structured, queryable memory rather than raw text transfer
-
-**Enforcement for skills:**
-- Required SKILL.md discovery fields are `name` and non-empty `description`.
-  Repository-only `requires` is optional and appears only for validated hard
-  dependencies; body instructions apply after native activation
-- Skill descriptions in frontmatter are capability declarations — keep them precise
-- Native activation is description-based. Use representative activation examples to
-  shape the description and positive and negative routing evals; do not serialize
-  examples as frontmatter routing metadata
-- Every first-class schema `2.0` `evals/cases.json` fixture declares top-level
-  `activation_cases`: exact `{user_request, should_activate}` objects with at
-  least two normalized-distinct positive requests and one normalized-disjoint
-  nearby negative. Schema `1.0` custom/local fixtures may omit the field, but
-  validate it when present; reject every other schema version. These are
-  discovery evidence, not ordinary response-grade `.cases` or SKILL.md
-  metadata. When externally observed native
-  selections are available, `run-skill-evals.sh --activation-results FILE`
-  validates one exact skill/request result per activation case and compares the
-  expected decision without invoking a custom router or provider API.
-- Subagent prompts include structured context blocks with required fields, not free-form prose
-
-### 7. LLM Guardrails — Drift Prevention
-
-**Sources:** [Datadog](https://www.datadoghq.com/blog/llm-guardrails-best-practices/), [Orq.ai](https://orq.ai/blog/llm-guardrails), [CSA](https://cloudsecurityalliance.org/blog/2025/12/10/how-to-build-ai-prompt-guardrails-an-in-depth-guide-for-securing-enterprise-genai)
-
-Without source-of-truth validation, outputs slowly become inaccurate or inconsistent (model drift). Guardrails enforce deterministic formatting by schema enforcement.
-
-**Key patterns:**
-- Output guardrails perform filtering and relevancy checks for domain drift
-- Format validation ensures structured outputs via schema enforcement
-- Evidence and confidence filters keep low-certainty responses from blocking completion
-- Prompt construction guardrails inject structured metadata (roles, permissions) into system prompts
-- Automated policy trees compiled into lightweight classifiers audit agent behavior at runtime
-
-**Enforcement for skills:**
-- Phase gate assertions prevent drift — the agent must prove it's on track before continuing
-- Cross-phase invariants catch slow drift (e.g., constraints list only grows, never shrinks)
-- Evidence-backed review filters keep speculative concerns non-blocking, and review contracts preserve the hard max-round cap
-
----
-
-## Contract Schema Format
-
-### Design principles
-- **Agent-portable**: Plain YAML — no Python, JavaScript, or framework-specific syntax
-- **Human-readable**: Any developer can read and understand the contracts
-- **Self-documenting**: Descriptions and validation rules explain intent
-- **Recoverable**: Every failure has a defined corrective action
-- **Outcome-shaped**: Root instructions state the goal, success criteria, constraints, output, and stop rules before detailed procedure
-- **Material clarification only**: `on_missing: ask` is reserved for implementation-shaping missing data that cannot be safely inferred or discovered
-- **Freshness-checked durable state**: persisted task or workflow state is a claim that must be reconciled against the newest user intent and current artifact/repository evidence before its next action is trusted
-- **Evidence-bounded completion**: completion and review claims name their reviewed scope, verification evidence, limitations, and exclusions instead of implying proof beyond available evidence
-
-### Progressive contract loading
-
-Validate tier-required files at applicable enforcement points; eager loading is unnecessary, but every applicable canonical rule must still be checked.
-
-Non-trivial Process or Analysis skills MAY add `contracts/index.yaml` as a progressive load index. The index is optional and does not replace or redefine the canonical tier contracts. When present, it should:
-
-- declare `schema_version`, `contract: index`, and `skill`;
-- list every canonical file under `authoritative_contracts`;
-- define selector-bounded load sets with a positive `budget_words` value;
-- route entry inputs, the current phase or round gate, the selected handoff, and completion outputs to their enforcement points; and
-- use `load_full_authoritative_file` for both missing and invalid selectors so the full named canonical file is validated instead of silently skipping rules.
-
-Root `SKILL.md` routes applicable selectors; canonical files remain authoritative.
-Static reports may separately measure a named set's declared closure and recursive
-worker return-field projection; they exclude runtime context and fail on invalid
-pointers. Indexes never relax tiers or validation.
-
-### Field schema
-
-`float`, `file`, and `jsonl_line` are supported repository extensions.
+Use existing YAML shapes for actual consumers:
 
 ```yaml
-fields:
-  - name: field_name            # identifier (snake_case)
-    type: string                # string|int|boolean|enum|string[]|object|object[]|float|file|jsonl_line
-    required: true              # true | false | conditional
-    condition: "when..."        # only when required=conditional
-    description: "what this is" # human-readable purpose
-    validation: "rule"          # plain-English validation predicate
-    default: value              # when required=false, the default value
-    on_missing: ask             # ask | infer | skip | fail | re-dispatch
-    enum_values: [a, b, c]      # when type=enum
-    min_items: 1                # when type=array, minimum entries
-    object_fields: [...]        # when type=object or object[], nested field definitions
-    examples: [...]             # optional example values
-    infer_from: "rule"          # when on_missing=infer, how to infer
-    ask_prompt: "question"      # when on_missing=ask, what to ask
-    notes: "context"            # additional context for the agent
+schema_version: "1.0"
+contract: input  # input | output | phase-gates | handoffs
+skill: assistant-example
+
+fields:  # output contracts use artifacts
+  - name: request
+    type: string
+    required: true
+    description: "The requested operation"
+    validation: "Non-empty request within the supported scope"
+    on_missing: ask
+    ask_prompt: "Which operation should I perform?"
 ```
 
-### Semantic interface policy
+Field types: `string`, `int`, `boolean`, `enum`, `string[]`, `object`, `object[]`, `float`, `file`, `jsonl_line`
 
-Use a named semantic type, value object, request/result type, event, or
-discriminated result when a value has domain meaning, validation, unit,
-lifecycle, ownership, security meaning, public-contract meaning, or a likely
-extension seam. A public/domain `string`, `int`, `Action<string>`, or
-`IEnumerable<int>` must not be accepted as an unexplained substitute for a
-semantic type.
+- Required input fields declare actionable `on_missing`: `ask`, `infer`, `skip`,
+  `fail`, or `re-dispatch`; explain an inference or safe default.
+- Required output artifacts declare validation or actionable failure recovery;
+  author explicit `on_fail` when recovery matters to the consumer.
+- Enums declare bounded `enum_values`. Use `object_fields` for nested fields.
+- Use `required: conditional` with a plain-English `condition` for fields needed
+  only in one operation. Do not force irrelevant artifacts into read-only work.
+- Keep descriptions, validation predicates, and corrective actions concrete.
+  Add realistic examples when ambiguity remains; no fixed example count applies.
+- A gate has a named `phase`, optional condition, binary `entry_assertions` or
+  `exit_assertions`, and actionable `on_fail`. Check entry assertions before
+  mutation or dispatch. Add invariants only for real cross-phase constraints.
+- A handoff names `from`, `to`, `phase`, `context_fields`, and `return_fields`.
+  The producer's return fields must satisfy the consumer's context fields.
+  Validate a failed return before continuing; retry only within approved bounds.
 
-Primitive representations remain valid at local temporary calculations, opaque
-wire/storage/foreign-library boundaries, framework-required signatures, and
-values with demonstrably no domain semantics. Record the primitive exception,
-conversion point, and validation rule; convert to semantic types at the owned
-boundary. Prefer a cohesive command/request type when an operation evolves,
-but do not replace coherent interfaces with generic property bags. Public or
-serialized type changes must declare compatibility, versioning/adapters, and
-migration or rollback handling.
+Changes to public or serialized contracts need a compatibility decision. Adding
+optional fields can preserve a major version; removing or weakening required
+fields needs a major `schema_version` bump, a migration note in `SKILL.md`, and
+updated consumers, evals, and mirrors. Deleting an unconsumed schema does not
+justify deleting the safety or behavior it described from the instructions.
 
-### Verification and TDD boundaries
+### Indexes
 
-Carry `assistant-verification/contracts/output.yaml` unchanged: selection/assessment,
-independent scope/method/TDD, meaningful oracles, active-TDD RED.
+`contracts/index.yaml` is optional. Keep it only when progressive loading is
+useful to a real consumer. When present, declare `schema_version`,
+`contract: index`, `skill`, and the actual `authoritative_contracts`. Include
+supplied and explicitly referenced canonical files, rather than category quotas.
+Use selector-bounded `load_sets` with positive `budget_words`. Select entry
+inputs, current gates, handoffs, or completion fields by explicit keys and names.
+Both missing and invalid selectors use `load_full_authoritative_file`; never
+silently skip the canonical file. Paths stay inside the skill root, including
+through symlinks. Declared files, selector addresses, references, and word budgets
+must resolve. Static closure reports exclude runtime context.
 
-### Architecture Decision Pack and skill surface audit
+### Semantic boundaries and workflow safety
 
-Architecture design is an LLM-led, conditional workflow capability, not a
-permanent architect agent or global memory system. Create or refresh the
-compact Architecture Decision Pack only when a task has a new system,
-cross-boundary data/resource ownership, public-contract change, material
-quality driver, or genuinely viable architectural alternatives. It records a
-single goal, freshness basis, facts versus assumptions, material questions,
-boundaries, design-pressure checks, Type Ledger, interfaces, quality scenarios,
-alternatives, decision, verification, invalidation, and handoff reference. The
-pressure checks cover control/early exit, ownership/disposal, resource envelope,
-extension registration, and a representative producer-consumer path so an LLM
-does not invent a generic engine or callback before its concrete use is known.
-For ordinary local work,
-record `architecture_design_mode: not_applicable` and a short reason.
+Use named semantic types when values have domain, public-contract, lifecycle,
+unit, validation, ownership, security, or extension meaning. YAML field types are
+transport primitives, not permission to erase those meanings. Primitive
+representations are reasonable for local temporary values, wire/storage or
+foreign/framework boundaries, or values with no domain semantics. Record the
+exception, conversion point, and validation. Prefer cohesive request/result
+types to generic property bags; do not invent wrappers without a consumer.
 
-Questions are not numerically limited: inspect source, apply safe defaults,
-then ask every remaining material question concisely by topic with why, risk if
-guessed, and a default where one exists. Never claim a memory, performance, or
-extensibility benefit without a workload, budget/threshold or explicit unknown,
-measurement method, and failure condition.
+When architecture decisions are material, preserve the applicable decision
+record: facts and assumptions, ownership, control and early exit, resource
+disposal and bounds, extension registration, representative producer-consumer
+path, compatibility, and falsifiable quality checks. Ordinary local work needs
+no architecture ceremony. Do not claim memory, performance, or extensibility
+benefits without measurements or a clearly stated unknown.
 
-The first-class skills were audited against that playbook. Each owns only the
-smallest relevant behavior; none is required to invent architecture ceremony.
+Existing-system preparation distinguishes requirements, design evidence, current
+implementation, observable effects, tests, conflicts, and evidence gaps. Missing
+inspection is an evidence gap, not a Product decision. Preserve tested behavior
+only within the actor, data, and authorization context supported by the evidence.
+Persisted task state must be reconciled with current user intent and repository
+or artifact identity before trusting its next action. Keep unanswered material
+choices and provisional recommendations out of applied defaults or confirmed
+criteria in responses and task state. Source-backed technical defaults remain
+automatic.
 
-| Skill | Architecture-playbook responsibility |
-|---|---|
-| `assistant-workflow` | Owns conditional Pack triage, freshness, design-pressure checks, plan/journal/packet propagation, and completion evidence. |
-| `assistant-clarify` | Discovers every material design question concisely, grouped with why/risk/default. |
-| `assistant-thinking` | Selectively challenges genuinely contested Pack decisions; returns a compact Pack update, never a standing council. |
-| `assistant-review` | Independently checks applicable Pack freshness, boundaries, design-pressure checks, semantic types/exceptions, quality falsifiability, compatibility, and handoff. |
-| `assistant-onboard` | Maps evidence-backed ownership/lifecycle, design-pressure, and type candidates before change work. |
-| `assistant-docs` | Documents only fresh source-backed decisions, design/type boundaries, and quality verification claims. |
-| `assistant-skill-creator` | Enforces semantic interface design and explicit primitive exceptions in reusable skill contracts. |
-| `assistant-tdd` | Tests semantic conversion/validation, public compatibility, design-pressure behavior, and stated quality scenarios when carried by a Pack. |
-| `assistant-debugging` | Supplies source facts, failure lifecycle, and falsifiable hypotheses that may invalidate a Pack. |
-| `assistant-diagrams` | Visualizes only evidence-backed boundaries, ownership, and flows supplied by the decision record. |
-| `assistant-ideate` | Produces options only when alternatives are needed; it does not select or persist the architectural decision. |
-| `assistant-research` | Validates external claims or benchmarks only when local evidence is insufficient and research is in scope. |
-| `assistant-security` | Evaluates security-sensitive ownership, public-contract, and data-boundary implications when triggered. |
-| `assistant-telos` | Remains purpose/strategy scoped; it does not create implementation architecture unless the user explicitly requests a bridge. |
+For shared impacts, preserve source identity and gaps. Mutation requires current
+valid pre-build evidence; completion requires verification and review evidence.
+Missing loaded-path runtimes block. Fanout alone does not escalate architecture,
+QA, or execution lane. Keep review and QA responsibilities distinct. Metrics are
+optional, non-blocking observability; they never determine completion.
 
-This audit is behavior mapping, not a requirement to change every skill for
-every task. The workflow Pack and review gate are the durable integration path.
+For actual long-running controllers, reuse the owning workflow's Done Contract,
+Harness Recipe, typed references, trace/replay, and pivot/restart formats when
+needed. Load `references/harness-patterns.md` in the creator for those patterns.
+Do not add this machinery to single-pass work. Review/QA/fix loops remain bounded
+by their existing limits and at most 10 rounds; stagnation, repeated regression,
+and unexpected blockers require an explicit pivot or restart decision.
 
-### Existing-system feature preparation evidence
+## Validation and evidence
 
-Technical preparation for a feature, epic, story, or spike must not classify a
-behavior as a Product question merely because requirements or visual design omit
-it. When existing repository behavior is in scope, `assistant-workflow` owns a
-provider-neutral evidence matrix that traces requirements, design evidence or an
-explicit disposition, current implementation and observable effects, relevant
-behavioral tests or inspected absence/access gaps, conflicts, and evidence gaps.
-The matrix classifies behavior separately from work: for example, behavior may
-be `existing_behavior_to_preserve` while the work is an `implementation_gap`.
-
-Product-question promotion fails closed. Uninspected or inaccessible evidence is
-an evidence gap, contradictory sources are a source conflict, and tested current
-behavior defaults to preservation only within the actor, data, and authorization
-context supported by its sources. Adding a route does not itself change that
-context; a new audience or disclosure boundary may. Implementation details and
-internal access controls do not by themselves establish a policy for a new
-audience or data boundary. Keep each unanswered material product choice and its
-recommendation provisional in both the response and task journal; do not record
-it as an applied default or confirmed criterion. Record the provisional recommendation and unresolved status together in each task-state draft; the same choice cannot also be an applied default. Source-backed technical defaults
-remain automatic. The gate applies before Plan or Build in prepare-only and
-end-to-end work; implementation-only work must resolve the approved evidence
-reference.
-Prepare-only completion reports that execution has not started and never
-manufactures changed-files or implementation verification evidence.
-
-Adjacent skills consume but do not redefine this decision. `assistant-thinking`
-may surface candidate concerns or criteria, but cannot promote them without an
-admissible evidence row. `assistant-diagrams` traces every rendered node and edge
-to inspected or user-provided evidence and discloses gaps. `assistant-docs`
-blocks any existing-system preparation document whose behavior claims or Product
-questions lack complete evidence; when a fresh Architecture Decision Pack also
-applies, it returns an additional incomplete-Pack recovery rather than
-propagating those claims as decisions.
-
-### Phase gate schema
-
-```yaml
-gates:
-  - phase: PHASE_NAME
-    checkpoint_start: "--- PHASE: NAME ---"
-    checkpoint_end: "--- PHASE: NAME COMPLETE ---"
-    condition: "when this phase runs"  # optional
-    entry_assertions: []  # Optional; same schema, checked before any mutation or mutation dispatch
-    exit_assertions:
-      - id: XX1                        # unique
-        check: "what must be true"
-        condition: "when applicable"   # optional
-        on_fail: "corrective action"
-
-invariants:
-  - id: INV1
-    check: "what must always be true"
-    scope: all_phases
-    on_fail: "corrective action"
-```
-
-### Handoff schema
-
-```yaml
-handoffs:
-  - name: producer_to_consumer
-    from: ProducerRole
-    to: ConsumerRole
-    phase: PHASE_NAME
-    context_fields: [...]   # what the orchestrator sends (uses field schema)
-    return_fields: [...]    # what the subagent must return (uses field schema)
-    on_missing_field: "corrective action"
-```
-
----
-
-## Contract Tiers by Skill Category
-
-| Category | Skills | Contract files | Rationale |
-|---|---|---|---|
-| **Process** (multi-phase, subagents) | workflow, review, tdd, security, research | input + output + phase-gates + handoffs | Full pipeline with transitions and declared delegation |
-| **Analysis** (structured reasoning) | thinking, ideate, verification | input + output + phase-gates | Multi-step pipeline but no subagent delegation |
-| **Utility** (single-purpose) | docs, diagrams, onboard, telos | input + output | Single-pass execution, no phases to gate |
-
-Infer a skill category in this order: Process first when its purpose mentions a
-workflow, pipeline, multi-phase work, subagents, dispatch, or handoffs; then
-Analysis for analyze/analysis/reason/research/diverge/converge; otherwise
-Utility. Process wins when a purpose contains both Process and Analysis terms.
-
-### Process skills (4 files)
-- Most complex — multiple phases, subagent dispatch, approval gates
-- Phase gates enforce sequencing (can't skip steps)
-- Handoff schemas ensure subagents get proper context and return structured data
-- Example: assistant-workflow, assistant-review
-
-For loop-based Process skills, model the harness controller explicitly instead
-of hiding it in prose. Medium+ harness-capable work should define a Done
-Contract and Harness Recipe before Build, carry typed Artifact References across
-handoffs, and record run-state, trace, replay, review, QA, and pivot/restart
-artifacts when the controller requires them. Code Reviewer and QA Evaluator
-handoffs stay separate: Code Reviewer owns code defects, security,
-architecture, test coverage, and structural code risk; QA Evaluator owns Done
-Contract, acceptance criteria, verification evidence, final readiness, and
-scoped domain quality. Review/QA loops must be bounded, currently with a max 10
-round terminal cap, and stagnation, repeated drift/regression, rubric pivots, or
-Code Writer unexpected blockers must route through an explicit
-`pivot_restart_decision` rather than silently continuing.
-
-### Analysis skills (3 files)
-- Multi-step pipeline (e.g., diverge → converge → refine)
-- Phase gates enforce pipeline ordering
-- No subagent delegation — the main agent does all work
-- Example: assistant-ideate (light mode ranks 3-5 options quickly; deep mode generates 8-15 ideas before full scoring)
-
-### Utility skills (2 files)
-- Single-pass: accept input, produce output
-- Input contract prevents "what do you want me to do?" confusion
-- Output contract prevents incomplete or missing artifacts
-- Example: assistant-docs (must specify doc type, must produce a file)
-
----
-
-## Enforcement Mechanisms
-
-### Source validation foundation
-
-Run the source validator before changing first-class skill contracts:
+Run focused checks first, then the aggregate checks appropriate to changed
+consumers. Source validation accepts instruction-only skills; supplied contracts,
+explicit local contract references, and declared indexes still validate. Missing
+literal local `contracts/*.yaml` references fail. Cross-skill producer references
+are not local file declarations. This is not a general Markdown link checker.
 
 ```bash
 tools/skills/validate-skills.sh
-```
-
-The default inventory is the tracked first-class release set: `skills/assistant-*/SKILL.md`. Use targeted validation when working on one skill:
-
-```bash
 tools/skills/validate-skills.sh --skill assistant-thinking
-tools/skills/validate-skills.sh --skill skills/assistant-thinking/SKILL.md
-```
-
-Use `--include-local` only for local experiments:
-
-```bash
 tools/skills/validate-skills.sh --include-local
-```
-
-This validator checks source skill metadata and contract structure: frontmatter,
-required contract tier files, contract headers, required-field recovery behavior,
-and enum value declarations. SKILL.md frontmatter requires `name` and a non-empty
-`description`; repository skills may include optional `requires` for validated
-hard dependencies. Top-level `effort` and `triggers` are deprecated and rejected.
-Top-level keys use plain or quoted scalar block-mapping syntax; YAML merge keys,
-node properties, aliases, and explicit-key indicators are rejected.
-It intentionally stays on the source side. Canonical source paths such as
-`.claude` remain valid in source skills; installed-agent path substitution for
-`.codex` and `.gemini` stays covered by installer tests.
-
-### Level 1: Contract files exist (passive)
-Contracts are skill-directory YAML read during execution; adherence relies on the instruction-following trust model used by SKILL.md.
-
-### Level 2: SKILL.md references contracts (active)
-SKILL.md says to read and follow `contracts/`, then lists each file and summarizes its rules, making them visible.
-
-### Level 3: Source structural validation (automated)
-Source validation checks machine-readable skill and contract structure before release, catching missing tiers, malformed headers, missing recovery actions, undeclared enum values, invalid selectors, and other drift. It is provider-neutral and needs no agent lifecycle integration.
-
-Runtime adherence depends on normal instruction-following: entrypoints load applicable contracts, orchestrators record required evidence, and review checks completion gates. Optional metrics are non-blocking.
-
-### Level 4: Conformance test suite (automated)
-YAML test cases define "given this input, skill must produce output matching this schema." They can verify skill changes.
-
-The validator is the Level 4 foundation because it provides the inventory and structural checks that per-skill conformance suites build on. Provider-neutral per-skill eval fixtures now live at `skills/<skill>/evals/cases.json` and run through `tools/evals/run-skill-evals.sh`.
-
-```bash
 tools/evals/run-skill-evals.sh --validate-fixture
-tools/evals/run-skill-evals.sh --list
-tools/evals/run-skill-evals.sh --emit-prompts /tmp/skill-eval-prompts
-tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 ```
 
-The default per-skill eval inventory is 15 first-class `skills/assistant-*` skills with fixtures: `assistant-clarify`, `assistant-debugging`, `assistant-diagrams`, `assistant-docs`, `assistant-ideate`, `assistant-onboard`, `assistant-research`, `assistant-review`, `assistant-security`, `assistant-skill-creator`, `assistant-tdd`, `assistant-telos`, `assistant-thinking`, `assistant-verification`, and `assistant-workflow`.
+Source checks cover metadata, dependencies, contract headers, required-field
+recovery, enum declarations, field types, passive YAML, and indexes. They do not
+prove execution adherence, host activation, or model quality. Installed path
+substitution remains covered by installer tests.
 
-Each first-class schema `2.0` fixture must provide top-level `activation_cases`
-with exact `user_request` and `should_activate` fields, at least two
-normalized-distinct positive requests, and one normalized-disjoint nearby
-negative. Schema `1.0` custom/local fixtures may omit the field, but it remains
-validated when present; every other schema version is rejected. This evidence
-shapes native description routing and is separate from response-grade `.cases`.
+Keep structural validation, explicit invocation, implicit native selection, and
+post-activation behavior separate. Native activation observations must bind to
+the actual host, skill inventory, source identity, requests, and available trace;
+unavailable telemetry stays unavailable. `run-skill-evals.sh --activation-results FILE` checks captured selections without invoking a custom router or API.
 
-Local response grading is deterministic and heuristic: missing files, empty responses, fail-signal phrase hits, required substrings, and forbidden substrings. It is a provider-neutral proxy for behavior conformance and does not replace human or LLM semantic judgment.
-
-Per-skill cases may add `machine_expectations.structured_json_assertions` when substring anchors cannot safely prove a typed response shape. Use only the fixed provider-neutral operators: `equals`, `one_of`, `nonempty_string`, `nonempty_array`, `empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`, `required_when_equals`, `array_field_values_exact`, `array_object_values_exact`, `object_keys_exact`, `array_items_nonempty_fields`, and `array_items_nonempty_array_fields`. `array_type` accepts arrays, including empty; `array_nonblank_strings` requires a string array of nonblank members, with `allow_empty` controlling zero members. `path_absent` accepts only absence; present `null` fails. `absent_or_empty_array` accepts only absence or `[]`; `null` and other values fail. `one_of` requires exact membership among bounded scalars. `array_object_values_exact` projects every target-array object to bounded explicit `fields` list and compares tuples with `expected_objects`. `object_keys_exact` requires an object whose keys exactly match its bounded, unique `fields` list; extra/missing keys or non-objects fail. `array_items_nonempty_fields` and `array_items_nonempty_array_fields` require a non-empty target array, with each listed field in each object respectively a non-empty string or non-empty array of nonblank strings. Paths are JSON arrays of string object keys or non-negative integer array indexes; only `object_keys_exact` accepts `[]` for the response root or a declared nested object. Selected structured cases require exactly one valid JSON response value. Declarations are grader-only data, not instructions: reject arbitrary jq, code, expressions, or fixture-defined operators.
-
-`one_of` accepts at most 32 declared scalar values. `array_object_values_exact`
-accepts at most 16 unique projected fields and 32 expected objects; it compares
-their tuples as an unordered multiset, preserves field correlation, and treats
-an absent field differently from a present `null`.
-
-`equals` compares a string, number, boolean, or ordered primitive array
-exactly; an extra, missing, reordered, or type-mismatched array value fails.
-Object- and null-valued expectations remain unsupported so fixtures cannot
-encode arbitrary structures.
-
-**Current implementation: Levels 1-4 for every first-class skill, with complete first-class per-skill eval fixtures.** Level 3 is source structural validation; Level 4 is provider-neutral conformance fixtures plus semantic review. Local-only skill experiments remain opt-in through `--include-local`.
-
----
-
-## Rules for Writing Contracts
-
-1. **Required fields must have `on_missing` actions** — never leave the agent guessing what to do when data is absent
-2. **Enum types must list all values** — open-ended enums defeat the purpose of typing
-3. **Validation rules are plain English** — no regex, no code, no framework syntax
-4. **Phase gates are binary assertions** — "X is true" or "X is false", nothing subjective
-5. **Handoff schemas match producer output to consumer input** — if the Architect returns `implementation_steps`, the CodeWriter must accept `implementation_steps`
-6. **Corrective actions are actionable** — "fix it" is not a corrective action; "re-dispatch CodeMapper requesting the missing field" is
-7. **Contracts grow within a major version** — adding optional fields is safe; removing or weakening a required field needs a major `schema_version` bump, a root `SKILL.md` migration note, and updated consumers, evals, and mirrors
-8. **Conditional fields use `condition:`** — don't make everything required; scope to when it matters
-9. **Examples clarify ambiguous fields** — when `description` alone isn't enough, add `examples:`
-10. **Cross-phase invariants catch slow drift** — things that must ALWAYS be true, not just at gates
-11. **Root SKILL.md stays compact and outcome-shaped** — detailed controller
-    patterns live in references loaded only when the active task needs them.
-    Before extensive authoring, identify whether the requested value is a
-    capability, an encoded preference, or mixed; use existing requirements or
-    demonstrated gaps as success criteria and make no improvement claim without
-    evidence.
-12. **Clarification prompts are admissible and uncapped** — ask every material,
-    non-discoverable missing decision with no safe default; group questions by
-    topic and do not add ritual or count-driven questions
-13. **Semantic interfaces preserve meaning** — use named types for domain,
-    public, lifecycle, unit, validation, ownership, or extension semantics;
-    record primitive exceptions and boundary conversions; version public or
-    serialized changes
-14. **Loop controllers are explicit and bounded** — use Done Contract, Harness
-    Recipe, typed refs, separate code-review/QA handoffs, pivot/restart
-    decisions, and the max 10 terminal cap when the Process skill has
-    long-running review, QA, or fix-verify loops
-15. **Shared-impact evidence** — preserve identity. Discovery reports gaps;
-    mutation requires current valid pre-build entry evidence; completion needs
-    verification/review. Missing loaded-path runtimes block. Fanout alone
-    does not escalate architecture, QA, or lane.
+Local substring grading is heuristic. Structured assertions check bounded JSON
+shapes using the eval runner's fixed operators, never arbitrary fixture code.
+Before authoring `machine_expectations.structured_json_assertions`, read
+`../../docs/evals/README.md#per-skill-eval-fixtures`, resolved from the directory
+containing the active creator `SKILL.md`, for the exact operator list, bounds,
+and null/absence rules. Accepted declaration keys are defined by installed
+`../../tools/evals/lib/skill-eval-fixtures.sh`; validate authored fixtures with
+`run-skill-evals.sh --validate-fixture`. For Windows Codex shared skills, resolve
+these docs/tools under configured `CODEX_HOME` (default `~/.codex`), not `.agents`;
+the installer reports the actual tools location.
+Creator semantic fixtures bind operation claims to independent run capture and
+actual artifact bytes; see `references/behavioral-evaluation.md`. They preserve
+canonical producer envelopes for that consumer without making them a requirement
+for every user-facing reply. Comparative claims need matched conditions and
+held-out acceptance evidence. A source fetch does not establish adoption, native
+activation, behavioral improvement, or freshness beyond the captured evidence.

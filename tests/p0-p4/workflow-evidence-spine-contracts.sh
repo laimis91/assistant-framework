@@ -26,14 +26,16 @@ state_repair_fragments_are_present() {
         && p0p4_contains_text "$file" "superseded" \
         && p0p4_contains_text "$file" "completed" \
         && p0p4_contains_text "$file" '{agent_state_dir}/task.md' \
-        && p0p4_contains_text "$file" "before acting" \
+        && p0p4_contains_text_ci "$file" "before acting" \
         && p0p4_contains_text "$file" "classification" \
         && p0p4_contains_text "$file" "reason" \
         && p0p4_contains_text "$file" "task identity" \
         && p0p4_contains_text "$file" "exact next action"
 }
 
-if state_repair_fragments_are_present "$workflow_dir/SKILL.md" \
+if p0p4_contains_text "$workflow_dir/SKILL.md" "references/task-state-reconciliation.md" \
+    && p0p4_contains_text "$workflow_dir/SKILL.md" "before trusting persisted state" \
+    && state_repair_fragments_are_present "$workflow_dir/references/task-state-reconciliation.md" \
     && p0p4_contains_text "$workflow_dir/references/task-state-reconciliation.md" 'persist any `stale`, `superseded`, or `completed`' \
     && p0p4_contains_text "$workflow_dir/references/task-state-reconciliation.md" 'framework-owned `{agent_state_dir}/task.md`' \
     && state_repair_fragments_are_present "$candidate_workflow" \
@@ -48,9 +50,13 @@ fi
 test_start "workflow routing covers persisted continuation and exact external schemas"
 if p0p4_contains_text "$workflow_dir/SKILL.md" "resume repository task state" \
     && p0p4_contains_text "$candidate_workflow" "resume persisted task state" \
-    && p0p4_contains_text "$workflow_dir/SKILL.md" "Honor user/repository schemas" \
+    && p0p4_contains_text "$workflow_dir/SKILL.md" "references/artifact-first-output-contract.md" \
+    && p0p4_contains_text "$workflow_dir/SKILL.md" "before planning, direct Build, or output" \
+    && p0p4_contains_text "$workflow_dir/SKILL.md" "external schemas override workflow-internal shapes" \
+    && p0p4_contains_text "$workflow_dir/references/artifact-first-output-contract.md" "closed-world external contract" \
+    && p0p4_contains_text "$workflow_dir/references/artifact-first-output-contract.md" "omit undeclared fields" \
     && p0p4_contains_text "$candidate_workflow" "Explicit user or repository artifact schemas override workflow-internal shapes" \
-    && p0p4_contains_text "$workflow_dir/SKILL.md" "preserve paths, keys, types, ids and literals" \
+    && p0p4_contains_text "$workflow_dir/SKILL.md" "Preserve exact paths, keys, types, ids, and supplied literals" \
     && p0p4_contains_text "$candidate_workflow" "preserve exact paths, keys, types, ids, and supplied literals"; then
     pass
 else
@@ -138,9 +144,12 @@ else
 fi
 
 test_start "requirement map stays proportional for small work"
-if p0p4_contains_text "$workflow_dir/contracts/input.yaml" "size in [medium, large, mega]" \
+if ruby -ryaml -e '
+    field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |item| item["name"] == "requirement_acceptance_map" }
+    exit(field["required"] == "conditional" && field.fetch("condition").start_with?("size in [medium, large, mega] or") ? 0 : 1)
+' "$workflow_dir/contracts/input.yaml" \
     && p0p4_contains_text "$workflow_dir/references/requirement-acceptance-map.md" 'Small work may use the compact `acceptance_criteria` list' \
-    && p0p4_contains_text "$workflow_dir/references/phases.md" 'otherwise use compact `acceptance_criteria`' \
+    && p0p4_contains_text "$workflow_dir/references/phases.md" 'otherwise compact acceptance criteria suffice' \
     && p0p4_contains_text "$workflow_dir/references/workflow-controller.md" 'Otherwise keep compact `acceptance_criteria`' \
     && p0p4_contains_text "$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/SKILL.md" 'Small work returns status, changed areas, compact acceptance/verification'; then
     pass

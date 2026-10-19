@@ -62,13 +62,10 @@ if ruby -ryaml -e '
   generated_phase = generated[/^## Phase: Discover.*?(?=^## Phase: Decompose|\z)/m]
   prep_state = normalize.call(source_phase.to_s)
   prep_requirements = [
-    "for execution_intent=prepare_only, retain unresolved topics and provisional recommendations",
-    "finish discover through preparation completion without readiness or dependent work",
-    "in feature_preparation_result.open_decisions and existing map/state",
-    "preserve needs_clarification and actual technical defaults",
-    "optional readiness context settles no decisions",
-    "the following clarification wait rules apply to other execution intents",
-    "for execution_intent != prepare_only, discover does not complete while clarification status: needs_clarification"
+    "prepare_only may finish with open decisions in feature_preparation_result",
+    "do not claim readiness or start execution",
+    "it proceeds to preparation completion, not implementation approval",
+    "other execution intents wait for remaining material answers before dependent work"
   ]
   source_allows_preparation = prep_requirements.all? { |term| prep_state.include?(normalize.call(term)) } && normalize.call(generated_phase.to_s) == prep_state
   unresolved_topic = ["product choice: open question"]
@@ -112,18 +109,15 @@ if ruby -ryaml -e '
   view = File.read(ARGV.fetch(1))
   normalize = ->(value) { value.downcase.delete(96.chr).gsub(/\s+/, " ") }
   plan = source[/^## Phase: Plan.*?(?=^## Phase: Design)/m]
-  entry = plan.to_s.lines.find { |line| line.start_with?("**Entry rule:") }
-  scoped = entry && entry.include?("For `execution_intent != prepare_only`,")
-  freshness = entry && entry.include?("Architecture Decision Pack must also be fresh")
-  preparation = plan.to_s.include?("For `prepare_only`, an explicitly requested readiness Plan is inline and never waits.")
-  pack_questions_retained = normalize.call(plan.to_s).include?("unresolved pack questions") &&
-    normalize.call(plan.to_s).include?("feature_preparation_result.open_decisions") &&
-    normalize.call(plan.to_s).include?("optional plan never waits")
-  generated_pack_questions_retained = normalize.call(view).include?("unresolved pack questions") &&
-    normalize.call(view).include?("feature_preparation_result.open_decisions")
+  normalized_plan = normalize.call(plan.to_s)
+  scoped = normalized_plan.include?("for execution, enter only after material intent is settled")
+  freshness = normalized_plan.include?("applicable packs are current with no blocking questions")
+  preparation = normalized_plan.include?("for prepare_only, plan runs only when readiness planning was explicitly requested, stays inline, and never waits for implementation approval")
+  pack_questions_retained = normalized_plan.include?("preserve open decisions and exact existing-system preparation evidence")
+  generated_pack_questions_retained = normalize.call(view).include?("preserve open decisions and exact existing-system preparation evidence")
   pending_allowed = scoped && preparation && pack_questions_retained && generated_pack_questions_retained
-  dependent_blocked = entry && entry.downcase.include?("do not enter plan while the saved clarification state is pending")
-  mirror = view.include?(entry.to_s.strip) && view.include?("For `prepare_only`, an explicitly requested readiness Plan is inline and never waits.")
+  dependent_blocked = scoped && freshness
+  mirror = normalize.call(view).include?(normalized_plan.strip)
   gates = YAML.load_file(ARGV.fetch(2)).fetch("gates")
   p8 = gates.find { |gate| gate["phase"] == "PLAN" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "P8" }.fetch("check")
   common_defaults = p8.include?("clarification_defaults_applied is explicit (true/false)")
@@ -156,30 +150,27 @@ if ruby -ryaml -e '
   build = build_gate && build_gate.fetch("entry_assertions").find { |item| item["id"] == "B_REQUIREMENTS_SUFFICIENCY" }
   discover_phase = phases[/^## Phase: Discover.*?(?=^## Phase: Decompose)/m]
   generated_phase = generated[/^## Phase: Discover.*?(?=^## Phase: Decompose)/m]
-  source_state = discover_phase && discover_phase[/^\*\*Clarification state rules:\*\*.*?(?=^\*\*Rules:\*\*)/m]
-  generated_state = generated[/^\*\*Clarification state rules:\*\*.*?(?=^\*\*Rules:\*\*)/m]
+  source_state = discover_phase && discover_phase[/^### State and conditional discovery.*/m]
+  generated_state = generated[/^### State and conditional discovery.*/m]
   d_check = "Dependent work requires references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
   d2_check = "clarification_status=ready; each implementation-shaping field is explicit, source-backed-defaulted, accepted from displayed recommendations, or resolved; approval alone never resolves choices."
   tick = 96.chr
-  d2_fail = "Follow Discover step 5. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
+  d2_fail = "Follow the Requirements sufficiency heading in references/phases.md. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
   expected_build = "plan_mode=none: revalidate fresh Discover sufficiency before Build; criteria carry confirmed answers and sourced defaults, not guessed choices or evidence_gap/source_conflict."
   required = [
-    "requested intent",
-    "applicable authoritative behavior",
-    "source-backed technical defaults",
-    "proposed product assumptions",
-    "unresolved choices",
-    "record topic, value, source, and rationale",
-    "new material product choices require a concrete question and explicit answer before dependent work",
-    "missing plumbing, convention, reversibility, recommendation, or Plan approval alone does not establish intent",
-    "explicit acceptance of a clearly presented choice is an answer",
-    "empty question list alone is not proof",
-    "partial answers resolve only answered choices",
-    "record confirmed answers in existing acceptance criteria before dependent edits",
-    "repeat for newly exposed choices",
-    "existing-policy and complete tasks need no ritual questions",
-    "missing or conflicting controlling authority remains evidence_gap/source_conflict",
-    "do not invent or reframe it as a product question"
+    "requested intent", "authoritative behavior", "source-backed technical defaults",
+    "proposed product assumptions", "unresolved choices",
+    "retaining topic, value, source, and rationale",
+    "ask every remaining material choice that cannot be discovered or safely defaulted",
+    "a recommendation, compatibility, reversibility, or plan approval alone does not settle intent",
+    "explicit acceptance of displayed recommendations (including `defaults`) is an answer",
+    "an empty question list alone does not prove readiness",
+    "partial answers settle only answered choices",
+    "record the accepted outcome before dependent edits",
+    "revisit dependent choices when their predecessor is resolved",
+    "well-specified work needs no ritual question",
+    "missing or conflicting controlling authority stays `evidence_gap`/`source_conflict`",
+    "do not invent it or reframe it as a product preference"
   ]
   selector_valid = selector &&
     selector.fetch("path") == "contracts/phase-gates.yaml" &&
@@ -189,16 +180,13 @@ if ruby -ryaml -e '
     selector.fetch("allowed_names").include?("DISCOVER") &&
     selector.fetch("allowed_names").include?("BUILD")
   source_rules = [
-    ["ready only if no unresolved material topics remain", 2],
-    ["otherwise retain remaining topics and set clarification status: needs_clarification", 2],
-    ["clear only answered topics", 2],
-    ["one or more open question ids", 1]
+    "unresolved material topics mean needs_clarification and prevent decompose/plan/build",
+    "once all are resolved, set ready and record the request/source/default basis",
+    "partial answers settle only answered choices"
   ]
   phase_source = phases.delete("`").downcase.gsub(/\s+/, " ")
   generated_source = generated.delete("`").downcase.gsub(/\s+/, " ")
-  transition_valid = source_rules.all? do |rule, count|
-    phase_source.scan(rule).length == count && generated_source.scan(rule).length == count
-  end
+  transition_valid = source_rules.all? { |rule| phase_source.include?(rule) && generated_source.include?(rule) }
   discover_body = normalized.call(discover_phase.to_s)
   valid = selector_valid &&
     discover && discover.fetch("check") == d_check &&
@@ -208,7 +196,7 @@ if ruby -ryaml -e '
     build.fetch("check") == expected_build &&
     build.fetch("on_fail") == "Stop Build; return to Discover for explicit answers or controlling-source resolution." &&
     required.all? { |term| discover_body.include?(normalized.call(term)) } &&
-    source_state && generated_state && source_state == generated_state &&
+    source_state && generated_state && normalized.call(source_state) == normalized.call(generated_state) &&
     transition_valid
   exit(valid ? 0 : 1)
 ' "$phase_gates" "$phases" "$contract_index" "$discover_view"; then
@@ -236,8 +224,8 @@ if ruby -ryaml -e '
   ]
   provisional_fragments = ["unanswered material", "recommendation", "provisional", "response", "task journal", "do not record", "applied default", "confirmed criterion"]
   positive_controls = [
-    "automatically apply only source-backed technical defaults",
-    "existing-policy and complete tasks need no ritual questions"
+    "apply only source-backed technical defaults automatically",
+    "well-specified work needs no ritual question"
   ]
   same_context_control = "for viewing without enabling editing"
   unsafe_rules = [
@@ -255,8 +243,9 @@ if ruby -ryaml -e '
     feature = normalized.call(feature_text)
     combined = [source, generated, gate, feature].join(" ")
     generated == source &&
-      scoped_preservation.all? { |term| source.include?(normalized.call(term)) } &&
-      provisional_fragments.all? { |term| source.include?(normalized.call(term)) } &&
+      source.include?("references/feature-preparation-evidence.md") &&
+      scoped_preservation.all? { |term| [source, feature].join(" ").include?(normalized.call(term)) } &&
+      provisional_fragments.all? { |term| [source, feature].join(" ").include?(normalized.call(term)) } &&
       positive_controls.all? { |term| source.include?(normalized.call(term)) } &&
       feature.include?(normalized.call(same_context_control)) &&
       scoped_preservation.all? { |term| gate.include?(normalized.call(term)) } &&
@@ -265,7 +254,7 @@ if ruby -ryaml -e '
   end
   gate = prep_gate.fetch("check") + " " + invariant.fetch("check")
   valid = prep_gate.fetch("check").include?("INV_FEATURE_PREPARATION_QUESTION_ADMISSIBILITY") && discover_source && discover_view && policy_valid.call(discover_source, discover_view, gate, feature_reference)
-  safe_source = "#{scoped_preservation.join(" ")} #{provisional_fragments.join(" ")} #{positive_controls.join(" ")}"
+  safe_source = "references/feature-preparation-evidence.md #{scoped_preservation.join(" ")} #{provisional_fragments.join(" ")} #{positive_controls.join(" ")}"
   safe_gate = "#{scoped_preservation.join(" ")} #{provisional_fragments.join(" ")}"
   safe_feature = same_context_control
   safe_fixture = [safe_source, safe_source, safe_gate, safe_feature]
@@ -388,48 +377,41 @@ if ruby -ryaml -e '
   plan = File.read(ARGV.fetch(4))
   gates = YAML.load_file(ARGV.fetch(5)).fetch("gates")
   normalized = ->(value) { value.downcase.gsub(/\s+/, " ") }
-  discover = phases[/^\*\*Requirements sufficiency.*?(?=^\d+\.)/m]
-  generated_discover = generated[/^\*\*Requirements sufficiency.*?(?=^\d+\.)/m]
-  step5 = phases.lines.find { |line| line.start_with?("5. Preserve applicable authoritative existing behavior") }
+  discover = phases[/^### Requirements sufficiency.*?(?=^### State and conditional discovery)/m]
+  generated_discover = generated[/^### Requirements sufficiency.*?(?=^### State and conditional discovery)/m]
+  default_rules = discover
   root_requirements = [
-    "enter Discover requirements check",
-    "Honor user/repository schemas",
-    "Apply source-backed defaults; ask material product questions",
-    "Plan approval cannot settle intent",
-    "assistant-clarify owns prompt-level ambiguity"
+    "Preserve authoritative behavior and apply source-backed technical defaults",
+    "Ask only about remaining material intent, scope, safety, or acceptance choices",
+    "plan approval does not answer an unresolved product question",
+    "Use assistant-clarify for unclear intent"
   ]
   discover_requirements = [
-    "ready work needs a sufficient intended outcome and material product behavior",
-    "before Plan or plan_mode=none dependent work",
-    "before treating a material product outcome as settled in progress, Plan, or dependent implementation",
-    "whether the request and applicable authority still leave materially different observable outcomes open",
-    "ask only about that remaining material choice; compatibility alone does not select intent",
-    "Keep technical alternatives that achieve the accepted outcome automatic",
-    "provisional options or recommendations open during discovery",
-    "Use existing inline criteria, the Requirement Acceptance Map, or carried state to distinguish the requested outcome from constraints",
-    "inspect task-relevant behavior, affected data/users, dependencies, likely failures, and acceptance implications",
-    "classify material points as requested intent, applicable authoritative behavior, source-backed technical defaults, proposed product assumptions, or unresolved choices",
-    "missing or conflicting controlling authority remains evidence_gap/source_conflict",
-    "do not invent or reframe it as a product question",
-    "empty question list alone is not proof",
-    "partial answers resolve only answered choices",
-    "record confirmed answers in existing acceptance criteria before dependent edits",
-    "repeat for newly exposed choices",
-    "existing-policy and complete tasks need no ritual questions",
-    "no parallel report or ledger"
+    "requested intent, authoritative behavior, source-backed technical defaults, proposed product assumptions, and unresolved choices",
+    "Missing or conflicting controlling authority stays `evidence_gap`/`source_conflict`",
+    "do not invent it or reframe it as a product preference",
+    "Internal fields/permissions do not establish policy for a new audience or disclosure boundary",
+    "Ask every remaining material choice that cannot be discovered or safely defaulted",
+    "Well-specified work needs no ritual question",
+    "A recommendation, compatibility, reversibility, or Plan approval alone does not settle intent",
+    "Keep unanswered choices and recommendations provisional",
+    "Partial answers settle only answered choices",
+    "Explicit acceptance of displayed recommendations (including `defaults`) is an answer",
+    "Free-form continuation alone is not an answer",
+    "Revisit dependent choices when their predecessor is resolved",
+    "Record the accepted outcome before dependent edits",
+    "an empty question list alone does not prove readiness"
   ]
-  step5_requirements = [
-    "automatically apply only source-backed technical defaults",
-    "record topic, value, source, and rationale",
-    "new material product choices require a concrete question and explicit answer before dependent work",
-    "missing plumbing, convention, reversibility, recommendation, or Plan approval alone does not establish intent",
-    "explicit acceptance of a clearly presented choice is an answer",
-    "ask other admissible unresolved questions by topic",
-    "there is no numeric question cap"
+  default_requirements = [
+    "Preserve authoritative behavior within its evidenced context",
+    "Apply only source-backed technical defaults automatically",
+    "retaining topic, value, source, and rationale in existing criteria/state",
+    "No question quota or universal questionnaire applies",
+    "never also record them as applied defaults or confirmed criteria"
   ]
   controller_requirements = [
     "before Plan or plan_mode=none dependent work, confirm a sufficient intended outcome and material behavior",
-    "use references/phases.md step 5 for defaults and choice answers",
+    "use the Requirements sufficiency heading in references/phases.md for defaults and choice answers",
     "missing or conflicting controlling authority remains evidence_gap/source_conflict",
     "an empty question list alone is not proof",
     "record the basis in existing criteria/map and task journal or carried state"
@@ -450,26 +432,23 @@ if ruby -ryaml -e '
   plan_approval = "Plan approval alone does not settle an unanswered product choice; an explicit answer that accepts a clearly presented choice resolves it without ritual reconfirmation."
   d_check = "Dependent work requires references/phases.md sufficiency; block guesses and controlling-source gaps/conflicts."
   d2_check = "clarification_status=ready; each implementation-shaping field is explicit, source-backed-defaulted, accepted from displayed recommendations, or resolved; approval alone never resolves choices."
-  d2_fail = "Follow Discover step 5. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
+  d2_fail = "Follow the Requirements sufficiency heading in references/phases.md. Partial answers resolve answered topics only; defaults accepts displayed recommendations."
   b_check = "plan_mode=none: revalidate fresh Discover sufficiency before Build; criteria carry confirmed answers and sourced defaults, not guessed choices or evidence_gap/source_conflict."
-  phase_state = phases[/^\*\*Clarification state rules:\*\*.*?(?=^\*\*Rules:\*\*)/m]
-  generated_state = generated[/^\*\*Clarification state rules:\*\*.*?(?=^\*\*Rules:\*\*)/m]
+  phase_state = phases[/^### State and conditional discovery.*?(?=^## Phase: Decompose)/m]
+  generated_state = generated[/^### State and conditional discovery.*/m]
   transition_rules = [
-    ["ready only if no unresolved material topics remain", 2],
-    ["otherwise retain remaining topics and set clarification status: needs_clarification", 2],
-    ["clear only answered topics", 2],
-    ["one or more open question ids", 1]
+    "preserve clarification status, unresolved topics, provisional recommendations, and actual technical defaults",
+    "unresolved material topics mean `needs_clarification` and prevent Decompose/Plan/Build",
+    "Once all are resolved, set `ready` and record the request/source/default basis"
   ]
-  tick = 96.chr
-  phase_source = phases.delete(tick).downcase.gsub(/\s+/, " ")
-  generated_source = generated.delete(tick).downcase.gsub(/\s+/, " ")
-  transitions_match = transition_rules.all? do |rule, count|
-    phase_source.scan(rule).length == count && generated_source.scan(rule).length == count
+  transitions_match = transition_rules.all? do |rule|
+    normalized.call(phase_state.to_s).include?(normalized.call(rule)) &&
+      normalized.call(generated_state.to_s).include?(normalized.call(rule))
   end
   valid = root_requirements.all? { |term| normalized.call(skill).include?(normalized.call(term)) } &&
     discover && generated_discover && discover_requirements.all? { |term| normalized.call(discover).include?(normalized.call(term)) } &&
     normalized.call(generated_discover) == normalized.call(discover) &&
-    step5 && step5_requirements.all? { |term| normalized.call(step5).include?(normalized.call(term)) } &&
+    default_rules && default_requirements.all? { |term| normalized.call(default_rules).include?(normalized.call(term)) } &&
     controller_requirements.all? { |term| normalized.call(controller).include?(normalized.call(term)) } &&
     controller_state_requirements.all? { |term| normalized.call(controller).include?(normalized.call(term)) } &&
     normalized.call(assumption_line.to_s.strip) == normalized.call(expected_assumption) &&
@@ -481,7 +460,7 @@ if ruby -ryaml -e '
     build_check && build_check.fetch("condition") == "execution_intent != prepare_only and plan_mode == none" &&
     build_check.fetch("check") == b_check &&
     build_check.fetch("on_fail") == "Stop Build; return to Discover for explicit answers or controlling-source resolution." &&
-    phase_state && generated_state && phase_state == generated_state && transitions_match
+    phase_state && generated_state && normalized.call(phase_state) == normalized.call(generated_state) && transitions_match
   exit(valid ? 0 : 1)
 ' "$workflow_dir/SKILL.md" "$phases" "$discover_view" "$workflow_dir/references/workflow-controller.md" "$workflow_dir/references/plan-template.md" "$phase_gates"; then
     pass

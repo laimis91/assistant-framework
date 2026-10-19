@@ -149,7 +149,7 @@ def authoring_freshness_route_is_conditional_and_source_scoped():
     assert any(item["path"] == "contracts/output.yaml" and "upstream_guidance_assessment" in item["names"] for item in completion)
     root_text = (skill_root / "SKILL.md").read_text(encoding="utf-8").lower()
     assert "authoring_freshness" in root_text and "new/material authoring" in root_text
-    assert "known relevant change" in root_text and "refresh asks for missing scope" in root_text
+    assert "known relevant source/runtime change" in root_text and "ask for missing refresh scope" in root_text
 
 check("authoring freshness route is conditional, source-scoped, and keeps explicit refresh clarification", authoring_freshness_route_is_conditional_and_source_scoped)
 

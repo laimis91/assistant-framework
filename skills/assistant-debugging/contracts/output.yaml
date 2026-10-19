@@ -1,3 +1,8 @@
+# Applicability: structured diagnosis/fix results, persisted continuations,
+# and selected handoffs. Human diagnosis may summarize evidence without empty
+# report slots. Fix authorization, reproduction, verification, and active TDD
+# prerequisites apply regardless of presentation.
+
 schema_version: "2.0"
 contract: output
 skill: assistant-debugging
@@ -77,8 +82,8 @@ artifacts:
     type: object[]
     required: true
     description: "Ranked possible causes considered during diagnosis"
-    validation: "At least three hypotheses unless fewer_hypotheses_reason is populated; each includes evidence and diagnostic result"
-    on_fail: "Add missing plausible hypotheses or explain why the evidence supports fewer than three"
+    validation: "List evidence-grounded plausible causes with diagnostic results; there is no minimum hypothesis count"
+    on_fail: "Investigate plausible causes and retain evidence without inventing hypotheses for a quota"
     object_fields:
       - name: rank
         type: int
@@ -108,11 +113,11 @@ artifacts:
 
   - name: fewer_hypotheses_reason
     type: string
-    required: conditional
-    condition: "when fewer than three hypotheses are listed"
-    description: "Why fewer than three hypotheses are justified"
-    on_missing: fail
-    validation: "Must cite constraining evidence, not convenience"
+    required: false
+    description: "Optional legacy explanation retained for compatibility; no hypothesis quota applies"
+    on_missing: skip
+    default: ""
+    validation: "When supplied, cites constraining evidence rather than convenience"
 
   - name: root_cause
     type: string

@@ -109,7 +109,6 @@ validate_contract_index() {
     local index_file="$1"
     local skill_name="$2"
     local skill_dir
-    local tier
     local expected_contracts
     local event
     local field1 field2 field3 field4 field5 field6 field7 field8
@@ -126,13 +125,12 @@ validate_contract_index() {
     local -a selector_rows=()
 
     skill_dir="$(dirname -- "$(dirname -- "$index_file")")"
-    tier="$(infer_contract_tier "$skill_dir/SKILL.md")"
-    expected_contracts="contracts/input.yaml contracts/output.yaml"
-    if [[ "$tier" == "Analysis" ]]; then
-        expected_contracts="$expected_contracts contracts/phase-gates.yaml"
-    elif [[ "$tier" == "Process" ]]; then
-        expected_contracts="$expected_contracts contracts/phase-gates.yaml contracts/handoffs.yaml"
-    fi
+    expected_contracts="$(
+        {
+            skill_contract_references "$skill_dir/SKILL.md"
+            find "$skill_dir/contracts" -maxdepth 1 -type f -name '*.yaml' ! -name index.yaml -exec basename {} \; | sed 's|^|contracts/|'
+        } | sort -u | awk '$0 != "contracts/index.yaml" { printf "%s ", $0 }'
+    )"
 
     while IFS='|' read -r event field1 field2 field3 field4 field5 field6 field7 field8; do
         [[ -n "$event" ]] || continue
@@ -198,7 +196,7 @@ validate_contract_index() {
                     emit("CONTRACT_INDEX_AUTHORITATIVE_DUPLICATE", "authoritative_contracts contains duplicate path \047" current_authoritative_path "\047")
                 }
                 if (!(current_authoritative_path in required)) {
-                    emit("CONTRACT_INDEX_AUTHORITATIVE_EXTRA", "authoritative path \047" current_authoritative_path "\047 is not required for the inferred skill tier")
+                    emit("CONTRACT_INDEX_AUTHORITATIVE_EXTRA", "authoritative path \047" current_authoritative_path "\047 must name a supplied or explicitly referenced contract")
                 }
             }
             if (current_authoritative_contract == "") {

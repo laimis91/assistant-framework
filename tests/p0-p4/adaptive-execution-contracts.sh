@@ -88,8 +88,8 @@ else
 fi
 
 test_start "TDD supports one bounded owner without weakening RED"
-if p0p4_contains_text "$tdd/SKILL.md" "one bounded executor owns RED, production, GREEN, and REFACTOR verification" \
-    && p0p4_contains_text "$tdd/SKILL.md" "production starts only after valid RED" \
+if p0p4_contains_text "$tdd/SKILL.md" "one owner authors tests, observes RED, implements, and verifies GREEN and REFACTOR" \
+    && p0p4_contains_text "$tdd/SKILL.md" "observe the intended missing-behavior failure before production edits" \
     && p0p4_contains_text "$tdd/contracts/input.yaml" "enum_values: [bounded_executor, separated_workers]"; then
     pass
 else
@@ -131,8 +131,18 @@ else
 fi
 
 test_start "entry loading defers exact field names to the canonical selector"
-if grep -Eq '^- `entry`: load (the exact )?entry fields declared by `contracts/index\.yaml` from `contracts/input\.yaml`;' "$workflow/SKILL.md" \
-    && ! grep -Fq 'select `task_description`, `task_type`, `scope_hint`' "$workflow/SKILL.md"; then
+if ruby -ryaml - "$workflow" <<'RUBY'
+root = ARGV.fetch(0)
+source = File.read(File.join(root, "SKILL.md")).gsub(/\s+/, " ")
+index = YAML.load_file(File.join(root, "contracts/index.yaml"))
+entry = index.fetch("load_sets").fetch("entry").fetch("selectors").find { |item| item["id"] == "workflow-entry-fields" }
+valid = source.include?("load `contracts/index.yaml` and the relevant entry, current-phase, selected-handoff, packet-admission, and completion sets") &&
+  entry && entry["path"] == "contracts/input.yaml" && entry["section"] == "fields" && entry["key"] == "name" &&
+  !entry.fetch("names").empty? && entry.fetch("names").uniq == entry.fetch("names") &&
+  !source.include?("select `task_description`, `task_type`, `scope_hint`")
+exit(valid ? 0 : 1)
+RUBY
+then
     pass
 else
     fail "always-loaded workflow root duplicates and drifts from the entry selector"

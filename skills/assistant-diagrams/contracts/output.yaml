@@ -1,3 +1,5 @@
+# Applies to integrated calls and explicitly requested supported structured output.
+# Ordinary conversation follows SKILL.md without this serialized envelope.
 # contract header
 schema_version: "3.0"
 contract: output

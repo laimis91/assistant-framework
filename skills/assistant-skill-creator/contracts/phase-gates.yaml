@@ -19,7 +19,7 @@ gates:
         on_fail: "Infer from the existing target or ask for the missing outcome"
       - id: SC3
         check: "skill_category follows Process-first inference"
-        on_fail: "Infer the category from the target purpose or ask only when contract tier changes"
+        on_fail: "Infer the work category from the target purpose; do not infer contract file quotas"
       - id: SC4
         check: "Authoring activation evidence contains two normalized-distinct positives and one normalized-disjoint nearby negative"
         on_fail: "Inspect existing description and activation evals, derive adequate examples, and ask only for remaining material gaps"
@@ -45,7 +45,7 @@ gates:
         check: "Activation examples satisfy the author's normalized positive and nearby negative requirement before DESIGN completion"
         on_fail: "Derive adequate existing examples, then ask only for residual activation gaps"
       - id: SD1
-        check: "Every input field declares a type"
+        check: "Every field in a supplied input contract declares a type"
         on_fail: "Add a semantic type or a justified primitive boundary"
       - id: SD2
         check: "Every required input field has an on_missing action"
@@ -54,12 +54,12 @@ gates:
         check: "Every required output artifact has an on_fail action"
         on_fail: "Add an actionable recovery action to each required artifact"
       - id: SD4
-        check: "Analysis and Process targets have gates for each phase"
-        condition: "skill_category is process or analysis"
+        check: "Structured gates protect the transitions that their actual consumer needs"
+        condition: "a transition consumer or explicit user request requires a gate schema"
         on_fail: "Add only the binary gates needed for the target workflow"
       - id: SD5
-        check: "Process targets have matching typed handoffs"
-        condition: "skill_category is process"
+        check: "Delegated consumers have matching typed handoffs where required"
+        condition: "a delegated consumer or explicit user request requires a handoff schema"
         on_fail: "Define matching producer and consumer fields for each necessary handoff"
       - id: SD6
         check: "The user has reviewed new or materially changed contract design before BUILD"
@@ -99,12 +99,12 @@ gates:
         check: "The target contracts contain only artifacts needed by the requested outcome"
         on_fail: "Remove fabricated or unnecessary contract artifacts"
       - id: SB3
-        check: "Analysis and Process targets include phase gates"
-        condition: "skill_category is process or analysis"
+        check: "Required transition schemas are present"
+        condition: "a transition consumer or explicit user request requires a gate schema"
         on_fail: "Create the required phase-gates contract"
       - id: SB4
-        check: "Process targets include matching handoffs"
-        condition: "skill_category is process"
+        check: "Required delegated schemas have matching context and return fields"
+        condition: "a delegated consumer or explicit user request requires a handoff schema"
         on_fail: "Create necessary typed handoffs or correct the category"
 
   - phase: VALIDATE
@@ -113,7 +113,7 @@ gates:
     condition: "operation in [create, update]"
     exit_assertions:
       - id: SV1
-        check: "All 15 applicable contract design guide rules pass"
+        check: "Applicable design rules pass for the changed boundary without category-driven file quotas"
         on_fail: "Correct the applicable rule failures and validate again"
       - id: SV2
         check: "Target metadata respects current name, description, compatibility, and dependency behavior"

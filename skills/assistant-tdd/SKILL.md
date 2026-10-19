@@ -5,101 +5,61 @@ description: "Use for tests-first TDD requests, project TDD rules, or workflow-s
 
 # Test-Driven Development
 
-## Goal
-
-For an active TDD decision, protect each selected behavior with meaningful RED,
-minimal GREEN, and behavior-neutral REFACTOR evidence before production code is
-trusted. TDD is independent of test scope and does not activate by default.
-
-## Success Criteria
-
-- Each behavior starts with a test assertion that fails for the intended reason; extend an existing test when that is the smallest useful change.
-- Production code is limited to the smallest change that makes that test pass.
-- The target and relevant regression checks pass before the next cycle; run binding project suites when required.
-- RED/GREEN/REFACTOR evidence is recorded in the task journal or output.
-- When a workflow Architecture Decision Pack carries semantic type, primitive-boundary, public compatibility, or quality-scenario obligations, tests prove those obligations rather than merely compiling wrappers.
-
-## Constraints
-
-- Never treat syntax, import, environment, or flaky failures as valid RED.
-- Do not write production code before RED evidence exists.
-- Ask every material question when behavior or acceptable test scope changes the test; group questions by topic with why, risk if guessed, and a safe default where available rather than enforcing a numeric quota.
-
-## Progressive Contract Loading
-
-Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`,
-`contracts/phase-gates.yaml`, and `contracts/handoffs.yaml`.
-
-Read `contracts/index.yaml` first and load only the active enforcement boundary:
-
-- `entry` for activation, behaviors, debugging evidence, framework, and exceptions;
-- `current_phase` for RED, GREEN, or REFACTOR; and
-- `completion` for the returned cycle artifact.
-
-The handoffs contract remains canonical but empty because `assistant-workflow`
-owns cross-role dispatch. Missing or invalid selectors fall back to the full
-named canonical contract; do not load every contract at entry.
-
-## Ownership
-
-assistant-tdd owns RED-GREEN-REFACTOR correctness. Generic workflow coordinates
-task packets and role dispatch, but specialist gates are authoritative.
-
-When workflow delegates, ownership follows `execution_lane`; preserve carried
-decision and phase boundary:
-
-- Run RED only for selected IDs intersecting `tdd_choice.applicable_check_ids`;
-  split active workflow packets until one ID intersects, and preserve the
-  decision unchanged.
-
-- `verification_selection` uses unchanged `selected_technique` and current ID
-  intersection; preserve its source.
-
-- In `bounded_executor`, one bounded executor owns RED, production, GREEN, and REFACTOR verification; production starts only after valid RED.
-- Separated_workers: SAME writer authors tests (`test_authoring`, no incoming RED), implements after current RED (`production`), and refactors after current GREEN (`refactor`). Builder/Tester only executes RED/GREEN/REFACTOR. Stage-only DONE cannot complete Build or Review.
-
-Reused checks force no new tests/stages. Changed authorizing inputs require fresh RED; preserve history.
-
-Required RED evidence before production implementation:
-
-- Test file and test name
-- For authorizing RED, the sole applicable selected CheckSpec ID, exact argv/cwd,
-  and matching oracle; standalone/no-decision TDD may omit the ID.
-- Failure summary
-- Why the failure proves the intended missing behaviour
-
-Keep actual RED outcomes/counts failed. Only matching authorizing RED completes
-`pre_production_red` with aggregate `partial` and pending GREEN; it is not final
-Build evidence. Run `final_verification` after Code Writer before Review.
-
-For a carried Architecture Decision Pack, test semantic type, primitive-boundary, public-compatibility, quality-scenario, and applicable design-pressure obligations (control/early exit, ownership/disposal, resources, extension registration, representative path). Do not invent Packs or benchmarks. Quality claims remain unknown until workload, budget, measurement, and failure condition are testable.
-
-If TDD is active and RED evidence is missing, the selected production owner
-must return `NEEDS_CONTEXT` and make no production changes.
+Use TDD only when requested, required by project policy, or activated for selected
+checks by the carried verification decision. Scope, technique, and TDD are
+independent; inactive TDD never needs a fabricated RED.
 
 ## Cycle
 
-1. **RED** — writer adds or extends one behavior assertion; the verification owner runs it for the right failure. If it passes unexpectedly, inspect existing behavior and test validity; use current regression/characterization evidence instead of fabricating RED.
-2. **GREEN** — write the simplest passing code, rerun the target and relevant
-   regressions, plus any binding suite. Repair regressions before continuing.
-3. **REFACTOR** — remove duplication or improve names without new behavior; keep
-   tests green after each change.
-4. Repeat for the next behavior.
+1. **RED.** The writer adds or extends a meaningful behavior assertion. Run it
+   and observe the intended missing-behavior failure before production edits.
+   Syntax, imports, environment, and flaky failures do not authorize production.
+   If it passes, inspect existing behavior and the oracle; do not remove working
+   code or invent failure evidence.
+2. **GREEN.** Make the smallest production change that passes. Verify the target,
+   selected relevant regressions, and applicable binding checks. Repair failures
+   before moving on; do not infer an unselected full suite.
+3. **REFACTOR.** After current GREEN, improve names or remove duplication only
+   when useful; `none needed` is valid. Record actual changes and run a distinct
+   REFACTOR verification, even when no refactor was needed.
 
-For unknown-cause bugs, use `assistant-debugging` first. Start TDD only after
-reproduction/root-cause evidence can define a meaningful regression test.
+Keep actual test identity, commands/argv, cwd, observed outcomes, and why RED
+failed for the right reason. Partial cycles remain partial; an exception needs
+its recorded approval/reason and cannot be called TDD completion. Reused checks
+need no fabricated test edits.
 
-Allowed exceptions require recorded approval/reason when TDD is active:
-throwaway spikes, generated code, docs-only work, behavior-free config, and
-layout-only styling. Do not claim TDD completion for an exception.
+## Workflow ownership
 
-## Output
+For workflow/producer boundaries, load `contracts/index.yaml`: `entry`, active
+`current_phase`, and `completion` preserve the existing canonical cycle log and
+gates. Missing/invalid selectors load the full named file. Workflow owns dispatch.
+Load workflow's `references/build-worker-protocol.md` only when that execution
+path is selected.
 
-Return status, cycle log with commands/outcomes, test and production files,
-targeted/regression verification, approved exceptions, and blockers.
+- `bounded_executor`: one owner authors tests, observes RED, implements, and
+  verifies GREEN and REFACTOR.
+- `separated_workers`: the SAME selected writer authors tests (`test_authoring`),
+  implements after current RED (`production`), and refactors after current GREEN
+  (`refactor`). Builder/Tester executes checks only. Test-authoring DONE is
+  stage-only and cannot complete Build or permit Review.
 
-## Stop Rules
+Preserve the unchanged decision, task-wide `tdd_mode`, and selected IDs. Workflow
+activation is their intersection with `tdd_choice.applicable_check_ids`; split
+active packets until exactly one ID intersects. Authorizing RED must match that
+CheckSpec's exact ID, test file/name, argv/cwd, and meaningful-failure oracle.
+Changed authorizing inputs require fresh RED without erasing history. Standalone
+TDD without a decision invents no CheckSpec ID.
 
-- Stop before production edits when active TDD requires RED and its evidence is absent or invalid.
-- Stop and repair the test when RED passes or fails for the wrong reason.
-- Stop and repair regressions before the next behavior.
+For a carried Architecture Decision Pack, test its semantic conversions,
+validation, compatibility, design-pressure behavior, and stated quality scenarios.
+Do not invent a Pack, benchmark, or quality claim. Unknown-cause bugs go through
+assistant-debugging before selecting the regression oracle.
+
+## Result and stop rules
+
+Return the cycle evidence, changed test/production files, relevant verification,
+exceptions, and blockers; preserve the canonical log for actual consumers.
+Missing or invalid required RED blocks production (`NEEDS_CONTEXT` for delegated
+writers). Wrong-reason RED requires a test/environment repair; failed GREEN or
+REFACTOR blocks the next behavior. Ask only about unresolved material behavior
+or oracle choices, with no numeric question quota.

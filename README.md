@@ -16,7 +16,7 @@ A Personal AI Assistant framework for developers. 15 first-class `assistant-*` s
 10. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
 11. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
 12. **Review Automation** — Evidence-bounded review/fix/re-review with calibrated scores and finite rounds
-13. **Skill Creation** — Scaffolds V1 skills with contracts, phase gates, and handoffs
+13. **Skill Creation** — Creates focused instructions, with schemas when a real consumer needs them
 14. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
 15. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
 
@@ -124,7 +124,7 @@ Core development pipeline: idea-to-action decomposition, discover, proportional 
 | Pattern | Use | Combine with |
 |---|---|---|
 | Linear | One focused change with dependent steps; scale planning and review to risk. | Goal-driven checks and fresh review; a low-risk local change may use the direct lightweight path. |
-| Skill-driven | A recurring task has a matching installed skill and contract. | Any other pattern; the skill supplies the method. |
+| Skill-driven | A recurring task has a matching installed skill. | Any other pattern; the skill supplies the method. |
 | Parallel | Independent work can progress together. Source-changing packets remain sequential in a shared or unknown workspace; overlap requires runtime-proven isolated workspaces. | Goal-driven integration: dependents wait for VERIFIED prerequisites, then full-scope validation precedes fresh review; due integration checks remain mandatory for one or multiple canonical packets. |
 | Goal-driven | Acceptance checks must remain the completion condition through repair. | Linear, skill-driven, or parallel execution; bounded repair escalates instead of claiming false completion. |
 
@@ -218,7 +218,7 @@ Loop readiness is conditional. Ordinary day-to-day development, such as taking a
 Triggers on: build, implement, fix, refactor, plan, create, idea
 
 ### assistant-clarify
-Clarification workflow for ambiguous, fragmented, or multi-intent prompts. Restates the likely goal, surfaces constraints, asks targeted questions, and produces a structured execution brief.
+Resolves ambiguous or multi-intent requests using available context and material questions. Carries answers forward and shows a structured brief when useful.
 
 Triggers on: messy prompt, unclear prompt, figure out what I mean, help me structure this
 
@@ -235,12 +235,12 @@ Triggers on: debug, root cause, investigate failure, flaky test, failing test, p
 ### assistant-thinking
 Six structured reasoning tools: clarify, perspectives, stress-test, deep-think, hypothesize, creative.
 
-Triggers on: think about, clarify, perspectives, stress test, brainstorm, debate
+Triggers on: architecture decisions, complex trade-offs, stress tests, debate, first principles, hypotheses
 
 ### assistant-research
-Tiered research (quick/standard/extensive/deep), five-lens decision briefing with five independent frozen lens handoffs and separate peer review, deep investigation, URL verification.
+Source-backed research with verified links, claim-specific confidence, and explicit conflicts and gaps. Selected five-lens decision briefings retain five independent lens handoffs and separate peer review.
 
-Triggers on: research, investigate, look into, find out, what is
+Triggers on: research, topic investigation, current evidence, source-backed comparisons
 
 ### assistant-security
 STRIDE threat model, OWASP code review, CVE dependency audit, attack surface mapping.
@@ -253,22 +253,25 @@ Evidence-bounded code review: audits use one frozen multi-pass batch with two in
 Triggers on: review, fresh review, code review, review this, check the code
 
 ### assistant-docs
-Documentation generation and maintenance. Six modes: API docs, architecture overview, README, changelog, migration guide, code explainer. Detects stale docs and offers updates.
+Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope.
 
 Triggers on: document, write docs, update readme, changelog, API docs, architecture doc
 
 ### assistant-skill-creator
-Creates or updates V1 skills with input/output contracts, phase gates, and handoff definitions following the framework contract guide.
+Creates, updates, or assesses concise skills. Adds contracts when an actual consumer, persisted state, validator, or user-requested schema needs a defined format.
 
 Triggers on: create skill, new skill, add contracts, skill contracts, scaffold skill
 
 ### assistant-onboard
-Systematic codebase learning for new projects. Six-phase protocol: surface scan, architecture map, pattern recognition, knowledge gaps, record project context, report.
+Maps a codebase to the requested depth: entry points, responsibilities, commands, conventions, relevant risks, and coverage gaps. Persists orientation only when authorized.
 
 Triggers on: learn this codebase, onboard, get familiar with, map this project
 
 ### assistant-ideate
-Mode-aware ideation: light mode returns 3-5 quickly ranked options for improvement scans; deep mode runs the full 8-15 idea, weighted-score, refine, and decide pipeline. Codebase-aware ideation scans only the local context needed to shape useful options.
+Light ideation compares useful options quickly; deep ideation expands and
+refines alternatives when the decision needs it. The task sets the depth and
+criteria. Codebase-aware ideation reads only the local context needed to shape
+useful options.
 
 Triggers on: brainstorm, feature ideas, what if, how could we, alternatives, or what-else improvement scans
 
@@ -278,12 +281,12 @@ Visual documentation from code analysis. Seven diagram types: architecture, sequ
 Triggers on: diagram, draw, visualize, show me the flow, architecture diagram
 
 ### assistant-telos
-Purpose context framework based on [Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos). Guides you through building a purpose chain (problems → mission → goals → challenges → strategies → projects) stored at `~/.claude/telos.md`. Loaded at every session start so agents can prioritize work aligned with what actually matters to you.
+Purpose context framework based on [Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos). Creates or updates a purpose chain (problems → mission → goals → challenges → strategies → projects) to the requested depth. Uses a user-approved location when persistence is requested; session loading depends on the user's configured setup.
 
 Triggers on: telos, my purpose, why am I doing this, what matters most, my mission, update telos
 
 ### assistant-verification
-Selects proportional verification scope, methods, and TDD applicability, then assesses observed evidence and limitations. It guides verification without running checks; canonical contracts define its policy and typed outputs, while method references load on demand.
+Selects proportional verification scope, methods, and TDD applicability, then assesses observed evidence and limitations. It guides verification without running checks. Workflow consumers retain canonical typed decisions; human-only assessments can use concise prose.
 
 Triggers on: verify a change, choose tests, test strategy, assess evidence, are these checks enough
 
@@ -508,10 +511,10 @@ skills/
     explainer.md                   <- Code explanation for learning
 
   assistant-skill-creator/
-    SKILL.md                       <- V1 skill scaffolding with contracts and phase gates
+    SKILL.md                       <- Instruction-first skill authoring and assessment
 
   assistant-onboard/
-    SKILL.md                       <- Six-phase onboarding protocol
+    SKILL.md                       <- Scoped codebase orientation
 
   assistant-ideate/
     SKILL.md                       <- Diverge-converge-refine pipeline
@@ -549,7 +552,7 @@ tests/
 ### For ideas (vague)
 ```
 You: "I want to add caching to our API"
-Workflow skill: Decomposes into 6-8 testable criteria, asks for confirmation, then triages
+Workflow skill: Inspects existing behavior, resolves material choices, and plans the agreed outcome
 ```
 
 ### For tasks (concrete)
@@ -597,7 +600,7 @@ Onboard skill: Maps structure, identifies patterns, and reports project orientat
 ### For brainstorming
 ```
 You: "What are some ideas for improving the search experience?"
-Ideate skill: Understands context, generates 10+ ideas, scores them, refines top 3
+Ideate skill: Uses the constraints to compare useful alternatives; expands the search when requested
 ```
 
 ### For diagrams
@@ -618,8 +621,12 @@ Telos skill: Checks active work against your purpose chain
 
 Each supported agent discovers installed skills from required native `name` and
 non-empty `description` fields. Body instructions apply after activation.
-Framework contracts, evals, project guidance, and review provide the workflow
-discipline; there is no separate runtime router or lifecycle enforcement layer.
+Skill instructions, relevant references, evaluations, project guidance, and
+review provide the workflow discipline; there is no separate runtime router or
+lifecycle enforcement layer. Ordinary skills start with concise instructions.
+Contracts remain where persisted state, another agent, an explicit structured
+response, or an executable validator consumes a defined format. A YAML rule
+read by a model has the same instruction-following limits as prose.
 
 Workflow metrics are optional, non-blocking observability.
 
@@ -638,11 +645,27 @@ dependencies; omit it when none exist. Native discovery uses required `name`
 and `description`; optional repository `requires` is not an activation signal.
 Agents apply body instructions only after activation.
 Top-level `effort` and `triggers` are retired and rejected by validation. Keep
-representative activation examples in contracts and positive/negative evals,
+representative activation examples in relevant references and positive/negative evals,
 never in SKILL.md header metadata.
 
 No runtime script changes are needed when adding a skill: add required discovery
-fields, conditional `requires` when applicable, contracts, and evals, then reinstall.
+fields, conditional `requires` when applicable, and focused evals, then reinstall.
+Add contract files only for a named consumer or supported interface; validate
+all supplied or explicitly referenced contracts. See the
+[skill design guide](docs/skill-contract-design-guide.md).
+
+### Trying the simplified skills
+
+Test the skills on normal work and report the skill, source revision, request,
+expected behavior, and actual behavior. Distinguish an inconvenient response
+from a correctness, authority, or compatibility regression. Structural checks
+and shorter instruction files do not establish better model results.
+
+Keep the previous source revision before updating. Reverting the change and
+reinstalling that revision restores framework files; it does not undo project
+work produced during testing. Installation mirrors managed skill directories,
+so preserve any local edits there before updating and retain custom agent
+configuration when reinstalling.
 
 ## Design principles
 

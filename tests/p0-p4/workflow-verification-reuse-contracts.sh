@@ -21,7 +21,7 @@ normalized_contains() { tr -s '[:space:]' ' ' <"$1" | grep -Fq "$2"; }
 test_start "current verification reuse keeps conservative invalidation and review boundaries"
 missing=()
 for term in "exact argv and cwd" "complete passing result/log" "source/test/config/dependency" "toolchain and relevant non-secret environment" "covered acceptance obligations" "Unknown identity, freshness, or coverage requires rerun" "mutable external state" "user explicitly requests a fresh run" "source changes after a fix"; do normalized_contains "$worker_protocol" "$term" || missing+=("protocol:$term"); done
-for term in "references/build-worker-protocol.md" "reuse only full matching identity/coverage evidence" "new integration coverage" "final current validation" "independent code review" "final review snapshot"; do normalized_contains "$phases" "$term" || missing+=("phases:$term"); done
+for term in "references/build-worker-protocol.md" "reuse only full matching identity/coverage evidence" "new integration coverage" "run the selected checks and binding project checks over the completed scope before fresh Review" "independent code review" "final review snapshot"; do normalized_contains "$phases" "$term" || missing+=("phases:$term"); done
 for term in \
   "Each result carries the exact selected_check_ids and binding_obligation_refs it actually observes" \
   "Resolve IDs and exact {kind,value,source_ref} tuples against the unchanged decision" \
@@ -80,7 +80,8 @@ if ! ruby -ryaml -e '
   debug_handoffs = load_yaml.call("skills/assistant-debugging/contracts/handoffs.yaml")
   debug_gates = load_yaml.call("skills/assistant-debugging/contracts/phase-gates.yaml")
   tdd_output = load_yaml.call("skills/assistant-tdd/contracts/output.yaml")
-  debug_skill = File.read(File.join(root, "skills/assistant-debugging/SKILL.md"))
+  debug_skill = File.read(File.join(root, "skills/assistant-debugging/SKILL.md")).gsub(/\s+/, " ")
+  tdd_skill = File.read(File.join(root, "skills/assistant-tdd/SKILL.md")).gsub(/\s+/, " ")
   review_gates = load_yaml.call("skills/assistant-review/contracts/phase-gates.yaml")
   review_loop = File.read(File.join(root, "skills/assistant-review/references/review-loop.md"))
   field = ->(fields, name) { fields.find { |entry| entry["name"] == name } || raise("missing #{name}") }
@@ -224,8 +225,10 @@ if ! ruby -ryaml -e '
     result_gate.fetch("check").include?("unchanged decision") && result_gate.fetch("check").include?("selected/applicable IDs") &&
     result_gate.fetch("on_fail").include?("preserve actual partial cycle_log for blocked/partial") &&
     result_gate.fetch("on_fail").include?("absent or incomplete cycle evidence blocks fixed") &&
-    debug_skill.include?("Only `tdd_applies=false`") && debug_skill.include?("permits the generic fix path") &&
-    debug_skill.include?("When inactive, follow selected") && debug_skill.include?("without fabricating RED")
+    debug_skill.include?("Active TDD routes through assistant-tdd") &&
+    debug_skill.include?("execution lane and meaningful authorizing RED") &&
+    debug_skill.include?("the generic fixer is only for inactive TDD") &&
+    tdd_skill.include?("inactive TDD never needs a fabricated RED")
   valid = invocation_conditions_ok && blocked_selection_ok && verify_order_ok && schema_ok && assessor_states_ok && completion_ok && assessor_started_outcome_ok && review_ref_ok && debug_gaps_ok && verify_gaps_ok && aggregate_ok && review_route_ok && debug_route_ok && gate.fetch("condition") == "status == fixed" && gate.fetch("check").include?("cannot establish fixed") &&
     results.fetch("object_fields").find { |f| f["name"] == "result" }.fetch("enum_values") == allowed &&
     results.fetch("validation").include?("Partial and unavailable are explicit evidence gaps") &&

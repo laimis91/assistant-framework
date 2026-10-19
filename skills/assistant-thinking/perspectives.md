@@ -10,7 +10,7 @@ Get the smallest useful set of independent viewpoints on a genuinely contested d
 ## Process
 
 ### Setup
-Choose only the perspectives that can change the decision (normally 2-4). Defaults:
+Choose only the perspectives that can change the decision for this question. Possible roles:
 
 | Role | Focus |
 |---|---|
@@ -24,17 +24,15 @@ Swap roles as needed (e.g., Security Expert, Performance Engineer, Domain Expert
 When a workflow Architecture Decision Pack applies, each selected perspective first checks its source/revision freshness, facts versus assumptions, ownership/lifecycle and dependency boundary, Type Ledger, and quality scenarios. A memory, performance, or extensibility claim is admissible only with workload, budget, measurement method, and failure condition; otherwise record it as an explicit unknown or measurement task.
 
 ### Delegation trigger
-For high-uncertainty or high-stakes debates, use independent perspectives only when applicable instructions allow or require it. Resolve `subagent_policy_state`, `subagent_execution_mode`, `subagent_trigger_scope`, and conditional `policy_blocking_source` before spawning. Do not spawn a council merely because an architecture task exists.
-
-Delegate each role only when `delegated requires subagent_policy_state=delegation_triggered`. Otherwise, `sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source`; record that state and evidence in the synthesis.
+For high-uncertainty or high-stakes debates, follow the [independence and delegation rule](SKILL.md#independence-and-delegation). Do not spawn a council merely because an architecture task exists. Integrated calls and requested structured output use the [canonical contracts](SKILL.md#integrated-and-structured-output).
 
 ### Round 1: Independent positions
 Each perspective gives a concise position grounded in decision facts, assumptions, and the stated quality/type boundary. No interaction yet.
 
-### Round 2: Respond to each other
-Each perspective responds to the others' points. This is where the value is — genuine friction, not just independent opinions.
+### Challenge where useful
+Use another round only when unresolved disagreement could change the decision. Preserve material dissent rather than forcing convergence.
 
-### Round 3: Synthesis
+### Synthesis
 Identify:
 - **Convergence**: What do all/most perspectives agree on?
 - **Tensions**: Where do they genuinely disagree? Why?

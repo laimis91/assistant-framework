@@ -114,6 +114,65 @@ else
     fail "targeted custom skill path did not validate"
 fi
 
+test_start "skill validator accepts instruction-only skills without contract references"
+optional_contract_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-optional-contracts.XXXXXX")"
+p0p4_register_cleanup "$optional_contract_root"
+optional_skill="$optional_contract_root/instruction-only-skill"
+mkdir -p "$optional_skill"
+cat >"$optional_skill/SKILL.md" <<'EOF'
+---
+name: instruction-only-skill
+description: "Rewrite a supplied sentence in plain language."
+---
+
+Rewrite the supplied sentence. Preserve its meaning and return the revised sentence.
+Consult assistant-verification/contracts/output.yaml only for a carried verification result.
+EOF
+if "$skill_validator" --skill "$optional_skill" >/dev/null; then
+    pass
+else
+    fail "validator rejected an instruction-only skill without local contract references"
+fi
+
+test_start "skill validator rejects an explicitly referenced missing local contract"
+printf '\nRead [the result contract](contracts/output.yaml#artifacts).\n' >>"$optional_skill/SKILL.md"
+optional_contract_err="$optional_contract_root/missing.err"
+if "$skill_validator" --skill "$optional_skill" >/dev/null 2>"$optional_contract_err"; then
+    fail "validator accepted an explicitly referenced missing output contract"
+elif grep -Fq "CONTRACT_MISSING" "$optional_contract_err" && grep -Fq "output.yaml" "$optional_contract_err"; then
+    pass
+else
+    fail "missing explicit contract lacked CONTRACT_MISSING diagnostic"
+fi
+
+test_start "skill validator validates supplied contracts even without a root reference"
+p0p4_write_valid_skill_fixture "$optional_contract_root/supplied-contract-skill"
+sed '/## Contracts/,$d' "$optional_contract_root/supplied-contract-skill/SKILL.md" >"$optional_contract_root/skill.tmp"
+mv "$optional_contract_root/skill.tmp" "$optional_contract_root/supplied-contract-skill/SKILL.md"
+printf '\n  - name: mode\n    type: enum\n    required: false\n' >>"$optional_contract_root/supplied-contract-skill/contracts/input.yaml"
+if "$skill_validator" --skill "$optional_contract_root/supplied-contract-skill" >/dev/null 2>"$optional_contract_err"; then
+    fail "validator accepted a malformed supplied contract without a root reference"
+elif grep -Fq "ENUM_VALUES" "$optional_contract_err"; then
+    pass
+else
+    fail "malformed supplied contract lacked ENUM_VALUES diagnostic"
+fi
+
+test_start "skill validator rejects explicitly referenced unsupported yml contracts"
+p0p4_write_valid_skill_fixture "$optional_contract_root/yml-contract-skill"
+yml_contract_skill="$optional_contract_root/yml-contract-skill"
+sed 's|contracts/input.yaml|contracts/input.yml|' "$yml_contract_skill/SKILL.md" >"$optional_contract_root/skill.tmp"
+mv "$optional_contract_root/skill.tmp" "$yml_contract_skill/SKILL.md"
+mv "$yml_contract_skill/contracts/input.yaml" "$yml_contract_skill/contracts/input.yml"
+printf 'fields: [\n' >"$yml_contract_skill/contracts/input.yml"
+if "$skill_validator" --skill "$yml_contract_skill" >/dev/null 2>"$optional_contract_err"; then
+    fail "validator accepted a malformed explicitly referenced input.yml without validation"
+elif grep -Fq "CONTRACT_EXTENSION" "$optional_contract_err" && grep -Fq "input.yml" "$optional_contract_err"; then
+    pass
+else
+    fail "unsupported yml contract lacked an explicit extension diagnostic"
+fi
+
 test_start "skill validator rejects semantically empty, non-string, and unsupported plain descriptions"
 description_scalar_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-description-scalars.XXXXXX")"
 p0p4_register_cleanup "$description_scalar_root"

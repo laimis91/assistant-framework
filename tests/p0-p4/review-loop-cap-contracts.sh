@@ -63,9 +63,8 @@ fi
 test_start "assistant-review contracts and loop use 10-round cap"
 missing_review_cap_terms=()
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::max 10 rounds" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Round 10 is terminal; never start 11." \
     "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::while round <= 10:" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::round 10 is terminal" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::validation: \">= 1 and <= 10\"" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::rounds (1-10)" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::capped at the 10-round review limit" \

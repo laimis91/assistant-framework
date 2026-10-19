@@ -32,7 +32,7 @@
       "expected_behavior": [
         "Defines symptom, expected behavior, and bounded scope before editing.",
         "Runs or identifies the smallest safe reproduction path before patching.",
-        "Lists at least three hypotheses or justifies fewer with evidence.",
+        "Investigates evidence-grounded plausible causes without a numeric hypothesis quota.",
         "Chooses diagnostics based on signal and safety.",
         "Does not patch checkout code before reproduction evidence or blocker is recorded."
       ],
@@ -44,7 +44,7 @@
       ],
       "fail_signals": [
         "Immediately patches likely files without reproduction.",
-        "Lists only one theory without justification.",
+        "Claims a cause without supporting or distinguishing evidence.",
         "Claims root cause from a stack trace alone.",
         "Treats skipped tests as validation."
       ],
@@ -61,7 +61,6 @@
         ],
         "forbidden_substrings": [
           "patched without reproduction",
-          "only one hypothesis",
           "root cause from stack trace alone",
           "skipped tests prove"
         ]
@@ -153,11 +152,7 @@
           {"operator":"nonempty_string","path":["reproduction","reproduced"]},
           {"operator":"array_items_nonempty_fields","path":["hypotheses"],"fields":["cause","supporting_evidence","disconfirming_evidence","diagnostic_check"]},
           {"operator":"equals","path":["hypotheses",0,"rank"],"expected":1},
-          {"operator":"equals","path":["hypotheses",1,"rank"],"expected":2},
-          {"operator":"equals","path":["hypotheses",2,"rank"],"expected":3},
           {"operator":"equals","path":["hypotheses",0,"result"],"expected":"confirmed"},
-          {"operator":"equals","path":["hypotheses",1,"result"],"expected":"refuted"},
-          {"operator":"equals","path":["hypotheses",2,"result"],"expected":"refuted"},
           {"operator":"nonempty_string","path":["root_cause"]},
           {"operator":"equals","path":["confidence"],"expected":"medium"},
           {"operator":"array_items_nonempty_fields","path":["verification"],"fields":["command_or_check","result","evidence"]},

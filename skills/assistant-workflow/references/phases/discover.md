@@ -34,119 +34,91 @@ deviation, dispatch, and verification signals remain explicit when applicable.
 
 Print: `--- PHASE: DISCOVER ---`
 
-**Goal:** Track unknowns. Resolve implementation-shaping ambiguity before dependent planning/coding. `prepare_only` may finish with recorded open decisions, without claiming readiness.
+Resolve the intended outcome and material behavior before dependent planning or
+coding. Read task-relevant repository guidance, source, callers, tests, and
+configuration; compare current behavior with the request. Map files directly
+when possible. Use Code Mapper only for unresolved scope/ownership boundaries,
+and Explorer only for a remaining execution, lifecycle, failure, or coupling
+question. Load `references/context-budget-and-pattern-retrieval.md` when the
+material cannot be faithfully inspected in the current context.
 
-For material that cannot be faithfully inspected in the current working context, load `references/context-budget-and-pattern-retrieval.md` before mapping. Record what stays exact, what is summarized, what is omitted/deferred, and whether the work must be split/delegated instead of stuffed into one context. Create a **Code Mapper** context map (see `references/context-map-template.md`) only when the candidate scope scan, public/ownership boundary, or changed files cannot be resolved directly from local source. Resolve `subagent_policy_state`, `subagent_execution_mode`, and `subagent_trigger_scope` before any requested/required subagent spawn; otherwise create the same compact map directly. The map covers likely modified areas and behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces. If local state artifacts are configured and policy-allowed, persist the map to `{agent_state_dir}/context-map.md`; otherwise carry it in the plan/task packet. Trace deeper execution paths with Explorer only when an unresolved lifecycle, failure, coupling, or behavior question remains after the compact map. Size can signal likely work, but neither role is automatic ceremony.
+Route unclear intent through assistant-clarify. For unknown-cause bugs, complete
+assistant-debugging or retain its concrete blocked/inconclusive result before
+choosing a repair. Recall lessons only when prior decisions or corrections can
+materially affect this task. Check the environment needed for the work; a numeric
+readiness score is not an implementation or completion gate.
 
-When `workflow_state_mode=journal`, create or update
-`{agent_state_dir}/task.md` during Discover when local state artifacts are
-configured and policy-allowed. Journal mode is selected for clarification
-waits, delegated work, cross-session/compaction persistence, explicit durable
-state, strict work, harness work, or required QA. Otherwise keep the same state
-inline before printing clarification questions or any wait. Medium+ size alone
-does not require a task journal. Persist:
-- `Clarification status: ready | needs_clarification`
-- `Clarification defaults applied: true | false`
-- `Clarification confidence: low | medium | high`
-- `Clarification questions asked: N`
-- `Clarification question policy: every admissible material question; no numeric cap or quota`
-- `Clarification admissibility: satisfied | needs_clarification | not_applicable`
-- `Unresolved clarification topics:` as a markdown list
-- `Controller intensity: light | standard | strict`
-- `Architecture design mode: not_applicable | lightweight | required | review_intensive`
-- `Architecture Decision Pack ref: [current ref or N/A with concrete reason]`
-- `Search mode: none | lightweight | candidate_search`
-- `Candidate archive: {agent_state_dir}/candidate-search.md | inline | N/A`
+### Requirements sufficiency
 
-For tasks needing durable state, keep the task journal or equivalent carried-forward state for the full task lifecycle even when Discover resolves without a clarification wait. Size alone does not create a journal requirement.
+Distinguish requested intent, authoritative behavior, source-backed technical
+defaults, proposed product assumptions, and unresolved choices. Inspect relevant
+actor/data boundaries and behavior from initiation through cancellation/reversal,
+including material failure/recovery paths. Missing or conflicting controlling
+authority stays `evidence_gap`/`source_conflict`; do not invent it or reframe it as
+a product preference. Internal fields/permissions do not establish policy for a
+new audience or disclosure boundary.
 
-Workflow state artifacts (`{agent_state_dir}/task.md`, `{agent_state_dir}/context-map.md`, `{agent_state_dir}/session.md`, and `{agent_state_dir}/working-buffer.md`) are framework-owned, ignored state when an agent state directory is configured and policy allows local state files. The orchestrator may create and update them directly. If state files are unavailable, carry the equivalent state in the response/plan packet. This exception never applies to project source, docs, tests, config, or generated app artifacts.
+Preserve authoritative behavior within its evidenced context. Apply only
+source-backed technical defaults automatically, retaining topic, value, source,
+and rationale in existing criteria/state. Ask every remaining material choice
+that cannot be discovered or safely defaulted, grouped concisely with why it
+matters, risk if guessed, and any proposed recommendation. No question quota or
+universal questionnaire applies. Well-specified work needs no ritual question.
+A recommendation, compatibility, reversibility, or Plan approval alone does not
+settle intent. Keep unanswered choices and recommendations provisional; never
+also record them as applied defaults or confirmed criteria.
 
-For execution_intent != prepare_only, Discover does not complete while `Clarification status: needs_clarification`. In prepare_only, unresolved topics and their actual status are retained in `feature_preparation_result.open_decisions`; they do not force a clarification wait or prevent Preparation Completion. Clarification waiting is a Discover substate, not a separate workflow phase, for execution intents that require readiness.
+Partial answers settle only answered choices. Explicit acceptance of displayed
+recommendations (including `defaults`) is an answer, not an automatic technical
+default. Free-form continuation alone is not an answer. Revisit dependent
+choices when their predecessor is resolved. Record the accepted outcome before
+dependent edits; an empty question list alone does not prove readiness.
 
-Route prompt-level ambiguity that matches `assistant-clarify` first; clear
-prompts do not invoke it. Then classify the remaining implementation
-uncertainty. `uncertainty_shape=bounded` is the default: fully specified tasks
-remain bounded, and size alone is not a trigger. Use
-`uncertainty_shape=progressive` only when a not-yet-precise outcome-shaping
-unknown is unlocked by a predecessor; then load
-`references/progressive-discovery.md` before continuing Discover. Precise,
-answerable questions and deterministic safe defaults stay in the existing
-workflow clarification path.
+### State and conditional discovery
 
-For progressive mapping, resolving, route_clear, or blocked state,
-`references/progressive-discovery.md` defines the no-execution boundary. The
-only permitted local state update is the framework-owned journal/equivalent
-carried-state update required to record progressive state; it never authorizes
-project/source mutation or an external write. Do not enter Decompose, Plan, or
-Build and do not run a mutating prerequisite in this substate; use a separate
-approved workflow that returns evidence. After route clearance, return to
-bounded Discover for the normal Requirement Acceptance Map and current gates.
+Use `references/workflow-controller.md` for routing. When persisted state is
+carried, reconcile newest intent and current source before trusting it. Use
+`workflow_state_mode=journal` only for its actual waits, delegated execution,
+continuation/persistence, strict, harness, or QA triggers; size alone is no trigger.
+The existing `references/task-journal-template.md` owns the serialized fields.
+When state files are unavailable or policy disallows them, retain equivalent
+carried state. Framework-owned ignored state never authorizes project mutations.
 
-Print: `>> Dispatching Code Mapper → context map` only when a context map is required and delegated mapping is selected.
-Print: `>> Direct local context map` when a context map is required but mapping remains direct.
-Print: `>> Dispatching Explorer` only when an unresolved execution/lifecycle question remains and delegated analysis is selected.
-Print: `>> Direct execution-path trace` when that question remains but analysis stays direct.
+Before asking/waiting, preserve clarification status, unresolved topics,
+provisional recommendations, and actual technical defaults in that state.
+For execution work, unresolved material topics mean `needs_clarification` and
+prevent Decompose/Plan/Build. Once all are resolved, set `ready` and record the
+request/source/default basis. Keep small clear checks inline without empty
+field inventories. Medium+ or small work with material ambiguity/risk/multiple
+requirements uses `references/requirement-acceptance-map.md`; otherwise compact
+acceptance criteria suffice. Preserve stable IDs only where the map applies.
 
-1. Read repo: README, CLAUDE.md, AGENTS.md, key files. Batch independent file reads/searches when the active tool policy supports parallel calls; use sequential reads otherwise.
-2. Compare current state against request
-**Requirements sufficiency (before planning or dependent work)**
+`uncertainty_shape=bounded` is default. Predecessor-unlocked outcome uncertainty
+or retained progressive markers loads `references/progressive-discovery.md`.
+Its mapping/resolving/route-clear/blocked substates are no-execution boundaries:
+only framework-owned state updates are allowed. Mutating prerequisites use a
+separate approved workflow that returns evidence. After clearance, resume bounded
+Discover; completed task state alone does not archive retained progressive data.
 
-Ready work needs a sufficient intended outcome and material product behavior. Before Plan or plan_mode=none dependent work, inspect task-relevant behavior, affected data/users, dependencies, likely failures, and acceptance implications after relevant request/code/context reads. Classify material points as requested intent, applicable authoritative behavior, source-backed technical defaults, proposed product assumptions, or unresolved choices; use step 5 for defaults and questions. Missing or conflicting controlling authority remains evidence_gap/source_conflict: request it; do not invent or reframe it as a product question. An empty question list alone is not proof. Partial answers resolve only answered choices; record confirmed answers in existing acceptance criteria before dependent edits and repeat for newly exposed choices. Existing-policy and complete tasks need no ritual questions. Keep small checks inline; record basis in existing criteria/Requirement Acceptance Map and task journal or carried state when used; no parallel report or ledger.
+When architecture is triggered, load `references/architecture-decision-pack.md`.
+Retain current facts, material questions, ownership/lifecycle, design pressures,
+Type Ledger/exceptions, quality evidence, compatibility, and invalidators.
+Discover uses `discover_only` with `context_or_journal_ref` only; no future Plan
+or Review refs. Use the existing progressive map for dependent design unknowns.
 
-Before presenting the first question set, trace each new observable behavior from initiation through ongoing use to termination, cancellation, or reversal. Inspect applicable actor/data boundaries and failure/recovery paths. Ask about every currently answerable material choice left unsupported by request or authority; do not stop discovery after finding the most obvious gap. Where a prior answer is needed to identify a later choice, retain that dependency in existing carried state and revisit it before Plan. This is a relevance check, not a universal questionnaire; omit inapplicable dimensions and preserve authoritative behavior and technical defaults.
+For existing-system preparation, every `implement_only`, or carried future
+obligations, use `references/feature-preparation-evidence.md` before dependent
+questions/Plan/Build. Preserve the exact approved result/source binding.
+`prepare_only` may finish with open decisions in `feature_preparation_result`
+and optional readiness context; do not claim readiness or start execution.
+Keep QA/harness inactive and future obligations typed. It proceeds to Preparation
+Completion, not implementation approval. Other execution intents wait for
+remaining material answers before dependent work.
 
-Before treating a material product outcome as settled in progress, Plan, or dependent implementation, check whether the request and applicable authority still leave materially different observable outcomes open. If so, ask only about that remaining material choice; compatibility alone does not select intent. While material choices remain unanswered, the public response contains clarification state, concrete questions and explicitly provisional options or recommendations. Keep each unanswered material choice and its recommendation explicitly provisional in both the response and any task journal or carried state; do not record it as an applied default or confirmed criterion. In each task-state draft, preserve the recommendation as provisional alongside its unresolved status; the same choice cannot also be an applied default or confirmed criterion. For `execution_intent != prepare_only`, do not include dependent implementation steps, file-change or test plans, or a proposed Plan while choices remain. For `prepare_only`, return the preparation result with open decisions and do not claim readiness or start dependent work; optional readiness-plan context leaves those choices unresolved. For other execution intents, request answers or acceptance of specific displayed choices and seek Plan approval only after no material choices remain and confirmed answers are carried into existing criteria. Keep technical alternatives that achieve the accepted outcome automatic, and provisional options or recommendations open during discovery. Use existing inline criteria, the Requirement Acceptance Map, or carried state to distinguish the requested outcome from constraints.
-
-3. **Recall lessons when relevant**: Recall prior lessons only when they can materially affect the current task, such as after a user correction, task recovery, or a request that depends on earlier project decisions. Incorporate high-confidence matches into constraints; otherwise skip memory retrieval.
-   Print: `>> Found [N] relevant lessons from past tasks` only when recall ran and returned useful context.
-4. **Agent readiness check** (medium+ tasks): Quick scan of the project environment. Score 0-5:
-   - Linter config present? (eslint, .editorconfig, analyzers, etc.)
-   - Build scripted/documented? (CI, Makefile, documented `dotnet build` command, etc.)
-   - Test suite exists? (any test project or test files)
-   - `CLAUDE.md` or `AGENTS.md` exists? (agent can orient itself)
-   - Observability in place? (logging, telemetry, health checks)
-   Print: `>> Agent readiness: [N]/5` followed by any gaps found.
-   If score ≤ 2: recommend fixing environment gaps before feature work. The agent isn't broken — the environment is.
-5. Preserve applicable authoritative existing behavior only within the actor, data, and authorization context supported by its sources. Adding a route does not itself change that context; a new audience or disclosure boundary may. Internal renderer fields and permission rules do not establish policy for a new audience or data boundary. Automatically apply only source-backed technical defaults; record topic, value, source, and rationale, and set Clarification defaults applied=true only for those defaults. New material product choices require a concrete question and explicit answer before dependent work: missing plumbing, convention, reversibility, recommendation, or Plan approval alone does not establish intent. Explicit acceptance of a clearly presented choice is an answer. Ask other admissible unresolved questions by topic when material, undiscoverable from code/context, without an evidenced default, and with risk stated if guessed. There is no numeric question cap.
-6. When `architecture_design_mode != not_applicable`, load `references/architecture-decision-pack.md` and create or refresh the typed pack from the context map. Its facts name source evidence; its assumptions and questions remain explicit; it records boundary ownership, Type Ledger, interface evolution, falsifiable quality scenarios, verification, and invalidation. Discover uses discover_only with context_or_journal_ref only and forbids future refs. For predecessor-unlocked design uncertainty, use the existing progressive decision map rather than a second architecture workflow.
-7. For `execution_intent=prepare_only`, restate requirements from available evidence and retain unresolved topics in the Requirement Acceptance Map and `feature_preparation_result.open_decisions`; for other intents, restate requirements after clarification is resolved. For medium+, small work promoted by ambiguity, risk, or multiple material requirements, or small work with architecture_design_mode required/review_intensive, create the Requirement Acceptance Map from `references/requirement-acceptance-map.md`; otherwise use compact `acceptance_criteria`. Assign stable requirement ids only when the durable map applies.
-8. Confirm or revise `Task type`, `Risk tier`, `Controller intensity`, `Plan mode`, `QA evaluation mode`, `Harness capable`, `Architecture design mode`, `Build execution lane`, `Workflow state mode`, `Required gates`, `Required agents`, `subagent_policy_state`, and `subagent_execution_mode` from the saved Triage metadata after reading code/context. Carry forward `qa_evaluation_mode`, `harness_capable`, `build_execution_lane`, and `workflow_state_mode` together; if discovery changes any of them, print `>> Re-triage required` and update the task journal before continuing.
-9. For `task_type: bugfix`, classify `debugging_mode`: if root cause is unknown or the reproduction path is unclear, load and follow `assistant-debugging` before planning a fix. Carry forward its reproduction status, hypotheses, root cause/confidence, and residual risks. If `assistant-debugging` is unavailable or policy-disallowed, do direct hypothesis-driven debugging with the same evidence requirements and record the fallback path.
-
-**Clarification format:**
-```
-Need to know
-1. [Question]?
-   Why needed: [correctness/scope/behavior/security/verification impact]
-   Risk if guessed: [what could break]
-   Safe default: none
-   a) [Option]  b) [Option]  c) [Option]
-   --> Recommendation: b because [reason]
-
-Reply with: "1b 2a" or "defaults" (`defaults` accepts the displayed recommendations).
-```
-
-**Clarification state rules:**
-- For `execution_intent=prepare_only`, retain unresolved topics and provisional recommendations in `feature_preparation_result.open_decisions` and existing map/state. Preserve `needs_clarification` and actual technical defaults. Finish Discover through Preparation Completion without readiness or dependent work; optional readiness context settles no decisions.
-- The following clarification wait rules apply to other execution intents. Create configured, policy-allowed state, or carry it in the response, before asking questions or waiting.
-- There is no question cap or quota. A well-specified task can and should record `Clarification questions asked: 0`; when questions are needed, ask every admissible material decision and group them by topic rather than truncating the set.
-- Before printing questions, keep Status in Discover, set Clarification status: needs_clarification, preserve Clarification defaults applied and recorded entries for source-backed technical defaults only, keep unanswered product recommendations provisional rather than applied defaults or confirmed criteria, set Clarification confidence: low | medium, Clarification questions asked: N, Clarification admissibility: needs_clarification, and list only topics still requiring explicit answers.
-- Print: `>> WAITING: Clarification answers required`
-- Stop after the wait message. Do not continue into Decompose or Plan while clarification is pending.
-- On resume, accept only:
-  - explicit question/option answers for one or more open question ids (example: `1b 2a`)
-  - explicit `defaults`
-- Do not infer answers from free-form continuation text.
-- Every implementation-shaping field that is still unresolved must appear in `Unresolved clarification topics` until it is answered or a displayed recommendation is explicitly accepted.
-- Treat clarification as pending whenever unresolved clarification topics are non-empty, even if `Clarification status` was previously recorded as `ready`.
-- If the reply is `defaults`, record explicit compatibility acceptance of displayed recommendations, not an automatic default. Preserve Clarification defaults applied based only on recorded source-backed technical defaults, clear only answered topics, and set Clarification status: ready only if no unresolved material topics remain; otherwise retain remaining topics and set Clarification status: needs_clarification.
-- If the reply gives explicit answers, record chosen options and preserve Clarification defaults applied based only on recorded source-backed technical defaults; clear only answered topics, and set Clarification status: ready only if no unresolved material topics remain; otherwise retain remaining topics and set Clarification status: needs_clarification.
-- If no questions are needed, record Clarification status: ready, Clarification defaults applied: true only when source-backed technical defaults were recorded (otherwise false), Clarification confidence: high, Clarification questions asked: 0, Clarification admissibility: not_applicable, and explain which request/context evidence, authoritative behavior, or defaults made the task clear.
-
-**Rules:**
-- No commands, edits, or plans that depend on unknowns
-- Read-only discovery (search, git log, browsing) is allowed
-- Keep interaction concise by resolving one goal or file-oriented decision at a time, not by suppressing material questions.
+Confirm changed risk, approval, review, delegation, or verification routing from
+actual source evidence; update carried state if the initial classification was
+wrong. Before any required dispatch, resolve subagent policy/execution/trigger
+scope through `references/subagent-dispatch.md`. No mapping/Architect role is
+required merely by size.
 
 Print: `--- PHASE: DISCOVER COMPLETE ---`

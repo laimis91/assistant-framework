@@ -350,7 +350,7 @@ for term in \
         missing_tdd_phase_terms+=("$term")
     fi
 done
-if ! grep -Fq -- "Load \`references/build-worker-protocol.md\` for source-changing Build work" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
+if ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" "Load \`references/build-worker-protocol.md\` for canonical packet or worker Build execution"; then
     missing_tdd_phase_terms+=("phases.md missing build-worker-protocol loader")
 fi
 phase_sequence_source="$(sed -n '/when the canonical decision activates TDD\. In `separated_workers`, active TDD/,+5p' "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md")"
@@ -432,43 +432,41 @@ for file_and_term in \
 done
 if [[ "${#workflow_tdd_failures[@]}" -eq 0 ]]; then pass; else fail "workflow TDD projection or false-mode policy drifted: ${workflow_tdd_failures[*]}"; fi
 
-test_start "workflow Stop Rules permit sufficient selected non-test evidence"
+test_start "workflow completion gates permit sufficient selected non-test evidence"
 workflow_stop_rule_allows_non_test() {
-    local file="$1"
-    local stop_rules
-    stop_rules="$(awk '
-        /^## Stop Rules$/ { in_section = 1; print; next }
-        in_section && /^## / { exit }
-        in_section { print }
-    ' "$file")"
-    grep -Fq "missing required output evidence" <<<"$stop_rules" \
-        && grep -Fq "completed selected and binding checks and applicable review" <<<"$stop_rules" \
-        && ! grep -Fq "a build, tests, and review" <<<"$stop_rules"
+    ruby -ryaml -e '
+      invariant = YAML.load_file(ARGV.fetch(0)).fetch("invariants").find { |entry| entry["id"] == "INV_VERIFICATION_RESULTS" }
+      check = invariant.fetch("check")
+      exit(check.include?("every due selected check and applicable due/executable binding obligation") &&
+        check.include?("Only current, resolved passing evidence can support sufficient") &&
+        !check.include?("a build, tests, and review") ? 0 : 1)
+    ' "$1"
 }
 workflow_stop_rule_wrong="$(mktemp)"
 p0p4_register_cleanup "$workflow_stop_rule_wrong"
-sed 's/completed selected and binding checks and applicable review/a build, tests, and review/' \
-    "$workflow_root" >"$workflow_stop_rule_wrong"
-if workflow_stop_rule_allows_non_test "$workflow_root" \
+sed 's/every due selected check and applicable due\/executable binding obligation/a build, tests, and review/' \
+    "$workflow_gates" >"$workflow_stop_rule_wrong"
+if workflow_stop_rule_allows_non_test "$workflow_gates" \
     && ! workflow_stop_rule_allows_non_test "$workflow_stop_rule_wrong"; then
     pass
 else
-    fail "workflow Stop Rules did not distinguish selected non-test evidence from the retired blanket test requirement"
+    fail "workflow completion gate did not distinguish selected non-test evidence from the retired blanket test requirement"
 fi
 
 test_start "TDD skill gates meaningful RED only for active TDD and allows assertion extension"
 missing_tdd_skill_terms=()
 for term in \
-    "When workflow delegates, ownership follows" \
-    'In `bounded_executor`, one bounded executor owns RED, production, GREEN, and REFACTOR verification; production starts only after valid RED.' \
-    'Separated_workers: SAME writer authors tests (`test_authoring`, no incoming RED), implements after current RED (`production`), and refactors after current GREEN (`refactor`).' \
-    "Required RED evidence before production implementation:" \
-    "adds or extends one behavior assertion" \
-    "Test file and test name" \
-    "Why the failure proves the intended missing behaviour" \
-    'If TDD is active and RED evidence is missing, the selected production owner' \
-    'must return `NEEDS_CONTEXT` and make no production changes.'; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md"; then
+    'Use TDD only when requested' \
+    '`bounded_executor`: one owner authors tests, observes RED, implements, and verifies GREEN and REFACTOR.' \
+    'the SAME selected writer authors tests (`test_authoring`)' \
+    'implements after current RED (`production`)' \
+    'refactors after current GREEN (`refactor`)' \
+    'Builder/Tester executes checks only' \
+    'adds or extends a meaningful behavior assertion' \
+    'test file/name, argv/cwd, and meaningful-failure oracle' \
+    'why RED failed for the right reason' \
+    'Missing or invalid required RED blocks production (`NEEDS_CONTEXT` for delegated writers)'; do
+    if ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md" "$term"; then
         missing_tdd_skill_terms+=("$term")
     fi
 done

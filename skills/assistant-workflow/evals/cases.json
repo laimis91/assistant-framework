@@ -670,9 +670,9 @@
       ],
       "expected_behavior": [
         "Reports concise natural progress for Triage and Discover without requiring exact phase markers at standard intensity.",
-        "Triages the work as a medium task and lists Discover, conditional Decompose, Plan, Build, Review, and Document.",
+        "Communicates the material scope, risk, required plan approval, and next step without a mandatory triage field inventory.",
         "Records a candidate scope scan before finalizing Triage.",
-        "Records references checked in the Discover context map.",
+        "Inspects relevant references; creates a context map only if current boundaries cannot be resolved directly.",
         "Restates requirements and records constraints before planning.",
         "Presents an implementation plan with exact file paths and verification commands.",
         "Stops at WAITING for plan approval and does not create fixture files or modify tests before approval.",
@@ -680,7 +680,7 @@
       ],
       "pass_criteria": [
         "The response visibly reports Triage and Discover progress.",
-        "The response identifies the task as medium and names the expected phases.",
+        "The response explains why the work requires an approved plan before implementation.",
         "The response includes slice decomposition or task packets before Build.",
         "The response asks for plan approval before implementation.",
         "The response does not claim files were already created."
@@ -695,9 +695,6 @@
         "required_substrings": [
           "Triage",
           "Discover",
-          "Triaged as: medium",
-          "Candidate scope scan",
-          "References Checked",
           "Plan",
           "WAITING: Plan approval required",
           "verification criteria",
@@ -34332,7 +34329,7 @@
       "id": "light-completion-retains-canonical-verification-outputs",
       "title": "Light completion returns both canonical verification outputs",
       "category": "light_completion",
-      "purpose": "Checks that a small low-risk workflow keeps its unchanged verification decision and current evidence assessment visible through inline completion.",
+      "purpose": "Checks that an explicitly requested structured small-work completion preserves the unchanged verification decision and current evidence assessment; ordinary human-only summaries need no JSON dump.",
       "prompt": "Complete this approved small, low-risk documentation-only change after Build and fresh review. Return one valid JSON object with the canonical completion outputs.",
       "setup_context": [
         "The task is small, low-risk, documentation-only, and controller_intensity=light; no task journal, metrics, or manual verification was triggered.",
@@ -34341,7 +34338,7 @@
         "Fresh review after validation passed and names the changed README scope, selected-check result, current evidence_assessment, and unchanged verification_decision."
       ],
       "expected_behavior": [
-        "Returns the canonical verification_decision visibly before Build and carries it unchanged through completion.",
+        "Preserves the canonical verification_decision already supplied before Build and returns it unchanged for this explicitly requested structured completion.",
         "At completion, returns one inline JSON object containing both existing output keys, verification_decision and evidence_assessment.",
         "Preserves the current evidence ref and assessment status within the approved documentation-only scope.",
         "Uses the light completion lane without requiring a journal or exact phase markers."

@@ -1,356 +1,87 @@
-# Five-Lens Research Briefing
+# Five-lens research briefing
 
-Decision-grade research using a STORM-inspired multi-perspective workflow: perspective scan → contradiction map → synthesis → peer review.
+Use for an explicit five-lens request, or a consequential contested decision
+where independent perspectives, contradiction mapping, and peer critique can
+change the recommendation. Comparisons, broad topics, high stakes, or requests
+for "deep understanding" alone remain source research. Explain the actual need
+briefly before choosing this method.
 
-Use this when the user needs understanding that is broader than a normal source lookup: investment/trading research, business decisions, technology choices, architecture options, vendor/tool evaluation, unfamiliar domains, negotiations, presentations, or any topic where incentives and blind spots matter.
+## Method
 
-## When to choose this method
+1. **Scope.** Establish the question, relevant user context, decision criteria,
+   and bounded research effort. Ask only about material missing context that
+   cannot be discovered. Freeze the common scope before any lens executes.
+2. **Independent lenses.** Dispatch five sibling-blind assignments, one each:
+   practitioner, academic/technical expert, skeptic, economist/incentives analyst,
+   and historian/pattern matcher. Each asks its own relevant question and returns
+   source-backed evidence or an explicit gap, position, blind spots, and insights.
+   Distinct native agents may use the same model. Capacity-bounded waves preserve
+   isolation: later assignments cannot consume earlier returns or synthesis.
+3. **Validate evidence and follow-ups.** Check that each return answers its
+   assignment and cites usable evidence. Retain every material follow-up question,
+   answer or gap, sources, evidence status, and unresolved limits. No numeric
+   follow-up cap applies. Inference-only/unresolved results stay weak evidence;
+   do not invent sources or follow-ups to fill a template.
+4. **Root synthesis.** Only after all five usable returns, the root maps
+   consequential conflicts, consensus, relative evidence strength, unresolved
+   questions, and missing angles. Synthesize findings, implications, and a
+   recommendation calibrated to the user's goal and available evidence.
+5. **Separate peer critique.** A distinct peer reviewer, separate from all five
+   lens agents, checks the root synthesis for weak claims, bias/lens dominance,
+   missing perspectives, and evidence that could falsify the recommendation.
+   Address required revisions or downgrade claims before presenting. Preserve
+   valid lens evidence if only the peer stage needs recovery.
 
-Prefer `five_lens_briefing` when any of these are true:
+The method triggers delegation without separate spawn consent. Fallback requires
+explicit opt-out, real unavailable/failed spawning, supported configuration proof,
+or the exact active policy block. Record the basis and reduced independence;
+sequential root passes are never called independent delegation. Global opt-out or
+a policy block also forbids peer dispatch. Never mix partial delegated/root lens
+results and claim an independent complete stage.
 
-- The user asks for deep research, due diligence, decision support, or "what should I do?".
-- The topic has incentives, controversy, trade-offs, hype, or expert disagreement.
-- A single summary would likely reproduce the majority framing and miss practitioner reality.
-- The output will inform money, architecture, strategy, career, negotiation, or public communication.
+Check source identity, freshness, independence, and directness for each material
+claim; verify decision-critical claims and every presented URL per `url-verify.md`.
+Safe repository/authenticated/offline references remain valid without public
+URLs. Distinguish sourced facts, inference, and candidate mechanisms. Follow-ups
+and uncertain causal mechanisms retain their validation method and gaps.
+Confidence follows evidence quality and conflicts, not a source count.
 
-Do not use this as ceremony for simple factual lookups. Use quick or standard `source_research` instead.
+For high-impact finance, legal, medical, or safety decisions, keep unresolved user
+context explicit. A stronger recommendation requires verified decision-critical
+evidence, explicit relevant context, and peer support; otherwise investigate
+further. Research does not authorize an irreversible external action.
 
-## High-stakes constraint
+## Retained v3 consumer protocol
 
-For finance/trading, legal, medical, safety-critical, or similarly high-impact decisions:
+Load `contracts/index.yaml` and selected `five_lens`, `selected_handoff`,
+`current_phase`, and `completion` sets only when an existing structured v3
+consumer, persisted run, or audit/eval requires that protocol. It retains these
+canonical rules; ordinary human-only research need not manufacture its full
+serialized artifact:
 
-- frame the output as educational due diligence and decision support, not professional advice or an instruction to act
-- state user-context and risk caveats before any recommendation
-- retain `user_context_status` as `explicit`, `unresolved`, or
-  `not_applicable`: a non-high-stakes topic uses `not_applicable` and literal
-  `user_context_basis=not_applicable`; a high-stakes topic uses `explicit` or
-  `unresolved`
-- a stronger recommendation requires `user_context_status=explicit` and the
-  same concrete `user_context_basis` frozen in every assignment packet's
-  `known_context` before any lens execution; `investigate_further` may retain
-  unresolved context
-- verify decision-critical claims with real sources before strengthening a recommendation
-- default the recommendation to `investigate_further` unless verified evidence, explicit user context, and the peer review all support a stronger `do`, `wait`, or `avoid` recommendation
-- never recommend executing a trade, legal action, medical action, or other irreversible high-stakes action without qualified professional/user approval
+- Frozen five-packet set, exact LensKind coverage, shared scope/source/isolation
+  literals, ordered manifest, timestamps, IDs, canonical RFC 8785 JCS preimages,
+  and SHA-256 content/set digests before execution. Later mutation invalidates
+  the lens stage. Every dispatch/root pass binds its assignment and set.
+- Exactly five accepted result bodies/digests; perspective scan and question trace
+  project those exact bodies, including source-empty unresolved results and their
+  own gaps. Typed follow-ups retain every material item or one `none_needed`.
+- Current input/output/phase-gate schemas define tier normalization, fixed numeric
+  budgets/count-based confidence, actual usage/termination, capacity waves, fallback
+  evidence, and one same-assignment schema retry. These numeric rules are retained
+  for compatibility fixtures, not universal research quotas. A failed lens stage
+  after that repair reruns completely through admissible fallback or blocks.
+- Root-only contradiction map and initial synthesis; separate peer assignment,
+  native/fallback identity, canonical peer-input preimage/digest, exact accepted
+  results, verified evidence, high-stakes context, and final-equal artifacts.
+  `accepted`/`accepted_with_concerns` have no required revisions and unchanged
+  synthesis. `revise` requires root-owned disposition for every required synthesis
+  revision and matching final digest. Changes to findings/mechanisms/conflicts/map
+  require fresh peer input/review; synthesis-only closure cannot cover them.
+- Empty verified-source evidence is allowed with explicit gaps. Unusable peer
+  status or unresolved revisions block audited completion. Recommendation and
+  high-stakes bindings remain exact; no fabricated process evidence.
 
-## Workflow
-
-### 1. Scope and source plan
-
-State the topic, user role/goal if known, decision being informed, and evidence budget. Ask only if a missing answer materially changes source selection or interpretation and cannot be inferred.
-
-An explicit `quick` request for this method normalizes to `standard` while
-preserving `five_lens_briefing`; disclose that tier normalization. Record
-`tier_resolution.requested_tier`, `effective_tier`, and
-`normalization_disclosure` in final process evidence (use `not_applicable` for
-the disclosure when quick was not requested). The valid five-lens tiers are
-`standard`, `extensive`, and `deep`.
-
-Use the frozen numeric search resource budget: standard is at most 3 queries,
-4 sources, and 10 minutes per lens (15/20/50 overall); extensive is 5/6/15
-(25/30/75 overall); deep is 8/10/25 (40/50/125 overall). Deep stops at
-saturation or its hard ceiling. Record budget exhaustion as gaps and LOW
-confidence; do not continue searching indefinitely.
-
-### 2. Freeze, dispatch, and validate the perspective scan
-
-Before the first dispatch, freeze exactly five sibling-blind assignment packets
-as one immutable packet set with a set ID, digest, and pre-dispatch timestamp:
-one for each named lens below. A packet contains shared scope, evidence budget,
-and its LensKind only; it excludes sibling results, prior waves, contradiction
-mapping, synthesis, recommendation, and peer review. Dispatch one independent
-`LensResearcher` identity per packet. Capacity-bounded waves stay within adapter
-capacity with exact, disjoint, exhaustive coverage; later waves cannot consume earlier results.
-Each frozen packet carries `source_policy=verified_sources_only` and
-`isolation_policy=sibling_blind_no_synthesis`; these canonical literals prevent
-response-controlled policy prose from changing the assignment boundary.
-Independent dispatch means distinct native dispatch or agent identities, not
-distinct model identities: one model may serve multiple isolated assignments.
-All five packets have equal `question`, `tier`, `user_role_or_goal`,
-`output_purpose`, `known_context`, `evidence_budget`, `search_resource_budget`,
-`source_policy`, and `isolation_policy`; identity, LensKind, digest, and freeze
-time remain per-packet.
-
-The packet set includes an ordered five-entry manifest and the final process
-evidence retains all five exact `FrozenLensAssignmentPacket` bodies. Each entry
-binds `packet_id`, its exact LensKind, and a `content_digest` over the canonical
-complete frozen packet. ContentDigest is `sha256:` plus 64 lowercase hex
-SHA-256 over the exact UTF-8 bytes produced by RFC 8785 JSON Canonicalization
-Scheme (JCS), with no trailing newline; packet preimage excludes `content_digest` and
-`packet_set_digest` applies the same construction to the ordered manifest array
-whose entries contain exactly `packet_id`, `lens_kind`, and `content_digest`.
-Every delegated dispatch or fallback root pass repeats the matching packet
-content digest. Recompute every manifest content digest from the retained
-packet preimage before accepting it. A changed packet body or digest mismatch
-invalidates the entire lens stage.
-
-Every `packet_frozen_at` is at or before `packet_set_frozen_at` and strictly
-before the first lens execution. Any later packet timestamp invalidates the
-complete lens stage; do not repair a single late packet after dispatch.
-
-Validate each return against its frozen assignment before accepting it. One
-same-assignment schema-correction retry is allowed. If the lens stage still
-fails, rerun the complete lens stage through evidenced sequential fallback or
-block—never present a partial delegated/root mixture as independent research.
-For every usable return, recompute `lens_result_digest` over the RFC 8785 JCS
-bytes of `lens_result` only. Retain the five authoritative bodies in
-`accepted_lens_results`, exactly equal to the peer input. The process record,
-perspective scan, and question trace must repeat the matching LensKind, assignment ID, and digest,
-and their presented lens fields must exactly project that accepted result,
-including an empty source array when inference-only or unresolved evidence has
-a recorded gap.
-
-Record actual query/source uses, elapsed minutes, termination state, exhausted
-dimensions, and downgrade evidence for every lens plus overall query/source
-totals and observed wall-clock elapsed. A usable record never exceeds a
-configured ceiling. Sequential fallback wall-clock is at least the sum of pass
-times; delegated wall-clock is at least the sum of each wave's maximum member
-time. Ceiling exhaustion requires an explicit gap and LOW lens
-confidence; an over-ceiling run blocks.
-
-Sequential fallback is only for explicit opt-out, real failed/unavailable
-mechanism, supported configuration proof, or exact policy block. It still runs
-five frozen-packet root passes, records reduced independence, omits invented
-references, and retains peer critique as a separate fresh pass.
-
-Every delegated dispatch or fallback root pass binds both its packet ID and
-packet-set ID. Record the first lens execution timestamp after the set freeze;
-this ordering proves later waves did not alter the frozen assignments.
-
-Set `subagent_policy_state=delegation_triggered` and
-`subagent_execution_mode=delegated` for this skill-instruction-triggered
-method without a separate permission question. For fallback, record concrete
-`sequential_fallback_evidence`; an exact policy block also records
-`policy_blocking_source` and its no-exception basis.
-Global opt-out or policy-disallowed state forces peer `sequential_fallback`
-with matching admissible evidence and forbids peer subagent dispatch.
-
-### 3. Perspective scan results
-
-Analyze the topic through five lenses. Use real sources where available; label
-every source-empty inference-only or unresolved lens LOW confidence until verified.
-
-1. **Practitioner** — works with this daily. What practical realities are usually ignored? What would they warn about?
-2. **Academic / technical expert** — studies the evidence. What does the best evidence say? Where does evidence contradict popular belief?
-3. **Skeptic** — challenges the mainstream view. What is the strongest counterargument? What evidence do proponents ignore?
-4. **Economist / incentives analyst** — follows incentives. Who profits? What financial, organizational, or status incentives shape the narrative?
-5. **Historian / pattern matcher** — compares earlier cycles. What historical parallels exist? How did similar situations play out?
-
-For each lens produce:
-
-- core position in 2-3 sentences
-- exact sources or verified URLs from the accepted lens result; preserve an
-  empty array for inference-only or unresolved evidence with a recorded gap
-- likely blind spot
-- one unique insight no other lens supplied
-- confidence level and source notes
-
-### 4. Question trace / evidence ledger
-
-STORM is not just fixed perspectives; it is perspective-guided question asking with retrieval-backed answers and follow-up questions before synthesis. Before building the contradiction map, create a lightweight question trace:
-
-For each lens:
-
-- ask at least one lens-specific research question that lens would naturally ask
-- answer it with source-grounded evidence when tools/sources are available
-- record sources or verified URLs used for the answer
-- retain every material follow-up prompted by the first answer, contradiction, or gap; do not impose a numeric cap
-- for each follow-up, record its question, answer or gap, sources/verified URLs, evidence status, and its own gaps array; when no material follow-up exists, record one typed `none_needed` decision
-- label whether each answer is source-backed, inference-only, or unresolved
-
-Reject a malformed follow-up or a source-empty inference-only/unresolved
-follow-up without its own non-empty gap. Request one same-assignment schema
-correction; if it remains invalid, rerun the complete lens stage through
-evidenced fallback or block rather than inventing follow-up evidence.
-
-Decision-critical evidence uses external HTTPS, repository locator, opaque
-connector/record, or offline citation. Public URLs use bounded static admission:
-no malformed/protocol-relative form, userinfo, port, secret, PII, traversal,
-literal reserved/private IP, or special-use DNS name. Static checks neither
-resolve DNS, prove reachability, redirect, or SSRF safety; runtimes validate
-addresses and redirects at connect time. Static decoding is single-pass.
-Conflict references obey these rules.
-
-Do not synthesize from a lens until its key question and at least one answer/gap entry are recorded. If source access is unavailable, keep the question trace and mark answers as inference-only or unresolved rather than pretending they are source-backed.
-
-### 5. Root-owned contradiction map
-
-After all five results validate, the root Orchestrator alone builds the
-contradiction map. The disagreements are usually the highest-value part of the
-briefing.
-
-Include:
-
-- direct conflicts between lenses, with the clashing claims named
-- which lens has strongest evidence and why
-- which lens has weakest evidence and why
-- what every lens agrees on
-- the biggest unresolved question
-- what none of the lenses addressed
-
-### 6. Root-owned synthesis briefing
-
-Combine the scan and contradiction map into a decision-ready briefing:
-
-- one-paragraph executive summary with nuance
-- 5 key findings ranked by reliability
-- for each finding, which lenses support and challenge it
-- hidden connection visible only after combining lenses
-- practical implication for the user's role/goal
-- recommended action: do / wait / avoid / investigate further, with high-stakes caveats when applicable
-- frontier question that would most change the conclusion
-
-### 7. Independent peer review
-
-Dispatch a distinct `ResearchPeerReviewer` after the root initial synthesis.
-The reviewer critiques rather than rewrites root-owned synthesis; it must be a
-separate identity from every LensResearcher. If only peer review fails, retain
-validated lens results and use a separately recorded reviewer fallback.
-The Orchestrator creates `peer_review_assignment_id`, freezes a canonical
-peer-input preimage and digest covering final-equal findings, conflicts and
-contradiction map; mechanisms normalized to `[]` when absent; validated lenses;
-lens provenance; initial synthesis; verified evidence; `verification_gaps`
-equal to top-level `gaps`; and high-stakes context. The worker echoes the digest
-and supported recommendation; only the Orchestrator records native peer
-identity. For every usable peer result, the final
-recommendation must equal the peer-supported recommendation. The final presentation must equal the reviewed
-initial synthesis for accepted verdicts, or be bound to complete revision
-closure for revise.
-When no decision-critical source can be verified, pass an empty verified-source
-ledger with verification gaps; peer review must downgrade or block unsupported
-claims rather than inventing evidence or refusing the review.
-
-The peer review must assess:
-
-- confidence score for each major claim
-- weakest claim and how to verify it
-- source bias or lens dominance
-- missing sixth perspective that could change the conclusion
-- evidence that would falsify the recommendation
-- revision to the recommendation if the critique changes it
-
-When verdict is `revise`, including sequential peer fallback, the root Orchestrator records a revision disposition
-for every required synthesis revision exactly once: `applied` or `claim_downgraded`, with
-closure evidence. The peer worker does not self-attest those changes. An
-unresolved revision blocks presentation. The Orchestrator records
-`revision_disposition_id` in peer review and repeats that exact value as
-`peer_review_revision_disposition_id` in process evidence. Each disposition
-also records the final-synthesis digest; `applied` or `claim_downgraded`
-closure changes the peer-reviewed initial synthesis.
-Disposition closes synthesis revisions only. Changing findings, mechanisms,
-conflicts, or the map requires a new peer input and fresh review.
-
-For `accepted` and `accepted_with_concerns`, `required_revisions` is empty. A
-`revise` verdict has one or more required revisions and complete orchestrator-
-owned dispositions for each. Unusable or blocked peer results cannot present.
-
-## Verification rule
-
-Five-lens structure does not replace source verification:
-
-- verify the top 3-5 decision-critical claims with real sources when tools are available
-- keep URLs only if verified per `url-verify.md`
-- downgrade or mark as gaps any claim that could not be verified
-- separate "lens inference" from "source-backed finding"
-- for HIGH, retain exact `source_provenance` rows (`source`, `independence_key`,
-  `authority`: primary/official/secondary) whose source set equals public
-  string `sources`; HIGH requires both 3+ independence keys and a
-  primary/official row, while one authoritative source is MEDIUM
-
-## Output format
-
-```text
-RESEARCH: [topic]
-Method: five_lens_briefing
-Tier: [standard/extensive/deep]
-Evidence budget: [source/angle target and whether met]
-
-PERSPECTIVE SCAN
-1. Practitioner — confidence: [HIGH/MEDIUM/LOW]
-   Core position: ...
-   Evidence/source notes: ...
-   Blind spot: ...
-   Unique insight: ...
-2. Academic / technical expert — ...
-3. Skeptic — ...
-4. Economist / incentives analyst — ...
-5. Historian / pattern matcher — ...
-
-QUESTION TRACE / EVIDENCE LEDGER
-1. Practitioner
-   Question: ...
-   Source-grounded answer: ...
-   Sources / verified URLs: ...
-   Follow-ups:
-   - decision: follow_up
-     Question: [first material follow-up]
-     Answer or open gap: ...
-     Sources / verified URLs: ...
-     Evidence status: source-backed / inference-only / unresolved
-     Gaps: [own unresolved evidence limits, if any]
-   - decision: follow_up
-     Question: [second material follow-up]
-     Answer or open gap: ...
-     Sources / verified URLs: ...
-     Evidence status: source-backed / inference-only / unresolved
-     Gaps: [own unresolved evidence limits, if any]
-   Evidence status: source-backed / inference-only / unresolved
-2. Academic / technical expert — ...
-3. Skeptic — Follow-ups: [{decision: none_needed, answer_or_gap: no material follow-up, sources_or_verified_urls: [verified source], evidence_status: source-backed, gaps: []}]
-4. Economist / incentives analyst — ...
-5. Historian / pattern matcher — ...
-
-CONTRADICTION MAP
-- Direct conflicts: ...
-- Strongest evidence: ...
-- Weakest evidence: ...
-- Consensus: ...
-- Biggest unresolved question: ...
-- Missing angle/gap: ...
-
-FINDINGS
-1. [source-backed factual claim or decision insight] — confidence: [HIGH/MEDIUM/LOW]
-   Sources: [source names]
-   Source provenance, required for HIGH: [{source, independence_key, authority}, ...]
-   Verified URLs: [verified URLs, if any]
-2. ...
-   If every accepted main result and material follow-up is source-empty
-   inference-only or unresolved, emit no findings and retain non-empty
-   top-level gaps rather than inventing a source-backed summary.
-
-CONFLICTS
-- [source or lens A] says X; [source or lens B] says Y — [assessment]
-- none found, if conflicts were explicitly checked and none were found
-
-SYNTHESIS
-- Executive summary: ...
-- Key findings ranked by reliability: ...
-- Hidden connection: ...
-- Actionable implication for [role/goal]: ...
-- Recommendation: do / wait / avoid / investigate further
-- High-stakes caveat/context, if applicable: ...
-- Frontier question: ...
-
-PEER REVIEW
-- Confidence scores: ...
-- Weakest claim: ...
-- Bias check: ...
-- Missing sixth perspective: ...
-- Falsification test: ...
-- Revised recommendation if needed: ...
-
-FIVE-LENS PROCESS EVIDENCE
-- Frozen packet-set ID/digest, ordered packet manifest/content digests, pre-dispatch record ID, and first-execution evidence: ...
-- Retained frozen packets with equal scope, tier resolution, bound peer-input preimage, and final synthesis digest: ...
-- Lens mode and exact five dispatches/root passes with assignment/packet-set/content-digest bindings and return_validated: ...
-- Peer assignment, native identity or fresh fallback pass, and mode: ...
-- Reduced independence and admissible fallback evidence, if applicable: ...
-- Search resource budget and exhaustion gaps, if any: ...
-- Synthesis-only revision disposition/digest when revise; artifact changes require fresh peer review: ...
-
-SOURCES / VERIFIED URLS
-- ...
-
-GAPS
-- ...
-```
+Keep these records in the consumed artifact. The human answer gives the useful
+conclusion, sources, consequential conflicts, peer critique, and material limits;
+it need not include a compulsory FIVE-LENS PROCESS EVIDENCE dump.

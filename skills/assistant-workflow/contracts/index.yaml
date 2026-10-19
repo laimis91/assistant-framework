@@ -1,3 +1,8 @@
+# Applicability: canonical plans/task packets, persisted state, delegated handoffs,
+# and executable admission/evaluation use this existing protocol. Ordinary human
+# updates summarize decisions/evidence without serializing every internal field.
+# This boundary does not waive approval, verification, review, or active TDD.
+
 schema_version: "14.0"
 contract: index
 skill: assistant-workflow

@@ -5,103 +5,75 @@ description: "Gather and synthesize source-backed information. Use for explicit 
 
 # Research
 
-## Goal
+Answer with source-backed evidence, conclusions, conflicts, and gaps. Match
+effort to decision risk; stop when further searching cannot materially help
+within budget.
 
-Answer proportionally with source-weighted findings, verified URLs, explicit
-conflicts, and honest evidence gaps.
+## Ordinary source research
 
-## Success Criteria
+1. Establish the question, context, and decision criteria. Ask only about material
+   information that cannot be discovered or safely inferred.
+2. Prefer relevant primary evidence; seek independent corroboration and
+   counterevidence when warranted. Comparisons and requests for understanding
+   ordinarily remain `source_research`.
+3. Check source identity, freshness, applicability, and disagreement. Verify every
+   URL presented or omit it; repository, authenticated, and offline evidence can
+   use safe stable locators. Never expose secrets or private host references.
+4. Place citations close to supported claims. Distinguish observation, source statements, inference,
+   and unknowns. Assess each claim's evidence quality, directness, independence,
+   and conflicts, not source counts; copies add no independent support. Report
+   material conflicts and gaps; omit empty sections.
 
-- Research depth matches decision risk and available evidence.
-- Findings cite supporting sources and calibrated confidence.
-- Every URL presented is verified or omitted.
-- Conflicts and gaps are reported, even when empty.
-- Candidate mechanisms remain hypotheses until a validation method is executed.
+For finance, legal, medical, safety-critical, or similarly high-impact
+recommendations, frame findings as educational due diligence with relevant risks
+and context limits. A stronger recommendation needs verified decision-critical
+sources and explicit relevant user context; otherwise recommend investigating
+further and state the gaps. This applies to every research method. Factual
+answers need neither five lenses nor a structured envelope merely because the
+topic is high impact.
 
-## Constraints
+Use [research.md](research.md) for source strategy, [investigate.md](investigate.md)
+for a deep entity investigation, and [url-verify.md](url-verify.md) for uncertain
+URL verification. A why/how or improvement question may yield candidate mechanisms;
+retain their support, counterevidence, gaps, and validation method. Do not call a
+candidate a proven cause or claim an improvement without executed validation.
 
-- Ask only when scope changes source selection, jurisdiction/domain, depth, or
-  decision criteria and cannot be inferred safely.
-- HIGH requires 3+ independent agreeing sources plus primary/official evidence;
-  one authoritative source is MEDIUM.
-- Keep `source_research` direct-capable. For `five_lens_briefing`, use the
-  declared five-lens Process handoffs and do not substitute a single-agent
-  perspective scan for independent lens evidence.
+## Five-lens research
 
-## Progressive Contract Loading
+Select `five_lens_briefing` for an explicit method request or when a
+consequential contested decision actually needs independent perspectives,
+contradiction mapping, synthesis, and peer critique. Explain why; comparison,
+"deep understanding", breadth, or high stakes alone does not trigger it. Load
+[five-lens-briefing.md](five-lens-briefing.md).
 
-Canonical tier files are `contracts/input.yaml`, `contracts/output.yaml`,
-`contracts/phase-gates.yaml`, and `contracts/handoffs.yaml`.
+Preserve five independent sibling-blind assignments: practitioner, academic/
+technical expert, skeptic, incentives analyst, and historian/pattern matcher.
+Freeze common scope before execution; later waves cannot see earlier results.
+Each lens retains its own research, material follow-ups, evidence, and gaps.
+The root alone maps contradictions and synthesizes after all five usable
+returns; a separate peer reviewer critiques that synthesis before final
+presentation. Address required revisions or downgrade unsupported claims.
 
-Read `contracts/index.yaml` first and load only the active boundary:
+This method triggers delegation without a separate permission question. Only
+explicit opt-out, actual unavailability, supported configuration evidence, or
+an exact policy block permits sequential fallback. Record reduced independence;
+never call role-play independent research. Source research stays direct-capable.
 
-- `entry` for question, tier, method, role/goal, purpose, known context, and
-  resolved subagent policy/execution/fallback evidence;
-- `current_phase` for SEARCH, SYNTHESIZE, or VERIFY;
-- `source_research`, `five_lens`, or `investigate` only after method selection; and
-- `selected_handoff` before every LensResearcher or ResearchPeerReviewer dispatch and return validation; and
-- `completion` only for the artifact being returned.
+## Consumer and compatibility boundaries
 
-Missing or invalid selectors fall back to the full named canonical contract. Do
-not load every contract or research method at entry.
+Load `contracts/index.yaml` for structured research consumers, persisted v3
+packets, five-lens audits/evals, or v3 worker handoffs. Load the selected
+entry/method, current-phase, selected-handoff, and completion sets only as
+needed; missing/invalid selectors load the full named contract. Retain existing
+digest-bound frozen packets, accepted results, follow-ups, root synthesis,
+peer-input preimages, revision closure, high-stakes bindings, and output
+schemas. Older v2 follow-ups need typed v3 conversion; incomplete v3 evidence
+cannot claim a valid audited run.
 
-Migration note: assistant-research contracts are v3.0. Convert v2 follow-up
-fields to typed `follow_ups`, retaining each material follow-up or one
-`none_needed`. v3 requires five frozen, sibling-blind assignment packets,
-root-only synthesis, distinct peer review, canonical packet/peer-input
-preimages, tier resolution, and high-stakes bindings. Reject or re-run
-incomplete v3 artifacts.
+The existing numeric tier budgets and HIGH/MEDIUM/LOW source-count rules belong
+to that compatibility fixture, not ordinary claim assessment. Keep required
+process evidence in consumed artifacts. Human five-lens answers can summarize
+findings, consequential conflicts, peer critique, conclusions, and limits.
 
-## Ownership
-
-assistant-research owns source selection, synthesis, confidence, and URL
-verification. Its specialist gates are authoritative.
-
-For `five_lens_briefing`, the root Orchestrator freezes exactly five
-assignment packets before dispatching one independent LensResearcher per named
-lens. Orchestrator alone builds the contradiction map and initial synthesis
-after validated returns. A distinct ResearchPeerReviewer then critiques that
-synthesis. Sequential fallback is constrained to the documented admissible
-bases and records reduced independence; it never claims delegated independence.
-Resolve `subagent_policy_state` before dispatch: this skill instruction makes
-five-lens delegation `delegation_triggered` without another permission prompt.
-Only documented opt-out, real unavailability, or an exact policy block permits
-`sequential_fallback`; `source_research` remains `not_required/not_applicable`.
-
-## Method Selection
-
-- **source_research** — factual lookup and comparison. Load `source_research`;
-  choose tier by risk.
-- **five_lens_briefing** — decision-grade work needing perspectives,
-  contradictions, incentives, synthesis, and peer review. Load `five_lens`.
-- **investigate** — deep entity/domain analysis with ethical boundaries. Load
-  `investigate`.
-
-Quick tier may use one strong primary source. Standard uses multiple sources.
-Extensive/deep tiers expand perspectives and primary evidence only when the
-decision warrants the cost.
-
-Every finding needs confidence grounded in source quality and agreement. For
-causal or improvement questions, return candidate mechanisms with evidence,
-counterevidence, gaps, and a validation method—not proven-cause language.
-
-## Output
-
-Return status/confidence, concise answer, source-backed findings, candidate
-mechanisms when applicable, verified sources, conflicts, gaps, and five-lens
-artifacts only when that method ran.
-
-For five_lens_briefing, include FIVE-LENS PROCESS EVIDENCE: tier resolution,
-frozen packet-set ID/digest and retained canonical packet preimages,
-pre-dispatch ordering, exact lens execution records,
-assignment/packet-set bindings, return validation, peer assignment/identity or
-fallback, execution modes, reduced-independence state, and the bounded search
-resource budget. Bind final synthesis to the exact peer-reviewed input or a
-complete revision closure. The root Orchestrator owns this lifecycle record.
-
-## Stop Rules
-
-- Ask every material, non-discoverable question when missing scope changes interpretation; group them by topic and keep them concise.
-- Report a gap when sources are inaccessible, stale, conflicting, or too weak.
-- Do not finalize with any unverified URL.
-- Do not present candidate mechanisms as causes without executed validation.
+Stop or qualify answers with inaccessible, stale, conflicting, or weak
+evidence. Unverified URLs and unsupported causal claims cannot be finalized.

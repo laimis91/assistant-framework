@@ -1,3 +1,5 @@
+# Applies to integrated calls and explicitly requested supported structured output.
+# Ordinary conversation follows SKILL.md without this serialized envelope.
 schema_version: "6.0"
 contract: output
 skill: assistant-thinking
@@ -151,7 +153,7 @@ artifacts:
     required: conditional
     condition: "tool_used == hypothesize"
     description: "Hypotheses, tests, disconfirming evidence, and conclusion for debugging uncertainty"
-    validation: "Includes at least three hypotheses unless fewer are plausible, tests performed or proposed, and what would disprove the current conclusion"
+    validation: "Includes distinct plausible hypotheses without a numeric quota, tests performed or proposed, and what would disprove the current conclusion"
     on_fail: "Re-run hypothesis analysis and include hypotheses, tests, disconfirming evidence, and conclusion"
 
   - name: candidate_concerns_or_criteria

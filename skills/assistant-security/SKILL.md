@@ -3,118 +3,30 @@ name: assistant-security
 description: "Analyze threats, vulnerabilities, dependencies, and attack surfaces. Use for explicit security work or changes to auth, input, or sensitive data."
 ---
 
-# Security Tools
+# Analyze Security Risks
 
-## Contracts
+Inspect the requested surface and report concrete attack paths, their impact, and the smallest useful remediation. Infer scope and method from context; ask only when missing source, access, or deployment facts prevent a trustworthy conclusion. Keep analysis read-only unless remediation is authorized.
 
-| Contract | File | Purpose |
+Load the relevant reference, using only checklist categories that apply:
+
+| Analysis | Reference | Focus |
 |---|---|---|
-| **Input** | `contracts/input.yaml` | Analysis type, scope, severity threshold |
-| **Output** | `contracts/output.yaml` | Findings with severity, remediation, and risk level |
-| **Phase Gates** | `contracts/phase-gates.yaml` | Scope → Analyze → Report pipeline gates |
-| **Handoffs** | `contracts/handoffs.yaml` | Subagent dispatch contracts (currently none) |
+| Threat model | `threat-model.md` | Trust boundaries and threats; STRIDE where useful |
+| Code review | `code-review.md` | Reachable vulnerabilities in changed code |
+| Dependency audit | `dependency-audit.md` | Actual dependency versions and exposure |
+| Attack surface | `attack-surface.md` | Entry points, privileges, and integrations |
 
-**Rules:**
-- Every finding must have severity, impact, and remediation — observations without fixes are not actionable
-- Severity levels follow the 4-level scale consistently
-- Findings must be evidence-based — cite specific code, config, or dependency
+For a detailed requested threat model, `prompts/threat-model.md` provides additional prompts. Check relevant paths such as authentication/authorization, tenant isolation, untrusted input, data access, shell/process execution, file paths, network integrations, serialization, dependency/configuration risk, and privacy/logging. Do not turn an irrelevant category into a finding.
 
-On-demand security analysis. Use when touching auth, inputs, dependencies, or preparing for review.
+Each finding needs specific redacted evidence (file/line, configuration, dependency, or threat path), a reachable attack or misuse path, impact, severity, remediation, and a verification step. Separate demonstrated behavior from assumptions. Do not invent vulnerabilities or report generic advice as findings. Respect the requested severity threshold and order findings by material risk.
 
-## Goal
+Use a consistent severity scale:
 
-Identify concrete security risks with evidence, severity, impact, and remediation that can be acted on before release or merge. Keep the analysis practical and company-safe: local-first, no secret exposure, no unapproved external scanners, and no generic security essays.
+- **critical**: immediate exploitation or breach risk;
+- **high**: significant vulnerability needing attention before release;
+- **medium**: material weakness with limited or conditional exploitability;
+- **low**: minor exposure or defense improvement.
 
-## Success Criteria
+State the assessed scope, result, and confidence; report residual risks, inaccessible areas, and evidence gaps that limit a clean conclusion. Omit empty reporting sections. If structured output is requested, preserve `findings` with `severity`, `category`, `description`, `impact`, and `remediation`; include evidence and attack path, `summary`, highest material `risk_level` (or `none`), and prioritized `action_items` when findings require fixes.
 
-- Scope, analysis type, and severity threshold are explicit.
-- Findings cite specific code, config, dependency, or threat paths.
-- Each finding includes severity, impact, and smallest useful remediation.
-- Residual risks and unassessed areas are called out separately from findings.
-
-## Constraints
-
-- Do not report generic security advice without evidence in the reviewed surface.
-- Ask only when missing scope or access prevents a trustworthy security conclusion.
-- Treat exploitable vulnerabilities and secret exposure as blockers, not nits.
-- Do not paste, log, or repeat secrets. Redact values and cite only the file/location.
-- Do not require external SaaS scanners, remote code upload, or unapproved dependency installs; use local/repo-native checks when available.
-
-## Available Tools
-
-| Tool | File | When to use |
-|---|---|---|
-| **Threat Model** | `threat-model.md` | New features, auth changes, external integrations. STRIDE analysis. |
-| **Code Review** | `code-review.md` | Before merging PRs touching auth, input handling, data access. OWASP Top 10. |
-| **Dependency Audit** | `dependency-audit.md` | Before releases, after adding packages, periodic CVE checks. |
-| **Attack Surface** | `attack-surface.md` | Starting security work, after adding endpoints/integrations. |
-
-## Usage
-
-Read the relevant tool file when the situation calls for it.
-
-**When to use which tool:**
-- Starting a new feature with external input -> Attack Surface first, then Threat Model
-- Adding/updating NuGet packages -> Dependency Audit
-- PR touches auth, sessions, or data access -> Code Review (OWASP)
-- New API endpoints or integrations -> Threat Model (STRIDE)
-
-**Deep analysis:**
-For thorough threat modeling, also load `prompts/threat-model.md` — it provides a detailed prompt pack for comprehensive STRIDE analysis.
-
-## Practical Review Checklist
-
-Always scan relevant surfaces for:
-- **Secrets exposure**: committed tokens, private keys, credentials, `.env` leaks, sensitive logs.
-- **Auth and authorization**: missing checks, confused roles, tenant isolation, IDOR, privilege escalation.
-- **Input handling**: validation gaps, injection paths, unsafe parsing, untrusted file names.
-- **Data access**: SQL/NoSQL injection, overbroad queries, missing row-level filters, unsafe migrations.
-- **Shell/process execution**: command injection, unsanitized arguments, PATH/env trust, unsafe temp files.
-- **Path and file operations**: path traversal, unsafe extraction, symlink races, broad delete/write.
-- **Network and integrations**: SSRF, webhook verification, TLS assumptions, replay handling, timeout/retry abuse.
-- **Serialization**: unsafe deserialization, object injection, prototype pollution, untrusted YAML/XML.
-- **Dependency/config risk**: vulnerable packages, dangerous debug flags, permissive CORS, exposed admin endpoints.
-- **Privacy/logging**: PII leakage, customer data in telemetry, excessive error detail.
-
-Only report checklist items with evidence in the reviewed scope. If a category is relevant but unassessed, list it under residual risk rather than inventing a finding.
-
-## Finding Template
-
-```markdown
-### [severity] Short title
-
-- Category: injection | auth bypass | secret exposure | unsafe dependency | etc.
-- File: file path or `project-level`
-- Description: what the security issue is
-- Evidence: file:line/config/dependency/threat path, with secrets redacted
-- Attack path: how an attacker or misuse reaches the issue
-- Impact: data, integrity, availability, compliance, or privilege impact
-- Remediation: smallest useful fix
-- Verification: command/test/manual check that would prove the fix
-```
-
-The contract-required fields are `severity`, `category`, `description`, `impact`, and `remediation`; include them exactly in every finding. Use lowercase severity values (`critical`, `high`, `medium`, `low`) when producing structured output.
-
-## Severity Scale
-
-All tools use a consistent 4-level scale:
-- **CRITICAL**: Immediate exploitation risk, data breach potential
-- **HIGH**: Significant vulnerability, needs fix before release
-- **MEDIUM**: Should fix, but not immediately exploitable
-- **LOW**: Minor concern, fix when convenient
-
-## Output
-
-Return:
-- **Status** - completion state and confidence for the security analysis.
-- **Risk summary** - overall result and scope assessed.
-- **Findings** - actionable items with severity, impact, evidence, and remediation.
-- **Evidence** - specific code, config, dependency, or threat path for each finding.
-- **Residual risk** - accepted risks, assumptions, or areas not assessed.
-- **Blockers** - missing access, missing context, or follow-up questions required for confidence.
-
-## Stop Rules
-
-- Stop and ask when required source, dependency, or deployment context is unavailable and affects severity.
-- Stop and escalate immediately if a secret, credential, or active exploit path is found.
-- Do not finalize a clean security result when important scope was inaccessible; report the residual risk.
+Never paste, log, or repeat secret values; redact and cite location only. Use local/repo-native checks where available. Do not upload proprietary code, install scanners, or call external scanning services without authorization. If a credential exposure or active exploit path is found, promptly report the redacted evidence and required containment within the authorized scope; do not claim broad safety from inaccessible evidence or perform unapproved remediation.

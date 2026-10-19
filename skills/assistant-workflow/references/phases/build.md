@@ -48,7 +48,8 @@ action.
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
 
-Load `references/build-worker-protocol.md` for source-changing Build work. It
+Load `references/build-worker-protocol.md` for canonical packet or worker Build
+execution, active workflow TDD, or a repair requiring its carried protocol. It
 owns delegated/direct fallback execution, Code Writer and Builder/Tester
 evidence, selected verification, conditional TDD, Code Writer unexpected blockers, and per-slice
 verification. It also owns the ordinary bounded repair state with three total
@@ -93,7 +94,7 @@ otherwise do not fabricate it.
 Resolve build and test applicability from the current due CheckSpecs and
 resolved binding constraints, using each check's claim, oracle, and concrete
 procedure. Do not infer applicability from file type, command presence, method,
-or technique alone; missing or unresolved applicability is a gap. Keep
+or technique alone; missing or unresolved applicability is a gap. For actual worker/packet consumers, keep
 `build_result` required: `not_applicable` means no due selected or binding build
 check applies and no build was executed; `not_run` means a required build could
 not run and requires `NEEDS_CONTEXT` or `BLOCKED`; `passed` requires current
@@ -126,8 +127,8 @@ record `pivot_restart_decision.reapproval_required=true`, update harness runtime
 artifacts when applicable, and wait for approval before continuing the changed
 path.
 
-Print: `>> Build complete — all [N] steps implemented`
-Print: `>> Running final current validation (execute or evidence-bound reuse)`
-Print: `>> Build: [passed/failed/not_run/not_applicable] | Tests: [N passed, M failed, K skipped] (zero counts mean no tests ran)`
+Summarize the completed change and observed verification once; omit empty test
+counts and internal result fields from ordinary human updates. Consumer evidence
+retains actual invocation/result identity, including zero counts when required.
 
 Print: `--- PHASE: BUILD COMPLETE ---`
