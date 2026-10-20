@@ -111,7 +111,8 @@ compaction preserves known bindings in optional `closed_admissions`.
 verification, active promotion and completion. Historical actions may differ from
 the latest proposal. Old UNKNOWN bindings remain readable; certification needs
 authoritative reconstruction (`progress_history_missing`). Full grouped history
-may use matching barrier/member authority. VERIFIED no-pair completion recovers
+may use matching barrier/member authority. Every marked VERIFIED execution needs
+historical action identity; guard identity cannot certify closure. No-pair completion recovers
 historical `admission_ref` from its full checkpoint or validated `closed_admissions`,
 then uses exact lineage; known mismatches yield `progress_mismatch`.
 Unmarked legacy and retained PENDING proposals remain compatible.

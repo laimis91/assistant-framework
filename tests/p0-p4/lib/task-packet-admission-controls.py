@@ -1743,6 +1743,58 @@ def completion_progress_closure_controls():
     # packet's current identity. Canonical transitions supply it automatically.
     known_closed = retained_progress_request(closed)
     known_closed["context"]["progress"]["state"]["history"][-1]["closed_admission"] = deepcopy(original_admission)
+    # Marker subsets retain actual admission/action values from this closed
+    # fixture. Readability never supplies a missing completed action identity.
+    marker_fields = ("progress_guard_ref", "action_ref", "action_admission_ref")
+    for form, retained in (("full", known_closed), ("compacted", compact(known_closed))):
+        for mask in range(8):
+            shape = "".join(letter for bit, letter in enumerate("GAD") if mask & (1 << bit)) or "unmarked"
+            marked = completion(retained)
+            for plan in (marked["plan"], marked["context"]["previous_plan"]):
+                execution = plan["implementation_steps"][0]["execution"]
+                execution["state"] = "VERIFIED"
+                for bit, field in enumerate(marker_fields):
+                    if not mask & (1 << bit):
+                        execution.pop(field, None)
+            for boundary in ("plan", "resume", "carrier-free resume"):
+                read = deepcopy(marked)
+                read["boundary"] = "plan" if boundary == "plan" else "resume"
+                if boundary == "carrier-free resume":
+                    read["context"].pop("progress")
+                status = "blocked" if mask in (4, 5) else "accepted"
+                check(read, status, form + " " + shape + " historical " + boundary,
+                      "progress_mismatch" if status == "blocked" else None)
+            status = "accepted" if mask in (0, 3, 7) else "blocked"
+            code = "progress_history_missing" if mask == 1 else "progress_mismatch" if status == "blocked" else None
+            check(marked, status, form + " " + shape + " VERIFIED completion marker subset", code)
+        for historical_state in ("PENDING", "RUNNING", "BLOCKED", "INVALIDATED", "VERIFIED"):
+            historical = deepcopy(retained)
+            for plan in (historical["plan"], historical["context"]["previous_plan"]):
+                execution = plan["implementation_steps"][0]["execution"]
+                execution["state"] = historical_state
+                for field in ("action_ref", "action_admission_ref"):
+                    execution.pop(field)
+            historical["boundary"] = "resume"
+            check(historical, "accepted", form + " guard-only " + historical_state + " historical resume")
+            current = completion(retained)
+            current["context"]["previous_plan"] = deepcopy(historical["context"]["previous_plan"])
+            check(current, "blocked" if historical_state == "VERIFIED" else "accepted",
+                  form + " genuine closed GAD with retained guard-only " + historical_state,
+                  "progress_history_missing" if historical_state == "VERIFIED" else None)
+    empty_initial = deepcopy(initial_baseline)
+    empty_initial["boundary"] = "plan"
+    empty_read = check(empty_initial, "accepted", "valid empty initial progress is read before dispatch")
+    assert empty_read["status"] == "accepted", "Empty initial fixture must precede action admission"
+    empty_guard = completion(retained_progress_request(empty_read))
+    assert empty_guard["context"]["progress"]["state"]["history"] == []
+    assert empty_guard["context"]["progress"]["state"]["work_ordinal"] == 0
+    assert empty_guard["context"]["progress"]["state"].get("action_admission") is None
+    for plan in (empty_guard["plan"], empty_guard["context"]["previous_plan"]):
+        execution = plan["implementation_steps"][0]["execution"]
+        execution["state"] = "VERIFIED"
+        for field in ("action_ref", "action_admission_ref"):
+            execution.pop(field, None)
+    check(empty_guard, "blocked", "valid empty initial progress cannot certify guard-only VERIFIED work", "progress_history_missing")
     for form, retained in (("full", known_closed), ("compacted", compact(known_closed))):
         expected_location = "checkpoint" if form == "full" else "summary"
         check_lineage(retained, original_identity, original_admission["admission_ref"], expected_location,

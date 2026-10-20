@@ -1124,7 +1124,9 @@ def admission(request):
                     lineage = _execution_lineage(pid, execution, context, progress)
                     require(lineage.location in {"checkpoint", "summary"},
                             "progress_mismatch", "context.progress", "Completion needs recorded closure of each admitted execution")
-                elif execution["state"] == "VERIFIED" and "action_ref" in execution:
+                elif execution["state"] == "VERIFIED":
+                    require("action_ref" in execution, "progress_history_missing", pid,
+                            "Completed action identity required")
                     checkpoint = next((event for event in progress.history
                                        if event.kind == "work_checkpoint" and event.action_ref == execution["action_ref"]), None)
                     admission_ref = checkpoint.admission_ref if checkpoint is not None else None
