@@ -117,61 +117,56 @@ accepted `previous_plan`; preserve its presence and canonical JSON digest on lat
 calls. Fresh plans cannot invent provenance. Progress does not change approval;
 material definition changes require deviation/reapproval, never candidate self-signing.
 
-Each packet stores its coordinator-owned `execution` on that same record:
+Each packet stores coordinator-owned `execution`:
 `state: PENDING|RUNNING|VERIFIED|BLOCKED|INVALIDATED`, `evidence_refs`,
-`input_identity` (object of relevant source/contract/requirement identities),
-`history` (retained evidence/invalidation entries), and
-optional historical `recovery: {attempt_count, no_progress_count}`. These old
-observations never authorize or stop continuation. Repeated work carries one
-independently resolved `context.progress` with `state`, `resolved_sources`,
-`action`, and optional completed `event`. Execution carries `progress_guard_ref`,
+`input_identity` (object of relevant source/contract/requirement identities), retained
+evidence/invalidation `history`, optional historical
+`recovery: {attempt_count, no_progress_count}`. Totals neither authorize nor stop
+continuation. Repeated work carries independently resolved `context.progress`:
+`state`, `resolved_sources`, `action`, optional completed `event`.
+Execution carries `progress_guard_ref`,
 `action_ref`, `action_admission_ref`. Single-pass work needs no progress object.
-Journal tables display the same canonical state; they are not another ledger.
-`DONE` alone cannot produce coordinator `VERIFIED`.
+Journal tables display canonical state, never another ledger; `DONE` cannot certify `VERIFIED`.
 
 `completion_allocation` retains task-wide/deferred `requirement_ids`,
 `acceptance_criteria`, `selected_check_ids` and exact `binding_obligation_refs`.
-The accepted Requirement Acceptance Map governs criteria; each requirement,
-check and policy tuple has a packet or task-wide owner. Locally exercised integration
-may remain due at completion. Every `tdd_choice.applicable_check_ids` member must
-occur in `implementation_steps[].selected_check_ids`; completion-only allocation
-cannot replace its executable TDD cycle. Each packet has at most one applicable
-ID, but IDs may repeat across packets/completion beside inactive packets.
-Packet count waives no integration, independent review, conditional QA/harness
-or final snapshot gate.
+The accepted Requirement Acceptance Map governs criteria. Each requirement/check/policy
+tuple has a packet/task-wide owner; locally exercised integration may remain due.
+Every `tdd_choice.applicable_check_ids` member occurs in
+`implementation_steps[].selected_check_ids`, never completion-only instead of
+executable TDD. Packets have at most one applicable ID; IDs may repeat across
+packets/completion alongside inactive packets. Packet count waives no
+integration/independent-review/conditional-QA/harness/final-snapshot gate.
 
 ### Packet admission wire boundary
 
-At Plan acceptance, resume, dispatch, verification and completion, invoke this
-skill's installed `scripts/task-packet-admission.py` using Python 3.9+.
+At Plan acceptance/resume/dispatch/verification/completion, invoke installed
+`scripts/task-packet-admission.py` with Python 3.9+.
 Unix: `python3 scripts/task-packet-admission.py`; native PowerShell uses the
 installer-reported invocation, e.g. `py -3 scripts/task-packet-admission.py` or
 `& 'C:\Path With Spaces\python.exe' scripts/task-packet-admission.py`, never `.py`
-association. Missing/unsupported Python blocks helper/Workflow eval admission,
-including manual installs or later removal; install and rerun. Import-safe
-`admission(request)` and JSON stdin/stdout calculate identically: exit 0 `accepted`,
-1 `blocked`; at most 2 MiB, 256 packets, standard library only. No network,
-commands, arbitrary reference loading, persistence, retries, dispatch or scheduling.
-Existing owners attest readiness/native isolation/worker behavior; consistency
-cannot establish unavailable runtime facts.
+association. Missing/unsupported Python, including manual installs or later
+removal, blocks helper/Workflow eval admission; install and rerun. Import-safe
+`admission(request)` equals JSON stdin/stdout: exits 0 `accepted`/1 `blocked`;
+limits 2 MiB/256 packets; standard library only. No network/commands/arbitrary
+reference loading/persistence/retries/dispatch/scheduling. Existing owners attest
+readiness/native isolation/worker behavior; consistency cannot prove unavailable facts.
 
 Request: `boundary: plan|resume|dispatch|verification|completion`, `plan`, `context`,
-`target_packet_id` (required only at dispatch/verification), and optional
-`current_task_packet` for projection comparison. Internal dispatcher `worker_stage`
-values: inactive `implementation` (or public `production`), `test_authoring`,
-`final_verification`; active
+`target_packet_id` (required only at dispatch/verification), optional `current_task_packet`
+for projection comparison. Dispatcher `worker_stage`: inactive `implementation`
+(public `production`), `test_authoring`, `final_verification`; active
 `test_authoring`, `pre_production_red`, `production`, `green`, `refactor`,
-`refactor_verification`. These differ from the CodeWriter handoff enum: writers
-project only `worker_stage: test_authoring|production|refactor` into
-`current_task_packet` and its top-level alias; builders project only
-`verification_stage: pre_production_red|final_verification`, with actual cycle
-evidence distinguishing GREEN/REFACTOR. Optional `inline_worker_stage` must match.
-Stored packets reject direct worker_stage; definition digests remain unchanged.
-Initial bounded production accepts planned RED, but the SAME executor must observe
-current meaningful RED before editing production. Test authoring permits tests only
-and needs no incoming RED. Inactive refactor deliverables use production then
-verification, without a refactor dispatch stage. Active production/refactor retain
-their exact RED/GREEN gates.
+`refactor_verification`. Handoffs project only writer
+`worker_stage: test_authoring|production|refactor` or builder
+`verification_stage: pre_production_red|final_verification` into `current_task_packet`
+and its top-level alias; actual cycle evidence distinguishes GREEN/REFACTOR.
+`inline_worker_stage`, when present, must match. Stored worker_stage is forbidden;
+definition digests stay unchanged. Initial bounded production accepts planned RED;
+the SAME executor observes current meaningful RED before production edits.
+Test authoring changes tests only, without incoming RED. Inactive refactor uses
+production then verification, never refactor dispatch; active production/refactor
+retain exact RED/GREEN gates.
 The prior source Writer must be terminal before same-packet redispatch, including
 verification. RUNNING stages reuse their admission; completed cycles precede
 subsequent blockers. The source-bound effective window (default three consecutive

@@ -187,8 +187,8 @@ gates:
     exit_assertions:
 
       - id: EV1
-        check: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
-        on_fail: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+        check: "Decision is EXIT_CLEAN, EXIT_ISSUES_FIXED, EXIT_INCOMPLETE_COVERAGE, ESCALATE_PIVOT_RESTART, or CONTINUE. Escalation requires the shared task guard or an applicable material-change decision; positive round ordinals have no cumulative ceiling."
+        on_fail: "Select a supported decision using the common task guard in tools/progress/operating-guidance.md. Retain completed checkpoints before later blockers; preserve authority, coverage and acceptance gates."
 
       - id: EV2
         check: "EXIT_CLEAN or EXIT_ISSUES_FIXED only if the current final snapshot recomputed scope-manifest/content identity still matches, the complete aggregated union has exact manifest-derived tuple closure and zero must-fix and zero should-fix findings remain; prior incomplete or invalidated batches require terminal accounting in history but do not permanently block a later complete replacement batch; needs_context, blocked, timed_out, failed, or invalidated current expected pass forces coverage_complete=false and HAS_REMAINING_ITEMS, never CLEAN or ISSUES_FIXED; any below-threshold aggregate rubric score is recorded as residual risk with the evidence-bounded claim"

@@ -36,6 +36,9 @@ perspectives, root synthesis, and a separate peer critique; see
 
 Return the answer with supporting citations, material conflicts, uncertainty,
 and next steps only where needed. Omit empty headings and internal process fields.
-For existing v3 structured consumers/audit fixtures, `contracts/index.yaml`
-selects the unchanged output and gates; that fixture's numeric budgets and
-HIGH/MEDIUM/LOW count rules do not define ordinary confidence assessment.
+For existing v3 structured consumers/audit fixtures, preserve historical labels
+and evidence; refresh current dispatch/return authority to v4 through
+`contracts/index.yaml` before reuse. Replace private correction allowances with
+the retained task guard; missing progress observations remain gaps. Compatibility
+fixtures' numeric budgets and HIGH/MEDIUM/LOW count rules do not define ordinary
+confidence assessment.

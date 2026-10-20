@@ -917,14 +917,9 @@ elsif explicit_artifact_name == "qa_evaluation_result" || (explicit_artifact_nam
         valid &&= final_failed_count.is_a?(Integer) && final_failed_count > 0
         valid &&= remaining_acceptance.any? { |finding| %w[blocker concern].include?(finding["severity"]) }
       end
-      # Scores remain diagnostics. Only the common independently assessed
-      # progress guard can stop or reactivate repeated work. An optional signal
-      # reports its evidence; score deltas never demand a private pivot window.
-      signal = qa["pivot_restart_signal"]
-      unless signal.nil?
-        valid &&= signal.is_a?(Hash) && nonblank.call(signal["trigger"]) && signal["affected_round"] == qa["rounds"] && nonblank.call(signal["recommended_recovery_focus"])
-        valid &&= signal && signal["evidence"].is_a?(Array) && !signal["evidence"].empty? && signal["evidence"].all? { |entry| entry.is_a?(Hash) && nonblank.call(entry["source"]) && nonblank.call(entry["detail"]) }
-      end
+      # Current fixed QA cases establish no independent guard-trigger authority.
+      # Candidate signal text and diagnostic score movement cannot supply it.
+      valid &&= !qa.key?("pivot_restart_signal")
     end
     valid &&= qa["evidence"].is_a?(Array) && qa["evidence"].any? && qa["evidence"].all? { |entry| entry.is_a?(Hash) && nonblank.call(entry["source"]) && nonblank.call(entry["detail"]) }
   end

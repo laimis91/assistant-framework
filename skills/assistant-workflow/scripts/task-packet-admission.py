@@ -912,6 +912,22 @@ def progress_checkpoint(context):
     return state
 
 
+def _validate_progress_witnesses(plan, context, state):
+    """Reconcile retained execution checkpoints without changing progress."""
+    checkpoints = {event.event_id: event.assessment_ref for event in state.history if event.kind == "work_checkpoint"}
+    summarized = set(PROGRESS.resolved(context["progress"]["resolved_sources"], state.history_base_ref)["seen_event_ids"]) if state.history_base_ref else set()
+    for retained_plan in (plan, context.get("previous_plan") or {}):
+        for retained_packet in retained_plan.get("implementation_steps", []):
+            retained_execution = retained_packet["execution"]
+            if retained_execution.get("progress_guard_ref") != state.guard.guard_id:
+                continue
+            for row in retained_execution["history"]:
+                if not all(isinstance(row.get(key), str) and bool(row[key].strip()) for key in ("event_id", "evidence_ref")):
+                    continue
+                require(row["event_id"] in summarized or checkpoints.get(row["event_id"]) == row["evidence_ref"],
+                        "progress_history_missing", retained_packet["packet_id"], "Retain explicitly observed semantic checkpoints in progress history")
+
+
 def progress_admission(packet, context, state, plan):
     execution = packet["execution"]
     if state is None:
@@ -1038,6 +1054,8 @@ def admission(request):
         if boundary == "resume":
             require(context.get("previous_plan") is not None, "resume_identity", "context.previous_plan", "Resume needs independently retained last snapshot")
         invalid = reconcile_execution(snapshot, context, checks)
+        if boundary in {"dispatch", "completion"} and progress is not None:
+            _validate_progress_witnesses(snapshot, context, progress)
         packets = {packet["packet_id"]: packet for packet in snapshot["implementation_steps"]}
         target = request.get("target_packet_id")
         packet = None

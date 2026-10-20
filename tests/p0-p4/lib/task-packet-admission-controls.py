@@ -1370,9 +1370,161 @@ def completion_progress_closure_controls():
         carrier["resolved_sources"][carrier["event"]["assessment_ref"]]["resolved_uncertainty_ref"] = uncertainty
         return trial
 
+    def incomplete_assessment(event_id, form):
+        return {"empty": {}, "event-only": {"event_id": event_id},
+                "mismatched": {"event_id": "foreign:" + event_id, "disposition": "no_progress"},
+                "unknown": {"event_id": event_id, "disposition": "unknown"}}[form]
+
     predispatch = released_v14_productive_fourth_attempt()
+    legacy_completion = completion(predispatch)
+    for plan in (legacy_completion["plan"], legacy_completion["context"]["previous_plan"]):
+        assert all("action_admission_ref" not in packet["execution"] for packet in plan["implementation_steps"])
+    legacy_closed = check(legacy_completion, "accepted", "legacy completion retains genuine checkpoint witnesses without invented admissions")
+    assert legacy_closed["status"] == "accepted", "Full legacy completion fixture must remain valid"
+    assert legacy_closed["canonical_progress_state"]["work_ordinal"] == 3
+    assert "action_admission" not in legacy_closed["canonical_progress_state"]
+    # Explicit resolved checkpoint witnesses, unlike legacy totals, cannot be
+    # discarded by supplying an internally valid but incomplete progress state.
+    for retained_count in (0, 1, 2):
+        omitted = deepcopy(predispatch)
+        state = omitted["context"]["progress"]["state"]
+        state["history"] = state["history"][:retained_count]
+        state.update(work_ordinal=retained_count,
+                     frontier_ref=state["history"][-1]["frontier_ref"] if retained_count else state["baseline_ref"],
+                     evidence_refs=[ref for row in state["history"] for ref in row["evidence_refs"] + [row["assessment_ref"]]])
+        assert omitted["plan"] == predispatch["plan"]
+        assert omitted["context"]["previous_plan"] == predispatch["context"]["previous_plan"]
+        check(omitted, "blocked", "retained checkpoint witnesses reject lineage retaining " + str(retained_count),
+              "progress_history_missing")
+        omitted_completion = completion(omitted)
+        assert omitted_completion["plan"] == legacy_completion["plan"]
+        assert omitted_completion["context"]["previous_plan"] == legacy_completion["context"]["previous_plan"]
+        assert omitted_completion["context"]["progress"]["resolved_sources"] == legacy_completion["context"]["progress"]["resolved_sources"]
+        check(omitted_completion, "blocked", "legacy completion cannot omit retained checkpoints after " + str(retained_count),
+              "progress_history_missing")
+        for resolution in ("missing", "unresolved", "empty", "event-only", "mismatched", "unknown"):
+            unavailable = deepcopy(omitted)
+            sources = unavailable["context"]["progress"]["resolved_sources"]
+            for checkpoint in predispatch["context"]["progress"]["state"]["history"][retained_count:]:
+                if resolution == "missing":
+                    sources.pop(checkpoint["assessment_ref"])
+                elif resolution == "unresolved":
+                    sources[checkpoint["assessment_ref"]] = None
+                else:
+                    sources[checkpoint["assessment_ref"]] = incomplete_assessment(checkpoint["event_id"], resolution)
+            assert unavailable["plan"] == predispatch["plan"]
+            assert unavailable["context"]["previous_plan"] == predispatch["context"]["previous_plan"]
+            check(unavailable, "blocked", resolution + " assessment cannot hide uncovered witnesses after " + str(retained_count),
+                  "progress_history_missing")
+        if retained_count == 0:
+            initial_baseline = deepcopy(omitted)
+    # No explicit checkpoint witness remains in this independently supplied
+    # baseline. A historical total alone does not establish completed cycles.
+    for plan in (initial_baseline["plan"], initial_baseline["context"]["previous_plan"]):
+        execution = plan["implementation_steps"][0]["execution"]
+        execution.update(history=[], evidence_refs=[])
+    totals_only = check(initial_baseline, "accepted", "legacy totals alone do not invent semantic cycles")
+    assert totals_only["canonical_progress_state"]["work_ordinal"] == 0
+    for plan in (initial_baseline["plan"], initial_baseline["context"]["previous_plan"]):
+        plan["implementation_steps"][0]["execution"]["recovery"] = {"attempt_count": 0, "no_progress_count": 0}
+    initial_baseline["context"]["recovery_counters"]["accepted-outcome"] = {"attempt_count": 0, "no_progress_count": 0}
+    baseline = check(initial_baseline, "accepted", "known initial baseline admits without invented checkpoints")
+    assert baseline["canonical_progress_state"]["work_ordinal"] == 0
+    # Generic producer notes carry evidence/invalidation fields, without
+    # manufacturing a completed-event witness or a private classifier protocol.
+    informational = valid_request()
+    execution = informational["plan"]["implementation_steps"][0]["execution"]
+    execution["history"].append({"state": execution["state"], "input_identity": deepcopy(execution["input_identity"]),
+                                 "evidence_refs": ["runtime:status-note"], "reason": "Runtime status recorded before work starts"})
+    execution["evidence_refs"].append("runtime:status-note")
+    informational["context"]["previous_plan"] = deepcopy(informational["plan"])
+    nonsemantic = check(informational, "accepted", "generic history note requires no invented semantic checkpoint")
+    assert "canonical_progress_state" not in nonsemantic
+    covered = check(compact(predispatch), "accepted", "compacted event inventory covers retained checkpoint witnesses")
+    assert covered["canonical_progress_state"]["work_ordinal"] == 3
+    archived = compact(predispatch)
+    for checkpoint in predispatch["context"]["progress"]["state"]["history"]:
+        archived["context"]["progress"]["resolved_sources"].pop(checkpoint["assessment_ref"])
+    covered = check(archived, "accepted", "validated compacted membership needs no archived assessment reload")
+    assert covered["canonical_progress_state"]["work_ordinal"] == 3
+    legacy_compacted = check(completion(archived), "accepted", "legacy completion accepts compacted witness membership without old bodies")
+    assert legacy_compacted["status"] == "accepted", "Compacted legacy completion must not reload archived assessments"
+    assert legacy_compacted["canonical_progress_state"]["work_ordinal"] == 3
+    # Fix no-progress observations before evaluating either carrier; the
+    # negative retains those same explicit current/previous checkpoint records.
+    stalled = deepcopy(predispatch)
+    carrier = stalled["context"]["progress"]
+    state = carrier["state"]
+    state.update(frontier_ref=state["baseline_ref"], consecutive_no_progress=3, status="stagnant")
+    for checkpoint in state["history"]:
+        checkpoint.update(disposition="no_progress", frontier_ref=state["baseline_ref"])
+        carrier["resolved_sources"][checkpoint["assessment_ref"]].update(disposition="no_progress", frontier_ref=state["baseline_ref"])
+        for ref in checkpoint["evidence_refs"]:
+            carrier["resolved_sources"][ref] = {"result": "failed", "before_frontier_ref": state["baseline_ref"],
+                                               "after_frontier_ref": state["baseline_ref"]}
+    retained_stall = check(stalled, "blocked", "three retained no-progress cycles block corrective admission", "progress_stagnant")
+    assert retained_stall["canonical_progress_state"]["work_ordinal"] == 3
+    assert retained_stall["canonical_progress_state"]["consecutive_no_progress"] == 3
+    unknown_stall = deepcopy(stalled)
+    carrier = unknown_stall["context"]["progress"]
+    for checkpoint in carrier["state"]["history"]:
+        carrier["resolved_sources"].pop(checkpoint["assessment_ref"])
+    carrier["state"].update(history=[], evidence_refs=[], work_ordinal=0, consecutive_no_progress=0, status="active")
+    assert unknown_stall["plan"] == stalled["plan"]
+    assert unknown_stall["context"]["previous_plan"] == stalled["context"]["previous_plan"]
+    check(unknown_stall, "blocked", "unavailable stalled-history witnesses cannot authorize a fresh zero-count window",
+          "progress_history_missing")
+    for form in ("empty", "event-only", "mismatched", "unknown"):
+        partial_stall = deepcopy(unknown_stall)
+        for checkpoint in stalled["context"]["progress"]["state"]["history"]:
+            partial_stall["context"]["progress"]["resolved_sources"][checkpoint["assessment_ref"]] = incomplete_assessment(checkpoint["event_id"], form)
+        assert partial_stall["plan"] == stalled["plan"]
+        assert partial_stall["context"]["previous_plan"] == stalled["context"]["previous_plan"]
+        check(partial_stall, "blocked", form + " stalled-history bodies cannot authorize a fresh zero-count window",
+              "progress_history_missing")
     initial = check(predispatch, "accepted", "singleton admission fixture")
     assert initial["status"] == "accepted", "Invalid singleton fixture is not authorizing RED"
+    unfinished = retained_progress_request(initial)
+    unfinished.update(worker_stage="production", worker_role="code_writer")
+    packet = unfinished["plan"]["implementation_steps"][0]
+    packet["execution"]["state"] = "RUNNING"
+    packet["execution"]["history"].append({"state": "RUNNING", "input_identity": deepcopy(packet["execution"]["input_identity"]),
+        "evidence_refs": ["runtime:unfinished-action"], "reason": "Started action is still running"})
+    packet["execution"]["evidence_refs"].append("runtime:unfinished-action")
+    unfinished["context"]["packet_evidence"][packet["packet_id"]] = evidence(unfinished, packet)
+    continuing = check(unfinished, "accepted", "unfinished RUNNING work retains its admission without another checkpoint")
+    assert continuing["canonical_progress_state"] == initial["canonical_progress_state"]
+    assert continuing["canonical_plan"]["implementation_steps"][0]["execution"]["state"] == "RUNNING"
+    gain_parent = check(cycle(retained_progress_request(initial)), "accepted", "completed cycle before typed acceptance gain")
+    assert gain_parent["status"] == "accepted", "Acceptance-gain fixture must have an actual admitted predecessor"
+    assert gain_parent["canonical_progress_state"]["consecutive_no_progress"] == 1
+    typed_gain = cycle(retained_progress_request(gain_parent), "verified_gain")
+    typed_gain.update(boundary="plan", plan=deepcopy(gain_parent["canonical_plan"]))
+    carrier = typed_gain["context"]["progress"]
+    event = carrier["event"]
+    frontier = "frontier:typed-obligation:A"
+    carrier["resolved_sources"][frontier] = {"accepted_obligations": ["scope", "focused", "integration", "A"]}
+    event["frontier_ref"] = frontier
+    carrier["resolved_sources"][event["assessment_ref"]]["frontier_ref"] = frontier
+    observation_ref = event["evidence_refs"][0]
+    carrier["resolved_sources"][observation_ref].update(result="passed", newly_verified_obligations=["A"])
+    valid_gain = check(typed_gain, "accepted", "unique obligation reference array certifies a genuine gain")
+    assert valid_gain["status"] == "accepted", "Typed acceptance observation must remain valid"
+    assert valid_gain["canonical_progress_state"]["consecutive_no_progress"] == 0
+    for label, malformed in (("string", "A"), ("object", {"A": True}), ("duplicate array", ["A", "A"])):
+        for later_row in (False, True):
+            malformed_gain = deepcopy(typed_gain)
+            carrier = malformed_gain["context"]["progress"]
+            event = carrier["event"]
+            ref = observation_ref
+            if later_row:
+                ref = "observation:typed-obligation:later"
+                carrier["resolved_sources"][ref] = deepcopy(carrier["resolved_sources"][observation_ref])
+                event["evidence_refs"].append(ref)
+                carrier["resolved_sources"][event["assessment_ref"]]["observation_refs"].append(ref)
+            carrier["resolved_sources"][ref]["newly_verified_obligations"] = deepcopy(malformed)
+            check(malformed_gain, "blocked", label + (" after valid supporting row" if later_row else " obligation evidence"),
+                  "progress_mismatch")
     singleton = retained_progress_request(initial)
     singleton["boundary"] = "verification"
     packet = singleton["plan"]["implementation_steps"][0]
@@ -1613,6 +1765,16 @@ def completion_progress_closure_controls():
     group_successor["context"]["workspace"]["active_source_writer_ids"] = []
     group_successor["plan"]["implementation_steps"][0]["execution"]["action_ref"] = action_ref
     group_successor["context"]["packet_evidence"]["accepted-outcome"]["implementation_evidence_ref"] = "writer:coordinator-successor"
+    witnessed_group = deepcopy(group_successor)
+    checkpoint = witnessed_group["context"]["progress"]["state"]["history"][-1]
+    for plan in (witnessed_group["plan"], witnessed_group["context"]["previous_plan"]):
+        for packet in plan["implementation_steps"]:
+            packet["execution"]["history"].append({"event_id": checkpoint["event_id"], "evidence_ref": checkpoint["assessment_ref"]})
+            packet["execution"]["evidence_refs"] = list(dict.fromkeys(packet["execution"]["evidence_refs"] +
+                checkpoint["evidence_refs"] + [checkpoint["assessment_ref"]]))
+    deduplicated = check(witnessed_group, "accepted", "two member checkpoint witnesses retain one coordinator cycle")
+    assert deduplicated["status"] == "accepted", "Shared group witnesses must not become separate semantic cycles"
+    assert deduplicated["canonical_progress_state"]["work_ordinal"] == 1
     first_member = check(group_successor, "accepted", "genuine grouped successor binds its anchor after old closure")
     assert first_member["status"] == "accepted", "Grouped successor anchor must remain valid"
     second_member = retained_progress_request(first_member)

@@ -472,8 +472,9 @@ def assess(event, sources, ordinal, count, frontier, observations, frontiers, wi
                                             for ref in frontiers))
         require(old < new and bool(new - previously_accepted) and event.frontier_ref not in frontiers,
                 "Oscillation, renamed recurring acceptance or lost acceptance is not a durable gain")
-        require(any(fact.get("result") == "passed" and set(fact.get("newly_verified_obligations", [])) & (new - old)
-                    for fact in facts), "Verified gain needs independent acceptance observations")
+        verified = [set(refs(fact.get("newly_verified_obligations", []))) for fact in facts if fact.get("result") == "passed"]
+        require(any(obligations & (new - old) for obligations in verified),
+                "Verified gain needs independent acceptance observations")
     elif event.disposition == "useful_new_evidence":
         require(assessment.get("changes_next_action") is True and bool(assessment.get("resolved_uncertainty_ref")),
                 "Unsupported novelty is not useful evidence")
