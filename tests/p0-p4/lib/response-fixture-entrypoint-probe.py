@@ -15,7 +15,7 @@ def probe(suite):
     source = Path(__file__).resolve().parents[3]
     with tempfile.TemporaryDirectory(prefix="response-entrypoint-probe-") as temporary:
         destination = Path(temporary)
-        for relative in ("tests", "skills", "tools/evals/lib"):
+        for relative in ("tests", "skills", "tools/evals/lib", "tools/progress"):
             shutil.copytree(source / relative, destination / relative)
         marker = destination / "grader-was-called"
         runner = destination / "tools/evals/run-skill-evals.sh"

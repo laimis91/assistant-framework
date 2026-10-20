@@ -834,6 +834,9 @@ def reconcile_execution(plan, context, checks):
         require(bool(current[pid]), "input_identity", pid, "Current relevant-input identity required")
         if pid in previous_packets:
             old = previous_packets[pid]["execution"]
+            if "progress_guard_ref" in old:
+                require("progress_guard_ref" in execution and execution["progress_guard_ref"] == old["progress_guard_ref"],
+                        "progress_mismatch", pid, "Retain the independently recorded task guard across canonical snapshots")
             require(old["state"] != "VERIFIED" or execution["state"] == "VERIFIED",
                     "invalid_state", pid, "Caller cannot downgrade retained VERIFIED work; only helper reconciliation invalidates it")
             # The current recovery owner above attests measurable-progress resets
@@ -1056,6 +1059,18 @@ def admission(request):
             packet["execution"]["state"] = "VERIFIED"
         if boundary == "completion":
             require(all(p["execution"]["state"] == "VERIFIED" for p in packets.values()), "incomplete_packets", "implementation_steps", "Every canonical packet must be VERIFIED")
+            marked_executions = [p["execution"]
+                                 for retained_plan in (snapshot, context.get("previous_plan") or {})
+                                 for p in retained_plan.get("implementation_steps", [])
+                                 if any(field in p["execution"] for field in
+                                        ("progress_guard_ref", "action_ref", "action_admission_ref"))]
+            require(not marked_executions or progress is not None, "progress_history_missing", "context.progress",
+                    "Completion must retain progress bound by current or previous packet executions")
+            for execution in marked_executions:
+                require(execution.get("progress_guard_ref") == progress.guard.guard_id,
+                        "progress_mismatch", "context.progress", "Completed packet executions must retain the same task guard")
+            require(progress is None or progress.action_admission is None, "progress_mismatch", "context.progress",
+                    "Record the completed semantic cycle before final completion")
             completion = object_value(context.get("completion_evidence"), "context.completion_evidence")
             require(completion.get("approved_plan_identity") == snapshot["approved_plan_identity"], "stale_evidence", "completion", "Completion approval identity mismatch")
             current_snapshot = text(context.get("current_snapshot_identity"), "context.current_snapshot_identity")

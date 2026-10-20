@@ -1371,7 +1371,7 @@ stays unknown; the bounded synthetic pilot does not establish production savings
 
 ## Canonical packet admission controls
 
-The closed `assistant-workflow.packet_admission_v14` semantic validator reuses
+The closed `assistant-workflow.packet_admission_v15` semantic validator reuses
 `skills/assistant-workflow/scripts/task-packet-admission.py`, the same install-portable
 pure helper used at Plan/resume/dispatch/verification/completion. Closed grading
 passes the inventory-selected `SKILL.md` separately from fixture and response

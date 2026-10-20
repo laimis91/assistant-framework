@@ -1300,6 +1300,182 @@ def restored_completed_action_history_uniqueness():
     assert not failures, ("Restored completed action counted twice instead of rejected as progress_replay", failures)
 
 
+def completion_progress_closure_controls():
+    """Final completion closes admitted cycles; intermediate verification need not."""
+    failures = []
+    total = 0
+
+    def check(request, status, name, code=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        print("Completion progress control: " + name + "; observed=" + result["status"] + "/" + result["code"]
+              + "; required=" + status + ("/" + code if code else ""))
+        if result["status"] != status or (code is not None and result["code"] != code):
+            failures.append((name, status, code, result))
+        assert request == before, (name, "Admission mutated caller-owned progress or execution")
+        total += 1
+        return result
+
+    def completion(request):
+        trial = verify_all(deepcopy(request))
+        trial["boundary"] = "completion"
+        context = trial["context"]
+        context.update(current_snapshot_identity="snapshot:completion", required_terminal_gates=["independent_review"])
+        context["workspace"]["active_source_writer_ids"] = []
+        context["completion_evidence"] = {
+            "approved_plan_identity": deepcopy(trial["plan"]["approved_plan_identity"]),
+            "snapshot_identity": "snapshot:completion", "acceptance_results": [],
+            "validation_results": [{"selected_check_ids": ["integrated"], "binding_obligation_refs": [],
+                "result": "passed", "evidence_ref": "integration:completion",
+                "procedure": "Inspect the current integrated acceptance evidence"}],
+            "terminal_gates": {"independent_review": {"passed": True, "after_integration": True,
+                "snapshot_identity": "snapshot:completion", "evidence_ref": "review:completion"}}}
+        return trial
+
+    initial = check(released_v14_productive_fourth_attempt(), "accepted", "singleton admission fixture")
+    assert initial["status"] == "accepted", "Invalid singleton fixture is not authorizing RED"
+    singleton = retained_progress_request(initial)
+    singleton["boundary"] = "verification"
+    packet = singleton["plan"]["implementation_steps"][0]
+    packet["execution"]["state"] = "RUNNING"
+    singleton["context"]["packet_evidence"][packet["packet_id"]] = evidence(singleton, packet)
+    singleton["context"]["required_terminal_gates"] = ["independent_review"]
+    verified = check(singleton, "accepted", "singleton verification before due Review")
+    assert verified["status"] == "accepted", "Intermediate verification must remain valid"
+    assert verified["canonical_progress_state"] == singleton["context"]["progress"]["state"]
+    singleton = retained_progress_request(verified)
+
+    joined = check(guarded_parallel_member_request(), "accepted", "grouped admission fixture")
+    assert joined["status"] == "accepted", "Invalid grouped fixture is not authorizing RED"
+    grouped = retained_progress_request(joined)
+    grouped["context"]["workspace"]["active_source_writer_ids"] = []
+    for packet in grouped["plan"]["implementation_steps"]:
+        packet["execution"]["state"] = "RUNNING"
+        grouped["context"]["packet_evidence"][packet["packet_id"]] = evidence(grouped, packet)
+    for index, pid in enumerate(("accepted-outcome", "dependent-outcome")):
+        grouped.update(boundary="verification", target_packet_id=pid)
+        verified = check(grouped, "accepted", "group member verification before coordinator barrier: " + pid)
+        assert verified["status"] == "accepted", "Intermediate member verification must remain valid"
+        assert verified["canonical_progress_state"] == grouped["context"]["progress"]["state"]
+        if index == 0:
+            assert verified["canonical_plan"]["implementation_steps"][1]["execution"]["state"] == "RUNNING"
+        grouped = retained_progress_request(verified)
+
+    for name, request in (("singleton", singleton), ("grouped", grouped)):
+        resume = deepcopy(request)
+        resume["boundary"] = "resume"
+        resumed = check(resume, "accepted", name + " retained resume with progress")
+        assert resumed["status"] == "accepted", "Valid retained resume must remain accepted"
+        assert resumed["canonical_progress_state"] == request["context"]["progress"]["state"]
+        without_carrier = deepcopy(resume)
+        without_carrier["context"].pop("progress")
+        resumed = check(without_carrier, "accepted", name + " retained resume safely omits carrier")
+        assert resumed["status"] == "accepted", "Resume may retain guard provenance without the carrier"
+        for before, after in zip(request["plan"]["implementation_steps"], resumed["canonical_plan"]["implementation_steps"]):
+            assert after["execution"]["progress_guard_ref"] == before["execution"]["progress_guard_ref"]
+        check(completion(retained_progress_request(resumed)), "blocked",
+              name + " retained canonical handoff still requires completion carrier", "progress_history_missing")
+        for mutation in ("erase", "rebind"):
+            lost = deepcopy(without_carrier)
+            for packet in lost["plan"]["implementation_steps"]:
+                if mutation == "erase":
+                    for field in ("progress_guard_ref", "action_ref", "action_admission_ref"):
+                        packet["execution"].pop(field)
+                else:
+                    packet["execution"]["progress_guard_ref"] = "guard:substituted-on-resume"
+            observed = check(lost, "blocked", name + " resume cannot " + mutation + " retained guard",
+                             "progress_mismatch")
+            if observed["status"] == "accepted":
+                # Exercise the actual accepted canonical promotion, not a
+                # synthetic previous_plan stripped independently by the test.
+                check(completion(retained_progress_request(observed)), "blocked",
+                      name + " " + mutation + " resume canonical handoff cannot bypass completion",
+                      "progress_history_missing")
+        live = completion(request)
+        check(live, "blocked", name + " completion retains a live admission", "progress_mismatch")
+        if name == "grouped":
+            closed_now = completion(guarded_parallel_barrier_request(request))
+        else:
+            closed_now = completion(completed_progress_cycle(request))
+            # Historical execution actions need not equal the carrier's next
+            # proposed action after the completed admission has been closed.
+            closed_now["plan"] = deepcopy(request["plan"])
+        closed = check(closed_now, "accepted", name + " completion closes the cycle now")
+        assert closed["status"] == "accepted", "Valid closing checkpoint must permit completion"
+        state = closed["canonical_progress_state"]
+        prior = request["context"]["progress"]["state"]
+        assert state["work_ordinal"] == prior["work_ordinal"] + 1
+        assert state["consecutive_no_progress"] == prior["consecutive_no_progress"] + 1
+        assert "action_admission" not in state
+        # Passing completion evidence does not invent a productive disposition.
+        assert state["history"][-1]["disposition"] == "no_progress"
+        already_closed = completion(retained_progress_request(closed))
+        retained = check(already_closed, "accepted", name + " completion retains a previously closed cycle")
+        assert retained["canonical_progress_state"] == state
+        blocked = deepcopy(closed_now)
+        blocked["context"]["readiness"]["ready"] = False
+        observed = check(blocked, "blocked", name + " completed checkpoint precedes a later blocker", "not_ready")
+        assert observed["canonical_progress_state"] == state
+
+        for owner in ("current", "previous"):
+            wrong_guard = deepcopy(already_closed)
+            plan = wrong_guard["plan"] if owner == "current" else wrong_guard["context"]["previous_plan"]
+            plan["implementation_steps"][-1]["execution"]["progress_guard_ref"] = "guard:wrong-outcome"
+            check(wrong_guard, "blocked", name + " wrong " + owner + " guard binding", "progress_mismatch")
+
+        # Each marker independently retains the carrier requirement, including
+        # committed markers deleted from the current execution by a candidate.
+        for owner in ("current", "previous"):
+            for marker in ("progress_guard_ref", "action_ref", "action_admission_ref"):
+                omitted = deepcopy(already_closed)
+                omitted["context"].pop("progress")
+                retained_plan = omitted["context"]["previous_plan"]
+                value = retained_plan["implementation_steps"][-1]["execution"][marker]
+                for plan in (omitted["plan"], retained_plan):
+                    for packet in plan["implementation_steps"]:
+                        for field in ("progress_guard_ref", "action_ref", "action_admission_ref"):
+                            packet["execution"].pop(field, None)
+                marked = omitted["plan"] if owner == "current" else retained_plan
+                marked["implementation_steps"][-1]["execution"][marker] = value
+                # A retained guard cannot first be deleted during reconciliation;
+                # other omitted-carrier cases still reach the completion gate.
+                code = "progress_mismatch" if owner == "previous" and marker == "progress_guard_ref" else "progress_history_missing"
+                check(omitted, "blocked", name + " omitted carrier with only " + owner + " " + marker,
+                      code)
+
+    check(completion(valid_request()), "accepted", "single-pass completion without progress")
+    later_action = check(completed_progress_cycle(retained_progress_request(initial)), "accepted",
+                         "legitimate later action retains the task guard")
+    assert later_action["status"] == "accepted", "Valid later-action fixture must remain accepted"
+    later_resume = retained_progress_request(later_action)
+    later_resume["boundary"] = "resume"
+    later_resume["context"]["previous_plan"] = deepcopy(initial["canonical_plan"])
+    old = initial["canonical_plan"]["implementation_steps"][0]["execution"]
+    current_execution = later_resume["plan"]["implementation_steps"][0]["execution"]
+    assert current_execution["progress_guard_ref"] == old["progress_guard_ref"]
+    assert current_execution["action_ref"] != old["action_ref"]
+    assert current_execution["action_admission_ref"] != old["action_admission_ref"]
+    check(later_resume, "accepted", "resume accepts changed action and admission refs under the same guard")
+    current = retained_progress_request(initial)
+    for _ in range(2):
+        next_cycle = check(completed_progress_cycle(current), "accepted", "prepare retained no-progress cycle")
+        assert next_cycle["status"] == "accepted", "Invalid stagnation fixture is not authorizing RED"
+        current = retained_progress_request(next_cycle)
+    final = completion(completed_progress_cycle(current))
+    stagnant = check(final, "accepted", "final checkpoint reaches stagnation with proven completion")
+    assert stagnant["status"] == "accepted", "Stagnation alone must not refuse proven completion"
+    state = stagnant["canonical_progress_state"]
+    assert state["status"] == "stagnant" and state["consecutive_no_progress"] == 3
+    assert state["work_ordinal"] == current["context"]["progress"]["state"]["work_ordinal"] + 1
+    assert "action_admission" not in state
+    retained = check(completion(retained_progress_request(stagnant)), "accepted", "previously stagnant proven completion")
+    assert retained["canonical_progress_state"] == state
+    if failures:
+        raise AssertionError(("Final completion progress closure regression controls", failures))
+    return total
+
+
 def run_controls():
     # Run the dedicated source-backed authorizer before later guard controls;
     # unsupported versions, missing helper APIs and setup errors are not RED.
@@ -1308,7 +1484,7 @@ def run_controls():
     guarded_parallel_second_member_admission()
     restored_completed_action_history_uniqueness()
     terminal_stage_and_provenance_controls()
-    total = 4 + shared_progress_controls()
+    total = 4 + shared_progress_controls() + completion_progress_closure_controls()
 
     def expect(request, status, code=None, name=None):
         nonlocal total
