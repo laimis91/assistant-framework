@@ -205,6 +205,7 @@ class ProgressEvent:
     authority_ref: Optional[str] = None
     coordinator_barrier_ref: Optional[str] = None
     action_scope_ref: Optional[str] = None
+    closed_admission: Optional[ActionAdmission] = None
 
     @classmethod
     def parse(cls, value):
@@ -217,6 +218,9 @@ class ProgressEvent:
         disposition = value.get("disposition")
         if kind == "work_checkpoint":
             require(disposition in {"verified_gain", "useful_new_evidence", "no_progress"}, "Unknown progress disposition")
+        closed = ActionAdmission.parse(value.get("closed_admission"))
+        require("closed_admission" not in value or (kind == "work_checkpoint" and closed is not None),
+                "Only completed checkpoints retain an admission")
         return cls(kind, text(value.get("event_id")),
                    GuardIdentity(text(value.get("guard_id")), text(value.get("outcome_ref"))),
                    text(previous) if previous is not None else None, integer(value.get("work_ordinal")),
@@ -229,7 +233,7 @@ class ProgressEvent:
                    ProgressPolicy.from_wire(value.get("new_policy")) if kind == "policy_change" else None,
                    text(value.get("authority_ref")) if kind == "policy_change" else None,
                    text(value["coordinator_barrier_ref"]) if "coordinator_barrier_ref" in value else None,
-                   text(value["action_scope_ref"]) if "action_scope_ref" in value else None)
+                   text(value["action_scope_ref"]) if "action_scope_ref" in value else None, closed)
 
     def wire(self):
         result = dict(kind=self.kind, event_id=self.event_id, guard_id=self.guard.guard_id,
@@ -251,6 +255,8 @@ class ProgressEvent:
         if self.action_scope_ref is not None:
             require(self.kind == "material_unblock", "Only material unblocks carry action scope")
             result["action_scope_ref"] = self.action_scope_ref
+        if self.closed_admission is not None:
+            result["closed_admission"] = self.closed_admission.wire()
         return result
 
 
@@ -315,6 +321,14 @@ class ProgressState:
             refs(base.get("unresolved_oscillation_refs"))
             refs(base.get("seen_unblock_change_refs"))
             completed_actions = set(refs(base.get("seen_action_refs")))
+            closed = base.get("closed_admissions", [])
+            require(isinstance(closed, list), "Expected compacted admission array")
+            admissions = tuple(ActionAdmission.parse(row) for row in closed)
+            require(all(row is not None and row.guard_id == state.guard.guard_id
+                        and row.action.action_ref in completed_actions for row in admissions),
+                    "Compacted admissions must bind this guard and closed actions")
+            require(len({row.action.action_ref for row in admissions}) == len(admissions),
+                    "Duplicate compacted admission action")
             if "seen_resolved_uncertainty_refs" in base:
                 resolved_uncertainties = set(refs(base["seen_resolved_uncertainty_refs"]))
             require(state.history_base_ref in state.evidence_refs, "Compacted evidence reference was discarded")
@@ -323,6 +337,14 @@ class ProgressState:
                     and event.predecessor_event_id == previous, "Replayed, reordered or different-outcome progress event")
             if event.kind == "work_checkpoint":
                 require(event.action_ref not in completed_actions, "Completed action repeated in retained history", "progress_replay")
+                closed = event.closed_admission
+                if closed is not None:
+                    require(closed.guard_id == state.guard.guard_id and closed.action.action_ref == event.action_ref
+                            and closed.admission_ref == event.admission_ref, "Checkpoint changed its closed admission")
+                    scope = closed.action.member_scope
+                    require((scope is None) == (event.coordinator_barrier_ref is None), "Closed admission changed coordinator membership")
+                    if scope is not None:
+                        coordinator_barrier(event, sources, scope)
             if event.kind == "material_unblock":
                 summarized_changes = set(base.get("seen_unblock_change_refs", [])) if state.history_base_ref else set()
                 require(event.changed_ref not in {prior.changed_ref for prior in state.history if prior.event_id in seen} | summarized_changes,
@@ -371,22 +393,53 @@ class ProgressState:
         return state
 
     def action_lineage(self, action: ActionIdentity, admission_ref: str, sources) -> ActionLineage:
-        """Locate an execution pair without inventing order within a summary."""
+        """Certify the exact admitted packet/member and relevant input."""
+        lineage, bound_input = self._lineage_binding(action, admission_ref, sources)
+        return lineage if bound_input is None or bound_input == action.input_identity else ActionLineage("missing")
+
+    def predecessor_lineage(self, action: ActionIdentity, admission_ref: str, sources) -> ActionLineage:
+        """Retire the same packet/member's pair despite a refreshed input."""
+        lineage, _ = self._lineage_binding(action, admission_ref, sources)
+        return lineage
+
+    def _lineage_binding(self, action: ActionIdentity, admission_ref: str, sources) -> Tuple[ActionLineage, Optional[RelevantInputIdentity]]:
         text(admission_ref)
-        admission = self.action_admission
-        if admission and admission.admission_ref == admission_ref and admission.action.action_ref == action.action_ref:
+        admission, scope = None, None
+        if self.action_admission and self.action_admission.action.action_ref == action.action_ref:
+            admission = self.action_admission
+            lineage = ActionLineage("admitted")
+        else:
+            event = next((row for row in self.history if row.kind == "work_checkpoint" and row.action_ref == action.action_ref), None)
+            if event is not None:
+                if event.admission_ref != admission_ref:
+                    return ActionLineage("missing"), None
+                lineage = ActionLineage("checkpoint", event.work_ordinal)
+                admission = event.closed_admission
+                if admission is None and event.coordinator_barrier_ref is not None:
+                    try:
+                        barrier = resolved(sources, event.coordinator_barrier_ref)
+                        source_ref = text(barrier.get("action_scope_ref"))
+                        scope = CoordinatorMemberScope.parse(dict(source_ref=source_ref, members=resolved(sources, source_ref).get("members")))
+                        coordinator_barrier(event, sources, scope)
+                    except ProgressError as error:
+                        if error.code != "progress_history_missing":
+                            raise
+                        scope = None
+            elif self.history_base_ref and action.action_ref in resolved(sources, self.history_base_ref)["seen_action_refs"]:
+                lineage = ActionLineage("summary")
+                admission = next((ActionAdmission.parse(row) for row in resolved(sources, self.history_base_ref).get("closed_admissions", [])
+                                  if row["action_ref"] == action.action_ref), None)
+            else:
+                return ActionLineage("missing"), None
+        if admission is not None:
+            if admission.admission_ref != admission_ref:
+                return ActionLineage("missing"), None
             scope = admission.action.member_scope
-            bound = (next((member for member in scope.members if member.packet_id == action.packet_id), None)
-                     if scope else admission.action if admission.action.packet_id == action.packet_id else None)
-            if bound is not None and bound.input_identity == action.input_identity:
-                return ActionLineage("admitted")
-        for event in self.history:
-            if event.kind == "work_checkpoint" and event.action_ref == action.action_ref:
-                return (ActionLineage("checkpoint", event.work_ordinal) if event.admission_ref == admission_ref
-                        else ActionLineage("missing"))
-        if self.history_base_ref and action.action_ref in resolved(sources, self.history_base_ref)["seen_action_refs"]:
-            return ActionLineage("summary")
-        return ActionLineage("missing")
+        elif scope is None:
+            return ActionLineage("unknown", lineage.work_ordinal), None
+        bound = (next((member for member in scope.members if member.packet_id == action.packet_id), None)
+                 if scope else admission.action if admission.action.packet_id == action.packet_id else None)
+        return (lineage, bound.input_identity) if bound is not None else (ActionLineage("missing"), None)
 
     def wire(self):
         result = dict(schema_version="1.0", guard_id=self.guard.guard_id, outcome_ref=self.guard.outcome_ref,
@@ -545,6 +598,9 @@ def transition(request: ProgressTransitionRequest) -> ProgressTransitionResult:
             admission = state.action_admission
             require(admission is not None and event.action_ref == admission.action.action_ref
                     and event.admission_ref == admission.admission_ref, "Completed cycle must bind its admitted action")
+            require(event.closed_admission is None or event.closed_admission == admission,
+                    "Supplied close metadata differs from the actual admission")
+            event = replace(event, closed_admission=admission)
             if admission.action.member_scope:
                 require(event.coordinator_barrier_ref is not None, "Grouped cycle needs one complete coordinator barrier")
                 coordinator_barrier(event, request.resolved_sources, admission.action.member_scope)

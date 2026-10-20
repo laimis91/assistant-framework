@@ -1338,6 +1338,7 @@ def completion_progress_closure_controls():
         carrier = trial["context"]["progress"]
         state = carrier["state"]
         history = state["history"]
+        base = carrier["resolved_sources"].get(state.get("history_base_ref"), {})
         summary_ref = "history:completion:compacted:" + str(state["work_ordinal"])
         summary = {"guard_id": state["guard_id"], "outcome_ref": state["outcome_ref"],
             "policy": deepcopy(state["policy"]), "work_ordinal": state["work_ordinal"],
@@ -1349,6 +1350,16 @@ def completion_progress_closure_controls():
             "seen_observation_refs": list(dict.fromkeys(ref for row in history for ref in row["evidence_refs"])),
             "seen_frontier_refs": list(dict.fromkeys([state["baseline_ref"]] + [row["frontier_ref"] for row in history])),
             "seen_unblock_change_refs": [], "unresolved_oscillation_refs": []}
+        for field in ("seen_event_ids", "seen_action_refs", "seen_policy_authority_refs", "seen_observation_refs",
+                      "seen_frontier_refs", "seen_unblock_change_refs", "unresolved_oscillation_refs"):
+            summary[field] = list(dict.fromkeys(base.get(field, []) + summary[field]))
+        bindings = {row["action_ref"]: deepcopy(row) for row in base.get("closed_admissions", [])}
+        for row in history:
+            if "closed_admission" in row:
+                binding = deepcopy(row["closed_admission"])
+                bindings[binding["action_ref"]] = binding
+        if bindings or "closed_admissions" in base:
+            summary["closed_admissions"] = list(bindings.values())
         if inventory is not None:
             summary["seen_resolved_uncertainty_refs"] = list(inventory)
         carrier["resolved_sources"][summary_ref] = summary
@@ -1374,6 +1385,16 @@ def completion_progress_closure_controls():
         return {"empty": {}, "event-only": {"event_id": event_id},
                 "mismatched": {"event_id": "foreign:" + event_id, "disposition": "no_progress"},
                 "unknown": {"event_id": event_id, "disposition": "unknown"}}[form]
+
+    def check_lineage(request, identity, admission_ref, location, name):
+        nonlocal total
+        carrier = request["context"]["progress"]
+        state = API.PROGRESS.ProgressState.parse(carrier["state"], carrier["resolved_sources"])
+        found = state.action_lineage(API.PROGRESS.ActionIdentity.parse(identity), admission_ref, carrier["resolved_sources"])
+        print("Closed binding control: " + name + "; observed=" + found.location + "; required=" + location)
+        if found.location != location:
+            failures.append((name, location, found))
+        total += 1
 
     predispatch = released_v14_productive_fourth_attempt()
     legacy_completion = completion(predispatch)
@@ -1679,6 +1700,80 @@ def completion_progress_closure_controls():
     closed_request.update(boundary="plan", plan=deepcopy(initial["canonical_plan"]))
     closed = check(closed_request, "accepted", "actual closure before the successor dispatch")
     assert closed["status"] == "accepted", "Completed predecessor fixture must remain valid"
+    original_admission = deepcopy(initial["canonical_progress_state"]["action_admission"])
+    original_identity = {field: deepcopy(original_admission[field]) for field in ("action_ref", "packet_id", "input_identity")}
+    contradictory = deepcopy(closed_request)
+    contradictory["context"]["progress"]["event"]["closed_admission"] = deepcopy(original_admission)
+    contradictory["context"]["progress"]["event"]["closed_admission"]["input_identity"] = {"source": "contradicts-real-admission"}
+    check(contradictory, "blocked", "checkpoint cannot replace its real admitted input with supplied close metadata", "progress_mismatch")
+
+    # Reconstruction uses the independently retained real admission, never the
+    # packet's current identity. Canonical transitions supply it automatically.
+    known_closed = retained_progress_request(closed)
+    known_closed["context"]["progress"]["state"]["history"][-1]["closed_admission"] = deepcopy(original_admission)
+    for form, retained in (("full", known_closed), ("compacted", compact(known_closed))):
+        expected_location = "checkpoint" if form == "full" else "summary"
+        check_lineage(retained, original_identity, original_admission["admission_ref"], expected_location,
+                      form + " original closed packet/input binding")
+        for field, value in (("packet_id", "foreign-packet"), ("input_identity", {"source": "different-input"})):
+            wrong = deepcopy(original_identity)
+            wrong[field] = value
+            check_lineage(retained, wrong, original_admission["admission_ref"], "missing", form + " closed binding rejects wrong " + field)
+        check_lineage(retained, original_identity, "admission:foreign", "missing", form + " closed binding rejects wrong admission")
+        check(completion(retained), "accepted", form + " independently retained closed binding certifies its original execution")
+        unknown = deepcopy(retained)
+        carrier = unknown["context"]["progress"]
+        if form == "full":
+            for row in carrier["state"]["history"]:
+                row.pop("closed_admission", None)
+        else:
+            carrier["resolved_sources"][carrier["state"]["history_base_ref"]].pop("closed_admissions", None)
+        unknown["boundary"] = "plan"
+        check(unknown, "accepted", form + " old unknown closed binding remains readable")
+        check_lineage(unknown, original_identity, original_admission["admission_ref"], "unknown", form + " absent historical binding is unknown")
+        check(completion(unknown), "blocked", form + " unknown closed binding needs reconstruction for certification", "progress_history_missing")
+        restored = deepcopy(unknown)
+        carrier = restored["context"]["progress"]
+        if form == "full":
+            carrier["state"]["history"][-1]["closed_admission"] = deepcopy(original_admission)
+        else:
+            carrier["resolved_sources"][carrier["state"]["history_base_ref"]]["closed_admissions"] = [deepcopy(original_admission)]
+        check(completion(restored), "accepted", form + " authoritative old admission reconstruction preserves completion")
+
+    siblings = valid_request(2)
+    seed = released_v14_productive_fourth_attempt()
+    siblings["context"]["progress"] = deepcopy(seed["context"]["progress"])
+    siblings["plan"]["implementation_steps"][0]["execution"] = deepcopy(seed["plan"]["implementation_steps"][0]["execution"])
+    siblings["context"]["recovery_counters"]["accepted-outcome"] = deepcopy(seed["context"]["recovery_counters"]["accepted-outcome"])
+    siblings["context"]["previous_plan"] = deepcopy(siblings["plan"])
+    first = check(siblings, "accepted", "two-packet task actually admits its guarded first packet")
+    assert first["status"] == "accepted", "Shared-carrier fixture must admit its first action"
+    verify_first = retained_progress_request(first)
+    verify_first["boundary"] = "verification"
+    packet = verify_first["plan"]["implementation_steps"][0]
+    packet["execution"]["state"] = "RUNNING"
+    verify_first["context"]["packet_evidence"][packet["packet_id"]] = evidence(verify_first, packet)
+    verified_first = check(verify_first, "accepted", "first guarded packet actually verifies before its checkpoint")
+    assert verified_first["status"] == "accepted", "Shared-carrier fixture verification must remain valid"
+    close_first = cycle(retained_progress_request(verified_first))
+    close_first.update(boundary="plan", plan=deepcopy(verified_first["canonical_plan"]))
+    closed_first = check(close_first, "accepted", "first guarded packet actually closes before sibling dispatch")
+    assert closed_first["status"] == "accepted", "Shared-carrier fixture closure must remain valid"
+    sibling = retained_progress_request(closed_first)
+    sibling["target_packet_id"] = "dependent-outcome"
+    assert not any(field in sibling["plan"]["implementation_steps"][1]["execution"]
+                   for field in ("progress_guard_ref", "action_ref", "action_admission_ref"))
+    without_carrier = deepcopy(sibling)
+    without_carrier["context"].pop("progress")
+    check(without_carrier, "blocked", "unmarked sibling dispatch cannot omit the established task carrier", "progress_history_missing")
+    carrier = sibling["context"]["progress"]
+    packet = sibling["plan"]["implementation_steps"][1]
+    carrier["action"] = {"action_ref": "action:guarded-sibling", "packet_id": packet["packet_id"],
+                         "input_identity": deepcopy(packet["execution"]["input_identity"])}
+    packet["execution"].update(progress_guard_ref=carrier["state"]["guard_id"], action_ref=carrier["action"]["action_ref"])
+    sibling_admitted = check(sibling, "accepted", "sibling retains shared history with its genuinely bound fresh action")
+    assert sibling_admitted["status"] == "accepted", "Shared carrier must permit lawful sibling work"
+    assert sibling_admitted["canonical_progress_state"]["work_ordinal"] == closed_first["canonical_progress_state"]["work_ordinal"]
     successor = retained_progress_request(closed)
     successor["plan"]["implementation_steps"][0]["execution"]["action_ref"] = successor["context"]["progress"]["action"]["action_ref"]
     admitted = check(successor, "accepted", "real successor dispatch materializes a new admission after predecessor closure")
@@ -1736,6 +1831,30 @@ def completion_progress_closure_controls():
     invalid_execution = invalidated["canonical_plan"]["implementation_steps"][0]["execution"]
     assert invalid_execution["state"] == "INVALIDATED"
     assert invalid_execution["action_admission_ref"] == completed_successor["canonical_plan"]["implementation_steps"][0]["execution"]["action_admission_ref"]
+    refresh = retained_progress_request(invalidated)
+    refresh["boundary"] = "resume"
+    packet = refresh["plan"]["implementation_steps"][0]
+    packet["execution"]["input_identity"] = deepcopy(refresh["context"]["current_input_identities"][packet["packet_id"]])
+    refresh["context"]["packet_evidence"][packet["packet_id"]] = evidence(refresh, packet)
+    refresh["context"]["test_applicability"][packet["packet_id"]] = applicability(refresh, packet)
+    refreshed = check(refresh, "accepted", "INVALIDATED snapshot may refresh input while retaining its obsolete pair")
+    assert refreshed["status"] == "accepted", "Input refresh of invalidated work must remain lawful"
+    assert refreshed["canonical_plan"]["implementation_steps"][0]["execution"]["state"] == "INVALIDATED"
+    for origin, retained in (("initial invalidation", invalidated), ("refreshed invalidation", refreshed)):
+        for form in ("full", "compacted"):
+            rebound = retained_progress_request(retained)
+            if form == "compacted":
+                rebound = compact(rebound)
+            rebound["boundary"] = "verification"
+            packet = rebound["plan"]["implementation_steps"][0]
+            packet["execution"].update(state="RUNNING", input_identity=deepcopy(rebound["context"]["current_input_identities"][packet["packet_id"]]))
+            rebound["context"]["packet_evidence"][packet["packet_id"]] = evidence(rebound, packet)
+            rebound["context"]["test_applicability"][packet["packet_id"]] = applicability(rebound, packet)
+            activation = deepcopy(rebound)
+            activation["boundary"] = "resume"
+            check(activation, "blocked", form + " " + origin + " cannot promote new-input RUNNING work under the old pair", "progress_mismatch")
+            check(rebound, "blocked", form + " " + origin + " old pair cannot verify new input", "progress_mismatch")
+            check(completion(rebound), "blocked", form + " " + origin + " old pair cannot complete new input", "progress_mismatch")
     redispatch = retained_progress_request(invalidated)
     packet = redispatch["plan"]["implementation_steps"][0]
     current_input = redispatch["context"]["current_input_identities"][packet["packet_id"]]
@@ -1745,10 +1864,33 @@ def completion_progress_closure_controls():
     redispatch["context"]["packet_evidence"][packet["packet_id"]] = evidence(redispatch, packet)
     redispatch["context"]["test_applicability"][packet["packet_id"]] = applicability(redispatch, packet)
     check(redispatch, "accepted", "legitimate dispatch after helper invalidation creates the genuinely bound new pair")
+    refreshed_dispatch = retained_progress_request(refreshed)
+    packet = refreshed_dispatch["plan"]["implementation_steps"][0]
+    current_input = refreshed_dispatch["context"]["current_input_identities"][packet["packet_id"]]
+    packet["execution"].update(state="PENDING", action_ref=refreshed_dispatch["context"]["progress"]["action"]["action_ref"])
+    refreshed_dispatch["context"]["progress"]["action"]["input_identity"] = deepcopy(current_input)
+    refreshed_dispatch["context"]["packet_evidence"][packet["packet_id"]] = evidence(refreshed_dispatch, packet)
+    refreshed_dispatch["context"]["test_applicability"][packet["packet_id"]] = applicability(refreshed_dispatch, packet)
+    check(refreshed_dispatch, "accepted", "genuine redispatch retires the old admission after an INVALIDATED input refresh")
 
     group_closed = check(guarded_parallel_barrier_request(retained_progress_request(joined)), "accepted",
                          "actual grouped predecessor closes before a successor coordinator")
     assert group_closed["status"] == "accepted", "Grouped predecessor fixture must remain valid"
+    known_group = retained_progress_request(group_closed)
+    group_admission = deepcopy(joined["canonical_progress_state"]["action_admission"])
+    known_group["context"]["progress"]["state"]["history"][-1]["closed_admission"] = deepcopy(group_admission)
+    fallback_group = deepcopy(known_group)
+    fallback_group["context"]["progress"]["state"]["history"][-1].pop("closed_admission")
+    for form, retained in (("full", known_group), ("compacted", compact(known_group)), ("barrier fallback", fallback_group)):
+        location = "summary" if form == "compacted" else "checkpoint"
+        for member in group_admission["member_scope"]["members"]:
+            identity = {"action_ref": group_admission["action_ref"], "packet_id": member["packet_id"],
+                        "input_identity": deepcopy(member["input_identity"])}
+            check_lineage(retained, identity, group_admission["admission_ref"], location, form + " closed group binds declared member " + member["packet_id"])
+            identity["input_identity"] = {"source": "different-member-input"}
+            check_lineage(retained, identity, group_admission["admission_ref"], "missing", form + " closed group rejects changed member input " + member["packet_id"])
+        identity = {"action_ref": group_admission["action_ref"], "packet_id": "undeclared-member", "input_identity": {"source": "source-0"}}
+        check_lineage(retained, identity, group_admission["admission_ref"], "missing", form + " closed group rejects undeclared member")
     group_successor = retained_progress_request(group_closed)
     carrier = group_successor["context"]["progress"]
     action_ref, scope_ref = "action:coordinator-successor", "scope:coordinator-successor"

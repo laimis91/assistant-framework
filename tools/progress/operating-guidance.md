@@ -103,12 +103,20 @@ never derive that authority from candidate counts/status or a narrative.
 ordinal, action, assessment and observed evidence. Checkpoints bind the current
 admission; unblocks bind changed circumstances, resolved blocker and exact action.
 Execution carries `progress_guard_ref`, `action_ref`, `action_admission_ref`.
-Final completion matches admitted execution actions to recorded checkpoint
-action/admission pairs, or same-guard closed actions in a compacted summary.
-Historical actions need not equal the latest proposed action.
+Further dispatch retains the shared carrier whenever any current or previous
+task execution has these markers; all marked executions bind the same guard.
+Closing a checkpoint copies the actual admission into optional `closed_admission`;
+compaction preserves known bindings in optional `closed_admissions`.
+`action_lineage` certifies the exact pair, packet/member and relevant input for
+verification, active promotion and final completion. Historical actions need not
+equal the latest proposed action. Old missing bindings remain readable but UNKNOWN;
+certification requires authoritative reconstruction (`progress_history_missing`).
+A full grouped checkpoint can instead use its matching barrier and member authority.
 Canonical promotion retains each committed pair or proves forward succession:
 close the predecessor, then bind a live successor to that packet/member/input
-or show a strictly later full checkpoint. A compacted predecessor followed by a
+or show a strictly later full checkpoint. `predecessor_lineage` establishes only
+historical pair/member retirement, allowing obsolete input to refresh while
+INVALIDATED; new active work still needs its genuine admitted input. A compacted predecessor followed by a
 tail checkpoint has known order; two different summarized pairs require archive
 reconstruction (`progress_history_missing`). Validate after dispatch materializes
 its admission. Unchanged pairs permit carrier-free resume, with completion still
