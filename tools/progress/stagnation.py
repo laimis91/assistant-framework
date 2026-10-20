@@ -535,12 +535,16 @@ def assess(event, sources, ordinal, count, frontier, observations, frontiers, wi
     return ordinal + 1, 0 if productive else count + 1, event.frontier_ref
 
 
-def coordinator_barrier(event, sources, scope=None):
+def coordinator_barrier(event, sources, scope=None, *, current_admission: Optional[ActionAdmission] = None):
     """Bind one lead event to domain-owned terminal cycle evidence, not packet verification."""
     barrier = resolved(sources, event.coordinator_barrier_ref)
     require(barrier.get("kind") == "coordinator_barrier" and barrier.get("guard_id") == event.guard.guard_id
             and barrier.get("outcome_ref") == event.guard.outcome_ref and barrier.get("action_ref") == event.action_ref
             and barrier.get("admission_ref") == event.admission_ref, "Coordinator barrier changed action/admission")
+    if current_admission is not None:
+        require(current_admission.guard_id == event.guard.guard_id
+                and current_admission.action.action_ref == barrier["action_ref"]
+                and current_admission.admission_ref == barrier["admission_ref"], "Barrier differs from current admission")
     source_ref = text(barrier.get("action_scope_ref"))
     source = resolved(sources, source_ref)
     bound = CoordinatorMemberScope.parse(dict(source_ref=source_ref, members=source.get("members")))
@@ -561,6 +565,13 @@ def coordinator_barrier(event, sources, scope=None):
             require(fact.get("packet_id") == row["packet_id"] and fact.get("result") == row["result"]
                     and fact.get("lifecycle") == "terminal_cycle", "Member result lacks bound terminal lifecycle evidence")
             text(fact.get("invocation_ref") or fact.get("lifecycle_evidence_ref"))
+            if current_admission is not None:
+                require(all(isinstance(fact.get(field), str) and bool(fact[field].strip())
+                            for field in ("action_ref", "admission_ref")),
+                        "Current terminal lifecycle binding is missing", "progress_history_missing")
+                require(fact["action_ref"] == current_admission.action.action_ref
+                        and fact["admission_ref"] == current_admission.admission_ref,
+                        "Terminal lifecycle evidence belongs to another admission")
 
 
 @dataclass(frozen=True)
@@ -603,7 +614,7 @@ def transition(request: ProgressTransitionRequest) -> ProgressTransitionResult:
             event = replace(event, closed_admission=admission)
             if admission.action.member_scope:
                 require(event.coordinator_barrier_ref is not None, "Grouped cycle needs one complete coordinator barrier")
-                coordinator_barrier(event, request.resolved_sources, admission.action.member_scope)
+                coordinator_barrier(event, request.resolved_sources, admission.action.member_scope, current_admission=admission)
             else:
                 require(event.coordinator_barrier_ref is None, "Singleton cycle cannot claim coordinator membership")
             if event.disposition == "useful_new_evidence" and state.history_base_ref:

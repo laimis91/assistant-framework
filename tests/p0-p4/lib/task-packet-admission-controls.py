@@ -880,15 +880,17 @@ def guarded_parallel_barrier_request(joined, complete=True):
     carrier = request["context"]["progress"]
     carrier["action"] = deepcopy(joined["context"]["progress"]["action"])
     event = carrier["event"]
-    barrier_ref = "barrier:coordinated-cycle"
-    event["coordinator_barrier_ref"] = barrier_ref
     admission = carrier["state"]["action_admission"]
+    identity = admission["action_ref"] + ":" + admission["admission_ref"]
+    barrier_ref = "barrier:coordinated-cycle:" + identity
+    event["coordinator_barrier_ref"] = barrier_ref
     members = admission["member_scope"]["members"]
     results = []
     for member in members[:len(members) if complete else 1]:
-        ref = "observation:member-terminal:" + member["packet_id"]
+        ref = "observation:member-terminal:" + identity + ":" + member["packet_id"]
         carrier["resolved_sources"][ref] = {"packet_id": member["packet_id"], "result": "failed",
-            "lifecycle": "terminal_cycle", "invocation_ref": "green:observed:" + member["packet_id"]}
+            "lifecycle": "terminal_cycle", "invocation_ref": "green:observed:" + identity + ":" + member["packet_id"],
+            "action_ref": admission["action_ref"], "admission_ref": admission["admission_ref"]}
         results.append({"packet_id": member["packet_id"], "result": "failed", "evidence_refs": [ref]})
     carrier["resolved_sources"][barrier_ref] = {"kind": "coordinator_barrier",
         "guard_id": carrier["state"]["guard_id"], "outcome_ref": carrier["state"]["outcome_ref"],
@@ -964,7 +966,7 @@ def guarded_parallel_member_controls(second, joined):
     partial = guarded_parallel_barrier_request(joined, complete=False)
     blocked = reject(partial)
     assert blocked["canonical_progress_state"] == joined["context"]["progress"]["state"], "Incomplete barrier erased partial member evidence or admission"
-    assert len(partial["context"]["progress"]["resolved_sources"]["barrier:coordinated-cycle"]["member_results"]) == 1
+    assert len(partial["context"]["progress"]["resolved_sources"][partial["context"]["progress"]["event"]["coordinator_barrier_ref"]]["member_results"]) == 1
     complete = guarded_parallel_barrier_request(joined)
     closed = API.admission(complete)
     assert closed["status"] == "accepted", ("Complete independent member barrier rejected", closed)
@@ -972,8 +974,8 @@ def guarded_parallel_member_controls(second, joined):
     assert state["work_ordinal"] == 1 and state["consecutive_no_progress"] == 1 and len(state["history"]) == 1
     assert "action_admission" not in state
     duplicate = deepcopy(complete)
-    duplicate["context"]["progress"]["resolved_sources"]["barrier:coordinated-cycle"]["member_results"].append(
-        deepcopy(duplicate["context"]["progress"]["resolved_sources"]["barrier:coordinated-cycle"]["member_results"][0]))
+    duplicate["context"]["progress"]["resolved_sources"][duplicate["context"]["progress"]["event"]["coordinator_barrier_ref"]]["member_results"].append(
+        deepcopy(duplicate["context"]["progress"]["resolved_sources"][duplicate["context"]["progress"]["event"]["coordinator_barrier_ref"]]["member_results"][0]))
     reject(duplicate)
     guarded_parallel_unblock_and_compaction_controls(second, closed)
     # Closed parent and stale child stage cannot reopen a completed coordinator.
@@ -1925,6 +1927,75 @@ def completion_progress_closure_controls():
     second_member["context"]["workspace"]["active_source_writer_ids"] = ["accepted-outcome"]
     member = check(second_member, "accepted", "genuine later coordinator admission binds its non-anchor member")
     assert member["status"] == "accepted", "Declared member must join the successor admission"
+
+    predecessor = group_closed["canonical_progress_state"]["history"][-1]
+    prior_sources = group_closed["canonical_context"]["progress"]["resolved_sources"]
+    prior_barrier = prior_sources[predecessor["coordinator_barrier_ref"]]
+    prior_terminal_ref = prior_barrier["member_results"][0]["evidence_refs"][0]
+    for form in ("full", "compacted"):
+        historical = retained_progress_request(group_closed)
+        historical["boundary"] = "plan"
+        for row in prior_barrier["member_results"]:
+            for ref in row["evidence_refs"]:
+                for field in ("action_ref", "admission_ref"):
+                    historical["context"]["progress"]["resolved_sources"][ref].pop(field)
+        if form == "compacted":
+            historical = compact(historical)
+        read = check(historical, "accepted", form + " historical unbound member facts remain readable")
+        assert read["status"] == "accepted", "Legacy member facts are not new current-cycle certification"
+
+        successor = retained_progress_request(member)
+        if form == "compacted":
+            successor = compact(successor)
+        fresh = guarded_parallel_barrier_request(successor)
+        carrier = fresh["context"]["progress"]
+        if form == "compacted":
+            carrier["event"]["predecessor_event_id"] = carrier["resolved_sources"][carrier["state"]["history_base_ref"]]["last_event_id"]
+        assert all(carrier["resolved_sources"][ref] == source for ref, source in prior_sources.items()), "Successor overwrote genuine predecessor sources"
+        before = deepcopy(carrier["state"])
+        current_barrier_ref = carrier["event"]["coordinator_barrier_ref"]
+        assert current_barrier_ref != predecessor["coordinator_barrier_ref"]
+        current_barrier = carrier["resolved_sources"][current_barrier_ref]
+        for row in current_barrier["member_results"]:
+            for ref in row["evidence_refs"]:
+                fact = carrier["resolved_sources"][ref]
+                assert fact["action_ref"] == before["action_admission"]["action_ref"]
+                assert fact["admission_ref"] == before["action_admission"]["admission_ref"]
+                assert ref not in prior_sources
+        closed = check(fresh, "accepted", form + " fresh current-bound member facts close the actual successor once")
+        assert closed["status"] == "accepted", "Fresh successor lifecycle facts must remain valid"
+        assert closed["canonical_progress_state"]["work_ordinal"] == before["work_ordinal"] + 1
+        assert closed["canonical_progress_state"]["consecutive_no_progress"] == before["consecutive_no_progress"] + 1
+        assert "action_admission" not in closed["canonical_progress_state"]
+
+        supported = deepcopy(fresh)
+        event = supported["context"]["progress"]["event"]
+        assert event["assessment_ref"] != predecessor["assessment_ref"]
+        event["evidence_refs"] = deepcopy(predecessor["evidence_refs"])
+        supported["context"]["progress"]["resolved_sources"][event["assessment_ref"]]["observation_refs"] = deepcopy(event["evidence_refs"])
+        reused_support = check(supported, "accepted", form + " a new independently assessed no-progress cycle may reuse supporting checks")
+        assert reused_support["status"] == "accepted", "Supporting evidence reuse is distinct from old terminal lifecycle certification"
+        assert reused_support["canonical_progress_state"]["work_ordinal"] == before["work_ordinal"] + 1
+
+        for mutation in ("old fact", "old-bound wrapper", "missing action", "missing admission", "missing pair"):
+            stale = deepcopy(fresh)
+            sources = stale["context"]["progress"]["resolved_sources"]
+            row = sources[current_barrier_ref]["member_results"][0]
+            if mutation == "old fact":
+                row["evidence_refs"] = [prior_terminal_ref]
+            elif mutation == "old-bound wrapper":
+                ref = "observation:old-bound-wrapper:" + form
+                sources[ref] = deepcopy(prior_sources[prior_terminal_ref])
+                row["evidence_refs"] = [ref]
+            else:
+                fact = sources[row["evidence_refs"][0]]
+                for field in (("action_ref", "admission_ref") if mutation == "missing pair" else
+                              ("action_ref",) if mutation == "missing action" else ("admission_ref",)):
+                    fact.pop(field)
+            expected = "progress_history_missing" if mutation.startswith("missing") else "progress_mismatch"
+            rejected = check(stale, "blocked", form + " successor cannot close with " + mutation, expected)
+            if rejected.get("canonical_progress_state") != before:
+                failures.append((form + " " + mutation + " consumed the live successor admission or changed its count", rejected))
 
     singleton_successor = retained_progress_request(group_closed)
     singleton_successor.update(worker_stage="production", worker_role="code_writer")

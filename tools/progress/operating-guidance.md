@@ -147,7 +147,13 @@ The lead's one `work_checkpoint.coordinator_barrier_ref` resolves a
 Each entry has `packet_id`, `result` and independently retained `evidence_refs`.
 Evidence binds packet/result, `lifecycle: terminal_cycle` and actual
 `invocation_ref` or `lifecycle_evidence_ref`. Domain owners establish terminal
-cycle truth, including failed checks or
+cycle truth. For incoming closure, each terminal fact also binds `action_ref` and
+`admission_ref` to the actual current admission and barrier. Missing binding is
+`progress_history_missing`; a contradictory pair is `progress_mismatch`.
+Historical unbound facts remain readable but cannot certify a new closure.
+Fresh independently assessed no-progress cycles may reuse supporting check refs;
+those refs cannot establish productive novelty or replace current member lifecycle
+facts. Terminal results include failed checks or
 evidenced cancellation/blocking; VERIFIED packet completion is unnecessary.
 Partial results wait without checkpoints and remain retained. Missing, duplicate
 or undeclared results cannot close the cycle. Closing clears one admission;
