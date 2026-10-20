@@ -1400,12 +1400,28 @@ def completion_progress_closure_controls():
 
     predispatch = released_v14_productive_fourth_attempt()
     legacy_completion = completion(predispatch)
+    closed_legacy_action = predispatch["context"]["progress"]["state"]["history"][-1]["action_ref"]
+    legacy_completion["plan"]["implementation_steps"][0]["execution"]["action_ref"] = closed_legacy_action
+    assert legacy_completion["context"]["previous_plan"]["implementation_steps"][0]["execution"]["state"] == "PENDING"
+    assert legacy_completion["context"]["previous_plan"]["implementation_steps"][0]["execution"]["action_ref"] == predispatch["context"]["progress"]["action"]["action_ref"] != closed_legacy_action
     for plan in (legacy_completion["plan"], legacy_completion["context"]["previous_plan"]):
         assert all("action_admission_ref" not in packet["execution"] for packet in plan["implementation_steps"])
     legacy_closed = check(legacy_completion, "accepted", "legacy completion retains genuine checkpoint witnesses without invented admissions")
     assert legacy_closed["status"] == "accepted", "Full legacy completion fixture must remain valid"
     assert legacy_closed["canonical_progress_state"]["work_ordinal"] == 3
     assert "action_admission" not in legacy_closed["canonical_progress_state"]
+    for form in ("full", "compacted"):
+        unrecorded = completion(predispatch)
+        unmarked = deepcopy(legacy_completion)
+        for plan in (unmarked["plan"], unmarked["context"]["previous_plan"]):
+            for packet in plan["implementation_steps"]:
+                for field in ("progress_guard_ref", "action_ref"):
+                    packet["execution"].pop(field, None)
+        if form == "compacted":
+            unrecorded, unmarked = compact(unrecorded), compact(unmarked)
+        check(unrecorded, "blocked", form + " VERIFIED no-pair action must have recorded closure", "progress_history_missing")
+        accepted = check(unmarked, "accepted", form + " genuinely unmarked legacy completion remains valid")
+        assert accepted["status"] == "accepted", "Unmarked legacy history must not acquire a synthetic admission requirement"
     # Explicit resolved checkpoint witnesses, unlike legacy totals, cannot be
     # discarded by supplying an internally valid but incomplete progress state.
     for retained_count in (0, 1, 2):
@@ -1420,6 +1436,7 @@ def completion_progress_closure_controls():
         check(omitted, "blocked", "retained checkpoint witnesses reject lineage retaining " + str(retained_count),
               "progress_history_missing")
         omitted_completion = completion(omitted)
+        omitted_completion["plan"]["implementation_steps"][0]["execution"]["action_ref"] = closed_legacy_action
         assert omitted_completion["plan"] == legacy_completion["plan"]
         assert omitted_completion["context"]["previous_plan"] == legacy_completion["context"]["previous_plan"]
         assert omitted_completion["context"]["progress"]["resolved_sources"] == legacy_completion["context"]["progress"]["resolved_sources"]
@@ -1470,7 +1487,9 @@ def completion_progress_closure_controls():
         archived["context"]["progress"]["resolved_sources"].pop(checkpoint["assessment_ref"])
     covered = check(archived, "accepted", "validated compacted membership needs no archived assessment reload")
     assert covered["canonical_progress_state"]["work_ordinal"] == 3
-    legacy_compacted = check(completion(archived), "accepted", "legacy completion accepts compacted witness membership without old bodies")
+    archived_completion = completion(archived)
+    archived_completion["plan"]["implementation_steps"][0]["execution"]["action_ref"] = closed_legacy_action
+    legacy_compacted = check(archived_completion, "accepted", "legacy completion accepts compacted witness membership without old bodies")
     assert legacy_compacted["status"] == "accepted", "Compacted legacy completion must not reload archived assessments"
     assert legacy_compacted["canonical_progress_state"]["work_ordinal"] == 3
     # Fix no-progress observations before evaluating either carrier; the
@@ -1562,6 +1581,16 @@ def completion_progress_closure_controls():
     stale["context"]["progress"]["state"] = deepcopy(predispatch["context"]["progress"]["state"])
     assert stale["plan"] == singleton["plan"] and stale["context"]["previous_plan"] == singleton["context"]["previous_plan"]
     check(stale, "blocked", "older pre-dispatch state cannot close genuinely verified execution", "progress_mismatch")
+    for form in ("full", "compacted"):
+        unpaired = deepcopy(stale)
+        for plan in (unpaired["plan"], unpaired["context"]["previous_plan"]):
+            execution = plan["implementation_steps"][0]["execution"]
+            assert execution["state"] == "VERIFIED"
+            execution.pop("action_admission_ref")
+            assert execution["action_ref"] == verified["canonical_progress_state"]["action_admission"]["action_ref"]
+        if form == "compacted":
+            unpaired = compact(unpaired)
+        check(unpaired, "blocked", form + " admitted then VERIFIED action without pair still needs recorded closure", "progress_history_missing")
     for stage, retained_request in (("RUNNING", retained_progress_request(initial)), ("VERIFIED", singleton)):
         for erased in (("action_admission_ref",), ("action_ref", "action_admission_ref")):
             lost = deepcopy(retained_request)

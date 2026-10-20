@@ -4,7 +4,7 @@ Load only for persisted pre-v9 review results. Current v9 field definitions and
 migration validation remain authoritative in `contracts/input.yaml` and
 `contracts/handoffs.yaml`.
 
-Invalidate persisted 6.0/7.0/7.1/7.2 result, delegation, snapshot, Pack, QA, plan,
+Invalidate persisted 6.0/7.0/7.1/7.2/8.0 result, delegation, snapshot, Pack, QA, plan,
 and coverage references. Rebuild a fresh rehashed v9 snapshot and complete review
 before CLEAN/ISSUES_FIXED. Preserve raw history, recoverable selected design,
 rationale, viable alternatives/dispositions, and complete closure identity tuples.

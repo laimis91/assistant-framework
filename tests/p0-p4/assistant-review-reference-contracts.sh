@@ -1314,15 +1314,15 @@ if ruby -ryaml -e '
   current_schema_version = input.fetch("schema_version")
   migration = {"source_schema_version" => legacy_packet.fetch("schema_version"), "batch_disposition" => "invalidated_rebuild_required", "rebuilt_review_snapshot_id" => "fresh-v#{current_schema_version}-snapshot"}
   legacy_v7_packet = {"schema_version" => "7.0", "final_summary" => {"result" => "CLEAN"}}
-  immediate_prior_schema_version = "7.2"
-  immediate_prior_history = [{"description" => "retained closure", "fixed_in_round" => 1, "aggregate_finding_id" => "aggregate-v7-2", "source_finding_ids" => ["review-pass-v7-2"], "source_provenance" => [{"source_kind" => "review_pass", "source_id" => "review-pass-v7-2"}]}]
+  immediate_prior_schema_version = "8.0"
+  immediate_prior_history = [{"description" => "retained closure", "fixed_in_round" => 1, "aggregate_finding_id" => "aggregate-v8", "source_finding_ids" => ["review-pass-v8"], "source_provenance" => [{"source_kind" => "review_pass", "source_id" => "review-pass-v8"}]}]
   immediate_prior_packet = {"schema_version" => immediate_prior_schema_version, "final_summary" => {"result" => "CLEAN"}, "previously_fixed" => immediate_prior_history, "canonical_result_ref" => "legacy-result", "delegation_path_ref" => "legacy-delegation", "final_snapshot_identity_ref" => "legacy-snapshot", "architecture_decision_pack_review_ref" => "legacy-pack", "qa_evaluation_result_ref" => "legacy-qa", "final_batch_plan_ref" => "legacy-plan", "coverage_ledger_ref" => "legacy-coverage"}
   can_claim_clean = ->(packet, migration_state) { packet.fetch("schema_version") == current_schema_version && migration_state.fetch("batch_disposition") != "invalidated_rebuild_required" }
   previously_fixed = input.fetch("fields").find { |field| field["name"] == "previously_fixed" }.fetch("object_fields").to_h { |field| [field["name"], field] }
   migration_contract = input.fetch("fields").find { |field| field["name"] == "persisted_v6_packet_migration" }
   v7_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v7_0_packet_invalidation" }
   v7_2_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v7_2_packet_invalidation" }
-  immediate_prior_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v#{immediate_prior_schema_version.tr(".", "_")}_packet_invalidation" }
+  immediate_prior_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v8_packet_invalidation" }
   review_loop = File.read(ARGV.fetch(3))
   pass_fields = reviewer.fetch("context_fields").map { |field| field.fetch("name") }
   final = output.fetch("artifacts").find { |item| item["name"] == "final_summary" }.fetch("object_fields").to_h { |field| [field["name"], field] }
@@ -1334,8 +1334,8 @@ if ruby -ryaml -e '
     migration_contract.fetch("validation").include?("UTF-8 NFC") && migration_contract.fetch("validation").include?("SHA-256") && migration_contract.fetch("validation").downcase.include?("invalidate") &&
     migration_contract.fetch("validation").downcase.include?("non-colliding records use") && migration_contract.fetch("validation").include?("every colliding record appends") &&
     v7_invalidation.fetch("condition").include?("7.0") && v7_invalidation.fetch("validation").include?("do not reinterpret") && v7_invalidation.fetch("validation").include?("fresh 9.0 snapshot") &&
-    v7_2_invalidation.fetch("condition").include?(immediate_prior_schema_version) && v7_2_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == [immediate_prior_schema_version] && v7_2_invalidation.fetch("validation").include?("Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs") && v7_2_invalidation.fetch("validation").include?("preserve raw history and complete finding identity tuples unchanged") && v7_2_invalidation.fetch("validation").include?("fresh 9.0 snapshot") &&
-    immediate_prior_invalidation.fetch("condition").include?(immediate_prior_schema_version) && immediate_prior_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == [immediate_prior_schema_version] && immediate_prior_invalidation.fetch("validation").include?("Invalidate active 7.2") && immediate_prior_invalidation.fetch("validation").include?("without reassigning IDs") &&
+    v7_2_invalidation.fetch("condition").include?("7.2") && v7_2_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == ["7.2"] && v7_2_invalidation.fetch("validation").include?("Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs") && v7_2_invalidation.fetch("validation").include?("preserve raw history and complete finding identity tuples unchanged") && v7_2_invalidation.fetch("validation").include?("fresh 9.0 snapshot") &&
+    immediate_prior_invalidation.fetch("required") == "conditional" && immediate_prior_invalidation.fetch("on_missing") == "fail" && immediate_prior_invalidation.fetch("condition").include?(immediate_prior_schema_version) && immediate_prior_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == [immediate_prior_schema_version] && immediate_prior_invalidation.fetch("validation").include?("Invalidate active 8.0 result/delegation/snapshot/Pack/QA/plan/coverage refs") && immediate_prior_invalidation.fetch("validation").include?("without reassigning IDs") && immediate_prior_invalidation.fetch("validation").include?("fresh 9.0 snapshot") &&
     immediate_prior_packet.fetch("previously_fixed") == immediate_prior_history && immediate_prior_history.all? { |entry| entry.fetch("aggregate_finding_id").start_with?("aggregate-") && entry.fetch("source_finding_ids").length == 1 && entry.fetch("source_provenance").length == 1 } &&
     %w[canonical_result_ref delegation_path_ref final_snapshot_identity_ref architecture_decision_pack_review_ref qa_evaluation_result_ref final_batch_plan_ref coverage_ledger_ref].all? { |ref| immediate_prior_packet.key?(ref) } && review_loop.include?("previously_fixed = validated_entry.previously_fixed || []") && review_loop.include?("invalidating current result/delegation/snapshot/Pack/QA/plan/coverage refs") && review_loop.include?("retain every aggregate_finding_id, source_finding_ids, and source_provenance entry") &&
     bundle.fetch("context_fields_from_dispatch").include?("review_focus") && pass_fields.include?("review_focus") &&
@@ -1785,9 +1785,9 @@ if ruby -ryaml -rjson -e '
   v6_migration = input_fields.fetch("persisted_v6_packet_migration")
   v7_0_invalidation = input_fields.fetch("persisted_v7_0_packet_invalidation")
   invalidation_identity = input_fields.fetch("persisted_v7_0_packet_invalidation").fetch("object_fields").find { |field| field.fetch("name") == "rebuilt_snapshot_identity" }.fetch("object_fields")
-  immediate_prior = "7.2"
-  immediate_prior_name = "persisted_v#{immediate_prior.tr(".", "_")}_packet_invalidation"
-  v7_2_invalidation = input_fields.fetch(immediate_prior_name)
+  immediate_prior = "8.0"
+  immediate_prior_name = "persisted_v8_packet_invalidation"
+  v7_2_invalidation = input_fields.fetch("persisted_v7_2_packet_invalidation")
   immediate_prior_invalidation = input_fields.fetch(immediate_prior_name)
   immediate_prior_invalidation_identity = input_fields.fetch(immediate_prior_name).fetch("object_fields").find { |field| field.fetch("name") == "rebuilt_snapshot_identity" }.fetch("object_fields")
   f3 = gates.fetch("gates").flat_map { |phase| phase.fetch("exit_assertions", []) }.find { |gate| gate.fetch("id") == "F3" }
@@ -1827,6 +1827,7 @@ if ruby -ryaml -rjson -e '
     v6_input: v6_migration.fetch("validation"),
     v7_input: v7_0_invalidation.fetch("validation"),
     v7_2_input: v7_2_invalidation.fetch("validation"),
+    v8_input: immediate_prior_invalidation.fetch("validation"),
     loop: review_loop,
     handoff_aggregate: handoff_previous.fetch("aggregate_finding_id").fetch("validation"),
     handoff_source_ids: handoff_previous.fetch("source_finding_ids").fetch("validation"),
@@ -1835,9 +1836,10 @@ if ruby -ryaml -rjson -e '
   policy_assertions = {
     history_seed: [[:input_default, "[]"], [:loop, "previously_fixed = validated_entry.previously_fixed || []"]],
     history_retention: [[:loop, "Retain raw persisted history"]],
-    complete_v6: [[:v6_input, "preserve each complete identity tuple unchanged"], [:loop, "preserve complete v6, 7.0, 7.1, 7.2, and current tuples unchanged"], [:handoff_aggregate, "Complete historic tuples are unchanged"]],
-    complete_v7_0: [[:v7_input, "preserve each complete aggregate_finding_id/source_finding_ids/source_provenance tuple unchanged"], [:loop, "preserve complete v6, 7.0, 7.1, 7.2, and current tuples unchanged"], [:handoff_aggregate, "Complete historic tuples are unchanged"]],
-    complete_v7_2: [[:v7_2_input, "preserve raw history and complete finding identity tuples unchanged without reassigning IDs"], [:loop, "preserve complete v6, 7.0, 7.1, 7.2, and current tuples unchanged"]],
+    complete_v6: [[:v6_input, "preserve each complete identity tuple unchanged"], [:loop, "preserve complete v6, 7.0, 7.1, 7.2, 8.0, and current tuples unchanged"], [:handoff_aggregate, "Complete historic tuples are unchanged"]],
+    complete_v7_0: [[:v7_input, "preserve each complete aggregate_finding_id/source_finding_ids/source_provenance tuple unchanged"], [:loop, "preserve complete v6, 7.0, 7.1, 7.2, 8.0, and current tuples unchanged"], [:handoff_aggregate, "Complete historic tuples are unchanged"]],
+    complete_v7_2: [[:v7_2_input, "preserve raw history and complete finding identity tuples unchanged without reassigning IDs"], [:loop, "preserve complete v6, 7.0, 7.1, 7.2, 8.0, and current tuples unchanged"]],
+    complete_v8: [[:v8_input, "preserve raw history and complete finding identity tuples unchanged without reassigning IDs"], [:loop, "preserve complete v6, 7.0, 7.1, 7.2, 8.0, and current tuples unchanged"]],
     preserve_aggregate_v6: [[:v6_input, "preserve a supplied aggregate_finding_id"], [:loop, "preserve a supplied aggregate_finding_id"], [:handoff_aggregate, "partial v6/v7.0 tuples preserve a supplied ID"]],
     preserve_aggregate_v7_0: [[:v7_input, "preserve a supplied aggregate_finding_id"], [:loop, "preserve a supplied aggregate_finding_id"], [:handoff_aggregate, "partial v6/v7.0 tuples preserve a supplied ID"]],
     derive_id_v6: [[:v6_input, "Missing aggregate_finding_id"], [:v6_input, "legacy-v6:<fixed_in_round>:<first-24-hex>"], [:loop, "legacy-v6:<fixed_in_round>:<first-24-hex>"]],
@@ -1857,7 +1859,8 @@ if ruby -ryaml -rjson -e '
     {"schema_version" => "6.0", "policies" => [:complete_v6]},
     {"schema_version" => "7.0", "policies" => [:complete_v7_0]},
     {"schema_version" => "7.1", "policies" => [:history_retention]},
-    {"schema_version" => immediate_prior, "policies" => [:history_retention, :complete_v7_2]},
+    {"schema_version" => "7.2", "policies" => [:history_retention, :complete_v7_2]},
+    {"schema_version" => immediate_prior, "policies" => [:history_retention, :complete_v8]},
     {"schema_version" => input.fetch("schema_version"), "policies" => [:history_retention]}
   ]
   partial_presence_cases = [
@@ -1877,7 +1880,7 @@ if ruby -ryaml -rjson -e '
     end
   end
   policy_cases_valid = history_lifecycle_cases.map { |fixture| fixture.fetch("name") } == %w[absent empty nonempty] &&
-    complete_history_cases.map { |fixture| fixture.fetch("schema_version") }.sort == ["6.0", "7.0", "7.1", immediate_prior, input.fetch("schema_version")].sort &&
+    complete_history_cases.map { |fixture| fixture.fetch("schema_version") }.sort == ["6.0", "7.0", "7.1", "7.2", immediate_prior, input.fetch("schema_version")].sort &&
     partial_history_cases.length == 14 &&
     (history_lifecycle_cases + complete_history_cases + partial_history_cases).all? { |fixture| policy_checker.call(fixture.fetch("policies"), source_text) }
   mutation_controls_rejected = [
@@ -1905,17 +1908,21 @@ if ruby -ryaml -rjson -e '
     actual.uniq.length == actual.length && actual.sort == expected.sort
   end
   valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "9.0" } &&
-    entry_names.include?("previously_fixed") && entry_names.include?("persisted_v6_packet_migration") && entry_names.include?("persisted_v7_0_packet_invalidation") && entry_names.include?("persisted_v7_1_packet_invalidation") && entry_names.include?(immediate_prior_name) &&
+    entry_names.include?("previously_fixed") && entry_names.include?("persisted_v6_packet_migration") && entry_names.include?("persisted_v7_0_packet_invalidation") && entry_names.include?("persisted_v7_1_packet_invalidation") && entry_names.include?("persisted_v7_2_packet_invalidation") && entry_names.include?(immediate_prior_name) &&
     previous.key?("aggregate_finding_id") && previous.fetch("source_finding_ids").fetch("condition").include?("producer schema 7.1") && previous.fetch("source_provenance").fetch("condition").include?("producer schema 7.1") && !previous.key?("finding_id") &&
     migration_identity == canonical_identity && invalidation_identity == canonical_identity && immediate_prior_invalidation_identity == canonical_identity &&
     v6_migration.fetch("validation").include?("legacy-v6:<fixed_in_round>:<first-24-hex>") &&
     v7_0_invalidation.fetch("validation").include?("Retain every raw 7.0 previously_fixed record") && v7_0_invalidation.fetch("validation").include?("legacy-v7-0:<fixed_in_round>:<first-24-hex>") && v7_0_invalidation.fetch("validation").include?("persisted-v7-0-migration") &&
     v7_2_invalidation.fetch("condition").include?("7.2") && v7_2_invalidation.fetch("object_fields").find { |field| field.fetch("name") == "source_schema_version" }.fetch("enum_values") == ["7.2"] &&
     v7_2_invalidation.fetch("validation").include?("Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs") && v7_2_invalidation.fetch("validation").include?("preserve raw history and complete finding identity tuples unchanged without reassigning IDs") && v7_2_invalidation.fetch("validation").include?("fresh 9.0 snapshot") &&
+    immediate_prior_invalidation.fetch("required") == "conditional" && immediate_prior_invalidation.fetch("on_missing") == "fail" && immediate_prior_invalidation.fetch("condition").include?(immediate_prior) && immediate_prior_invalidation.fetch("object_fields").find { |field| field.fetch("name") == "source_schema_version" }.fetch("enum_values") == [immediate_prior] && immediate_prior_invalidation.fetch("validation").include?("Invalidate active 8.0 result/delegation/snapshot/Pack/QA/plan/coverage refs") && immediate_prior_invalidation.fetch("validation").include?("fresh 9.0 snapshot") &&
     f3.fetch("check").include?("source_finding_ids") && f3.fetch("check").include?("source_provenance") && e10.fetch("check").include?(immediate_prior) && e10.fetch("check").include?("7.1-or-later") &&
+    handoffs.fetch("worker_status_protocol").fetch("packet_rules").any? { |rule| rule.include?("Persisted 6.0/7.0/7.1/7.2/8.0 packets are invalidated") && rule.include?("fresh 9.0 snapshot") } &&
+    review_loop.include?("For invalidated persisted 7.1, 7.2, or 8.0 packets") && review_loop.include?("Rebuild persisted 6.0/7.0/7.1/7.2/8.0 under 9.0") &&
+    File.read(ARGV.fetch(7)).include?("Invalidate persisted 6.0/7.0/7.1/7.2/8.0 result, delegation, snapshot, Pack, QA, plan,") &&
     handoff_previous.key?("aggregate_finding_id") && handoff_previous.fetch("aggregate_finding_id").fetch("validation").include?("v7.0") && handoff_previous.fetch("source_finding_ids").fetch("required") == true && handoff_previous.fetch("source_finding_ids").fetch("validation").include?("persisted-v7-0-migration") && handoff_previous.fetch("source_provenance").fetch("required") == true && handoff_previous.fetch("source_provenance").fetch("validation").include?("persisted-v7-0-migration") && !handoff_previous.key?("finding_id") &&
     policy_cases_valid && mutation_controls_rejected &&
-    score_progression.fetch("validation").include?("v9.0 score tracking uses aggregated_finding_count") && score_progression.fetch("validation").include?("Persisted 6.0/7.0/7.1/7.2 packets are invalidated and rebuilt before score tracking") &&
+    score_progression.fetch("validation").include?("v9.0 score tracking uses aggregated_finding_count") && score_progression.fetch("validation").include?("Persisted 6.0/7.0/7.1/7.2/8.0 packets are invalidated and rebuilt before score tracking") &&
     batch.fetch("scope_size").fetch("enum_values") == %w[trivial small medium large] &&
     coverage.fetch("coverage_disposition").fetch("enum_values") == %w[inspected_no_risk finding incomplete] &&
     coverage.fetch("finding_ids").fetch("condition") == "coverage_disposition == finding" && coverage.fetch("finding_ids").fetch("min_items") == 1 &&
@@ -1942,7 +1949,7 @@ if ruby -ryaml -rjson -e '
     final_artifact.fetch("validation").include?("final_batch_plan") &&
     post_fix_paths.include?(["final_summary", "coverage_ledger", 0, "coverage_gap_id"]) && post_fix_paths.include?(["final_summary", "coverage_ledger", 1, "coverage_gap_id"])
   exit valid ? 0 : 1
-' "$review_input" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_handoffs" "$review_index" "$review_evals" "$review_phase_gates" "$review_loop" \
+' "$review_input" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_handoffs" "$review_index" "$review_evals" "$review_phase_gates" "$review_loop" "$review_legacy" \
   && ! grep -Fq -- "medium+ scope only" "$review_handoffs" \
   && grep -Fq -- "including triggered trivial/small scope" "$review_handoffs"; then
     pass

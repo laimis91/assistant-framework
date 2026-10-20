@@ -7,7 +7,7 @@
 schema_version: "9.0"
 contract: handoffs
 skill: assistant-review
-# v9.0 migration: persisted 6.0 and incompatible 7.0/7.1/7.2 packets are invalidated and
+# v9.0 migration: persisted 6.0 and incompatible 7.0/7.1/7.2/8.0 packets are invalidated and
 # rebuilt from a freshly rehashed 9.0 snapshot before CLEAN or ISSUES_FIXED. Preserve a
 # legacy closure ledger by preserving complete identity tuples. For a partial
 # v6/v7.0 tuple, preserve a supplied aggregate_finding_id and fill only missing
@@ -35,7 +35,7 @@ worker_status_protocol:
     - "Every expected review pass reaches a terminal state before aggregation; the first response never establishes batch coverage."
     - "evidence is required to support the verdict and any findings."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
-    - "Persisted 6.0/7.0/7.1/7.2 packets are invalidated and rebuilt from a fresh 9.0 snapshot before CLEAN or ISSUES_FIXED. Preserve complete closure identity tuples and raw history; for partial v6/v7.0 tuples preserve a supplied aggregate_finding_id, fill only missing source IDs/provenance, and use the versioned UTF-8 NFC/SHA-256 legacy ID only when absent. Non-colliding IDs use the base; every colliding record appends :<ordinal> in original packet order."
+    - "Persisted 6.0/7.0/7.1/7.2/8.0 packets are invalidated and rebuilt from a fresh 9.0 snapshot before CLEAN or ISSUES_FIXED. Preserve complete closure identity tuples and raw history; for partial v6/v7.0 tuples preserve a supplied aggregate_finding_id, fill only missing source IDs/provenance, and use the versioned UTF-8 NFC/SHA-256 legacy ID only when absent. Non-colliding IDs use the base; every colliding record appends :<ordinal> in original packet order."
     - "status is required on every QAEvaluator return."
     - "QAEvaluator returns acceptance_findings, qa_scorecard, final_verdict, result, evidence, and every-round score_entry; score_progression is optional history. Selected_domain_rubrics and domain_quality_scores are required only when scoped. QA does not replace Reviewer/code-reviewer findings."
     - "Reviewer and QAEvaluator return pivot_restart_signal for genuine shared semantic stagnation or material change, with independent evidence; score labels alone do not trigger it. The orchestrator owns the final pivot_restart_decision."

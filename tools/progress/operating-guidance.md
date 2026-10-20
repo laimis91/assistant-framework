@@ -112,6 +112,9 @@ verification, active promotion and final completion. Historical actions need not
 equal the latest proposed action. Old missing bindings remain readable but UNKNOWN;
 certification requires authoritative reconstruction (`progress_history_missing`).
 A full grouped checkpoint can instead use its matching barrier and member authority.
+At completion, a VERIFIED execution naming an action without an admission must
+name a full/compacted closed action; absence is `progress_history_missing`.
+Unmarked legacy executions and retained PENDING proposals remain compatible.
 Canonical promotion retains each committed pair or proves forward succession:
 close the predecessor, then bind a live successor to that packet/member/input
 or show a strictly later full checkpoint. `predecessor_lineage` establishes only

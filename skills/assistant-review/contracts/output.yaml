@@ -952,7 +952,7 @@ artifacts:
         type: object[]
         required: true
         description: "Weighted aggregate score and aggregated union finding count per round — used for drift detection and diagnostic only; shared semantic progress governs continuation"
-        validation: "v9.0 score tracking uses aggregated_finding_count. Persisted 6.0/7.0/7.1/7.2 packets are invalidated and rebuilt before score tracking; legacy finding_count remains historical evidence only."
+        validation: "v9.0 score tracking uses aggregated_finding_count. Persisted 6.0/7.0/7.1/7.2/8.0 packets are invalidated and rebuilt before score tracking; legacy finding_count remains historical evidence only."
         object_fields:
           - name: round
             type: int
