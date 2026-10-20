@@ -416,14 +416,14 @@ Fill during Plan; Security/Operability stays optional. Plan approval alone does 
 - Subagent policy state: [not_required | delegation_triggered | delegation_opted_out | subagents_unavailable | policy_disallowed]
 - Subagent execution mode: [delegated | direct_fallback | not_applicable]
 - Subagent trigger scope: [direct user | applicable AGENTS.md | active skill; covered roles/phases/actions, or none]
-- Policy blocking source: [exact active rule plus confirmation that no applicable user, AGENTS, or skill exception permits delegation; required only for policy_disallowed]
+- Policy blocking source: [policy_disallowed only: exact active rule; confirm no applicable user/AGENTS/skill exception permits delegation]
 - Search mode: [none | lightweight | candidate_search]
 
 ## Constraints & decisions (from Discovery)
 - [Q&A question]: [chosen option and why]
 - Assumed (not explicitly asked): [only source-backed technical defaults or applicable authoritative behavior, with source and rationale; no unanswered new material product choices]
 - Non-goals: [what's explicitly out of scope]
-- Reuse search: [copy the CodeMapper result; not_applicable needs a concrete reason, otherwise include searches, candidates or no_candidate_reason, decision, and decision_rationale]
+- Reuse search: [copy CodeMapper result: concrete not_applicable reason; otherwise searches, candidates/no_candidate_reason, decision, decision_rationale]
 - Implement-only preparation result: [execution_intent=implement_only: copy the exact typed approved_feature_preparation_result, feature_preparation_scope, and applicable evidence/basis unchanged into every implementation step and task packet; otherwise N/A]
 
 ## Architecture Decision Pack
@@ -459,7 +459,7 @@ Fill during Plan; Security/Operability stays optional. Plan approval alone does 
 
 ## Analysis
 ### Candidate search summary
-- Candidate search summary: [N/A unless search_mode=candidate_search; otherwise selected candidate and why]
+- Candidate search summary: [search_mode=candidate_search: selected candidate and rationale; otherwise N/A]
 - Candidate archive: [{agent_state_dir}/candidate-search.md when local state is allowed, or inline plan section]
 - Goal tree source: [acceptance criteria/slice criteria used]
 
@@ -481,27 +481,26 @@ Fill during Plan; Security/Operability stays optional. Plan approval alone does 
 - Dependency order: [summary]
 - Output-plan match: [artifact/verification alignment]
 - Fallback path: [subagent path or direct equivalent]
-- Broad-split rejection: [required proof that layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits were rejected unless verified deliverable artifact slices]
+- Broad-split rejection: [prove layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits rejected unless verified deliverable artifact slices]
 - Decision: proceed | revise_decomposition | return_to_discover
 
 ## Artifact Contract
 
 - Artifact type: code | docs | report | dataset | chart | slide_deck | plan | eval | PR | config | other
-- Required files or deliverables: [exact paths or named external artifacts]
+- Required files or deliverables: [exact paths/named external artifacts]
 - Output format/schema: [markdown/json/yaml/csv/pdf/etc.]
 - Acceptance criteria: [binary user-visible checks]
-- Verification command or method: [command, inspection, manual validation, or review gate]
-- Expected success signal: [exact passing output, created file, PR URL, green test, approved review]
+- Verification command or method: [command/inspection/manual validation/review gate]
+- Expected success signal: [exact passing output/created file/PR URL/green test/approved review]
 - Owner/consumer: [user, reviewer, downstream tool, runtime]
 - Non-goals/exclusions: [what must not be produced]
 
 ## Loop / Experiment Routing
 
-Only for explicit workflow experiments, explicit repeat/optimization loops, or a
-second/sequential progressive decision activation.
-Ordinary medium+ tasks keep `harness_capable=false`; loop artifacts alone do not
-require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact
-Reference Ledger, or QA evaluation.
+For explicit workflow experiments, explicit repeat/optimization loops, or
+second/sequential progressive decision activation only. Ordinary medium+ keeps
+`harness_capable=false`; loop artifacts alone do not require Done Contract, Harness
+Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation.
 
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next check]
 - progressive_activation_provenance: [on first activation atomically set positive activation_ordinal; never-activated items omit it; keep ordinals immutable and unique across retained canonical decision-map history, including activation-marked items outside current-map refs and across resolved/blocked/superseded/excluded status and compaction, so ascending ordinals reconstruct activated_decision_item_refs before the second activation]
@@ -545,12 +544,11 @@ Use the Executable Task Packet structure, dependency order and approved-definiti
 - Approved QA/acceptance obligation: [`approved_feature_preparation_qa_acceptance_obligation` for implement_only; preserve requested_scope and execution_prerequisite plus exactly one source binding; set `qa_evaluation_mode=required` and route post-Build Code Reviewer then QA Evaluator, or N/A]
 - Future harness obligation: [`feature_preparation_result.future_harness_obligation` or N/A; preparation keeps `harness_capable=false`]
 
-For `prepare_only`, return `feature_preparation_result` instead of an execution
-handoff: scope, evidence ref when applicable, evidence gaps, open decisions,
-implementation implications, recommended next step, and `execution_status=not_started`.
-For medium+ preparation, an optional readiness plan may be recorded without
-waiting for implementation approval; name that approval or delegation as the
-next implementation state rather than treating it as a gate on preparation.
+For `prepare_only`, return `feature_preparation_result`: scope, applicable evidence
+ref, gaps, open decisions, implementation implications, recommended next step,
+`execution_status=not_started`; no execution handoff. Optional medium+ readiness
+planning needs no implementation approval; name approval/delegation as the next
+implementation state, never a preparation gate.
 
 ## Tests to run
 - [command]: [what it validates]

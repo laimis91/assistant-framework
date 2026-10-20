@@ -107,14 +107,14 @@ Further dispatch retains the shared carrier whenever any current or previous
 task execution has these markers; all marked executions bind the same guard.
 Closing a checkpoint copies the actual admission into optional `closed_admission`;
 compaction preserves known bindings in optional `closed_admissions`.
-`action_lineage` certifies the exact pair, packet/member and relevant input for
-verification, active promotion and final completion. Historical actions need not
-equal the latest proposed action. Old missing bindings remain readable but UNKNOWN;
-certification requires authoritative reconstruction (`progress_history_missing`).
-A full grouped checkpoint can instead use its matching barrier and member authority.
-At completion, a VERIFIED execution naming an action without an admission must
-name a full/compacted closed action; absence is `progress_history_missing`.
-Unmarked legacy executions and retained PENDING proposals remain compatible.
+`action_lineage` certifies exact admission, packet/member and relevant input for
+verification, active promotion and completion. Historical actions may differ from
+the latest proposal. Old UNKNOWN bindings remain readable; certification needs
+authoritative reconstruction (`progress_history_missing`). Full grouped history
+may use matching barrier/member authority. VERIFIED no-pair completion recovers
+historical `admission_ref` from its full checkpoint or validated `closed_admissions`,
+then uses exact lineage; known mismatches yield `progress_mismatch`.
+Unmarked legacy and retained PENDING proposals remain compatible.
 Canonical promotion retains each committed pair or proves forward succession:
 close the predecessor, then bind a live successor to that packet/member/input
 or show a strictly later full checkpoint. `predecessor_lineage` establishes only

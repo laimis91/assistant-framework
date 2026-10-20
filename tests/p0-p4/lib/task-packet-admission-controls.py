@@ -1406,10 +1406,12 @@ def completion_progress_closure_controls():
     assert legacy_completion["context"]["previous_plan"]["implementation_steps"][0]["execution"]["action_ref"] == predispatch["context"]["progress"]["action"]["action_ref"] != closed_legacy_action
     for plan in (legacy_completion["plan"], legacy_completion["context"]["previous_plan"]):
         assert all("action_admission_ref" not in packet["execution"] for packet in plan["implementation_steps"])
-    legacy_closed = check(legacy_completion, "accepted", "legacy completion retains genuine checkpoint witnesses without invented admissions")
-    assert legacy_closed["status"] == "accepted", "Full legacy completion fixture must remain valid"
-    assert legacy_closed["canonical_progress_state"]["work_ordinal"] == 3
-    assert "action_admission" not in legacy_closed["canonical_progress_state"]
+    # These synthetic checkpoints prove action history, but never recorded an
+    # admission identity or packet/input binding for the declared old action.
+    assert all("admission_ref" not in row and "closed_admission" not in row
+               for row in predispatch["context"]["progress"]["state"]["history"])
+    check(legacy_completion, "blocked", "synthetic legacy marked completion needs actual historical admission authority",
+          "progress_history_missing")
     for form in ("full", "compacted"):
         unrecorded = completion(predispatch)
         unmarked = deepcopy(legacy_completion)
@@ -1489,9 +1491,8 @@ def completion_progress_closure_controls():
     assert covered["canonical_progress_state"]["work_ordinal"] == 3
     archived_completion = completion(archived)
     archived_completion["plan"]["implementation_steps"][0]["execution"]["action_ref"] = closed_legacy_action
-    legacy_compacted = check(archived_completion, "accepted", "legacy completion accepts compacted witness membership without old bodies")
-    assert legacy_compacted["status"] == "accepted", "Compacted legacy completion must not reload archived assessments"
-    assert legacy_compacted["canonical_progress_state"]["work_ordinal"] == 3
+    check(archived_completion, "blocked", "compacted synthetic action membership alone cannot certify marked completion",
+          "progress_history_missing")
     # Fix no-progress observations before evaluating either carrier; the
     # negative retains those same explicit current/previous checkpoint records.
     stalled = deepcopy(predispatch)
@@ -1770,6 +1771,25 @@ def completion_progress_closure_controls():
         else:
             carrier["resolved_sources"][carrier["state"]["history_base_ref"]]["closed_admissions"] = [deepcopy(original_admission)]
         check(completion(restored), "accepted", form + " authoritative old admission reconstruction preserves completion")
+        # Missing execution markers do not erase known historical bindings.
+        # Reconstruction uses that same actual archive admission, without
+        # promoting a recovered marker into either stored execution snapshot.
+        for binding, source in (("known", retained), ("unknown", unknown), ("restored", restored)):
+            no_pair = deepcopy(source)
+            for plan in (no_pair["plan"], no_pair["context"]["previous_plan"]):
+                plan["implementation_steps"][0]["execution"].pop("action_admission_ref")
+            read = deepcopy(no_pair)
+            read["boundary"] = "resume"
+            readable = check(read, "accepted", form + " " + binding + " no-pair closed history remains readable")
+            assert readable["status"] == "accepted", "Historical readability must not depend on certification authority"
+            before = deepcopy(no_pair["context"]["progress"]["state"])
+            result = check(completion(no_pair), "blocked" if binding == "unknown" else "accepted",
+                           form + " " + binding + " no-pair closure certifies only actual historical authority",
+                           "progress_history_missing" if binding == "unknown" else None)
+            if result["status"] == "accepted":
+                assert result["canonical_progress_state"] == before, "Reconstruction must not reset history, ordinal or counters"
+                for plan in (result["canonical_plan"], result["canonical_context"]["previous_plan"]):
+                    assert "action_admission_ref" not in plan["implementation_steps"][0]["execution"], "Recovered identity is local certification only"
 
     siblings = valid_request(2)
     seed = released_v14_productive_fourth_attempt()
@@ -1790,6 +1810,20 @@ def completion_progress_closure_controls():
     close_first.update(boundary="plan", plan=deepcopy(verified_first["canonical_plan"]))
     closed_first = check(close_first, "accepted", "first guarded packet actually closes before sibling dispatch")
     assert closed_first["status"] == "accepted", "Shared-carrier fixture closure must remain valid"
+    # The fixed approved two-packet plan actually admitted and closed A alone.
+    # Reusing its old action for B cannot turn scalar membership into binding.
+    for form in ("full", "compacted"):
+        foreign = retained_progress_request(closed_first)
+        old_action = closed_first["canonical_progress_state"]["history"][-1]["action_ref"]
+        for plan in (foreign["plan"], foreign["context"]["previous_plan"]):
+            for packet in plan["implementation_steps"]:
+                packet["execution"].pop("action_admission_ref", None)
+            packet = plan["implementation_steps"][1]
+            packet["execution"].update(progress_guard_ref=foreign["context"]["progress"]["state"]["guard_id"],
+                                       action_ref=old_action)
+        if form == "compacted":
+            foreign = compact(foreign)
+        check(completion(foreign), "blocked", form + " no-pair B cannot complete under actually closed singleton A", "progress_mismatch")
     sibling = retained_progress_request(closed_first)
     sibling["target_packet_id"] = "dependent-outcome"
     assert not any(field in sibling["plan"]["implementation_steps"][1]["execution"]
@@ -1871,6 +1905,18 @@ def completion_progress_closure_controls():
     refreshed = check(refresh, "accepted", "INVALIDATED snapshot may refresh input while retaining its obsolete pair")
     assert refreshed["status"] == "accepted", "Input refresh of invalidated work must remain lawful"
     assert refreshed["canonical_plan"]["implementation_steps"][0]["execution"]["state"] == "INVALIDATED"
+    # Use the helper's accepted invalidation and refresh, never rewrite the
+    # retained admission input to make the new candidate appear historical.
+    for form in ("full", "compacted"):
+        no_pair = retained_progress_request(refreshed)
+        for plan in (no_pair["plan"], no_pair["context"]["previous_plan"]):
+            execution = plan["implementation_steps"][0]["execution"]
+            execution.pop("action_admission_ref")
+            assert execution["action_ref"] == invalid_execution["action_ref"]
+            assert execution["input_identity"] == no_pair["context"]["current_input_identities"]["accepted-outcome"]
+        if form == "compacted":
+            no_pair = compact(no_pair)
+        check(completion(no_pair), "blocked", form + " no-pair old action cannot certify helper-refreshed input", "progress_mismatch")
     for origin, retained in (("initial invalidation", invalidated), ("refreshed invalidation", refreshed)):
         for form in ("full", "compacted"):
             rebound = retained_progress_request(retained)
@@ -1922,6 +1968,47 @@ def completion_progress_closure_controls():
             check_lineage(retained, identity, group_admission["admission_ref"], "missing", form + " closed group rejects changed member input " + member["packet_id"])
         identity = {"action_ref": group_admission["action_ref"], "packet_id": "undeclared-member", "input_identity": {"source": "source-0"}}
         check_lineage(retained, identity, group_admission["admission_ref"], "missing", form + " closed group rejects undeclared member")
+        no_pair = deepcopy(retained)
+        for plan in (no_pair["plan"], no_pair["context"]["previous_plan"]):
+            for packet in plan["implementation_steps"]:
+                packet["execution"].pop("action_admission_ref")
+        before = deepcopy(no_pair["context"]["progress"]["state"])
+        completed = check(completion(no_pair), "accepted", form + " known no-pair group certifies declared members and inputs")
+        assert completed["status"] == "accepted", "Actual group closure and full historical barrier fallback must remain valid"
+        assert completed["canonical_progress_state"] == before
+        for packet in completed["canonical_plan"]["implementation_steps"]:
+            assert "action_admission_ref" not in packet["execution"], "Group certification must not store recovered markers"
+        if form == "compacted":
+            unknown = deepcopy(no_pair)
+            carrier = unknown["context"]["progress"]
+            carrier["resolved_sources"][carrier["state"]["history_base_ref"]].pop("closed_admissions")
+            read = deepcopy(unknown)
+            read["boundary"] = "resume"
+            check(read, "accepted", "compacted unknown no-pair group remains readable")
+            check(completion(unknown), "blocked", "compacted group action inventory cannot recover member/input binding",
+                  "progress_history_missing")
+    group_invalidation = deepcopy(known_group)
+    group_invalidation["boundary"] = "resume"
+    group_invalidation["context"]["current_input_identities"]["dependent-outcome"] = {"source": "independently-observed-new-member-input"}
+    invalidated_group = check(group_invalidation, "accepted", "helper actually invalidates changed closed group member input")
+    assert invalidated_group["status"] == "accepted", "Group input invalidation must remain lawful"
+    group_refresh = retained_progress_request(invalidated_group)
+    group_refresh["boundary"] = "resume"
+    packet = group_refresh["plan"]["implementation_steps"][1]
+    assert packet["execution"]["state"] == "INVALIDATED"
+    packet["execution"]["input_identity"] = deepcopy(group_refresh["context"]["current_input_identities"][packet["packet_id"]])
+    group_refresh["context"]["packet_evidence"][packet["packet_id"]] = evidence(group_refresh, packet)
+    group_refresh["context"]["test_applicability"][packet["packet_id"]] = applicability(group_refresh, packet)
+    refreshed_group = check(group_refresh, "accepted", "helper accepts INVALIDATED group member input refresh")
+    assert refreshed_group["status"] == "accepted", "Group refresh fixture must use accepted helper output"
+    for form in ("full", "compacted"):
+        no_pair = retained_progress_request(refreshed_group)
+        for plan in (no_pair["plan"], no_pair["context"]["previous_plan"]):
+            for packet in plan["implementation_steps"]:
+                packet["execution"].pop("action_admission_ref")
+        if form == "compacted":
+            no_pair = compact(no_pair)
+        check(completion(no_pair), "blocked", form + " no-pair group cannot certify a changed declared member input", "progress_mismatch")
     group_successor = retained_progress_request(group_closed)
     carrier = group_successor["context"]["progress"]
     action_ref, scope_ref = "action:coordinator-successor", "scope:coordinator-successor"

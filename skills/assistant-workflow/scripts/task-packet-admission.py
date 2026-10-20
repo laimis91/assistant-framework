@@ -1119,17 +1119,25 @@ def admission(request):
             packet["execution"]["state"] = "VERIFIED"
         if boundary == "completion":
             require(all(p["execution"]["state"] == "VERIFIED" for p in packets.values()), "incomplete_packets", "implementation_steps", "Every canonical packet must be VERIFIED")
-            closed_actions = {event.action_ref for event in progress.history if event.kind == "work_checkpoint"} if progress else set()
-            if progress and progress.history_base_ref:
-                closed_actions.update(PROGRESS.resolved(context["progress"]["resolved_sources"], progress.history_base_ref)["seen_action_refs"])
             for pid, execution in marked_executions:
                 if "action_admission_ref" in execution:
                     lineage = _execution_lineage(pid, execution, context, progress)
                     require(lineage.location in {"checkpoint", "summary"},
                             "progress_mismatch", "context.progress", "Completion needs recorded closure of each admitted execution")
                 elif execution["state"] == "VERIFIED" and "action_ref" in execution:
-                    require(execution["action_ref"] in closed_actions, "progress_history_missing", pid,
-                            "Declared completed action needs recorded closure")
+                    checkpoint = next((event for event in progress.history
+                                       if event.kind == "work_checkpoint" and event.action_ref == execution["action_ref"]), None)
+                    admission_ref = checkpoint.admission_ref if checkpoint is not None else None
+                    if checkpoint is None and progress.history_base_ref:
+                        summary = PROGRESS.resolved(context["progress"]["resolved_sources"], progress.history_base_ref)
+                        closed = next((row for row in summary.get("closed_admissions", [])
+                                       if row["action_ref"] == execution["action_ref"]), None)
+                        admission_ref = closed["admission_ref"] if closed is not None else None
+                    require(admission_ref is not None, "progress_history_missing", pid,
+                            "Reconstruct the declared action's historical admission")
+                    lineage = _execution_lineage(pid, dict(execution, action_admission_ref=admission_ref), context, progress)
+                    require(lineage.location in {"checkpoint", "summary"},
+                            "progress_mismatch", "context.progress", "Completion needs recorded closure of each admitted execution")
             require(progress is None or progress.action_admission is None, "progress_mismatch", "context.progress",
                     "Record the completed semantic cycle before final completion")
             completion = object_value(context.get("completion_evidence"), "context.completion_evidence")
