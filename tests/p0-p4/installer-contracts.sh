@@ -73,6 +73,9 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq "For small, low-risk, localized work, act as a hands-on worker" "$agents_file" \
             && grep -Fq "For medium+ or elevated-risk development work, remain the orchestrator" "$agents_file" \
             && grep -Fq "Keep orchestration proportional" "$agents_file" \
+            && grep -Fq "including when no skill matches" "$agents_file" \
+            && cmp -s "$FRAMEWORK_DIR/tools/progress/operating-guidance.md" "$INSTALL_HOME/.codex/tools/progress/operating-guidance.md" \
+            && cmp -s "$FRAMEWORK_DIR/tools/progress/stagnation.py" "$INSTALL_HOME/.codex/tools/progress/stagnation.py" \
             && grep -Fq "Get plan approval before medium+ or risky edits." "$agents_file" \
             && grep -Fq "Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent." "$agents_file" \
             && ! grep -Fq "## Skills (loaded" "$agents_file" \
@@ -813,7 +816,7 @@ for change_impact_skill in assistant-debugging assistant-review; do
     if ! HOME="$change_impact_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill "$change_impact_skill" --no-hooks >/tmp/p0p4-change-impact-${change_impact_skill}.out 2>/tmp/p0p4-change-impact-${change_impact_skill}.err; then
         change_impact_install_failure="$change_impact_skill selective install failed"
         break
-    elif [[ ! -f "$change_impact_skill_file" || ! -f "$change_impact_tool" || ! -f "$change_impact_protocol" || ! -f "$change_impact_example" ]]; then
+    elif [[ ! -f "$change_impact_skill_file" || ! -f "$change_impact_tool" || ! -f "$change_impact_protocol" || ! -f "$change_impact_example" || ! -f "$(dirname "$change_impact_skill_file")/../../tools/progress/operating-guidance.md" || ! -f "$(dirname "$change_impact_skill_file")/../../tools/progress/stagnation.py" ]]; then
         change_impact_install_failure="$change_impact_skill selective install omitted common validator resources at the path resolved from its loaded SKILL.md"
         break
     elif [[ -d "$change_impact_home/.codex/skills/assistant-workflow" || ! -f "$change_impact_reference" ]] \
@@ -956,9 +959,10 @@ worker_stage_protocol:
       completes_build: false
 PROTOCOL
     case "$variant" in
-        current14|unknown-version)
+        current14|current15|unknown-version)
             local target_version=14.0
-            [[ "$variant" != unknown-version ]] || target_version=15.0
+            [[ "$variant" != current15 ]] || target_version=15.0
+            [[ "$variant" != unknown-version ]] || target_version=16.0
             for file in "$workflow/contracts/index.yaml" "$workflow/contracts/handoffs.yaml"; do
                 sed "s/13.0/$target_version/" "$file" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$file"
             done ;;
@@ -1110,7 +1114,7 @@ ownership_install_compatibility_matrix() {
     local matrix_root="$1" agent variant mode case_home agent_home skills workflow before after workflow_before status log
     local -a args
     for agent in codex claude; do
-        for variant in old no-stages stage-mismatch early-completion missing-index duplicate-index duplicate-handoffs malformed wrong-identity unsafe-workflow unsafe-skill unsafe-index absent current current14 unknown-version mixed-version bom-crlf recovery full; do
+        for variant in old no-stages stage-mismatch early-completion missing-index duplicate-index duplicate-handoffs malformed wrong-identity unsafe-workflow unsafe-skill unsafe-index absent current current14 current15 unknown-version mixed-version bom-crlf recovery full; do
             for mode in normal dry-run; do
                 [[ "$mode" == dry-run && ( "$variant" == recovery || "$variant" == full ) ]] && continue
                 case_home="$matrix_root/$agent-$variant-$mode"
@@ -1141,11 +1145,11 @@ ownership_install_compatibility_matrix() {
                 HOME="$case_home" CODEX_HOME="$([[ "$agent" == codex ]] && printf '%s' "$agent_home" || printf /)" bash "$FRAMEWORK_DIR/install.sh" "${args[@]}" >"$log" 2>&1 || status=$?
                 after="$(ownership_install_fingerprint "$case_home")"
                 case "$variant" in
-                    absent|current|current14|bom-crlf|recovery|full)
+                    absent|current|current14|current15|bom-crlf|recovery|full)
                         if [[ "$status" != 0 ]]; then ownership_matrix_failure="$agent/$variant/$mode unexpectedly rejected; $log"; return 1; fi
                         if [[ "$mode" == dry-run && "$before" != "$after" ]]; then ownership_matrix_failure="$agent/$variant dry-run mutated managed tree"; return 1; fi
                         if [[ "$variant" == absent && -e "$workflow" ]]; then ownership_matrix_failure="$agent selective absent install added workflow"; return 1; fi
-                        if [[ "$variant" == current || "$variant" == current14 || "$variant" == bom-crlf ]]; then
+                        if [[ "$variant" == current || "$variant" == current14 || "$variant" == current15 || "$variant" == bom-crlf ]]; then
                             if [[ "$workflow_before" != "$(ownership_install_fingerprint "$workflow")" ]]; then ownership_matrix_failure="$agent selective install refreshed retained compatible controller"; return 1; fi
                         fi
                         if [[ "$variant" == recovery || "$variant" == full ]]; then

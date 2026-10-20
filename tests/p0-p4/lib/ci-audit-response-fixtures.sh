@@ -27,7 +27,7 @@ write_s1_response() {
             ' >"$response_path"
             ;;
         repair-expectations-switch-and-resume)
-            jq -n '{build_repair_state:{attempt:3,max_attempts:3,no_progress_count:2,no_progress_limit:2,
+            jq -n '{progress_state:{guard_id:"guard:filter-fix",work_ordinal:3,consecutive_no_progress:3,status:"stagnant"},build_repair_state:{attempt:3,max_attempts:3,no_progress_count:2,no_progress_limit:2,
               failure_signatures:["old-call-order:implementation-coupled/duplicate","deny-nonowner:product regression","dependency-load:baseline/environment","cache-race:unresolved"],
               progress_evidence:["Retained v1 attempts: initial plus two repairs; last two added no evidence. Switching checks, writer and session grants no allowance.","docs:permissions-v2 retires call ordering; never change production for it. Keep unique denial protection, baseline blocking relevance and unresolved cache cause."],
               plan_version:"v1",cumulative_attempt_count:3,status:"blocked",terminal_route:"debugging",evidence_ref:"capture:retained-v1"},changed_files:[]}' >"$response_path"

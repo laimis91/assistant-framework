@@ -265,8 +265,10 @@ preflight_workflow_role_compatibility() {
         || ! { { declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 13.0 \
                   && declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 13.0; } \
                || { declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 14.0 \
-                  && declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 14.0; }; }; then
-        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare matching schema 13.0 or 14.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
+                  && declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 14.0; } \
+               || { declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 15.0 \
+                  && declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 15.0; }; }; then
+        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare matching schema 13.0, 14.0 or 15.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
     fi
 }
 
@@ -1056,6 +1058,8 @@ if [[ "$AGENT" == "codex" ]]; then
 # AGENTS.md — Codex Agent Instructions
 
 Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.
+
+Read \`tools/progress/operating-guidance.md\` under the configured \`CODEX_HOME\` (default \`~/.codex\`) as the common operating guidance for every activity, including when no skill matches.
 
 For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent.
 

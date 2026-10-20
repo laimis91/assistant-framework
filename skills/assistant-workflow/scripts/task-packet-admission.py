@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pure v14 packet admission. The caller resolves authority; this module never does I/O.
+"""Pure v15 packet admission with authenticated v14/v12/v13 reconciliation.
 
 See references/plan-template.md, Packet admission wire boundary. CLI reads one JSON
 request from stdin and writes one result. It cannot attest the caller's runtime facts.
@@ -17,6 +17,15 @@ import hashlib
 import json
 import math
 import re
+import importlib.util
+from pathlib import Path
+
+
+_progress_spec = importlib.util.spec_from_file_location(
+    "assistant_shared_progress", Path(__file__).resolve().parents[3] / "tools/progress/stagnation.py")
+PROGRESS = importlib.util.module_from_spec(_progress_spec)
+sys.modules[_progress_spec.name] = PROGRESS
+_progress_spec.loader.exec_module(PROGRESS)
 
 
 MAX_BYTES = 2 * 1024 * 1024
@@ -491,8 +500,8 @@ def allocation(owner, checks, canonical_bindings, requirements, path):
     return ids, tuples, reqs
 
 
-def validate_plan(plan, context):
-    require(plan.get("plan_schema_version") == "14.0", "unsupported_version", "plan_schema_version", "Only canonical v14 is writable")
+def validate_plan(plan, context, version="15.0"):
+    require(plan.get("plan_schema_version") == version, "unsupported_version", "plan_schema_version", "Only canonical v15 is writable; validate original v14 before migration")
     require(not any(key in plan for key in ("slice_manifest", "single_slice_rationale", "slice_verification_summary",
                                            "decomposition_plan_review", "current_task_packet", "verification_decision", "red_evidence", "red_phase", "worker_stage", "test_applicability")),
             "mixed_schema", "plan", "Plan has one packet collection and one specialist reference")
@@ -570,10 +579,11 @@ def validate_plan(plan, context):
         object_value(execution.get("input_identity"), pid + ".input_identity")
         for entry in array(execution.get("history"), pid + ".history"):
             object_value(entry, pid + ".history[]")
-        recovery = object_value(execution.get("recovery"), pid + ".recovery")
-        for field in ("attempt_count", "no_progress_count"):
-            require(type(recovery.get(field)) is int and recovery[field] >= 0, "recovery_mismatch", pid, "Recovery counters must be retained nonnegative integers")
-        require(recovery["no_progress_count"] <= recovery["attempt_count"], "recovery_mismatch", pid, "Invalid spent repair counters")
+        if version == "14.0" or "recovery" in execution:
+            recovery = object_value(execution.get("recovery"), pid + ".recovery")
+            for field in ("attempt_count", "no_progress_count"):
+                require(type(recovery.get(field)) is int and recovery[field] >= 0, "recovery_mismatch", pid, "Historical counters must be retained nonnegative integers")
+            require(recovery["no_progress_count"] <= recovery["attempt_count"], "recovery_mismatch", pid, "Invalid historical counters")
     graph(packets)
     completion = object_value(plan.get("completion_allocation"), "completion_allocation")
     ids, tuples, reqs = allocation(completion, checks, canonical_bindings, requirements, "completion_allocation")
@@ -806,7 +816,7 @@ def worker_stage(request, packet, context, plan):
 def reconcile_execution(plan, context, checks):
     current = object_value(context.get("current_input_identities"), "context.current_input_identities")
     evidence = object_value(context.get("packet_evidence"), "context.packet_evidence")
-    counters = object_value(context.get("recovery_counters"), "context.recovery_counters")
+    counters = object_value(context.get("recovery_counters", {}), "context.recovery_counters")
     previous = context.get("previous_plan")
     previous_packets = {}
     if previous is not None:
@@ -817,8 +827,9 @@ def reconcile_execution(plan, context, checks):
     packets = {packet["packet_id"]: packet for packet in plan["implementation_steps"]}
     for packet in plan["implementation_steps"]:
         pid, execution = packet["packet_id"], packet["execution"]
-        require(digest(execution["recovery"]) == digest(counters.get(pid)), "recovery_mismatch", pid,
-                "Spent counters must match independently resolved current recovery state")
+        if "recovery" in execution and pid in counters:
+            require(digest(execution["recovery"]) == digest(counters[pid]), "recovery_mismatch", pid,
+                    "Historical counters must match independently retained observations")
         object_value(current.get(pid), "current_input_identities." + pid)
         require(bool(current[pid]), "input_identity", pid, "Current relevant-input identity required")
         if pid in previous_packets:
@@ -827,7 +838,7 @@ def reconcile_execution(plan, context, checks):
                     "invalid_state", pid, "Caller cannot downgrade retained VERIFIED work; only helper reconciliation invalidates it")
             # The current recovery owner above attests measurable-progress resets
             # of no_progress_count; cumulative spent attempts never reset.
-            require(execution["recovery"]["attempt_count"] >= old["recovery"]["attempt_count"]
+            require(("recovery" not in old or ("recovery" in execution and execution["recovery"]["attempt_count"] >= old["recovery"]["attempt_count"]))
                     and digest(execution["history"][:len(old["history"])]) == digest(old["history"])
                     and set(old["evidence_refs"]) <= set(execution["evidence_refs"]), "recovery_mismatch", pid, "Resume cannot reset spent attempts or discard history/evidence")
         if digest(execution.get("input_identity")) != digest(current[pid]):
@@ -850,6 +861,110 @@ def reconcile_execution(plan, context, checks):
     return invalid
 
 
+def normalize_v14(source, context):
+    """Validate original approval before the fixed representation-only migration.
+
+    The independently resolved original approval digest is the attestation. No
+    candidate migration flag can approve changed scope. Return the remapped
+    authority context for the caller to retain with the canonical snapshot.
+    """
+    validate_plan(source, context, "14.0")
+    original_identity = deepcopy(source["approved_plan_identity"])
+    plan, current = deepcopy(source), deepcopy(context)
+    plan["plan_schema_version"] = "15.0"
+    normalized_identity = {**original_identity, "definition_digest": digest(definition(plan))}
+    plan["approved_plan_identity"] = deepcopy(normalized_identity)
+    provenance = plan.setdefault("reconciliation_provenance", {})
+    provenance["workflow_migration"] = {
+        "producer_schema_version": "14.0", "consumer_schema_version": "15.0",
+        "source_sha256": digest(source), "original_approved_plan_identity": original_identity,
+        "normalized_definition_digest": normalized_identity["definition_digest"],
+        "mapping_ref": "task-packet-admission.py#normalize_v14",
+        "packet_mapping": [{"source_packet_id": p["packet_id"], "packet_id": p["packet_id"],
+                            "packet_definition_digest": digest(packet_definition(p))} for p in source["implementation_steps"]]}
+    # Only identity projections change. Commands, bindings, native actor, input,
+    # current stages, RED and other results are preserved literally.
+    for rows in (current.get("packet_evidence", {}), current.get("test_applicability", {})):
+        for row in rows.values():
+            if row.get("approved_plan_identity") == original_identity:
+                row["approved_plan_identity"] = deepcopy(normalized_identity)
+    if isinstance(current.get("completion_evidence"), dict) and current["completion_evidence"].get("approved_plan_identity") == original_identity:
+        current["completion_evidence"]["approved_plan_identity"] = deepcopy(normalized_identity)
+    if isinstance(current.get("previous_plan"), dict):
+        prior = current["previous_plan"]
+        require(prior.get("approved_plan_identity") == original_identity, "resume_identity", "previous_plan", "Original migration snapshot must bind original approval")
+        require(digest(definition(prior)) == original_identity["definition_digest"], "resume_identity", "previous_plan", "Original retained definition changed")
+        prior["plan_schema_version"] = "15.0"
+        prior["approved_plan_identity"] = deepcopy(normalized_identity)
+        prior["reconciliation_provenance"] = deepcopy(provenance)
+    current["approved_plan_identity"] = deepcopy(normalized_identity)
+    return plan, current
+
+
+def progress_checkpoint(context):
+    carrier = context.get("progress")
+    if carrier is None:
+        return None
+    object_value(carrier, "context.progress")
+    sources = object_value(carrier.get("resolved_sources"), "context.progress.resolved_sources")
+    state = PROGRESS.ProgressState.parse(carrier.get("state"), sources)
+    outcome = PROGRESS.resolved(sources, state.guard.outcome_ref)
+    require(outcome.get("task_identity") == context.get("task_identity"), "progress_mismatch", "context.progress", "Guard must retain the intended task outcome")
+    return state
+
+
+def progress_admission(packet, context, state, plan):
+    execution = packet["execution"]
+    if state is None:
+        require(not execution.get("recovery", {}).get("attempt_count", 0)
+                and not execution.get("progress_guard_ref"), "progress_history_missing", packet["packet_id"],
+                "Repeated work requires retained progress observations; old totals do not prove a stall or fresh window")
+        return None  # Single-pass work needs no new progress envelope.
+    carrier = context["progress"]
+    action = PROGRESS.ActionIdentity.parse(carrier.get("action"))
+    pid = packet["packet_id"]
+    scope = action.member_scope
+    retained = state.action_admission
+    matching = retained is not None and retained.action == action
+    if scope:
+        source = scope.authority(carrier["resolved_sources"], state.guard, action.action_ref)
+        require(digest(source["approved_plan_identity"]) == digest(plan["approved_plan_identity"]),
+                "progress_mismatch", pid, "Grouping must bind current approved Plan")
+        packets = {row["packet_id"]: row for row in plan["implementation_steps"]}
+        previous_members = {row["packet_id"]: row["execution"] for row in context.get("previous_plan", {}).get("implementation_steps", [])}
+        for member in scope.members:
+            require(member.packet_id in packets and member.packet_definition_digest == digest(packet_definition(packets[member.packet_id]))
+                    and digest(member.input_identity.wire()) == digest(context["current_input_identities"][member.packet_id]),
+                    "progress_mismatch", pid, "Group member must bind canonical definition and current input")
+            if matching and previous_members.get(member.packet_id, {}).get("action_admission_ref") == retained.admission_ref:
+                require(packets[member.packet_id]["execution"].get("action_admission_ref") == retained.admission_ref,
+                        "progress_replay", pid, "Cannot erase any committed member join")
+        bound = next((row for row in scope.members if row.packet_id == pid), None)
+    else:
+        bound = action if action.packet_id == pid else None
+    require(execution.get("progress_guard_ref") == state.guard.guard_id
+            and execution.get("action_ref") == action.action_ref and bound is not None
+            and digest(bound.input_identity.wire()) == digest(context["current_input_identities"][pid]),
+            "progress_mismatch", pid, "Action/guard must bind independently current packet and inputs")
+    continuing = execution["state"] == "RUNNING" and matching
+    if scope and retained is not None:
+        require(matching, "progress_replay", pid, "Retain complete admitted coordinator scope")
+        previous = next((row["execution"] for row in context.get("previous_plan", {}).get("implementation_steps", [])
+                         if row["packet_id"] == pid), {})
+        joined = execution.get("action_admission_ref") == retained.admission_ref
+        was_joined = previous.get("action_admission_ref") == retained.admission_ref
+        require(not was_joined or joined, "progress_replay", pid, "Cannot erase a committed coordinator join")
+        if execution["state"] == "PENDING":
+            require(not joined and not was_joined, "progress_replay", pid, "Member already joined this coordinator")
+            continuing = True
+    if execution["state"] == "RUNNING" and retained is not None:
+        require(continuing and execution.get("action_admission_ref") == retained.admission_ref,
+                "progress_replay", pid, "Retain original admitted action for later RUNNING stages")
+    result = PROGRESS.transition(PROGRESS.ProgressTransitionRequest(
+        state, carrier["resolved_sources"], action=action, admit=True, continuing=continuing))
+    return result.state
+
+
 def authenticate_provenance(plan, context):
     """Only trusted normalization creates provenance; later calls retain it exactly."""
     previous = context.get("previous_plan")
@@ -868,12 +983,19 @@ def authenticate_provenance(plan, context):
 
 def admission(request):
     """Calculate an admission result without mutating the request or external state."""
-    snapshot = None
+    snapshot, progress = None, None
     try:
         object_value(request, "request")
         boundary = request.get("boundary")
         require(boundary in BOUNDARIES, "unsupported_boundary", "boundary", "Unknown admission operation")
         context = object_value(request.get("context"), "context")
+        # A completed cycle belongs to the retained outcome even when authority,
+        # readiness, workspace or a later-stage gate blocks the next action.
+        progress = progress_checkpoint(context)
+        if progress is not None:
+            carrier = context["progress"]
+            event = PROGRESS.ProgressEvent.parse(carrier["event"]) if carrier.get("event") is not None else None
+            progress = PROGRESS.transition(PROGRESS.ProgressTransitionRequest(progress, carrier["resolved_sources"], event)).state
         readiness = object_value(context.get("readiness"), "context.readiness")
         require(readiness.get("execution_intent") in {"implement_only", "end_to_end"}, "no_execution", "readiness.execution_intent", "Preparation produces no executable work")
         require(readiness.get("ready") is True and readiness.get("route_clear") is True,
@@ -885,6 +1007,8 @@ def admission(request):
             require("schema_version" not in source, "mixed_schema", "plan", "Explicit verified legacy admission required")
             authenticate_provenance(source, context)
             snapshot = deepcopy(source)
+        if snapshot.get("plan_schema_version") == "14.0":
+            snapshot, context = normalize_v14(snapshot, context)
         checks, _ = validate_plan(snapshot, context)
         if boundary == "resume":
             require(context.get("previous_plan") is not None, "resume_identity", "context.previous_plan", "Resume needs independently retained last snapshot")
@@ -902,14 +1026,6 @@ def admission(request):
             require(packet["execution"]["state"] == "PENDING" or (packet["execution"]["state"] == "RUNNING" and "worker_stage" in request),
                     "invalid_state", target, "Materialize PENDING work or an explicit stage of the same RUNNING packet")
             worker_stage(request, packet, context, snapshot)
-            recovery = packet["execution"]["recovery"]
-            stage = request.get("worker_stage", "implementation")
-            continuing_attempt = packet["execution"]["state"] == "RUNNING" and stage in {
-                "test_authoring", "production", "green", "refactor", "refactor_verification", "final_verification"}
-            # Finish actual stages of the current third attempt; never start a fourth.
-            limit = 3 if continuing_attempt else 2
-            require(recovery["attempt_count"] <= limit and recovery["no_progress_count"] < 2,
-                    "recovery_exhausted", target, "Existing recovery allowance exhausted; route pivot/restart decision")
             source_writer = bool(packet["files_to_create"] or packet["files_to_modify"])
             workspace = object_value(context.get("workspace"), "context.workspace")
             active_ids = set(strings(workspace.get("active_source_writer_ids"), "workspace.active_source_writer_ids"))
@@ -955,11 +1071,15 @@ def admission(request):
                 text(fact.get("evidence_ref"), gate)
         result = {"status": "accepted", "code": "accepted", "path": "", "details": "Admission consistency validated; runtime authority remains caller-owned",
                   "canonical_plan": snapshot}
+        if progress is not None:
+            result["canonical_progress_state"] = progress.wire()
         if packet is not None:
             projection = deepcopy(packet)
             projection["verification_decision"] = deepcopy(context["verification_decision"])
             projection["evidence_assessment"] = deepcopy(object_value(context.get("evidence_assessment"), "context.evidence_assessment"))
             projection["approved_plan_identity"] = deepcopy(snapshot["approved_plan_identity"])
+            if progress is not None:
+                projection["progress_state"] = progress.wire()
             phase = request.get("worker_stage", "implementation")
             verifier = boundary == "verification" or (context["build_execution_lane"] == "separated_workers" and phase in {"pre_production_red", "green", "refactor_verification", "final_verification"})
             if verifier:
@@ -982,14 +1102,43 @@ def admission(request):
             if "current_task_packet" in request:
                 require(digest(request["current_task_packet"]) == digest(projection), "projection_mismatch", "current_task_packet", "Projection cannot redefine canonical work or specialist decision")
             result["current_task_packet"] = projection
+        if boundary == "dispatch":
+            # Projection/inline checks are gates too. No rejected call consumes
+            # a bound unblock or writes an admission into its canonical packet.
+            progress = progress_admission(packet, context, progress, snapshot)
+            if progress is not None:
+                admission_ref = progress.action_admission.admission_ref
+                packet["execution"]["action_admission_ref"] = admission_ref
+                result["current_task_packet"]["execution"]["action_admission_ref"] = admission_ref
+                result["current_task_packet"]["progress_state"] = progress.wire()
+                result["canonical_progress_state"] = progress.wire()
+        result["canonical_context"] = deepcopy(context)
+        # The accepted snapshot becomes the caller's next retained authority;
+        # keeping an older snapshot here could hide a later terminal downgrade.
+        result["canonical_context"]["previous_plan"] = deepcopy(snapshot)
+        if progress is not None:
+            result["canonical_context"]["progress"]["state"] = progress.wire()
+            result["canonical_context"]["progress"].pop("event", None)
         return result
     except AdmissionError as error:
         result = {"status": "blocked", "code": error.code, "path": error.path, "details": error.details}
         if snapshot is not None:
             result["canonical_plan"] = snapshot
+        if progress is not None:
+            result["canonical_progress_state"] = progress.wire()
+        return result
+    except PROGRESS.ProgressError as error:
+        result = {"status": "blocked", "code": error.code, "path": "context.progress", "details": str(error)}
+        if snapshot is not None:
+            result["canonical_plan"] = snapshot
+        if progress is not None:
+            result["canonical_progress_state"] = progress.wire()
         return result
     except (KeyError, TypeError, ValueError, AttributeError, RecursionError, OverflowError, UnicodeError) as error:
-        return {"status": "blocked", "code": "malformed", "path": "request", "details": "Malformed or unsupported input: " + type(error).__name__}
+        result = {"status": "blocked", "code": "malformed", "path": "request", "details": "Malformed or unsupported input: " + type(error).__name__}
+        if progress is not None:
+            result["canonical_progress_state"] = progress.wire()
+        return result
 
 
 def load_json(value):

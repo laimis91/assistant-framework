@@ -27,7 +27,7 @@ The orchestrator provides:
 - `code_review_result`: final Code Reviewer or Reviewer compatibility result.
 - `domain_context`: scoped UI/visual, product, UX, docs, DX, or domain notes when applicable.
 - `rubric_refs`: explicit references to scoped domain rubric families from `references/domain-rubrics.md` when applicable.
-- `round`: QA round number from 1 to 10.
+- `round`: QA round number, a positive integer.
 - `previously_failed_acceptance_items`: failed acceptance items from earlier QA rounds.
 - `qa_filter_policy`: acceptance findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns stay non-blocking.
 - `approved_feature_preparation_qa_acceptance_obligation` when carried: requested_scope, execution_prerequisite, and exactly one source_feature_preparation_evidence_ref or source_preparation_basis=not_applicable. It makes `qa_evaluation_mode=required`.
@@ -54,7 +54,7 @@ round = 1
 previously_failed_acceptance_items = []
 score_progression = []
 
-while round <= 10:
+while shared_progress_allows_work:
   1. EVALUATE ACCEPTANCE
      Dispatch qa-evaluator in delegated mode, or use direct fallback with fresh QA context.
      Before dispatch and after any QA pause, rehash source material and require exact equality with the current complete final review batch. Source mutation requires validation, invalidation, and a fresh complete review batch before QA resumes; no stale review result may enter QA. When the carried obligation exists, verify execution_prerequisite before requested_scope; block if prerequisite or evidence is missing rather than dropping the obligation. Return its unchanged requested_scope, execution_prerequisite, feature_preparation_scope, and the exact conditional source ref or not_applicable basis with status/evidence.
@@ -69,9 +69,9 @@ while round <= 10:
      Return selected_domain_rubrics and domain_quality_scores when domain rubrics were selected.
      Record score_entry: round, weighted_score, failed_acceptance_count, delta, drift_status.
      Round 1 uses `delta=initial` and `drift_status=NOT_APPLICABLE` or `NEUTRAL`. Every later `delta` is the exact signed two-decimal difference from the immediately preceding weighted score. Derive status from that adjacent transition: a negative delta is REGRESSION; a positive delta with fewer failed items is GENUINE (SUSPICIOUS when greater than 1.00), otherwise a positive delta is DRIFT; two consecutive zero-score transitions with the same positive failed-item count end in STAGNATION; other zero deltas are NEUTRAL.
-     If score progression reports terminal STAGNATION, two consecutive terminal DRIFT entries, two consecutive terminal REGRESSION entries,
-     or selected domain rubric action pivot, return pivot_restart_signal to the
-     orchestrator before another QA/build dispatch.
+     These labels are diagnostics, never semantic progress/reset/stop authority.
+     Apply the common task guard to the completed correction and its due checks;
+     retain acceptance failures regardless of score movement.
 
   3. DECIDE
      accepted: no failed acceptance items and evidence proves done.
@@ -80,10 +80,10 @@ while round <= 10:
      blocked: required acceptance material or verification evidence is missing.
 
   4. FIX OR EXIT
-     If rejected before round 10, return failed acceptance items to Build for fixes, then re-run QA.
+     If rejected while the shared guard permits corrective work, return failed acceptance items to Build for fixes, then re-run QA.
      If blocked, return NEEDS_CONTEXT or BLOCKED with open_questions.
      If a carried obligation exists, accepted/CLEAN, accepted/ISSUES_FIXED, accepted_with_concerns/CLEAN, and accepted_with_concerns/ISSUES_FIXED require requested_scope_status=fulfilled, execution_prerequisite_status=met, exact carried binding, and evidence. Otherwise return rejected/HAS_REMAINING_ITEMS or blocked/BLOCKED. Only then may accepted or accepted_with_concerns exit with the final result.
-     Round 10 is terminal; return remaining failed acceptance items instead of starting round 11.
+     The shared guard governs continuation; unresolved acceptance items remain explicit.
      If pivot_restart_signal was returned, pause QA until the orchestrator
      records pivot_restart_decision with exact_next_action.
 ```
@@ -102,7 +102,7 @@ Do not report generic code defects, architecture concerns, security issues, or t
 ## Final Result
 
 The QA loop returns one final result:
-- `rounds`: 1-10.
+- `rounds`: positive integer.
 - `final_verdict`: accepted, accepted_with_concerns, rejected, or blocked.
 - `result`: CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS, or BLOCKED.
 - `acceptance_findings`: remaining or resolved acceptance findings with evidence.
@@ -110,7 +110,7 @@ The QA loop returns one final result:
 - `selected_domain_rubrics`: selected rubric families when scoped domain rubrics were used; empty or omitted when not applicable.
 - `domain_quality_scores`: per-family/per-dimension scores when scoped domain rubrics were used; empty or omitted when not applicable.
 - `score_progression`: same canonical projection: `round` (int), `weighted_score` (float), `failed_acceptance_count` (int), exact adjacent `delta` (string), and derived `drift_status` (the canonical enum), per round.
-- `pivot_restart_signal`: required when QA ends in STAGNATION, two consecutive terminal DRIFT entries, two consecutive terminal REGRESSION entries, or a scoped domain action pivot is detected; nonconsecutive historical entries do not trigger it.
+- `pivot_restart_signal`: required when the shared semantic guard reports genuine stagnation; diagnostic scores alone do not trigger it.
 - `evidence`: materials inspected and why they prove or fail acceptance.
 - `open_questions`: required when blocked.
 
@@ -123,3 +123,5 @@ options_considered, selected_action, reapproval_required, next_agent,
 recovery_pointer, and exact_next_action. Update harness trace/replay/run-state
 when available. Reapproval is required when the selected action changes scope,
 files, behavior, risk, verification, or acceptance criteria.
+
+Productive work may continue beyond round 10 under the same shared guard; acceptance, complete evidence and current snapshot gates still apply.

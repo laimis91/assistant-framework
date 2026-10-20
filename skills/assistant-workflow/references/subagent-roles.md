@@ -62,12 +62,12 @@ Report at 80%+ confidence only.
 
 **Round N > 1:**
 ```
-Use the code-reviewer agent. This is review round {N} of 10.
+Use the code-reviewer agent. This is review round {N}.
 Discovery passes receive the current snapshot and assigned scope with no prior findings.
 Only the designated closure_verification pass receives the immutable pre-fix ledger
 as previously_fixed and verifies those findings against the current snapshot.
 Keep discovery passes isolated from sibling results and return the canonical Reviewer schema.
-Confidence threshold: Round 1-3: 80%+ | Round 4-7: 85%+ | Round 8-10: 90%+
+Confidence standards remain evidence-based and unchanged across round ordinals.
 ```
 
 Follow the [review loop](../../assistant-review/references/review-loop.md) and
@@ -92,12 +92,11 @@ Do not replace Code Reviewer. Report only acceptance findings backed by evidence
 
 **QA Round N > 1:**
 ```
-Use the qa-evaluator agent. This is QA round {N} of 10.
+Use the qa-evaluator agent. This is QA round {N}.
 Previously failed acceptance items:
 {previously_failed_acceptance_items}
-Do not re-report resolved items. In rounds 8-10, only unresolved acceptance
-blockers or high-confidence acceptance risks keep the QA loop open.
-Round 10 is terminal; return the final verdict instead of implying round 11.
+Do not re-report resolved items. Keep the same acceptance and confidence
+standards at every ordinal. Use the shared semantic task guard for correction.
 ```
 
 ## Fallback: agents not installed

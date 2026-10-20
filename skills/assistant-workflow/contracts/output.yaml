@@ -7,7 +7,7 @@
 # Defines required artifacts for consumed canonical workflow results.
 # Canonical completion verifies required artifacts before the completion marker.
 
-schema_version: "14.0"
+schema_version: "15.0"
 contract: output
 skill: assistant-workflow
 
@@ -1521,59 +1521,33 @@ artifacts:
 
   - name: build_repair_state
     type: object
-    required: conditional
-    condition: "execution_intent != prepare_only and an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
-    description: "Bounded ordinary Build repair controller state; harness-specific loops keep their existing controller artifacts"
-    validation: "Fixed bounds are max_attempts 3 and no_progress_limit 2. Each attempt records normalized failure signatures and progress evidence, plan_version is stable for same-scope retries, cumulative_attempt_count never resets across changing failing tests/checks, workers, contexts or sessions, and reaching either bound sets terminal_route to pivot or block rather than another retry."
-    on_fail: "Stop the retry, reconstruct the repair state from Build evidence, and create a pivot_restart_decision or return blocked before any further implementation attempt."
+    required: false
+    condition: "execution_intent != prepare_only"
+    description: "Legacy repair observations only; retain original counts and evidence, never use as continuation authority. The canonical progress_state owns the shared guard."
     object_fields:
-      - name: attempt
-        type: int
-        required: true
-        validation: ">= 1 and <= 3"
-      - name: max_attempts
-        type: int
-        required: true
-        validation: "Exactly 3"
-      - name: no_progress_count
-        type: int
-        required: true
-        validation: ">= 0 and <= 2; reset only when new evidence proves measurable progress"
-      - name: no_progress_limit
-        type: int
-        required: true
-        validation: "Exactly 2"
-      - name: failure_signatures
-        type: string[]
-        required: true
-        min_items: 1
-        validation: "Normalized signatures for the current and prior same-scope failures"
-      - name: progress_evidence
-        type: string[]
-        required: true
-        min_items: 1
-        validation: "Concrete newly passing selected check, reduced failing scope, new evidence isolating the cause, or explicit no-progress evidence; changed failure/test signatures alone are not progress"
-      - name: plan_version
-        type: string
-        required: true
-        validation: "Stable approved-plan or no-plan task identity; changing it requires replan/reapproval before retry"
-      - name: cumulative_attempt_count
-        type: int
-        required: true
-        validation: ">= attempt and <= 3; never resets on redispatch, context reset, compaction, or continuation"
-      - name: status
-        type: enum
-        required: true
-        enum_values: [repairing, recovered, terminal_pivot, blocked]
-      - name: terminal_route
-        type: enum
-        required: conditional
-        condition: "status in [terminal_pivot, blocked]"
-        enum_values: [debugging, replan, restart_with_reapproval, block_for_user, block_for_environment]
-      - name: evidence_ref
-        type: string
-        required: true
-        validation: "Pointer to validation output, task journal repair entry, or carried-forward packet evidence"
+      - {name: attempt, type: int, required: false, description: "Optional retained historical attempt ordinal; never a current allowance."}
+      - {name: cumulative_attempt_count, type: int, required: false, description: "Optional historical total, not a current correction ceiling."}
+      - {name: no_progress_count, type: int, required: false, description: "Optional legacy observation, not the shared guard count."}
+      - {name: max_attempts, type: int, required: false, description: "Optional obsolete policy observation retained for compatibility, never enforced as current policy."}
+      - {name: no_progress_limit, type: int, required: false, description: "Optional obsolete policy observation retained for compatibility, never enforced as current policy."}
+      - {name: plan_version, type: string, required: false, description: "Plan identity attached to the historical observations."}
+      - {name: status, type: string, required: false, description: "Retained historical repair disposition, not current continuation authority."}
+      - {name: terminal_route, type: string, required: false, description: "Historical evidence-backed route observation."}
+      - {name: failure_signatures, type: "string[]", required: false, description: "Retained regression/incidental/baseline/unknown classifications consumed by the compatibility evaluator."}
+
+  - name: progress_state
+    type: object
+    required: conditional
+    condition: "repeated or persisted semantic work has a progress consumer"
+    description: "Canonical ProgressState v1 in the existing task/journal context; see tools/progress/operating-guidance.md and ProgressState.parse in stagnation.py."
+    validation: "Independent outcome/guard, policy source, assessed history, evidence and current action admission are retained; derive counts, reject replay, preserve completed-cycle-before-blocker ordering; optional fixed coordinator members share one admission and complete terminal-cycle barrier under the common helper; no phase-local allowance."
+    # Only the scalar display/evaluator projection is declared here. The helper
+    # remains authoritative for the full runtime state and transition semantics.
+    object_fields:
+      - {name: guard_id, type: string, required: false, description: "Stable shared outcome guard identity when projected."}
+      - {name: work_ordinal, type: int, required: false, description: "Completed semantic-cycle ordinal when projected; not an allowance."}
+      - {name: consecutive_no_progress, type: int, required: false, description: "Current helper-derived shared count when projected; distinct from historical legacy observations."}
+      - {name: status, type: enum, required: false, enum_values: [active, stagnant, reactivated], description: "Current shared guard status when projected; validated against independent evidence by the helper."}
 
   - name: final_handoff
     type: object
@@ -2299,7 +2273,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [reset_context, return_to_build, dispatch_debugging, dispatch_explorer, dispatch_architect, run_candidate_search, replan, restart_slice, restart_phase, block_for_user, accept_with_limitations]
-        validation: "Concrete recovery action selected by the orchestrator; it must not imply starting round 11 after a terminal round 10"
+        validation: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
         on_missing: fail
       - name: reapproval_required
         type: boolean
@@ -2326,8 +2300,8 @@ artifacts:
     type: enum
     required: conditional
     condition: "approved Plan uses executable packets"
-    enum_values: ["14.0"]
-    description: "New producers write v14 only; explicit verified v12 provenance uses bounded read-old/write-new admission."
+    enum_values: ["15.0"]
+    description: "New producers write v15 only; explicit verified v12 provenance uses bounded read-old/write-new admission."
 
   - name: approved_plan_identity
     type: object
@@ -2755,9 +2729,13 @@ artifacts:
             condition: "tdd_applies is true and the actual canonical cycle_log has started"
             validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
           - {name: history, type: "object[]", required: true}
+          - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
+          - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
+          - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
           - name: recovery
             type: object
-            required: true
+            required: false
+            description: "Historical v14 observations only; preserve supplied facts without using them as continuation authority."
             object_fields:
               - {name: attempt_count, type: int, required: true}
               - {name: no_progress_count, type: int, required: true}
@@ -3168,8 +3146,8 @@ artifacts:
     required: conditional
     condition: "before starting an explicit repeat or optimization loop outside the standard required workflow phase gates, or before a second/sequential progressive decision activation inside Discover, or (progressive_artifact_retention_state != terminally_archived and progressive_sequence_readiness_state in [active, closed])"
     description: "Pre-loop/readiness gate for repeat/optimization loops and sequential progressive resolution; not required for one-pass work or the normal required review loop."
-    validation: "Records loop_type, loop_trigger, readiness_state, verifier, stop_condition, max_iterations, budget_limit, tool_access, state_tracking, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, rollback_or_exit, harness_routing, and evidence before the loop starts. For loop_type == progressive_decision_sequence, set progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained atomically before the second activation; one stable readiness_assessment_id and progressive_decision_map_ref identify the sequence; max_iterations is immutable; cumulative_activation_count equals the ordered unique append-only activated_decision_item_refs including the first activation; resolved_decision_item_refs are ordered unique subset entries and contain every activated ref whose canonical decision_item.status=resolved; and each such ref maps exactly once to decision_resolution.decision_item_ref. While active, retain that record through pause, blocked state, compaction, continuation, route-clear preparation, third+ activation proposals, and durable route-clear consumption. Only then set closed. After progressive_sequence_readiness_state becomes closed, progressive_artifact_retention_state=retained keeps the same record while the task remains active/resumable or compacts. Only progressive_artifact_retention_state=terminally_archived permits omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible; Task state: completed does not qualify, and terminally_archived cannot revert. Closed cannot reopen or reset the same decision-map record. loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
-    on_fail: "Before running the repeat/optimization loop or activating a second/sequential progressive decision, add the readiness assessment or remove the loop/activation from the plan. For progressive_decision_sequence, preserve the stable identity and cumulative history while active through durable route-clear consumption and after closed while progressive_artifact_retention_state=retained. Permit omission only after the explicit final archival/termination transition to terminally_archived. When count equals max_iterations or evidence is inconsistent, fail closed to blocked/escalation. Do not reopen or reset a closed sequence. Set harness_routing=required only when harness_capable == true or independent QA criteria already apply."
+    validation: "Records loop_type, loop_trigger, readiness_state, verifier, stop_condition, max_iterations, budget_limit, tool_access, state_tracking, retry_or_empty_result_handling, tool_error_handling, low_confidence_escalation, rollback_or_exit, harness_routing, and evidence before the loop starts. For loop_type == progressive_decision_sequence, set progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained atomically before the second activation; one stable readiness_assessment_id and progressive_decision_map_ref identify the sequence; max_iterations is optional and source-backed when supplied; cumulative_activation_count equals the ordered unique append-only activated_decision_item_refs including the first activation; resolved_decision_item_refs are ordered unique subset entries and contain every activated ref whose canonical decision_item.status=resolved; and each such ref maps exactly once to decision_resolution.decision_item_ref. While active, retain that record through pause, blocked state, compaction, continuation, route-clear preparation, third+ activation proposals, and durable route-clear consumption. Only then set closed. After progressive_sequence_readiness_state becomes closed, progressive_artifact_retention_state=retained keeps the same record while the task remains active/resumable or compacts. Only progressive_artifact_retention_state=terminally_archived permits omission after explicit final archival/termination evidence proves continuation and reference resolution are impossible; Task state: completed does not qualify, and terminally_archived cannot revert. Closed cannot reopen or reset the same decision-map record. loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
+    on_fail: "Before running the repeat/optimization loop or activating a second/sequential progressive decision, add the readiness assessment or remove the loop/activation from the plan. For progressive_decision_sequence, preserve the stable identity and cumulative history while active through durable route-clear consumption and after closed while progressive_artifact_retention_state=retained. Permit omission only after the explicit final archival/termination transition to terminally_archived. When an explicit resource bound is exhausted or evidence is inconsistent, retain the actual blocked/escalation reason. Do not reopen or reset a closed sequence. Set harness_routing=required only when harness_capable == true or independent QA criteria already apply."
     object_fields:
       - name: loop_type
         type: enum
@@ -3204,8 +3182,13 @@ artifacts:
         validation: "Concrete pass, budget, stagnation, or failure condition that ends the loop"
       - name: max_iterations
         type: int
-        required: true
-        validation: "Positive finite cap; immutable for one readiness_assessment_id and progressive_decision_map_ref pair when loop_type == progressive_decision_sequence"
+        required: false
+        validation: "Positive bound only when an explicit user or evidenced resource constraint applies; carry its source. No mandatory framework activation ceiling."
+      - name: iteration_bound_source_ref
+        type: string
+        required: conditional
+        condition: "max_iterations is supplied"
+        validation: "Resolves the explicit user instruction or evidenced resource policy imposing this bound; no invented framework cap."
       - name: cumulative_activation_count
         type: int
         required: conditional
@@ -3216,7 +3199,7 @@ artifacts:
         required: conditional
         condition: "loop_type == progressive_decision_sequence"
         min_items: 1
-        validation: "Ordered unique append-only decision_item refs; another activation atomically appends one ref and increments cumulative_activation_count only while the count is below max_iterations"
+        validation: "Ordered unique append-only decision_item refs; another activation atomically appends one ref and increments cumulative_activation_count while the shared guard and any explicit source-backed budget permit work"
       - name: resolved_decision_item_refs
         type: string[]
         required: conditional
@@ -3225,7 +3208,7 @@ artifacts:
       - name: budget_limit
         type: string
         required: true
-        validation: "Token, time, cost, run-count, or explicit local-effort cap"
+        validation: "Actual token/time/cost/resource policy or explicit not_applicable; do not invent a local allowance"
       - name: tool_access
         type: string[]
         required: true

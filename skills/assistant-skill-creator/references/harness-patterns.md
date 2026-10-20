@@ -171,25 +171,26 @@ Contract placement:
 
 ## Pattern 7: Bounded Review / QA Loops
 
-Any autonomous review, QA, refinement, or fix-verify loop needs a hard cap. The
-current framework cap is **max 10 rounds**.
+Framework correction loops share one task-level guard. Stop at the source-bound effective window
+(default three consecutive unproductive semantic cycles); productive work has no cumulative
+ceiling. Preserve explicit user/resource bounds and product-loop safety policies.
 
 ```text
 round = 1
-while round <= 10:
+while shared_progress_allows_work:
   evaluate
   decide PASS / REFINE / PIVOT
   fix or exit
   round += 1
 ```
 
-Round 10 is terminal. Return remaining blockers, findings, or failed acceptance
-items instead of starting round 11.
+Retain completed evidence and the same guard across phases and sessions.
+Report remaining blockers, findings and acceptance failures honestly.
 
 Include these fields where applicable:
 
-- `round`: current round number, validation `>= 1 and <= 10`.
-- `max_rounds`: default `10`.
+- `round`: positive unbounded observation; standards do not change by ordinal.
+- `progress_state`: the existing shared task guard when repeated work has a consumer; no mandatory per-loop artifact.
 - `previously_fixed` or `previously_failed_acceptance_items`.
 - `score_progression` or `score_entry`.
 - `loop_exit_reason`.
@@ -208,20 +209,11 @@ Scoring fields:
 - action enum such as `PASS`, `REFINE`, `PIVOT`.
 - evidence for each score.
 
-Drift classification:
-
-| Signal | Condition | Action |
-|---|---|---|
-| GENUINE | score improves and findings decrease | continue |
-| SUSPICIOUS | score jumps sharply while findings decrease | log warning |
-| DRIFT | score improves while findings stay flat or rise | reset evaluator |
-| REGRESSION | score drops | investigate |
-| STAGNATION | findings remain across repeated unchanged scores | pivot/restart |
-
-Add cross-phase invariants for drift and stagnation. Repeated `DRIFT`, repeated
-`REGRESSION`, `STAGNATION`, or rubric action `PIVOT` must return a
-`pivot_restart_signal`; the orchestrator records the actual
-`pivot_restart_decision`.
+Score deltas, finding counts and drift labels are diagnostics. They cannot grant
+continuation, stop productive work, change finding standards or demand a pivot.
+Use the existing common task guard and assessed semantic evidence; only three
+consecutive unproductive cycles establish the default stall. Retain current
+acceptance failures and complete coverage independently of score movement.
 
 ---
 
@@ -270,12 +262,14 @@ Apply this pattern to every repeated agent/tool/model loop.
 
 Required design fields:
 
-- bounded execution: max rounds, steps, timeout, or budget
+- framework semantic work: one shared task guard, with its source-bound effective window of unproductive completed cycles (default three); productive work has no cumulative round/step allowance
+- application/tool/API execution: retain explicit user/product/resource bounds and accurate exits
 - stop condition: success, clean exit, max-budget exit, blocker exit
-- retry policy: capped retries for transient failures only
-- empty-result handling: broaden once, fallback, report no evidence, ask, or exit
+- retry policy: operational transient retries retain their source-backed policy; framework correction uses the same guard
+- empty-result handling: useful query/investigation change, fallback, report no evidence, ask about a consequential choice, or exit
 - tool-error routing: retry, fallback, blocker, or degraded result
-- progress signal: new evidence, fewer findings, better score, or explicit state
+- progress signal: durable acceptance gain or useful novel decision-relevant evidence; scores/counts alone are diagnostic
+- lineage: retain count/frontier/oscillation through compaction, worker changes, policy records and material unblock; never reset on context changes
 - cost/token guard: paid model, subagent, and large-context loops need budget
   awareness
 
@@ -296,7 +290,7 @@ For a loop-based Process skill, require the matching patterns:
 | Do artifacts cross role boundaries? | Typed Artifact References |
 | Are code quality and acceptance both evaluated? | Code Reviewer / QA Evaluator split |
 | Is subjective/domain quality part of acceptance? | Conditional Domain Rubrics |
-| Does a loop run multiple rounds? | Max 10 loop cap, scoring, drift detection |
+| Does framework work repeat? | Shared semantic progress guard; scores diagnostic |
 | Can the approach go stale or hit legacy blockers? | Pivot/Restart Decision |
 
 Most loop-based Process skills use all of these. Simple retry-only skills still

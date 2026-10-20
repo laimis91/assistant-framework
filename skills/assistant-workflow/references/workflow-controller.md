@@ -181,13 +181,7 @@ gates.
 - Classify failing expectations against accepted behavior before repair using
   build-worker-protocol.md; incidental assertions never justify production changes.
   Preserve reduced-testing scope/source through dispatch, review and resume.
-- Ordinary non-harness Build repair is same-scope and bounded across failing
-  tests/checks, workers and sessions. Switching any of them never resets limits. Persist
-  `build_repair_state` with `max_attempts=3`, `no_progress_limit=2`, normalized
-  failure signatures, progress evidence, plan version,
-  `cumulative_attempt_count`, and terminal `terminal_route`. Redispatch,
-  compaction, or continuation never resets the cumulative same-scope count.
-  Reaching either bound terminates in pivot/replan/debugging or blocked.
+- Use the common task-level guard in tools/progress/operating-guidance.md: its source-bound effective window (default three consecutive unproductive semantic cycles); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates. Preserve the same guard across plan versions and sessions.
 
 ## Harness Boundary
 

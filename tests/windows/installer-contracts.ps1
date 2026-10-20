@@ -2395,6 +2395,22 @@ requires:
         }
     }
 
+    Invoke-Contract 'full default Codex install delivers common progress without global-file ownership' {
+        Use-IsolatedEnvironment 'default full progress' {
+            param($root, $isolatedUserProfile)
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', $null, 'Process')
+            $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-NoHooks')
+            Assert-Equal 0 $result.ExitCode "Default full progress install failed: $($result.Output)"
+            foreach ($progressFile in @('operating-guidance.md', 'stagnation.py')) {
+                $ordinary = Join-Path $isolatedUserProfile ('.codex\tools\progress\' + $progressFile)
+                $mirror = Join-Path $isolatedUserProfile ('.agents\tools\progress\' + $progressFile)
+                Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($ordinary))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($mirror))) 'Default full progress mirror mismatch'
+            }
+            $guidance = [System.IO.File]::ReadAllText((Join-Path $isolatedUserProfile '.codex\AGENTS.md'))
+            Assert-Contains $guidance 'including when no skill matches' 'Standing Codex guidance lacks the unmatched activity route'
+        }
+    }
+
     Invoke-Contract 'selective debugging and review installs ship an executable common change-impact checker' {
         Use-IsolatedEnvironment 'selective change impact checker' {
             param($root, $isolatedUserProfile)
@@ -2416,6 +2432,15 @@ requires:
                 $protocol = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\protocol.v1.json'))
                 $example = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\example.completion.v1.json'))
                 Assert-True ([System.IO.File]::Exists($installedSkill)) "$skill selective installation omitted its installed SKILL.md"
+                $progress = Join-Path $skillProfile '.agents\tools\progress'
+                foreach ($progressFile in @('operating-guidance.md', 'stagnation.py')) {
+                    $mirror = Join-Path $progress $progressFile
+                    $ordinary = Join-Path $codexHome ('tools\progress\' + $progressFile)
+                    Assert-True ([System.IO.File]::Exists($mirror)) "$skill omitted the skill-relative common progress mirror"
+                    Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($ordinary))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($mirror))) 'Common progress mirror differs from configured CODEX_HOME'
+                }
+                Assert-Contains ([System.IO.File]::ReadAllText($installedSkill)) '../../tools/progress/operating-guidance.md' 'Installed skill lacks portable common guidance'
+
                 if ($skill -eq 'assistant-debugging') {
                     Assert-True ([System.IO.File]::Exists((Join-Path $skillProfile '.agents\skills\assistant-review\SKILL.md'))) 'assistant-debugging selective installation omitted its canonical assistant-review producer'
                     Assert-True ([System.IO.File]::Exists((Join-Path $skillProfile '.agents\skills\assistant-verification\SKILL.md'))) 'assistant-debugging selective installation omitted its canonical assistant-verification producer'
@@ -2469,6 +2494,12 @@ requires:
             foreach ($phase in @('fresh', 'upgrade')) {
                 $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-NoHooks')
                 Assert-Equal 0 $result.ExitCode "Writer $phase install failed: $($result.Output)"
+                foreach ($progressFile in @('operating-guidance.md', 'stagnation.py')) {
+                    $ordinary = Join-Path $codexHome ('tools\progress\' + $progressFile)
+                    $mirror = Join-Path $isolatedUserProfile ('.agents\tools\progress\' + $progressFile)
+                    Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($ordinary))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($mirror))) 'Repeated/custom-home progress mirror mismatch'
+                }
+
                 $definitions = @(Get-ChildItem -LiteralPath (Join-Path $script:FrameworkRoot 'agents\codex') -Filter '*.toml' -File)
                 Assert-Equal 12 $definitions.Count 'Transition must contain eleven normal definitions plus legacy writer'
                 foreach ($definition in $definitions) {
@@ -2602,7 +2633,8 @@ worker_stage_protocol:
             $handoffsText = $handoffsText.Replace("`r`n", "`n") + "`n"
             switch ($Variant) {
                 'current14' { $indexText = $indexText.Replace('13.0', '14.0'); $handoffsText = $handoffsText.Replace('13.0', '14.0') }
-                'unknown-version' { $indexText = $indexText.Replace('13.0', '15.0'); $handoffsText = $handoffsText.Replace('13.0', '15.0') }
+                'current15' { $indexText = $indexText.Replace('13.0', '15.0'); $handoffsText = $handoffsText.Replace('13.0', '15.0') }
+                'unknown-version' { $indexText = $indexText.Replace('13.0', '16.0'); $handoffsText = $handoffsText.Replace('13.0', '16.0') }
                 'mixed-version' { $indexText = $indexText.Replace('13.0', '14.0') }
                 { $_ -in @('old', 'recovery', 'full', 'gemini') } { $indexText = $indexText.Replace('13.0', '12.0') }
                 'no-stages' { $handoffsText = $handoffsText.Substring(0, $handoffsText.IndexOf('worker_stage_protocol:')) }
@@ -2640,7 +2672,7 @@ worker_stage_protocol:
         }
 
         foreach ($agent in @('codex', 'claude')) {
-            foreach ($variant in @('old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'current14', 'unknown-version', 'mixed-version', 'bom-crlf', 'recovery', 'full')) {
+            foreach ($variant in @('old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'current14', 'current15', 'unknown-version', 'mixed-version', 'bom-crlf', 'recovery', 'full')) {
                 foreach ($mode in @('normal', 'dry-run')) {
                     if ($mode -eq 'dry-run' -and $variant -in @('recovery', 'full')) { continue }
                     Use-IsolatedEnvironment ("ownership-$agent-$variant-$mode") {
@@ -2688,11 +2720,11 @@ worker_stage_protocol:
                         $result = Invoke-Installer -Arguments $installArguments
                         $after = Get-TreeFingerprint -LiteralPath $root
                         $label = "$agent/$variant/$mode"
-                        if ($variant -in @('absent', 'current', 'current14', 'bom-crlf', 'recovery', 'full')) {
+                        if ($variant -in @('absent', 'current', 'current14', 'current15', 'bom-crlf', 'recovery', 'full')) {
                             Assert-Equal 0 $result.ExitCode "$label unexpectedly rejected: $($result.Output)"
                             if ($mode -eq 'dry-run') { Assert-Equal $before $after "$label dry-run mutated scratch tree" }
                             if ($variant -eq 'absent') { Assert-False (Test-Path -LiteralPath $workflow) "$label added unselected workflow" }
-                            if ($variant -in @('current', 'current14', 'bom-crlf')) {
+                            if ($variant -in @('current', 'current14', 'current15', 'bom-crlf')) {
                                 Assert-Equal $workflowBefore (Get-TreeFingerprint -LiteralPath $workflow) "$label refreshed retained compatible controller"
                             }
                             if ($variant -in @('recovery', 'full')) {

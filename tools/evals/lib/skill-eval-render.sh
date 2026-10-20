@@ -113,7 +113,7 @@ emit_prompts() {
                   + "Skill Path: " + $skill_path + "\n\n"
                   + "## Setup Context\n\n" + bullets(.setup_context) + "\n\n"
                   + "## Prompt\n\n" + .prompt + "\n"
-                  + (if .semantic_validator == "assistant-workflow.packet_admission_v14" then
+                  + (if .semantic_validator == "assistant-workflow.packet_admission_v15" then
                        "\n## Fixed Packet Admission Request\n\n```json\n"
                        + (.semantic_context.packet_admission.request | tojson)
                        + "\n```\n"

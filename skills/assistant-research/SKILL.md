@@ -5,9 +5,13 @@ description: "Gather and synthesize source-backed information. Use for explicit 
 
 # Research
 
-Answer with source-backed evidence, conclusions, conflicts, and gaps. Match
-effort to decision risk; stop when further searching cannot materially help
-within budget.
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
+Answer with source-backed evidence, conclusions, conflicts and gaps. Scale effort
+to decision risk; stop searching when further work cannot materially help within budget.
 
 ## Ordinary source research
 
@@ -24,19 +28,17 @@ within budget.
    and conflicts, not source counts; copies add no independent support. Report
    material conflicts and gaps; omit empty sections.
 
-For finance, legal, medical, safety-critical, or similarly high-impact
-recommendations, frame findings as educational due diligence with relevant risks
-and context limits. A stronger recommendation needs verified decision-critical
-sources and explicit relevant user context; otherwise recommend investigating
-further and state the gaps. This applies to every research method. Factual
-answers need neither five lenses nor a structured envelope merely because the
-topic is high impact.
+For finance, legal, medical, safety-critical or other high-impact recommendations,
+use educational due diligence with relevant risks/context limits. A stronger recommendation needs verified decision-critical sources and explicit relevant
+user context; otherwise state gaps and recommend investigation. Every method
+follows this rule; high-impact facts alone require neither five lenses nor a
+structured envelope.
 
-Use [research.md](research.md) for source strategy, [investigate.md](investigate.md)
-for a deep entity investigation, and [url-verify.md](url-verify.md) for uncertain
-URL verification. A why/how or improvement question may yield candidate mechanisms;
-retain their support, counterevidence, gaps, and validation method. Do not call a
-candidate a proven cause or claim an improvement without executed validation.
+Use [research.md](research.md) for sources, [investigate.md](investigate.md) for
+entities and [url-verify.md](url-verify.md) for uncertain URLs. Why/how/improvement
+questions may yield candidate mechanisms; retain their support, counterevidence,
+gaps, and validation method. Never claim proven causality or improvement without
+executed validation.
 
 ## Five-lens research
 
@@ -46,13 +48,12 @@ contradiction mapping, synthesis, and peer critique. Explain why; comparison,
 "deep understanding", breadth, or high stakes alone does not trigger it. Load
 [five-lens-briefing.md](five-lens-briefing.md).
 
-Preserve five independent sibling-blind assignments: practitioner, academic/
-technical expert, skeptic, incentives analyst, and historian/pattern matcher.
-Freeze common scope before execution; later waves cannot see earlier results.
-Each lens retains its own research, material follow-ups, evidence, and gaps.
-The root alone maps contradictions and synthesizes after all five usable
-returns; a separate peer reviewer critiques that synthesis before final
-presentation. Address required revisions or downgrade unsupported claims.
+Freeze five independent sibling-blind assignments: practitioner, academic/
+technical expert, skeptic, incentives analyst and historian/pattern matcher.
+Later waves cannot see earlier results. Each lens retains research, material
+follow-ups, evidence and gaps. The root alone maps contradictions/synthesizes
+after all five usable returns; separate peer review precedes final presentation.
+Address required revisions or downgrade unsupported claims.
 
 This method triggers delegation without a separate permission question. Only
 explicit opt-out, actual unavailability, supported configuration evidence, or
@@ -61,19 +62,22 @@ never call role-play independent research. Source research stays direct-capable.
 
 ## Consumer and compatibility boundaries
 
-Load `contracts/index.yaml` for structured research consumers, persisted v3
-packets, five-lens audits/evals, or v3 worker handoffs. Load the selected
-entry/method, current-phase, selected-handoff, and completion sets only as
-needed; missing/invalid selectors load the full named contract. Retain existing
-digest-bound frozen packets, accepted results, follow-ups, root synthesis,
-peer-input preimages, revision closure, high-stakes bindings, and output
-schemas. Older v2 follow-ups need typed v3 conversion; incomplete v3 evidence
-cannot claim a valid audited run.
+For structured consumers, persisted v4 packets, five-lens audits/evals or v4
+handoffs, load `contracts/index.yaml` and only needed entry/method, current-phase,
+selected-handoff/completion sets. Missing/invalid selectors load the full named
+contract. Preserve digest-bound frozen packets, accepted results/follow-ups,
+root synthesis, peer-input preimages, revision closure, high-stakes bindings and
+output schemas. Older v2 follow-ups need typed v4 conversion; incomplete v4 evidence cannot
+claim a valid audited run.
 
-The existing numeric tier budgets and HIGH/MEDIUM/LOW source-count rules belong
-to that compatibility fixture, not ordinary claim assessment. Keep required
-process evidence in consumed artifacts. Human five-lens answers can summarize
-findings, consequential conflicts, peer critique, conclusions, and limits.
+Numeric tier budgets/HIGH/MEDIUM/LOW source-count rules govern compatibility
+fixtures, not ordinary claim assessment. Retain consumed process evidence; human
+five-lens answers may summarize findings/conflicts, peer critique, conclusions
+and limits.
 
 Stop or qualify answers with inaccessible, stale, conflicting, or weak
 evidence. Unverified URLs and unsupported causal claims cannot be finalized.
+
+Preserve persisted v3 labels/evidence; refresh current v4 dispatch/return authority
+before reuse. Replace private lens/peer correction allowances with the same
+retained task guard. Missing progress observations are gaps, never invented resets.

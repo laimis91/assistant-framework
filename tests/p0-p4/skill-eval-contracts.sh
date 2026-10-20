@@ -200,7 +200,6 @@ p0p4_write_assistant_review_batch_response() {
                 security_specialist_triggered: false,
                 closure_verification_required: false,
                 max_required_responses: 2,
-                max_repair_attempts_per_pass: 1
               },
               expected_passes: [
                 {review_pass_id: "pass-contract", perspective: "contract_and_test_oracle", assigned_scope: ["scope-1"], coverage_obligations: ["contract"], prior_finding_visibility: "none"},
@@ -1019,7 +1018,7 @@ p0p4_write_skill_eval_responses() {
                 continue
             fi
             if [[ "$skill_name" == "assistant-research" ]] \
-                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | .semantic_validator == "assistant-research.five_lens_v3"' "$fixture_file" >/dev/null; then
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | .semantic_validator == "assistant-research.five_lens_v4"' "$fixture_file" >/dev/null; then
                 case "$skill_name:$id" in
                     assistant-research:five-lens-decision-briefing-uses-storm-style-workflow)
                         p0p4_write_assistant_research_delegated_response "$response_path" "$required_summary"
@@ -2765,7 +2764,7 @@ coverage-tuple-duplicate|trivial-audit-uses-two-isolated-passes|.final_summary.c
 coverage-pass-count|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger[2].review_pass_id = "pass-contract"
 round2-reason-not-changed-files|post-fix-review-uses-fresh-snapshot-batch|.final_summary.additional_round_reasons[0].reason = "unresolved_finding"
 qa-rounds-progression|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.rounds = 2
-qa-round-eleven|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.rounds = 11
+qa-round-eleven-with-incomplete-history|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.rounds = 11
 qa-progression-round|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.score_progression[0].round = 2
 qa-half-step|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.qa_scorecard.acceptance_coverage = 4.7 | .qa_evaluation_result.qa_scorecard.weighted_score = 4.91 | .qa_evaluation_result.score_progression[0].weighted_score = 4.91
 qa-quarter-step|qa-obligation-echo-fulfills-exact-binding|.qa_evaluation_result.qa_scorecard.acceptance_coverage = 4.25 | .qa_evaluation_result.qa_scorecard.weighted_score = 4.84 | .qa_evaluation_result.score_progression[0].weighted_score = 4.84
@@ -2971,7 +2970,7 @@ else
 fi
 mv "$assistant_review_nonconsecutive_response.original" "$assistant_review_nonconsecutive_response"
 
-test_start "assistant-review QA requires a pivot for consecutive terminal regressions"
+test_start "assistant-review QA score regressions alone do not force a pivot"
 assistant_review_regression_response="$passing_response_dir/assistant-review/qa-obligation-echo-fulfills-exact-binding.txt"
 cp "$assistant_review_regression_response" "$assistant_review_regression_response.original"
 jq '.qa_evaluation_result.rounds = 3
@@ -2985,12 +2984,12 @@ jq '.qa_evaluation_result.rounds = 3
         {round:2,weighted_score:4.5,failed_acceptance_count:1,delta:"-0.50",drift_status:"REGRESSION"},
         {round:3,weighted_score:4,failed_acceptance_count:0,delta:"-0.50",drift_status:"REGRESSION"}
       ]
-    | .qa_evaluation_result.pivot_restart_signal = {trigger:"repeated_REGRESSION",affected_round:3,evidence:[{source:"score_progression",detail:"Rounds 2 and 3 are consecutive regressions."}],recommended_recovery_focus:"Re-evaluate the failed acceptance path."}' "$assistant_review_regression_response" >"$assistant_review_r9_output"
+    | del(.qa_evaluation_result.pivot_restart_signal)' "$assistant_review_regression_response" >"$assistant_review_r9_output"
 mv "$assistant_review_r9_output" "$assistant_review_regression_response"
 if assistant_review_lifecycle_semantics_valid "qa-obligation-echo-fulfills-exact-binding" "$assistant_review_regression_response"; then
     pass
 else
-    fail "assistant-review QA rejected a valid consecutive-regression pivot signal"
+    fail "assistant-review QA rejected valid diagnostics without an independent semantic-stall signal"
 fi
 mv "$assistant_review_regression_response.original" "$assistant_review_regression_response"
 

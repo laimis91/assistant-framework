@@ -2236,6 +2236,8 @@ function Get-CodexGuidanceBlock {
 
 Codex uses installed skills through native skill routing. When a skill matches, read its `SKILL.md` and load only the references or contracts relevant to the current phase.
 
+Read `tools/progress/operating-guidance.md` under the configured `CODEX_HOME` (default `~/.codex`) as the common operating guidance for every activity, including when no skill matches.
+
 For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent.
 
 ## Operating stance
@@ -2397,8 +2399,10 @@ function Assert-WorkflowRoleCompatibility {
             (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '13.0')
         $compatible14 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '14.0') -and
             (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '14.0')
-        if (-not ($compatible13 -or $compatible14)) {
-            throw 'Retained index/handoffs do not uniquely declare matching schema 13.0 or 14.0 and the supported ownership stage tuples.'
+        $compatible15 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '15.0') -and
+            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '15.0')
+        if (-not ($compatible13 -or $compatible14 -or $compatible15)) {
+            throw 'Retained index/handoffs do not uniquely declare matching schema 13.0, 14.0 or 15.0 and the supported ownership stage tuples.'
         }
     }
     catch {
@@ -2500,6 +2504,7 @@ function Invoke-AssistantFrameworkInstall {
 
     $toolsSource = Join-Path $script:FrameworkDir 'tools'
     $changeImpactToolsSource = Join-Path $toolsSource 'change-impact'
+    $progressToolsSource = Join-Path $toolsSource 'progress'
     $toolExclusions = @('.DS_Store', '.publish', 'bin', 'obj')
     $evalDocsSource = Join-Path (Join-Path $script:FrameworkDir 'docs') 'evals'
     $sourceOnlyFiles = @(
@@ -2537,6 +2542,9 @@ function Invoke-AssistantFrameworkInstall {
     if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
         [void](Assert-ManagedDirectoryCopySafe -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -Label 'Codex common change-impact checker')
     }
+    if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $progressToolsSource -PathType Container)) {
+        [void](Assert-ManagedDirectoryCopySafe -Source $progressToolsSource -Target (Join-Path $codexCommonToolsTarget 'progress') -ManagedRoot $agentsRoot -Label 'Codex common progress guidance')
+    }
     if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
         Assert-ManagedTopLevelEntriesSafe -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'
     }
@@ -2567,6 +2575,9 @@ function Invoke-AssistantFrameworkInstall {
         }
         if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
             Sync-ManagedDirectory -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -Label 'Codex common change-impact checker'
+        }
+        if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $progressToolsSource -PathType Container)) {
+            Sync-ManagedDirectory -Source $progressToolsSource -Target (Join-Path $codexCommonToolsTarget 'progress') -ManagedRoot $agentsRoot -Label 'Codex common progress guidance'
         }
         if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
             Sync-ManagedTopLevelEntries -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'

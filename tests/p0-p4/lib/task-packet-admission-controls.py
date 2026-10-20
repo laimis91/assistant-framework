@@ -216,6 +216,35 @@ def released_v13_request(runtime="codex", many=False, active=False):
     return reseal_legacy(request)
 
 
+
+def expected_current_definition(source):
+    """Independent fixed v14 -> v15 representation oracle, never candidate output.
+
+    Keep every approved field except the specified version tag; coordinator
+    execution, approval identity and migration provenance are outside definition.
+    """
+    assert source["plan_schema_version"] in {"14.0", "15.0"}
+    expected = {key: deepcopy(value) for key, value in source.items()
+                if key not in {"approved_plan_identity", "reconciliation_provenance"}}
+    expected["plan_schema_version"] = "15.0"
+    expected["implementation_steps"] = [
+        {key: deepcopy(value) for key, value in packet.items() if key != "execution"}
+        for packet in source["implementation_steps"]]
+    return expected
+
+
+def assert_current_approval(source, canonical):
+    """Only the fixed representation digest may change, with original authority."""
+    expected = expected_current_definition(source)
+    identity = {**source["approved_plan_identity"], "definition_digest": API.digest(expected)}
+    assert canonical["approved_plan_identity"] == identity, "Representation changed original approval authority"
+    if source["plan_schema_version"] == "14.0":
+        migration = canonical["reconciliation_provenance"]["workflow_migration"]
+        assert migration["source_sha256"] == API.digest(source), "Original migration source identity changed"
+        assert migration["original_approved_plan_identity"] == source["approved_plan_identity"]
+        assert migration["normalized_definition_digest"] == identity["definition_digest"]
+
+
 def current_authored_dispatch(stage="production"):
     request = valid_request()
     decision = request["context"]["verification_decision"]
@@ -277,7 +306,7 @@ def canonical_v14_plan_format_admission():
     observed = API.admission(case)
     if observed["status"] == "blocked" and observed["code"] == "unsupported_version":
         raise AssertionError("Canonical v14 packet format is not admitted")
-    if observed["status"] != "accepted" or observed["canonical_plan"]["plan_schema_version"] != "14.0":
+    if observed["status"] != "accepted" or observed["canonical_plan"]["plan_schema_version"] != "15.0":
         raise AssertionError(("Unexpected canonical14 admission result", observed))
 
 
@@ -390,6 +419,7 @@ def terminal_stage_and_provenance_controls():
                 failures.append((changed, "invalidation discarded retained evidence"))
             continuation = deepcopy(trial)
             continuation["plan"] = deepcopy(canonical)
+            continuation["context"] = deepcopy(result["canonical_context"])
             continuation["context"]["previous_plan"] = deepcopy(canonical)
             again = check(continuation, "accepted", "helper INVALIDATED snapshot remains resumable")
             if again["status"] == "accepted" and again["canonical_plan"] != canonical:
@@ -441,6 +471,7 @@ def terminal_stage_and_provenance_controls():
         for boundary in ("plan", "resume", "dispatch", "verification", "completion"):
             trial = deepcopy(legacy)
             trial.update(plan=deepcopy(canonical), boundary=boundary, target_packet_id=canonical["implementation_steps"][0]["packet_id"])
+            trial["context"] = deepcopy(result["canonical_context"])
             trial["context"].pop("legacy")
             if boundary == "verification":
                 packet = trial["plan"]["implementation_steps"][0]
@@ -476,9 +507,808 @@ def terminal_stage_and_provenance_controls():
         raise AssertionError(("Terminal/stage/provenance regression controls", failures))
 
 
-def run_controls():
-    terminal_stage_and_provenance_controls()
+def released_v14_productive_fourth_attempt():
+    """Retain released source and independent progress, never invent a v15 plan.
+
+    The task-level context is the progress authority. Execution carries only
+    guard/action references; it cannot supply its own reset or assessment. The
+    resolved source rows are synthetic observations fixed before mutations,
+    rather than evidence of a native check or model run.
+    """
+    request = valid_request()
+    packet = request["plan"]["implementation_steps"][0]
+    guard_id = "guard:synthetic-task:accepted-outcome"
+    baseline_ref = "frontier:productive:0"
+    sources = {baseline_ref: {"accepted_obligations": [], "unresolved": ["scope", "focused", "integration"]}}
+    history = []
+    evidence_refs = []
+    for ordinal, obligation in enumerate(("scope", "focused", "integration"), 1):
+        event_id = "checkpoint:productive:" + str(ordinal)
+        prior_ref = "frontier:productive:" + str(ordinal - 1)
+        frontier_ref = "frontier:productive:" + str(ordinal)
+        observation_ref = "observation:productive:" + str(ordinal)
+        assessment_ref = "assessment:productive:" + str(ordinal)
+        accepted = ["scope", "focused", "integration"][:ordinal]
+        sources[frontier_ref] = {"accepted_obligations": accepted,
+                                 "unresolved": ["scope", "focused", "integration"][ordinal:]}
+        sources[observation_ref] = {"before_frontier_ref": prior_ref, "after_frontier_ref": frontier_ref,
+                                    "newly_verified_obligations": [obligation], "result": "passed"}
+        sources[assessment_ref] = {"event_id": event_id, "disposition": "verified_gain",
+                                  "observation_refs": [observation_ref], "frontier_ref": frontier_ref}
+        history.append({"kind": "work_checkpoint", "event_id": event_id, "guard_id": guard_id,
+                        "outcome_ref": "outcome:synthetic-task", "predecessor_event_id": history[-1]["event_id"] if history else None,
+                        "work_ordinal": ordinal, "action_ref": "action:productive:" + str(ordinal),
+                        "assessment_ref": assessment_ref, "evidence_refs": [observation_ref],
+                        "disposition": "verified_gain", "frontier_ref": frontier_ref})
+        evidence_refs.extend((observation_ref, assessment_ref))
+    state = {"schema_version": "1.0", "guard_id": guard_id, "outcome_ref": "outcome:synthetic-task",
+             "policy": {"policy_id": "shared-stagnation-v1", "stagnation_window": 3,
+                        "source_ref": "policy:approved-shared"},
+             "work_ordinal": 3, "consecutive_no_progress": 0, "status": "active",
+             "baseline_ref": baseline_ref, "frontier_ref": "frontier:productive:3",
+             "history": history, "evidence_refs": evidence_refs}
+    sources["policy:approved-shared"] = {"policy_id": "shared-stagnation-v1", "stagnation_window": 3,
+                                         "authority_ref": "approval:synthetic-fixed"}
+    sources["outcome:synthetic-task"] = {"task_identity": "synthetic-task",
+                                         "intended_outcome": "Preserve accepted behavior"}
+    action = {"action_ref": "action:productive:4", "packet_id": packet["packet_id"],
+              "input_identity": deepcopy(packet["execution"]["input_identity"])}
+    request["context"]["progress"] = {"state": state, "resolved_sources": sources, "action": action}
+    packet["execution"].update(recovery={"attempt_count": 3, "no_progress_count": 0},
+        progress_guard_ref=guard_id, action_ref=action["action_ref"],
+        history=[{"event_id": entry["event_id"], "evidence_ref": entry["assessment_ref"]} for entry in history],
+        evidence_refs=deepcopy(evidence_refs))
+    request["context"]["recovery_counters"][packet["packet_id"]] = deepcopy(packet["execution"]["recovery"])
+    request["context"]["previous_plan"] = deepcopy(request["plan"])
+    return request
+
+
+def productive_fourth_attempt_admission():
+    """OG-GUARD-ADMISSION: the released-v14 cumulative ceiling is the RED oracle."""
+    request = released_v14_productive_fourth_attempt()
+    original = deepcopy(request)
+    packet = request["plan"]["implementation_steps"][0]
+    retained = request["context"]["progress"]["state"]
+    assert request["plan"]["plan_schema_version"] == "14.0"
+    assert packet["execution"]["state"] == "PENDING"
+    assert packet["execution"]["recovery"]["attempt_count"] == 3
+    assert retained["work_ordinal"] == 3 and retained["consecutive_no_progress"] == 0
+    assert [entry["disposition"] for entry in retained["history"]] == ["verified_gain"] * 3
+    observed = API.admission(request)
+    assert request == original, "Productive admission mutated released source or independent progress"
+    if observed["status"] == "blocked" and observed["code"] == "recovery_exhausted":
+        raise AssertionError("Productive fourth-attempt admission rejected: recovery_exhausted at spent attempt_count=3")
+    if observed["status"] != "accepted":
+        raise AssertionError(("Productive fourth-attempt failed for an unrelated reason; this is not authorizing RED", observed))
+    # Migration may change representation, but must preserve the original
+    # approved work, decision, current inputs and historical observations.
+    canonical = observed["canonical_plan"]
+    assert canonical["task_identity"] == request["plan"]["task_identity"]
+    assert canonical["plan_version"] == request["plan"]["plan_version"]
+    current = observed["current_task_packet"]
+    for field in ("files_to_create", "files_to_modify", "files_to_test", "depends_on",
+                  "selected_check_ids", "binding_obligation_refs", "tdd_applies", "verification_decision_ref"):
+        assert current[field] == packet[field], ("Migration changed approved allocation", field)
+    assert current["verification_decision"] == request["context"]["verification_decision"]
+    for field in ("input_identity", "history", "evidence_refs", "recovery"):
+        assert current["execution"][field] == packet["execution"][field], ("Migration lost original execution", field)
+    progress = observed["canonical_progress_state"]
+    for field in ("guard_id", "outcome_ref", "policy", "work_ordinal", "consecutive_no_progress",
+                  "status", "baseline_ref", "frontier_ref", "history", "evidence_refs"):
+        assert progress[field] == retained[field], ("Admission reset or changed retained progress", field)
+    admission = progress["action_admission"]
+    assert admission["action_ref"] == "action:productive:4"
+    assert admission["packet_id"] == packet["packet_id"]
+    assert admission["input_identity"] == packet["execution"]["input_identity"]
+    assert admission["guard_id"] == retained["guard_id"]
+    assert isinstance(admission["admission_ref"], str) and admission["admission_ref"]
+
+
+def retained_progress_request(result):
+    """The caller commits one accepted snapshot/context, never a candidate reset."""
+    return {"boundary": "dispatch", "target_packet_id": "accepted-outcome",
+            "plan": deepcopy(result["canonical_plan"]), "context": deepcopy(result["canonical_context"])}
+
+
+def completed_progress_cycle(request, disposition="no_progress", phase="Build"):
+    trial = deepcopy(request)
+    carrier = trial["context"]["progress"]
+    state, action = carrier["state"], carrier["state"]["action_admission"]
+    ordinal = state["work_ordinal"] + 1
+    event_id = "checkpoint:cycle:" + str(ordinal)
+    observation_ref, assessment_ref = "observation:cycle:" + str(ordinal), "assessment:cycle:" + str(ordinal)
+    frontier = state["frontier_ref"]
+    observation = {"phase": phase, "result": "failed", "state": "A" if ordinal % 2 else "B",
+                   "fresh_verification": True, "fresh_review": True}
+    assessment = {"event_id": event_id, "disposition": disposition, "observation_refs": [observation_ref],
+                  "frontier_ref": frontier}
+    if disposition == "useful_new_evidence":
+        uncertainty = "uncertainty:ruled-out:" + str(ordinal)
+        carrier["resolved_sources"][uncertainty] = {"result": "plausible cause ruled out", "next_action": "investigate remaining cause"}
+        assessment.update(changes_next_action=True, resolved_uncertainty_ref=uncertainty)
+    carrier["resolved_sources"].update({observation_ref: observation, assessment_ref: assessment})
+    carrier["event"] = {"kind": "work_checkpoint", "event_id": event_id, "guard_id": state["guard_id"],
+        "outcome_ref": state["outcome_ref"], "predecessor_event_id": state["history"][-1]["event_id"] if state["history"] else None,
+        "work_ordinal": ordinal, "action_ref": action["action_ref"], "admission_ref": action["admission_ref"],
+        "assessment_ref": assessment_ref, "evidence_refs": [observation_ref], "disposition": disposition, "frontier_ref": frontier}
+    next_action = "action:cycle:" + str(ordinal + 1)
+    carrier["action"]["action_ref"] = next_action
+    packet = trial["plan"]["implementation_steps"][0]
+    packet["execution"].update(state="PENDING", action_ref=next_action)
+    return trial
+
+
+
+def failed_green_running_next_action_admission():
+    """A new semantic correction is distinct from stages of a RUNNING action."""
+    request = current_authored_dispatch("refactor")
+    request.update(worker_stage="production", worker_role="code_writer")
+    packet = request["plan"]["implementation_steps"][0]
+    pid = packet["packet_id"]
+    cycle = request["context"]["packet_evidence"][pid]["tdd_cycle"]
+    cycle["green"].update(all_tests_pass=False, invocation_ref="green:observed-failure")
+    guard, action = "guard:failed-green", "action:failed-green-production"
+    baseline, policy, outcome = "frontier:failed-green:initial", "policy:failed-green:approved", "outcome:failed-green"
+    admission_ref = "admission:observed-first-production"
+    input_identity = deepcopy(packet["execution"]["input_identity"])
+    identity = {"action_ref": action, "packet_id": pid, "input_identity": input_identity}
+    packet["execution"].update(progress_guard_ref=guard, action_ref=action, action_admission_ref=admission_ref)
+    request["context"]["progress"] = {
+        "state": {"schema_version": "1.0", "guard_id": guard, "outcome_ref": outcome,
+            "policy": {"policy_id": "shared-stagnation-v1", "stagnation_window": 3, "source_ref": policy},
+            "work_ordinal": 0, "consecutive_no_progress": 0, "status": "active",
+            "baseline_ref": baseline, "frontier_ref": baseline, "history": [], "evidence_refs": [],
+            "action_admission": {"admission_ref": admission_ref, "guard_id": guard, **deepcopy(identity)}},
+        "resolved_sources": {
+            baseline: {"accepted_obligations": [], "unresolved": ["selected behavior"]},
+            policy: {"policy_id": "shared-stagnation-v1", "stagnation_window": 3, "authority_ref": "approval:synthetic-fixed"},
+            outcome: {"task_identity": "synthetic-task", "intended_outcome": "Preserve accepted behavior"}},
+        "action": deepcopy(identity)}
+    initial = API.admission(request)
+    assert initial["status"] == "accepted", ("Failed-GREEN lifecycle fixture must pass existing stage/actor/RED/input gates", initial)
+    current = retained_progress_request(initial)
+    # Retained history is initially empty; unlike the earlier productive fixture,
+    # the first checkpoint has no predecessor. Waiting created no completed cycle.
+    completed = completed_progress_cycle(current, "useful_new_evidence")
+    completed.update(worker_stage="production", worker_role="code_writer")
+    packet = completed["plan"]["implementation_steps"][0]
+    packet["execution"]["state"] = "RUNNING"
+    carrier = completed["context"]["progress"]
+    original_cycle = deepcopy(completed["context"]["packet_evidence"][pid]["tdd_cycle"])
+    observed = API.admission(completed)
+    assert completed["plan"]["implementation_steps"][0]["execution"]["state"] == "RUNNING"
+    if observed["status"] == "blocked" and observed["code"] == "progress_replay":
+        progress = observed["canonical_progress_state"]
+        assert progress["work_ordinal"] == 1 and progress["consecutive_no_progress"] == 0
+        assert "action_admission" not in progress
+        # Replaying the now closed original action must also remain blocked;
+        # fixing the lifecycle must not permit missing-admission replay.
+        replay = deepcopy(completed)
+        replay["context"]["progress"]["state"] = deepcopy(progress)
+        replay["context"]["progress"].pop("event")
+        replay["context"]["progress"]["action"] = deepcopy(identity)
+        replay["plan"]["implementation_steps"][0]["execution"].update(action_ref=action, action_admission_ref=admission_ref)
+        rejected = API.admission(replay)
+        assert rejected["status"] == "blocked" and rejected["code"] == "progress_replay", ("Closed action/admission replay was accepted", rejected)
+        raise AssertionError("Failed-GREEN same-packet correction rejected: progress_replay after completed action while packet stays RUNNING")
+    assert observed["status"] == "accepted", ("Failed-GREEN lifecycle discriminator failed for an unrelated reason; not supplemental RED", observed)
+    actual = observed["current_task_packet"]
+    assert actual["execution"]["state"] == "RUNNING"
+    assert actual["execution"]["input_identity"] == input_identity
+    assert actual["execution"]["history"] == packet["execution"]["history"]
+    assert actual["red_evidence"] == original_cycle["red"]
+    assert observed["canonical_context"]["packet_evidence"][pid]["tdd_cycle"] == original_cycle
+    assert observed["canonical_context"]["writer_actor_ids"][pid] == "native-writer:" + pid
+    progress = observed["canonical_progress_state"]
+    assert progress["work_ordinal"] == 1 and progress["consecutive_no_progress"] == 0
+    assert progress["action_admission"]["action_ref"] == carrier["action"]["action_ref"] != action
+    assert progress["action_admission"]["admission_ref"] != admission_ref
+    replay = retained_progress_request(observed)
+    replay.update(worker_stage="production", worker_role="code_writer")
+    replay["context"]["progress"]["action"] = deepcopy(identity)
+    replay["plan"]["implementation_steps"][0]["execution"].update(action_ref=action, action_admission_ref=admission_ref)
+    rejected = API.admission(replay)
+    assert rejected["status"] == "blocked" and rejected["code"] == "progress_replay", ("Closed action/admission replay was accepted", rejected)
+
+
+def policy_history_controls(pending_unblock, consumed_unblock):
+    """User policy changes are history, never progress or a reset window."""
+    def policy_change(request):
+        trial = deepcopy(request)
+        carrier = trial["context"]["progress"]
+        state = carrier["state"]
+        previous_policy = deepcopy(state["policy"])
+        next_policy = {"policy_id": "shared-stagnation-v1", "stagnation_window": 5, "source_ref": "policy:explicit-user:5"}
+        authority, observation, assessment = "authority:user-window5", "observation:user-window5", "assessment:user-window5"
+        event = {"kind": "policy_change", "event_id": "policy-change:3-to-5", "guard_id": state["guard_id"],
+            "outcome_ref": state["outcome_ref"], "predecessor_event_id": state["history"][-1]["event_id"],
+            "work_ordinal": state["work_ordinal"], "action_ref": carrier["action"]["action_ref"],
+            "assessment_ref": assessment, "evidence_refs": [observation], "authority_ref": authority,
+            "previous_policy": previous_policy, "new_policy": next_policy}
+        carrier["resolved_sources"].update({
+            "policy:explicit-user:5": {"policy_id": next_policy["policy_id"], "stagnation_window": 5, "authority_ref": authority},
+            authority: {"kind": "user_policy_change", "authorized": True, "guard_id": state["guard_id"],
+                        "outcome_ref": state["outcome_ref"], "previous_policy": previous_policy, "new_policy": next_policy},
+            observation: {"result": "Explicit user instruction changes shared window from 3 to 5", "authority_ref": authority},
+            assessment: {"kind": "policy_change", "event_id": event["event_id"], "observation_refs": [observation],
+                         "authority_ref": authority, "previous_policy": previous_policy, "new_policy": next_policy}})
+        carrier["event"] = event
+        return trial
+
+    def accepted_without_reset(request, before):
+        result = API.admission(request)
+        assert result["status"] == "accepted", ("Explicit policy change must preserve historical effective policy/unblock validity", result)
+        state = result["canonical_progress_state"]
+        for name in ("guard_id", "outcome_ref", "work_ordinal", "consecutive_no_progress", "baseline_ref", "frontier_ref"):
+            assert state[name] == before[name], ("Policy change reset semantic history", name)
+        assert state["history"][:-1] == before["history"]
+        assert set(before["evidence_refs"]) <= set(state["evidence_refs"])
+        assert state["policy"]["stagnation_window"] == 5
+        assert state["history"][-1]["kind"] == "policy_change"
+        assert state["action_admission"]["unblock_event_id"] == "event:unblock"
+        return result
+
+    # A policy record after the material unblock must not hide its bound action.
+    pending = policy_change(pending_unblock)
+    before = pending_unblock["context"]["progress"]["state"]
+    accepted = accepted_without_reset(pending, before)
+    assert before["consecutive_no_progress"] == 3 and "action_admission" not in before
+    assert accepted["canonical_progress_state"]["action_admission"]["action_ref"] == pending["context"]["progress"]["action"]["action_ref"]
+    # A previously consumed unblock/current admission stays consumed, including
+    # subsequent stages of its RUNNING action after the policy-change record.
+    consumed = policy_change(retained_progress_request(consumed_unblock))
+    consumed.update(worker_stage="production", worker_role="code_writer")
+    consumed["plan"]["implementation_steps"][0]["execution"]["state"] = "RUNNING"
+    consumed["context"]["packet_evidence"]["accepted-outcome"]["implementation_evidence_ref"] = "writer:observed-unblock-production"
+    prior = consumed_unblock["canonical_progress_state"]
+    continued = accepted_without_reset(consumed, prior)
+    assert continued["canonical_progress_state"]["action_admission"] == prior["action_admission"]
+    for mutation in ("unauthorized", "wrong_guard", "self_raise", "replay"):
+        trial = deepcopy(pending)
+        if mutation == "unauthorized":
+            trial["context"]["progress"]["resolved_sources"]["authority:user-window5"]["authorized"] = False
+        elif mutation == "wrong_guard":
+            trial["context"]["progress"]["resolved_sources"]["authority:user-window5"]["guard_id"] = "different-guard"
+        elif mutation == "self_raise":
+            trial["context"]["progress"]["state"]["policy"] = deepcopy(trial["context"]["progress"]["event"]["new_policy"])
+            trial["context"]["progress"].pop("event")
+        else:
+            trial = retained_progress_request(accepted)
+            trial["context"]["progress"]["event"] = deepcopy(pending["context"]["progress"]["event"])
+        result = API.admission(trial)
+        assert result["status"] == "blocked", ("Policy cannot authorize its own raise/reset or replay", mutation, result)
+        if mutation == "replay": assert result["code"] == "progress_replay"
+    # An old-policy compacted base and old count3 unblock remain valid when the
+    # prospective current policy is 5. Retain replay/novelty/oscillation lineage.
+    compacted = retained_progress_request(continued)
+    compacted.update(worker_stage="production", worker_role="code_writer")
+    carrier = compacted["context"]["progress"]
+    state = carrier["state"]
+    historical = before["history"][:-1]  # Keep pending unblock then policy in tail.
+    last = historical[-1]
+    summary_ref = "history:old-policy3:compacted"
+    carrier["resolved_sources"][summary_ref] = {
+        "guard_id": state["guard_id"], "outcome_ref": state["outcome_ref"], "policy": deepcopy(before["policy"]),
+        "work_ordinal": before["work_ordinal"], "consecutive_no_progress": 3,
+        "frontier_ref": before["frontier_ref"], "last_event_id": last["event_id"],
+        "seen_event_ids": [row["event_id"] for row in historical],
+        "seen_action_refs": list(dict.fromkeys(row["action_ref"] for row in historical if row["kind"] == "work_checkpoint")),
+        "seen_policy_authority_refs": [],
+        "seen_observation_refs": list(dict.fromkeys(ref for row in historical for ref in row["evidence_refs"])),
+        "seen_frontier_refs": list(dict.fromkeys(row["frontier_ref"] for row in historical if "frontier_ref" in row)),
+        "seen_unblock_change_refs": [], "unresolved_oscillation_refs": ["observation:cycle:4", "observation:cycle:5", "observation:cycle:6"]}
+    state.update(history=state["history"][-2:], history_base_ref=summary_ref)
+    state["evidence_refs"].append(summary_ref)
+    result = API.admission(compacted)
+    assert result["status"] == "accepted", ("Compacted historical policy must be replayed at its original window", result)
+    retained = result["canonical_progress_state"]
+    assert retained["consecutive_no_progress"] == 3 and retained["work_ordinal"] == before["work_ordinal"]
+    assert retained["history_base_ref"] == summary_ref and retained["action_admission"] == prior["action_admission"]
+    # Raising policy leaves the spent count at3: one failure reaches4; the next
+    # reaches5 and stops. It never grants five extra cycles or policy progress.
+    next_cycle = completed_progress_cycle(retained_progress_request(accepted))
+    result = API.admission(next_cycle)
+    assert result["status"] == "accepted" and result["canonical_progress_state"]["consecutive_no_progress"] == 4, result
+    final_cycle = completed_progress_cycle(retained_progress_request(result))
+    result = API.admission(final_cycle)
+    assert result["status"] == "blocked" and result["code"] == "progress_stagnant", result
+    assert result["canonical_progress_state"]["consecutive_no_progress"] == 5
+
+
+def guarded_parallel_member_request():
+    """Fixed grouping authority plus an actual committed first-member admission."""
+    request = valid_request(2, "plan")
+    request["plan"]["implementation_steps"][1]["depends_on"] = []
+    seal(request)  # Independence is approved before any group or candidate exists.
+    normalized = API.admission(request)
+    assert normalized["status"] == "accepted", ("Parallel Plan fixture is invalid", normalized)
+    request = retained_progress_request(normalized)
+    packets = request["plan"]["implementation_steps"]
+    guard, outcome = "guard:coordinator", "outcome:coordinator"
+    action_ref, scope_ref = "action:coordinated-cycle", "scope:coordinated-cycle"
+    members = [{"packet_id": p["packet_id"], "packet_definition_digest": API.digest(API.packet_definition(p)),
+                "input_identity": deepcopy(request["context"]["current_input_identities"][p["packet_id"]])} for p in packets]
+    scope = {"source_ref": scope_ref, "members": members}
+    action = {"action_ref": action_ref, "packet_id": members[0]["packet_id"],
+              "input_identity": deepcopy(members[0]["input_identity"]), "member_scope": deepcopy(scope)}
+    request["context"]["progress"] = {
+        "state": {"schema_version": "1.0", "guard_id": guard, "outcome_ref": outcome,
+            "policy": {"policy_id": "shared-stagnation-v1", "stagnation_window": 3, "source_ref": "policy:coordinator"},
+            "work_ordinal": 0, "consecutive_no_progress": 0, "status": "active",
+            "baseline_ref": "frontier:coordinator", "frontier_ref": "frontier:coordinator", "history": [], "evidence_refs": []},
+        "resolved_sources": {
+            "frontier:coordinator": {"accepted_obligations": [], "unresolved": ["both packet outcomes"]},
+            "policy:coordinator": {"policy_id": "shared-stagnation-v1", "stagnation_window": 3, "authority_ref": "approval:synthetic-fixed"},
+            outcome: {"task_identity": "synthetic-task", "intended_outcome": "Preserve accepted behavior"},
+            scope_ref: {"kind": "coordinator_action_scope", "guard_id": guard, "outcome_ref": outcome,
+                "action_ref": action_ref, "approved_plan_identity": deepcopy(request["plan"]["approved_plan_identity"]),
+                "members": deepcopy(members), "grouping_decision_ref": "decision:independent-isolated-packets"},
+            "decision:independent-isolated-packets": {"approved_plan_identity": deepcopy(request["plan"]["approved_plan_identity"]),
+                "reason": "Independent approved outcomes can run in witnessed isolated workspaces"}},
+        "action": action}
+    for packet in packets:
+        packet["execution"].update(progress_guard_ref=guard, action_ref=action_ref)
+    request["context"]["previous_plan"] = deepcopy(request["plan"])
+    first = API.admission(request)
+    assert first["status"] == "accepted", ("First guarded member must pass existing admission gates", first)
+    second = retained_progress_request(first)
+    carrier = second["context"]["progress"]
+    # Released singleton parsing drops unknown optional membership. Preserve the
+    # EXACT fixed scope, rather than making parser support the authorizing RED.
+    retained = carrier["state"]["action_admission"]
+    for field in ("action_ref", "packet_id", "input_identity"):
+        assert retained[field] == action[field], ("First admission changed anchor", field)
+    retained["member_scope"] = deepcopy(scope)
+    carrier["action"] = deepcopy(action)
+    packets = second["plan"]["implementation_steps"]
+    packets[0]["execution"]["state"] = "RUNNING"  # Independently observed A dispatch.
+    second["context"]["previous_plan"] = deepcopy(second["plan"])
+    second["target_packet_id"] = packets[1]["packet_id"]
+    second["context"]["workspace"] = {"mode": "isolated", "active_source_writer_ids": [packets[0]["packet_id"]],
+        "isolation": {p["packet_id"]: {"current": True,
+            "input_identity": deepcopy(second["context"]["current_input_identities"][p["packet_id"]]),
+            "runtime_evidence_ref": "runtime:coordinator:" + p["packet_id"],
+            "workspace_identity": "workspace:coordinator:" + p["packet_id"]} for p in packets}}
+    return second
+
+
+def guarded_parallel_barrier_request(joined, complete=True):
+    """One lead checkpoint consumes independently recorded terminal member results."""
+    request = completed_progress_cycle(joined)
+    request["boundary"] = "plan"  # Close the cycle without inventing a next dispatch.
+    request["plan"] = deepcopy(joined["plan"])
+    carrier = request["context"]["progress"]
+    carrier["action"] = deepcopy(joined["context"]["progress"]["action"])
+    event = carrier["event"]
+    barrier_ref = "barrier:coordinated-cycle"
+    event["coordinator_barrier_ref"] = barrier_ref
+    admission = carrier["state"]["action_admission"]
+    members = admission["member_scope"]["members"]
+    results = []
+    for member in members[:len(members) if complete else 1]:
+        ref = "observation:member-terminal:" + member["packet_id"]
+        carrier["resolved_sources"][ref] = {"packet_id": member["packet_id"], "result": "failed",
+            "lifecycle": "terminal_cycle", "invocation_ref": "green:observed:" + member["packet_id"]}
+        results.append({"packet_id": member["packet_id"], "result": "failed", "evidence_refs": [ref]})
+    carrier["resolved_sources"][barrier_ref] = {"kind": "coordinator_barrier",
+        "guard_id": carrier["state"]["guard_id"], "outcome_ref": carrier["state"]["outcome_ref"],
+        "action_ref": admission["action_ref"], "admission_ref": admission["admission_ref"],
+        "action_scope_ref": admission["member_scope"]["source_ref"], "member_results": results}
+    return request
+
+
+def guarded_parallel_second_member_admission():
+    """A second isolated member shares one coordinator admission and semantic count."""
+    request = guarded_parallel_member_request()
+    before = deepcopy(request)
+    observed = API.admission(request)
+    assert request == before, "Grouped admission mutated caller-owned authority or retained A state"
+    if observed["status"] == "blocked" and observed["code"] == "progress_mismatch":
+        assert observed["path"] == "dependent-outcome"
+        assert observed["details"] == "Action/guard must bind independently current packet and inputs"
+        assert observed["canonical_progress_state"]["work_ordinal"] == 0
+        assert observed["canonical_plan"]["implementation_steps"][0]["execution"]["state"] == "RUNNING"
+        raise AssertionError("Legitimate second isolated PENDING member rejected progress_mismatch at packet/action target binding")
+    assert observed["status"] == "accepted", ("Grouped second member failed for an unrelated reason; not supplemental RED", observed)
+    expected = request["context"]["progress"]["state"]
+    assert observed["canonical_progress_state"] == expected, "Joining B spent another action/unblock or changed history/count"
+    admission = expected["action_admission"]
+    assert observed["current_task_packet"]["execution"]["action_admission_ref"] == admission["admission_ref"]
+    joined = retained_progress_request(observed)
+    joined["target_packet_id"] = "dependent-outcome"
+    guarded_parallel_member_controls(request, joined)
+
+
+def guarded_parallel_member_controls(second, joined):
+    """Membership grants neither dispatch authority nor permission to close early."""
+    def reject(request, code=None):
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == "blocked" and (code is None or result["code"] == code), result
+        assert request == before, "Negative grouped admission mutated supplied state"
+        if "canonical_progress_state" in result:
+            assert result["canonical_progress_state"]["work_ordinal"] == 0, "Rejected member/barrier consumed a cycle"
+        return result
+
+    for mutation in ("shared", "unknown", "stale_isolation", "active_target", "actor", "role", "stage", "stale_input", "stale_digest", "authority", "expanded_scope"):
+        trial = deepcopy(second)
+        carrier = trial["context"]["progress"]
+        if mutation in {"shared", "unknown"}: trial["context"]["workspace"]["mode"] = mutation
+        elif mutation == "stale_isolation": trial["context"]["workspace"]["isolation"]["accepted-outcome"]["current"] = False
+        elif mutation == "active_target": trial["context"]["workspace"]["active_source_writer_ids"].append("dependent-outcome")
+        elif mutation == "actor": trial["context"]["writer_actor_ids"]["dependent-outcome"] = "native-writer:substitute"
+        elif mutation == "role": trial["worker_role"] = "builder_tester"
+        elif mutation == "stage": trial["worker_stage"] = "refactor"
+        elif mutation == "stale_input": carrier["action"]["member_scope"]["members"][1]["input_identity"] = {"source": "stale"}
+        elif mutation == "stale_digest": carrier["action"]["member_scope"]["members"][1]["packet_definition_digest"] = "0" * 64
+        elif mutation == "authority": carrier["resolved_sources"]["scope:coordinated-cycle"]["approved_plan_identity"]["approval_ref"] = "forged"
+        else: carrier["action"]["member_scope"]["members"].append({"packet_id": "undeclared", "packet_definition_digest": "0" * 64, "input_identity": {"source": "extra"}})
+        reject(trial, "workspace_overlap" if mutation in {"shared", "unknown", "stale_isolation", "active_target"} else None)
+    sibling_erased = deepcopy(second)
+    sibling_erased["plan"]["implementation_steps"][0]["execution"].pop("action_admission_ref")
+    reject(sibling_erased, "progress_replay")  # Dispatching B cannot erase A's committed join.
+    reject(joined, "progress_replay")  # A committed PENDING join cannot join twice.
+    erased = deepcopy(joined)
+    erased["plan"]["implementation_steps"][1]["execution"].pop("action_admission_ref")
+    reject(erased)  # Retained previous_plan prevents erasing a committed join.
+    continuing = deepcopy(joined)
+    continuing.update(worker_stage="production", worker_role="code_writer")
+    continuing["plan"]["implementation_steps"][1]["execution"]["state"] = "RUNNING"
+    continuing["context"]["packet_evidence"]["dependent-outcome"]["implementation_evidence_ref"] = "writer:observed-member"
+    continued = API.admission(continuing)
+    assert continued["status"] == "accepted", ("Member stage continuation lost its admission", continued)
+    assert continued["canonical_progress_state"] == joined["context"]["progress"]["state"]
+    child_only = guarded_parallel_barrier_request(joined)
+    child_only["context"]["progress"]["event"].pop("coordinator_barrier_ref")
+    reject(child_only)  # Child evidence cannot independently spend a parent cycle.
+    partial = guarded_parallel_barrier_request(joined, complete=False)
+    blocked = reject(partial)
+    assert blocked["canonical_progress_state"] == joined["context"]["progress"]["state"], "Incomplete barrier erased partial member evidence or admission"
+    assert len(partial["context"]["progress"]["resolved_sources"]["barrier:coordinated-cycle"]["member_results"]) == 1
+    complete = guarded_parallel_barrier_request(joined)
+    closed = API.admission(complete)
+    assert closed["status"] == "accepted", ("Complete independent member barrier rejected", closed)
+    state = closed["canonical_progress_state"]
+    assert state["work_ordinal"] == 1 and state["consecutive_no_progress"] == 1 and len(state["history"]) == 1
+    assert "action_admission" not in state
+    duplicate = deepcopy(complete)
+    duplicate["context"]["progress"]["resolved_sources"]["barrier:coordinated-cycle"]["member_results"].append(
+        deepcopy(duplicate["context"]["progress"]["resolved_sources"]["barrier:coordinated-cycle"]["member_results"][0]))
+    reject(duplicate)
+    guarded_parallel_unblock_and_compaction_controls(second, closed)
+    # Closed parent and stale child stage cannot reopen a completed coordinator.
+    for pid in ("accepted-outcome", "dependent-outcome"):
+        replay = retained_progress_request(closed)
+        replay.update(target_packet_id=pid, worker_stage="production", worker_role="code_writer")
+        packet = next(p for p in replay["plan"]["implementation_steps"] if p["packet_id"] == pid)
+        packet["execution"]["state"] = "RUNNING"
+        replay["context"]["workspace"]["active_source_writer_ids"] = []
+        replay["context"]["packet_evidence"][pid]["implementation_evidence_ref"] = "writer:observed-closed-member"
+        result = API.admission(replay)
+        assert result["status"] == "blocked" and result["code"] == "progress_replay", result
+        assert result["canonical_progress_state"] == state
+
+
+def guarded_parallel_unblock_and_compaction_controls(second, closed):
+    """One material unblock covers only the fixed group; compaction cannot reopen it."""
+    stalled = deepcopy(second)
+    stalled["target_packet_id"] = "accepted-outcome"
+    carrier = stalled["context"]["progress"]
+    state = carrier["state"]
+    state.pop("action_admission")
+    for packet in stalled["plan"]["implementation_steps"]:
+        packet["execution"]["state"] = "PENDING"
+        packet["execution"].pop("action_admission_ref", None)
+    stalled["context"]["previous_plan"] = deepcopy(stalled["plan"])
+    stalled["context"]["workspace"]["active_source_writer_ids"] = []
+    for ordinal in range(1, 4):
+        ref, assessment = "observation:group-stall:" + str(ordinal), "assessment:group-stall:" + str(ordinal)
+        event = {"kind": "work_checkpoint", "event_id": "checkpoint:group-stall:" + str(ordinal),
+            "guard_id": state["guard_id"], "outcome_ref": state["outcome_ref"],
+            "predecessor_event_id": state["history"][-1]["event_id"] if state["history"] else None,
+            "work_ordinal": ordinal, "action_ref": "action:prior-singleton:" + str(ordinal),
+            "assessment_ref": assessment, "evidence_refs": [ref], "disposition": "no_progress", "frontier_ref": state["frontier_ref"]}
+        carrier["resolved_sources"][ref] = {"result": "failed", "invocation_ref": "green:prior:" + str(ordinal)}
+        carrier["resolved_sources"][assessment] = {"event_id": event["event_id"], "disposition": "no_progress",
+            "observation_refs": [ref], "frontier_ref": state["frontier_ref"]}
+        state["history"].append(event)
+        state["evidence_refs"].extend([ref, assessment])
+    state.update(work_ordinal=3, consecutive_no_progress=3, status="stagnant")
+    scope_ref = carrier["action"]["member_scope"]["source_ref"]
+    carrier["resolved_sources"].update({
+        "blocker:coordinator": {"blocked_action": carrier["action"]["action_ref"]},
+        "change:coordinator": {"change_kind": "capability", "material": True,
+            "action_ref": carrier["action"]["action_ref"], "action_scope_ref": scope_ref},
+        "observation:group-unblock": {"result": "isolated capability became available"},
+        "assessment:group-unblock": {"event_id": "event:group-unblock", "kind": "material_unblock",
+            "action_ref": carrier["action"]["action_ref"], "action_scope_ref": scope_ref,
+            "changed_ref": "change:coordinator", "resolved_blocker_ref": "blocker:coordinator",
+            "observation_refs": ["observation:group-unblock"]}})
+    carrier["event"] = {"kind": "material_unblock", "event_id": "event:group-unblock", "guard_id": state["guard_id"],
+        "outcome_ref": state["outcome_ref"], "predecessor_event_id": state["history"][-1]["event_id"],
+        "work_ordinal": 3, "action_ref": carrier["action"]["action_ref"], "action_scope_ref": scope_ref,
+        "assessment_ref": "assessment:group-unblock", "evidence_refs": ["observation:group-unblock"],
+        "changed_ref": "change:coordinator", "resolved_blocker_ref": "blocker:coordinator"}
+    # A real dispatch gate leaves the independently validated unblock unspent.
+    blocked = deepcopy(stalled)
+    blocked["context"]["readiness"]["ready"] = False
+    result = API.admission(blocked)
+    assert result["status"] == "blocked" and result["code"] == "not_ready", result
+    assert result["canonical_progress_state"]["status"] == "reactivated"
+    assert "action_admission" not in result["canonical_progress_state"]
+    for location in ("event", "assessment", "change"):
+        trial = deepcopy(stalled)
+        progress = trial["context"]["progress"]
+        row = (progress["event"] if location == "event" else
+               progress["resolved_sources"]["assessment:group-unblock" if location == "assessment" else "change:coordinator"])
+        row.pop("action_scope_ref")
+        result = API.admission(trial)
+        assert result["status"] == "blocked", ("Group unblock lost its fixed scope", location, result)
+    first = API.admission(stalled)
+    assert first["status"] == "accepted", ("Bound grouped unblock rejected", first)
+    admitted = first["canonical_progress_state"]["action_admission"]
+    assert admitted["unblock_event_id"] == "event:group-unblock"
+    next_member = retained_progress_request(first)
+    next_member["target_packet_id"] = "dependent-outcome"
+    next_member["plan"]["implementation_steps"][0]["execution"]["state"] = "RUNNING"
+    next_member["context"]["previous_plan"] = deepcopy(next_member["plan"])
+    next_member["context"]["workspace"]["active_source_writer_ids"] = ["accepted-outcome"]
+    joined = API.admission(next_member)
+    assert joined["status"] == "accepted", ("Bound sibling attempted second unblock consumption", joined)
+    assert joined["canonical_progress_state"] == first["canonical_progress_state"]
+    assert joined["canonical_progress_state"]["work_ordinal"] == 3
+    assert joined["canonical_progress_state"]["consecutive_no_progress"] == 3
+    # Compact the already CLOSED coordinator, retaining its action identity.
+    compacted = retained_progress_request(closed)
+    compacted.update(worker_stage="production", worker_role="code_writer")
+    compacted["plan"]["implementation_steps"][0]["execution"]["state"] = "RUNNING"
+    compacted["context"]["workspace"]["active_source_writer_ids"] = []
+    compacted["context"]["packet_evidence"]["accepted-outcome"]["implementation_evidence_ref"] = "writer:closed-coordinator"
+    progress = compacted["context"]["progress"]
+    retained = progress["state"]
+    history = deepcopy(retained["history"])
+    summary = "history:closed-coordinator"
+    progress["resolved_sources"][summary] = {"guard_id": retained["guard_id"], "outcome_ref": retained["outcome_ref"],
+        "policy": deepcopy(retained["policy"]), "work_ordinal": 1, "consecutive_no_progress": 1,
+        "frontier_ref": retained["frontier_ref"], "last_event_id": history[-1]["event_id"],
+        "seen_event_ids": [history[-1]["event_id"]], "seen_action_refs": [history[-1]["action_ref"]],
+        "seen_policy_authority_refs": [], "seen_observation_refs": deepcopy(history[-1]["evidence_refs"]),
+        "seen_frontier_refs": [retained["frontier_ref"]], "seen_unblock_change_refs": [], "unresolved_oscillation_refs": []}
+    retained.update(history=[], history_base_ref=summary)
+    retained["evidence_refs"].append(summary)
+    result = API.admission(compacted)
+    assert result["status"] == "blocked" and result["code"] == "progress_replay", ("Compaction reopened closed coordinator", result)
+    assert result["canonical_progress_state"] == retained
+
+
+def shared_progress_controls():
+    """One guard rejects unsafe continuation and preserves productive evidence."""
     total = 0
+
+    def check(request, status, code=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), result
+        assert request == before, "Shared progress mutated caller state"
+        total += 1
+        return result
+
+    admitted = check(released_v14_productive_fourth_attempt(), "accepted")
+    current = retained_progress_request(admitted)
+    # Productive evidence survives ALL subsequent blockers; none consumes an
+    # action or creates a checkpoint for waiting/unfinished asynchronous work.
+    for productive in (False, True):
+        completed = completed_progress_cycle(current, "useful_new_evidence" if productive else "no_progress")
+        for blocker in ("readiness", "authority", "workspace", "stage", "projection"):
+            trial = deepcopy(completed)
+            if blocker == "readiness": trial["context"]["readiness"]["ready"] = False
+            elif blocker == "authority": trial["context"]["approved_plan_identity"]["approval_ref"] = "forged"
+            elif blocker == "workspace": trial["context"]["workspace"]["active_source_writer_ids"] = ["accepted-outcome"]
+            elif blocker == "stage": trial.update(worker_stage="refactor", worker_role="code_writer")
+            else: trial["current_task_packet"] = {"forged": True}
+            result = check(trial, "blocked")
+            progress = result["canonical_progress_state"]
+            assert progress["work_ordinal"] == 4 and progress["consecutive_no_progress"] == (0 if productive else 1)
+            assert progress["history"][-1]["event_id"] == completed["context"]["progress"]["event"]["event_id"]
+            assert "action_admission" not in progress
+    for mutation in ("count", "boolean", "policy", "history", "assessment", "novelty"):
+        trial = deepcopy(current)
+        carrier = trial["context"]["progress"]
+        if mutation == "count": carrier["state"]["consecutive_no_progress"] = 2
+        elif mutation == "boolean": carrier["state"]["work_ordinal"] = True
+        elif mutation == "policy": carrier["state"]["policy"]["stagnation_window"] = 100
+        elif mutation == "history": carrier["state"]["history"].pop(0)
+        elif mutation == "assessment": carrier["resolved_sources"].pop("assessment:productive:2")
+        else:
+            # Candidate prose cannot turn a recurring frontier into a gain.
+            trial = completed_progress_cycle(current)
+            trial["context"]["progress"]["event"]["disposition"] = "verified_gain"
+        check(trial, "blocked")
+    # Fresh observation/frontier names cannot turn a restored old acceptance
+    # state into new progress. The simpler recurring-ref case cannot catch this.
+    lost = completed_progress_cycle(current)
+    carrier = lost["context"]["progress"]
+    event = carrier["event"]
+    carrier["resolved_sources"]["frontier:lost"] = {"accepted_obligations": ["scope", "focused"]}
+    event["frontier_ref"] = "frontier:lost"
+    carrier["resolved_sources"][event["assessment_ref"]]["frontier_ref"] = "frontier:lost"
+    restored = completed_progress_cycle(retained_progress_request(check(lost, "accepted")))
+    carrier = restored["context"]["progress"]
+    event = carrier["event"]
+    carrier["resolved_sources"]["frontier:renamed-restoration"] = {"accepted_obligations": ["scope", "focused", "integration"]}
+    event.update(disposition="verified_gain", frontier_ref="frontier:renamed-restoration")
+    carrier["resolved_sources"][event["assessment_ref"]].update(disposition="verified_gain", frontier_ref=event["frontier_ref"])
+    carrier["resolved_sources"][event["evidence_refs"][0]].update(result="passed", newly_verified_obligations=["integration"])
+    check(restored, "blocked")
+    replay = deepcopy(current)
+    replay["context"]["progress"]["event"] = deepcopy(replay["context"]["progress"]["state"]["history"][-1])
+    check(replay, "blocked", "progress_replay")
+    # Three net-unproductive A/B cycles include mandatory fresh rechecks. They
+    # cross phase boundaries and are NOT six separate verification/reset cycles.
+    for index, phase in enumerate(("Build", "Review", "QA"), 1):
+        completed = completed_progress_cycle(current, phase=phase)
+        result = check(completed, "accepted" if index < 3 else "blocked", None if index < 3 else "progress_stagnant")
+        assert result["canonical_progress_state"]["consecutive_no_progress"] == index
+        if index < 3:
+            current = retained_progress_request(result)
+    stalled = deepcopy(completed)
+    stalled["context"]["progress"]["state"] = deepcopy(result["canonical_progress_state"])
+    stalled["context"]["progress"].pop("event")
+    check(stalled, "blocked", "progress_stagnant")  # Generic continuation cannot reopen it.
+    # Genuine new information permits only its bound action, never a new window.
+    carrier = stalled["context"]["progress"]
+    state = carrier["state"]
+    carrier["resolved_sources"].update({
+        "blocker:missing-capability": {"blocked_action": carrier["action"]["action_ref"]},
+        "change:capability": {"change_kind": "capability", "material": True, "action_ref": carrier["action"]["action_ref"]},
+        "observation:capability": {"result": "capability now available"},
+        "assessment:unblock": {"event_id": "event:unblock", "kind": "material_unblock",
+            "action_ref": carrier["action"]["action_ref"], "changed_ref": "change:capability",
+            "resolved_blocker_ref": "blocker:missing-capability", "observation_refs": ["observation:capability"]}})
+    carrier["event"] = {"kind": "material_unblock", "event_id": "event:unblock", "guard_id": state["guard_id"],
+        "outcome_ref": state["outcome_ref"], "predecessor_event_id": state["history"][-1]["event_id"],
+        "work_ordinal": state["work_ordinal"], "action_ref": carrier["action"]["action_ref"],
+        "assessment_ref": "assessment:unblock", "evidence_refs": ["observation:capability"],
+        "changed_ref": "change:capability", "resolved_blocker_ref": "blocker:missing-capability"}
+    for blocker in ("readiness", "workspace", "projection"):
+        trial = deepcopy(stalled)
+        if blocker == "readiness": trial["context"]["readiness"]["route_clear"] = False
+        elif blocker == "workspace": trial["context"]["workspace"]["active_source_writer_ids"] = ["accepted-outcome"]
+        else: trial["current_task_packet"] = {"forged": True}
+        result = check(trial, "blocked")
+        progress = result["canonical_progress_state"]
+        assert progress["status"] == "reactivated" and progress["consecutive_no_progress"] == 3
+        assert "action_admission" not in progress
+        pending_unblock = deepcopy(stalled)
+        pending_unblock["context"]["progress"]["state"] = deepcopy(progress)
+        pending_unblock["context"]["progress"].pop("event")
+    changed = deepcopy(stalled)
+    changed["context"]["progress"]["resolved_sources"]["change:capability"]["material"] = False
+    check(changed, "blocked")
+    result = check(stalled, "accepted")
+    progress = result["canonical_progress_state"]
+    assert progress["consecutive_no_progress"] == 3 and progress["work_ordinal"] == state["work_ordinal"]
+    assert progress["action_admission"]["unblock_event_id"] == "event:unblock"
+    policy_history_controls(pending_unblock, result)
+    committed = retained_progress_request(result)
+    check(committed, "blocked", "progress_replay")  # Same NEW action cannot spend it again.
+    continuing = deepcopy(committed)
+    continuing["plan"]["implementation_steps"][0]["execution"]["state"] = "RUNNING"
+    continuing.update(worker_stage="production", worker_role="code_writer")
+    continuing["context"]["packet_evidence"]["accepted-outcome"]["implementation_evidence_ref"] = "writer:observed-unblock-production"
+    continued = check(continuing, "accepted")
+    assert continued["canonical_progress_state"] == progress  # No second consumption/checkpoint.
+    unproductive = completed_progress_cycle(committed)
+    stopped = check(unproductive, "blocked", "progress_stagnant")
+    assert stopped["canonical_progress_state"]["consecutive_no_progress"] == 4
+    productive = completed_progress_cycle(committed, "useful_new_evidence", "debugging")
+    continued = check(productive, "accepted")
+    assert continued["canonical_progress_state"]["consecutive_no_progress"] == 0
+    assert continued["canonical_progress_state"]["status"] == "active"
+    # Productive work beyond ten rounds retains the same guard and no cap.
+    current = retained_progress_request(continued)
+    for _ in range(12):
+        current = retained_progress_request(check(completed_progress_cycle(current, "useful_new_evidence", "research"), "accepted"))
+    assert current["context"]["progress"]["state"]["guard_id"] == state["guard_id"]
+    assert current["context"]["progress"]["state"]["consecutive_no_progress"] == 0
+    # Compaction retains independently resolved semantic history, novelty and
+    # unresolved oscillation refs; it never creates a fresh window or quota.
+    compacted = deepcopy(current)
+    carrier = compacted["context"]["progress"]
+    retained = carrier["state"]
+    prior_event = deepcopy(retained["history"][-1])
+    summary_ref = "history:compacted:retained"
+    carrier["resolved_sources"][summary_ref] = {
+        "guard_id": retained["guard_id"], "outcome_ref": retained["outcome_ref"], "policy": deepcopy(retained["policy"]),
+        "work_ordinal": retained["work_ordinal"], "consecutive_no_progress": retained["consecutive_no_progress"],
+        "frontier_ref": retained["frontier_ref"], "last_event_id": prior_event["event_id"],
+        "seen_event_ids": [row["event_id"] for row in retained["history"]],
+        "seen_action_refs": list(dict.fromkeys(row["action_ref"] for row in retained["history"] if row["kind"] == "work_checkpoint")),
+        "seen_policy_authority_refs": [],
+        "seen_observation_refs": list(dict.fromkeys(ref for row in retained["history"] for ref in row["evidence_refs"])),
+        "seen_frontier_refs": list(dict.fromkeys(row["frontier_ref"] for row in retained["history"] if "frontier_ref" in row)),
+        "seen_unblock_change_refs": [row["changed_ref"] for row in retained["history"] if row["kind"] == "material_unblock"],
+        "unresolved_oscillation_refs": ["observation:cycle:4", "observation:cycle:5", "observation:cycle:6"]}
+    retained.update(history=[], history_base_ref=summary_ref)
+    retained["evidence_refs"].append(summary_ref)
+    compacted["plan"]["implementation_steps"][0]["execution"]["state"] = "RUNNING"
+    compacted.update(worker_stage="production", worker_role="code_writer")
+    compacted["context"]["packet_evidence"]["accepted-outcome"]["implementation_evidence_ref"] = "writer:observed-research-production"
+    compact = check(compacted, "accepted")
+    assert compact["canonical_progress_state"]["work_ordinal"] == retained["work_ordinal"]
+    assert compact["canonical_progress_state"]["history_base_ref"] == summary_ref
+    compacted["context"]["progress"]["event"] = prior_event
+    check(compacted, "blocked", "progress_replay")
+    return total
+
+
+def restored_completed_action_history_uniqueness():
+    """OG-GUARD-HISTORY: distinct event IDs cannot complete one action twice."""
+    failures = []
+    for compacted in (False, True):
+        # Reuse independently fixed released-v14 history. The approved Plan and
+        # all original observations/frontiers remain unchanged by the mutation.
+        unique = released_v14_productive_fourth_attempt()
+        unique["boundary"] = "plan"
+        carrier = unique["context"]["progress"]
+        state = carrier["state"]
+        first = deepcopy(state["history"][0])
+        if compacted:
+            summary_ref = "history:completed-action:base"
+            carrier["resolved_sources"][summary_ref] = {
+                "guard_id": state["guard_id"], "outcome_ref": state["outcome_ref"],
+                "policy": deepcopy(state["policy"]), "work_ordinal": 1, "consecutive_no_progress": 0,
+                "frontier_ref": first["frontier_ref"], "last_event_id": first["event_id"],
+                "last_semantic_kind": "work_checkpoint", "seen_event_ids": [first["event_id"]],
+                "seen_action_refs": [first["action_ref"]], "seen_policy_authority_refs": [],
+                "seen_observation_refs": deepcopy(first["evidence_refs"]),
+                "seen_frontier_refs": [state["baseline_ref"], first["frontier_ref"]],
+                "seen_unblock_change_refs": [], "unresolved_oscillation_refs": []}
+            state.update(history=state["history"][1:], history_base_ref=summary_ref)
+            state["evidence_refs"].append(summary_ref)
+        before = deepcopy(unique)
+        positive = API.admission(unique)
+        assert unique == before, "Unique restoration mutated independent input"
+        assert positive["status"] == "accepted", (
+            "Unique-action restoration fixture failed; not authorizing RED", compacted,
+            {"expected_status": "accepted", "status": positive["status"], "code": positive.get("code")})
+        restored = positive["canonical_progress_state"]
+        assert restored["work_ordinal"] == 3 and restored["consecutive_no_progress"] == 0
+        assert restored["frontier_ref"] == "frontier:productive:3"
+
+        repeated = deepcopy(unique)
+        history = repeated["context"]["progress"]["state"]["history"]
+        duplicate = history[0 if compacted else 1]
+        assert duplicate["event_id"] != first["event_id"]
+        assert duplicate["evidence_refs"] != first["evidence_refs"]
+        assert duplicate["action_ref"] != first["action_ref"]
+        duplicate["action_ref"] = first["action_ref"]  # The ONLY negative mutation.
+        before = deepcopy(repeated)
+        observed = API.admission(repeated)
+        assert repeated == before, "Duplicate restoration mutated caller-owned history"
+        if observed["status"] == "accepted" or observed.get("code") == "progress_stagnant":
+            failures.append({"history": "compacted_base_collision" if compacted else "distinct_event_collision",
+                             "expected_code": "progress_replay", "status": observed["status"], "code": observed.get("code"),
+                             "work_ordinal": observed.get("canonical_progress_state", {}).get("work_ordinal"),
+                             "consecutive_no_progress": observed.get("canonical_progress_state", {}).get("consecutive_no_progress")})
+        else:
+            assert observed["status"] == "blocked" and observed["code"] == "progress_replay", (
+                "Completed-action uniqueness failed for an unrelated reason; not authorizing RED", compacted,
+                {"expected_status": "blocked", "expected_code": "progress_replay",
+                 "status": observed["status"], "code": observed.get("code")})
+    assert not failures, ("Restored completed action counted twice instead of rejected as progress_replay", failures)
+
+
+def run_controls():
+    # Run the dedicated source-backed authorizer before later guard controls;
+    # unsupported versions, missing helper APIs and setup errors are not RED.
+    productive_fourth_attempt_admission()
+    failed_green_running_next_action_admission()
+    guarded_parallel_second_member_admission()
+    restored_completed_action_history_uniqueness()
+    terminal_stage_and_provenance_controls()
+    total = 4 + shared_progress_controls()
 
     def expect(request, status, code=None, name=None):
         nonlocal total
@@ -556,13 +1386,14 @@ def run_controls():
         expect(malformed, "blocked", expected_code, name="verification activity " + mutation)
     # Stage overlays retain approved identity; they never become stored work.
     case = valid_request()
-    original_definition = API.digest(API.definition(case["plan"]))
+    original_definition = expected_current_definition(case["plan"])
     case.update(worker_stage="test_authoring", inline_worker_stage="test_authoring")
     case["context"]["writer_actor_ids"] = {}
     case["context"]["packet_evidence"] = {}
     result = expect(case, "accepted", name="first new writer actor is not fabricated")
-    if result["worker_stage"] != result["current_task_packet"]["worker_stage"] or API.digest(API.definition(result["canonical_plan"])) != original_definition:
+    if result["worker_stage"] != result["current_task_packet"]["worker_stage"] or API.definition(result["canonical_plan"]) != original_definition:
         raise AssertionError("Stage overlay changed approved work or inline agreement")
+    assert_current_approval(case["plan"], result["canonical_plan"])
     if "worker_stage" in result["canonical_plan"]["implementation_steps"][0]:
         raise AssertionError("Runtime writer stage leaked into stored definition")
     mismatch = deepcopy(case)
@@ -574,10 +1405,11 @@ def run_controls():
     expect(stored, "blocked", "mixed_schema")
     for stage in ("production", "refactor"):
         case = current_authored_dispatch(stage)
-        definition_before = API.digest(API.definition(case["plan"]))
+        definition_before = expected_current_definition(case["plan"])
         result = expect(case, "accepted", name="same actual writer " + stage)
-        if result["worker_stage"] != stage or result["current_task_packet"]["worker_stage"] != stage or API.digest(API.definition(result["canonical_plan"])) != definition_before:
+        if result["worker_stage"] != stage or result["current_task_packet"]["worker_stage"] != stage or API.definition(result["canonical_plan"]) != definition_before:
             raise AssertionError("Valid stage lost overlay or stable approval")
+        assert_current_approval(case["plan"], result["canonical_plan"])
         for mutation in ("missing_current", "missing_prior", "different_actual", "configured_role_only", "different_test_author"):
             trial = deepcopy(case)
             ev = trial["context"]["packet_evidence"]["accepted-outcome"]
@@ -1211,28 +2043,29 @@ def run_controls():
             expect(case, "blocked", "workspace_overlap")
     case["context"]["workspace"]["active_source_writer_ids"] = []  # Actual Writer is terminal.
     case.update(worker_stage="final_verification", worker_role="builder_tester")
-    for count, no_progress, status in ((1, 0, "accepted"), (2, 0, "accepted"), (3, 0, "accepted"),
+    for count, no_progress, status in ((1, 0, "blocked"), (2, 0, "blocked"), (3, 0, "blocked"),
                                        (4, 0, "blocked"), (3, 2, "blocked")):
         trial = deepcopy(case)
         counters = {"attempt_count": count, "no_progress_count": no_progress}
         trial["plan"]["implementation_steps"][0]["execution"]["recovery"] = deepcopy(counters)
         trial["context"]["recovery_counters"][packet["packet_id"]] = deepcopy(counters)
-        expect(trial, status, "accepted" if status == "accepted" else "recovery_exhausted")
+        expect(trial, status, "accepted" if status == "accepted" else "progress_history_missing")
     for state in ("PENDING", "RUNNING"):
         trial = deepcopy(case)
         trial.update(worker_stage="implementation", worker_role="code_writer")
         trial["plan"]["implementation_steps"][0]["execution"].update(state=state, recovery={"attempt_count": 3, "no_progress_count": 0})
         trial["context"]["recovery_counters"][packet["packet_id"]] = {"attempt_count": 3, "no_progress_count": 0}
-        expect(trial, "blocked", "recovery_exhausted")
+        expect(trial, "blocked", "progress_history_missing")
     # Caller-resolved applicability preserves truthful no-tests evidence across all consumers.
     for command in (False, True):
         case = no_tests_request(command)
-        before_definition = API.digest(API.definition(case["plan"]))
+        before_definition = expected_current_definition(case["plan"])
         accepted = expect(case, "accepted")
         packet = case["plan"]["implementation_steps"][0]
         proof = case["context"]["packet_evidence"][packet["packet_id"]]
-        if API.digest(API.definition(accepted["canonical_plan"])) != before_definition or "tests" in proof:
+        if API.definition(accepted["canonical_plan"]) != before_definition or "tests" in proof:
             raise AssertionError("Applicability changed approved work or invented test provenance")
+        assert_current_approval(case["plan"], accepted["canonical_plan"])
         dispatched = deepcopy(case)
         dispatched.update(boundary="dispatch", worker_stage="final_verification", worker_role="builder_tester")
         expect(dispatched, "accepted")
@@ -1246,6 +2079,7 @@ def run_controls():
         expect(initial, "blocked", "writer_lineage")
         completed = deepcopy(case)
         completed["plan"] = deepcopy(accepted["canonical_plan"])
+        completed["context"] = deepcopy(accepted["canonical_context"])
         completed["boundary"] = "completion"
         completed["context"].update(current_snapshot_identity="snapshot:no-tests", required_terminal_gates=["independent_review"])
         completed["context"]["completion_evidence"] = {
@@ -1478,7 +2312,7 @@ def run_controls():
         "cwd": packet["red_cwd"], "production_file": "src/result.py", "invocation_ref": "green:actual"}
     assert expect(refactor, "accepted")["current_task_packet"]["red_evidence"] == ev["tdd_cycle"]["red"]
     for lane in ("separated_workers", "bounded_executor"):
-        for count, status in ((3, "accepted"), (4, "blocked")):
+        for count, status in ((3, "blocked"), (4, "blocked")):
             trial = deepcopy(case)
             trial["context"]["build_execution_lane"] = lane
             trial["context"]["test_applicability"] = {p["packet_id"]: applicability(trial, p) for p in trial["plan"]["implementation_steps"]}
@@ -1486,7 +2320,7 @@ def run_controls():
             trial["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = lane
             trial["plan"]["implementation_steps"][0]["execution"]["recovery"] = {"attempt_count": count, "no_progress_count": 0}
             trial["context"]["recovery_counters"][packet["packet_id"]] = {"attempt_count": count, "no_progress_count": 0}
-            expect(trial, status, "accepted" if status == "accepted" else "recovery_exhausted")
+            expect(trial, status, "accepted" if status == "accepted" else "progress_history_missing")
     active = deepcopy(case)
     active["context"]["workspace"]["active_source_writer_ids"] = [packet["packet_id"]]
     expect(active, "blocked", "workspace_overlap")
@@ -1501,7 +2335,7 @@ def run_controls():
     ev["tdd_cycle"]["green"] = {"production_file": "accepted-outcome.py"}
     expect(case, "accepted")
     for lane in ("separated_workers", "bounded_executor"):
-        for count, status in ((3, "accepted"), (4, "blocked")):
+        for count, status in ((3, "blocked"), (4, "blocked")):
             trial = deepcopy(case)
             trial["context"]["build_execution_lane"] = lane
             trial["context"]["test_applicability"] = {p["packet_id"]: applicability(trial, p) for p in trial["plan"]["implementation_steps"]}
@@ -1509,7 +2343,7 @@ def run_controls():
             trial["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = lane
             trial["plan"]["implementation_steps"][0]["execution"]["recovery"] = {"attempt_count": count, "no_progress_count": 0}
             trial["context"]["recovery_counters"][packet["packet_id"]] = {"attempt_count": count, "no_progress_count": 0}
-            expect(trial, status, "accepted" if status == "accepted" else "recovery_exhausted")
+            expect(trial, status, "accepted" if status == "accepted" else "progress_history_missing")
     active = deepcopy(case)
     active["context"]["workspace"]["active_source_writer_ids"] = [packet["packet_id"]]
     expect(active, "blocked", "workspace_overlap")
@@ -1518,7 +2352,7 @@ def run_controls():
     ev["tdd_cycle"]["green"].update(all_tests_pass=True, command=packet["red_command"], cwd="/workspace", invocation_ref="green:actual")
     expect(case, "accepted")
     for lane in ("separated_workers", "bounded_executor"):
-        for count, status in ((3, "accepted"), (4, "blocked")):
+        for count, status in ((3, "blocked"), (4, "blocked")):
             trial = deepcopy(case)
             trial["context"]["build_execution_lane"] = lane
             trial["context"]["test_applicability"] = {p["packet_id"]: applicability(trial, p) for p in trial["plan"]["implementation_steps"]}
@@ -1526,7 +2360,7 @@ def run_controls():
             trial["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = lane
             trial["plan"]["implementation_steps"][0]["execution"]["recovery"] = {"attempt_count": count, "no_progress_count": 0}
             trial["context"]["recovery_counters"][packet["packet_id"]] = {"attempt_count": count, "no_progress_count": 0}
-            expect(trial, status, "accepted" if status == "accepted" else "recovery_exhausted")
+            expect(trial, status, "accepted" if status == "accepted" else "progress_history_missing")
     active = deepcopy(case)
     active["context"]["workspace"]["active_source_writer_ids"] = [packet["packet_id"]]
     expect(active, "blocked", "workspace_overlap")
@@ -1535,7 +2369,7 @@ def run_controls():
     ev["tdd_cycle"]["refactor"] = {"changes_made": "none needed"}
     expect(case, "accepted")
     for lane in ("separated_workers", "bounded_executor"):
-        for count, status in ((3, "accepted"), (4, "blocked")):
+        for count, status in ((3, "blocked"), (4, "blocked")):
             trial = deepcopy(case)
             trial["context"]["build_execution_lane"] = lane
             trial["context"]["test_applicability"] = {p["packet_id"]: applicability(trial, p) for p in trial["plan"]["implementation_steps"]}
@@ -1543,7 +2377,7 @@ def run_controls():
             trial["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = lane
             trial["plan"]["implementation_steps"][0]["execution"]["recovery"] = {"attempt_count": count, "no_progress_count": 0}
             trial["context"]["recovery_counters"][packet["packet_id"]] = {"attempt_count": count, "no_progress_count": 0}
-            expect(trial, status, "accepted" if status == "accepted" else "recovery_exhausted")
+            expect(trial, status, "accepted" if status == "accepted" else "progress_history_missing")
     active = deepcopy(case)
     active["context"]["workspace"]["active_source_writer_ids"] = [packet["packet_id"]]
     expect(active, "blocked", "workspace_overlap")

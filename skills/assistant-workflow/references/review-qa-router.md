@@ -3,7 +3,7 @@
 Internal reference for Review routing. Load during Review after Build evidence
 exists. `references/phases.md` keeps the compact Review shell; this file owns
 Spec Review, Code Quality Review, QA Evaluator routing, status gates,
-pivot/round-10 handling, and verification-summary inputs for Document.
+pivot/shared stagnation handling, and verification-summary inputs for Document.
 
 ## Review Lane Separation
 
@@ -114,9 +114,9 @@ small tasks may use a quick spec check plus one clean review round. Small
 strict/required-QA work requires full Stage 1 Spec Review and Stage 2 Code
 Quality Review, as do medium+ tasks.
 
-If code review reports STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT, pause the loop and create an orchestrator-owned
+If code review reports shared semantic guard stagnation or a material scope/authority change, pause the loop and create an orchestrator-owned
 `pivot_restart_decision` before another fix/review dispatch. The autonomous
-quality loop is bounded to max 10 rounds.
+quality loop uses the shared semantic progress guard, without a round ceiling.
 
 ## Stage 3 - QA Evaluation
 
@@ -147,11 +147,11 @@ QA Evaluation focuses on acceptance and final result. It must not report general
 code defects, security issues, architecture concerns, or test coverage gaps
 unless they directly block an acceptance criterion or Done Contract item.
 
-If QA score progression reports STAGNATION, repeated DRIFT, repeated REGRESSION,
-or any scoped domain rubric returns action `pivot`, pause the QA loop and create
+If the shared semantic guard reports genuine stagnation, retain the acceptance
+evidence and have the orchestrator assess
 an orchestrator-owned `pivot_restart_decision` before another QA/build dispatch.
-Round 10 remains terminal: return the final QA verdict and remaining failed
-acceptance items instead of starting round 11.
+Return failed acceptance items to authorized Build while the shared guard
+permits corrective work; retain remaining failures at every ordinal.
 
 QA rejection followed by a source fix returns to Build. Before another QA
 round, record passed Build validation, recompute the source digest, and run a
@@ -221,3 +221,7 @@ review evidence is complete; user confirmation is not a ritual gate.
 When required manual verification reports issues, add them to Review Notes,
 re-enter Build and Review for those steps only, update the verification summary,
 and present it again.
+
+On genuine shared semantic stagnation or material change, retain the guard and
+route the evidence-backed Pivot/Restart Decision Packet before corrective work.
+Numeric score diagnostics alone do not require another decision.

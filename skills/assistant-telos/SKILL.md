@@ -5,6 +5,11 @@ description: "Create or update Telos purpose, mission, goals, challenges, and st
 
 # Telos Context
 
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
 Help a person, team, or organization express purpose and connect it to action. Based on [Daniel Miessler's Telos](https://github.com/danielmiessler/Telos).
 
 Use this chain when useful:

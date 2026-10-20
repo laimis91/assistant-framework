@@ -142,16 +142,16 @@ inventing subjective bars.
 
 ## Review And QA Loops
 
-The code-review loop and QA loop are bounded at **max 10 rounds**.
+Code review and QA share the task-level three-consecutive-unproductive-cycle guard. Productive rounds have no cumulative ceiling.
 
 ```text
 round = 1
 previously_fixed = []
 score_history = []
 
-while round <= 10:
+while shared_progress_allows_work:
   REVIEW   -> fresh Code Reviewer with diff, acceptance context, and prior fixes
-  DECIDE   -> PASS, REFINE, or PIVOT from rubric score and findings
+  DECIDE   -> current acceptance/findings and shared semantic progress; scores diagnostic
   FIX      -> Code Writer fixes actionable findings when REFINE
   VERIFY   -> Builder/Tester records build/test evidence
   round += 1
@@ -164,7 +164,7 @@ round = 1
 previously_failed_acceptance_items = []
 score_progression = []
 
-while round <= 10:
+while shared_progress_allows_work:
   EVALUATE -> QA Evaluator checks Done Contract, criteria, evidence, domain scope
   SCORE    -> qa_scorecard and score_entry
   DECIDE   -> accepted, accepted_with_concerns, rejected, or blocked
@@ -172,18 +172,16 @@ while round <= 10:
   round += 1
 ```
 
-Round 10 is terminal. The controller reports remaining blockers or failed
-acceptance items instead of starting round 11.
+The shared guard records completed evidence before later blockers. Acceptance
+failures and incomplete coverage remain explicit at every positive ordinal.
 
 ### Finding Filter
 
 Review and QA findings must have concrete evidence and direct impact:
 
-| Rounds | Blocking bar |
+| Ordinal | Blocking bar |
 |---|---|
-| 1-7 | Evidence-backed must-fix or should-fix findings |
-| 8-9 | Must-fix or high-confidence should-fix findings |
-| 10 | Terminal report of remaining blockers or acceptance items |
+| Every positive round | Evidence-backed must-fix/should-fix and scoped acceptance failures with stable confidence standards |
 
 Speculative concerns stay non-blocking unless evidence connects them to
 correctness, security, architecture, test reliability, or acceptance criteria.

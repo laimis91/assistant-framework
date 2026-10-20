@@ -5,6 +5,11 @@ description: "Audit CI and test suites for false passes, discovery gaps, stale f
 
 # CI and Test Maintenance Audit
 
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
 Investigate whether the named checking system detects important failures and
 whether its maintenance work is justified. This Analysis skill diagnoses and
 recommends; findings grant no repair, deletion/quarantine, publication, install,

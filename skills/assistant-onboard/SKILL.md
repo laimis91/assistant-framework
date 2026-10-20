@@ -5,6 +5,11 @@ description: "Map an unfamiliar codebase and its patterns. Use for onboarding, p
 
 # Map the Codebase
 
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
 Build a useful, scoped orientation from inspected source. Infer the project and focus from context; ask only when a missing choice materially changes the inspection. Keep onboarding read-only for production code.
 
 - Read project instructions, README/docs, build manifests, and relevant CI configuration. Identify purpose, stack, structure, and source-backed build, test, and run commands. Batch independent reads when supported.

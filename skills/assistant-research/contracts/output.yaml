@@ -1,4 +1,4 @@
-# Applicability: retained v3 structured consumers, persisted packets, handoffs,
+# Applicability: current v4 structured consumers, persisted packets, handoffs,
 # and the existing five-lens audit/eval fixture. Numeric tier/source-count rules
 # below are compatibility-fixture rules, not ordinary claim-confidence policy.
 # Human-only source research uses claim-specific evidence and concise output.
@@ -6,9 +6,9 @@
 # synthesis, separate peer review, material follow-ups, and honest limits.
 
 # Research Output Contract
-# Defines the retained structured v3 compatibility result.
+# Defines the retained structured v4 compatibility result.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: output
 skill: assistant-research
 
@@ -174,7 +174,7 @@ artifacts:
         required: true
         description: "Every material follow-up prompted by this answer, contradiction, or gap, or one typed none_needed decision"
         validation: "Every material follow-up is retained exactly once with a question, answer_or_gap, sources_or_verified_urls, and evidence_status. An empty collection is invalid; use one none_needed decision only when no material follow-up exists, and none_needed cannot coexist with material follow-ups for the same trace."
-        on_fail: "Reject the malformed lens result and request one same-assignment correction for the exact follow-up field; if it remains invalid, rerun the complete lens stage through evidenced fallback or block rather than inventing follow-up evidence."
+        on_fail: "Reject the malformed lens result and request same-assignment correction under the shared guard for the exact follow-up field; if it remains invalid, rerun the complete lens stage through evidenced fallback or block rather than inventing follow-up evidence."
         min_items: 1
         object_fields:
           - name: decision

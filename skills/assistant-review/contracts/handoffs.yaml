@@ -4,11 +4,11 @@
 # including triggered trivial/small scope. Direct fallback uses the same review
 # fields as local evidence without spawning a subagent.
 
-schema_version: "8.0"
+schema_version: "9.0"
 contract: handoffs
 skill: assistant-review
-# v8.0 migration: persisted 6.0 and incompatible 7.0/7.1/7.2 packets are invalidated and
-# rebuilt from a freshly rehashed 8.0 snapshot before CLEAN or ISSUES_FIXED. Preserve a
+# v9.0 migration: persisted 6.0 and incompatible 7.0/7.1/7.2 packets are invalidated and
+# rebuilt from a freshly rehashed 9.0 snapshot before CLEAN or ISSUES_FIXED. Preserve a
 # legacy closure ledger by preserving complete identity tuples. For a partial
 # v6/v7.0 tuple, preserve a supplied aggregate_finding_id and fill only missing
 # source IDs/provenance. When that ID is absent, normalize UTF-8
@@ -35,10 +35,10 @@ worker_status_protocol:
     - "Every expected review pass reaches a terminal state before aggregation; the first response never establishes batch coverage."
     - "evidence is required to support the verdict and any findings."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
-    - "Persisted 6.0/7.0/7.1/7.2 packets are invalidated and rebuilt from a fresh 8.0 snapshot before CLEAN or ISSUES_FIXED. Preserve complete closure identity tuples and raw history; for partial v6/v7.0 tuples preserve a supplied aggregate_finding_id, fill only missing source IDs/provenance, and use the versioned UTF-8 NFC/SHA-256 legacy ID only when absent. Non-colliding IDs use the base; every colliding record appends :<ordinal> in original packet order."
+    - "Persisted 6.0/7.0/7.1/7.2 packets are invalidated and rebuilt from a fresh 9.0 snapshot before CLEAN or ISSUES_FIXED. Preserve complete closure identity tuples and raw history; for partial v6/v7.0 tuples preserve a supplied aggregate_finding_id, fill only missing source IDs/provenance, and use the versioned UTF-8 NFC/SHA-256 legacy ID only when absent. Non-colliding IDs use the base; every colliding record appends :<ordinal> in original packet order."
     - "status is required on every QAEvaluator return."
     - "QAEvaluator returns acceptance_findings, qa_scorecard, final_verdict, result, evidence, and every-round score_entry; score_progression is optional history. Selected_domain_rubrics and domain_quality_scores are required only when scoped. QA does not replace Reviewer/code-reviewer findings."
-    - "Reviewer and QAEvaluator may return pivot_restart_signal for PIVOT, STAGNATION, repeated DRIFT, or repeated REGRESSION; the orchestrator owns the final pivot_restart_decision."
+    - "Reviewer and QAEvaluator return pivot_restart_signal for genuine shared semantic stagnation or material change, with independent evidence; score labels alone do not trigger it. The orchestrator owns the final pivot_restart_decision."
 
 # Boundary records point to canonical handoff fields without duplicating them.
 dispatch_context_bundles:
@@ -249,7 +249,7 @@ handoffs:
           - name: topology
             type: object
             required: true
-            validation: "trivial/small=2 independent discovery passes; medium=3; large=4; an optional triggered security specialist and post-fix closure verification may raise required responses to a maximum of 6; one retry is permitted per transient or schema-invalid pass."
+            validation: "trivial/small=2 independent discovery passes; medium=3; large=4; an optional triggered security specialist and post-fix closure verification may raise required responses to a maximum of 6; response correction uses the same shared task guard; preserve typed lifecycle failures and complete coverage."
             object_fields:
               - name: discovery_pass_count
                 type: int
@@ -293,10 +293,6 @@ handoffs:
                 type: int
                 required: true
                 validation: "Equals expected_passes length and is <= 6."
-              - name: max_repair_attempts_per_pass
-                type: int
-                required: true
-                validation: "one retry for a transient or schema-invalid response"
           - name: expected_passes
             type: object[]
             required: true
@@ -417,7 +413,7 @@ handoffs:
             required: true
             min_items: 0
             description: "Orchestrator-owned lifecycle ledger for expected passes; empty while planned, partial while collecting, and terminal only at the response barrier."
-            validation: "planned/dispatched allow empty or pending zero-attempt records; collecting allows a partial subset. Each pass keeps one or two ordered dispatch attempts. Response-backed completed, needs_context, and blocked terminal states have exactly one active_terminal response event for active_terminal_attempt_id; timed_out, failed, and invalidated may have zero active responses only with typed failure evidence. Stale/duplicate replies never satisfy the barrier. pass_repair_guard allows at most one transient/schema repair; after exhaustion record failed or timed_out and continue incomplete aggregation."
+            validation: "planned/dispatched allow empty or pending zero-attempt records; collecting allows a partial subset. Each pass keeps ordered dispatch attempts under the shared task guard. Response-backed completed, needs_context, and blocked terminal states have exactly one active_terminal response event for active_terminal_attempt_id; timed_out, failed, and invalidated may have zero active responses only with typed failure evidence. Stale/duplicate replies never satisfy the barrier. Response repair uses the same task guard; record typed failures and incomplete coverage when stopped."
             object_fields:
               - name: review_pass_id
                 type: string
@@ -431,7 +427,7 @@ handoffs:
                 type: object[]
                 required: true
                 min_items: 0
-                validation: "Length is 1..2; attempt_count values are exactly contiguous 1..length and review_attempt_id values are unique in dispatch order. Response-backed terminal states require exactly one active_terminal response event for active_terminal_attempt_id; non-response lifecycle failures require typed failure evidence instead."
+                validation: "Length is positive at the terminal barrier, with no separate repair cap; attempt_count values are exactly contiguous 1..length and review_attempt_id values are unique in dispatch order. Response-backed terminal states require exactly one active_terminal response event for active_terminal_attempt_id; non-response lifecycle failures require typed failure evidence instead."
                 object_fields:
                   - name: review_attempt_id
                     type: string
@@ -440,7 +436,7 @@ handoffs:
                   - name: attempt_count
                     type: int
                     required: true
-                    validation: ">= 0 and <= 2"
+                    validation: ">= 0; observation only, no local retry ceiling"
                   - name: record_state
                     type: enum
                     required: true
@@ -556,8 +552,8 @@ handoffs:
       - name: round
         type: int
         required: true
-        description: "Current review round number (1-10)"
-        validation: ">= 1 and <= 10"
+        description: "Current review round number (positive integer)"
+        validation: "Positive integer; no ordinal ceiling"
 
       - name: additional_round_reason
         type: object
@@ -593,7 +589,7 @@ handoffs:
           - name: fixed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: "Positive integer; no ordinal ceiling"
           - name: aggregate_finding_id
             type: string
             required: true
@@ -625,8 +621,8 @@ handoffs:
         type: string
         required: true
         description: "Evidence-backed finding filter for this round"
-        validation: "Must state that findings require file/line evidence, concrete impact, and the smallest useful fix; speculative concerns are Observations and do not block; round 10 remains terminal."
-        notes: "In rounds 8-10, only must-fix or high-confidence should-fix findings count as blockers. The loop never starts round 11."
+        validation: "Must state that findings require file/line evidence, concrete impact, and the smallest useful fix; speculative concerns are Observations and do not block; the shared stagnation guard governs repeated work."
+        notes: "At every round, concrete must-fix and should-fix findings retain the same evidence/confidence standards. Productive work can continue past round 10."
 
       - name: project_type
         type: string
@@ -721,7 +717,7 @@ handoffs:
         type: int
         required: true
         description: "Echo back the round number for tracking"
-        validation: ">= 1 and <= 10"
+        validation: "Positive integer; no ordinal ceiling"
 
       - name: batch_id
         type: string
@@ -805,7 +801,7 @@ handoffs:
           - name: confidence_pct
             type: int
             required: true
-            validation: "Evidence-calibrated confidence value; used for explanation and late-round should-fix blocking, not numeric threshold gating"
+            validation: "Evidence-calibrated confidence value; used for evidence-calibrated explanation with the same standards at every ordinal"
           - name: suggestion
             type: string
             required: false
@@ -935,7 +931,7 @@ handoffs:
           - name: bounded_execution
             type: string
             required: true
-            description: "Whether max steps/rounds/time/cost budget exists and is appropriate"
+            description: "Whether framework semantic work shares the task guard and application/tool/API loops retain appropriate explicit user/product/resource bounds"
           - name: stop_condition
             type: string
             required: true
@@ -943,7 +939,7 @@ handoffs:
           - name: retry_and_empty_result_handling
             type: string
             required: true
-            description: "Whether retries and empty results have capped fallback behavior"
+            description: "Whether semantic correction retains the shared guard and transient tool/API retries and empty results follow their operational policy"
           - name: tool_error_handling
             type: string
             required: true
@@ -1235,7 +1231,7 @@ handoffs:
       - name: pivot_restart_signal
         type: object
         required: conditional
-        condition: "rubric_scores.action == PIVOT or score tracking detects STAGNATION, repeated DRIFT, or repeated REGRESSION"
+        condition: "the shared task guard reports genuine semantic stagnation or a material change needs a decision"
         description: "Signal that the review loop needs orchestrator-owned pivot/restart handling before another fix/review dispatch."
         object_fields:
           - name: trigger
@@ -1256,13 +1252,13 @@ handoffs:
           - name: affected_round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: "Positive integer; no ordinal ceiling"
           - name: recommended_recovery_focus
             type: string
             required: true
             description: "Lowest-scoring dimensions, stale-context concern, or blocker evidence the orchestrator should consider"
 
-    on_missing_field: "Use the orchestrator-owned pass_repair_guard: at most one transient/schema repair per pass. After exhaustion, record failed or timed_out with typed failure_kind/failure_evidence and aggregate the coverage gap. In direct fallback mode, complete the local review evidence before continuing. status, findings, evidence, and verdict are never optional — a review without them is not a review."
+    on_missing_field: "Use the same orchestrator-owned shared progress guard for transient/schema correction. When genuinely stalled, record failed or timed_out with typed failure_kind/failure_evidence and aggregate the coverage gap. In direct fallback mode, complete the local review evidence before continuing. status, findings, evidence, and verdict are never optional — a review without them is not a review."
 
   # ─────────────────────────────────────────────
   # Orchestrator → QAEvaluator (per QA round)
@@ -1391,7 +1387,7 @@ handoffs:
           - name: rounds
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: "Positive integer; no ordinal ceiling"
           - name: final_review_snapshot_id
             type: string
             required: true
@@ -1432,8 +1428,8 @@ handoffs:
       - name: round
         type: int
         required: true
-        description: "Current QA evaluation round number (1-10)"
-        validation: ">= 1 and <= 10"
+        description: "Current QA evaluation round number (positive integer)"
+        validation: "Positive integer; no ordinal ceiling"
 
       - name: previously_failed_acceptance_items
         type: object[]
@@ -1446,7 +1442,7 @@ handoffs:
           - name: failed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: "Positive integer; no ordinal ceiling"
           - name: evidence_gap
             type: string
             required: true
@@ -1455,7 +1451,7 @@ handoffs:
         type: string
         required: true
         description: "Evidence-backed QA finding filter for this round"
-        validation: "Must state that QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns are non-blocking; round 10 is terminal."
+        validation: "Must state that QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns are non-blocking; the shared guard governs continuation."
 
     return_fields:
       - name: status
@@ -1468,7 +1464,7 @@ handoffs:
         type: int
         required: true
         description: "Echo back the QA round number"
-        validation: ">= 1 and <= 10"
+        validation: "Positive integer; no ordinal ceiling"
 
       - name: acceptance_findings
         type: object[]
@@ -1652,7 +1648,7 @@ handoffs:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: "Positive integer; no ordinal ceiling"
           - name: weighted_score
             type: float
             required: true
@@ -1677,7 +1673,7 @@ handoffs:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: "Positive integer; no ordinal ceiling"
           - name: weighted_score
             type: float
             required: true
@@ -1703,7 +1699,7 @@ handoffs:
       - name: pivot_restart_signal
         type: object
         required: conditional
-        condition: "score_entry.drift_status == STAGNATION, repeated QA DRIFT/REGRESSION is detected, or any scoped domain_quality_scores action == pivot"
+        condition: "the shared task guard reports genuine semantic stagnation; score diagnostics alone are insufficient"
         description: "Signal that the QA loop needs orchestrator-owned pivot/restart handling before another QA/build dispatch."
         object_fields:
           - name: trigger
@@ -1724,7 +1720,7 @@ handoffs:
           - name: affected_round
             type: int
             required: true
-            validation: ">= 1 and <= 10; exactly equals current return round."
+            validation: "Positive integer; no ordinal ceiling"
           - name: recommended_recovery_focus
             type: string
             required: true
@@ -1735,7 +1731,7 @@ handoffs:
 # ─────────────────────────────────────────────
 # Validation behavior:
 # 1. Before delegated dispatch or direct-fallback review: verify all required context_fields are populated
-# 2. Build finding_filter_policy from round number and hard-cap rules; do not compute numeric confidence tiers
+# 2. Build finding_filter_policy from evidence and impact with stable standards at every positive ordinal; no confidence tiers or round cap
 # 3. After each return: enforce the Reviewer status/pass_completion_state/verdict/findings/coverage_entries/open_questions truth table; verify batch_id, review_pass_id, review_attempt_id, review_snapshot_id, summary, and evidence. Response-backed terminals have exactly one active response; the orchestrator owns timed_out/failed/invalidated typed terminal failures.
 # 4. Move speculative or low-evidence items to observations; findings require file/line evidence, concrete impact, and a smallest useful fix
 # 5. Do not suppress previously_fixed findings blindly: verify closure; report incomplete or regressed fixes with their original aggregate_finding_id
@@ -1745,10 +1741,10 @@ handoffs:
 # 9. If pivot_restart_signal is present, stop the current loop path until the orchestrator records pivot_restart_decision; do not silently continue.
 # 10. If round >= 3, require additional_round_reason backed by new evidence; score below threshold alone is invalid
 # 11. Wait until every expected review pass reaches terminal accounting: completed, needs_context, and blocked are response-backed; timed_out, failed, and invalidated may have zero response only with typed failure evidence. Current incomplete or invalidated coverage maps to HAS_REMAINING_ITEMS, never CLEAN or ISSUES_FIXED.
-# 12. If round == 10, exit after its complete batch with CLEAN, ISSUES_FIXED, or HAS_REMAINING_ITEMS; never start round 11
+# 12. Apply the same shared semantic progress guard; productive work may continue beyond round 10. Keep complete-coverage exit gates.
 # 12. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
 # 13. If qa_evaluation_mode=required, run orchestrator_to_qa_evaluator after build/test and code-review evidence; include debate_record when Done Contract exists; never treat QA evaluation as a replacement for Reviewer/code-reviewer.
-# 14. If QA round == 10, return accepted, accepted_with_concerns, rejected, or blocked with remaining failed acceptance items; never start QA round 11.
+# 14. QA acceptance/verdict standards remain unchanged at every positive ordinal; use the shared task guard for repeated correction.
 # 15. If domain_context/rubric_refs or subjective/product/UX/docs/DX/UI/domain acceptance scope exists: verify selected_domain_rubrics and domain_quality_scores are present and evidence-backed.
 # 16. If no scoped domain rubric applies: verify QAEvaluator did not invent rubrics or penalize domain_quality for missing unscoped evidence.
 # ─────────────────────────────────────────────

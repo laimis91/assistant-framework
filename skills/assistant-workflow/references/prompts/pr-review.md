@@ -7,8 +7,7 @@ Load this during Stage 2 of the review cycle. This is the code quality gate — 
 Run this after all build steps complete and tests pass. Audit mode performs one
 pass. Review-fix mode performs the initial review, fixes and validation, then
 one fresh re-review by default. Round 3+ requires an evidence-backed
-`additional_round_reason`; the loop supports up to 10 rounds and 10 remains the
-terminal safety cap. You do not need
+`additional_round_reason`; the loop uses the shared task guard with no cumulative round ceiling. You do not need
 user input between valid review rounds.
 
 For small tasks, do a quick pass through the "must-check" items only. For medium+ tasks, work through the full checklist.
@@ -18,7 +17,7 @@ For small tasks, do a quick pass through the "must-check" items only. For medium
 When dispatching the Reviewer subagent for round N > 1, prepend this context to the prompt:
 
 ```
-## Previously Fixed (Round N of 10)
+## Previously Fixed (Round N)
 
 This is review round [N]. The following [count] items were already found
 and fixed in prior rounds — do NOT re-report them:
@@ -26,10 +25,8 @@ and fixed in prior rounds — do NOT re-report them:
 [list each previously fixed item: "- [file:line] — [issue] (round N)"]
 
 Focus ONLY on NEW high-confidence findings not in the above list.
-Raise your confidence threshold each round:
-- Round 1-3: report findings at 80%+ confidence
-- Round 4-7: report findings at 85%+ confidence
-- Round 8-10: report findings at 90%+ confidence
+Use the same evidence-calibrated confidence and severity standards at every
+positive round ordinal; scores and ordinal alone cannot suppress findings.
 
 If you find no new issues above your confidence threshold, say "No new findings."
 ```
@@ -157,7 +154,7 @@ Where `<framework-tools>` is the installed tools directory (typically `~/{agent_
 - **Should-fix items:** fix immediately alongside must-fix items (don't defer — our experience shows these are real issues worth fixing)
 - **Nits:** do NOT fix — note them but exit the loop. Nits don't justify another round.
 - **No findings:** exit loop, write Final Result: CLEAN
-- **Max rounds reached with remaining must-fix:** exit loop, write Final Result: HAS_REMAINING_ITEMS, escalate to user
+- **Shared semantic stagnation or actual authority/resource blocker with unresolved findings:** retain evidence, write Final Result: HAS_REMAINING_ITEMS, and report the concrete unblock condition
 - If significant drift from plan: stop and flag for re-approval before continuing
 
 ## Review discipline — receiving feedback

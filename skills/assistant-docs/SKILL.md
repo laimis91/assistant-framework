@@ -5,6 +5,11 @@ description: "Create or update README, API, architecture, changelog, or migratio
 
 # Write Source-Backed Documentation
 
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
 Create or update the requested document from source truth. Read the target, project instructions, and relevant code, tests, configuration, git history, or user-provided material first. Keep the requested scope, audience, destination, and existing style. Ask only for material choices that context cannot resolve.
 
 Load only the mode reference needed:

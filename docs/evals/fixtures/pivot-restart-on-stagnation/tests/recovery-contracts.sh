@@ -4,6 +4,9 @@ set -euo pipefail
 fixture_root="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$fixture_root"
 
+grep -Fqx 'guard_id=fixture-shared-outcome' RECOVERY.md
+grep -Fqx 'completed_unproductive_cycles=3' RECOVERY.md
+
 grep -Fqx 'terminal_completed=false' RECOVERY.md
 grep -Fqx 'next_action=assistant-debugging' RECOVERY.md
 grep -Fqx 'recovery_pointer=fixture-owned-recovery-artifacts' RECOVERY.md

@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "14.0"
+schema_version: "15.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -48,7 +48,7 @@ worker_status_protocol:
 
 # Writer stages are semantic selectors on the existing CodeWriter handoff.
 worker_stage_protocol:
-  description: "One selected writer owns tests and implementation; BuilderTester executes already authored checks. Stage completion never closes Build. Canonical v14 stored implementation_steps are stage-neutral. The caller overlay materializes worker_stage/verification_stage and matching inline aliases; changing stage never changes definition or packet_definition. Native actor and authored/reused test proofs are caller-resolved, not a second plan or execution attestation."
+  description: "One selected writer owns tests and implementation; BuilderTester executes already authored checks. Stage completion never closes Build. Canonical v15 stored implementation_steps are stage-neutral. The caller overlay materializes worker_stage/verification_stage and matching inline aliases; changing stage never changes definition or packet_definition. Native actor and authored/reused test proofs are caller-resolved, not a second plan or execution attestation."
   stages:
     - value: test_authoring
       mutation_scope: tests_only
@@ -1249,9 +1249,13 @@ handoffs:
                 condition: "tdd_applies is true and the actual canonical cycle_log has started"
                 validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
               - {name: history, type: "object[]", required: true}
+              - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
+              - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
+              - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
               - name: recovery
                 type: object
-                required: true
+                required: false
+                description: "Historical v14 observations only; preserve supplied facts without using them as continuation authority."
                 object_fields:
                   - {name: attempt_count, type: int, required: true}
                   - {name: no_progress_count, type: int, required: true}
@@ -1888,9 +1892,13 @@ handoffs:
                 condition: "tdd_applies is true and the actual canonical cycle_log has started"
                 validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
               - {name: history, type: "object[]", required: true}
+              - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
+              - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
+              - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
               - name: recovery
                 type: object
-                required: true
+                required: false
+                description: "Historical v14 observations only; preserve supplied facts without using them as continuation authority."
                 object_fields:
                   - {name: attempt_count, type: int, required: true}
                   - {name: no_progress_count, type: int, required: true}
@@ -2347,9 +2355,13 @@ handoffs:
                 condition: "tdd_applies is true and the actual canonical cycle_log has started"
                 validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
               - {name: history, type: "object[]", required: true}
+              - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
+              - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
+              - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
               - name: recovery
                 type: object
-                required: true
+                required: false
+                description: "Historical v14 observations only; preserve supplied facts without using them as continuation authority."
                 object_fields:
                   - {name: attempt_count, type: int, required: true}
                   - {name: no_progress_count, type: int, required: true}
@@ -2982,13 +2994,22 @@ handoffs:
                 condition: "tdd_applies is true and the actual canonical cycle_log has started"
                 validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
               - {name: history, type: "object[]", required: true}
+              - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
+              - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
+              - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
               - name: recovery
                 type: object
-                required: true
+                required: false
+                description: "Historical v14 observations only; preserve supplied facts without using them as continuation authority."
                 object_fields:
                   - {name: attempt_count, type: int, required: true}
                   - {name: no_progress_count, type: int, required: true}
 
+          - name: progress_state
+            type: object
+            required: conditional
+            condition: "context.progress is carried for repeated or persisted semantic work"
+            description: "Read-only materialized ProgressState v1; independently retained context owns policy history, counts/frontier, closed actions and pending/consumed action admission. Never store this mutable copy in the approved Plan definition."
           - name: verification_decision
             type: object
             required: true
@@ -3120,38 +3141,16 @@ handoffs:
         validation: "Equals current_task_packet.verification_decision.tdd_choice.mode when current_task_packet is present; otherwise equals verification_decision.tdd_choice.mode. Never infer local RED from task-wide mode."
       - name: build_repair_state
         type: object
+        required: false
+        description: "Legacy repair observations only; retain original counts and evidence, never use as continuation authority. The canonical progress_state owns the shared guard."
+
+      - name: progress_state
+        type: object
         required: conditional
-        condition: "this dispatch is an ordinary same-scope Build repair attempt"
-        description: "Bounded repair state that the worker must preserve; redispatch does not reset its counters"
-        object_fields:
-          - name: attempt
-            type: int
-            required: true
-          - name: max_attempts
-            type: int
-            required: true
-            validation: "Exactly 3"
-          - name: no_progress_count
-            type: int
-            required: true
-          - name: no_progress_limit
-            type: int
-            required: true
-            validation: "Exactly 2"
-          - name: failure_signatures
-            type: string[]
-            required: true
-            min_items: 1
-          - name: progress_evidence
-            type: string[]
-            required: true
-            min_items: 1
-          - name: plan_version
-            type: string
-            required: true
-          - name: cumulative_attempt_count
-            type: int
-            required: true
+        condition: "repeated or persisted semantic work has a progress consumer"
+        description: "Canonical ProgressState v1 in the existing task/journal context; see tools/progress/operating-guidance.md and ProgressState.parse in stagnation.py."
+        validation: "Independent outcome/guard, policy source, assessed history, evidence and current action admission are retained; derive counts, reject replay, preserve completed-cycle-before-blocker ordering; optional fixed coordinator members share one admission and complete terminal-cycle barrier under the common helper; no phase-local allowance."
+
     return_fields:
       - name: worker_stage
         type: enum
@@ -3984,13 +3983,22 @@ handoffs:
                 condition: "tdd_applies is true and the actual canonical cycle_log has started"
                 validation: "Actual retained assistant-tdd cycle identity; omit unstarted work. Starting RED updates execution without changing approved definition."
               - {name: history, type: "object[]", required: true}
+              - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
+              - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
+              - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
               - name: recovery
                 type: object
-                required: true
+                required: false
+                description: "Historical v14 observations only; preserve supplied facts without using them as continuation authority."
                 object_fields:
                   - {name: attempt_count, type: int, required: true}
                   - {name: no_progress_count, type: int, required: true}
 
+          - name: progress_state
+            type: object
+            required: conditional
+            condition: "context.progress is carried for repeated or persisted semantic work"
+            description: "Read-only materialized ProgressState v1; independently retained context owns policy history, counts/frontier, closed actions and pending/consumed action admission. Never store this mutable copy in the approved Plan definition."
           - name: verification_decision
             type: object
             required: true
@@ -4011,38 +4019,16 @@ handoffs:
 
       - name: build_repair_state
         type: object
+        required: false
+        description: "Legacy repair observations only; retain original counts and evidence, never use as continuation authority. The canonical progress_state owns the shared guard."
+
+      - name: progress_state
+        type: object
         required: conditional
-        condition: "this dispatch is an ordinary same-scope Build repair attempt"
-        description: "Bounded repair state that BuilderTester must preserve; redispatch does not reset its counters"
-        object_fields:
-          - name: attempt
-            type: int
-            required: true
-          - name: max_attempts
-            type: int
-            required: true
-            validation: "Exactly 3"
-          - name: no_progress_count
-            type: int
-            required: true
-          - name: no_progress_limit
-            type: int
-            required: true
-            validation: "Exactly 2"
-          - name: failure_signatures
-            type: string[]
-            required: true
-            min_items: 1
-          - name: progress_evidence
-            type: string[]
-            required: true
-            min_items: 1
-          - name: plan_version
-            type: string
-            required: true
-          - name: cumulative_attempt_count
-            type: int
-            required: true
+        condition: "repeated or persisted semantic work has a progress consumer"
+        description: "Canonical ProgressState v1 in the existing task/journal context; see tools/progress/operating-guidance.md and ProgressState.parse in stagnation.py."
+        validation: "Independent outcome/guard, policy source, assessed history, evidence and current action admission are retained; derive counts, reject replay, preserve completed-cycle-before-blocker ordering; optional fixed coordinator members share one admission and complete terminal-cycle barrier under the common helper; no phase-local allowance."
+
     return_fields:
       - name: status
         type: enum
@@ -4252,8 +4238,8 @@ delegated_skill_contract_owners:
 #
 # 1. Before dispatching: verify all required context_fields are populated
 # 2. After return: verify all required return_fields are present, including the worker status packet
-# 3. If on_missing_field action is "re-dispatch": retry once with explicit request
-# 4. If second dispatch also misses required fields: log the gap and route to direct fallback, BLOCKED, or a degraded result with explicit evidence; do not fabricate required fields
+# 3. If on_missing_field action is "re-dispatch": use the same shared task guard with the exact missing-field request
+# 4. Continue authorized missing-field correction under the shared task guard; on an actual blocker or stall, log the gap and use policy-allowed direct fallback, BLOCKED, or an honest degraded result with explicit gaps/evidence; never fabricate required fields
 # 5. When CodeWriter returns blocker_type, the orchestrator records the blocker evidence and routes to debugging, explorer, architect, candidate_search, replan, restart, user clarification, environment fix, or permission request. Do not ask CodeWriter to widen scope or patch blindly through a legacy blocker.
 # 6. Never silently proceed with missing required fields — always log what was missing and how the missing evidence was resolved, deferred, or blocked
 # ─────────────────────────────────────────────

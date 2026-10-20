@@ -5,6 +5,11 @@ description: "Reason through architecture decisions and complex trade-offs. Use 
 
 # Think Through the Decision
 
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
 Choose the smallest reasoning method that helps answer the question. Use local evidence and user constraints, distinguish facts from assumptions, and make uncertainty visible. Do not turn clear execution into deliberation or expose proprietary source, secrets, or sensitive logs to external tools.
 
 | Method | Reference | Use when |

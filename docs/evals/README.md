@@ -50,7 +50,7 @@ under common operating conditions:
 - separate Code Reviewer and QA Evaluator evidence
 - QA loop behavior with conditional domain rubrics
 - pivot/restart decisions for stagnation and Code Writer blockers
-- terminal max 10 review/QA round behavior
+- shared review/QA guard with productive ordinals beyond ten
 
 ## Observed execution-pattern evidence
 
@@ -1412,3 +1412,15 @@ model quality or total-cost benefit. Missing native capability stays unavailable
 Default installation/promotion and a comparative pilot require separate approval
 of exact runtime/model, call/elapsed/token limits, stop conditions and benefit
 threshold. No native/model calls or real-user installation are part of these checks.
+
+
+The shared progress guard is exercised by the existing packet admission control
+module against fixed independent synthetic observations, including productive
+fourth/later actions, three unproductive cycles, oscillation with fresh rechecks,
+material unblock, replay, compaction and later blockers. These controls establish
+bounded state/admission correctness. They do not measure native interruptions,
+model quality, time or cost. The framework instruction cases retain matched
+productive-later-round and genuine-stall scenarios; an optional authorized
+matched native evaluation must freeze outcome oracles, report correctness,
+avoidable user interruptions and limits before claiming reduced friction.
+No such native pilot is implied by source or installer checks.

@@ -1,4 +1,4 @@
-# Applicability: retained v3 structured consumers, persisted packets, handoffs,
+# Applicability: current v4 structured consumers, persisted packets, handoffs,
 # and the existing five-lens audit/eval fixture. Numeric tier/source-count rules
 # below are compatibility-fixture rules, not ordinary claim-confidence policy.
 # Human-only source research uses claim-specific evidence and concise output.
@@ -6,9 +6,9 @@
 # synthesis, separate peer review, material follow-ups, and honest limits.
 
 # Research Input Contract
-# Resolve these fields for a structured v3 consumer or audit/eval fixture.
+# Resolve these fields for a structured v4 consumer or audit/eval fixture.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: input
 skill: assistant-research
 

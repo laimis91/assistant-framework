@@ -144,7 +144,7 @@ state tracking and atomically set
 `progressive_sequence_readiness_state=active` plus
 `progressive_artifact_retention_state=retained`. Its stable `readiness_assessment_id` and
 `progressive_decision_map_ref` identify one cumulative sequence across
-continuation or compaction. It must set immutable finite `max_iterations`,
+continuation or compaction. It must set optional source-backed `max_iterations`,
 `cumulative_activation_count`, ordered unique append-only
 `activated_decision_item_refs` including the first activation, and ordered
 unique `resolved_decision_item_refs` as a subset mapped exactly once to
@@ -153,9 +153,9 @@ cap, stagnation, or failure stop conditions, detect an unchanged
 frontier/no-progress result, and specify
 `retry_or_empty_result_handling`, `tool_error_handling`, and
 `low_confidence_escalation`. Another activation atomically appends one ref and
-increments the cumulative count only while it remains below the cap. At equality,
-inconsistency, an exhausted limit, or failed evidence route, fail closed to
-`blocked/escalation`; do not activate another item or reset the cap. While
+increments the cumulative count while the shared guard and any explicit source-backed budget permit it. On
+inconsistent evidence or an exhausted explicit bound, retain the actual blocker;
+do not reset the guard or invent another allowance. While
 active, retain the same readiness record through pause, blocked state,
 compaction, continuation, route-clear preparation, third+ activation proposals,
 and durable route-clear consumption. Only then set
@@ -195,4 +195,4 @@ After the predecessor resolves enough context to state the unknown precisely,
 return to bounded Discover and continue through the existing clarification and
 planning flow.
 
-Canonical v14 execution uses implementation_steps/current_task_packet only after all existing readiness and retained route-clear consumption gates pass. Unresolved progressive discovery cannot manufacture executable packets or admission execution outputs.
+Canonical v15 execution uses implementation_steps/current_task_packet only after all existing readiness and retained route-clear consumption gates pass. Unresolved progressive discovery cannot manufacture executable packets or admission execution outputs.

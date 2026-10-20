@@ -100,18 +100,13 @@ Example: correctness=4, quality=3.5, architecture=4, security=5, coverage=3
 
 A score below threshold alone does not authorize round 3 or later. Rubric scores calibrate focus and residual risk; they do not manufacture findings, prove correctness, or justify repeated review without new evidence.
 
-### Threshold adjustment by round
+### Stable standards across rounds
 
-As the loop progresses, the bar rises — like a tightening ratchet:
-
-| Round | Pass Threshold | Refine Range | Pivot Threshold |
-|---|---|---|---|
-| 1 | 4.0+ | 2.5–3.9 | < 2.5 |
-| 2 | 4.0+ | 2.75–3.9 | < 2.75 |
-| 3 | 4.0+ | 3.0–3.9 | < 3.0 |
-| 4-10 | 4.0+ | 3.25–3.9 | < 3.25 |
-
-Rationale: If the code hasn't reached 3.25 by round 4, the approach likely needs rethinking, not more polish. Rounds 4-10 keep that pivot threshold stable while confidence requirements continue to rise.
+Use the same severity, confidence and score anchors at every positive round
+ordinal. Scores describe residual risk; PASS/REFINE/PIVOT are diagnostic labels,
+not continuation authority. A low score or changing finding count cannot force
+another pass, stop productive work, or manufacture findings. Apply the common
+task guard using durable acceptance gains and useful new evidence.
 
 ## Reviewer Scoring Instructions
 

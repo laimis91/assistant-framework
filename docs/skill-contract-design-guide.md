@@ -153,8 +153,11 @@ For actual long-running controllers, reuse the owning workflow's Done Contract,
 Harness Recipe, typed references, trace/replay, and pivot/restart formats when
 needed. Load `references/harness-patterns.md` in the creator for those patterns.
 Do not add this machinery to single-pass work. Review/QA/fix loops remain bounded
-by their existing limits and at most 10 rounds; stagnation, repeated regression,
-and unexpected blockers require an explicit pivot or restart decision.
+by the common task-level guard: its source-bound effective window (default three consecutive unproductive semantic cycles),
+with no cumulative attempt or round ceiling. Preserve explicit user/resource
+bounds, material-change approval and actual blocker reasons. Material scope,
+access, cost, risk or acceptance changes require an explicit pivot or restart decision
+under existing authority.
 
 ## Validation and evidence
 

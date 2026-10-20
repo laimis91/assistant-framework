@@ -378,7 +378,7 @@ if ! ruby -ryaml -e '
     reviewer_challenge = reviewer_checks.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
     output_pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack_review" }
     output_challenge = output_pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
-    valid = input["schema_version"] == "8.0" && handoffs["schema_version"] == "8.0" && output["schema_version"] == "8.0" && index["schema_version"] == "8.0" &&
+    valid = input["schema_version"] == "9.0" && handoffs["schema_version"] == "9.0" && output["schema_version"] == "9.0" && index["schema_version"] == "9.0" &&
       canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
       canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
       canonical_mode["on_missing"] == "infer" &&
@@ -456,7 +456,7 @@ elif ! grep -Fq $'FAIL\tassistant-review\tstandalone-high-risk-record-without-ch
     architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response did not fail structured assertions")
 fi
 for file_and_term in \
-    "$review_legacy::Current v8 field definitions" \
+    "$review_legacy::Current v9 field definitions" \
     "$review_phase_gates::architecture_design_mode" \
     "$review_handoffs::architecture_decision_pack.mode must equal canonical architecture_design_mode"; do
     file="${file_and_term%%::*}"
@@ -691,7 +691,7 @@ if ! ruby -ryaml -e '
     pressure = fields.fetch("design_pressure_checks")
     required_concerns = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
     ref = fields.fetch("ref")
-    valid = contracts.all? { |contract| contract.fetch("schema_version") == "8.0" } &&
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == "9.0" } &&
       boundaries["required"] == true && boundaries["min_items"] == 1 &&
       pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
       ref["required"] == true && ref.fetch("validation").include?("selected design") && ref.fetch("validation").include?("rationale") && ref.fetch("validation").include?("viable alternatives") &&
@@ -700,9 +700,9 @@ if ! ruby -ryaml -e '
 ' "$review_input" "$review_output" "$review_phase_gates" "$review_handoffs" "$review_index"; then
     pack_projection_cardinality_failures+=("v7 input does not preserve recoverable selected design, rationale, viable alternative dispositions, non-empty boundaries, and exact five-concern pressure coverage")
 fi
-if ! p0p4_contains_text "$review_legacy" 'Current v8 field definitions' \
+if ! p0p4_contains_text "$review_legacy" 'Current v9 field definitions' \
     || ! p0p4_contains_text "$review_legacy" 'recoverable selected design, rationale, viable alternatives/dispositions'; then
-    pack_projection_cardinality_failures+=("8.0 migration note does not describe recoverable selected design evidence")
+    pack_projection_cardinality_failures+=("9.0 migration note does not describe recoverable selected design evidence")
 fi
 if ! jq -e '
     .cases[] | select(.id == "architecture-pack-empty-review-evidence-blocks") |
@@ -851,7 +851,7 @@ if ruby -ryaml -e '
     expected["min_items"] == 2 && expected["max_items"] == 6 &&
     perspective.fetch("enum_values").include?("closure_verification") &&
     topology.fetch("validation").include?("trivial/small=2") && topology.fetch("validation").include?("medium=3") && topology.fetch("validation").include?("large=4") &&
-    topology.fetch("validation").include?("maximum of 6") && topology.fetch("validation").include?("one retry") &&
+    topology.fetch("validation").include?("maximum of 6") && topology.fetch("validation").include?("shared task guard") &&
     previous["required"] == "conditional" && previous["condition"] == "review_perspective == closure_verification" &&
     returns.fetch("verdict").fetch("description").include?("pass-level") &&
     final_fields.key?("batch_summaries") && final_fields.key?("aggregation_ledger") && final_fields.key?("aggregated_findings") &&
@@ -997,7 +997,7 @@ if ruby -ryaml -e '
     obligation.fetch("source_feature_preparation_evidence_ref").fetch("condition") == "feature_preparation_scope == existing_system" && qa_obligation.fetch("source_feature_preparation_evidence_ref").fetch("condition") == "feature_preparation_scope == existing_system" &&
     obligation.fetch("source_preparation_basis").fetch("condition") == "feature_preparation_scope == not_applicable" && qa_obligation.fetch("source_preparation_basis").fetch("condition") == "feature_preparation_scope == not_applicable" &&
     gate.fetch("E7").fetch("check").include?("feature_preparation_scope") &&
-    attempt.fetch("review_pass_id")["required"] == true && attempt.fetch("active_terminal_attempt_id")["required"] == "conditional" && attempt.fetch("attempts").fetch("object_fields").any? { |field| field["name"] == "attempt_count" && field["validation"].include?("<= 2") } &&
+    attempt.fetch("review_pass_id")["required"] == true && attempt.fetch("active_terminal_attempt_id")["required"] == "conditional" && attempt.fetch("attempts").fetch("object_fields").any? { |field| field["name"] == "attempt_count" && field["validation"].include?("no local retry ceiling") } &&
     invariant_names.include?("INV_BATCH") && rubric.fetch("condition") == "scope_size in [medium, large]" &&
     !exact_closure && audit.key?("coverage_complete") && audit.key?("batch_summaries") && audit.key?("coverage_ledger_ref")
   exit valid ? 0 : 1
@@ -1037,9 +1037,9 @@ if ruby -ryaml -rjson -e '
     when "planned", "dispatched"
       records.empty? || records.all? { |record| record["record_state"] == "pending" && record["attempt_count"] == 0 }
     when "collecting"
-      records.length < expected_ids.length && records.all? { |record| expected_ids.include?(record["review_pass_id"]) && record.fetch("attempt_count") <= 2 }
+      records.length < expected_ids.length && records.all? { |record| expected_ids.include?(record["review_pass_id"]) && record.fetch("attempt_count").is_a?(Integer) && record.fetch("attempt_count") >= 0 }
     else
-      records.length == expected_ids.length && records.map { |record| record["review_pass_id"] }.uniq.length == expected_ids.length && records.all? { |record| record["record_state"] == "terminal" && terminal.include?(record["terminal_state"]) && (1..2).cover?(record["attempt_count"]) }
+      records.length == expected_ids.length && records.map { |record| record["review_pass_id"] }.uniq.length == expected_ids.length && records.all? { |record| record["record_state"] == "terminal" && terminal.include?(record["terminal_state"]) && record["attempt_count"].is_a?(Integer) && record["attempt_count"].positive? }
     end
   }
   expected_ids = %w[p-contract p-runtime]
@@ -1204,7 +1204,7 @@ else
 fi
 
 test_start "assistant-review 8.0 migration wording preserves source and target direction"
-if grep -Fq 'Rebuild persisted 6.0 or incompatible 7.0/7.1/7.2 under 8.0 from a fresh snapshot' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md" \
+if grep -Fq 'Rebuild persisted 6.0 or incompatible 7.0/7.1/7.2/8.0 under 9.0 from a fresh snapshot' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md" \
   && ! grep -Fq 'Rebuild 8.0 from' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"; then
     pass
 else
@@ -1333,8 +1333,8 @@ if ruby -ryaml -e '
     migration_contract.fetch("description").include?(current_schema_version) && migration_contract.fetch("validation").include?("freshly rehashed #{current_schema_version} snapshot") && migration_contract.fetch("object_fields").find { |field| field["name"] == "rebuilt_snapshot_identity" }.fetch("description").include?(current_schema_version) &&
     migration_contract.fetch("validation").include?("UTF-8 NFC") && migration_contract.fetch("validation").include?("SHA-256") && migration_contract.fetch("validation").downcase.include?("invalidate") &&
     migration_contract.fetch("validation").downcase.include?("non-colliding records use") && migration_contract.fetch("validation").include?("every colliding record appends") &&
-    v7_invalidation.fetch("condition").include?("7.0") && v7_invalidation.fetch("validation").include?("do not reinterpret") && v7_invalidation.fetch("validation").include?("fresh 8.0 snapshot") &&
-    v7_2_invalidation.fetch("condition").include?(immediate_prior_schema_version) && v7_2_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == [immediate_prior_schema_version] && v7_2_invalidation.fetch("validation").include?("Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs") && v7_2_invalidation.fetch("validation").include?("preserve raw history and complete finding identity tuples unchanged") && v7_2_invalidation.fetch("validation").include?("fresh 8.0 snapshot") &&
+    v7_invalidation.fetch("condition").include?("7.0") && v7_invalidation.fetch("validation").include?("do not reinterpret") && v7_invalidation.fetch("validation").include?("fresh 9.0 snapshot") &&
+    v7_2_invalidation.fetch("condition").include?(immediate_prior_schema_version) && v7_2_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == [immediate_prior_schema_version] && v7_2_invalidation.fetch("validation").include?("Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs") && v7_2_invalidation.fetch("validation").include?("preserve raw history and complete finding identity tuples unchanged") && v7_2_invalidation.fetch("validation").include?("fresh 9.0 snapshot") &&
     immediate_prior_invalidation.fetch("condition").include?(immediate_prior_schema_version) && immediate_prior_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == [immediate_prior_schema_version] && immediate_prior_invalidation.fetch("validation").include?("Invalidate active 7.2") && immediate_prior_invalidation.fetch("validation").include?("without reassigning IDs") &&
     immediate_prior_packet.fetch("previously_fixed") == immediate_prior_history && immediate_prior_history.all? { |entry| entry.fetch("aggregate_finding_id").start_with?("aggregate-") && entry.fetch("source_finding_ids").length == 1 && entry.fetch("source_provenance").length == 1 } &&
     %w[canonical_result_ref delegation_path_ref final_snapshot_identity_ref architecture_decision_pack_review_ref qa_evaluation_result_ref final_batch_plan_ref coverage_ledger_ref].all? { |ref| immediate_prior_packet.key?(ref) } && review_loop.include?("previously_fixed = validated_entry.previously_fixed || []") && review_loop.include?("invalidating current result/delegation/snapshot/Pack/QA/plan/coverage refs") && review_loop.include?("retain every aggregate_finding_id, source_finding_ids, and source_provenance entry") &&
@@ -1362,18 +1362,21 @@ if ruby -ryaml -e '
   ledger = final.fetch("aggregation_ledger").fetch("object_fields").to_h { |field| [field["name"], field] }
   summaries = final.fetch("batch_summaries").fetch("object_fields").to_h { |field| [field["name"], field] }
   terminal = ->(records, active) {
-    records.length.between?(1, 2) && records.map { |r| r["attempt_count"] } == (1..records.length).to_a &&
+    !records.empty? && records.last["review_attempt_id"] == active && records.map { |r| r["attempt_count"] } == (1..records.length).to_a &&
       records.map { |r| r["review_attempt_id"] }.uniq.length == records.length &&
       records.count { |r| r["review_attempt_id"] == active && r["response_events"].count { |e| e["disposition"] == "active_terminal" } == 1 } == 1
   }
   good = [{"review_attempt_id"=>"A", "attempt_count"=>1, "response_events"=>[{"response_event_id"=>"e1", "disposition"=>"stale"}]}, {"review_attempt_id"=>"B", "attempt_count"=>2, "response_events"=>[{"response_event_id"=>"e2", "disposition"=>"active_terminal"}, {"response_event_id"=>"e3", "disposition"=>"duplicate"}]}]
   bad_three = good + [{"review_attempt_id"=>"C", "attempt_count"=>3, "response_events"=>[]}]
+  good_three = Marshal.load(Marshal.dump(bad_three))
+  good_three[1]["response_events"][0]["disposition"] = "stale"
+  good_three[2]["response_events"] = [{"response_event_id"=>"e4", "disposition"=>"active_terminal"}]
   bad_pending = [{"review_attempt_id"=>"A", "attempt_count"=>1, "response_events"=>[{"response_event_id"=>"e1", "disposition"=>"active_terminal"}]}, {"review_attempt_id"=>"B", "attempt_count"=>2, "response_events"=>[]}]
   tuple = ->(required, returned) { required.sort == returned.sort && returned.all? { |t| t.length == 5 } }
   required = [["p1", "s1", "contract", "contract_and_test_oracle", "api"]]
   valid = !returns.key?("terminal_pass_state") && returns.fetch("status").fetch("enum_values") == %w[DONE DONE_WITH_CONCERNS NEEDS_CONTEXT BLOCKED] &&
     attempt.key?("response_events") && attempt.fetch("response_events").fetch("type") == "object[]" && attempt["response_disposition"].nil? &&
-    terminal.call(good, "B") && !terminal.call(bad_three, "B") && !terminal.call(bad_pending, "B") &&
+    terminal.call(good, "B") && terminal.call(good_three, "C") && !terminal.call(bad_three, "B") && !terminal.call(bad_pending, "B") &&
     ledger.fetch("source_finding_ids").fetch("required") == "conditional" && ledger.key?("source_coverage_gap_ids") &&
     summaries.key?("started_batch_ordinal") && summaries.fetch("started_batch_ordinal").fetch("validation").include?("contiguous") &&
     !tuple.call(required, []) && !tuple.call(required, required + [["p1", "s1", "contract", "contract_and_test_oracle", "extra"]])
@@ -1390,7 +1393,7 @@ for file_and_term in \
     "$review_phase_gates::mode=audit exits repair/Build/source-mutation dispatch, retains the mismatch as a pre-batch aggregate finding" \
     "$review_loop::stay read-only" \
     "$review_phase_gates::continues the frozen read-only multi-pass batch" \
-    "$review_handoffs::at most one transient/schema repair" \
+    "$review_handoffs::shared progress guard for transient/schema correction" \
     "$review_handoffs::recompute the current scope-manifest/content identity at the response barrier and immediately before final exit" \
     "$review_handoffs::direct_fallback" \
     "$review_loop::trivial/small uses two purpose-specific isolated direct-fallback passes" \
@@ -1442,7 +1445,7 @@ if ruby -ryaml -e '
   response_terminal = ->(events) { events.count { |event| event["disposition"] == "active_terminal" } == 1 }
   synthetic_failure = ->(events, kind, evidence) { events.none? { |event| event["disposition"] == "active_terminal" } && %w[timeout transport schema_invalid source_mutation].include?(kind) && !evidence.empty? }
   truth = returns.fetch("status").fetch("validation")
-  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "8.0" } &&
+  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "9.0" } &&
     identity == final_identity && final_identity.find { |field| field["name"] == "basis" }.fetch("type") == "enum" &&
     final.fetch("final_review_snapshot_id").fetch("validation").downcase.include?("exactly equals current review_snapshot_id") &&
     manifest.fetch("scope_item_id").fetch("validation").downcase.include?("unique") && manifest.fetch("applicable_concerns").fetch("validation").downcase.include?("unique") &&
@@ -1489,7 +1492,7 @@ if ruby -ryaml -e '
     {"review_pass_id" => "pass-contract", "perspective" => "contract_and_test_oracle", "assigned_scope" => ["item-1"], "coverage_obligations" => ["contract"], "prior_finding_visibility" => "none"},
     {"review_pass_id" => "pass-runtime", "perspective" => "runtime_lifecycle_and_failure_paths", "assigned_scope" => ["item-1"], "coverage_obligations" => ["runtime"], "prior_finding_visibility" => "none"}
   ]
-  topology = {"discovery_pass_count" => 2, "canonical_discovery_perspectives" => {"trivial_small" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths], "medium" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers], "large" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse]}, "security_specialist_triggered" => false, "closure_verification_required" => false, "max_required_responses" => 2, "max_repair_attempts_per_pass" => 1}
+  topology = {"discovery_pass_count" => 2, "canonical_discovery_perspectives" => {"trivial_small" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths], "medium" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers], "large" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse]}, "security_specialist_triggered" => false, "closure_verification_required" => false, "max_required_responses" => 2}
   tuples = expected_passes.map { |pass| {"review_pass_id" => pass["review_pass_id"], "scope_item_id" => "item-1", "applicable_concern" => "contract", "review_perspective" => pass["perspective"], "coverage_obligation" => pass["coverage_obligations"].first} }
   coverage = ->(pass) { {"scope_item_id" => "item-1", "applicable_concern" => "contract", "review_perspective" => pass["perspective"], "coverage_obligation" => pass["coverage_obligations"].first, "status" => "inspected_no_risk", "evidence" => "inspected #{pass["review_pass_id"]}"} }
   reviewer_return = ->(pass) {
@@ -1647,7 +1650,7 @@ if ruby -ryaml -e '
     "coordinated_invalid_terminal" => ->(trial) { trial["review_batch"]["pass_attempt_ledger"][0]["attempts"][0]["terminal_state"] = "blocked"; trial["reviewer_returns"][0]["status"] = "BLOCKED"; trial["reviewer_returns"][0]["pass_completion_state"] = "blocked"; trial["reviewer_returns"][0]["verdict"] = "not_assessed"; trial["reviewer_returns"][0]["coverage_entries"] = []; trial["reviewer_returns"][0]["open_questions"] = ["blocked"] }
   }
   mutation_valid = mutations.all? { |_name, mutate| trial = duplicate.call(packet); mutate.call(trial); !packet_valid.call(trial) }
-  valid = input.fetch("schema_version") == "8.0" && handoffs.fetch("schema_version") == "8.0" && output.fetch("schema_version") == "8.0" && packet_valid.call(packet) && truth_valid && mutation_valid
+  valid = input.fetch("schema_version") == "9.0" && handoffs.fetch("schema_version") == "9.0" && output.fetch("schema_version") == "9.0" && packet_valid.call(packet) && truth_valid && mutation_valid
   exit valid ? 0 : 1
 ' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
     pass
@@ -1694,8 +1697,8 @@ if ruby -ryaml -e '
   selector = bundle.fetch("worker_return_schema_selector")
   required = fields.values.select { |field| field["required"] == true }.map { |field| field.fetch("name") }
   triggered_fields = fields.values.select { |field| field["required"] == "conditional" }.map { |field| field.fetch("name") }
-  conditional = {"closure_results" => "review_perspective == closure_verification", "agentic_loop_safety_checks" => "agentic_loop_safety_review_required is true", "behavioral_contract_checks" => "behavioral_contract_review_required is true", "semantic_contract_checks" => "semantic_contract_review_required is true", "architecture_decision_pack_checks" => "architecture_decision_pack_review_required is true", "principle_checks" => "quality_principles_required is true or scope_size in [medium, large]", "pivot_restart_signal" => "rubric_scores.action == PIVOT"}
-  prompt_terms = ["Before first response, resolve `worker_return_schema`: from the active assistant-review skill root, load named `return_fields` recursively with bounded keys from `contracts/handoffs.yaml`; verify it equals the schema identified by `return_schema_ref`, or return `NEEDS_CONTEXT` without a partial result.", "Before first response, return the canonical Reviewer schema:", "Always include: `status`, `round`, `batch_id`, `review_snapshot_id`, `snapshot_identity`, `review_pass_id`, `review_attempt_id`, `review_perspective`, `pass_completion_state`, `reviewed_scope`, `findings`, `coverage_entries`, `summary`, `evidence`, `reuse_search`, and `verdict`.", "When `review_perspective=closure_verification`, include `closure_results`.", "When selected, return `agentic_loop_safety_checks`, `behavioral_contract_checks`, `semantic_contract_checks`, and `architecture_decision_pack_checks`.", "When quality principles apply, return `principle_checks`.", "When pivot/stagnation/drift/regression is triggered, return `pivot_restart_signal`."]
+  conditional = {"closure_results" => "review_perspective == closure_verification", "agentic_loop_safety_checks" => "agentic_loop_safety_review_required is true", "behavioral_contract_checks" => "behavioral_contract_review_required is true", "semantic_contract_checks" => "semantic_contract_review_required is true", "architecture_decision_pack_checks" => "architecture_decision_pack_review_required is true", "principle_checks" => "quality_principles_required is true or scope_size in [medium, large]", "pivot_restart_signal" => "the shared task guard reports genuine semantic stagnation"}
+  prompt_terms = ["Before first response, resolve `worker_return_schema`: from the active assistant-review skill root, load named `return_fields` recursively with bounded keys from `contracts/handoffs.yaml`; verify it equals the schema identified by `return_schema_ref`, or return `NEEDS_CONTEXT` without a partial result.", "Before first response, return the canonical Reviewer schema:", "Always include: `status`, `round`, `batch_id`, `review_snapshot_id`, `snapshot_identity`, `review_pass_id`, `review_attempt_id`, `review_perspective`, `pass_completion_state`, `reviewed_scope`, `findings`, `coverage_entries`, `summary`, `evidence`, `reuse_search`, and `verdict`.", "When `review_perspective=closure_verification`, include `closure_results`.", "When selected, return `agentic_loop_safety_checks`, `behavioral_contract_checks`, `semantic_contract_checks`, and `architecture_decision_pack_checks`.", "When quality principles apply, return `principle_checks`.", "When the shared task guard reports semantic stagnation or a material change needs a decision, return `pivot_restart_signal`."]
   visible_fields = required + triggered_fields
   sample = nil
   sample = ->(field) {
@@ -1901,18 +1904,18 @@ if ruby -ryaml -rjson -e '
     actual = template.fetch("required_coverage_tuples").map { |tuple| [tuple["review_pass_id"], tuple["scope_item_id"], tuple["applicable_concern"], tuple["review_perspective"], tuple["coverage_obligation"]] }
     actual.uniq.length == actual.length && actual.sort == expected.sort
   end
-  valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "8.0" } &&
+  valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "9.0" } &&
     entry_names.include?("previously_fixed") && entry_names.include?("persisted_v6_packet_migration") && entry_names.include?("persisted_v7_0_packet_invalidation") && entry_names.include?("persisted_v7_1_packet_invalidation") && entry_names.include?(immediate_prior_name) &&
     previous.key?("aggregate_finding_id") && previous.fetch("source_finding_ids").fetch("condition").include?("producer schema 7.1") && previous.fetch("source_provenance").fetch("condition").include?("producer schema 7.1") && !previous.key?("finding_id") &&
     migration_identity == canonical_identity && invalidation_identity == canonical_identity && immediate_prior_invalidation_identity == canonical_identity &&
     v6_migration.fetch("validation").include?("legacy-v6:<fixed_in_round>:<first-24-hex>") &&
     v7_0_invalidation.fetch("validation").include?("Retain every raw 7.0 previously_fixed record") && v7_0_invalidation.fetch("validation").include?("legacy-v7-0:<fixed_in_round>:<first-24-hex>") && v7_0_invalidation.fetch("validation").include?("persisted-v7-0-migration") &&
     v7_2_invalidation.fetch("condition").include?("7.2") && v7_2_invalidation.fetch("object_fields").find { |field| field.fetch("name") == "source_schema_version" }.fetch("enum_values") == ["7.2"] &&
-    v7_2_invalidation.fetch("validation").include?("Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs") && v7_2_invalidation.fetch("validation").include?("preserve raw history and complete finding identity tuples unchanged without reassigning IDs") && v7_2_invalidation.fetch("validation").include?("fresh 8.0 snapshot") &&
+    v7_2_invalidation.fetch("validation").include?("Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs") && v7_2_invalidation.fetch("validation").include?("preserve raw history and complete finding identity tuples unchanged without reassigning IDs") && v7_2_invalidation.fetch("validation").include?("fresh 9.0 snapshot") &&
     f3.fetch("check").include?("source_finding_ids") && f3.fetch("check").include?("source_provenance") && e10.fetch("check").include?(immediate_prior) && e10.fetch("check").include?("7.1-or-later") &&
     handoff_previous.key?("aggregate_finding_id") && handoff_previous.fetch("aggregate_finding_id").fetch("validation").include?("v7.0") && handoff_previous.fetch("source_finding_ids").fetch("required") == true && handoff_previous.fetch("source_finding_ids").fetch("validation").include?("persisted-v7-0-migration") && handoff_previous.fetch("source_provenance").fetch("required") == true && handoff_previous.fetch("source_provenance").fetch("validation").include?("persisted-v7-0-migration") && !handoff_previous.key?("finding_id") &&
     policy_cases_valid && mutation_controls_rejected &&
-    score_progression.fetch("validation").include?("v8.0 score tracking uses aggregated_finding_count") && score_progression.fetch("validation").include?("Persisted 6.0/7.0/7.1/7.2 packets are invalidated and rebuilt before score tracking") &&
+    score_progression.fetch("validation").include?("v9.0 score tracking uses aggregated_finding_count") && score_progression.fetch("validation").include?("Persisted 6.0/7.0/7.1/7.2 packets are invalidated and rebuilt before score tracking") &&
     batch.fetch("scope_size").fetch("enum_values") == %w[trivial small medium large] &&
     coverage.fetch("coverage_disposition").fetch("enum_values") == %w[inspected_no_risk finding incomplete] &&
     coverage.fetch("finding_ids").fetch("condition") == "coverage_disposition == finding" && coverage.fetch("finding_ids").fetch("min_items") == 1 &&

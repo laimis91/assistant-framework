@@ -2146,8 +2146,8 @@ for term in \
     "prior activated items may be resolved, superseded, or excluded" \
     "cumulative activated refs remain append-only" \
     "superseded/excluded refs are not classified as resolved" \
-    "immutable" \
-    "equality or inconsistency" \
+    "source-backed" \
+    "explicit resource bound" \
     "blocked/escalation" \
     "INV_PROGRESSIVE_REPEAT_READINESS"; do
     if ! p0p4_contains_text "$phase_gates" "$term"; then
@@ -2164,7 +2164,7 @@ for term in \
     "readiness_assessment_id" \
     "cumulative_activation_count" \
     "append-only" \
-    "blocked/escalation"; do
+    "retain the actual blocker"; do
     if ! p0p4_contains_text "$progressive_ref" "$term"; then
         readiness_missing+=("progressive-discovery.md missing $term")
     fi

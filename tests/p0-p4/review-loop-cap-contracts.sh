@@ -26,6 +26,7 @@ active_review_cap_files=(
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md"
@@ -41,106 +42,75 @@ active_review_cap_files=(
 # Historical/generated presentation artifacts are intentionally excluded from
 # this runtime cap guard; S9 owns deeper docs/presentation refresh.
 
-test_start "active review-loop surfaces reject accidental 20-round limits"
-stale_cap_output="$(mktemp)"
-p0p4_register_cleanup "$stale_cap_output"
-if rg -n -e 'max 20' \
-    -e 'max-20' \
-    -e '<= ?20' \
-    -e 'round <= 20' \
-    -e 'Round: N of 20' \
-    -e 'Round [0-9]+ of 20' \
-    -e 'Round 20 is terminal' \
-    -e 'round 20 is terminal' \
-    -e 'round 21' \
-    -e 'N between 1 and 20' \
-    "${active_review_cap_files[@]}" >"$stale_cap_output"; then
-    fail "found accidental 20-round review-loop cap text in active surfaces; see $stale_cap_output"
+test_start "active review and QA do not impose cumulative round or per-pass repair ceilings"
+legacy_cap_output="$(mktemp)"
+p0p4_register_cleanup "$legacy_cap_output"
+if rg -n -i -e 'while round <= [0-9]+' \
+    -e 'round 10 (is|remains) terminal' \
+    -e 'rounds remain.*must continue to fix step' \
+    -e 'at most one transient/schema repair' \
+    -e 'max 10 rounds' \
+    -e 'max_repair_attempts_per_pass' \
+    -e 'hard max[- ]10 cap' \
+    -e 'second dispatch also misses required fields' \
+    -e 'readiness identity/map/immutable cap/cumulative history' \
+    -e 'loop type/trigger/verifier/stop/max iterations/budget' \
+    "${active_review_cap_files[@]}" >"$legacy_cap_output"; then
+    fail "active local correction ceiling remains; see $legacy_cap_output"
 else
     pass
 fi
 
-test_start "assistant-review contracts and loop use 10-round cap"
-missing_review_cap_terms=()
-for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Round 10 is terminal; never start 11." \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::while round <= 10:" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::validation: \">= 1 and <= 10\"" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::rounds (1-10)" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::capped at the 10-round review limit" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml::Current review round number (1-10)" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml::round 10 remains terminal" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml::The loop never starts round 11." \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::EXIT_MAX_ROUNDS = round 10" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::Round: N of 10" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md::| 4-10 | 4.0+ | 3.25" \
-    "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json::max 10 rounds" \
-    "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json::rounds 1-10"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
-        missing_review_cap_terms+=("${file#$FRAMEWORK_DIR/}: $term")
+test_start "shared policy retains semantic progress, evidence and authority boundaries"
+missing_shared_terms=()
+for term in \
+    'three consecutive completed semantic cycles' \
+    'Useful negative evidence counts' \
+    'before' \
+    'Failed gates preserve the updated progress' \
+    'caller commits the state before spawning' \
+    'Later stages' \
+    'incomplete' \
+    'subprocess deadlines'; do
+    # Case-insensitive prose check supplements executable transition controls.
+    if ! grep -Fiq -- "$term" "$FRAMEWORK_DIR/tools/progress/operating-guidance.md"; then
+        missing_shared_terms+=("$term")
     fi
 done
-if [[ "${#missing_review_cap_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review 10-round cap terms missing: ${missing_review_cap_terms[*]}"
-fi
+if [[ ${#missing_shared_terms[@]} -eq 0 ]]; then pass; else fail "shared policy missing: ${missing_shared_terms[*]}"; fi
 
-test_start "review cap counts every started batch, not individual perspective passes"
+test_start "current review keeps batch accounting, coverage and canonical role separation"
 if grep -Fq 'round counts started review batches, not individual perspective passes' "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md" \
-    && grep -Fq 'round 10 remains terminal after its started batch reaches a terminal outcome' "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"; then
+    && grep -Fq 'no batch may claim clean before all expected responses are terminal and coverage is complete' "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml" \
+    && grep -Fq 'assistant-review/contracts/output.yaml#final_summary' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" \
+    && grep -Fq 'contract_ref: assistant-review/contracts/handoffs.yaml' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
     pass
 else
-    fail "assistant-review 10-round cap does not count incomplete or invalidated started batches"
+    fail "shared guard lost independent review/coverage ownership"
 fi
 
-test_start "workflow routes the canonical assistant-review 10-round cap without duplicating schemas"
-missing_runtime_cap_terms=()
-for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::assistant-review/contracts/output.yaml#final_summary" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::contract_ref: assistant-review/contracts/handoffs.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::max 10 rounds" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Round: 1 of 10" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Round: 2 of 10" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md::up to 10 rounds" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md::Round N of 10" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-roles.md::Round 8-10: 90%+" \
-    "$FRAMEWORK_DIR/docs/harness-design-guide.md::while round <= 10:" \
-    "$FRAMEWORK_DIR/docs/harness-design-guide.md::| 10 | Terminal report"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! review_cap_runtime_term_present "$file" "$term"; then
-        missing_runtime_cap_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
-done
-if [[ "${#missing_runtime_cap_terms[@]}" -eq 0 ]]; then
+test_start "review and QA graders accept unbounded positive ordinals while retaining complete evidence"
+if grep -Fq 'rounds.positive?' "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh" \
+    && grep -Fq 'qa["rounds"].positive?' "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh" \
+    && grep -Fq 'batches.length == rounds' "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh" \
+    && grep -Fq 'progression.length == qa["rounds"]' "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"; then
     pass
 else
-    fail "workflow contract/prompt 10-round cap terms missing: ${missing_runtime_cap_terms[*]}"
+    fail "positive ordinals or complete batch/QA evidence constraints missing"
 fi
 
-test_start "code-reviewer and reviewer compatibility prompts preserve role split with 10-round terminal guidance"
-missing_reviewer_prompt_terms=()
+test_start "native reviewer and QA prompts keep stable standards at every ordinal"
+missing_role_terms=()
 for file in \
     "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml" \
     "$FRAMEWORK_DIR/agents/codex/reviewer.toml" \
     "$FRAMEWORK_DIR/agents/claude/code-reviewer.md" \
     "$FRAMEWORK_DIR/agents/claude/reviewer.md"; do
-    for term in \
-        "In rounds 8-10" \
-        "Round 10 is terminal" \
-        "round 11"; do
-        if ! grep -Fq "$term" "$file"; then
-            missing_reviewer_prompt_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
+    if ! grep -Fq 'same evidence/confidence standards' "$file"; then missing_role_terms+=("$file"); fi
 done
-if [[ "${#missing_reviewer_prompt_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "reviewer prompt 10-round compatibility terms missing: ${missing_reviewer_prompt_terms[*]}"
-fi
+for file in "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml" "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md"; do
+    if ! grep -Fq 'same standards' "$file"; then missing_role_terms+=("$file"); fi
+done
+if [[ ${#missing_role_terms[@]} -eq 0 ]]; then pass; else fail "unstable native role standards: ${missing_role_terms[*]}"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

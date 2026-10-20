@@ -15,24 +15,24 @@ material expansion returns to selection and approval, never a score target.
 Use this checklist when reviewing changes that add or modify autonomous loops: agent loops, review/fix loops, research/search loops, retry loops, tool-calling loops, multi-agent orchestration, background jobs, or any workflow that repeatedly calls models, tools, APIs, or subagents.
 
 1. **Bounded execution**
-   - Require an explicit max step/round count, timeout, or budget.
-   - The bound must be low enough to prevent runaway cost/time while still allowing expected completion.
+   - For framework correction/reasoning, use the one shared task guard in `tools/progress/operating-guidance.md`; no independent round/retry ceiling. For application/tool/API loops, retain applicable explicit user, product and operational bounds.
+   - Retain source-backed access/cost/time limits and accurate exit reasons.
 
 2. **Stop condition**
    - Require a concrete success/exit condition, not only "until done".
    - The loop should stop on clean success, max budget, unrecoverable blocker, or explicit escalation.
 
 3. **Retry and empty-result handling**
-   - Retries must be capped and scoped to transient failures.
-   - Empty search/retrieval/tool results must have a defined fallback: broaden query once, report no evidence, ask/escalate, or exit; never infinite retry.
+   - Transient tool/API retries retain their operational policy. Semantic corrections across workers and phases consume the same shared guard.
+   - Empty search/retrieval/tool results must have a defined fallback: use a meaningfully different supported query, report no evidence, ask/escalate, or exit; never infinite retry.
 
 4. **Tool-error handling**
    - Tool/API failures must be observed and routed to retry, fallback, blocker, or degraded result.
    - Silent failures must not produce confident final answers.
 
 5. **Progress/stagnation detection**
-   - Repeated iterations should show new evidence, fewer findings, better score, or another progress signal.
-   - If progress stalls, reset context/evaluator, pivot, or escalate instead of continuing.
+   - A completed semantic cycle needs durable acceptance gains or useful novel evidence that changes the next action; scores/finding counts alone are diagnostic.
+   - At the source-bound effective window of consecutive unproductive cycles (default three), retain identity, count, frontier and oscillation history; report a concrete unblock. Context/evaluator changes and generic continuation never reset the guard.
 
 6. **Cost/token guardrails**
    - Loops that call paid APIs, large models, web search, subagents, or large-context prompts need cost/time/token awareness.

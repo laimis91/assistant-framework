@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Read `tools/progress/operating-guidance.md` for every activity in this repository.
+
 ## Project Overview
 
 Assistant Framework v0.3.0 — a personal AI assistant framework providing composable skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.claude/`, `~/.codex/`, `~/.gemini/`).
@@ -23,6 +25,8 @@ dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:mi
 ```
 
 ## Architecture
+
+assistant-research is a Process skill; research contracts and evidence methods remain authoritative.
 
 ### Two-layer design
 
@@ -57,20 +61,20 @@ Each supported agent discovers installed skills natively from required names and
 
 When creating or modifying skills, you **must** follow the contract design guide at `docs/skill-contract-design-guide.md`. Read it before starting any skill work. Key rules:
 
-- **Every skill must have contracts.** At minimum: `contracts/input.yaml` and `contracts/output.yaml`. Process skills (workflow, review, tdd, security, assistant-research) also need `phase-gates.yaml` and `handoffs.yaml`. Analysis skills (thinking, ideate) also need `phase-gates.yaml`; assistant-research is a Process skill because it declares five-lens handoffs.
+- **Start with precise instructions.** Retain contracts only for actual tool/agent/persisted consumers or an explicit requested schema. Utility, Analysis and Process are not file quotas.
 - **Required fields must have `on_missing` actions** — never leave the agent guessing what to do when data is absent.
 - **Enum types must list all values** — open-ended enums defeat the purpose of typing.
 - **Validation rules are plain English** — no regex, no code, no framework syntax.
 - **Phase gates are binary assertions** — "X is true" or "X is false", nothing subjective.
 - **Handoff schemas must match** — producer's `return_fields` must satisfy consumer's `context_fields`.
 - **Corrective actions must be actionable** — "fix it" is not a corrective action; "re-dispatch CodeMapper requesting the missing field" is.
-- **Contracts only grow** — adding fields is safe, removing required fields is a breaking change.
+- **Consumed contracts need compatibility decisions** — removing required fields requires versioning and aligned consumers; preserve historical labels.
 
 Use the field schema, phase gate schema, and handoff schema formats defined in the guide. Refer to existing skills' `contracts/` directories for examples.
 
 ## Key conventions
 
 - **Skills are markdown, not code.** They are prompt engineering artifacts. Edit them as structured prose, not programs.
-- **Native skill discovery drives routing.** Adding a new skill requires only a well-described SKILL.md and its contracts; no runtime script changes are needed.
+- **Native skill discovery drives routing.** Adding a new skill requires only a well-described SKILL.md and any actual consumed contracts; no runtime script changes are needed.
 - **install.sh auto-discovers skills** — any subdirectory of `skills/` containing a SKILL.md is installable.
-- **Contracts** (`contracts/` dirs) define structured input/output schemas in YAML. All assistant skills have contracts; see the Mandatory section above.
+- **Contracts** (`contracts/` dirs) define structured input/output schemas in YAML. Instruction-only skills are valid; see the canonical guide.

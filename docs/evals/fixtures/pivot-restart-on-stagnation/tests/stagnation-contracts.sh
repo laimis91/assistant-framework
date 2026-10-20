@@ -4,6 +4,9 @@ set -euo pipefail
 fixture_root="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$fixture_root"
 
+grep -Fqx 'guard_id=fixture-shared-outcome' RECOVERY.md
+grep -Fqx 'completed_unproductive_cycles=3' RECOVERY.md
+
 if [[ "${1:-}" == "--after-recovery" ]]; then
     failure_receipt=".assistant-eval/stagnation-failure-receipt.json"
     recovery_artifact=".assistant-eval/stagnation-recovery.json"
