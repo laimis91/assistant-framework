@@ -11,7 +11,7 @@ if sys.version_info < (3, 9):
     raise SystemExit("Python 3.9+ is required for Workflow packet admission. Install a supported interpreter and rerun before continuing.")
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 import hashlib
 import json
@@ -934,6 +934,16 @@ def progress_admission(packet, context, state, plan):
     pid = packet["packet_id"]
     scope = action.member_scope
     retained = state.action_admission
+    if scope is None:
+        definition = digest(packet_definition(packet))
+        if retained is not None and retained.action.action_ref == action.action_ref:
+            require(retained.action.packet_definition_digest is not None, "progress_history_missing", pid,
+                    "Reconstruct the original admitted definition")
+            require(retained.action.packet_definition_digest == definition, "progress_mismatch", pid,
+                    "Current work differs from its admitted definition")
+        require(action.packet_definition_digest is None or action.packet_definition_digest == definition,
+                "progress_mismatch", pid, "Proposed action differs from approved definition")
+        action = replace(action, packet_definition_digest=definition)
     matching = retained is not None and retained.action == action
     if scope:
         source = scope.authority(carrier["resolved_sources"], state.guard, action.action_ref)
@@ -974,14 +984,16 @@ def progress_admission(packet, context, state, plan):
     return result.state
 
 
-def _execution_lineage(pid, execution, context, progress):
+def _execution_lineage(packet, execution, context, progress):
+    pid = packet["packet_id"]
     require(progress is not None, "progress_history_missing", pid, "Certification needs retained admission binding")
     require(execution.get("progress_guard_ref") == progress.guard.guard_id,
             "progress_mismatch", pid, "Execution must retain its task guard")
     action = PROGRESS.ActionIdentity.parse({"action_ref": execution.get("action_ref"),
-        "packet_id": pid, "input_identity": execution["input_identity"]})
+        "packet_id": pid, "input_identity": execution["input_identity"],
+        "packet_definition_digest": digest(packet_definition(packet))})
     lineage = progress.action_lineage(action, execution["action_admission_ref"], context["progress"]["resolved_sources"])
-    require(lineage.location != "unknown", "progress_history_missing", pid, "Reconstruct the admitted packet/member/input binding")
+    require(lineage.location != "unknown", "progress_history_missing", pid, "Reconstruct the admitted packet/member/input/definition binding")
     require(lineage.location != "missing", "progress_mismatch", pid, "Execution differs from its admitted binding")
     return lineage
 
@@ -999,13 +1011,13 @@ def preserve_execution_pairs(plan, context, progress):
         if all(execution[field] == old.get(field) for field in ("action_ref", "action_admission_ref")):
             if execution["state"] in {"RUNNING", "VERIFIED"} and (
                     execution["state"] != old["state"] or execution["input_identity"] != old["input_identity"]):
-                _execution_lineage(pid, execution, context, progress)
+                _execution_lineage(packet, execution, context, progress)
             continue
         require(progress is not None, "progress_history_missing", pid, "Changed pairs need retained progress proof")
         sources = context["progress"]["resolved_sources"]
         before = progress.predecessor_lineage(PROGRESS.ActionIdentity.parse({"action_ref": old.get("action_ref"),
             "packet_id": pid, "input_identity": old["input_identity"]}), old["action_admission_ref"], sources)
-        after = _execution_lineage(pid, execution, context, progress)
+        after = _execution_lineage(packet, execution, context, progress)
         require(before.location != "unknown", "progress_history_missing", pid, "Reconstruct the predecessor admission binding")
         require(not (before.location == after.location == "summary"),
                 "progress_history_missing", pid, "Reconstruct ordering between summarized pairs")
@@ -1114,14 +1126,14 @@ def admission(request):
         if boundary == "verification":
             require(packet["execution"]["state"] in {"RUNNING", "VERIFIED"}, "invalid_state", target, "Only started work can verify")
             if "action_admission_ref" in packet["execution"]:
-                _execution_lineage(target, packet["execution"], context, progress)
+                _execution_lineage(packet, packet["execution"], context, progress)
             verified_packet(packet, context["packet_evidence"].get(target), snapshot, context, checks)
             packet["execution"]["state"] = "VERIFIED"
         if boundary == "completion":
             require(all(p["execution"]["state"] == "VERIFIED" for p in packets.values()), "incomplete_packets", "implementation_steps", "Every canonical packet must be VERIFIED")
             for pid, execution in marked_executions:
                 if "action_admission_ref" in execution:
-                    lineage = _execution_lineage(pid, execution, context, progress)
+                    lineage = _execution_lineage(packets[pid], execution, context, progress)
                     require(lineage.location in {"checkpoint", "summary"},
                             "progress_mismatch", "context.progress", "Completion needs recorded closure of each admitted execution")
                 elif execution["state"] == "VERIFIED":
@@ -1137,7 +1149,7 @@ def admission(request):
                         admission_ref = closed["admission_ref"] if closed is not None else None
                     require(admission_ref is not None, "progress_history_missing", pid,
                             "Reconstruct the declared action's historical admission")
-                    lineage = _execution_lineage(pid, dict(execution, action_admission_ref=admission_ref), context, progress)
+                    lineage = _execution_lineage(packets[pid], dict(execution, action_admission_ref=admission_ref), context, progress)
                     require(lineage.location in {"checkpoint", "summary"},
                             "progress_mismatch", "context.progress", "Completion needs recorded closure of each admitted execution")
             require(progress is None or progress.action_admission is None, "progress_mismatch", "context.progress",
@@ -1211,6 +1223,8 @@ def admission(request):
         result["canonical_context"]["previous_plan"] = deepcopy(snapshot)
         if progress is not None:
             result["canonical_context"]["progress"]["state"] = progress.wire()
+            if boundary == "dispatch":
+                result["canonical_context"]["progress"]["action"] = progress.action_admission.action.wire()
             result["canonical_context"]["progress"].pop("event", None)
         return result
     except AdmissionError as error:

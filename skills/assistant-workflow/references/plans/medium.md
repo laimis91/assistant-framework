@@ -12,7 +12,7 @@ For `execution_intent=prepare_only`, an explicitly requested readiness Plan is i
 
 ## Executable Task Packet (`execution_intent != prepare_only`)
 
-Medium/Large/Mega uses authoritative packets; Code Writer/BuilderTester delegates and direct fallback preserve their meaning and role evidence.
+Medium/Large/Mega authoritative packets preserve identical meaning and role evidence for delegates and direct fallback.
 
 ```markdown
 ### Task [ID]: [short name]
@@ -97,7 +97,7 @@ Medium/Large/Mega uses authoritative packets; Code Writer/BuilderTester delegate
 
 ## Canonical Packet Plan (`execution_intent != prepare_only`)
 
-Default to one coherent `implementation_steps` increment. Optional Decompose splits for acceptance, ownership/context, prerequisites, recovery/rollout or protocol boundaries, never size/file/layer counts. Apply `references/decomposition-plan-review.md`; no second manifest, one-item rationale, standalone review artifact or count-selected Architect.
+Default to one coherent `implementation_steps` increment. Decompose only for acceptance, ownership/context, prerequisites, recovery/rollout or protocol boundaries, never size/file/layer counts. Apply `references/decomposition-plan-review.md`; omit second manifests, one-item rationales, standalone review artifacts and count-selected Architects.
 
 ### Stored definition and authority
 
@@ -105,17 +105,17 @@ New producers store `plan_schema_version: "15.0"`, `task_identity`, `plan_versio
 `verification_decision_ref`, `implementation_steps`, `completion_allocation`, and
 `approved_plan_identity: {task_identity, plan_version, approval_ref, definition_digest}`
 matching independent current approval. Store the unchanged specialist decision
-once; each packet's `verification_decision_ref: {artifact_ref, sha256}` hashes the
-complete object, including exclusions, rationale, CheckSpecs and TddChoice.
+once; packet `verification_decision_ref: {artifact_ref, sha256}` hashes its complete
+exclusions, rationale, CheckSpecs and TddChoice.
 
-The approved definition excludes only top-level `approved_plan_identity` and
-`reconciliation_provenance`, plus each packet's `execution`. Encode as UTF-8 JSON,
-keys sorted, no whitespace separators (`(',', ':')`), `ensure_ascii=False`, no
-non-finite numbers; SHA-256 those bytes. Every other field participates in the
-approved digest. Authenticate migration provenance against independently retained
-accepted `previous_plan`; preserve its presence and canonical JSON digest on later
-calls. Fresh plans cannot invent provenance. Progress does not change approval;
-material definition changes require deviation/reapproval, never candidate self-signing.
+The approved definition excludes only top-level `approved_plan_identity`,
+`reconciliation_provenance` and packet `execution`; all other fields participate.
+SHA-256 UTF-8 JSON with sorted keys, no whitespace separators (`(',', ':')`),
+`ensure_ascii=False` and no non-finite numbers. Authenticate migration provenance
+against independently retained accepted `previous_plan`; preserve presence and
+canonical JSON digest on later calls. Fresh plans cannot invent provenance.
+Progress preserves approval; material definition changes require deviation/reapproval,
+never candidate self-signing.
 
 Each packet stores coordinator-owned `execution`:
 `state: PENDING|RUNNING|VERIFIED|BLOCKED|INVALIDATED`, `evidence_refs`,
@@ -142,14 +142,14 @@ integration/independent-review/conditional-QA/harness/final-snapshot gate.
 
 At Plan acceptance/resume/dispatch/verification/completion, invoke installed
 `scripts/task-packet-admission.py` with Python 3.9+.
-Unix: `python3 scripts/task-packet-admission.py`; native PowerShell uses the
-installer-reported invocation, e.g. `py -3 scripts/task-packet-admission.py` or
+Unix: `python3 scripts/task-packet-admission.py`; PowerShell follows the installer,
+e.g. `py -3 scripts/task-packet-admission.py` or
 `& 'C:\Path With Spaces\python.exe' scripts/task-packet-admission.py`, never `.py`
-association. Missing/unsupported Python, including manual installs or later
-removal, blocks helper/Workflow eval admission; install and rerun. Import-safe
+association. Missing/unsupported Python, including manual installs or removal,
+blocks helper/Workflow eval admission; install and rerun. Import-safe
 `admission(request)` equals JSON stdin/stdout: exits 0 `accepted`/1 `blocked`;
 limits 2 MiB/256 packets; standard library only. No network/commands/arbitrary
-reference loading/persistence/retries/dispatch/scheduling. Existing owners attest
+reference loading/persistence/retries/dispatch/scheduling. Owners attest
 readiness/native isolation/worker behavior; consistency cannot prove unavailable facts.
 
 Request: `boundary: plan|resume|dispatch|verification|completion`, `plan`, `context`,
@@ -222,18 +222,17 @@ supply approval/proof. It contains:
   `completion_evidence` from the existing completion/review/QA owners.
 
 Results contain `status`, stable `code`, `path`, `details`. Accepted projections
-contain `canonical_plan` and deep `current_task_packet`: canonical packet,
-unchanged `verification_decision`, current `evidence_assessment` and exact
-`approved_plan_identity`, without redefinition. Blocked plans may retain reconciled
-INVALIDATED state/history, never dispatch authority. Graded blocked output permits
-only optional string `summary` and `packet_admission: {status, code, canonical_plan?}`;
-any plan must exactly match the helper's blocked plan, including JSON types.
-Reject unknown fields/containers and external readiness/verified/current-task-packet
-claims. Persist admitted state through existing tooling. Preserve authorized
-path/verification-target strings (absolute, relative, Windows); admission resolves
-no paths or access. Existing approval/permissions control execution. Unapproved
-scope, NUL strings, unknown versions/operations, unsafe IDs, malformed/mixed forms,
-ambiguous identity/allocation and graph cycles fail closed.
+contain `canonical_plan` and deep `current_task_packet`: canonical packet, unchanged
+`verification_decision`, current `evidence_assessment`, exact `approved_plan_identity`.
+Blocked plans retain reconciled INVALIDATED state/history without dispatch authority.
+Graded blocked output allows only optional string `summary` and
+`packet_admission: {status, code, canonical_plan?}`; any plan exactly matches the
+helper's blocked plan, including JSON types. Reject unknown fields/containers and
+external readiness/verified/current-task-packet claims. Persist through existing
+tooling. Preserve authorized absolute/relative/Windows path/verification-target
+strings; admission resolves neither paths nor access. Approval/permissions control
+execution. Unapproved scope, NUL strings, unknown versions/operations, unsafe IDs,
+malformed/mixed forms, ambiguous identity/allocation and graph cycles fail closed.
 
 Dispatch requires the target PENDING, current inputs, every prerequisite
 current/evidence-bound VERIFIED, and the same task-level shared progress guard permitting the action. Shared or
@@ -306,13 +305,13 @@ lane-specific RED/production/GREEN/refactor ownership. Inactive TDD creates no R
 obligation. Existing identity, lane, input freshness, stage, and projection-equality
 guards remain required alongside this current producer proof.
 
-Completion evidence binds the exact approved identity and `snapshot_identity` and
-carries the same result/criterion/binding rows for `completion_allocation`. Each
-already-required terminal gate has `{passed, snapshot_identity,
-after_integration, evidence_ref}` under `terminal_gates`, resolved from canonical
-current review/QA/harness results. The Orchestrator validates integrated checks
-before fresh independent review and projects only real post-integration evidence.
-Helper consistency cannot replace canonical review contracts or waive a due gate.
+Completion evidence binds exact approved identity and `snapshot_identity`, carrying
+result/criterion/binding rows for `completion_allocation`. Each already-required
+terminal gate has `{passed, snapshot_identity, after_integration, evidence_ref}`
+under `terminal_gates`, resolved from canonical current review/QA/harness results.
+The Orchestrator validates integrated checks before fresh independent review and
+projects real post-integration evidence. Helper consistency neither replaces
+canonical review contracts nor waives due gates.
 
 ### Verified v12/v13 slice compatibility
 
@@ -365,15 +364,14 @@ historical and cannot become current writer-owned authorizing evidence.
 
 ### Candidate adoption
 
-Schema/prose consistency and local controls do not prove native consumption,
-isolation telemetry or total-cost benefit. Keep default installation/promotion
-gated pending current regression/obligation evidence and a separately approved
-native comparative pilot. Before calls, fix supported exact runtime/model,
-call/elapsed/token limits, stop conditions and benefit threshold. The proposed
-four paired scenarios cap discovery at eight top-level task runs; internal model
-turns/child calls count against the separately approved resources. Missing
-capability or resource approval remains an explicit gap. No ordinary task inherits
-this experiment and no static-byte/word-count result establishes efficiency.
+Schema/prose consistency and local controls prove no native consumption,
+isolation telemetry or total-cost benefit. Default installation/promotion requires
+current regression/obligation evidence and a separately approved native comparative
+pilot. Before calls, fix exact supported runtime/model, call/elapsed/token limits,
+stop conditions and benefit threshold. Four paired scenarios permit eight top-level
+task runs; internal turns/child calls consume separately approved resources.
+Missing capability/resource approval remains explicit. Ordinary tasks inherit
+no experiment; static byte/word counts establish no efficiency.
 
 ### Current-cycle stage ordering
 
@@ -387,7 +385,7 @@ invocations; aliases grant no premature edit. Stored work stays stage-neutral.
 
 ## Medium Tasks — Standard Plan (`execution_intent != prepare_only`)
 
-Fill during Plan; Security/Operability stays optional. Plan approval alone does not settle an unanswered product choice; an explicit answer that accepts a clearly presented choice resolves it without ritual reconfirmation.
+Fill during Plan; Security/Operability stays optional. Approval leaves unanswered product choices open; explicit acceptance of a presented choice resolves it without ritual reconfirmation.
 
 ```markdown
 ## Goal
@@ -514,7 +512,7 @@ Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation
 
 ## Harness Appendix Routing
 
-Medium+ harness-capable work loads `references/plan-harness-appendix.md` for full harness/QA schemas; otherwise `N/A: [reason]`.
+Medium+ harness-capable work loads `references/plan-harness-appendix.md`; otherwise `N/A: [reason]`.
 
 - appendix_status: [required | N/A: reason]
 - controller_intensity: [light | standard | strict + reason]
@@ -529,7 +527,7 @@ Medium+ harness-capable work loads `references/plan-harness-appendix.md` for ful
 
 ## Canonical implementation_steps
 
-Store `implementation_steps` once with the approved definition/completion allocation; progress and worker views reference it.
+Store approved `implementation_steps` once; progress/worker views reference its definition/completion allocation.
 
 ## Task packets
 Use the Executable Task Packet structure, dependency order and approved-definition deep worker projections.

@@ -651,7 +651,8 @@ def failed_green_running_next_action_admission():
     baseline, policy, outcome = "frontier:failed-green:initial", "policy:failed-green:approved", "outcome:failed-green"
     admission_ref = "admission:observed-first-production"
     input_identity = deepcopy(packet["execution"]["input_identity"])
-    identity = {"action_ref": action, "packet_id": pid, "input_identity": input_identity}
+    identity = {"action_ref": action, "packet_id": pid, "input_identity": input_identity,
+                "packet_definition_digest": API.digest(API.packet_definition(packet))}
     packet["execution"].update(progress_guard_ref=guard, action_ref=action, action_admission_ref=admission_ref)
     request["context"]["progress"] = {
         "state": {"schema_version": "1.0", "guard_id": guard, "outcome_ref": outcome,
@@ -1097,6 +1098,105 @@ def shared_progress_controls():
         return result
 
     admitted = check(released_v14_productive_fourth_attempt(), "accepted")
+    # A singleton admits approved work, not just a reusable packet/input name.
+    definition_failures = []
+    # Start a genuinely native v15 branch before admission. Mutating an accepted
+    # migrated v14 snapshot would instead exercise its provenance gate.
+    native_source = released_v14_productive_fourth_attempt()
+    native_source["plan"]["plan_schema_version"] = "15.0"
+    seal(native_source)
+    native_source["context"]["previous_plan"] = deepcopy(native_source["plan"])
+    native_admitted = check(native_source, "accepted")
+    approved_packet = native_admitted["canonical_plan"]["implementation_steps"][0]
+    approved_digest = API.digest(API.packet_definition(approved_packet))
+    for owner, action in (("carrier", native_admitted["canonical_context"]["progress"]["action"]),
+                          ("admission", native_admitted["canonical_progress_state"]["action_admission"])):
+        if action.get("packet_definition_digest") != approved_digest:
+            definition_failures.append(("new canonical " + owner + " lacks approved definition", action))
+    # Keep the original migrated-v14 admission independently exercised above;
+    # representation normalization changes no approved packet definition.
+    assert approved_digest == API.digest(API.packet_definition(admitted["canonical_plan"]["implementation_steps"][0]))
+    assert approved_digest == API.digest(API.packet_definition(released_v14_productive_fourth_attempt()["plan"]["implementation_steps"][0]))
+
+    def definition_check(request, status, name, code=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        print("Singleton definition control: " + name + "; observed=" + result["status"] + "/" + result["code"])
+        if result["status"] != status or (code is not None and result["code"] != code):
+            definition_failures.append((name, status, code, result))
+        assert request == before, (name, "Definition admission mutated caller-owned authority")
+        total += 1
+        return result
+
+    running = retained_progress_request(native_admitted)
+    running.update(worker_stage="production", worker_role="code_writer")
+    packet = running["plan"]["implementation_steps"][0]
+    packet["execution"]["state"] = "RUNNING"
+    running["context"]["packet_evidence"][packet["packet_id"]] = evidence(running, packet)
+    for retained_previous in (True, False):
+        unchanged = deepcopy(running)
+        if not retained_previous:
+            unchanged["context"].pop("previous_plan")
+        result = definition_check(unchanged, "accepted", "unchanged RUNNING definition previous=" + str(retained_previous))
+        if result["status"] == "accepted":
+            assert result["canonical_progress_state"] == native_admitted["canonical_progress_state"]
+    for mutation in ("scope", "specification", "verification", "plan-version", "approval", "plan-metadata"):
+        changed = deepcopy(running)
+        changed["context"].pop("previous_plan")
+        packet = changed["plan"]["implementation_steps"][0]
+        if mutation == "scope":
+            packet["files_to_modify"].append("independently-reapproved.py")
+        elif mutation == "specification":
+            packet["description"] = "Independently reapproved different packet result"
+        elif mutation == "verification":
+            decision = changed["context"]["verification_decision"]
+            decision["checks"][0]["command"]["argv"][-1] = "independently reapproved check"
+            ref = changed["context"]["verification_decision_ref"]
+            ref["sha256"] = API.digest(decision)
+            changed["plan"]["verification_decision_ref"] = deepcopy(ref)
+            packet["verification_decision_ref"] = deepcopy(ref)
+            packet["verification_command"] = deepcopy(decision["checks"][0]["command"]["argv"])
+        elif mutation == "plan-version":
+            changed["plan"]["plan_version"] = "independently-reapproved-version"
+        elif mutation == "plan-metadata":
+            changed["plan"]["description"] = "Unrelated approved plan metadata"
+        seal(changed)
+        if mutation == "approval":
+            for owner in (changed["plan"], changed["context"]):
+                owner["approved_plan_identity"]["approval_ref"] = "approval:independent-metadata-change"
+            changed["context"]["test_applicability"] = {packet["packet_id"]: applicability(changed, packet)}
+        changed["context"]["packet_evidence"][packet["packet_id"]] = evidence(changed, packet)
+        material = mutation in {"scope", "specification", "verification"}
+        assert (API.digest(API.packet_definition(packet)) != approved_digest) == material
+        result = definition_check(changed, "blocked" if material else "accepted",
+                                  "reapproved " + mutation + " cannot change admitted work" if material else "metadata-only " + mutation,
+                                  "progress_mismatch" if material else None)
+        if not material and result["status"] == "accepted":
+            assert result["canonical_progress_state"] == native_admitted["canonical_progress_state"]
+    explicit = deepcopy(native_source)
+    explicit["context"]["progress"]["action"]["packet_definition_digest"] = approved_digest
+    definition_check(explicit, "accepted", "matching explicit definition admits unchanged work")
+    contradictory = deepcopy(native_source)
+    contradictory["context"]["progress"]["action"]["packet_definition_digest"] = "0" * 64
+    definition_check(contradictory, "blocked", "explicit new-action definition cannot contradict approved work", "progress_mismatch")
+    # A readable legacy live admission has unknown historical definition. Only
+    # the independently retained original packet can reconstruct that authority.
+    unknown = deepcopy(running)
+    for action in (unknown["context"]["progress"]["action"], unknown["context"]["progress"]["state"]["action_admission"]):
+        action.pop("packet_definition_digest", None)
+    unknown["context"]["previous_plan"] = deepcopy(unknown["plan"])
+    read = deepcopy(unknown)
+    read["boundary"] = "plan"
+    definition_check(read, "accepted", "unbound legacy live admission remains readable")
+    definition_check(unknown, "blocked", "legacy live continuation cannot infer missing definition", "progress_history_missing")
+    reconstructed = deepcopy(unknown)
+    for action in (reconstructed["context"]["progress"]["action"], reconstructed["context"]["progress"]["state"]["action_admission"]):
+        action["packet_definition_digest"] = approved_digest
+    recovered = definition_check(reconstructed, "accepted", "independently archived live definition reconstruction")
+    if recovered["status"] == "accepted":
+        for field in ("guard_id", "work_ordinal", "consecutive_no_progress", "history", "frontier_ref"):
+            assert recovered["canonical_progress_state"][field] == native_admitted["canonical_progress_state"][field]
     current = retained_progress_request(admitted)
     # Productive evidence survives ALL subsequent blockers; none consumes an
     # action or creates a checkpoint for waiting/unfinished asynchronous work.
@@ -1242,6 +1342,7 @@ def shared_progress_controls():
     assert compact["canonical_progress_state"]["history_base_ref"] == summary_ref
     compacted["context"]["progress"]["event"] = prior_event
     check(compacted, "blocked", "progress_replay")
+    assert not definition_failures, ("Singleton admitted-definition controls", definition_failures)
     return total
 
 
@@ -1734,6 +1835,7 @@ def completion_progress_closure_controls():
     assert closed["status"] == "accepted", "Completed predecessor fixture must remain valid"
     original_admission = deepcopy(initial["canonical_progress_state"]["action_admission"])
     original_identity = {field: deepcopy(original_admission[field]) for field in ("action_ref", "packet_id", "input_identity")}
+    original_identity["packet_definition_digest"] = API.digest(API.packet_definition(initial["canonical_plan"]["implementation_steps"][0]))
     contradictory = deepcopy(closed_request)
     contradictory["context"]["progress"]["event"]["closed_admission"] = deepcopy(original_admission)
     contradictory["context"]["progress"]["event"]["closed_admission"]["input_identity"] = {"source": "contradicts-real-admission"}
@@ -1743,6 +1845,123 @@ def completion_progress_closure_controls():
     # packet's current identity. Canonical transitions supply it automatically.
     known_closed = retained_progress_request(closed)
     known_closed["context"]["progress"]["state"]["history"][-1]["closed_admission"] = deepcopy(original_admission)
+    # Freeze the historical definition before changing any candidate packet.
+    # Missing canonical retention is recorded without hiding the stale-work
+    # reproductions below; no historical authority is backfilled from a mutant.
+    native_source = released_v14_productive_fourth_attempt()
+    native_source["plan"]["plan_schema_version"] = "15.0"
+    seal(native_source)
+    native_source["context"]["previous_plan"] = deepcopy(native_source["plan"])
+    native_initial = check(native_source, "accepted", "native v15 singleton actually admits before definition mutations")
+    assert native_initial["status"] == "accepted", "Native singleton prerequisite failure is not authorizing RED"
+    native_close = cycle(retained_progress_request(native_initial))
+    native_close.update(boundary="plan", plan=deepcopy(native_initial["canonical_plan"]))
+    native_closed = check(native_close, "accepted", "native v15 singleton actually closes before definition mutations")
+    assert native_closed["status"] == "accepted", "Native singleton closure prerequisite failure is not authorizing RED"
+    native_known_closed = retained_progress_request(native_closed)
+    native_admission = deepcopy(native_initial["canonical_progress_state"]["action_admission"])
+    native_identity = {field: deepcopy(native_admission[field]) for field in ("action_ref", "packet_id", "input_identity")}
+    original_digest = API.digest(API.packet_definition(native_initial["canonical_plan"]["implementation_steps"][0]))
+    native_identity["packet_definition_digest"] = original_digest
+    if native_admission.get("packet_definition_digest") != original_digest:
+        failures.append(("new singleton admission lacks canonical definition", native_admission))
+    canonical_closed = native_known_closed["context"]["progress"]["state"]["history"][-1]["closed_admission"]
+    if canonical_closed.get("packet_definition_digest") != original_digest:
+        failures.append(("actual singleton closure loses admitted definition", canonical_closed))
+
+    def reapproved_definition(request, mutation):
+        trial = deepcopy(request)
+        trial["context"].pop("previous_plan", None)
+        packet = trial["plan"]["implementation_steps"][0]
+        if mutation == "scope":
+            packet["files_to_modify"].append("independently-reapproved-closed-work.py")
+        elif mutation == "specification":
+            packet["description"] = "Independently reapproved replacement packet result"
+        else:
+            decision = trial["context"]["verification_decision"]
+            decision["checks"][0]["command"]["argv"][-1] = "independently reapproved closed-work check"
+            ref = trial["context"]["verification_decision_ref"]
+            ref["sha256"] = API.digest(decision)
+            trial["plan"]["verification_decision_ref"] = deepcopy(ref)
+            packet["verification_decision_ref"] = deepcopy(ref)
+            packet["verification_command"] = deepcopy(decision["checks"][0]["command"]["argv"])
+        seal(trial)
+        trial["context"]["packet_evidence"][packet["packet_id"]] = evidence(trial, packet)
+        assert API.digest(API.packet_definition(packet)) != original_digest
+        return trial
+
+    for form, retained in (("full", native_known_closed), ("compacted", compact(native_known_closed))):
+        carrier = retained["context"]["progress"]
+        binding = (carrier["state"]["history"][-1]["closed_admission"] if form == "full" else
+                   carrier["resolved_sources"][carrier["state"]["history_base_ref"]]["closed_admissions"][-1])
+        if binding.get("packet_definition_digest") != original_digest:
+            failures.append((form + " retained definition missing", binding))
+        check(completion(retained), "accepted", form + " unchanged definition certifies actual closure")
+        for mutation in ("scope", "specification", "verification"):
+            changed = reapproved_definition(retained, mutation)
+            for paired in (True, False):
+                terminal = completion(changed)
+                if not paired:
+                    terminal["plan"]["implementation_steps"][0]["execution"].pop("action_admission_ref")
+                check(terminal, "blocked", form + " reapproved " + mutation + (" paired" if paired else " no-pair") +
+                      " cannot certify old closed definition", "progress_mismatch")
+            active = deepcopy(changed)
+            packet = active["plan"]["implementation_steps"][0]
+            packet["execution"]["state"] = "RUNNING"
+            active["context"]["packet_evidence"][packet["packet_id"]] = evidence(active, packet)
+            active["boundary"] = "verification"
+            check(active, "blocked", form + " reapproved " + mutation + " old definition cannot verify", "progress_mismatch")
+            # An accepted INVALIDATED representation retains the genuine old
+            # pair; promotion of that representation needs current authority.
+            active["context"]["previous_plan"] = deepcopy(active["plan"])
+            active["context"]["previous_plan"]["implementation_steps"][0]["execution"]["state"] = "INVALIDATED"
+            active["boundary"] = "resume"
+            check(active, "blocked", form + " reapproved " + mutation + " cannot promote obsolete definition", "progress_mismatch")
+        # These records know their exact pair and input but predate the optional
+        # definition field. Reading is compatible; certification is UNKNOWN.
+        unknown_definition = deepcopy(retained)
+        carrier = unknown_definition["context"]["progress"]
+        old_binding = (carrier["state"]["history"][-1]["closed_admission"] if form == "full" else
+                       carrier["resolved_sources"][carrier["state"]["history_base_ref"]]["closed_admissions"][-1])
+        old_binding.pop("packet_definition_digest", None)
+        unknown_definition["boundary"] = "plan"
+        check(unknown_definition, "accepted", form + " known-pair unknown-definition legacy read")
+        for paired in (True, False):
+            terminal = completion(unknown_definition)
+            if not paired:
+                for plan in (terminal["plan"], terminal["context"]["previous_plan"]):
+                    plan["implementation_steps"][0]["execution"].pop("action_admission_ref")
+            check(terminal, "blocked", form + " unknown historical definition cannot certify " + str(paired), "progress_history_missing")
+        reconstructed = deepcopy(unknown_definition)
+        carrier = reconstructed["context"]["progress"]
+        archive_binding = (carrier["state"]["history"][-1]["closed_admission"] if form == "full" else
+                           carrier["resolved_sources"][carrier["state"]["history_base_ref"]]["closed_admissions"][-1])
+        archive_binding["packet_definition_digest"] = original_digest
+        result = check(completion(reconstructed), "accepted", form + " original archived definition reconstruction certifies")
+        if result["status"] == "accepted":
+            for field in ("guard_id", "work_ordinal", "consecutive_no_progress", "frontier_ref"):
+                assert result["canonical_progress_state"][field] == retained["context"]["progress"]["state"][field]
+        # Retirement asks whether this same genuine pair/member closed, not
+        # whether its obsolete definition could certify the successor's work.
+        successor = reapproved_definition(retained, "scope")
+        carrier = successor["context"]["progress"]
+        state = API.PROGRESS.ProgressState.parse(carrier["state"], carrier["resolved_sources"])
+        old_query = {**deepcopy(native_identity), "packet_definition_digest": API.digest(API.packet_definition(successor["plan"]["implementation_steps"][0]))}
+        retired = state.predecessor_lineage(API.PROGRESS.ActionIdentity.parse(old_query), native_admission["admission_ref"], carrier["resolved_sources"])
+        assert retired.location == ("checkpoint" if form == "full" else "summary"), "Obsolete definition must not prevent genuine predecessor retirement"
+        packet = successor["plan"]["implementation_steps"][0]
+        packet["execution"]["state"] = "INVALIDATED"
+        successor["context"]["previous_plan"] = deepcopy(successor["plan"])
+        packet["execution"].update(state="PENDING", action_ref=carrier["action"]["action_ref"])
+        carrier["action"].pop("packet_definition_digest", None)
+        successor["boundary"] = "dispatch"
+        fresh = check(successor, "accepted", form + " changed work obtains genuinely new bound successor")
+        if fresh["status"] == "accepted":
+            actual = fresh["canonical_progress_state"]["action_admission"]
+            assert actual["admission_ref"] != native_admission["admission_ref"]
+            if actual.get("packet_definition_digest") != old_query["packet_definition_digest"]:
+                failures.append((form + " fresh successor lacks its approved definition", actual))
+            assert fresh["canonical_progress_state"]["work_ordinal"] == retained["context"]["progress"]["state"]["work_ordinal"]
     # Marker subsets retain actual admission/action values from this closed
     # fixture. Readability never supplies a missing completed action identity.
     marker_fields = ("progress_guard_ref", "action_ref", "action_admission_ref")
@@ -2014,7 +2233,8 @@ def completion_progress_closure_controls():
         location = "summary" if form == "compacted" else "checkpoint"
         for member in group_admission["member_scope"]["members"]:
             identity = {"action_ref": group_admission["action_ref"], "packet_id": member["packet_id"],
-                        "input_identity": deepcopy(member["input_identity"])}
+                        "input_identity": deepcopy(member["input_identity"]),
+                        "packet_definition_digest": member["packet_definition_digest"]}
             check_lineage(retained, identity, group_admission["admission_ref"], location, form + " closed group binds declared member " + member["packet_id"])
             identity["input_identity"] = {"source": "different-member-input"}
             check_lineage(retained, identity, group_admission["admission_ref"], "missing", form + " closed group rejects changed member input " + member["packet_id"])

@@ -107,8 +107,8 @@ Further dispatch retains the shared carrier whenever any current or previous
 task execution has these markers; all marked executions bind the same guard.
 Closing a checkpoint copies the actual admission into optional `closed_admission`;
 compaction preserves known bindings in optional `closed_admissions`.
-`action_lineage` certifies exact admission, packet/member and relevant input for
-verification, active promotion and completion. Historical actions may differ from
+`action_lineage` certifies exact admission, packet/member, input and approved
+definition for verification, active promotion and completion. Historical actions may differ from
 the latest proposal. Old UNKNOWN bindings remain readable; certification needs
 authoritative reconstruction (`progress_history_missing`). Full grouped history
 may use matching barrier/member authority. Every marked VERIFIED execution needs
@@ -119,8 +119,8 @@ Unmarked legacy and retained PENDING proposals remain compatible.
 Canonical promotion retains each committed pair or proves forward succession:
 close the predecessor, then bind a live successor to that packet/member/input
 or show a strictly later full checkpoint. `predecessor_lineage` establishes only
-historical pair/member retirement, allowing obsolete input to refresh while
-INVALIDATED; new active work still needs its genuine admitted input. A compacted predecessor followed by a
+historical pair/member retirement, allowing obsolete input/definition while
+INVALIDATED; new active work needs its genuinely admitted input and definition. A compacted predecessor followed by a
 tail checkpoint has known order; two different summarized pairs require archive
 reconstruction (`progress_history_missing`). Validate after dispatch materializes
 its admission. Unchanged pairs permit carrier-free resume, with completion still
@@ -128,6 +128,15 @@ requiring recorded closure.
 Accepted results provide `canonical_plan`, `canonical_context` and, when present,
 `canonical_progress_state`. A later blocked dispatch still returns completed
 progress. Commit before spawn; retain events only once.
+
+A singleton's optional `action.packet_definition_digest` binds its admitted
+canonical packet definition, excluding execution. The workflow owner enriches
+new proposals from already validated approved work, rejects explicit contradictions
+and returns the same bound action in the canonical carrier and admission. Existing
+unbound live or closed admissions remain readable; current continuation or
+certification requires reconstruction from independently retained original work,
+never the changed candidate. Reconstruction preserves the pair, history and counts.
+Unrelated plan/approval metadata does not change an unchanged packet's binding.
 
 Optional `action.member_scope = {source_ref, members}` freezes a coordinator
 cycle's members; each binding has `packet_id`, `packet_definition_digest` and

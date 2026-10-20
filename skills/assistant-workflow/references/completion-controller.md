@@ -27,7 +27,7 @@ or required-QA execution, including otherwise-small work.
 For packet-plan completion, retain `context.progress` whenever current or retained
 `previous_plan` executions carry progress bindings. Marked executions match its
 guard; no admission survives checkpoint closure. Certify exact admission,
-packet/member and input through full/compacted closure. VERIFIED no-pair executions
+packet/member, input and admitted approved definition through full/compacted closure. VERIFIED no-pair executions
 recover historical admission identity. Unknown binding requires authoritative
 reconstruction; known mismatch rejects. Close each semantic cycle with due
 verification/Review or its complete coordinator barrier. Intermediate packet/member

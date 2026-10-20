@@ -6,7 +6,7 @@ No dispatch, storage, clock, CLI or external dependency is involved.
 
 from dataclasses import dataclass, replace
 import json
-from typing import Mapping, Optional, Tuple
+from typing import Mapping, Optional, Tuple, Union
 
 
 class ProgressError(ValueError):
@@ -141,13 +141,15 @@ class ActionIdentity:
     packet_id: str
     input_identity: RelevantInputIdentity
     member_scope: Optional[CoordinatorMemberScope] = None
+    packet_definition_digest: Optional[str] = None
 
     @classmethod
     def parse(cls, value):
         require(isinstance(value, dict), "Action must bind current input identity")
         result = cls(text(value.get("action_ref")), text(value.get("packet_id")),
                      RelevantInputIdentity.parse(value.get("input_identity")),
-                     CoordinatorMemberScope.parse(value["member_scope"]) if "member_scope" in value else None)
+                     CoordinatorMemberScope.parse(value["member_scope"]) if "member_scope" in value else None,
+                     text(value["packet_definition_digest"]) if "packet_definition_digest" in value else None)
         if result.member_scope:
             anchor = next((row for row in result.member_scope.members if row.packet_id == result.packet_id), None)
             require(anchor is not None and anchor.input_identity == result.input_identity,
@@ -158,6 +160,8 @@ class ActionIdentity:
         result = dict(action_ref=self.action_ref, packet_id=self.packet_id, input_identity=self.input_identity.wire())
         if self.member_scope:
             result["member_scope"] = self.member_scope.wire()
+        if self.packet_definition_digest is not None:
+            result["packet_definition_digest"] = self.packet_definition_digest
         return result
 
 
@@ -393,16 +397,22 @@ class ProgressState:
         return state
 
     def action_lineage(self, action: ActionIdentity, admission_ref: str, sources) -> ActionLineage:
-        """Certify the exact admitted packet/member and relevant input."""
-        lineage, bound_input = self._lineage_binding(action, admission_ref, sources)
-        return lineage if bound_input is None or bound_input == action.input_identity else ActionLineage("missing")
+        """Certify the exact admitted packet/member, input and definition."""
+        lineage, bound = self._lineage_binding(action, admission_ref, sources)
+        if bound is None:
+            return lineage
+        if bound.input_identity != action.input_identity:
+            return ActionLineage("missing")
+        if bound.packet_definition_digest is None or action.packet_definition_digest is None:
+            return ActionLineage("unknown", lineage.work_ordinal)
+        return lineage if bound.packet_definition_digest == action.packet_definition_digest else ActionLineage("missing")
 
     def predecessor_lineage(self, action: ActionIdentity, admission_ref: str, sources) -> ActionLineage:
-        """Retire the same packet/member's pair despite a refreshed input."""
+        """Retire the same packet/member's pair despite obsolete input/definition."""
         lineage, _ = self._lineage_binding(action, admission_ref, sources)
         return lineage
 
-    def _lineage_binding(self, action: ActionIdentity, admission_ref: str, sources) -> Tuple[ActionLineage, Optional[RelevantInputIdentity]]:
+    def _lineage_binding(self, action: ActionIdentity, admission_ref: str, sources) -> Tuple[ActionLineage, Optional[Union[ActionIdentity, ActionMemberBinding]]]:
         text(admission_ref)
         admission, scope = None, None
         if self.action_admission and self.action_admission.action.action_ref == action.action_ref:
@@ -439,7 +449,7 @@ class ProgressState:
             return ActionLineage("unknown", lineage.work_ordinal), None
         bound = (next((member for member in scope.members if member.packet_id == action.packet_id), None)
                  if scope else admission.action if admission.action.packet_id == action.packet_id else None)
-        return (lineage, bound.input_identity) if bound is not None else (ActionLineage("missing"), None)
+        return (lineage, bound) if bound is not None else (ActionLineage("missing"), None)
 
     def wire(self):
         result = dict(schema_version="1.0", guard_id=self.guard.guard_id, outcome_ref=self.guard.outcome_ref,
