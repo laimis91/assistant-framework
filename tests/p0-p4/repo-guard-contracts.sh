@@ -281,7 +281,6 @@ else
         "contents: read" \
         "persist-credentials: false" \
         "timeout-minutes: 30" \
-        "timeout-minutes: 60" \
         "tools/skills/validate-skills.sh" \
         "./install.sh --agent codex --dry-run" \
         "./install.sh --agent claude --dry-run" \
@@ -297,8 +296,15 @@ else
         || framework_validation_failures+=("framework-validation.yml: both checkouts must disable credential persistence")
     [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 30[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: the fast framework-contract job must use the bounded timeout")
-    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 60[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
-        || framework_validation_failures+=("framework-validation.yml: the slow contract shards must use the bounded timeout")
+    if ! ruby -ryaml - "$framework_validation_workflow" <<'RUBY'
+jobs = YAML.load_file(ARGV.fetch(0)).fetch("jobs")
+shard_timeout = "${{ matrix.suite == 'skill-eval-contracts.sh' && 75 || 60 }}"
+abort "unexpected shard timeout policy" unless jobs.fetch("contract-shards")["timeout-minutes"] == shard_timeout
+abort "unexpected fast timeout policy" unless jobs.fetch("framework-contracts")["timeout-minutes"] == 30
+RUBY
+    then
+        framework_validation_failures+=("framework-validation.yml: skill-eval must use 75 minutes, other shards 60, and the fast job 30")
+    fi
     [[ "$(grep -Ec '^permissions:[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: expected one workflow-level permissions block")
     [[ "$(grep -Ec '^[[:space:]]+contents: read[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \

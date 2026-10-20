@@ -27,12 +27,16 @@ or required-QA execution, including otherwise-small work.
 For packet-plan completion, retain `context.progress` when current or independently
 retained `previous_plan` executions carry progress bindings. Every marked execution
 must bind that same guard, and the post-checkpoint state must have no live action
-admission. Record the completed semantic cycle, including due verification/Review
+admission. Match admitted execution actions to full checkpoint action/admission
+pairs or same-guard compacted closed-action identities. An older internally valid
+state missing that lineage cannot establish completion. Record the completed semantic cycle, including due verification/Review
 or the complete coordinator barrier, before final completion. Intermediate packet
 or group-member verification may precede that checkpoint. Historical action refs
 need not match the carrier's latest action. Passing checks do not establish semantic
 progress, and a final checkpoint reaching `stagnant` does not prevent otherwise
 proven completion. Single-pass work without progress bindings needs no carrier.
+Accepted canonical snapshots retain committed pairs or prove forward succession;
+they cannot erase or rewind an admission before replacing `previous_plan`.
 
 ## Document Paths
 

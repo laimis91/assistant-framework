@@ -103,6 +103,16 @@ never derive that authority from candidate counts/status or a narrative.
 ordinal, action, assessment and observed evidence. Checkpoints bind the current
 admission; unblocks bind changed circumstances, resolved blocker and exact action.
 Execution carries `progress_guard_ref`, `action_ref`, `action_admission_ref`.
+Final completion matches admitted execution actions to recorded checkpoint
+action/admission pairs, or same-guard closed actions in a compacted summary.
+Historical actions need not equal the latest proposed action.
+Canonical promotion retains each committed pair or proves forward succession:
+close the predecessor, then bind a live successor to that packet/member/input
+or show a strictly later full checkpoint. A compacted predecessor followed by a
+tail checkpoint has known order; two different summarized pairs require archive
+reconstruction (`progress_history_missing`). Validate after dispatch materializes
+its admission. Unchanged pairs permit carrier-free resume, with completion still
+requiring recorded closure.
 Accepted results provide `canonical_plan`, `canonical_context` and, when present,
 `canonical_progress_state`. A later blocked dispatch still returns completed
 progress. Commit before spawn; retain events only once.
@@ -145,6 +155,17 @@ refs. It preserves the semantic frontier and novelty/replay protection; it is
 never a new baseline or window. Keep pending material-unblock/admission events
 resolvable. There is no per-task history-length or iteration quota; genuine
 parser/transport limits retain their separate operational exit reason.
+
+Useful evidence cannot resolve the same exact `resolved_uncertainty_ref` twice
+through fresh observations or assessments. Retain those identities in the optional
+summary array `seen_resolved_uncertainty_refs`, combined with the history tail.
+A present empty array means known empty; absence means UNKNOWN. Legacy retained
+useful checkpoints remain readable, including for no-progress work, verified gains
+and otherwise-valid completion. Only a new incoming useful-evidence checkpoint
+across unknown inventory returns `progress_history_missing` without consuming it.
+The caller must reconstruct the authoritative archive inventory without resetting
+history or counts. Distinct supported resolution identities remain valid; the
+helper does not establish truth or equivalence between differently named claims.
 
 Explicit user changes to the guard are recorded as `policy_change` events in
 this same history, never productive checkpoints. Preserve guard/outcome,

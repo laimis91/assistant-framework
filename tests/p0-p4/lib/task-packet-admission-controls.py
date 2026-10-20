@@ -1333,7 +1333,45 @@ def completion_progress_closure_controls():
                 "snapshot_identity": "snapshot:completion", "evidence_ref": "review:completion"}}}
         return trial
 
-    initial = check(released_v14_productive_fourth_attempt(), "accepted", "singleton admission fixture")
+    def compact(request, inventory=None):
+        trial = deepcopy(request)
+        carrier = trial["context"]["progress"]
+        state = carrier["state"]
+        history = state["history"]
+        summary_ref = "history:completion:compacted:" + str(state["work_ordinal"])
+        summary = {"guard_id": state["guard_id"], "outcome_ref": state["outcome_ref"],
+            "policy": deepcopy(state["policy"]), "work_ordinal": state["work_ordinal"],
+            "consecutive_no_progress": state["consecutive_no_progress"], "frontier_ref": state["frontier_ref"],
+            "last_event_id": history[-1]["event_id"], "last_semantic_kind": history[-1]["kind"],
+            "seen_event_ids": [row["event_id"] for row in history],
+            "seen_action_refs": [row["action_ref"] for row in history if row["kind"] == "work_checkpoint"],
+            "seen_policy_authority_refs": [],
+            "seen_observation_refs": list(dict.fromkeys(ref for row in history for ref in row["evidence_refs"])),
+            "seen_frontier_refs": list(dict.fromkeys([state["baseline_ref"]] + [row["frontier_ref"] for row in history])),
+            "seen_unblock_change_refs": [], "unresolved_oscillation_refs": []}
+        if inventory is not None:
+            summary["seen_resolved_uncertainty_refs"] = list(inventory)
+        carrier["resolved_sources"][summary_ref] = summary
+        state.update(history=[], history_base_ref=summary_ref)
+        state["evidence_refs"].append(summary_ref)
+        return trial
+
+    def cycle(request, disposition="no_progress"):
+        trial = completed_progress_cycle(request, disposition)
+        carrier = trial["context"]["progress"]
+        state = carrier["state"]
+        if not state["history"] and "history_base_ref" in state:
+            carrier["event"]["predecessor_event_id"] = carrier["resolved_sources"][state["history_base_ref"]]["last_event_id"]
+        return trial
+
+    def resolve_again(request, uncertainty):
+        trial = cycle(request, "useful_new_evidence")
+        carrier = trial["context"]["progress"]
+        carrier["resolved_sources"][carrier["event"]["assessment_ref"]]["resolved_uncertainty_ref"] = uncertainty
+        return trial
+
+    predispatch = released_v14_productive_fourth_attempt()
+    initial = check(predispatch, "accepted", "singleton admission fixture")
     assert initial["status"] == "accepted", "Invalid singleton fixture is not authorizing RED"
     singleton = retained_progress_request(initial)
     singleton["boundary"] = "verification"
@@ -1345,6 +1383,30 @@ def completion_progress_closure_controls():
     assert verified["status"] == "accepted", "Intermediate verification must remain valid"
     assert verified["canonical_progress_state"] == singleton["context"]["progress"]["state"]
     singleton = retained_progress_request(verified)
+    stale = completion(singleton)
+    stale["context"]["progress"]["state"] = deepcopy(predispatch["context"]["progress"]["state"])
+    assert stale["plan"] == singleton["plan"] and stale["context"]["previous_plan"] == singleton["context"]["previous_plan"]
+    check(stale, "blocked", "older pre-dispatch state cannot close genuinely verified execution", "progress_mismatch")
+    for stage, retained_request in (("RUNNING", retained_progress_request(initial)), ("VERIFIED", singleton)):
+        for erased in (("action_admission_ref",), ("action_ref", "action_admission_ref")):
+            lost = deepcopy(retained_request)
+            lost["boundary"] = "resume"
+            lost["plan"]["implementation_steps"][0]["execution"]["state"] = stage
+            for field in erased:
+                lost["plan"]["implementation_steps"][0]["execution"].pop(field)
+            name = stage + " resume erases " + "+".join(erased)
+            promoted = check(lost, "blocked", name, "progress_mismatch")
+            if promoted["status"] == "accepted":
+                if stage == "RUNNING":
+                    verify = retained_progress_request(promoted)
+                    verify["boundary"] = "verification"
+                    packet = verify["plan"]["implementation_steps"][0]
+                    verify["context"]["packet_evidence"][packet["packet_id"]] = evidence(verify, packet)
+                    promoted = check(verify, "accepted", name + " actually verifies after canonical promotion")
+                if promoted["status"] == "accepted":
+                    stale = completion(retained_progress_request(promoted))
+                    stale["context"]["progress"]["state"] = deepcopy(predispatch["context"]["progress"]["state"])
+                    check(stale, "blocked", name + " cannot launder stale completion", "progress_mismatch")
 
     joined = check(guarded_parallel_member_request(), "accepted", "grouped admission fixture")
     assert joined["status"] == "accepted", "Invalid grouped fixture is not authorizing RED"
@@ -1413,6 +1475,10 @@ def completion_progress_closure_controls():
         already_closed = completion(retained_progress_request(closed))
         retained = check(already_closed, "accepted", name + " completion retains a previously closed cycle")
         assert retained["canonical_progress_state"] == state
+        wrong_pair = deepcopy(already_closed)
+        wrong_pair["context"]["progress"]["state"]["history"][-1]["admission_ref"] = "admission:unrelated-history"
+        check(wrong_pair, "blocked", name + " full checkpoint must match the completed action and admission", "progress_mismatch")
+        check(compact(already_closed), "accepted", name + " compacted closed action lineage permits completion")
         blocked = deepcopy(closed_now)
         blocked["context"]["readiness"]["ready"] = False
         observed = check(blocked, "blocked", name + " completed checkpoint precedes a later blocker", "not_ready")
@@ -1457,12 +1523,223 @@ def completion_progress_closure_controls():
     assert current_execution["action_ref"] != old["action_ref"]
     assert current_execution["action_admission_ref"] != old["action_admission_ref"]
     check(later_resume, "accepted", "resume accepts changed action and admission refs under the same guard")
+    closed_request = cycle(retained_progress_request(initial))
+    closed_request.update(boundary="plan", plan=deepcopy(initial["canonical_plan"]))
+    closed = check(closed_request, "accepted", "actual closure before the successor dispatch")
+    assert closed["status"] == "accepted", "Completed predecessor fixture must remain valid"
+    successor = retained_progress_request(closed)
+    successor["plan"]["implementation_steps"][0]["execution"]["action_ref"] = successor["context"]["progress"]["action"]["action_ref"]
+    admitted = check(successor, "accepted", "real successor dispatch materializes a new admission after predecessor closure")
+    assert admitted["status"] == "accepted", "Genuine successor dispatch must remain valid"
+    running = retained_progress_request(admitted)
+    running["boundary"] = "resume"
+    running["plan"]["implementation_steps"][0]["execution"]["state"] = "RUNNING"
+    running["context"]["previous_plan"] = deepcopy(initial["canonical_plan"])
+    check(running, "accepted", "resume preserves a genuine later live action under the same guard")
+    verify = retained_progress_request(admitted)
+    verify["boundary"] = "verification"
+    packet = verify["plan"]["implementation_steps"][0]
+    packet["execution"]["state"] = "RUNNING"
+    verify["context"]["packet_evidence"][packet["packet_id"]] = evidence(verify, packet)
+    verified_successor = check(verify, "accepted", "actual successor verification retains its committed pair")
+    assert verified_successor["status"] == "accepted", "Successor verification fixture must remain valid"
+    close_successor = cycle(retained_progress_request(verified_successor))
+    close_successor.update(boundary="plan", plan=deepcopy(verified_successor["canonical_plan"]))
+    completed_successor = check(close_successor, "accepted", "actual API closes the later admitted action")
+    assert completed_successor["status"] == "accepted", "Completed successor fixture must remain valid"
+    completed_resume = retained_progress_request(completed_successor)
+    completed_resume.update(boundary="resume")
+    completed_resume["context"]["previous_plan"] = deepcopy(initial["canonical_plan"])
+    check(completed_resume, "accepted", "resume proves a strictly later completed action from full checkpoints")
+    for name, observed in (("live", verified_successor), ("completed", completed_successor)):
+        rewind = retained_progress_request(observed)
+        rewind["boundary"] = "resume"
+        execution = rewind["plan"]["implementation_steps"][0]["execution"]
+        for field in ("action_ref", "action_admission_ref"):
+            execution[field] = initial["canonical_plan"]["implementation_steps"][0]["execution"][field]
+        promoted = check(rewind, "blocked", name + " successor cannot rewind to its genuinely closed predecessor",
+                         "progress_mismatch")
+        if promoted["status"] == "accepted":
+            stale = completion(retained_progress_request(promoted))
+            stale["context"]["progress"]["state"] = deepcopy(closed["canonical_progress_state"])
+            check(stale, "blocked", name + " rewind canonical handoff cannot close with predecessor-only history",
+                  "progress_mismatch")
+
+    old_base = compact(retained_progress_request(closed))
+    summary_ref = old_base["context"]["progress"]["state"]["history_base_ref"]
+    ordered = deepcopy(completed_resume)
+    carrier = ordered["context"]["progress"]
+    carrier["resolved_sources"][summary_ref] = deepcopy(old_base["context"]["progress"]["resolved_sources"][summary_ref])
+    carrier["state"].update(history=carrier["state"]["history"][-1:], history_base_ref=summary_ref)
+    carrier["state"]["evidence_refs"].append(summary_ref)
+    check(ordered, "accepted", "old compacted action followed by a genuine later tail checkpoint remains ordered")
+    check(compact(completed_resume), "blocked", "different pairs summarized without ordering remain an explicit evidence gap",
+          "progress_history_missing")
+
+    invalidation = retained_progress_request(completed_successor)
+    invalidation["boundary"] = "resume"
+    invalidation["context"]["current_input_identities"]["accepted-outcome"] = {"source": "independently-observed-new-input"}
+    invalidated = check(invalidation, "accepted", "helper invalidates changed inputs while retaining the committed pair")
+    assert invalidated["status"] == "accepted", "Helper invalidation must remain available"
+    invalid_execution = invalidated["canonical_plan"]["implementation_steps"][0]["execution"]
+    assert invalid_execution["state"] == "INVALIDATED"
+    assert invalid_execution["action_admission_ref"] == completed_successor["canonical_plan"]["implementation_steps"][0]["execution"]["action_admission_ref"]
+    redispatch = retained_progress_request(invalidated)
+    packet = redispatch["plan"]["implementation_steps"][0]
+    current_input = redispatch["context"]["current_input_identities"][packet["packet_id"]]
+    packet["execution"].update(state="PENDING", input_identity=deepcopy(current_input),
+        action_ref=redispatch["context"]["progress"]["action"]["action_ref"])
+    redispatch["context"]["progress"]["action"]["input_identity"] = deepcopy(current_input)
+    redispatch["context"]["packet_evidence"][packet["packet_id"]] = evidence(redispatch, packet)
+    redispatch["context"]["test_applicability"][packet["packet_id"]] = applicability(redispatch, packet)
+    check(redispatch, "accepted", "legitimate dispatch after helper invalidation creates the genuinely bound new pair")
+
+    group_closed = check(guarded_parallel_barrier_request(retained_progress_request(joined)), "accepted",
+                         "actual grouped predecessor closes before a successor coordinator")
+    assert group_closed["status"] == "accepted", "Grouped predecessor fixture must remain valid"
+    group_successor = retained_progress_request(group_closed)
+    carrier = group_successor["context"]["progress"]
+    action_ref, scope_ref = "action:coordinator-successor", "scope:coordinator-successor"
+    members = deepcopy(carrier["action"]["member_scope"]["members"])
+    carrier["action"].update(action_ref=action_ref, member_scope={"source_ref": scope_ref, "members": members})
+    carrier["resolved_sources"].update({
+        scope_ref: {"kind": "coordinator_action_scope", "guard_id": carrier["state"]["guard_id"],
+            "outcome_ref": carrier["state"]["outcome_ref"], "action_ref": action_ref,
+            "approved_plan_identity": deepcopy(group_successor["plan"]["approved_plan_identity"]),
+            "members": members, "grouping_decision_ref": "decision:coordinator-successor"},
+        "decision:coordinator-successor": {"approved_plan_identity": deepcopy(group_successor["plan"]["approved_plan_identity"]),
+            "reason": "The same independent isolated packets need a subsequent coordinated correction"}})
+    group_successor.update(worker_stage="production", worker_role="code_writer")
+    group_successor["context"]["workspace"]["active_source_writer_ids"] = []
+    group_successor["plan"]["implementation_steps"][0]["execution"]["action_ref"] = action_ref
+    group_successor["context"]["packet_evidence"]["accepted-outcome"]["implementation_evidence_ref"] = "writer:coordinator-successor"
+    first_member = check(group_successor, "accepted", "genuine grouped successor binds its anchor after old closure")
+    assert first_member["status"] == "accepted", "Grouped successor anchor must remain valid"
+    second_member = retained_progress_request(first_member)
+    second_member["target_packet_id"] = "dependent-outcome"
+    second_member["plan"]["implementation_steps"][1]["execution"]["action_ref"] = action_ref
+    second_member["context"]["workspace"]["active_source_writer_ids"] = ["accepted-outcome"]
+    member = check(second_member, "accepted", "genuine later coordinator admission binds its non-anchor member")
+    assert member["status"] == "accepted", "Declared member must join the successor admission"
+
+    singleton_successor = retained_progress_request(group_closed)
+    singleton_successor.update(worker_stage="production", worker_role="code_writer")
+    carrier = singleton_successor["context"]["progress"]
+    carrier["action"].pop("member_scope")
+    carrier["action"]["action_ref"] = "action:singleton-after-group"
+    singleton_successor["plan"]["implementation_steps"][0]["execution"]["action_ref"] = carrier["action"]["action_ref"]
+    singleton_successor["context"]["workspace"]["active_source_writer_ids"] = []
+    singleton_successor["context"]["packet_evidence"]["accepted-outcome"]["implementation_evidence_ref"] = "writer:singleton-after-group"
+    anchor = check(singleton_successor, "accepted", "actual singleton successor admits only its bound packet")
+    assert anchor["status"] == "accepted", "Singleton successor fixture must remain valid"
+    unbound = retained_progress_request(anchor)
+    unbound["boundary"] = "resume"
+    anchor_execution = unbound["plan"]["implementation_steps"][0]["execution"]
+    for field in ("action_ref", "action_admission_ref"):
+        unbound["plan"]["implementation_steps"][1]["execution"][field] = anchor_execution[field]
+    check(unbound, "blocked", "a sibling cannot adopt a live singleton pair outside its admission binding", "progress_mismatch")
+    useful = check(cycle(retained_progress_request(initial), "useful_new_evidence"), "accepted",
+                   "first ordinary supported uncertainty resolution")
+    assert useful["status"] == "accepted", "Useful-evidence fixture must remain valid"
+    useful_request = retained_progress_request(useful)
+    first_resolution = "uncertainty:ruled-out:4"
+    check(resolve_again(useful_request, first_resolution), "blocked", "fresh ordinary wrappers cannot resolve the same uncertainty again")
+    known = compact(useful_request, [first_resolution])
+    check(resolve_again(known, first_resolution), "blocked", "known compacted uncertainty cannot be resolved again")
+    distinct = check(cycle(known, "useful_new_evidence"), "accepted", "known compacted inventory permits distinct supported resolution")
+    assert distinct["status"] == "accepted", "Distinct uncertainty fixture must remain valid"
+    check(resolve_again(retained_progress_request(distinct), "uncertainty:ruled-out:5"), "blocked",
+          "known compacted inventory combines with retained tail resolutions")
+
+    known_empty = compact(retained_progress_request(initial), [])
+    first = check(cycle(known_empty, "useful_new_evidence"), "accepted", "known empty inventory permits a first supported resolution")
+    assert first["status"] == "accepted", "Known-empty fixture must remain valid"
+    legacy = retained_progress_request(first)
+    carrier = legacy["context"]["progress"]
+    carrier["resolved_sources"][carrier["state"]["history_base_ref"]].pop("seen_resolved_uncertainty_refs")
+    legacy["boundary"] = "plan"
+    read = check(legacy, "accepted", "unknown legacy inventory replays retained useful-evidence tail")
+    assert read["status"] == "accepted", "Legacy historical replay must remain readable"
+    assert read["canonical_progress_state"] == carrier["state"]
+    legacy["boundary"] = "dispatch"
+    no_progress = check(cycle(legacy), "accepted", "unknown legacy inventory permits an ordinary no-progress cycle")
+    assert no_progress["status"] == "accepted", "Legacy no-progress cycle must remain valid"
+    legacy = retained_progress_request(no_progress)
+    prior = deepcopy(legacy["context"]["progress"]["state"])
+    ordinary_completion = completion(cycle(legacy))
+    ordinary_completion["plan"] = deepcopy(legacy["plan"])
+    verify_all(ordinary_completion)
+    check(ordinary_completion, "accepted", "unknown legacy inventory permits genuinely closed completion")
+
+    gain = cycle(legacy, "verified_gain")
+    gain.update(boundary="plan", plan=deepcopy(legacy["plan"]))
+    carrier = gain["context"]["progress"]
+    event = carrier["event"]
+    frontier = "frontier:legacy:additional-gain"
+    carrier["resolved_sources"][frontier] = {"accepted_obligations": ["scope", "focused", "integration", "additional-gain"]}
+    event["frontier_ref"] = frontier
+    carrier["resolved_sources"][event["assessment_ref"]]["frontier_ref"] = frontier
+    carrier["resolved_sources"][event["evidence_refs"][0]].update(result="passed", newly_verified_obligations=["additional-gain"])
+    check(gain, "accepted", "unknown legacy inventory permits independently verified acceptance gain")
+
+    incoming = cycle(legacy, "useful_new_evidence")
+    incoming["boundary"] = "plan"
+    blocked = check(incoming, "blocked", "new useful event needs an authoritative inventory across unknown history",
+                    "progress_history_missing")
+    if blocked.get("canonical_progress_state") != prior:
+        failures.append(("Rejected unknown-inventory novelty consumed or changed retained state", blocked))
+    reconstructed = deepcopy(incoming)
+    reconstructed["plan"] = deepcopy(legacy["plan"])
+    carrier = reconstructed["context"]["progress"]
+    carrier["resolved_sources"][carrier["state"]["history_base_ref"]]["seen_resolved_uncertainty_refs"] = []
+    assert carrier["state"] == prior, "Archive inventory reconstruction must not reset retained progress"
+    restored = check(reconstructed, "accepted", "authoritative inventory reconstruction enables new novelty without reset")
+    assert restored["status"] == "accepted", "Authoritative inventory reconstruction must permit the supported distinct resolution"
+    after = restored["canonical_progress_state"]
+    assert after["history"][:-1] == prior["history"] and after["work_ordinal"] == prior["work_ordinal"] + 1
+    assert prior["consecutive_no_progress"] == 1 and after["consecutive_no_progress"] == 0
+    assert after["guard_id"] == prior["guard_id"] and after["history_base_ref"] == prior["history_base_ref"]
+
     current = retained_progress_request(initial)
     for _ in range(2):
         next_cycle = check(completed_progress_cycle(current), "accepted", "prepare retained no-progress cycle")
         assert next_cycle["status"] == "accepted", "Invalid stagnation fixture is not authorizing RED"
         current = retained_progress_request(next_cycle)
+    # Existing policy controls cover increases. A decrease must not revoke an
+    # ordinary action genuinely admitted before the changed threshold.
+    lowered = deepcopy(current)
+    lowered["boundary"] = "plan"
+    carrier = lowered["context"]["progress"]
+    state = carrier["state"]
+    old_policy = deepcopy(state["policy"])
+    policy = {"policy_id": "shared-stagnation-v1", "stagnation_window": 2, "source_ref": "policy:explicit-user:2"}
+    authority, observation, assessment = "authority:user-window2", "observation:user-window2", "assessment:user-window2"
+    event = {"kind": "policy_change", "event_id": "policy-change:3-to-2", "guard_id": state["guard_id"],
+        "outcome_ref": state["outcome_ref"], "predecessor_event_id": state["history"][-1]["event_id"],
+        "work_ordinal": state["work_ordinal"], "action_ref": carrier["action"]["action_ref"],
+        "assessment_ref": assessment, "evidence_refs": [observation], "authority_ref": authority,
+        "previous_policy": old_policy, "new_policy": policy}
+    carrier["resolved_sources"].update({
+        policy["source_ref"]: {"policy_id": policy["policy_id"], "stagnation_window": 2, "authority_ref": authority},
+        authority: {"kind": "user_policy_change", "authorized": True, "guard_id": state["guard_id"],
+            "outcome_ref": state["outcome_ref"], "previous_policy": old_policy, "new_policy": policy},
+        observation: {"result": "Explicit user instruction lowers shared window to 2", "authority_ref": authority},
+        assessment: {"kind": "policy_change", "event_id": event["event_id"], "observation_refs": [observation],
+            "authority_ref": authority, "previous_policy": old_policy, "new_policy": policy}})
+    carrier["event"] = event
+    changed = check(lowered, "accepted", "authorized lower window retains its already-admitted ordinary action")
+    assert changed["status"] == "accepted", "A lawful policy decrease must remain valid"
+    assert changed["canonical_progress_state"]["status"] == "stagnant"
+    assert changed["canonical_progress_state"]["action_admission"] == state["action_admission"]
+    continuing = retained_progress_request(changed)
+    continuing.update(worker_stage="production", worker_role="code_writer")
+    continuing["plan"]["implementation_steps"][0]["execution"]["state"] = "RUNNING"
+    continuing["context"]["packet_evidence"]["accepted-outcome"]["implementation_evidence_ref"] = "writer:observed-after-policy-decrease"
+    continued = check(continuing, "accepted", "existing ordinary action continues after an authorized policy decrease")
+    assert continued["canonical_progress_state"] == changed["canonical_progress_state"]
     final = completion(completed_progress_cycle(current))
+    final["plan"] = deepcopy(current["plan"])
+    verify_all(final)  # Retain the actual completed action, not the next proposal.
     stagnant = check(final, "accepted", "final checkpoint reaches stagnation with proven completion")
     assert stagnant["status"] == "accepted", "Stagnation alone must not refuse proven completion"
     state = stagnant["canonical_progress_state"]

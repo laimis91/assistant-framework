@@ -255,6 +255,12 @@ class ProgressEvent:
 
 
 @dataclass(frozen=True)
+class ActionLineage:
+    location: str
+    work_ordinal: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class ProgressState:
     guard: GuardIdentity
     policy: ProgressPolicy
@@ -284,6 +290,7 @@ class ProgressState:
         ordinal, count, frontier, previous = 0, 0, state.baseline_ref, None
         seen, observations, frontiers = set(), set(), {frontier}
         completed_actions = set()
+        resolved_uncertainties = set()
         last_kind = None
         effective_policy = next((event.previous_policy for event in state.history if event.kind == "policy_change"), state.policy)
         ProgressPolicy.parse(effective_policy.wire(), sources)
@@ -308,6 +315,8 @@ class ProgressState:
             refs(base.get("unresolved_oscillation_refs"))
             refs(base.get("seen_unblock_change_refs"))
             completed_actions = set(refs(base.get("seen_action_refs")))
+            if "seen_resolved_uncertainty_refs" in base:
+                resolved_uncertainties = set(refs(base["seen_resolved_uncertainty_refs"]))
             require(state.history_base_ref in state.evidence_refs, "Compacted evidence reference was discarded")
         for event in state.history:
             require(event.guard == state.guard and event.event_id not in seen
@@ -328,6 +337,11 @@ class ProgressState:
                 last_kind = event.kind
             if event.kind == "work_checkpoint":
                 completed_actions.add(event.action_ref)
+                if event.disposition == "useful_new_evidence":
+                    uncertainty = text(resolved(sources, event.assessment_ref).get("resolved_uncertainty_ref"))
+                    require(uncertainty not in resolved_uncertainties,
+                            "The same uncertainty resolution is not new useful evidence", "progress_replay")
+                    resolved_uncertainties.add(uncertainty)
             seen.add(event.event_id)
             observations.update(event.evidence_refs)
             if event.frontier_ref is not None:
@@ -355,6 +369,24 @@ class ProgressState:
                             and e.action_scope_ref == (scope.source_ref if scope else None) for e in state.history),
                         "Admission names an unknown unblock")
         return state
+
+    def action_lineage(self, action: ActionIdentity, admission_ref: str, sources) -> ActionLineage:
+        """Locate an execution pair without inventing order within a summary."""
+        text(admission_ref)
+        admission = self.action_admission
+        if admission and admission.admission_ref == admission_ref and admission.action.action_ref == action.action_ref:
+            scope = admission.action.member_scope
+            bound = (next((member for member in scope.members if member.packet_id == action.packet_id), None)
+                     if scope else admission.action if admission.action.packet_id == action.packet_id else None)
+            if bound is not None and bound.input_identity == action.input_identity:
+                return ActionLineage("admitted")
+        for event in self.history:
+            if event.kind == "work_checkpoint" and event.action_ref == action.action_ref:
+                return (ActionLineage("checkpoint", event.work_ordinal) if event.admission_ref == admission_ref
+                        else ActionLineage("missing"))
+        if self.history_base_ref and action.action_ref in resolved(sources, self.history_base_ref)["seen_action_refs"]:
+            return ActionLineage("summary")
+        return ActionLineage("missing")
 
     def wire(self):
         result = dict(schema_version="1.0", guard_id=self.guard.guard_id, outcome_ref=self.guard.outcome_ref,
@@ -517,6 +549,10 @@ def transition(request: ProgressTransitionRequest) -> ProgressTransitionResult:
                 coordinator_barrier(event, request.resolved_sources, admission.action.member_scope)
             else:
                 require(event.coordinator_barrier_ref is None, "Singleton cycle cannot claim coordinator membership")
+            if event.disposition == "useful_new_evidence" and state.history_base_ref:
+                require("seen_resolved_uncertainty_refs" in base,
+                        "Reconstruct the compacted uncertainty inventory before claiming new useful evidence",
+                        "progress_history_missing")
         wire = state.wire()
         wire["history"].append(event.wire())
         wire["evidence_refs"] = list(dict.fromkeys(wire["evidence_refs"] + list(event.evidence_refs) + [event.assessment_ref]))

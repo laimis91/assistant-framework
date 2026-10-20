@@ -650,9 +650,8 @@ def actual_red(packet, evidence):
             and red.get("cwd") == packet["red_cwd"], "tdd_evidence", pid, "Actual matching authorizing RED required")
     for field in ("test_file", "test_name", "failure_summary", "right_reason"):
         text(red.get(field), pid + ".red." + field)
-    # The trusted caller resolves this unchanged phase from the same actual
-    # canonical cycle. Producer/resolver adjudication owns the semantic oracle;
-    # diagnostics and explanations are not copies of the planned oracle prose.
+    # Resolve the unchanged canonical phase; producer/resolver adjudicates the
+    # oracle without copying its prose into diagnostics.
     phase = object_value(cycle.get("red_phase"), pid + ".red_phase")
     require(phase.get("verified_failing") is True and phase.get("test_file") == red["test_file"]
             and phase.get("test_name") == red["test_name"], "tdd_evidence", pid, "Current producer-verified RED target required")
@@ -749,8 +748,7 @@ def worker_stage(request, packet, context, plan):
         object_value(evidence, pid + ".evidence")
         if applicability.status == "not_applicable":
             applicability.assertion_source(evidence, actor, pid)
-    # Existing current-cycle progress is the only stage-order authority supplied
-    # by the caller. A closed cycle cannot be recycled as new test or production work.
+    # Only current-cycle evidence authorizes stages; closed cycles cannot restart.
     cycle_progress = evidence.get("tdd_cycle") if isinstance(evidence, dict) else None
     if tdd and stage in {"test_authoring", "pre_production_red"}:
         require(cycle_progress is None and packet["execution"].get("tdd_cycle_log_ref") is None,
@@ -764,8 +762,7 @@ def worker_stage(request, packet, context, plan):
             require(not (isinstance(prior_green, dict) and prior_green.get("all_tests_pass") is True)
                     and not prior_refactor, "worker_stage", pid, "Production cannot replay passed GREEN or REFACTOR")
     if stage in {"test_authoring", "implementation"} or (stage == "production" and packet["execution"]["state"] == "PENDING" and (not tdd or lane == "bounded_executor")):
-        # Initial native actor may be unknown before creation. The caller records it
-        # from the actual return; no forced bootstrap or invented identity is allowed.
+        # Record the actual new actor; no forced bootstrap or fabricated identity.
         if evidence is not None and evidence.get("writer_actor_id") is not None:
             require(actor is not None and evidence["writer_actor_id"] == actor,
                     "writer_lineage", pid, "Observed prior writer must match current native actor")
@@ -885,8 +882,7 @@ def normalize_v14(source, context):
         "mapping_ref": "task-packet-admission.py#normalize_v14",
         "packet_mapping": [{"source_packet_id": p["packet_id"], "packet_id": p["packet_id"],
                             "packet_definition_digest": digest(packet_definition(p))} for p in source["implementation_steps"]]}
-    # Only identity projections change. Commands, bindings, native actor, input,
-    # current stages, RED and other results are preserved literally.
+    # Migrate identities only; preserve commands, bindings, actors, inputs, stages and results.
     for rows in (current.get("packet_evidence", {}), current.get("test_applicability", {})):
         for row in rows.values():
             if row.get("approved_plan_identity") == original_identity:
@@ -968,6 +964,33 @@ def progress_admission(packet, context, state, plan):
     return result.state
 
 
+def preserve_execution_pairs(plan, context, progress):
+    """Validate the final snapshot before it replaces independently retained pairs."""
+    previous = {p["packet_id"]: p["execution"] for p in (context.get("previous_plan") or {}).get("implementation_steps", [])}
+    for packet in plan["implementation_steps"]:
+        pid, execution = packet["packet_id"], packet["execution"]
+        old = previous.get(pid, {})
+        if "action_admission_ref" not in old:
+            continue
+        require("action_ref" in execution and "action_admission_ref" in execution,
+                "progress_mismatch", pid, "Retain the committed action/admission pair")
+        if all(execution[field] == old.get(field) for field in ("action_ref", "action_admission_ref")):
+            continue
+        require(progress is not None, "progress_history_missing", pid, "Changed pairs need retained progress proof")
+        require(execution.get("progress_guard_ref") == progress.guard.guard_id,
+                "progress_mismatch", pid, "Pair transitions retain the same progress guard")
+        sources = context["progress"]["resolved_sources"]
+        before, after = [progress.action_lineage(PROGRESS.ActionIdentity.parse({"action_ref": row.get("action_ref"),
+                            "packet_id": pid, "input_identity": row["input_identity"]}), row["action_admission_ref"], sources)
+                         for row in (old, execution)]
+        require(not (before.location == after.location == "summary"),
+                "progress_history_missing", pid, "Reconstruct ordering between summarized pairs")
+        require(before.location in {"checkpoint", "summary"} and
+                (after.location == "admitted" or (after.location == "checkpoint" and
+                 (before.location == "summary" or after.work_ordinal > before.work_ordinal))),
+                "progress_mismatch", pid, "A changed pair must genuinely succeed its closed predecessor")
+
+
 def authenticate_provenance(plan, context):
     """Only trusted normalization creates provenance; later calls retain it exactly."""
     previous = context.get("previous_plan")
@@ -992,8 +1015,7 @@ def admission(request):
         boundary = request.get("boundary")
         require(boundary in BOUNDARIES, "unsupported_boundary", "boundary", "Unknown admission operation")
         context = object_value(request.get("context"), "context")
-        # A completed cycle belongs to the retained outcome even when authority,
-        # readiness, workspace or a later-stage gate blocks the next action.
+        # Retain completed progress before any subsequent admission gate.
         progress = progress_checkpoint(context)
         if progress is not None:
             carrier = context["progress"]
@@ -1059,16 +1081,22 @@ def admission(request):
             packet["execution"]["state"] = "VERIFIED"
         if boundary == "completion":
             require(all(p["execution"]["state"] == "VERIFIED" for p in packets.values()), "incomplete_packets", "implementation_steps", "Every canonical packet must be VERIFIED")
-            marked_executions = [p["execution"]
+            marked_executions = [(p["packet_id"], p["execution"])
                                  for retained_plan in (snapshot, context.get("previous_plan") or {})
                                  for p in retained_plan.get("implementation_steps", [])
                                  if any(field in p["execution"] for field in
                                         ("progress_guard_ref", "action_ref", "action_admission_ref"))]
             require(not marked_executions or progress is not None, "progress_history_missing", "context.progress",
                     "Completion must retain progress bound by current or previous packet executions")
-            for execution in marked_executions:
+            for pid, execution in marked_executions:
                 require(execution.get("progress_guard_ref") == progress.guard.guard_id,
                         "progress_mismatch", "context.progress", "Completed packet executions must retain the same task guard")
+                if "action_admission_ref" in execution:
+                    action = PROGRESS.ActionIdentity.parse({"action_ref": execution.get("action_ref"),
+                        "packet_id": pid, "input_identity": execution["input_identity"]})
+                    lineage = progress.action_lineage(action, execution["action_admission_ref"], context["progress"]["resolved_sources"])
+                    require(lineage.location in {"checkpoint", "summary"},
+                            "progress_mismatch", "context.progress", "Completion needs recorded closure of each admitted execution")
             require(progress is None or progress.action_admission is None, "progress_mismatch", "context.progress",
                     "Record the completed semantic cycle before final completion")
             completion = object_value(context.get("completion_evidence"), "context.completion_evidence")
@@ -1117,19 +1145,28 @@ def admission(request):
             if "current_task_packet" in request:
                 require(digest(request["current_task_packet"]) == digest(projection), "projection_mismatch", "current_task_packet", "Projection cannot redefine canonical work or specialist decision")
             result["current_task_packet"] = projection
+        final_progress = progress
+        prior_execution = deepcopy(packet["execution"]) if boundary == "dispatch" else None
         if boundary == "dispatch":
             # Projection/inline checks are gates too. No rejected call consumes
             # a bound unblock or writes an admission into its canonical packet.
-            progress = progress_admission(packet, context, progress, snapshot)
-            if progress is not None:
-                admission_ref = progress.action_admission.admission_ref
+            final_progress = progress_admission(packet, context, progress, snapshot)
+            if final_progress is not None:
+                admission_ref = final_progress.action_admission.admission_ref
                 packet["execution"]["action_admission_ref"] = admission_ref
                 result["current_task_packet"]["execution"]["action_admission_ref"] = admission_ref
-                result["current_task_packet"]["progress_state"] = progress.wire()
-                result["canonical_progress_state"] = progress.wire()
+                result["current_task_packet"]["progress_state"] = final_progress.wire()
+        try:
+            preserve_execution_pairs(snapshot, context, final_progress)
+        except Exception:
+            if prior_execution is not None:
+                packet["execution"] = prior_execution
+            raise
+        progress = final_progress
+        if progress is not None:
+            result["canonical_progress_state"] = progress.wire()
         result["canonical_context"] = deepcopy(context)
-        # The accepted snapshot becomes the caller's next retained authority;
-        # keeping an older snapshot here could hide a later terminal downgrade.
+        # Promote this snapshot; an older one could hide terminal downgrades.
         result["canonical_context"]["previous_plan"] = deepcopy(snapshot)
         if progress is not None:
             result["canonical_context"]["progress"]["state"] = progress.wire()
