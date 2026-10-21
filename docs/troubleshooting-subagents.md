@@ -24,12 +24,13 @@ scope.
 
 ## Selective upgrades and ownership compatibility
 
-`INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE` means a selective Claude or Codex install
-would replace writer/verifier profiles while retaining an old or unknown
-workflow controller. The installer stops before changing files, including in
-dry-run mode. It checks the retained controller’s declared matching v13 or v14 ownership stage
-protocol using its regular `SKILL.md`, `contracts/index.yaml`, and
-`contracts/handoffs.yaml` files.
+`INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE` means a selective Codex, Claude, or Gemini
+install would refresh shared tools or roles while retaining an incompatible live
+Workflow controller. For any retained controller, the installer requires regular
+`SKILL.md`, `contracts/index.yaml`, and `contracts/handoffs.yaml` files, with both
+contracts declaring matching schema `15.0` and the supported ownership stage
+tuples. It refuses before any write, including in dry-run mode. Required
+writer-source definitions are checked only for Codex and Claude.
 
 Refresh the workflow and its review, verification, and TDD dependencies first,
 then retry the original selection in the same environment:
