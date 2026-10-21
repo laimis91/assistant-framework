@@ -77,6 +77,121 @@ for term in \
         missing_shared_terms+=("$term")
     fi
 done
+if ! pivot_policy_output="$(python3 - "$FRAMEWORK_DIR" <<'PY'
+from pathlib import Path
+import json
+import re
+import sys
+
+root = Path(sys.argv[1]) / "skills/assistant-workflow"
+failures = []
+
+def section(path, start, end=None):
+    text = (root / path).read_text()
+    if start not in text or (end is not None and end not in text.split(start, 1)[1]):
+        failures.append(path + ": missing consumed section " + start)
+        return ""
+    text = text.split(start, 1)[1]
+    return text.split(end, 1)[0] if end else text
+
+regions = [
+    ("Review Stage 2", section("references/review-qa-router.md", "## Stage 2 - Code Quality Review", "## Stage 3 - QA Evaluation")),
+    ("Review Status Gate", section("references/review-qa-router.md", "## Status Gate", "## Verification Summary")),
+    ("Quality Review #1", section("references/task-journal-template.md", "### Quality Review #1", "### Quality Review #2")),
+    ("Quality Review #2", section("references/task-journal-template.md", "### Quality Review #2", "### QA Evaluation")),
+    ("Pivot/Restart Log append condition", section("references/task-journal-harness-appendix.md", "## Pivot/Restart Log", "### Pivot/Restart Decision #N")),
+    ("QA decision placeholder", section("references/task-journal-harness-appendix.md", "### QA Evaluation #1")),
+    ("Runtime controller triggers", section("references/harness-runtime-artifacts.md", "Trigger it for:", "Required decision fields:")),
+    ("Output decision condition", section("contracts/output.yaml", "  - name: pivot_restart_decision\n", "    object_fields:")),
+    ("Review stopping", section("../assistant-review/SKILL.md", "## QA and stopping", "## Result")),
+    ("Creator Pattern 9", section("../assistant-skill-creator/references/harness-patterns.md", "## Pattern 9: Pivot / Restart Decisions", "## Pattern 10: Agentic Loop Safety")),
+    ("Harness guide score table", section("../../docs/harness-design-guide.md", "## Drift, Stagnation, And Pivot/Restart", "### Code Writer Blocker Routing")),
+    ("Harness guide blocker continuation", section("../../docs/harness-design-guide.md", "### Code Writer Blocker Routing", "## Gate Enforcement")),
+]
+for name, text in regions:
+    normalized = re.sub(r"\s+", " ", text.replace(chr(96), "")).lower()
+    # Check the actual trigger/status/placeholder region. A shared-policy
+    # sentence elsewhere in a file cannot excuse its old score-only trigger.
+    for pattern, claim in ((r"shared.{0,35}(?:guard|semantic).{0,45}stagn", "shared guard stagnation"),
+                           (r"material.{0,35}(?:change|decision)", "material-change decision"),
+                           (r"(?:score|diagnostic).{0,90}alone.{0,65}(?:not|never|insufficient)", "diagnostic labels alone impose no decision")):
+        if not re.search(pattern, normalized):
+            failures.append(name + ": missing " + claim)
+    # Preserve old labels as vocabulary, while rejecting their formerly
+    # unconditional trigger syntax even if an aligned sentence was appended.
+    for pattern in (
+        r"must exist when review or qa reported stagnation",
+        r"ref if stagnation, repeated drift, repeated regression",
+        r"append when review/qa stagnation, repeated drift/regression",
+        r"^- review or qa stagnation\s*$|^- repeated (?:drift|regression)\s*$|^- rubric or domain action pivot\s*$",
+        r"condition:.*evidence triggers stagnation, repeated drift, repeated regression",
+        r"and a recorded pivot/restart decision before another pass",
+        r"reset evaluator with stricter context|repeated regression triggers pivot/restart|create pivot/restart signal",
+        r"review/qa stagnation, repeated drift/regression, domain action pivot",
+    ):
+        target = text.replace(chr(96), "").lower() if pattern.startswith("^-") else normalized
+        if re.search(pattern, target, re.M):
+            failures.append(name + ": score-only trigger remains")
+
+runtime = section("references/harness-runtime-artifacts.md", "## Pivot/Restart Controller", "## Corrective Actions")
+output = section("contracts/output.yaml", "  - name: pivot_restart_decision\n", "      - name: affected_slice_or_round")
+for name, text in (("Runtime controller", runtime), ("Output contract", output)):
+    normalized = text.lower().replace(chr(96), "")
+    for term in ("code_writer_blocker", "verification", "plan", "scope"):
+        if term not in normalized and term.replace("_", " ") not in normalized:
+            failures.append(name + ": lost real blocker/material routing " + term)
+for label in ("STAGNATION", "repeated_DRIFT", "repeated_REGRESSION", "pivot"):
+    if label not in output:
+        failures.append("Output contract lost diagnostic trigger vocabulary " + label)
+
+creator = section("../assistant-skill-creator/references/harness-patterns.md", "## Pattern 9: Pivot / Restart Decisions", "## Pattern 10: Agentic Loop Safety")
+guide = section("../../docs/harness-design-guide.md", "### Code Writer Blocker Routing", "## Gate Enforcement")
+for name, text in (("Creator Pattern 9", creator), ("Harness guide blocker routing", guide)):
+    for blocker in ("legacy_code_bug", "broken_baseline", "hidden_dependency", "missing_contract", "stale_plan",
+                    "scope_conflict", "tool_environment", "permission_policy", "tdd_red_missing"):
+        if blocker not in text:
+            failures.append(name + ": lost existing blocker route " + blocker)
+for label in ("GENUINE", "SUSPICIOUS", "DRIFT", "REGRESSION", "STAGNATION"):
+    if "| " + label + " |" not in regions[-2][1]:
+        failures.append("Harness guide lost score diagnostic row " + label)
+
+def fixture_case(path, case_id):
+    cases = json.loads((root / path).read_text())["cases"]
+    matches = [case for case in cases if case["id"] == case_id]
+    if len(matches) != 1:
+        failures.append(path + ": expected one existing case " + case_id)
+        return {}
+    return matches[0]
+
+authoring = fixture_case("../assistant-skill-creator/evals/cases.json", "loop-process-skill-applies-harness-patterns")
+expected = " ".join(authoring.get("expected_behavior", [])).lower()
+for pattern, claim in ((r"shared.{0,35}(?:guard|semantic).{0,45}stagn", "shared semantic stagnation"),
+                       (r"material.{0,35}change", "material/domain change"),
+                       (r"genuine code writer blockers", "genuine blocker authority"),
+                       (r"score labels alone do not require a decision, reset, or pause", "diagnostic-only labels")):
+    if not re.search(pattern, expected):
+        failures.append("Creator loop-process expectation missing " + claim)
+if "for stagnation, drift, regression, rubric pivot" in expected:
+    failures.append("Creator loop-process expectation still promotes score labels to triggers")
+
+loop = fixture_case("evals/cases.json", "loop-experiment-artifacts-stay-conditional")
+required = loop.get("machine_expectations", {}).get("required_substrings", [])
+if "shared guard" not in required or "max iterations" in required:
+    failures.append("Generic loop machine oracle must require shared guard without an unconditional iteration ceiling")
+expected = " ".join(loop.get("expected_behavior", [])).lower()
+if not re.search(r"max iterations only for an explicit user or evidenced resource bound.*source", expected):
+    failures.append("Generic loop expectation lost optional source-bound iteration limits")
+for term in ("shared guard", "verifier", "stop condition", "budget limit", "tool access", "state tracking",
+             "retry or empty-result handling", "tool-error handling", "low-confidence escalation", "rollback/exit"):
+    if term not in expected:
+        failures.append("Generic loop expectation lost " + term)
+if failures:
+    print("; ".join(failures))
+    raise SystemExit(1)
+PY
+)"; then
+    missing_shared_terms+=("$pivot_policy_output")
+fi
 if [[ ${#missing_shared_terms[@]} -eq 0 ]]; then pass; else fail "shared policy missing: ${missing_shared_terms[*]}"; fi
 
 test_start "current review keeps batch accounting, coverage and canonical role separation"

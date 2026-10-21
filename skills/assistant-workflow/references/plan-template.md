@@ -155,6 +155,13 @@ Execution carries `progress_guard_ref`,
 `action_ref`, `action_admission_ref`. Single-pass work needs no progress object.
 Journal tables display canonical state, never another ledger; `DONE` cannot certify `VERIFIED`.
 
+History stays literal. Same-guard `kind: work_checkpoint` requires nonblank
+`event_id`/`evidence_ref` and exact full event/assessment or validated compacted
+event coverage, regardless of assessment-body availability. Generic pairs/notes/worker-stage
+rows assert no checkpoint. Legacy classification requires caller reconstruction
+from retained original evidence, preserving facts; unavailable classification remains
+an evidence gap.
+
 `completion_allocation` retains task-wide/deferred `requirement_ids`,
 `acceptance_criteria`, `selected_check_ids` and exact `binding_obligation_refs`.
 The accepted Requirement Acceptance Map governs criteria. Each requirement/check/policy
@@ -412,15 +419,15 @@ invocations; aliases grant no premature edit. Stored work stays stage-neutral.
 
 ## Medium Tasks — Standard Plan (`execution_intent != prepare_only`)
 
-Fill during Plan; Security/Operability stays optional. Approval leaves unanswered product choices open; explicit acceptance of a presented choice resolves it without ritual reconfirmation.
+Fill during Plan; Security/Operability stays optional. Plan approval alone does not settle an unanswered product choice; an explicit answer that accepts a clearly presented choice resolves it without ritual reconfirmation.
 
 ```markdown
 ## Goal
-- [1-3 sentence restated requirement from Discovery]
+- [Discovery outcome]
 
 ## Requirement Acceptance Map
 - Intended outcome: [one outcome]
-- Assumptions/defaults: [source-backed technical defaults or applicable authoritative behavior, with source and rationale]
+- Assumptions/defaults: [sourced technical defaults/authoritative behavior; rationale]
 - Open material questions: [none before approval]
 - Non-goals: [exclusions]
 - Entries: [requirement_id -> acceptance criterion -> verification method -> evidence pending -> manual scenario or N/A]
@@ -437,34 +444,34 @@ Fill during Plan; Security/Operability stays optional. Approval leaves unanswere
 - Architecture design mode: [not_applicable | lightweight | required | review_intensive]
 - Architecture trigger reasons: [concrete evidence, or N/A reason]
 - Required gates: [common gates + task-category gate packs from references/triage-rubric.md]
-- Required agents: [roles/skills selected from size, task type, and risk]
+- Required agents: [roles/skills per triage]
 - Subagent policy state: [not_required | delegation_triggered | delegation_opted_out | subagents_unavailable | policy_disallowed]
 - Subagent execution mode: [delegated | direct_fallback | not_applicable]
-- Subagent trigger scope: [direct user | applicable AGENTS.md | active skill; covered roles/phases/actions, or none]
+- Subagent trigger scope: [user/AGENTS.md/skill source; covered roles/phases/actions, or none]
 - Policy blocking source: [policy_disallowed only: exact active rule; confirm no applicable user/AGENTS/skill exception permits delegation]
 - Search mode: [none | lightweight | candidate_search]
 
 ## Constraints & decisions (from Discovery)
-- [Q&A question]: [chosen option and why]
+- [question]: [answer and rationale]
 - Assumed (not explicitly asked): [only source-backed technical defaults or applicable authoritative behavior, with source and rationale; no unanswered new material product choices]
-- Non-goals: [what's explicitly out of scope]
+- Non-goals: [exclusions]
 - Reuse search: [copy CodeMapper result: concrete not_applicable reason; otherwise searches, candidates/no_candidate_reason, decision, decision_rationale]
 - Implement-only preparation result: [execution_intent=implement_only: copy the exact typed approved_feature_preparation_result, feature_preparation_scope, and applicable evidence/basis unchanged into every implementation step and task packet; otherwise N/A]
 
 ## Architecture Decision Pack
 - Pack ref / mode: [ref] | [lightweight | required | review_intensive], or `N/A: [concrete reason]`
 - Handoff binding: [discover_only: context/journal ref only; downstream_bound: context/journal, plan/task-packet, and review-scope refs atomically bound before Build]
-- Freshness: [branch/HEAD or greenfield basis; source refs; invalidation conditions]
+- Freshness: [revision/greenfield; sources; invalidators]
 - Facts versus assumptions: [compact refs]
 - Independent challenge evidence: [required for review_intensive: challenge, dissent/validation, resolution, selected-design impact]
 - Design-pressure checks: [control/early exit, ownership/disposal, resource envelope, extension registration, representative path]
-- Material design questions: [none before approval, or grouped question refs]
-- Boundaries / ownership / lifecycle: [compact table or ref]
-- Type Ledger: [semantic types, primitive exceptions with conversion points, and extension seams]
-- Interface evolution: [consumer/owner, input, output/failure, compatibility/versioning/adapters]
-- Quality scenarios: [attribute, workload, budget or explicit unknown, measurement, failure condition]
-- Selected design / genuine alternatives: [decision and trade-offs]
-- Verification / review scope: [command or method, success signal, failure condition, reviewer checks]
+- Material design questions: [resolved before approval; question refs]
+- Boundaries / ownership / lifecycle: [table/ref]
+- Type Ledger: [semantic types; primitive exceptions/conversions; extension seams]
+- Interface evolution: [owner/consumer; input/output/failure; compatibility/versioning/adapters]
+- Quality scenarios: [attribute/workload; budget/unknown; measurement/failure]
+- Selected design / genuine alternatives: [decision/tradeoffs]
+- Verification / review scope: [command/method; success/failure; reviewer checks]
 
 ## Research (current state)
 - Modules/subprojects: ...
@@ -475,18 +482,18 @@ Fill during Plan; Security/Operability stays optional. Approval leaves unanswere
 - Existing patterns: ...
 
 ## Architecture
-- Current architecture: [identified or "new project"]
-- Architecture for this change: [Clean/MVVM/Hexagonal/etc.]
-- Layer rules: [key dependency boundaries]
+- Current architecture: [existing/new]
+- Architecture for this change: [pattern]
+- Layer rules: [boundaries]
 - Dependency direction: [A → B → C]
-- New files placement: [file → layer/folder rationale]
+- New files placement: [file → location/rationale]
 - SOLID notes: [SRP/OCP/DIP risks or N/A]
 
 ## Analysis
 ### Candidate search summary
-- Candidate search summary: [search_mode=candidate_search: selected candidate and rationale; otherwise N/A]
-- Candidate archive: [{agent_state_dir}/candidate-search.md when local state is allowed, or inline plan section]
-- Goal tree source: [acceptance criteria/slice criteria used]
+- Candidate search summary: [candidate_search: selection/rationale; otherwise N/A]
+- Candidate archive: [{agent_state_dir}/candidate-search.md if allowed; otherwise inline]
+- Goal tree source: [acceptance/slice criteria]
 
 ### Options
 1. [approach] — [tradeoff]
@@ -500,9 +507,9 @@ Fill during Plan; Security/Operability stays optional. Approval leaves unanswere
 
 ## Plan review
 
-- Scope understanding: [pass/fix needed + evidence]
-- Packet/agent count: [smallest useful count and concrete purpose of extra packets]
-- Step/cost budget: [budget or direct-fallback rationale]
+- Scope understanding: [pass/fix; evidence]
+- Packet/agent count: [minimal count; extra-packet purposes]
+- Step/cost budget: [budget/direct-fallback rationale]
 - Dependency order: [summary]
 - Output-plan match: [artifact/verification alignment]
 - Fallback path: [subagent path or direct equivalent]
@@ -512,13 +519,13 @@ Fill during Plan; Security/Operability stays optional. Approval leaves unanswere
 ## Artifact Contract
 
 - Artifact type: code | docs | report | dataset | chart | slide_deck | plan | eval | PR | config | other
-- Required files or deliverables: [exact paths/named external artifacts]
+- Required files or deliverables: [exact paths/artifacts]
 - Output format/schema: [markdown/json/yaml/csv/pdf/etc.]
-- Acceptance criteria: [binary user-visible checks]
+- Acceptance criteria: [binary user-visible acceptance]
 - Verification command or method: [command/inspection/manual validation/review gate]
-- Expected success signal: [exact passing output/created file/PR URL/green test/approved review]
-- Owner/consumer: [user, reviewer, downstream tool, runtime]
-- Non-goals/exclusions: [what must not be produced]
+- Expected success signal: [passing output/artifact/PR/CI/review]
+- Owner/consumer: [recipient/runtime]
+- Non-goals/exclusions: [exclusions]
 
 ## Loop / Experiment Routing
 
@@ -554,10 +561,10 @@ Medium+ harness-capable work loads `references/plan-harness-appendix.md`; otherw
 
 ## Canonical implementation_steps
 
-Store approved `implementation_steps` once; progress/worker views reference its definition/completion allocation.
+Store `implementation_steps` once; progress/worker views reference approved definition/completion allocation.
 
 ## Task packets
-Use the Executable Task Packet structure, dependency order and approved-definition deep worker projections.
+Use Executable Task Packet structure/order and approved-definition deep worker projections.
 
 ## Existing-system feature preparation (when `feature_preparation_scope=existing_system`)
 - Feature-preparation evidence ref: [stable `feature_preparation_evidence.ref`]
@@ -584,13 +591,13 @@ implementation state, never a preparation gate.
 Extend Medium with Security/Operability for auth, external inputs, infrastructure or multi-module boundaries.
 
 ```markdown
-Extend Medium with these sections.
+
 
 ## Security considerations
 - Data classification: [PII/auth/payments/external inputs?]
 - Auth changes: [authentication/authorization changes?]
-- Input validation: [new inputs and validation]
-- Secrets handling: [new secret storage/injection]
+- Input validation: [inputs/validation]
+- Secrets handling: [secret storage/injection]
 - Threat model needed: [yes/no — yes if auth, PII, payments, or external inputs]
 - Dependencies: [new packages/vulnerabilities?]
 
@@ -602,13 +609,13 @@ Extend Medium with these sections.
   - Feature flag: [yes/no]
   - DB migration reversible: [yes/no/N/A]
   - Revert commit sufficient: [yes/no]
-- Runbook updates: [on-call procedure changes]
+- Runbook updates: [runbook changes]
 
 ## Large/Mega addenda
-- Triage result: include `Subagent policy state`, `Subagent execution mode`, `Subagent trigger scope`, and `Search mode` as in Medium.
+- Triage result: inherit Medium `Subagent policy state`, `Subagent execution mode`, `Subagent trigger scope`, `Search mode`.
 - Architecture: include LSP and ISP in addition to SRP/OCP/DIP.
-- Decomposition Plan Review: reuse Medium fields and keep `- Broad-split rejection:` proof for large/mega slice plans.
-- Harness Appendix Routing: reuse the Medium compact refs and load `references/plan-harness-appendix.md` only when harness-capable.
+- Decomposition Plan Review: inherit Medium, including `- Broad-split rejection:` proof.
+- Harness Appendix Routing: inherit Medium refs; load `references/plan-harness-appendix.md` only when harness-capable.
 
 ## Tests to run
 - [command]: [what it validates]

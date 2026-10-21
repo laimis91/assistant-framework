@@ -2223,7 +2223,7 @@ artifacts:
   - name: pivot_restart_decision
     type: object
     required: conditional
-    condition: "Review, QA, Build, or CodeWriter evidence triggers STAGNATION, repeated DRIFT, repeated REGRESSION, rubric/domain action pivot, CodeWriter blocker routing, verification blocker, plan deviation, or scope change"
+    condition: "Evidenced shared semantic guard stagnation, a material change including a source-backed domain pivot, CodeWriter blocker routing, verification blocker, plan deviation, or scope change requires recovery. Numeric score diagnostics alone do not require a decision or block finalization."
     description: "Orchestrator-owned decision packet for stagnant quality loops, CodeWriter unexpected blockers, and restart/pivot recovery."
     validation: "Must classify the trigger, cite evidence, name the affected slice or round, compare options, select a recovery action, state whether reapproval is required, name the next agent, and point recovery to an exact next action."
     on_fail: "Pause the review/QA/build loop, load references/harness-controller.md, create the Pivot/Restart Decision packet, append trace/replay/run-state updates, and obtain reapproval before continuing when scope, files, behavior, risk, or verification changes."
@@ -2232,13 +2232,13 @@ artifacts:
         type: enum
         required: true
         enum_values: [STAGNATION, repeated_DRIFT, repeated_REGRESSION, pivot, code_writer_blocker, verification_blocker, plan_deviation, scope_change]
-        validation: "Names the event that forced pivot/restart consideration"
+        validation: "Diagnostic category for the evidenced guard, material-change or blocker trigger; numeric labels alone establish no trigger."
         on_missing: fail
       - name: evidence
         type: object[]
         required: true
         min_items: 1
-        validation: "At least one review score, QA score, CodeWriter blocker, verification failure, trace entry, or task-packet mismatch supports the trigger"
+        validation: "At least one independently supported guard stagnation, material/domain change, CodeWriter blocker, verification failure, trace entry, or task-packet mismatch establishes the recovery trigger. Scores provide context only."
         on_missing: fail
         object_fields:
           - name: source
@@ -2344,7 +2344,7 @@ artifacts:
     type: object[]
     required: conditional
     condition: "execution_intent != prepare_only and approved Plan uses executable packets"
-    description: "Canonical ordered packets; one coherent increment defaults to one packet. Stored Plan keeps specialist references; worker projections materialize unchanged decisions. Optional display summaries may exist only for human readability and cannot replace exact packet and files_to_* fields."
+    description: "Canonical ordered packets; one coherent increment defaults to one packet. Stored Plan keeps specialist references; worker projections materialize unchanged decisions. Optional display summaries may exist only for human readability and cannot replace exact packet and files_to_* fields. Generic history rows stay literal. Same-guard kind=work_checkpoint requires nonblank event_id/evidence_ref and exact full event/assessment or validated compacted event coverage regardless of assessment-body availability. Legacy classification requires caller reconstruction from retained original evidence; pairs alone prove nothing."
     min_items: 1
     object_fields:
       - name: writer_selection

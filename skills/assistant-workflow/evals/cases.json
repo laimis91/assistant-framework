@@ -3531,7 +3531,7 @@
         "Adds workflow_experiment_ledger only because the prompt explicitly asks for a workflow experiment.",
         "Adds loop_readiness_assessment only before starting an explicit repeat or optimization loop.",
         "Records hypothesis, intervention, expected signal, measurement method, baseline/control, evidence, decision, and next check.",
-        "Records verifier, stop condition, max iterations, budget limit, tool access, state tracking, retry or empty-result handling, tool-error handling, low-confidence escalation, and rollback/exit before any loop starts.",
+        "Records verifier, stop condition, shared guard, budget limit, tool access, state tracking, retry or empty-result handling, tool-error handling, low-confidence escalation, and rollback/exit before any loop starts; records max iterations only for an explicit user or evidenced resource bound and retains its source.",
         "Does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation from loop artifacts alone."
       ],
       "pass_criteria": [
@@ -3558,7 +3558,7 @@
           "baseline/control",
           "verifier",
           "stop condition",
-          "max iterations",
+          "shared guard",
           "budget limit",
           "state tracking",
           "retry_or_empty_result_handling",

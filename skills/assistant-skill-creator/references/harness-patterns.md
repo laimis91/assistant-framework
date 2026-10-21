@@ -223,14 +223,16 @@ Use Pivot/Restart when the active loop or handoff no longer makes safe progress.
 
 Triggers:
 
-- review or QA `STAGNATION`
-- repeated `DRIFT`
-- repeated `REGRESSION`
-- rubric/domain action `PIVOT`
+- evidenced shared semantic guard stagnation
+- an applicable material change, including a source-backed rubric/domain pivot
 - Code Writer blocker types such as `legacy_code_bug`, `broken_baseline`,
   `hidden_dependency`, `missing_contract`, `stale_plan`, `scope_conflict`,
   `tool_environment`, `permission_policy`, `tdd_red_missing`, or `other`
 - verification blockers, plan deviations, or scope changes that stale the packet
+
+Score labels alone do not require a decision, reset the evaluator, or pause
+productive work. `STAGNATION`, `DRIFT`, `REGRESSION` and `PIVOT` remain diagnostic
+vocabulary; cite the actual guard, material/domain change or blocker evidence.
 
 Decision fields:
 

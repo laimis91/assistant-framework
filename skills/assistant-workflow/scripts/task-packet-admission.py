@@ -856,11 +856,9 @@ def reconcile_execution(plan, context, checks):
 
 
 def normalize_v14(source, context):
-    """Validate original approval before the fixed representation-only migration.
+    """Normalize independently approved v14 representation and matching authority.
 
-    The independently resolved original approval digest is the attestation. No
-    candidate migration flag can approve changed scope. Return the remapped
-    authority context for the caller to retain with the canonical snapshot.
+    Preserve original approval provenance; return canonical context for caller retention.
     """
     validate_plan(source, context, "14.0")
     original_identity = deepcopy(source["approved_plan_identity"])
@@ -881,6 +879,15 @@ def normalize_v14(source, context):
         for row in rows.values():
             if row.get("approved_plan_identity") == original_identity:
                 row["approved_plan_identity"] = deepcopy(normalized_identity)
+    sources = (current.get("progress") or {}).get("resolved_sources", {})
+    for scope in sources.values():
+        if (isinstance(scope, dict) and scope.get("kind") == "coordinator_action_scope"
+                and scope.get("approved_plan_identity") == original_identity):
+            scope["approved_plan_identity"] = deepcopy(normalized_identity)
+            ref = scope.get("grouping_decision_ref")
+            decision = sources.get(ref) if isinstance(ref, str) else None
+            if isinstance(decision, dict) and decision.get("approved_plan_identity") == original_identity:
+                decision["approved_plan_identity"] = deepcopy(normalized_identity)
     if isinstance(current.get("completion_evidence"), dict) and current["completion_evidence"].get("approved_plan_identity") == original_identity:
         current["completion_evidence"]["approved_plan_identity"] = deepcopy(normalized_identity)
     if isinstance(current.get("previous_plan"), dict):
@@ -916,8 +923,10 @@ def _validate_progress_witnesses(plan, context, state):
             if retained_execution.get("progress_guard_ref") != state.guard.guard_id:
                 continue
             for row in retained_execution["history"]:
-                if not all(isinstance(row.get(key), str) and bool(row[key].strip()) for key in ("event_id", "evidence_ref")):
+                if row.get("kind") != "work_checkpoint":
                     continue
+                require(all(isinstance(row.get(key), str) and bool(row[key].strip()) for key in ("event_id", "evidence_ref")),
+                        "progress_history_missing", retained_packet["packet_id"], "Explicit checkpoints require event and assessment references")
                 require(row["event_id"] in summarized or checkpoints.get(row["event_id"]) == row["evidence_ref"],
                         "progress_history_missing", retained_packet["packet_id"], "Retain explicitly observed semantic checkpoints in progress history")
 

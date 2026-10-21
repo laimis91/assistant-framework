@@ -195,11 +195,16 @@ not mask stale or worsening output.
 
 | Signal | Meaning | Controller Response |
 |---|---|---|
-| GENUINE | Score improves and finding count decreases | Continue normally |
-| SUSPICIOUS | Score jumps sharply while findings drop | Log and continue skeptically |
-| DRIFT | Score improves while findings stay flat or rise | Reset evaluator with stricter context |
-| REGRESSION | Score drops | Investigate; repeated regression triggers pivot/restart |
-| STAGNATION | Findings remain across repeated unchanged scores | Create pivot/restart signal |
+| GENUINE | Score improves and finding count decreases | Record the diagnostic; apply the shared guard and current acceptance gates |
+| SUSPICIOUS | Score jumps sharply while findings drop | Inspect supporting evidence under the same guard and acceptance gates |
+| DRIFT | Score improves while findings stay flat or rise | Inspect evidence and evaluator context; the label grants no reset |
+| REGRESSION | Score drops | Investigate acceptance losses; score movement grants no pivot |
+| STAGNATION | Findings remain across repeated unchanged scores | Assess semantic evidence under the shared guard; unchanged scores establish no stall |
+
+Only evidenced shared semantic guard stagnation, an applicable material change
+including a source-backed domain pivot, or a genuine existing blocker requires
+recovery. Score labels alone do not require a decision, reset the evaluator, or
+pause productive work.
 
 The orchestrator owns `pivot_restart_decision`. It records the trigger, evidence,
 affected slice or round, options considered, selected action, reapproval need,
@@ -222,9 +227,11 @@ Controller routing:
 - `tdd_red_missing` -> return to TDD RED evidence before production code is
   accepted
 
-Review/QA stagnation, repeated drift/regression, domain action `pivot`,
-verification blockers, and stale task packets all route through the same
-Pivot/Restart Controller. Do not silently continue the loop after these signals.
+Evidenced shared semantic guard stagnation, an applicable material change including
+a source-backed domain pivot, genuine Code Writer or verification blockers, and
+stale task packets route through the same Pivot/Restart Controller before dependent
+corrective work. Score labels alone do not require a decision, reset the evaluator,
+or pause productive work.
 
 ---
 

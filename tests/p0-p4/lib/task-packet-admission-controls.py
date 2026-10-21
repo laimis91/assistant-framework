@@ -556,7 +556,7 @@ def released_v14_productive_fourth_attempt():
     request["context"]["progress"] = {"state": state, "resolved_sources": sources, "action": action}
     packet["execution"].update(recovery={"attempt_count": 3, "no_progress_count": 0},
         progress_guard_ref=guard_id, action_ref=action["action_ref"],
-        history=[{"event_id": entry["event_id"], "evidence_ref": entry["assessment_ref"]} for entry in history],
+        history=[{"kind": "work_checkpoint", "event_id": entry["event_id"], "evidence_ref": entry["assessment_ref"]} for entry in history],
         evidence_refs=deepcopy(evidence_refs))
     request["context"]["recovery_counters"][packet["packet_id"]] = deepcopy(packet["execution"]["recovery"])
     request["context"]["previous_plan"] = deepcopy(request["plan"])
@@ -1129,6 +1129,110 @@ def shared_progress_controls():
         total += 1
         return result
 
+    # Construct both versions before normalization: neither approval identity
+    # nor the old authority is recovered from the candidate migration output.
+    def original_group(version):
+        request = valid_request(2)
+        request["plan"]["plan_schema_version"] = version
+        request["plan"]["implementation_steps"][1]["depends_on"] = []
+        seal(request)
+        guard, outcome = "guard:original-group", "outcome:original-group"
+        action_ref, scope_ref = "action:original-group", "scope:original-group"
+        members = [{"packet_id": p["packet_id"], "packet_definition_digest": API.digest(API.packet_definition(p)),
+                    "input_identity": deepcopy(p["execution"]["input_identity"])}
+                   for p in request["plan"]["implementation_steps"]]
+        identity = deepcopy(request["plan"]["approved_plan_identity"])
+        request["context"]["progress"] = {
+            "state": {"schema_version": "1.0", "guard_id": guard, "outcome_ref": outcome,
+                "policy": {"policy_id": "shared-stagnation-v1", "stagnation_window": 3, "source_ref": "policy:original-group"},
+                "work_ordinal": 0, "consecutive_no_progress": 0, "status": "active",
+                "baseline_ref": "frontier:original-group", "frontier_ref": "frontier:original-group", "history": [], "evidence_refs": []},
+            "action": {"action_ref": action_ref, "packet_id": members[0]["packet_id"],
+                "input_identity": deepcopy(members[0]["input_identity"]),
+                "member_scope": {"source_ref": scope_ref, "members": deepcopy(members)}},
+            "resolved_sources": {
+                "frontier:original-group": {"accepted_obligations": [], "unresolved": ["both outcomes"]},
+                "policy:original-group": {"policy_id": "shared-stagnation-v1", "stagnation_window": 3,
+                    "authority_ref": identity["approval_ref"]},
+                outcome: {"task_identity": request["plan"]["task_identity"], "intended_outcome": "Preserve accepted behavior"},
+                scope_ref: {"kind": "coordinator_action_scope", "guard_id": guard, "outcome_ref": outcome,
+                    "action_ref": action_ref, "approved_plan_identity": deepcopy(identity), "members": deepcopy(members),
+                    "grouping_decision_ref": "decision:original-group"},
+                "decision:original-group": {"approved_plan_identity": deepcopy(identity),
+                    "reason": "Independently approved packets form one coordinator cycle"},
+                "unrelated:original-group": {"approved_plan_identity": deepcopy(identity), "note": "Not grouping authority"}}}
+        for packet in request["plan"]["implementation_steps"]:
+            packet["execution"].update(progress_guard_ref=guard, action_ref=action_ref)
+        request["context"]["previous_plan"] = deepcopy(request["plan"])
+        return request
+
+    for version in ("14.0", "15.0"):
+        original = original_group(version)
+        expected_identity = {**original["plan"]["approved_plan_identity"],
+                             "definition_digest": API.digest(expected_current_definition(original["plan"]))}
+        carrier = original["context"]["progress"]
+        source_refs = ("scope:original-group", "decision:original-group")
+        result = definition_check(original, "accepted", version + " independently approved grouped dispatch")
+        if result["status"] == "accepted":
+            canonical = result["canonical_plan"]
+            assert_current_approval(original["plan"], canonical)
+            assert API.definition(canonical) == expected_current_definition(original["plan"])
+            current = result["canonical_context"]["progress"]
+            for ref in source_refs:
+                expected = {**deepcopy(carrier["resolved_sources"][ref]), "approved_plan_identity": expected_identity}
+                assert current["resolved_sources"][ref] == expected, (version, ref, "Only approved representation identity may change")
+            assert current["resolved_sources"]["unrelated:original-group"] == carrier["resolved_sources"]["unrelated:original-group"]
+            assert current["action"] == carrier["action"]
+            expected_state = deepcopy(carrier["state"])
+            expected_state["action_admission"] = deepcopy(result["canonical_progress_state"]["action_admission"])
+            assert result["canonical_progress_state"] == expected_state
+            for old, new in zip(original["plan"]["implementation_steps"], canonical["implementation_steps"]):
+                expected_execution = deepcopy(old["execution"])
+                if old["packet_id"] == original["target_packet_id"]:
+                    expected_execution["action_admission_ref"] = expected_state["action_admission"]["admission_ref"]
+                assert new["execution"] == expected_execution
+            assert result["canonical_context"]["current_input_identities"] == original["context"]["current_input_identities"]
+        for mutation in ("scope-identity", "decision-identity", "both-identities", "member", "input", "unapproved"):
+            changed = deepcopy(original)
+            sources = changed["context"]["progress"]["resolved_sources"]
+            for ref in source_refs:
+                if mutation == "both-identities" or mutation == ("scope-identity" if ref == source_refs[0] else "decision-identity"):
+                    sources[ref]["approved_plan_identity"]["approval_ref"] = "approval:foreign-group"
+            if mutation == "member":
+                sources[source_refs[0]]["members"][1]["packet_definition_digest"] = "foreign-member-definition"
+            elif mutation == "input":
+                changed["context"]["progress"]["action"]["member_scope"]["members"][1]["input_identity"] = {"source": "foreign-input"}
+            elif mutation == "unapproved":
+                changed["plan"]["implementation_steps"][0]["acceptance_criteria"].append("Unapproved outcome")
+            definition_check(changed, "blocked", version + " group rejects " + mutation,
+                             "definition_mismatch" if mutation == "unapproved" else "progress_mismatch")
+
+        # These arbitrary objects are literal history, despite pair-shaped
+        # fields. Keep live migration and generic-history defects in the same
+        # deferred assertion owner so the RED observation reaches both.
+        generic = deepcopy(released_v14_productive_fourth_attempt() if version == "14.0" else native_source)
+        rows = [{"event_id": "note:bare", "evidence_ref": "evidence:bare"},
+                {"kind": "note", "event_id": "note:kind", "evidence_ref": "evidence:kind"},
+                {"kind": "worker_stage_result", "event_id": "note:worker-kind", "evidence_ref": "evidence:worker-kind"},
+                {"worker_stage": "production", "state": "RUNNING", "event_id": "note:stage", "evidence_ref": "evidence:stage"}]
+        for plan in (generic["plan"], generic["context"]["previous_plan"]):
+            plan["implementation_steps"][0]["execution"]["history"].extend(deepcopy(rows))
+        result = definition_check(generic, "accepted", version + " guarded dispatch preserves generic history literally")
+        if result["status"] == "accepted":
+            for plan in (result["canonical_plan"], result["canonical_context"]["previous_plan"]):
+                assert plan["implementation_steps"][0]["execution"]["history"] == generic["plan"]["implementation_steps"][0]["execution"]["history"]
+        for field in ("event_id", "evidence_ref"):
+            for malformed in (None, "", " "):
+                marked = deepcopy(released_v14_productive_fourth_attempt() if version == "14.0" else native_source)
+                row = {"kind": "work_checkpoint", "event_id": "checkpoint:malformed", "evidence_ref": "assessment:malformed"}
+                if malformed is None:
+                    row.pop(field)
+                else:
+                    row[field] = malformed
+                marked["plan"]["implementation_steps"][0]["execution"]["history"].append(row)
+                marked["context"]["previous_plan"] = deepcopy(marked["plan"])
+                definition_check(marked, "blocked", version + " explicit checkpoint rejects " + field + "=" + repr(malformed))
+
     running = retained_progress_request(native_admitted)
     running.update(worker_stage="production", worker_role="code_writer")
     packet = running["plan"]["implementation_steps"][0]
@@ -1559,6 +1663,10 @@ def completion_progress_closure_controls():
             assert unavailable["context"]["previous_plan"] == predispatch["context"]["previous_plan"]
             check(unavailable, "blocked", resolution + " assessment cannot hide uncovered witnesses after " + str(retained_count),
                   "progress_history_missing")
+            unavailable_completion = completion(unavailable)
+            unavailable_completion["plan"]["implementation_steps"][0]["execution"]["action_ref"] = closed_legacy_action
+            check(unavailable_completion, "blocked", resolution + " assessment cannot hide completion witnesses after " + str(retained_count),
+                  "progress_history_missing")
         if retained_count == 0:
             initial_baseline = deepcopy(omitted)
     # No explicit checkpoint witness remains in this independently supplied
@@ -1868,6 +1976,67 @@ def completion_progress_closure_controls():
     canonical_closed = native_known_closed["context"]["progress"]["state"]["history"][-1]["closed_admission"]
     if canonical_closed.get("packet_definition_digest") != original_digest:
         failures.append(("actual singleton closure loses admitted definition", canonical_closed))
+
+    # Keep an independently approved released-format source, carrying the
+    # actual closed execution just observed above. This is not a migrated
+    # candidate with its accepted provenance removed or its authority resealed.
+    original_closed = deepcopy(predispatch)
+    original_closed["context"]["progress"] = deepcopy(known_closed["context"]["progress"])
+    original_closed["plan"]["implementation_steps"][0]["execution"] = deepcopy(known_closed["plan"]["implementation_steps"][0]["execution"])
+    original_closed["context"]["previous_plan"] = deepcopy(original_closed["plan"])
+    for version, original in (("14.0", original_closed), ("15.0", native_known_closed)):
+        for form in ("full", "compacted"):
+            retained = deepcopy(original) if form == "full" else compact(original)
+            if form == "compacted":
+                # Coverage uses the validated archive inventory, without
+                # requiring old assessment bodies to classify generic rows.
+                for checkpoint in original["context"]["progress"]["state"]["history"]:
+                    retained["context"]["progress"]["resolved_sources"].pop(checkpoint["assessment_ref"], None)
+            positive = check(completion(retained), "accepted", version + " " + form + " genuinely closed completion baseline")
+            assert positive["status"] == "accepted", "Generic completion must start with actual closed authority"
+            rows = [{"event_id": "completion:bare", "evidence_ref": "evidence:completion-bare"},
+                    {"kind": "note", "event_id": "completion:note", "evidence_ref": "evidence:completion-note"},
+                    {"kind": "worker_stage_result", "event_id": "completion:worker", "evidence_ref": "evidence:completion-worker"},
+                    {"worker_stage": "production", "state": "VERIFIED", "event_id": "completion:stage", "evidence_ref": "evidence:completion-stage"}]
+            generic = completion(retained)
+            for plan in (generic["plan"], generic["context"]["previous_plan"]):
+                plan["implementation_steps"][0]["execution"]["history"].extend(deepcopy(rows))
+            accepted = check(generic, "accepted", version + " " + form + " completion preserves generic history literally")
+            if accepted["status"] == "accepted":
+                for actual, expected in ((accepted["canonical_plan"], generic["plan"]),
+                                         (accepted["canonical_context"]["previous_plan"], generic["context"]["previous_plan"])):
+                    assert actual["implementation_steps"][0]["execution"]["history"] == expected["implementation_steps"][0]["execution"]["history"]
+            for field in ("event_id", "evidence_ref"):
+                for malformed in (None, "", " "):
+                    marked = completion(retained)
+                    row = {"kind": "work_checkpoint", "event_id": "checkpoint:malformed-completion", "evidence_ref": "assessment:malformed-completion"}
+                    if malformed is None:
+                        row.pop(field)
+                    else:
+                        row[field] = malformed
+                    marked["plan"]["implementation_steps"][0]["execution"]["history"].append(row)
+                    marked["context"]["previous_plan"] = deepcopy(marked["plan"])
+                    check(marked, "blocked", version + " " + form + " completion rejects explicit checkpoint " + field + "=" + repr(malformed))
+            if form == "compacted":
+                # Preserve genuine action/admission closure while omitting
+                # only an independently witnessed historical checkpoint.
+                checkpoint = original["context"]["progress"]["state"]["history"][0]
+                for resolution in ("present", "missing", "null", "empty", "event-only", "mismatched", "unknown"):
+                    omitted = completion(retained)
+                    carrier = omitted["context"]["progress"]
+                    summary = carrier["resolved_sources"][carrier["state"]["history_base_ref"]]
+                    summary["seen_event_ids"].remove(checkpoint["event_id"])
+                    sources = carrier["resolved_sources"]
+                    if resolution == "present":
+                        sources[checkpoint["assessment_ref"]] = deepcopy(original["context"]["progress"]["resolved_sources"][checkpoint["assessment_ref"]])
+                    elif resolution == "missing":
+                        sources.pop(checkpoint["assessment_ref"], None)
+                    elif resolution == "null":
+                        sources[checkpoint["assessment_ref"]] = None
+                    else:
+                        sources[checkpoint["assessment_ref"]] = incomplete_assessment(checkpoint["event_id"], resolution)
+                    check(omitted, "blocked", version + " compacted completion cannot omit marked witness with " + resolution + " assessment",
+                          "progress_history_missing")
 
     def reapproved_definition(request, mutation):
         trial = deepcopy(request)
@@ -2301,7 +2470,7 @@ def completion_progress_closure_controls():
     checkpoint = witnessed_group["context"]["progress"]["state"]["history"][-1]
     for plan in (witnessed_group["plan"], witnessed_group["context"]["previous_plan"]):
         for packet in plan["implementation_steps"]:
-            packet["execution"]["history"].append({"event_id": checkpoint["event_id"], "evidence_ref": checkpoint["assessment_ref"]})
+            packet["execution"]["history"].append({"kind": "work_checkpoint", "event_id": checkpoint["event_id"], "evidence_ref": checkpoint["assessment_ref"]})
             packet["execution"]["evidence_refs"] = list(dict.fromkeys(packet["execution"]["evidence_refs"] +
                 checkpoint["evidence_refs"] + [checkpoint["assessment_ref"]]))
     deduplicated = check(witnessed_group, "accepted", "two member checkpoint witnesses retain one coordinator cycle")

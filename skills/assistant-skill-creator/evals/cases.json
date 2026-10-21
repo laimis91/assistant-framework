@@ -393,7 +393,7 @@
         "Uses typed Artifact References for cross-agent artifacts.",
         "Keeps Code Reviewer and QA Evaluator handoffs and outputs separate.",
         "Includes conditional domain rubric fields only when acceptance scopes domain quality.",
-        "Adds pivot/restart decision fields for stagnation, drift, regression, rubric pivot, and Code Writer blockers.",
+        "Adds pivot/restart decision fields for evidenced shared semantic guard stagnation, applicable material/domain change, and genuine Code Writer blockers; score labels alone do not require a decision, reset, or pause.",
         "Uses one task-level shared guard for three consecutive unproductive semantic cycles, with productive later rounds and unchanged acceptance/coverage gates."
       ],
       "pass_criteria": [

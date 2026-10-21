@@ -91,8 +91,10 @@ Audit stops after its first started batch, without fixes. Review-fix runs round 
 authorized fixes and validation, then fresh round 2. Round 3+ requires changed
 files, unresolved findings, validation failure, regression/drift, or changed
 hypothesis; score alone is insufficient. Productive rounds can continue beyond 10 under the same shared guard.
-Medium+ score diagnostics use [score-tracking.md](references/score-tracking.md)
-and a recorded pivot/restart decision before another pass.
+Medium+ score diagnostics use [score-tracking.md](references/score-tracking.md).
+Require a recorded pivot/restart decision before another pass only for evidenced
+shared semantic guard stagnation or an applicable material change. Score labels
+alone do not require a decision, reset the evaluator, or pause productive work.
 
 ## Result
 

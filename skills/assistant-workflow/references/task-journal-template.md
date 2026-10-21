@@ -271,7 +271,7 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 - Weighted: [score]
 - Delta from previous: — (first round)
 - Drift check: — (first round)
-- Pivot/Restart decision: [ref if STAGNATION, repeated DRIFT, repeated REGRESSION, or PIVOT occurred; otherwise N/A]
+- Pivot/Restart decision: [ref for evidenced shared guard stagnation or material change, including a domain pivot; otherwise N/A. Numeric score diagnostics alone do not require a decision]
 - Complexity: [ran / skipped (not C#) / tool unavailable]
   - [method (line N): score X — refactored to Y, or "within threshold"]
 - Must-fix:
@@ -288,7 +288,7 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 - Weighted: [score]
 - Delta from previous: [+/- amount]
 - Drift check: [GENUINE / SUSPICIOUS / DRIFT / REGRESSION / STAGNATION / NEUTRAL]
-- Pivot/Restart decision: [ref if STAGNATION, repeated DRIFT, repeated REGRESSION, or PIVOT occurred; otherwise N/A]
+- Pivot/Restart decision: [ref for evidenced shared guard stagnation or material change, including a domain pivot; otherwise N/A. Numeric score diagnostics alone do not require a decision]
 - Must-fix:
   - [x] [file:line] — [issue] → [fix applied]
 - Should-fix:

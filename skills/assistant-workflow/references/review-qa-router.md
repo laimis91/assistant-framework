@@ -117,6 +117,7 @@ Quality Review, as do medium+ tasks.
 If code review reports shared semantic guard stagnation or a material scope/authority change, pause the loop and create an orchestrator-owned
 `pivot_restart_decision` before another fix/review dispatch. The autonomous
 quality loop uses the shared semantic progress guard, without a round ceiling.
+Numeric score diagnostics alone do not require a decision.
 
 ## Stage 3 - QA Evaluation
 
@@ -191,8 +192,10 @@ Enforce the review cycle before presenting results:
   `skills/assistant-review/contracts/index.yaml#schema_version`. Persisted
   mismatches invalidate canonical review/QA result, delegation, snapshot, and
   Pack refs and rerun the required current-contract lane.
-- Pivot/Restart Decision must exist when Review or QA reported STAGNATION,
-  repeated DRIFT, repeated REGRESSION, or pivot action.
+- Pivot/Restart Decision must exist for evidenced shared semantic guard stagnation
+  or a material change, including a source-backed domain pivot. Numeric score
+  diagnostics alone do not require a decision or block finalization; acceptance
+  failures and required QA verdict gates remain controlling.
 - Final Result must be recorded.
 - The full review cycle must complete before presenting results to the user.
 

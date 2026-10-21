@@ -1061,7 +1061,7 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/review-loop.md" \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/score-tracking.md" \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/qa-evaluation-loop.md" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::and a recorded pivot/restart decision before another pass" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Require a recorded pivot/restart decision before another pass only for evidenced" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::orchestrator records pivot_restart_decision" \
