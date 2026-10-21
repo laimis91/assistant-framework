@@ -518,6 +518,7 @@ try {
                     . ([scriptblock]::Create($statement.Extent.Text))
                 }
             }
+            $fixedProbe = 'import sys; print(chr(46).join(map(str, sys.version_info[:3]))); sys.exit(0 if sys.version_info >= (3, 9) else 1)'
             function Get-Command {
                 param([string[]]$Name, $CommandType, $ErrorAction)
                 foreach ($candidate in $Name) {
@@ -525,14 +526,22 @@ try {
                     if ($available.ContainsKey($candidate)) {
                         # A trusted discovered command path may contain spaces.
                         $source = if ($candidate -eq 'python3') { 'Runtime Python' } else { $candidate }
-                        return [pscustomobject]@{ Name = $candidate; Source = $source; Path = $source; CommandType = 'Application' }
+                        $applications = @($available[$candidate])
+                        for ($applicationIndex = 0; $applicationIndex -lt $applications.Count; $applicationIndex++) {
+                            $applicationSource = if ($applications.Count -gt 1) { $source + ' ' + ($applicationIndex + 1) } else { $source }
+                            [pscustomobject]@{ Name = $candidate; Source = $applicationSource; Path = $applicationSource; CommandType = 'Application' }
+                        }
+                        return
                     }
                 }
             }
             function Invoke-TestPythonCandidate {
-                param([string]$Candidate, [object[]]$ProbeArguments)
-                $runtimeCalls.Add([pscustomobject]@{ Name = $Candidate; Arguments = @($ProbeArguments) })
+                param([string]$Candidate, [object[]]$ProbeArguments, [int]$ApplicationIndex = 0)
                 Assert-True ($available.ContainsKey($Candidate)) 'Installer invoked an absent runtime'
+                $applications = @($available[$Candidate])
+                $source = if ($Candidate -eq 'python3') { 'Runtime Python' } else { $Candidate }
+                if ($applications.Count -gt 1) { $source += ' ' + ($ApplicationIndex + 1) }
+                $runtimeCalls.Add([pscustomobject]@{ Name = $Candidate; Source = $source; Arguments = @($ProbeArguments) })
                 $probeIndex = 0
                 if ($Candidate -eq 'py') {
                     Assert-True ($ProbeArguments.Count -ge 3 -and $ProbeArguments[0] -eq '-3') 'py must use explicit -3 and a literal version probe'
@@ -540,7 +549,8 @@ try {
                 }
                 if ($ProbeArguments.Count -gt $probeIndex -and $ProbeArguments[$probeIndex] -eq '-B') { $probeIndex++ }
                 Assert-True ($ProbeArguments.Count -eq ($probeIndex + 2) -and $ProbeArguments[$probeIndex] -eq '-c') 'Python invocation permits only fixed launcher prefix, optional -B and a literal version probe'
-                switch ($available[$Candidate]) {
+                Assert-Equal $fixedProbe $ProbeArguments[$probeIndex + 1] 'Python must receive the fixed literal version probe'
+                switch ($applications[$ApplicationIndex]) {
                     'supported' { $global:LASTEXITCODE = 0; '3.9.0' }
                     'old' { $global:LASTEXITCODE = 1; '3.8.20' }
                     'broken' { $global:LASTEXITCODE = 86 }
@@ -551,6 +561,8 @@ try {
             function python3 { Invoke-TestPythonCandidate -Candidate 'python3' -ProbeArguments $args }
             function python { Invoke-TestPythonCandidate -Candidate 'python' -ProbeArguments $args }
             Set-Item -LiteralPath 'Function:\Runtime Python' -Value { Invoke-TestPythonCandidate -Candidate 'python3' -ProbeArguments $args }
+            Set-Item -LiteralPath 'Function:\Runtime Python 1' -Value { Invoke-TestPythonCandidate -Candidate 'python3' -ProbeArguments $args -ApplicationIndex 0 }
+            Set-Item -LiteralPath 'Function:\Runtime Python 2' -Value { Invoke-TestPythonCandidate -Candidate 'python3' -ProbeArguments $args -ApplicationIndex 1 }
             $runtimeFailures = New-Object System.Collections.Generic.List[string]
             $scenarios = @(
                 @{ Name = 'missing'; Available = @{}; Expected = $null },
@@ -559,7 +571,9 @@ try {
                 @{ Name = 'alias'; Available = @{ python3 = 'alias' }; Expected = $null },
                 @{ Name = 'py-only'; Available = @{ py = 'supported' }; Expected = 'py' },
                 @{ Name = 'python3-only'; Available = @{ python3 = 'supported' }; Expected = 'python3' },
-                @{ Name = 'fallback'; Available = @{ py = 'broken'; python3 = 'old'; python = 'supported' }; Expected = 'python' }
+                @{ Name = 'fallback'; Available = @{ py = 'broken'; python3 = 'old'; python = 'supported' }; Expected = 'python' },
+                @{ Name = 'multiple-supported-later'; Available = @{ python3 = @('old', 'supported') }; Expected = 'python3'; ExpectedPath = 'Runtime Python 2'; ExpectedSources = @('Runtime Python 1', 'Runtime Python 2') },
+                @{ Name = 'multiple-unusable'; Available = @{ python3 = @('old', 'broken') }; Expected = $null; ExpectedSources = @('Runtime Python 1', 'Runtime Python 2') }
             )
             foreach ($scenario in $scenarios) {
                 foreach ($selection in @('workflow', 'dependent', 'docs', 'full')) {
@@ -606,11 +620,19 @@ try {
                                 else {
                                     if ($runtimeCalls.Count -eq 0 -or $runtimeCalls[$runtimeCalls.Count - 1].Name -ne $scenario.Expected) { $runtimeFailures.Add("$label did not use the supported interpreter") }
                                     $expectedInvocation = if ($scenario.Expected -eq 'python3') { 'Runtime Python' } else { $scenario.Expected }
+                                    if ($scenario.ContainsKey('ExpectedPath')) { $expectedInvocation = $scenario.ExpectedPath }
                                     if (($messages -join "`n") -notlike ('*' + $expectedInvocation + '*')) { $runtimeFailures.Add("$label omitted supported invocation") }
                                 }
                                 if (-not $preview) {
                                     $installedName = if ($selection -eq 'docs') { 'assistant-docs' } else { 'assistant-workflow' }
                                     if (-not (Test-Path -LiteralPath (Join-Path $isolatedUserProfile ('.gemini/skills/' + $installedName + '/SKILL.md')) -PathType Leaf)) { $runtimeFailures.Add("$label omitted selected installed skill") }
+                                }
+                            }
+                            if ($selection -ne 'docs' -and $scenario.ContainsKey('ExpectedSources')) {
+                                $actualSources = @($runtimeCalls | ForEach-Object { $_.Source })
+                                if (($actualSources -join '|') -cne ($scenario.ExpectedSources -join '|')) { $runtimeFailures.Add("$label did not probe concrete applications separately in order") }
+                                foreach ($call in $runtimeCalls) {
+                                    if (($call.Arguments -join '|') -cne (@('-B', '-c', $fixedProbe) -join '|')) { $runtimeFailures.Add("$label changed fixed concrete-application probe arguments") }
                                 }
                             }
                         }
@@ -2395,6 +2417,22 @@ requires:
         }
     }
 
+    Invoke-Contract 'full default Codex install delivers common progress without global-file ownership' {
+        Use-IsolatedEnvironment 'default full progress' {
+            param($root, $isolatedUserProfile)
+            [Environment]::SetEnvironmentVariable('CODEX_HOME', $null, 'Process')
+            $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-NoHooks')
+            Assert-Equal 0 $result.ExitCode "Default full progress install failed: $($result.Output)"
+            foreach ($progressFile in @('operating-guidance.md', 'stagnation.py')) {
+                $ordinary = Join-Path $isolatedUserProfile ('.codex\tools\progress\' + $progressFile)
+                $mirror = Join-Path $isolatedUserProfile ('.agents\tools\progress\' + $progressFile)
+                Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($ordinary))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($mirror))) 'Default full progress mirror mismatch'
+            }
+            $guidance = [System.IO.File]::ReadAllText((Join-Path $isolatedUserProfile '.codex\AGENTS.md'))
+            Assert-Contains $guidance 'including when no skill matches' 'Standing Codex guidance lacks the unmatched activity route'
+        }
+    }
+
     Invoke-Contract 'selective debugging and review installs ship an executable common change-impact checker' {
         Use-IsolatedEnvironment 'selective change impact checker' {
             param($root, $isolatedUserProfile)
@@ -2416,6 +2454,15 @@ requires:
                 $protocol = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\protocol.v1.json'))
                 $example = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\example.completion.v1.json'))
                 Assert-True ([System.IO.File]::Exists($installedSkill)) "$skill selective installation omitted its installed SKILL.md"
+                $progress = Join-Path $skillProfile '.agents\tools\progress'
+                foreach ($progressFile in @('operating-guidance.md', 'stagnation.py')) {
+                    $mirror = Join-Path $progress $progressFile
+                    $ordinary = Join-Path $codexHome ('tools\progress\' + $progressFile)
+                    Assert-True ([System.IO.File]::Exists($mirror)) "$skill omitted the skill-relative common progress mirror"
+                    Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($ordinary))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($mirror))) 'Common progress mirror differs from configured CODEX_HOME'
+                }
+                Assert-Contains ([System.IO.File]::ReadAllText($installedSkill)) '../../tools/progress/operating-guidance.md' 'Installed skill lacks portable common guidance'
+
                 if ($skill -eq 'assistant-debugging') {
                     Assert-True ([System.IO.File]::Exists((Join-Path $skillProfile '.agents\skills\assistant-review\SKILL.md'))) 'assistant-debugging selective installation omitted its canonical assistant-review producer'
                     Assert-True ([System.IO.File]::Exists((Join-Path $skillProfile '.agents\skills\assistant-verification\SKILL.md'))) 'assistant-debugging selective installation omitted its canonical assistant-verification producer'
@@ -2469,6 +2516,12 @@ requires:
             foreach ($phase in @('fresh', 'upgrade')) {
                 $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-NoHooks')
                 Assert-Equal 0 $result.ExitCode "Writer $phase install failed: $($result.Output)"
+                foreach ($progressFile in @('operating-guidance.md', 'stagnation.py')) {
+                    $ordinary = Join-Path $codexHome ('tools\progress\' + $progressFile)
+                    $mirror = Join-Path $isolatedUserProfile ('.agents\tools\progress\' + $progressFile)
+                    Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($ordinary))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($mirror))) 'Repeated/custom-home progress mirror mismatch'
+                }
+
                 $definitions = @(Get-ChildItem -LiteralPath (Join-Path $script:FrameworkRoot 'agents\codex') -Filter '*.toml' -File)
                 Assert-Equal 12 $definitions.Count 'Transition must contain eleven normal definitions plus legacy writer'
                 foreach ($definition in $definitions) {
@@ -2578,10 +2631,10 @@ requires:
             [void][System.IO.Directory]::CreateDirectory((Join-Path $Workflow 'contracts'))
             $utf8 = New-Object System.Text.UTF8Encoding($false)
             $skillText = "---`nname: assistant-workflow`ndescription: Retained ownership protocol fixture.`n---`n"
-            $indexText = "schema_version: `"13.0`"`ncontract: index`nskill: assistant-workflow`n"
+            $indexText = "schema_version: `"15.0`"`ncontract: index`nskill: assistant-workflow`n"
             # Fixed declared tuples, independent of the production compatibility reader.
             $handoffsText = @'
-schema_version: "13.0"
+schema_version: "15.0"
 contract: handoffs
 skill: assistant-workflow
 worker_stage_protocol:
@@ -2601,16 +2654,17 @@ worker_stage_protocol:
 '@
             $handoffsText = $handoffsText.Replace("`r`n", "`n") + "`n"
             switch ($Variant) {
-                'current14' { $indexText = $indexText.Replace('13.0', '14.0'); $handoffsText = $handoffsText.Replace('13.0', '14.0') }
-                'unknown-version' { $indexText = $indexText.Replace('13.0', '15.0'); $handoffsText = $handoffsText.Replace('13.0', '15.0') }
-                'mixed-version' { $indexText = $indexText.Replace('13.0', '14.0') }
-                { $_ -in @('old', 'recovery', 'full', 'gemini') } { $indexText = $indexText.Replace('13.0', '12.0') }
+                'old13' { $indexText = $indexText.Replace('15.0', '13.0'); $handoffsText = $handoffsText.Replace('15.0', '13.0') }
+                'old14' { $indexText = $indexText.Replace('15.0', '14.0'); $handoffsText = $handoffsText.Replace('15.0', '14.0') }
+                'unknown-version' { $indexText = $indexText.Replace('15.0', '16.0'); $handoffsText = $handoffsText.Replace('15.0', '16.0') }
+                'mixed-version' { $indexText = $indexText.Replace('15.0', '14.0') }
+                { $_ -in @('old', 'recovery', 'full') } { $indexText = $indexText.Replace('15.0', '12.0') }
                 'no-stages' { $handoffsText = $handoffsText.Substring(0, $handoffsText.IndexOf('worker_stage_protocol:')) }
                 'stage-mismatch' { $handoffsText = $handoffsText.Replace('current_matching_red', 'none') }
                 'early-completion' { $handoffsText = $handoffsText.Replace('completes_build: false', 'completes_build: true') }
                 'duplicate-index' { $indexText += "skill: assistant-workflow`n" }
-                'duplicate-handoffs' { $handoffsText += "schema_version: `"13.0`"`n" }
-                'malformed' { $indexText = "schema_version: `"13.0`ncontract: index`nskill: assistant-workflow`n" }
+                'duplicate-handoffs' { $handoffsText += "schema_version: `"15.0`"`n" }
+                'malformed' { $indexText = "schema_version: `"15.0`ncontract: index`nskill: assistant-workflow`n" }
                 'wrong-identity' { $indexText = $indexText.Replace('contract: index', 'contract: output') }
                 'bom-crlf' {
                     $utf8 = New-Object System.Text.UTF8Encoding($true)
@@ -2639,8 +2693,8 @@ worker_stage_protocol:
             }
         }
 
-        foreach ($agent in @('codex', 'claude')) {
-            foreach ($variant in @('old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'current14', 'unknown-version', 'mixed-version', 'bom-crlf', 'recovery', 'full')) {
+        foreach ($agent in @('codex', 'claude', 'gemini')) {
+            foreach ($variant in @('old13', 'old14', 'old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'current15', 'unknown-version', 'mixed-version', 'bom-crlf', 'recovery', 'full')) {
                 foreach ($mode in @('normal', 'dry-run')) {
                     if ($mode -eq 'dry-run' -and $variant -in @('recovery', 'full')) { continue }
                     Use-IsolatedEnvironment ("ownership-$agent-$variant-$mode") {
@@ -2655,7 +2709,7 @@ worker_stage_protocol:
                             $settingsText = 'personal = "retained"'
                         }
                         else {
-                            $agentHome = Join-Path $isolatedUserProfile '.claude'
+                            $agentHome = Join-Path $isolatedUserProfile ('.' + $agent)
                             [Environment]::SetEnvironmentVariable('CODEX_HOME', [System.IO.Path]::GetPathRoot($root), 'Process')
                             $skillsTarget = Join-Path $agentHome 'skills'
                             $roleLeaf = 'builder-tester.md'
@@ -2688,11 +2742,11 @@ worker_stage_protocol:
                         $result = Invoke-Installer -Arguments $installArguments
                         $after = Get-TreeFingerprint -LiteralPath $root
                         $label = "$agent/$variant/$mode"
-                        if ($variant -in @('absent', 'current', 'current14', 'bom-crlf', 'recovery', 'full')) {
+                        if ($variant -in @('absent', 'current', 'current15', 'bom-crlf', 'recovery', 'full')) {
                             Assert-Equal 0 $result.ExitCode "$label unexpectedly rejected: $($result.Output)"
                             if ($mode -eq 'dry-run') { Assert-Equal $before $after "$label dry-run mutated scratch tree" }
                             if ($variant -eq 'absent') { Assert-False (Test-Path -LiteralPath $workflow) "$label added unselected workflow" }
-                            if ($variant -in @('current', 'current14', 'bom-crlf')) {
+                            if ($variant -in @('current', 'current15', 'bom-crlf')) {
                                 Assert-Equal $workflowBefore (Get-TreeFingerprint -LiteralPath $workflow) "$label refreshed retained compatible controller"
                             }
                             if ($variant -in @('recovery', 'full')) {
@@ -2721,14 +2775,6 @@ worker_stage_protocol:
                 }
             }
         }
-        Use-IsolatedEnvironment 'ownership-gemini' {
-            param($root, $isolatedUserProfile)
-            Write-OwnershipWorkflowFixture -Workflow (Join-Path $isolatedUserProfile '.gemini/skills/assistant-workflow') -Variant gemini
-            [Environment]::SetEnvironmentVariable('CODEX_HOME', [System.IO.Path]::GetPathRoot($root), 'Process')
-            $result = Invoke-Installer -Arguments @('-Agent', 'gemini', '-Skill', 'assistant-docs', '-NoHooks')
-            Assert-Equal 0 $result.ExitCode "Gemini incorrectly inherited ownership profile guard: $($result.Output)"
-        }
-
         # Representative callers of the same pre-mode source completeness guard.
         $sourceCases = @(
             @{ Agent = 'codex'; Missing = 'intelligent-writer'; Selection = 'full'; Preview = $false },

@@ -45,7 +45,7 @@ if [[ -f "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml" ]]; then
         "Do NOT replace code-reviewer" \
         "Do NOT edit any files" \
         "final_verdict=rejected and result=HAS_REMAINING_ITEMS" \
-        "failed acceptance items should return to Build before round 10"; do
+        "failed acceptance items should return to Build while the shared guard permits corrective work"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml"; then
             missing_agent_terms+=("agents/codex/qa-evaluator.toml: $term")
         fi
@@ -62,7 +62,7 @@ if [[ -f "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md" ]]; then
         "Do NOT replace code-reviewer" \
         "Do NOT edit any files" \
         "final_verdict=rejected and result=HAS_REMAINING_ITEMS" \
-        "failed acceptance items should return to Build before round 10"; do
+        "failed acceptance items should return to Build while the shared guard permits corrective work"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md"; then
             missing_agent_terms+=("agents/claude/qa-evaluator.md: $term")
         fi
@@ -95,7 +95,7 @@ else
     fail "Codex install failed; see /tmp/p0p4-install-qa-evaluator.err"
 fi
 
-test_start "assistant-review routes independent QA evaluation to reference with 10-round cap"
+test_start "assistant-review routes independent QA evaluation with the shared semantic guard"
 review_dir="$FRAMEWORK_DIR/skills/assistant-review"
 missing_review_terms=()
 for file_and_term in \
@@ -103,8 +103,8 @@ for file_and_term in \
     "$review_dir/SKILL.md::Load [qa-evaluation-loop.md](references/qa-evaluation-loop.md) when required" \
     "$review_dir/references/review-loop.md::load \`qa-evaluation-loop.md\` before dispatching QAEvaluator" \
     "$review_dir/references/review-loop.md::That reference owns the detailed QA algorithm" \
-    "$review_dir/references/qa-evaluation-loop.md::while round <= 10" \
-    "$review_dir/references/qa-evaluation-loop.md::Round 10 is terminal" \
+    "$review_dir/references/qa-evaluation-loop.md::while shared_progress_allows_work" \
+    "$review_dir/references/qa-evaluation-loop.md::Productive work may continue beyond round 10" \
     "$review_dir/references/qa-evaluation-loop.md::does not replace code-reviewer" \
     "$review_dir/contracts/handoffs.yaml::to: QAEvaluator" \
     "$review_dir/contracts/handoffs.yaml::- name: debate_record" \
@@ -114,7 +114,7 @@ for file_and_term in \
     "$review_dir/contracts/handoffs.yaml::debate_record when Done Contract exists" \
     "$review_dir/contracts/handoffs.yaml::qa_scorecard" \
     "$review_dir/contracts/handoffs.yaml::score_entry" \
-    "$review_dir/contracts/handoffs.yaml::The loop never starts round 11." \
+    "$review_dir/contracts/handoffs.yaml::productive work may continue beyond round 10." \
     "$review_dir/contracts/input.yaml::- name: qa_evaluation_mode" \
     "$review_dir/contracts/input.yaml::- name: debate_record" \
     "$review_dir/contracts/input.yaml::pre-build debate/subagent-perspective evidence" \
@@ -128,7 +128,7 @@ for file_and_term in \
     "$review_dir/contracts/phase-gates.yaml::QA evaluation starts only after build/test verification evidence and Code Reviewer or Reviewer compatibility result are available" \
     "$review_dir/contracts/phase-gates.yaml::INV_QA4" \
     "$review_dir/contracts/phase-gates.yaml::QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists" \
-    "$review_dir/contracts/phase-gates.yaml::round 10 is terminal"; do
+    "$review_dir/contracts/phase-gates.yaml::shared guard governs continuation"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
@@ -198,7 +198,7 @@ if ruby -ryaml -rbigdecimal -e '
   output_pivot = output_fields.fetch("pivot_restart_signal")
   handoff_pivot = handoff_fields.fetch("pivot_restart_signal")
   pivot_shape_match = output_pivot.fetch("object_fields") == handoff_pivot.fetch("object_fields") &&
-    output_pivot.fetch("condition").include?("final score_progression entry") &&
+    output_pivot.fetch("condition").include?("shared task guard") &&
     output_pivot.fetch("validation").include?("current final QA round")
   valid_pivot_packet = ->(signal, current_round) do
     signal.is_a?(Hash) && %w[STAGNATION repeated_DRIFT repeated_REGRESSION pivot].include?(signal["trigger"]) &&
@@ -455,13 +455,13 @@ if ruby -ryaml -e '
   pivot = fields.fetch("pivot_restart_signal")
   pivot_names = pivot.fetch("object_fields").map { |field| field["name"] }
   canonical_projection = %w[round weighted_score failed_acceptance_count delta drift_status]
-  prompt_terms = ["Before first response, resolve `worker_return_schema`: from the active assistant-review skill root, load named `return_fields` recursively with bounded keys from `contracts/handoffs.yaml`; verify it equals the schema identified by `return_schema_ref`, or return `NEEDS_CONTEXT` without a partial result.", "`score_entry` is required for every QA round.", "`score_progression` is optional prior-round history; when returned, every entry is the same canonical projection: `round` (int), `weighted_score` (float), `failed_acceptance_count` (int), `delta` (string), and `drift_status` (the canonical enum).", "When score_entry.drift_status=STAGNATION, repeated QA DRIFT/REGRESSION occurs, or a scoped domain action=pivot, return `pivot_restart_signal` with `trigger`, `evidence`, `affected_round`, and `recommended_recovery_focus`."]
+  prompt_terms = ["Before first response, resolve `worker_return_schema`: from the active assistant-review skill root, load named `return_fields` recursively with bounded keys from `contracts/handoffs.yaml`; verify it equals the schema identified by `return_schema_ref`, or return `NEEDS_CONTEXT` without a partial result.", "`score_entry` is required for every QA round.", "`score_progression` is optional prior-round history; when returned, every entry is the same canonical projection: `round` (int), `weighted_score` (float), `failed_acceptance_count` (int), `delta` (string), and `drift_status` (the canonical enum).", "When the shared task guard reports genuine semantic stagnation, return `pivot_restart_signal` with `trigger`, `evidence`, `affected_round`, and `recommended_recovery_focus`; score diagnostics alone do not trigger it."]
   valid_projection = ->(entry) { entry.is_a?(Hash) && entry.keys.sort == canonical_projection.sort && entry["round"].is_a?(Integer) && entry["weighted_score"].is_a?(Numeric) && entry["failed_acceptance_count"].is_a?(Integer) && entry["delta"].is_a?(String) && %w[GENUINE SUSPICIOUS DRIFT REGRESSION STAGNATION NEUTRAL NOT_APPLICABLE].include?(entry["drift_status"]) }
   valid_packet = ->(packet) {
     score = packet["score_entry"]
     return false unless valid_projection.call(score)
     return false if packet.key?("score_progression") && (!packet["score_progression"].is_a?(Array) || !packet["score_progression"].all? { |entry| valid_projection.call(entry) })
-    triggered = score["drift_status"] == "STAGNATION" || packet["repeated_drift"] || packet["domain_pivot"]
+    triggered = packet["semantic_stagnation"] == true
     return !packet.key?("pivot_restart_signal") unless triggered
     signal = packet["pivot_restart_signal"]
     signal.is_a?(Hash) && %w[STAGNATION repeated_DRIFT repeated_REGRESSION pivot].include?(signal["trigger"]) && signal["evidence"].is_a?(Array) && !signal["evidence"].empty? && signal["affected_round"] == packet.dig("score_entry", "round") && signal["recommended_recovery_focus"].is_a?(String) && !signal["recommended_recovery_focus"].strip.empty?
@@ -469,7 +469,7 @@ if ruby -ryaml -e '
   normal = {"score_entry" => {"round" => 2, "weighted_score" => 4.0, "failed_acceptance_count" => 0, "delta" => "initial", "drift_status" => "NEUTRAL"}}
   with_progression = normal.merge("score_progression" => [normal.fetch("score_entry")])
   progression_only = {"score_progression" => []}
-  triggered = {"score_entry" => normal["score_entry"].merge("drift_status" => "STAGNATION"), "pivot_restart_signal" => {"trigger" => "STAGNATION", "evidence" => [{"source" => "score", "detail" => "stalled"}], "affected_round" => 2, "recommended_recovery_focus" => "recover"}}
+  triggered = {"semantic_stagnation" => true, "score_entry" => normal["score_entry"].merge("drift_status" => "STAGNATION"), "pivot_restart_signal" => {"trigger" => "STAGNATION", "evidence" => [{"source" => "score", "detail" => "stalled"}], "affected_round" => 2, "recommended_recovery_focus" => "recover"}}
   resolution = "Worker recursively loads named handoff return_fields (bounded keys); worker_return_schema equals schema identified by return_schema_ref before response; else NEEDS_CONTEXT, no partial result."
   resolve_schema = ->(document, ref) { _root, handoff_name, field_name = ref.split("."); document.fetch("handoffs").find { |entry| entry["name"] == handoff_name }.fetch(field_name) }
   resolved_schema_key = selector.fetch("resolution").match(/(worker_return_schema) equals schema identified by return_schema_ref before response/)[1]
@@ -477,7 +477,7 @@ if ruby -ryaml -e '
   selector_valid = selector.fetch("return_schema_ref") == "handoffs.orchestrator_to_qa_evaluator.return_fields" && selector.fetch("source_path") == "contracts/handoffs.yaml" && selector.fetch("resolution") == resolution && selector.fetch("recursive_shape").include?("required/conditional fields, types, enums, and cardinality") && selector.fetch("excludes").include?("sibling/batch state")
   projection_schema = ->(field) { field.fetch("object_fields").map { |item| item.slice("name", "type", "required", "enum_values") } }
   qa2 = gates.fetch("gates").flat_map { |phase| phase.fetch("exit_assertions", []) }.find { |gate| gate["id"] == "QA2" }
-  valid = fields.fetch("score_entry")["required"] == true && fields.fetch("score_progression")["required"] == false && projection_schema.call(fields.fetch("score_entry")) == projection_schema.call(fields.fetch("score_progression")) && projection_schema.call(fields.fetch("score_progression")) == projection_schema.call(output_progression) && fields.fetch("score_progression").fetch("object_fields").map { |field| field.fetch("name") } == canonical_projection && loop.include?("same canonical projection: `round` (int), `weighted_score` (float), `failed_acceptance_count` (int), exact adjacent `delta` (string), and derived `drift_status` (the canonical enum)") && pivot["required"] == "conditional" && pivot.fetch("condition").include?("score_entry.drift_status == STAGNATION") && pivot_names == %w[trigger evidence affected_round recommended_recovery_focus] && selector_valid && rendered_dispatch.fetch(resolved_schema_key) == qa.fetch("return_fields") && rendered_dispatch.fetch("return_schema_ref") == selector.fetch("return_schema_ref") && rendered_dispatch.fetch("resolution_proof") == resolution && qa2.fetch("check").include?("worker_return_schema_selector") && qa2.fetch("check").include?("worker_return_schema") && qa2.fetch("check").include?("fails closed") && prompts.all? { |prompt| prompt_terms.all? { |term| prompt.include?(term) } } && valid_packet.call(normal) && valid_packet.call(with_progression) && !valid_packet.call(progression_only) && !valid_packet.call(with_progression.dup.tap { |packet| packet["score_progression"] = [packet["score_progression"].first.dup.tap { |entry| entry.delete("delta") }] }) && !valid_packet.call(with_progression.dup.tap { |packet| packet["score_progression"] = [packet["score_progression"].first.dup.tap { |entry| entry["weighted_score"] = "4" }] }) && valid_packet.call(triggered) && !valid_packet.call(normal.dup.tap { |packet| packet["score_entry"] = packet["score_entry"].dup; packet["score_entry"].delete("weighted_score") }) && !valid_packet.call(normal.dup.tap { |packet| packet["score_entry"] = packet["score_entry"].dup; packet["score_entry"]["drift_status"] = "BAD" }) && !valid_packet.call(triggered.dup.tap { |packet| packet.delete("pivot_restart_signal") }) && !valid_packet.call(triggered.dup.tap { |packet| packet["pivot_restart_signal"] = packet["pivot_restart_signal"].dup; packet["pivot_restart_signal"]["evidence"] = [] })
+  valid = fields.fetch("score_entry")["required"] == true && fields.fetch("score_progression")["required"] == false && projection_schema.call(fields.fetch("score_entry")) == projection_schema.call(fields.fetch("score_progression")) && projection_schema.call(fields.fetch("score_progression")) == projection_schema.call(output_progression) && fields.fetch("score_progression").fetch("object_fields").map { |field| field.fetch("name") } == canonical_projection && loop.include?("same canonical projection: `round` (int), `weighted_score` (float), `failed_acceptance_count` (int), exact adjacent `delta` (string), and derived `drift_status` (the canonical enum)") && pivot["required"] == "conditional" && pivot.fetch("condition").include?("shared task guard") && pivot_names == %w[trigger evidence affected_round recommended_recovery_focus] && selector_valid && rendered_dispatch.fetch(resolved_schema_key) == qa.fetch("return_fields") && rendered_dispatch.fetch("return_schema_ref") == selector.fetch("return_schema_ref") && rendered_dispatch.fetch("resolution_proof") == resolution && qa2.fetch("check").include?("worker_return_schema_selector") && qa2.fetch("check").include?("worker_return_schema") && qa2.fetch("check").include?("fails closed") && prompts.all? { |prompt| prompt_terms.all? { |term| prompt.include?(term) } } && valid_packet.call(normal) && valid_packet.call(with_progression) && !valid_packet.call(progression_only) && !valid_packet.call(with_progression.dup.tap { |packet| packet["score_progression"] = [packet["score_progression"].first.dup.tap { |entry| entry.delete("delta") }] }) && !valid_packet.call(with_progression.dup.tap { |packet| packet["score_progression"] = [packet["score_progression"].first.dup.tap { |entry| entry["weighted_score"] = "4" }] }) && valid_packet.call(triggered) && !valid_packet.call(normal.dup.tap { |packet| packet["score_entry"] = packet["score_entry"].dup; packet["score_entry"].delete("weighted_score") }) && !valid_packet.call(normal.dup.tap { |packet| packet["score_entry"] = packet["score_entry"].dup; packet["score_entry"]["drift_status"] = "BAD" }) && !valid_packet.call(triggered.dup.tap { |packet| packet.delete("pivot_restart_signal") }) && !valid_packet.call(triggered.dup.tap { |packet| packet["pivot_restart_signal"] = packet["pivot_restart_signal"].dup; packet["pivot_restart_signal"]["evidence"] = [] })
   exit valid ? 0 : 1
 ' "$review_dir/contracts/handoffs.yaml" "$review_dir/contracts/output.yaml" "$review_dir/references/qa-evaluation-loop.md" "$review_dir/contracts/phase-gates.yaml" "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml" "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md"; then
     pass

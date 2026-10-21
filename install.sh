@@ -241,14 +241,15 @@ declared_workflow_contract_compatible() {
 
 preflight_workflow_role_compatibility() {
     local extension profile definition workflow="$SKILLS_TARGET/assistant-workflow" file
-    [[ "$AGENT" == codex || "$AGENT" == claude ]] || return 0
-    extension=md; [[ "$AGENT" != codex ]] || extension=toml
-    for profile in intelligent-writer mechanical-writer; do
-        definition="$FRAMEWORK_DIR/agents/$AGENT/$profile.$extension"
-        if [[ -L "$definition" || ! -f "$definition" || ! -r "$definition" ]]; then
-            fail "Missing required writer definition for $AGENT: $definition. Restore the complete framework source and retry. No installation files have been changed."
-        fi
-    done
+    if [[ "$AGENT" == codex || "$AGENT" == claude ]]; then
+        extension=md; [[ "$AGENT" != codex ]] || extension=toml
+        for profile in intelligent-writer mechanical-writer; do
+            definition="$FRAMEWORK_DIR/agents/$AGENT/$profile.$extension"
+            if [[ -L "$definition" || ! -f "$definition" || ! -r "$definition" ]]; then
+                fail "Missing required writer definition for $AGENT: $definition. Restore the complete framework source and retry. No installation files have been changed."
+            fi
+        done
+    fi
     array_contains assistant-workflow "${SKILLS[@]}" && return 0
 
     assert_managed_skill_target_root_safe
@@ -262,11 +263,9 @@ preflight_workflow_role_compatibility() {
         fi
     done
     if ! cat "$workflow/SKILL.md" >/dev/null \
-        || ! { { declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 13.0 \
-                  && declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 13.0; } \
-               || { declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 14.0 \
-                  && declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 14.0; }; }; then
-        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare matching schema 13.0 or 14.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
+        || ! declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 15.0 \
+        || ! declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 15.0; then
+        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare matching schema 15.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
     fi
 }
 
@@ -1056,6 +1055,8 @@ if [[ "$AGENT" == "codex" ]]; then
 # AGENTS.md — Codex Agent Instructions
 
 Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.
+
+Read \`tools/progress/operating-guidance.md\` under the configured \`CODEX_HOME\` (default \`~/.codex\`) as the common operating guidance for every activity, including when no skill matches.
 
 For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent.
 

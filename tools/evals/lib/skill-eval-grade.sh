@@ -346,7 +346,7 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     rounds = summary["rounds"]
     batches = summary["batch_summaries"]
     ledger = summary["coverage_ledger"]
-    valid &&= integer_in.call(rounds, 1..10) && batches.is_a?(Array) && batches.length == rounds
+    valid &&= (rounds.is_a?(Integer) && rounds.positive?) && batches.is_a?(Array) && batches.length == rounds
     valid &&= batches.each_with_index.all? do |batch, index|
       batch.is_a?(Hash) && batch["started_batch_ordinal"] == index + 1 &&
         nonblank.call(batch["batch_id"]) && nonblank.call(batch["review_snapshot_id"]) &&
@@ -403,7 +403,7 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     }
     valid &&= canonical_perspectives.key?(scope_size)
     expected_discovery = canonical_perspectives.fetch(scope_size, [])
-    valid &&= topology.is_a?(Hash) && topology["discovery_pass_count"] == expected_discovery.length && integer_in.call(topology["max_required_responses"], 2..6) && topology["max_repair_attempts_per_pass"] == 1
+    valid &&= topology.is_a?(Hash) && topology["discovery_pass_count"] == expected_discovery.length && integer_in.call(topology["max_required_responses"], 2..6)
     valid &&= [true, false].include?(topology["security_specialist_triggered"]) && [true, false].include?(topology["closure_verification_required"])
     canonical_lists = topology.is_a?(Hash) ? topology["canonical_discovery_perspectives"] : nil
     valid &&= canonical_lists.is_a?(Hash) && canonical_lists.keys.sort == %w[large medium trivial_small]
@@ -778,7 +778,7 @@ elsif explicit_artifact_name == "qa_evaluation_result" || (explicit_artifact_nam
   qa = response["qa_evaluation_result"]
   valid &&= qa.is_a?(Hash)
   if valid
-    valid &&= integer_in.call(qa["rounds"], 1..10)
+    valid &&= (qa["rounds"].is_a?(Integer) && qa["rounds"].positive?)
     verdict_result = {
       "accepted" => %w[CLEAN ISSUES_FIXED],
       "accepted_with_concerns" => %w[CLEAN ISSUES_FIXED],
@@ -917,24 +917,9 @@ elsif explicit_artifact_name == "qa_evaluation_result" || (explicit_artifact_nam
         valid &&= final_failed_count.is_a?(Integer) && final_failed_count > 0
         valid &&= remaining_acceptance.any? { |finding| %w[blocker concern].include?(finding["severity"]) }
       end
-      drift_statuses = progression.map { |entry| entry["drift_status"] }
-      domain_pivot = domain_scores.is_a?(Array) && domain_scores.any? { |score| score["action"] == "pivot" }
-      repeated_drift = drift_statuses.last(2) == ["DRIFT", "DRIFT"]
-      repeated_regression = drift_statuses.last(2) == ["REGRESSION", "REGRESSION"]
-      pivot_triggered = drift_statuses.last == "STAGNATION" || repeated_drift || repeated_regression || domain_pivot
-      signal = qa["pivot_restart_signal"]
-      if pivot_triggered
-        expected_triggers = []
-        expected_triggers << "STAGNATION" if drift_statuses.last == "STAGNATION"
-        expected_triggers << "repeated_DRIFT" if repeated_drift
-        expected_triggers << "repeated_REGRESSION" if repeated_regression
-        expected_triggers << "pivot" if domain_pivot
-        valid &&= signal.is_a?(Hash) && signal["affected_round"] == qa["rounds"] && nonblank.call(signal["recommended_recovery_focus"])
-        valid &&= signal && expected_triggers.include?(signal["trigger"])
-        valid &&= signal && signal["evidence"].is_a?(Array) && !signal["evidence"].empty? && signal["evidence"].all? { |entry| entry.is_a?(Hash) && nonblank.call(entry["source"]) && nonblank.call(entry["detail"]) }
-      else
-        valid &&= signal.nil?
-      end
+      # Current fixed QA cases establish no independent guard-trigger authority.
+      # Candidate signal text and diagnostic score movement cannot supply it.
+      valid &&= !qa.key?("pivot_restart_signal")
     end
     valid &&= qa["evidence"].is_a?(Array) && qa["evidence"].any? && qa["evidence"].all? { |entry| entry.is_a?(Hash) && nonblank.call(entry["source"]) && nonblank.call(entry["detail"]) }
   end
@@ -1105,7 +1090,7 @@ count_assistant_review_canonical_envelope_failures() {
             and (.basis as $basis | ["git_revision", "diff_digest", "content_digest", "task_or_pr_revision"] | index($basis)))
           and (.final_summary.coverage_complete | type == "boolean")
           and (.final_summary.final_batch_plan | required_fields(["batch_id", "review_snapshot_id", "topology", "expected_passes"])
-            and (.topology | required_fields(["discovery_pass_count", "canonical_discovery_perspectives", "security_specialist_triggered", "closure_verification_required", "max_required_responses", "max_repair_attempts_per_pass"]))
+            and (.topology | required_fields(["discovery_pass_count", "canonical_discovery_perspectives", "security_specialist_triggered", "closure_verification_required", "max_required_responses"]))
             and (.expected_passes | type == "array" and length >= 2 and length <= 6)
             and all(.expected_passes[]; required_fields(["review_pass_id", "perspective", "assigned_scope", "coverage_obligations", "prior_finding_visibility"])))
           and (.final_summary.coverage_ledger | type == "array" and length > 0)

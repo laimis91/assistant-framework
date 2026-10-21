@@ -254,30 +254,23 @@ retain their blocking relevance without automatically absorbing or ignoring repa
 Removal/quarantine needs the existing selection/authorization route. Never weaken
 assertions, suppress errors, increase timeouts or add retries just to get green.
 
-For ordinary non-harness same-scope repair, initialize and persist
-`build_repair_state` before the second implementation attempt:
-
-- `attempt` and `cumulative_attempt_count` (the cumulative same-scope count)
-- fixed `max_attempts: 3`
-- `no_progress_count` and fixed `no_progress_limit: 2`
-- normalized `failure_signatures`
-- concrete `progress_evidence`
-- stable `plan_version`
-- status and evidence reference
-
-One initial attempt plus at most two repairs is the complete three-attempt
-budget across all failing tests/checks. Switching tests, selected checks or workers
-does not create another allowance. Redispatch, context reset, compaction, handoff, or cross-session resume
-must not reset `cumulative_attempt_count` for the same plan version. Increment no-progress when no selected check newly passes, failing scope does
-not shrink, and no new evidence isolates the cause, even when the failure/test
-signature changes. Signature changes alone are not progress. Reset it only for measurable
-evidence-backed progress.
-
-At attempt 3, or when `no_progress_count` reaches 2, do not patch again. Set
-status to `terminal_pivot` or `blocked`, record `terminal_route`, and route to debugging, replan, restart
-with reapproval, user input, or environment recovery through
-`pivot_restart_decision` when applicable. A changed plan version starts a new
-path only after required reapproval; it must not disguise a same-scope retry.
+For repeated work, use one task-level ProgressState in the existing journal or
+carried context under [the shared policy](../../../tools/progress/operating-guidance.md).
+Record the completed correction plus its due/executable verification/review as
+one semantic checkpoint before next-work blockers. The source-bound effective
+window (default three consecutive unproductive cycles) stops corrective work.
+Productive fourth and later attempts continue. Phase, worker, failure signature,
+score or plan-version changes cannot reset the same outcome guard. Retain
+legacy repair counters as historical observations only; missing history is an
+explicit evidence gap. Action-bound material unblock uses the same retained
+count and history, consumes once only after all dispatch gates, and provides no
+new window. Same RUNNING stages retain their action admission. Optional frozen
+coordinator membership joins one admission across independently isolated packets;
+all ordinary dispatch gates remain. The lead closes one complete terminal member-cycle
+barrier, retaining partial results without checkpoints; failed cycles need not
+finish packet verification. See the shared policy for scope/barrier bindings and
+replay protection. Explicit user,
+resource and host bounds remain controlling with accurate exit reasons.
 
 After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite. Integrated selected and binding checks remain due for one or multiple packets before fresh independent Review; packet-local evidence cannot waive them. Single-slice validation still covers the selected integration claim. Per-slice verification does not satisfy a distinct selected integration check.
 

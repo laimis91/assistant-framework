@@ -60,7 +60,7 @@ Record or recover:
   uncovered failure and the existing selection/approval route.
 - Preserve cumulative same-scope repair counts across changing tests, checks,
   workers and sessions; a new failing expectation needs classification, not a
-  fresh budget. Retain the three-total-attempt/two-no-progress ceiling.
+  fresh window. Retain the same outcome guard and assessed history.
 - Current repository and verification evidence outrank unverified progress
   claims.
 - A branch or HEAD change is evidence to inspect, not automatic invalidation.

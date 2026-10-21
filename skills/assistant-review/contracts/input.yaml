@@ -1,9 +1,9 @@
 # Applicability: structured review batches, worker handoffs, persisted results,
-# and workflow/QA consumers use the canonical v8 protocol. Human summaries may
+# and workflow/QA consumers use the canonical v9 protocol. Human summaries may
 # omit empty/internal sections; frozen snapshots, independent passes, coverage,
-# verification, authorization, and round caps apply to every selected review.
+# verification, authorization, and the shared semantic guard apply to every selected review.
 
-schema_version: "8.0"
+schema_version: "9.0"
 contract: input
 skill: assistant-review
 
@@ -343,7 +343,7 @@ fields:
     required: conditional
     condition: "qa_evaluation_mode == required"
     description: "Evidence filter QAEvaluator must apply to acceptance findings"
-    validation: "States that QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns are non-blocking; round 10 is terminal"
+    validation: "States that QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists; speculative concerns are non-blocking; the shared guard governs continuation"
     on_missing: infer
     infer_from: "Use the standard QA filter policy from references/qa-evaluation-loop.md."
 
@@ -564,7 +564,7 @@ fields:
       - name: fixed_in_round
         type: int
         required: true
-        validation: ">= 1 and <= 10"
+        validation: "Positive integer; no ordinal ceiling"
       - name: aggregate_finding_id
         type: string
         required: conditional
@@ -597,8 +597,8 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet was created under v6"
-    description: "v6 to producer 8.0 migration."
-    validation: "Invalidate v6 and rebuild from a freshly rehashed 8.0 snapshot; block CLEAN/ISSUES_FIXED. Retain raw history and preserve each complete identity tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance only when each field is missing."
+    description: "v6 to producer 9.0 migration."
+    validation: "Invalidate v6 and rebuild from a freshly rehashed 9.0 snapshot; block CLEAN/ISSUES_FIXED. Retain raw history and preserve each complete identity tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance only when each field is missing."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -615,7 +615,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 8.0 identity."
+        description: "Fresh 9.0 identity."
         object_fields:
           - name: basis
             type: enum
@@ -636,7 +636,7 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet schema_version == 7.0"
-    validation: "Invalidate all 7.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 8.0. Retain every raw 7.0 previously_fixed record unchanged as historical evidence. Before closure dispatch, preserve each complete aggregate_finding_id/source_finding_ids/source_provenance tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. When aggregate_finding_id is absent, normalize UTF-8 NFC(description) into UTF-8 bytes, SHA-256 hash it, and use legacy-v7-0:<fixed_in_round>:<first-24-hex>; non-colliding records use the base and every colliding record appends :<ordinal> in original packet order, then fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. Rebuild required review/QA from a fresh 8.0 snapshot before CLEAN/ISSUES_FIXED."
+    validation: "Invalidate all 7.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 8.0. Retain every raw 7.0 previously_fixed record unchanged as historical evidence. Before closure dispatch, preserve each complete aggregate_finding_id/source_finding_ids/source_provenance tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. When aggregate_finding_id is absent, normalize UTF-8 NFC(description) into UTF-8 bytes, SHA-256 hash it, and use legacy-v7-0:<fixed_in_round>:<first-24-hex>; non-colliding records use the base and every colliding record appends :<ordinal> in original packet order, then fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. Rebuild required review/QA from a fresh 9.0 snapshot before CLEAN/ISSUES_FIXED."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -653,7 +653,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 8.0 identity after rehash."
+        description: "Fresh 9.0 identity after rehash."
         object_fields:
           - name: basis
             type: enum
@@ -674,7 +674,7 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet schema_version == 7.1"
-    validation: "Invalidate all 7.1 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 8.0. Preserve existing 7.1-or-later previously_fixed provenance as historical evidence, then rebuild required review/QA from a fresh 8.0 snapshot before CLEAN/ISSUES_FIXED."
+    validation: "Invalidate all 7.1 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 8.0. Preserve existing 7.1-or-later previously_fixed provenance as historical evidence, then rebuild required review/QA from a fresh 9.0 snapshot before CLEAN/ISSUES_FIXED."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -691,7 +691,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 8.0 identity after rehash."
+        description: "Fresh 9.0 identity after rehash."
         object_fields:
           - name: basis
             type: enum
@@ -712,8 +712,8 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet schema_version == 7.2"
-    description: "Invalidates a prior producer packet before Review8.0 admission."
-    validation: "Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs; preserve raw history and complete finding identity tuples unchanged without reassigning IDs. Rebuild review/QA from a fresh 8.0 snapshot before CLEAN/ISSUES_FIXED."
+    description: "Invalidates a prior producer packet before Review9.0 admission."
+    validation: "Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs; preserve raw history and complete finding identity tuples unchanged without reassigning IDs. Rebuild review/QA from a fresh 9.0 snapshot before CLEAN/ISSUES_FIXED."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -730,7 +730,51 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 8.0 identity after rehash."
+        description: "Fresh 9.0 identity after rehash."
+        object_fields:
+          - name: basis
+            type: enum
+            required: true
+            enum_values: [git_revision, diff_digest, content_digest, task_or_pr_revision]
+          - name: value
+            type: string
+            required: true
+          - name: captured_at
+            type: string
+            required: true
+          - name: scope_manifest_digest
+            type: string
+            required: true
+            description: "Digest of the ordered scope_manifest and its content digests"
+
+# 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required before entering the loop
+# 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
+# 3. If qa_evaluation_mode=required: require acceptance_criteria, verification_evidence, qa_filter_policy, and Done Contract with debate_record when the task has one before QAEvaluator dispatch
+# 4. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | subagent_mode: {subagent_execution_mode} | qa_evaluation_mode: {qa_evaluation_mode} | loop_safety_review: {agentic_loop_safety_review_required} | behavioral_contract_review: {behavioral_contract_review_required} | semantic_contract_review: {semantic_contract_review_required} | architecture_pack_review: {architecture_decision_pack_review_required} | files: {count}
+
+  - name: persisted_v8_packet_invalidation
+    type: object
+    required: conditional
+    condition: "persisted review packet schema_version == 8.0"
+    description: "Invalidates a prior producer packet before Review9.0 admission."
+    validation: "Invalidate active 8.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; preserve raw history and complete finding identity tuples unchanged without reassigning IDs. Rebuild review/QA from a fresh 9.0 snapshot before CLEAN/ISSUES_FIXED."
+    on_missing: fail
+    object_fields:
+      - name: source_schema_version
+        type: enum
+        required: true
+        enum_values: ["8.0"]
+      - name: batch_disposition
+        type: enum
+        required: true
+        enum_values: [invalidated_rebuild_required]
+      - name: rebuilt_review_snapshot_id
+        type: string
+        required: true
+      - name: rebuilt_snapshot_identity
+        type: object
+        required: true
+        description: "Fresh 9.0 identity after rehash."
         object_fields:
           - name: basis
             type: enum

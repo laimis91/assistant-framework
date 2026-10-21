@@ -1,165 +1,45 @@
-# Score Tracking & Drift Detection
+# Score tracking
 
-Tracks rubric scores across review rounds to ensure the loop makes genuine progress — not just an evaluator getting tired and passing things it shouldn't.
+Record the current final snapshot's aggregated score and finding count after the
+complete response barrier. Preserve historical entries and source/finding
+identities. Scores, counts and their GENUINE/SUSPICIOUS/DRIFT/REGRESSION/STAGNATION
+labels are diagnostics only; they cannot reset or stop work, change severity or
+confidence by round, force another review, or certify completion. In particular,
+a numeric STAGNATION label is not a semantic guard decision.
 
-Think of it like a speedometer with a lie detector: the score can go up, but only if the code actually got better.
+Use [the shared task policy](../../../tools/progress/operating-guidance.md) for
+repeated work. Assess each correction plus due executable verification/review
+as one semantic cycle. A durable acceptance gain or useful novel evidence resets
+the consecutive count; otherwise increment it. The source-bound effective window (default three consecutive unproductive
+cycles) stops corrective work. Productive trajectories can pass round 10. New
+findings, including an increased count, may be useful evidence; decreasing counts
+or score inflation alone prove no gain. A/B oscillation and its fresh rechecks
+retain one net disposition per cycle under the same guard.
 
-## Score History Format
+A score entry retains positive round ordinal, weighted_score, aggregated finding
+count, dimension scores, adjacent delta and diagnostic status. Never reinterpret
+historical score data as progress evidence. Current final-snapshot coverage,
+immutable finding provenance and acceptance obligations still govern completion.
+Audit remains one read-only batch.
 
-After each response barrier, recompute from the post-barrier aggregated union of
-the current final snapshot and record an entry in score history. Perspective-local
-rubrics never drive a batch exit or drift calculation.
+When genuinely stalled, retain evidence and report the specific blocker and next
+useful action. A pivot/restart decision is required for a material scope, access,
+cost, risk or acceptance change under existing authority rules. An equivalent
+routine correction needs no repeated approval. Generic continuation cannot erase
+a stall. A validated material unblock permits only its bound newly feasible
+action, consumed once after all gates, without resetting count/history.
 
-```
-score_history.append({
-  round: N,
-  weighted_score: 3.90, # (4.0 * 0.30) + (3.5 * 0.20) + (4.0 * 0.20) + (5.0 * 0.15) + (3.0 * 0.15)
-  aggregated_finding_count: 5, # union must-fix + should-fix (not nits)
-  dimension_scores: { correctness: 4.0, code_quality: 3.5, ... },
-  drift_status: GENUINE    # computed from rules below
-})
-```
+Diagnostic arithmetic preserves the aggregated union finding count. For adjacent
+entries, DRIFT takes precedence whenever finding count is unchanged or increased;
+SUSPICIOUS requires a score delta greater than +1.0 AND count decrease. A negative
+delta is REGRESSION; positive delta plus count decrease is otherwise GENUINE.
+A zero-delta plateau with the same positive count across two transitions is the
+numeric STAGNATION diagnostic. Example: correctness=4, quality=3.5,
+architecture=4, security=5, coverage=3 yields weighted_score: 3.90:
+(4.0 * 0.30) + (3.5 * 0.20) + (4 * 0.20) + (5 * 0.15) + (3 * 0.15).
+These arithmetic checks retain data integrity; score diagnostics alone do not
+trigger pivot_restart_decision. On genuine shared semantic stagnation or material
+change, preserve pivot_restart_signal and route the Pivot/Restart Decision Packet
+through the orchestrator with the retained guard and concrete unblock condition.
 
-## Drift Detection Rules
-
-Compare each round to the previous final snapshot using **aggregate score delta**
-and **aggregated union finding count delta**.
-
-### Rule 1: GENUINE improvement
-
-Score went up AND finding count went down.
-
-```
-score_delta > 0 AND aggregated_finding_count_delta < 0 → GENUINE
-```
-
-This is the expected pattern: fixes improve the code, fewer issues found.
-
-### Rule 2: SUSPICIOUS improvement
-
-Score went up significantly (> 1.0) in a single round while findings decreased. This magnitude warrants verification.
-
-```
-score_delta > 1.0 AND aggregated_finding_count_delta < 0 → SUSPICIOUS
-```
-
-Action: Log a warning in the final summary. The improvement may be real (e.g., a single critical fix that uncapped the score), but it should be noted.
-
-### Rule 3: DRIFT (evaluator leniency)
-
-DRIFT takes precedence whenever finding count is unchanged or increased, including a large score increase. The evaluator is scoring higher without evidence of fewer findings.
-
-```
-score_delta > 0 AND aggregated_finding_count_delta >= 0 → DRIFT
-```
-
-Action: **Reset evaluator context once.** Dispatch a fresh reviewer agent with an explicitly stricter prompt:
-
-> "Previous rounds showed score inflation without corresponding quality improvement.
-> Apply maximum skepticism. Score conservatively — when uncertain, round DOWN.
-> Do not give benefit of the doubt on any dimension."
-
-Also add to the final summary: "Drift detected in round N — evaluator was reset."
-Repeated DRIFT after the reset triggers `pivot_restart_signal` and requires an
-orchestrator-owned `pivot_restart_decision` before another review dispatch.
-
-### Rule 4: REGRESSION
-
-Score went down. Fixes may have introduced new problems, or the evaluator is catching things it previously missed.
-
-```
-score_delta < 0 → REGRESSION
-```
-
-Action: This is not necessarily bad — a fresh evaluator may legitimately find more issues. Log it, but 2+ consecutive REGRESSION entries trigger `pivot_restart_signal` and require an orchestrator-owned `pivot_restart_decision` before another fix/review dispatch.
-
-### Rule 5: STAGNATION
-
-Score unchanged for 2+ consecutive rounds with findings still present.
-
-```
-score_delta == 0 for 2 consecutive rounds AND aggregated_finding_count > 0 → STAGNATION
-```
-
-Action: Return `pivot_restart_signal` to the orchestrator. The loop is churning
-without progress. The orchestrator must record `pivot_restart_decision` before
-another fix/review dispatch and consider:
-- Fixes are introducing new issues at the same rate as resolving old ones
-- The remaining issues may be architectural (can't fix without broader changes)
-- The selected recovery may need reset, candidate search, replan, restart, or a
-  blocked/user path
-
-## Decision Matrix
-
-| Score Delta | Finding Condition | Status | Action |
-|---|---|---|---|
-| +, magnitude ≤ 1.0 | count decreased | **GENUINE** | Record progress; another round still requires new evidence after round 2 |
-| +, magnitude > 1.0 | count decreased | **SUSPICIOUS** | Log warning; another round still requires new evidence after round 2 |
-| +, any | count same or increased | **DRIFT** | Record regression/drift evidence; repeated DRIFT triggers pivot_restart_decision |
-| − | any | **REGRESSION** | Log; 2+ consecutive regressions trigger pivot_restart_decision |
-| 0 | any, findings > 0 remain, 2+ consecutive rounds | **STAGNATION** | Return pivot_restart_signal and require pivot_restart_decision |
-| 0 | any, findings > 0 remain, 1 round only | **NEUTRAL** | Log, no action yet |
-| 0 | findings == 0 | *(exit as CLEAN)* | Should not reach drift check |
-
-Note: STAGNATION checks absolute finding count (> 0), not finding delta. A score unchanged at 3.5 with findings dropping 5→3→1 across rounds is NEUTRAL (findings still moving), not STAGNATION. STAGNATION triggers when the score plateaus AND findings persist for 2+ consecutive rounds — the loop is churning without measurable progress.
-
-Score movement never authorizes round 3+ by itself. A later round requires `additional_round_reason` backed by changed files, an unresolved finding, validation failure, regression/drift, or a changed hypothesis created after the previous review began.
-
-## Task Journal Format
-
-Record scores in each Quality Review entry:
-
-```markdown
-### Quality Review #N
-- Round: N of 10
-- Previously fixed: M items from prior rounds
-- Found this round: X must-fix, Y should-fix, Z nits
-- Rubric: correctness=4.0 quality=3.5 architecture=4.0 security=5.0 coverage=3.0
-- Weighted: 3.90
-- Delta from previous: +0.35
-- Drift check: GENUINE (findings decreased 5→3)
-```
-
-## Final Summary Score Progression
-
-Include in the review exit summary:
-
-```markdown
-### Score Progression
-| Round | Score | Findings | Delta | Drift |
-|---|---|---|---|---|
-| 1 | 3.50 | 5 | — | — |
-| 2 | 3.90 | 3 | +0.40 | GENUINE |
-| 3 | 4.10 | 0 | +0.25 | GENUINE |
-```
-
-## Drift Response Escalation
-
-| Drift Count | Response |
-|---|---|
-| 1 occurrence | Reset evaluator, stricter prompt |
-| 2 occurrences | Return pivot_restart_signal; orchestrator records pivot_restart_decision |
-| 3+ occurrences | Stop current review path until pivot_restart_decision selects reset, candidate search, replan, restart, or blocked/user path |
-
-The goal is not to prevent the loop from exiting — it's to ensure that when it exits, the code genuinely earned its passing score.
-
-## Pivot/Restart Decision Packet
-
-When STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT
-fires, the review loop does not silently continue. It returns
-`pivot_restart_signal`; the orchestrator records `pivot_restart_decision` with:
-
-- `trigger`
-- `evidence`
-- `affected_slice_or_round`
-- `options_considered`
-- `selected_action`
-- `reapproval_required`
-- `next_agent`
-- `recovery_pointer`
-- `exact_next_action`
-
-If the selected action changes approved scope, files, behavior, risk,
-verification, or acceptance criteria, `reapproval_required` is true and the
-workflow waits for approval before Build or Review continues. Round 10 remains
-terminal; do not start round 11.
+Diagnostic formula: score_delta > 1.0 AND aggregated_finding_count_delta < 0 → SUSPICIOUS.

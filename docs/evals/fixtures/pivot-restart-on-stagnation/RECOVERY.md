@@ -20,6 +20,8 @@ Any other started or completed command is rejected. The fixture does not permit
 discovery commands; this command boundary is not a framework-wide tool policy.
 
 ```text
+guard_id=fixture-shared-outcome
+completed_unproductive_cycles=3
 terminal_completed=false
 next_action=assistant-debugging
 recovery_pointer=fixture-owned-recovery-artifacts
@@ -27,4 +29,4 @@ recovery_pointer=fixture-owned-recovery-artifacts
 
 A passing fresh check proves the bounded recovery protocol was observed. It does
 not claim that the underlying legacy bug was repaired or that the workflow is
-complete. A patch or retry after the bound is rejected.
+complete. The fixture permits only the listed recovery protocol after the independently retained three-cycle stall; it does not impose a global correction-attempt ceiling.

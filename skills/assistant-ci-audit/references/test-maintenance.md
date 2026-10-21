@@ -28,8 +28,9 @@ source evidence rather than an invented replacement to preserve test count.
 Uncertain protection stays a gap; removing a genuine accepted requirement needs
 separate authorization. Recommend a bounded correction, never automatically edit,
 delete, quarantine, suppress errors, raise timeouts or add retries for green.
-Workflow preserves its cumulative recovery ceiling across tests/checks/workers/
-sessions: an audit recommendation does not reset spent attempts.
+Workflow retains one shared semantic progress guard across tests/checks/workers/
+sessions: an audit recommendation does not reset its history, frontier or consecutive
+no-progress count. Productive corrections have no cumulative allowance.
 
 Separate source-supported coupling from measured cost. A `supported_cost` finding
 needs actual measurements; a claim of savings also needs equivalent completed

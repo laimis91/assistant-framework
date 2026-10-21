@@ -10,7 +10,7 @@ semantic_validator_id_for_case() {
     jq -r --arg id "$case_id" '.cases[] | select(.id == $id) | .semantic_validator // empty' "$fixture_file"
 }
 
-assistant_research_five_lens_v3_valid() {
+assistant_research_five_lens_v4_valid() {
     local response_path="$1"
     local fixture_file="$2"
     local case_id="$3"
@@ -29,7 +29,7 @@ assistant_skill_creator_behavior_v1_valid() {
     fi
 }
 
-assistant_workflow_packet_admission_v14_valid() {
+assistant_workflow_packet_admission_v15_valid() {
     local response_path="$1"
     local fixture_file="$2"
     local case_id="$3"
@@ -134,9 +134,9 @@ run_semantic_validator() {
     local selected_skill_file="${5:-}"
 
     case "$validator_id" in
-        assistant-research.five_lens_v3) assistant_research_five_lens_v3_valid "$response_path" "$fixture_file" "$case_id" ;;
+        assistant-research.five_lens_v4) assistant_research_five_lens_v4_valid "$response_path" "$fixture_file" "$case_id" ;;
         assistant-skill-creator.behavior_v1) assistant_skill_creator_behavior_v1_valid "$response_path" "$fixture_file" "$case_id" ;;
-        assistant-workflow.packet_admission_v14) assistant_workflow_packet_admission_v14_valid "$response_path" "$fixture_file" "$case_id" "$selected_skill_file" ;;
+        assistant-workflow.packet_admission_v15) assistant_workflow_packet_admission_v15_valid "$response_path" "$fixture_file" "$case_id" "$selected_skill_file" ;;
         *)
             echo "Unknown semantic validator: $validator_id" >&2
             return 1

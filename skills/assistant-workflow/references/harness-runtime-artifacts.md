@@ -96,10 +96,8 @@ quality loop or Build handoff is no longer making safe progress.
 
 Trigger it for:
 
-- review or QA `STAGNATION`
-- repeated `DRIFT`
-- repeated `REGRESSION`
-- rubric or domain action `pivot`
+- evidenced shared semantic guard stagnation
+- a material change, including a source-backed rubric or domain pivot
 - Code Writer `blocker_type` returns such as `legacy_code_bug`,
   `broken_baseline`, `hidden_dependency`, `missing_contract`, `stale_plan`,
   `scope_conflict`, `tool_environment`, `permission_policy`,
@@ -107,11 +105,15 @@ Trigger it for:
 - verification blockers, plan deviations, or scope changes that make the
   approved packet stale
 
+Numeric score diagnostics alone do not require a decision or block finalization.
+`STAGNATION`, `DRIFT`, `REGRESSION` and `pivot` remain diagnostic labels; cite
+the actual guard, material-change or blocker evidence for recovery.
+
 Required decision fields:
 
 - `trigger`: exact trigger category
-- `evidence`: score entries, findings, blocker evidence, verification failures,
-  or trace refs proving the trigger
+- `evidence`: guard, material-change or blocker facts proving the trigger;
+  score entries may supply context
 - `affected_slice_or_round`: current slice id/name, review round, QA round, or
   workflow phase
 - `options_considered`: at least two recovery options unless policy or missing
@@ -128,8 +130,8 @@ Required decision fields:
 
 When a decision is created, update Harness Run State, append a `pivot_restart`
 Trace Ledger entry, refresh Replay Packet so `exact_next_action` matches the
-decision, and add or update the Pivot/Restart Decision artifact ref. Round 10
-remains terminal; the controller never creates round 11 behavior.
+decision, and add or update the Pivot/Restart Decision artifact ref. The shared guard
+remains controlling. Productive work may continue beyond round 10.
 
 Routing rules:
 

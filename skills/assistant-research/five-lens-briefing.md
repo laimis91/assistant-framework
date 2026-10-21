@@ -51,10 +51,10 @@ context explicit. A stronger recommendation requires verified decision-critical
 evidence, explicit relevant context, and peer support; otherwise investigate
 further. Research does not authorize an irreversible external action.
 
-## Retained v3 consumer protocol
+## Current v4 consumer protocol
 
 Load `contracts/index.yaml` and selected `five_lens`, `selected_handoff`,
-`current_phase`, and `completion` sets only when an existing structured v3
+`current_phase`, and `completion` sets only when an existing structured v4
 consumer, persisted run, or audit/eval requires that protocol. It retains these
 canonical rules; ordinary human-only research need not manufacture its full
 serialized artifact:
@@ -68,7 +68,7 @@ serialized artifact:
   own gaps. Typed follow-ups retain every material item or one `none_needed`.
 - Current input/output/phase-gate schemas define tier normalization, fixed numeric
   budgets/count-based confidence, actual usage/termination, capacity waves, fallback
-  evidence, and one same-assignment schema retry. These numeric rules are retained
+  evidence, and same-assignment schema correction under the shared task guard. These numeric rules are retained
   for compatibility fixtures, not universal research quotas. A failed lens stage
   after that repair reruns completely through admissible fallback or blocks.
 - Root-only contradiction map and initial synthesis; separate peer assignment,

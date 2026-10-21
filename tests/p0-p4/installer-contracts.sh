@@ -73,6 +73,9 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq "For small, low-risk, localized work, act as a hands-on worker" "$agents_file" \
             && grep -Fq "For medium+ or elevated-risk development work, remain the orchestrator" "$agents_file" \
             && grep -Fq "Keep orchestration proportional" "$agents_file" \
+            && grep -Fq "including when no skill matches" "$agents_file" \
+            && cmp -s "$FRAMEWORK_DIR/tools/progress/operating-guidance.md" "$INSTALL_HOME/.codex/tools/progress/operating-guidance.md" \
+            && cmp -s "$FRAMEWORK_DIR/tools/progress/stagnation.py" "$INSTALL_HOME/.codex/tools/progress/stagnation.py" \
             && grep -Fq "Get plan approval before medium+ or risky edits." "$agents_file" \
             && grep -Fq "Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent." "$agents_file" \
             && ! grep -Fq "## Skills (loaded" "$agents_file" \
@@ -813,7 +816,7 @@ for change_impact_skill in assistant-debugging assistant-review; do
     if ! HOME="$change_impact_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill "$change_impact_skill" --no-hooks >/tmp/p0p4-change-impact-${change_impact_skill}.out 2>/tmp/p0p4-change-impact-${change_impact_skill}.err; then
         change_impact_install_failure="$change_impact_skill selective install failed"
         break
-    elif [[ ! -f "$change_impact_skill_file" || ! -f "$change_impact_tool" || ! -f "$change_impact_protocol" || ! -f "$change_impact_example" ]]; then
+    elif [[ ! -f "$change_impact_skill_file" || ! -f "$change_impact_tool" || ! -f "$change_impact_protocol" || ! -f "$change_impact_example" || ! -f "$(dirname "$change_impact_skill_file")/../../tools/progress/operating-guidance.md" || ! -f "$(dirname "$change_impact_skill_file")/../../tools/progress/stagnation.py" ]]; then
         change_impact_install_failure="$change_impact_skill selective install omitted common validator resources at the path resolved from its loaded SKILL.md"
         break
     elif [[ -d "$change_impact_home/.codex/skills/assistant-workflow" || ! -f "$change_impact_reference" ]] \
@@ -935,9 +938,9 @@ write_ownership_workflow_fixture() {
     local workflow="$1" variant="$2" file
     mkdir -p "$workflow/contracts"
     printf '%s\n' '---' 'name: assistant-workflow' 'description: Retained ownership protocol fixture.' '---' >"$workflow/SKILL.md"
-    printf '%s\n' 'schema_version: "13.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml"
+    printf '%s\n' 'schema_version: "15.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml"
     cat >"$workflow/contracts/handoffs.yaml" <<'PROTOCOL'
-schema_version: "13.0"
+schema_version: "15.0"
 contract: handoffs
 skill: assistant-workflow
 worker_stage_protocol:
@@ -956,22 +959,23 @@ worker_stage_protocol:
       completes_build: false
 PROTOCOL
     case "$variant" in
-        current14|unknown-version)
+        old13|old14|unknown-version)
             local target_version=14.0
-            [[ "$variant" != unknown-version ]] || target_version=15.0
+            [[ "$variant" != old13 ]] || target_version=13.0
+            [[ "$variant" != unknown-version ]] || target_version=16.0
             for file in "$workflow/contracts/index.yaml" "$workflow/contracts/handoffs.yaml"; do
-                sed "s/13.0/$target_version/" "$file" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$file"
+                sed "s/15.0/$target_version/" "$file" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$file"
             done ;;
-        mixed-version) sed 's/13.0/14.0/' "$workflow/contracts/index.yaml" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$workflow/contracts/index.yaml" ;;
-        old|recovery|full|gemini) printf '%s\n' 'schema_version: "12.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        mixed-version) sed 's/15.0/14.0/' "$workflow/contracts/index.yaml" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$workflow/contracts/index.yaml" ;;
+        old|recovery|full) printf '%s\n' 'schema_version: "12.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
         no-stages) sed '/^worker_stage_protocol:/,$d' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         stage-mismatch) sed 's/current_matching_red/none/' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         early-completion) sed 's/completes_build: false/completes_build: true/' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         missing-index) rm "$workflow/contracts/index.yaml" ;;
         duplicate-index) printf '%s\n' 'skill: assistant-workflow' >>"$workflow/contracts/index.yaml" ;;
-        duplicate-handoffs) printf '%s\n' 'schema_version: "13.0"' >>"$workflow/contracts/handoffs.yaml" ;;
-        malformed) printf '%s\n' 'schema_version: "13.0' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
-        wrong-identity) printf '%s\n' 'schema_version: "13.0"' 'contract: output' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        duplicate-handoffs) printf '%s\n' 'schema_version: "15.0"' >>"$workflow/contracts/handoffs.yaml" ;;
+        malformed) printf '%s\n' 'schema_version: "15.0' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        wrong-identity) printf '%s\n' 'schema_version: "15.0"' 'contract: output' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
         unsafe-workflow) rm -r "$workflow"; printf 'wrong path type\n' >"$workflow" ;;
         unsafe-skill) rm "$workflow/SKILL.md"; mkdir "$workflow/SKILL.md" ;;
         unsafe-index) rm "$workflow/contracts/index.yaml"; ln -s "$workflow/SKILL.md" "$workflow/contracts/index.yaml" ;;
@@ -1109,8 +1113,8 @@ if [[ "${#runtime_failures[@]}" == 0 ]]; then pass; else fail "Workflow interpre
 ownership_install_compatibility_matrix() {
     local matrix_root="$1" agent variant mode case_home agent_home skills workflow before after workflow_before status log
     local -a args
-    for agent in codex claude; do
-        for variant in old no-stages stage-mismatch early-completion missing-index duplicate-index duplicate-handoffs malformed wrong-identity unsafe-workflow unsafe-skill unsafe-index absent current current14 unknown-version mixed-version bom-crlf recovery full; do
+    for agent in codex claude gemini; do
+        for variant in old13 old14 old no-stages stage-mismatch early-completion missing-index duplicate-index duplicate-handoffs malformed wrong-identity unsafe-workflow unsafe-skill unsafe-index absent current current15 unknown-version mixed-version bom-crlf recovery full; do
             for mode in normal dry-run; do
                 [[ "$mode" == dry-run && ( "$variant" == recovery || "$variant" == full ) ]] && continue
                 case_home="$matrix_root/$agent-$variant-$mode"
@@ -1118,7 +1122,7 @@ ownership_install_compatibility_matrix() {
                 if [[ "$agent" == codex ]]; then
                     agent_home="$case_home/Custom Codex Home"
                 else
-                    agent_home="$case_home/.claude"
+                    agent_home="$case_home/.$agent"
                 fi
                 skills="$agent_home/skills"; workflow="$skills/assistant-workflow"
                 mkdir -p "$agent_home/agents" "$agent_home/tools"
@@ -1137,15 +1141,15 @@ ownership_install_compatibility_matrix() {
                 [[ "$mode" == dry-run ]] && args+=(--dry-run)
                 log="$matrix_root/$agent-$variant-$mode.log"
                 status=0
-                # Claude deliberately receives a hostile ambient CODEX_HOME.
+                # Non-Codex providers receive a hostile ambient CODEX_HOME.
                 HOME="$case_home" CODEX_HOME="$([[ "$agent" == codex ]] && printf '%s' "$agent_home" || printf /)" bash "$FRAMEWORK_DIR/install.sh" "${args[@]}" >"$log" 2>&1 || status=$?
                 after="$(ownership_install_fingerprint "$case_home")"
                 case "$variant" in
-                    absent|current|current14|bom-crlf|recovery|full)
+                    absent|current|current15|bom-crlf|recovery|full)
                         if [[ "$status" != 0 ]]; then ownership_matrix_failure="$agent/$variant/$mode unexpectedly rejected; $log"; return 1; fi
                         if [[ "$mode" == dry-run && "$before" != "$after" ]]; then ownership_matrix_failure="$agent/$variant dry-run mutated managed tree"; return 1; fi
                         if [[ "$variant" == absent && -e "$workflow" ]]; then ownership_matrix_failure="$agent selective absent install added workflow"; return 1; fi
-                        if [[ "$variant" == current || "$variant" == current14 || "$variant" == bom-crlf ]]; then
+                        if [[ "$variant" == current || "$variant" == current15 || "$variant" == bom-crlf ]]; then
                             if [[ "$workflow_before" != "$(ownership_install_fingerprint "$workflow")" ]]; then ownership_matrix_failure="$agent selective install refreshed retained compatible controller"; return 1; fi
                         fi
                         if [[ "$variant" == recovery || "$variant" == full ]]; then
@@ -1169,13 +1173,6 @@ ownership_install_compatibility_matrix() {
             done
         done
     done
-    # Gemini does not copy the coupled profiles and keeps native fallback behavior.
-    case_home="$matrix_root/gemini"; mkdir -p "$case_home"
-    write_ownership_workflow_fixture "$case_home/.gemini/skills/assistant-workflow" gemini
-    if ! HOME="$case_home" CODEX_HOME=/ bash "$FRAMEWORK_DIR/install.sh" --agent gemini --skill assistant-docs --no-hooks >"$matrix_root/gemini.log" 2>&1; then
-        ownership_matrix_failure='Gemini incorrectly inherited the ownership profile guard'; return 1
-    fi
-
     # One common pre-mode source guard: representative branches, not a Cartesian inventory.
     local missing selection preview source_root extension expected_definition row
     while IFS='|' read -r agent missing selection preview; do
@@ -1225,7 +1222,7 @@ claude|absent-agent-source|workflow|normal
 SOURCE_PROFILE_CASES
 }
 
-test_start "selective Claude and Codex role upgrades require a compatible retained workflow before writes"
+test_start "selective installs require a current retained workflow before writes for every provider"
 ownership_matrix_root="$(mktemp -d "${TMPDIR:-/tmp}/ownership-upgrade.XXXXXX")"
 p0p4_register_cleanup "$ownership_matrix_root"
 ownership_matrix_failure=''

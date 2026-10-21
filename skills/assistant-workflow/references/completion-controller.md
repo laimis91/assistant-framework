@@ -24,6 +24,19 @@ plus the next action.
 This typed terminal projection is required for medium+ work and for every strict
 or required-QA execution, including otherwise-small work.
 
+For packet-plan completion, retain `context.progress` whenever current or retained
+`previous_plan` executions carry progress bindings. Marked executions match its
+guard; no admission survives checkpoint closure. Certify exact admission,
+packet/member, input and admitted approved definition through full/compacted closure. VERIFIED no-pair executions
+recover historical admission identity. Unknown binding requires authoritative
+reconstruction; known mismatch rejects. Close each semantic cycle with due
+verification/Review or its complete coordinator barrier. Intermediate packet/member
+verification may precede closure. Historical actions may differ from the latest
+proposal. Passing checks imply no semantic progress; `stagnant` permits proven
+completion. Unmarked single-pass work needs no carrier. Canonical snapshots retain
+committed pairs or prove forward succession before replacing `previous_plan`;
+erasure and rewind reject.
+
 ## Document Paths
 
 ### Light path

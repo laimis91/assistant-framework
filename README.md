@@ -173,7 +173,7 @@ workflow like this:
 | PLAN? | Optional Plan | Select `plan_mode`: `none`, `inline`, or `approval_required`. |
 | EXECUTE SLICE, OBSERVE | Build | Implement one coherent slice, run its explicit verification command, and record evidence before marking it verified. |
 | REVIEW | Review | Independently check requirements, regressions, quality, security, and QA evidence. |
-| REPAIR | Build or Review | Build repair handles implementation or verification failures with bounded attempts, followed by fresh Review. The assistant-review Review-fix loop handles review findings inside Review with revalidation and a fresh review result. |
+| REPAIR | Build or Review | Build repair handles implementation or verification failures under the shared semantic progress guard, followed by fresh Review. The assistant-review Review-fix loop handles review findings inside Review with revalidation and a fresh review result. |
 | HANDOFF | Document | Compose `final_handoff` and developer-facing manual test guidance only after acceptance evidence exists. |
 
 For `execution_intent != prepare_only`, `plan_mode=none` is limited to small,
@@ -182,8 +182,8 @@ short plan without an approval wait. For `prepare_only` at any size, `plan_mode=
 For prepare_only at any size, default to `plan_mode=none` unless optional readiness planning is explicitly requested.
 For `execution_intent != prepare_only`, `approval_required` applies to medium-or-larger work and to risk, policy, or
 public-impact changes. An explicitly requested `prepare_only` readiness Plan is always inline and no-wait. Build owns implementation, tests, verification, and
-a bounded repair loop: at most three attempts, a no-progress limit of two, and
-recorded failure signatures and progress before pivoting or reporting a block.
+the shared task-level guard: its source-bound effective window (default three consecutive unproductive semantic cycles),
+with completed evidence retained before later blockers and no cumulative attempt ceiling.
 Build repair is implementation/verification-failure recovery. Review-fix work
 for review findings stays within the bounded `assistant-review` loop and records
 its own revalidation before a fresh review result.
@@ -206,14 +206,14 @@ Each canonical executable packet carries its exact selected verification procedu
 may run in parallel for independent packets with non-overlapping ownership.
 Source-changing packets in a shared or unknown workspace remain sequential;
 parallel source-changing packets require runtime proof of isolated workspaces.
-Canonical v14 Plans use one implementation_steps collection with descriptive packet_id values. Coherent work defaults to one packet; additional boundaries require acceptance, ownership/context, prerequisite, recovery/rollout or binding protocol purpose. Stored packets reference one unchanged specialist decision and carry coordinator execution evidence. Deep worker projections cannot redefine approved work. All due integrated selected/binding checks precede fresh independent review for one or multiple packets; conditional QA/harness and exact final snapshot binding remain. The pure shipped admission helper checks current approval, graph, evidence, isolation and explicit v12 migration facts. Local checks do not establish native runtime consumption or efficiency; default promotion and a bounded comparative pilot remain separately gated.
+Canonical v15 Plans use one implementation_steps collection with descriptive packet_id values. Coherent work defaults to one packet; additional boundaries require acceptance, ownership/context, prerequisite, recovery/rollout or binding protocol purpose. Stored packets reference one unchanged specialist decision and carry coordinator execution evidence. Deep worker projections cannot redefine approved work. All due integrated selected/binding checks precede fresh independent review for one or multiple packets; conditional QA/harness and exact final snapshot binding remain. The pure shipped admission helper checks current approval, graph, evidence, isolation and source-verified v12/v13/v14 migration authority. Local checks do not establish native runtime consumption or efficiency; default promotion and a bounded comparative pilot remain separately gated.
 
 For compression-safe work, the orchestrator keeps concise, root-scoped task and
 session state under `.codex/`. Resume reconciles that journal with the newest
 user request and current repository evidence before continuing; stale state
 never overrides either source.
 
-Loop readiness is conditional. Ordinary day-to-day development, such as taking a work item, prompting once, waiting for implementation, and manually testing the result, stays in the normal workflow. Add `loop_readiness_assessment` only before an explicit repeat, optimization, or experiment loop outside the standard phase gates. Examples include "keep fixing build/test failures until green", "iterate on this interface until the manual checklist passes", or "optimize until a measured target is reached". A loop plan must name the verifier, stop condition, finite max iterations, budget limit, retry/empty-result handling, tool-error handling, low-confidence escalation, rollback/exit action, and harness routing. Loop readiness alone does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness or QA criteria independently apply.
+Loop readiness is conditional. Ordinary day-to-day development, such as taking a work item, prompting once, waiting for implementation, and manually testing the result, stays in the normal workflow. Add `loop_readiness_assessment` only before an explicit repeat, optimization, or experiment loop outside the standard phase gates. Examples include "keep fixing build/test failures until green", "iterate on this interface until the manual checklist passes", or "optimize until a measured target is reached". A loop plan must name the verifier, stop condition, the shared progress guard, optional source-backed iteration/resource limits, retry/empty-result handling, tool-error handling, low-confidence escalation, rollback/exit action, and harness routing. Loop readiness alone does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation unless harness or QA criteria independently apply.
 
 Triggers on: build, implement, fix, refactor, plan, create, idea
 
@@ -248,7 +248,7 @@ STRIDE threat model, OWASP code review, CVE dependency audit, attack surface map
 Triggers on: security, threat model, audit, vulnerability, OWASP
 
 ### assistant-review
-Evidence-bounded code review: audits use one frozen multi-pass batch with two independent narrow passes, plus integration for medium scope and architecture for large scope. Review-fix work normally uses an initial batch, one bounded repair, and one fresh post-fix re-review batch. Additional rounds require new evidence and a recorded reason, within the terminal safety cap. Prioritizes concrete bugs, regressions, risks, and missing tests.
+Evidence-bounded code review: audits use one frozen multi-pass batch with two independent narrow passes, plus integration for medium scope and architecture for large scope. Review-fix work normally uses an initial batch, authorized productive correction, and one fresh post-fix re-review batch. Additional rounds require new evidence and a recorded reason, under the same shared task guard. Prioritizes concrete bugs, regressions, risks, and missing tests.
 
 Triggers on: review, fresh review, code review, review this, check the code
 
@@ -689,3 +689,33 @@ configuration when reinstalling.
 - **Thinking tools are tools, not phases** — Use them when needed, not on every task
 - **Evidence before change** — Current repository evidence, tests, and review gates guide delivery decisions
 - **Covers weaknesses** — Documentation, diagrams, and onboarding compensate for developer blind spots
+
+
+### Common guidance and unmatched activities
+
+All 16 first-class assistant skills reference
+`tools/progress/operating-guidance.md`. Unix installs put tools beside skills
+under `~/.claude`, configured `CODEX_HOME` (default `~/.codex`), or `~/.gemini`.
+Windows Codex also mirrors progress into `~/.agents/tools/progress`, so
+`../../tools/progress/operating-guidance.md` from shared skills resolves with
+both default and custom `CODEX_HOME`. Existing installer safeguards preserve
+user files; full, single-skill, repeated and dry-run installs use the same route.
+
+Codex's installer-owned AGENTS.md explicitly loads the common file independently
+of skill matching. For a Claude/Gemini session with no matching skill, use:
+
+- Claude: `Read ~/.claude/tools/progress/operating-guidance.md as the operating guidance for this chat, then handle: <request>`.
+- Gemini: `Read ~/.gemini/tools/progress/operating-guidance.md as the operating guidance for this chat, then handle: <request>`.
+
+A user may place the same reference in an existing native instruction source
+for standing coverage. Installers take no new global-file ownership. Source
+references and installation parity do not prove native activation; automatic
+provider coverage is claimed only for observed standing-instruction support.
+
+Workflow v15 validates/migrates original v14 authority, retaining original and
+normalized digests, execution, actors, selected TDD and results. Review v9 and
+five-lens research v4 use the same three-consecutive-unproductive-cycle policy.
+Productive attempts and review/QA rounds have no cumulative ceiling. Historical
+counters/labels remain evidence; missing progress history is an explicit gap.
+No native/model pilot, reduced-friction, quality, time or cost improvement has
+been established by structural checks alone.

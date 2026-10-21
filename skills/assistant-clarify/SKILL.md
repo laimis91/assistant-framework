@@ -5,6 +5,11 @@ description: "Clarify ambiguous or multi-intent requests. Use when the user asks
 
 # Clarify the Request
 
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
 Turn an ambiguous or mixed request into a clear next action. Preserve the user's intent and vocabulary; do not characterize their prompt as chaotic or blame them for missing context.
 
 1. Read the conversation and available source before asking. Separate what is known from assumptions and unresolved decisions. Briefly reflect the likely goal when that helps establish common ground.

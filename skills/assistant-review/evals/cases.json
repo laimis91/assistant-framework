@@ -32,8 +32,7 @@
           },
           "security_specialist_triggered": false,
           "closure_verification_required": false,
-          "max_required_responses": 2,
-          "max_repair_attempts_per_pass": 1
+          "max_required_responses": 2
         },
         "expected_passes": [
           {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
@@ -59,8 +58,7 @@
           },
           "security_specialist_triggered": false,
           "closure_verification_required": false,
-          "max_required_responses": 2,
-          "max_repair_attempts_per_pass": 1
+          "max_required_responses": 2
         },
         "expected_passes": [
           {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
@@ -86,8 +84,7 @@
           },
           "security_specialist_triggered": false,
           "closure_verification_required": true,
-          "max_required_responses": 3,
-          "max_repair_attempts_per_pass": 1
+          "max_required_responses": 3
         },
         "expected_passes": [
           {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
@@ -119,8 +116,7 @@
           },
           "security_specialist_triggered": false,
           "closure_verification_required": false,
-          "max_required_responses": 3,
-          "max_repair_attempts_per_pass": 1
+          "max_required_responses": 3
         },
         "expected_passes": [
           {"review_pass_id":"pass-contract","perspective":"contract_and_test_oracle","assigned_scope":["scope-1"],"coverage_obligations":["contract"],"prior_finding_visibility":"none"},
@@ -279,7 +275,7 @@
         "Performs the initial review, fixes and validation, then one fresh re-review.",
         "Does not start round 3 solely because the rubric score is below threshold.",
         "Starts round 3+ only with additional_round_reason backed by new evidence from changed_files, unresolved_finding, validation_failure, regression_or_drift, or changed_hypothesis.",
-        "Preserves the hard max 10 rounds and never starts round 11."
+        "Allows productive later ordinals under the same shared guard; preserves current coverage and findings."
       ],
       "pass_criteria": [
         "The response stops after the fresh round 2 re-review in this scenario.",
@@ -289,7 +285,7 @@
       "fail_signals": [
         "Starts round 3 only to raise a rubric score.",
         "Treats the score as a new code finding.",
-        "Requests or implies round 11."
+        "Continues without useful evidence or unresolved accepted work."
       ],
       "machine_expectations": {
         "required_substrings": [
@@ -700,7 +696,7 @@
       "expected_behavior": [
         "Requires rubric scores for correctness, code quality, architecture, security, and test coverage.",
         "Applies a weighted score action such as PASS, REFINE, or PIVOT to calibrate focus and residual risk.",
-        "Uses evidence-backed finding filtering across rounds 1-10 and treats round 10 as the hard cap.",
+        "Uses evidence-backed finding filtering across every positive round ordinal with the same standards and the shared semantic progress guard.",
         "Buffers intermediate round details and presents one final summary after loop exit.",
         "Includes score progression when multiple rounds occur.",
         "Does not ask the user between rounds unless blocked."

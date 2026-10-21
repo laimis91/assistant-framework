@@ -124,25 +124,26 @@ function Assert-WorkflowPythonRuntime {
         @{ Name = 'python'; Prefix = @() }
     )
     foreach ($candidate in $candidates) {
-        $command = Get-Command -Name $candidate.Name -CommandType Application -ErrorAction SilentlyContinue
-        if ($null -eq $command) { continue }
-        $probeArguments = @($candidate.Prefix) + @('-B', '-c', $probe)
-        $savedErrorActionPreference = $ErrorActionPreference
-        try {
-            $ErrorActionPreference = 'Continue'
-            $output = @(& $command.Source @probeArguments 2>$null)
-            $exitCode = $LASTEXITCODE
-        }
-        catch { continue }
-        finally { $ErrorActionPreference = $savedErrorActionPreference }
-        $version = $null
-        if ($exitCode -eq 0 -and $output.Count -eq 1 -and
-            [string]$output[0] -match '^\d+\.\d+\.\d+$' -and
-            [version]::TryParse([string]$output[0], [ref]$version) -and $version -ge [version]'3.9') {
-            $invocation = "& '" + $command.Source.Replace("'", "''") + "'"
-            if ($candidate.Prefix.Count -gt 0) { $invocation += ' ' + ($candidate.Prefix -join ' ') }
-            Write-Info "Workflow Python 3.9+ invocation: $invocation (Python $version)"
-            return
+        $commands = @(Get-Command -Name $candidate.Name -CommandType Application -ErrorAction SilentlyContinue)
+        foreach ($command in $commands) {
+            $probeArguments = @($candidate.Prefix) + @('-B', '-c', $probe)
+            $savedErrorActionPreference = $ErrorActionPreference
+            try {
+                $ErrorActionPreference = 'Continue'
+                $output = @(& $command.Source @probeArguments 2>$null)
+                $exitCode = $LASTEXITCODE
+            }
+            catch { continue }
+            finally { $ErrorActionPreference = $savedErrorActionPreference }
+            $version = $null
+            if ($exitCode -eq 0 -and $output.Count -eq 1 -and
+                [string]$output[0] -match '^\d+\.\d+\.\d+$' -and
+                [version]::TryParse([string]$output[0], [ref]$version) -and $version -ge [version]'3.9') {
+                $invocation = "& '" + $command.Source.Replace("'", "''") + "'"
+                if ($candidate.Prefix.Count -gt 0) { $invocation += ' ' + ($candidate.Prefix -join ' ') }
+                Write-Info "Workflow Python 3.9+ invocation: $invocation (Python $version)"
+                return
+            }
         }
     }
     throw 'Python 3.9+ is required when the selected skill closure includes assistant-workflow. Install a supported py -3, python3 or python interpreter and rerun. No installation files have been changed.'
@@ -2236,6 +2237,8 @@ function Get-CodexGuidanceBlock {
 
 Codex uses installed skills through native skill routing. When a skill matches, read its `SKILL.md` and load only the references or contracts relevant to the current phase.
 
+Read `tools/progress/operating-guidance.md` under the configured `CODEX_HOME` (default `~/.codex`) as the common operating guidance for every activity, including when no skill matches.
+
 For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent.
 
 ## Operating stance
@@ -2364,13 +2367,14 @@ function Test-DeclaredWorkflowContract {
 
 function Assert-WorkflowRoleCompatibility {
     param([string]$AgentName, [string]$SkillsTarget, [string[]]$SelectedSkills)
-    if (@('codex', 'claude') -cnotcontains $AgentName) { return }
-    $extension = if ($AgentName -ceq 'codex') { '.toml' } else { '.md' }
-    $profileSource = Join-Path (Join-Path $script:FrameworkDir 'agents') $AgentName
-    foreach ($name in @('intelligent-writer', 'mechanical-writer')) {
-        $definition = Join-Path $profileSource ($name + $extension)
-        if (-not (Test-Path -LiteralPath $definition -PathType Leaf)) {
-            throw "Missing required writer definition for ${AgentName}: $definition. Restore the complete framework source and retry. No installation files have been changed."
+    if (@('codex', 'claude') -ccontains $AgentName) {
+        $extension = if ($AgentName -ceq 'codex') { '.toml' } else { '.md' }
+        $profileSource = Join-Path (Join-Path $script:FrameworkDir 'agents') $AgentName
+        foreach ($name in @('intelligent-writer', 'mechanical-writer')) {
+            $definition = Join-Path $profileSource ($name + $extension)
+            if (-not (Test-Path -LiteralPath $definition -PathType Leaf)) {
+                throw "Missing required writer definition for ${AgentName}: $definition. Restore the complete framework source and retry. No installation files have been changed."
+            }
         }
     }
     if ($SelectedSkills -contains 'assistant-workflow') { return }
@@ -2393,12 +2397,10 @@ function Assert-WorkflowRoleCompatibility {
         }
         $index = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/index.yaml')
         $handoffs = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/handoffs.yaml')
-        $compatible13 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '13.0') -and
-            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '13.0')
-        $compatible14 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '14.0') -and
-            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '14.0')
-        if (-not ($compatible13 -or $compatible14)) {
-            throw 'Retained index/handoffs do not uniquely declare matching schema 13.0 or 14.0 and the supported ownership stage tuples.'
+        $compatible15 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '15.0') -and
+            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '15.0')
+        if (-not $compatible15) {
+            throw 'Retained index/handoffs do not uniquely declare matching schema 15.0 and the supported ownership stage tuples.'
         }
     }
     catch {
@@ -2500,6 +2502,7 @@ function Invoke-AssistantFrameworkInstall {
 
     $toolsSource = Join-Path $script:FrameworkDir 'tools'
     $changeImpactToolsSource = Join-Path $toolsSource 'change-impact'
+    $progressToolsSource = Join-Path $toolsSource 'progress'
     $toolExclusions = @('.DS_Store', '.publish', 'bin', 'obj')
     $evalDocsSource = Join-Path (Join-Path $script:FrameworkDir 'docs') 'evals'
     $sourceOnlyFiles = @(
@@ -2537,6 +2540,9 @@ function Invoke-AssistantFrameworkInstall {
     if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
         [void](Assert-ManagedDirectoryCopySafe -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -Label 'Codex common change-impact checker')
     }
+    if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $progressToolsSource -PathType Container)) {
+        [void](Assert-ManagedDirectoryCopySafe -Source $progressToolsSource -Target (Join-Path $codexCommonToolsTarget 'progress') -ManagedRoot $agentsRoot -Label 'Codex common progress guidance')
+    }
     if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
         Assert-ManagedTopLevelEntriesSafe -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'
     }
@@ -2567,6 +2573,9 @@ function Invoke-AssistantFrameworkInstall {
         }
         if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
             Sync-ManagedDirectory -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -Label 'Codex common change-impact checker'
+        }
+        if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $progressToolsSource -PathType Container)) {
+            Sync-ManagedDirectory -Source $progressToolsSource -Target (Join-Path $codexCommonToolsTarget 'progress') -ManagedRoot $agentsRoot -Label 'Codex common progress guidance'
         }
         if (Test-Path -LiteralPath $evalDocsSource -PathType Container) {
             Sync-ManagedTopLevelEntries -Source $evalDocsSource -Target $evalDocsTarget -ManagedRoot $agentHome -Label 'Eval docs'

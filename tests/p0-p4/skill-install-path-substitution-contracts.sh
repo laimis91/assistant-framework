@@ -101,4 +101,14 @@ else
     fail "codex fixture skill install failed; see /tmp/p0p4-install-subst.err"
 fi
 
+test_start "all first-class skill entries resolve the common outcome guidance"
+progress_path_failures=()
+for entry in "$FRAMEWORK_DIR"/skills/assistant-*/SKILL.md; do
+    if ! grep -Fq '../../tools/progress/operating-guidance.md' "$entry" \
+        || [[ ! -f "$(dirname "$entry")/../../tools/progress/operating-guidance.md" ]]; then
+        progress_path_failures+=("$entry")
+    fi
+done
+if [[ ${#progress_path_failures[@]} -eq 0 ]]; then pass; else fail "common guidance paths: ${progress_path_failures[*]}"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

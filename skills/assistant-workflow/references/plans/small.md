@@ -2,20 +2,17 @@
 
 # Plan Templates
 
-Three tiers — match ceremony to `plan_mode` and task size. `plan_mode=none`
-does not load this template or create a plan artifact.
+Match tiers to `plan_mode` and size. `plan_mode=none` loads no template and creates no plan.
 
-Generated focused views in `references/plans/` are maintained by `tools/skills/sync-workflow-references.py`; this source remains authoritative fallback.
+`tools/skills/sync-workflow-references.py` generates `references/plans/` views from this authoritative fallback.
 
-Harness details live in optional appendices. Base plans keep compact refs only:
-load `references/plan-harness-appendix.md` for harness-capable work, otherwise
-record `N/A: [reason]`.
+Keep compact harness refs; harness-capable work loads `references/plan-harness-appendix.md`, otherwise record `N/A: [reason]`.
 
-For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits. It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests. `existing_system` records the exact unchanged feature-preparation evidence ref; `not_applicable` records `preparation_basis=not_applicable` and no feature-evidence ref. It records readiness implications, open decisions, and recommended next implementation state; it never creates executable slices or a downstream handoff.
+For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits. It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests. Omit downstream handoffs. Record readiness implications, open decisions and next implementation state. `existing_system` retains the unchanged feature-preparation evidence ref; `not_applicable` records `preparation_basis=not_applicable` without that ref.
 
 ## Small Tasks — Inline Plan (`plan_mode=inline`, `execution_intent != prepare_only`)
 
-No separate plan document needed. Include directly in your response:
+Include this directly; no separate document:
 
 ```markdown
 **Goal:** [1 sentence]

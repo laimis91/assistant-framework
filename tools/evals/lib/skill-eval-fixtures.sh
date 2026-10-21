@@ -237,7 +237,7 @@ inline_eval_only_roots = {
     { "name" => "status", "type" => "enum", "required" => false, "enum_values" => %w[DONE NEEDS_CONTEXT BLOCKED DEVIATED] },
     { "name" => "failure_class", "type" => "string", "required" => false },
     { "name" => "next_action", "type" => "enum", "required" => false, "enum_values" => %w[review orchestrator] },
-    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["8.0"] }] },
+    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["9.0"] }] },
     { "name" => "current_final_batch", "type" => "object", "required" => false, "object_fields" => [{ "name" => "review_snapshot_id", "type" => "string", "required" => true }, final_snapshot_identity_schema] },
     { "name" => "harness_entry_state", "type" => "object", "required" => false },
     {
@@ -668,11 +668,10 @@ templates.each do |template_ref, template|
   %w[batch_id review_snapshot_id].each { |field| fail_with.call("templates.#{template_ref}.#{field} must be a nonblank string") unless nonblank.call(template[field]) }
   fail_with.call("templates.#{template_ref}.scope_size must be trivial, small, medium, or large") unless %w[trivial small medium large].include?(template["scope_size"])
   topology = template["topology"]
-  topology_fields = %w[canonical_discovery_perspectives closure_verification_required discovery_pass_count max_repair_attempts_per_pass max_required_responses security_specialist_triggered]
+  topology_fields = %w[canonical_discovery_perspectives closure_verification_required discovery_pass_count max_required_responses security_specialist_triggered]
   fail_with.call("templates.#{template_ref}.topology must contain exactly #{topology_fields.join(', ')}") unless topology.is_a?(Hash) && topology.keys.sort == topology_fields
   fail_with.call("templates.#{template_ref}.topology.discovery_pass_count must be an integer from 2 through 4") unless topology["discovery_pass_count"].is_a?(Integer) && (2..4).cover?(topology["discovery_pass_count"])
   fail_with.call("templates.#{template_ref}.topology.max_required_responses must be an integer from 2 through 6") unless topology["max_required_responses"].is_a?(Integer) && (2..6).cover?(topology["max_required_responses"])
-  fail_with.call("templates.#{template_ref}.topology.max_repair_attempts_per_pass must equal 1") unless topology["max_repair_attempts_per_pass"] == 1
   %w[security_specialist_triggered closure_verification_required].each { |field| fail_with.call("templates.#{template_ref}.topology.#{field} must be boolean") unless [true, false].include?(topology[field]) }
   fail_with.call("templates.#{template_ref}.topology.canonical_discovery_perspectives must exactly match the canonical perspective matrix") unless topology["canonical_discovery_perspectives"] == canonical_perspectives
   passes, tuples = template.values_at("expected_passes", "required_coverage_tuples")
@@ -1315,11 +1314,11 @@ validate_fixture() {
           elif $skill_name == "assistant-workflow" and (packet_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "packet admission cases must declare their semantic validator"
           elif ($declared | length) == 0 then empty
           elif $skill_name == "assistant-research" and ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the five five-lens assistant-research cases"
-          elif $skill_name == "assistant-research" and ($declared | all(.semantic_validator == "assistant-research.five_lens_v3")) then empty
+          elif $skill_name == "assistant-research" and ($declared | all(.semantic_validator == "assistant-research.five_lens_v4")) then empty
           elif $skill_name == "assistant-skill-creator" and ($declared | map(.id) | sort) != (creator_case_ids | sort) then "semantic_validator must be declared by exactly the six fixed assistant-skill-creator cases"
           elif $skill_name == "assistant-skill-creator" and ($declared | all(.semantic_validator == "assistant-skill-creator.behavior_v1")) then empty
           elif $skill_name == "assistant-workflow" and ($declared | map(.id) | sort) != (packet_case_ids | sort) then "semantic_validator must be declared by exactly the three fixed packet-admission cases"
-          elif $skill_name == "assistant-workflow" and ($declared | all(.semantic_validator == "assistant-workflow.packet_admission_v14")) then empty
+          elif $skill_name == "assistant-workflow" and ($declared | all(.semantic_validator == "assistant-workflow.packet_admission_v15")) then empty
           else "semantic_validator is only supported by its exact assistant-research or assistant-skill-creator case allowlist" end
     ' "$fixture_file")" || die "Fixture is not valid JSON: $(display_path "$fixture_file")"
     [[ -z "$validation_error" ]] || die "$validation_error"

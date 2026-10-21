@@ -1,4 +1,4 @@
-# Applicability: retained v3 structured consumers, persisted packets, handoffs,
+# Applicability: current v4 structured consumers, persisted packets, handoffs,
 # and the existing five-lens audit/eval fixture. Numeric tier/source-count rules
 # below are compatibility-fixture rules, not ordinary claim-confidence policy.
 # Human-only source research uses claim-specific evidence and concise output.
@@ -9,7 +9,7 @@
 # Research has a search → synthesize → verify pipeline.
 # Gates ensure each stage completes before the next begins.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: phase-gates
 skill: assistant-research
 
@@ -130,7 +130,7 @@ gates:
         on_fail: "Revise root synthesis with all five valid lens results before dispatching the separate peer reviewer from five-lens-briefing.md"
 
       - id: SY8
-        check: "For five_lens_briefing: after one same-assignment schema-correction retry, a failed lens stage reruns completely through evidenced fallback or blocks; partial delegated/root mixtures never claim independence"
+        check: "For five_lens_briefing: under the shared task guard, a failed lens stage reruns completely through evidenced fallback or blocks; partial delegated/root mixtures never claim independence"
         condition: "research_method == five_lens_briefing"
         on_fail: "Discard the incomplete stage evidence, record fallback or blocker evidence, and do not synthesize from a mixed lens set"
 

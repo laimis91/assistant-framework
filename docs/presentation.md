@@ -53,8 +53,8 @@ Works with: **Claude Code** | **OpenAI Codex** | **Google Gemini CLI**
     │Thinking │ │Research │ │Security│ │  Review  │
     │ Tools   │ │ Tools   │ │Analysis│ │  Loop    │
     │         │ │         │ │        │ │          │
-    │6 modes  │ │4 tiers  │ │STRIDE  │ │Max 5     │
-    │debate   │ │URL      │ │OWASP   │ │rounds    │
+    │6 modes  │ │4 tiers  │ │STRIDE  │ │Shared    │
+    │debate   │ │URL      │ │OWASP   │ │guard     │
     │stress   │ │verify   │ │CVE     │ │auto-fix  │
     │test     │ │scoring  │ │attack  │ │fresh     │
     │creative │ │         │ │surface │ │reviewer  │
@@ -119,7 +119,7 @@ Round 3: Dispatch NEW Reviewer
 Result: CLEAN after 3 rounds.
 ```
 
-**Higher confidence threshold each round.** Early rounds catch obvious issues. Later rounds require higher certainty. Fresh reviewer each round prevents stale context.
+**Evidence and confidence standards stay fixed across rounds.** Every finding requires concrete evidence under the same severity and confidence criteria. A fresh independent reviewer each round prevents stale context.
 
 ---
 
@@ -319,7 +319,7 @@ Native capabilities stay native; Assistant Framework adds portable workflow disc
 | Others | Assistant Framework |
 |---|---|
 | Skills as suggestions | Skills as **mandatory enforcement** |
-| One-shot review | **Autonomous review loop** (max 10 rounds) |
+| One-shot review | **Autonomous review loop** (shared stagnation guard) |
 | Generic patterns | **Current repository evidence** informs the task |
 | Single agent | **Multi-agent orchestration** with role separation |
 | One platform | **Three platforms** (Claude, Codex, Gemini) |

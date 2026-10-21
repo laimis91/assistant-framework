@@ -5,15 +5,20 @@ description: "Review code, fix actionable findings, and run one fresh re-review.
 
 # Review
 
-Find concrete defects and regressions within the requested scope. Read the diff
-and connected callers, contracts, tests, and configuration; a change can break a
-consumer outside the diff. Each finding needs a real input/situation, file/line
-evidence, impact, calibrated confidence, and the smallest useful fix. Style taste
-and speculative concerns are non-blocking observations. Preserve a carried
-reduced-testing boundary/source via existing criteria, verification evidence and
-material snapshot refs. Additional tests need a distinct important uncovered
-failure and inadequate-existing-evidence rationale; scores or generic coverage
-advice cannot expand scope. Return material expansion to selection/approval.
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
+Find concrete defects and regressions within scope. Read the diff and connected
+callers, contracts, tests and configuration, including affected consumers outside
+the diff. Findings require real input/situation, file/line evidence, impact,
+calibrated confidence and the smallest useful fix. Style taste/speculation stays
+non-blocking. Preserve carried reduced-testing boundary/source through criteria,
+verification evidence and material snapshot refs. Additional tests require a
+distinct important uncovered failure and inadequate-existing-evidence rationale;
+scores/generic coverage advice cannot expand scope. Return material expansion
+to selection/approval.
 
 ## Authority and scope
 
@@ -39,7 +44,7 @@ or dispatch. Keep this guidance outside Reviewer bundles.
 
 Load [review-loop.md](references/review-loop.md) before the first batch; it owns
 transitions, frozen snapshot identity, response
-barriers, aggregation, and pivots. The current v8 protocol remains authoritative:
+barriers, aggregation, and pivots. The current v9 protocol remains authoritative:
 
 - Each frozen batch plans and attempts at least two independent, sibling-blind
   passes. Resolve `reviewer_context` for each pass, the selected handoff before
@@ -70,7 +75,7 @@ barriers, aggregation, and pivots. The current v8 protocol remains authoritative
 The change-impact projection does not replace canonical snapshot/coverage closure. Missing/invalid
 selectors load the full named contract. Load
 [legacy-compatibility.md](references/legacy-compatibility.md) only for persisted
-pre-v8 results; do not reinterpret historical evidence as a current clean batch.
+pre-v9 results; do not reinterpret historical evidence as a current clean batch.
 
 ## QA and stopping
 
@@ -85,15 +90,17 @@ Carry approved preparation QA obligations and exact result/source bindings.
 Audit stops after its first started batch, without fixes. Review-fix runs round 1,
 authorized fixes and validation, then fresh round 2. Round 3+ requires changed
 files, unresolved findings, validation failure, regression/drift, or changed
-hypothesis; score alone is insufficient. Round 10 is terminal; never start 11.
-Medium+ drift/stagnation uses [score-tracking.md](references/score-tracking.md)
-and a recorded pivot/restart decision before another pass.
+hypothesis; score alone is insufficient. Productive rounds can continue beyond 10 under the same shared guard.
+Medium+ score diagnostics use [score-tracking.md](references/score-tracking.md).
+Require a recorded pivot/restart decision before another pass only for evidenced
+shared semantic guard stagnation or an applicable material change. Score labels
+alone do not require a decision, reset the evaluator, or pause productive work.
 
 ## Result
 
-Report findings or fixes, reviewed scope, verification and material limits.
-No findings means "No material findings within the reviewed scope and available
-evidence"; `CLEAN` is an enum, not proof. Actual consumers retain
+Report findings/fixes, scope, verification and material limits. No findings means
+"No material findings within the reviewed scope and available evidence";
+`CLEAN` is an enum, not proof. Consumers retain
 `contracts/output.yaml`, canonical reviewed scope, batch/round evidence, required
 checks and QA. `CLEAN`/`ISSUES_FIXED` require complete current coverage and no
 remaining must-fix/should-fix items. Failed or blocked passes cannot claim clean.

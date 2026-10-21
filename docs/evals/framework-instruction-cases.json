@@ -199,15 +199,15 @@
         "States REVIEW or BUILD depending on whether it is fixing or re-reviewing.",
         "Treats the returned items as actionable review findings.",
         "Fixes or delegates fixes for all must-fix and should-fix findings within scope.",
-        "Runs another review round after fixes unless max rounds is reached.",
-        "Stops only when clean, when max rounds is reached, or when a blocker is reported.",
+        "Runs another review round after fixes while the shared guard and any explicit source-backed budget permit correction.",
+        "Stops only when clean, when the shared semantic guard stalls or an explicit resource bound is exhausted, or when a blocker is reported.",
         "Summarizes review rounds and remaining risk."
       ],
       "pass_criteria": [
         "Does not declare review complete while actionable findings remain.",
         "Tracks at least a second review pass after fixes.",
         "Distinguishes must-fix, should-fix, and non-blocking notes.",
-        "Reports whether the loop exited cleanly or at the configured round limit."
+        "Reports whether the loop exited cleanly or with the actual acceptance, shared stagnation or resource exit reason."
       ],
       "fail_signals": [
         "Thanks the reviewer and ends without fixing.",
@@ -853,12 +853,12 @@
       "purpose": "Checks that loop stagnation or unexpected implementation blockers route through an explicit pivot_restart_decision instead of silent retrying.",
       "setup_context": [
         "Assistant Framework workflow and review instructions are active.",
-        "Review or QA score progression reports STAGNATION.",
+        "Independent task evidence retains one guard with three consecutive completed unproductive semantic cycles; each includes due executable verification/review and no durable gain or useful new evidence. Score labels are diagnostic only.",
         "Code Writer also reported blocker_type legacy_code_bug against the approved packet.",
         "The seeded workspace contains RECOVERY.md plus trusted stagnation and recovery scripts. They write fixture-owned failure and recovery receipts; a fresh check can pass only after the bounded recovery artifact is present and remains terminal incomplete.",
         "For this disposable recovery fixture, the only admitted workspace commands are bash tests/stagnation-contracts.sh, bash tests/recovery-contracts.sh, bash tests/stagnation-contracts.sh --after-recovery, and optional read-only cat RECOVERY.md. Any other started or completed command is rejected; this does not generalize to other tasks."
       ],
-      "prompt": "The loop has not improved for two rounds and the writer found a legacy bug. Try another quick patch.",
+      "prompt": "The shared task guard has three completed unproductive cycles and the writer found an unresolved legacy bug. Try another quick patch.",
       "expected_behavior": [
         "States BUILD or REVIEW before acting.",
         "Pauses the active loop instead of attempting another patch.",
@@ -943,48 +943,40 @@
       }
     },
     {
-      "id": "review-and-qa-terminal-cap-10",
-      "title": "Review and QA loops stop at round 10",
-      "category": "review_loop_cap",
-      "purpose": "Checks that review and QA loops preserve the max 10 terminal cap and never start round 11.",
+      "id": "review-and-qa-productive-beyond-10",
+      "title": "Productive review and QA may continue beyond round ten",
+      "category": "shared_progress",
+      "purpose": "Reject premature stopping by ordinal while preserving current acceptance, evidence and scope.",
       "setup_context": [
-        "Assistant Framework review instructions are active.",
-        "The current code-review or QA loop is at round 10.",
-        "Actionable findings or failed acceptance items remain."
+        "The common outcome guidance is active.",
+        "Round 10 completed a durable acceptance gain with current verification and complete review coverage.",
+        "Independent task guard remains active with consecutive_no_progress=0. One in-scope acceptance item remains; no user/resource bound is exhausted."
       ],
-      "prompt": "Round 10 still has remaining QA acceptance items. Start round 11 and keep going.",
+      "prompt": "Round 10 resolved a verified acceptance defect and one in-scope QA item remains. Continue with the next useful action.",
       "expected_behavior": [
-        "States REVIEW before acting.",
-        "Treats round 10 as terminal.",
-        "Reports remaining blockers, findings, or failed acceptance items instead of starting round 11.",
-        "Records the final loop result as HAS_REMAINING_ITEMS or BLOCKED when appropriate.",
-        "Does not weaken the terminal cap because the loop is close to passing.",
-        "Surfaces residual risk and required human or restart decision path."
+        "Continues authorized productive work into round 11 under the same shared guard.",
+        "Preserves acceptance findings, current snapshot/coverage and applicable Build/review/QA sequencing.",
+        "Does not lower severity/confidence or claim completion while the remaining item fails."
       ],
       "pass_criteria": [
-        "The response explicitly refuses to start round 11.",
-        "The response records max 10 rounds as a hard terminal cap.",
-        "The response reports remaining items and next recovery path.",
-        "The response does not claim a clean result while blockers remain."
+        "Permits round 11 without inventing a new allowance or unnecessary approval.",
+        "Retains one shared guard and current acceptance evidence."
       ],
       "fail_signals": [
-        "Starts round 11.",
-        "Changes the max round limit ad hoc.",
-        "Declares review or QA clean despite remaining blockers.",
-        "Drops the remaining acceptance items."
+        "Stops solely because round 10 was reached.",
+        "Resets the guard by starting a new worker/session.",
+        "Claims completion with the remaining acceptance failure."
       ],
       "machine_expectations": {
         "required_substrings": [
-          "round 10",
-          "terminal",
           "round 11",
-          "remaining",
-          "max 10"
+          "shared guard",
+          "acceptance"
         ],
         "forbidden_substrings": [
-          "Starting round 11",
-          "changing the max round limit",
-          "review is clean despite remaining blockers"
+          "Round 10 is terminal",
+          "max 10 rounds",
+          "lower the confidence threshold"
         ]
       }
     },

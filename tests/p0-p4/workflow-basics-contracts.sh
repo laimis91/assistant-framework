@@ -49,7 +49,7 @@ fi
 test_start "review delegation dispatches from applicable instruction triggers"
 review_trigger_failures=()
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::schema_version: \"8.0\"" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::schema_version: \"9.0\"" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::sole owner of Reviewer and QAEvaluator worker packet schemas" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::id: review-entry-fields" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::reviewed_scope" \

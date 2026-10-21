@@ -208,4 +208,14 @@ else
     pass
 fi
 
+test_start "Windows progress mirror uses existing safety preflight and copy owners"
+if grep -Fq "Assert-ManagedDirectoryCopySafe -Source \$progressToolsSource" "$installer" \
+    && grep -Fq "Sync-ManagedDirectory -Source \$progressToolsSource" "$installer" \
+    && grep -Fq 'full default Codex install delivers common progress' "$native_suite" \
+    && grep -Fq 'Repeated/custom-home progress mirror mismatch' "$native_suite"; then
+    pass
+else
+    fail "common progress mirror lacks managed safeguards or default/custom/repeated test coverage"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -74,9 +74,9 @@ Load `references/build-worker-protocol.md` for canonical packet or worker Build
 execution, active workflow TDD, or a repair requiring its carried protocol. It
 owns delegated/direct fallback execution, Code Writer and Builder/Tester
 evidence, selected verification, conditional TDD, Code Writer unexpected blockers, and per-slice
-verification. It also owns the ordinary bounded repair state with three total
-same-scope attempts and a two-attempt no-progress limit. Silent fallback cannot
-complete.
+verification. Repeated work uses one task-level shared stagnation guard: three
+consecutive unproductive semantic cycles, completed evidence before subsequent
+blockers, and no cumulative attempt ceiling. Silent fallback cannot complete.
 
 For medium+ harness-capable work, confirm the task journal or carried-forward
 plan has compact refs for an accepted Done Contract, selected Harness Recipe,

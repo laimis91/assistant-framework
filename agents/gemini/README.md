@@ -25,5 +25,7 @@ need a distinct important uncovered failure and inadequate-existing-evidence
 rationale. Use workflow Build reuse-first ordering with complete consumers/error
 paths. Classify expectations before repair; incidental assertions do not justify
 production changes. Preserve controlling checks, selected meaningful TDD and
-cumulative three-total-attempt/two-no-progress limits across tests, checks, workers
+shared three-consecutive-unproductive-cycle guard across tests, checks, workers
 and sessions. Material expansion returns to selection/approval.
+
+For unmatched work, explicitly read `~/.gemini/tools/progress/operating-guidance.md` as the operating guidance for this chat, then handle the request. Standing coverage requires the user's existing native instruction source; installation alone does not demonstrate activation.

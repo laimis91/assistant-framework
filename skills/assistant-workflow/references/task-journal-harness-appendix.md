@@ -88,9 +88,9 @@ phase handoff, or end-of-turn]
 
 ## Pivot/Restart Log
 
-[append when review/QA stagnation, repeated drift/regression, rubric/domain
-pivot, Code Writer blocker, verification blocker, plan deviation, or scope
-change triggers recovery]
+[append for evidenced shared guard stagnation, material change including a
+domain pivot, Code Writer blocker, verification blocker, or plan deviation that
+requires recovery. Numeric score diagnostics alone do not require a decision]
 
 ### Pivot/Restart Decision #N
 
@@ -125,7 +125,7 @@ build/test evidence and Code Reviewer or Reviewer compatibility evidence.
 
 ### QA Evaluation #1
 
-- Round: 1 of 10
+- Round: 1
 - Mode: required | optional | not_required
 - Done Contract: [ref or N/A with reason]
 - Acceptance criteria checked: [count]
@@ -137,11 +137,11 @@ build/test evidence and Code Reviewer or Reviewer compatibility evidence.
 - QA scorecard: acceptance_coverage=[score] evidence_strength=[score] domain_quality=[score] final_readiness=[score]
 - Weighted: [score]
 - Score progression: [round1->...]
-- Pivot/Restart decision: [ref if STAGNATION, repeated DRIFT, repeated REGRESSION, or domain action pivot occurred; otherwise N/A]
+- Pivot/Restart decision: [ref for evidenced shared guard stagnation or material change, including a domain pivot; otherwise N/A. Numeric score diagnostics alone do not require a decision]
 - Final verdict: accepted | accepted_with_concerns | rejected | blocked
 - Acceptance findings:
   - [blocker|concern|observation] [criterion] - [evidence] -> [fix/defer/open question]
 
-[...repeat QA Evaluation until accepted, accepted_with_concerns, blocked, or max round 10 reached...]
+[...repeat QA Evaluation until accepted, accepted_with_concerns, blocked, or the shared task guard stops corrective work...]
 
 Legacy recovery display keys such as slice and affected_slice_or_round retain their public shape. Project an explicit resolved canonical packet reference into them; they create no separate slice authority.

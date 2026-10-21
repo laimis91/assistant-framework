@@ -9,6 +9,11 @@ requires:
 
 # Development Workflow
 
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
 Complete the requested change with the smallest complete implementation and
 credible evidence. Inspect callers, tests, configuration, and other affected
 consumers before deciding the scope; reuse existing code and conventions. Carry
@@ -117,8 +122,9 @@ infer old authorization. Admission needs its independently resolved authority
 and supported Python runtime. Full serialized objects belong to these consumer
 boundaries; an ordinary human update can summarize the same decision and evidence.
 
-Same-scope repair stays within the approved recovery allowance: at most three
-attempts and two attempts without progress under the existing controller.
+Repeated correction uses one shared task-level stagnation guard: three
+consecutive completed unproductive semantic cycles. Productive work has no
+cumulative attempt or round ceiling; record completed evidence before later blockers.
 Scope, access, cost, safety, acceptance, or verification changes require a new
 decision. Missing required evidence blocks completion. Medium+, strict, and
 required-QA handoffs use [final-handoff.md](references/final-handoff.md); incomplete

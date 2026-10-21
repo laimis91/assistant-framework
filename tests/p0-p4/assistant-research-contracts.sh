@@ -49,7 +49,7 @@ write_research_eval_responses() {
         elif [[ "$case_id" == "five-lens-retains-all-material-follow-ups" ]] \
             && jq -e --arg case_id "$case_id" '
                 .cases[] | select(.id == $case_id)
-                | .semantic_validator == "assistant-research.five_lens_v3"
+                | .semantic_validator == "assistant-research.five_lens_v4"
             ' "$research_evals" >/dev/null; then
             write_schema_valid_five_lens_eval_response retained_follow_ups "$output_dir/assistant-research/$case_id.txt"
         else
@@ -777,7 +777,7 @@ research_typed_url_label_validators_match() {
     local private_actual official_actual
 
     if research_response_oracle_is_valid "$response_path" "$case_id" >/dev/null 2>&1; then private_actual=accept; else private_actual=reject; fi
-    if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v3_valid "$response_path" "$research_evals" "$case_id" ) >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v4_valid "$response_path" "$research_evals" "$case_id" ) >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
     [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]]
 }
 
@@ -910,7 +910,7 @@ research_overlapping_evidence_alias_controls() {
         fi
         research_refresh_response_derivatives "$response_path"
         if research_response_oracle_is_valid "$response_path" "$case_id" >/dev/null 2>&1; then private_actual=accept; else private_actual=reject; fi
-        if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v3_valid "$response_path" "$research_evals" "$case_id" ) >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+        if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v4_valid "$response_path" "$research_evals" "$case_id" ) >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
         [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || failures+=("$control_name:$private_actual/$official_actual")
     done <<'EOF'
 reject|candidate-overlap-forward-medium|candidate|medium|[{"claim":"Alias A.","source":"source:alias-a","verification_method":"public_url","verification_reference":"https://www.iana.org/alias-b","verified_url":"https://www.iana.org/alias-b","verification_detail":"First alias."},{"claim":"Alias B.","source":"https://www.iana.org/alias-b","verification_method":"public_url","verification_reference":"https://www.iana.org/alias-c","verified_url":"https://www.iana.org/alias-c","verification_detail":"Second alias."}]|["source:alias-a","https://www.iana.org/alias-b"]|[]
@@ -1089,7 +1089,7 @@ for file in \
     "$research_output" \
     "$research_phase_gates" \
     "$research_handoffs"; do
-    if ! grep -Fq -- 'schema_version: "3.0"' "$file"; then
+    if ! grep -Fq -- 'schema_version: "4.0"' "$file"; then
         five_lens_process_missing+=("${file#$FRAMEWORK_DIR/}: v3 schema version")
     fi
 done
@@ -1108,8 +1108,8 @@ for term in \
     'sibling-blind' \
     'all lens assignment packets are frozen before first dispatch' \
     'ResearchPeerReviewer' \
-    'one same-assignment schema-correction retry' \
-    'complete lens stage via evidenced fallback or block'; do
+    'shared task guard' \
+    'complete-stage evidenced fallback or block'; do
     if ! grep -Fq -- "$term" "$research_handoffs"; then
         five_lens_process_missing+=("contracts/handoffs.yaml: $term")
     fi
@@ -1551,11 +1551,11 @@ for file in \
     "$FRAMEWORK_DIR/skills/assistant-research/contracts/output.yaml" \
     "$FRAMEWORK_DIR/skills/assistant-research/contracts/phase-gates.yaml" \
     "$research_handoffs"; do
-    if ! grep -Fq -- 'schema_version: "3.0"' "$file"; then
+    if ! grep -Fq -- 'schema_version: "4.0"' "$file"; then
         follow_up_missing+=("${file#$FRAMEWORK_DIR/}: v3 migration version")
     fi
 done
-if ! p0p4_contains_text "$research_skill" "Older v2 follow-ups need typed v3 conversion"; then
+if ! p0p4_contains_text "$research_skill" "Older v2 follow-ups need typed v4 conversion"; then
     follow_up_missing+=("SKILL.md: v3 migration note")
 fi
 if [[ "${#follow_up_missing[@]}" -eq 0 ]]; then
@@ -2218,12 +2218,12 @@ for handoff_name in orchestrator_to_lens_researcher orchestrator_to_research_pee
     if ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'on_missing_field:'; then
         pr53_missing+=("$handoff_name actionable on_missing_field")
     elif [[ "$handoff_name" == "orchestrator_to_lens_researcher" ]] \
-        && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'same LensResearcher assignment once' \
-            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'complete lens stage' \
+        && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'same frozen assignment under the shared task guard' \
+            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'complete-stage' \
             || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'fallback or block'); then
         pr53_missing+=("lens on_missing_field must cap retry then fallback-or-block")
     elif [[ "$handoff_name" == "orchestrator_to_research_peer_reviewer" ]] \
-        && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'one peer correction' \
+        && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'exact peer correction' \
             || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'reviewer-only fallback' \
             || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'or block'); then
         pr53_missing+=("peer on_missing_field must cap correction then reviewer fallback-or-block")
@@ -2918,7 +2918,7 @@ while IFS='|' read -r expected fixture_name mutation; do
     research_refresh_response_derivatives "$semantic_closeout_response"
     if research_response_oracle_is_valid "$semantic_closeout_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then private_actual=accept; else private_actual=reject; fi
     if [[ "$fixture_name" == "delegated-peer-accepted" ]]; then
-        if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v3_valid "$semantic_closeout_response" "$research_evals" five-lens-decision-briefing-uses-storm-style-workflow ) >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+        if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v4_valid "$semantic_closeout_response" "$research_evals" five-lens-decision-briefing-uses-storm-style-workflow ) >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
     elif "$research_eval_runner" --responses "$semantic_closeout_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
     [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || semantic_closeout_failures+=("$fixture_name:$private_actual/$official_actual")
 done <<'EOF'
@@ -2964,10 +2964,10 @@ missing_adapter_fixture="$adapter_context_dir/missing-adapter-context.json"
 invalid_adapter_fixture="$adapter_context_dir/invalid-adapter-context.json"
 oversized_adapter_fixture="$adapter_context_dir/oversized-adapter-context.json"
 upper_bound_adapter_fixture="$adapter_context_dir/upper-bound-adapter-context.json"
-jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .semantic_context) |= del(.adapter_context)' "$research_evals" >"$missing_adapter_fixture"
-jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .semantic_context.adapter_context.max_concurrent_lens_workers) = 0' "$research_evals" >"$invalid_adapter_fixture"
-jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .semantic_context.adapter_context.max_concurrent_lens_workers) = 9007199254740992' "$research_evals" >"$oversized_adapter_fixture"
-jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .semantic_context.adapter_context.max_concurrent_lens_workers) = 9007199254740991' "$research_evals" >"$upper_bound_adapter_fixture"
+jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v4") | .semantic_context) |= del(.adapter_context)' "$research_evals" >"$missing_adapter_fixture"
+jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v4") | .semantic_context.adapter_context.max_concurrent_lens_workers) = 0' "$research_evals" >"$invalid_adapter_fixture"
+jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v4") | .semantic_context.adapter_context.max_concurrent_lens_workers) = 9007199254740992' "$research_evals" >"$oversized_adapter_fixture"
+jq '(.cases[] | select(.semantic_validator == "assistant-research.five_lens_v4") | .semantic_context.adapter_context.max_concurrent_lens_workers) = 9007199254740991' "$research_evals" >"$upper_bound_adapter_fixture"
 write_research_eval_responses "$adapter_context_dir/responses"
 upper_bound_response="$adapter_context_dir/responses/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
 if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fixture "$research_evals" assistant-research ) >/dev/null 2>&1 \
@@ -2975,7 +2975,7 @@ if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fi
     && ! ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fixture "$invalid_adapter_fixture" assistant-research ) >/dev/null 2>&1 \
     && ! ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fixture "$oversized_adapter_fixture" assistant-research ) >/dev/null 2>&1 \
     && ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"; validate_fixture "$upper_bound_adapter_fixture" assistant-research ) >/dev/null 2>&1 \
-    && ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v3_valid "$upper_bound_response" "$upper_bound_adapter_fixture" five-lens-decision-briefing-uses-storm-style-workflow ) >/dev/null 2>&1; then
+    && ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v4_valid "$upper_bound_response" "$upper_bound_adapter_fixture" five-lens-decision-briefing-uses-storm-style-workflow ) >/dev/null 2>&1; then
     pass
 else
     fail "assistant-research semantic adapter context accepted a missing or non-positive capacity"
@@ -3007,8 +3007,8 @@ while IFS= read -r semantic_case_id; do
         || ! research_response_oracle_is_valid "$semantic_response" "$semantic_case_id"; then
         semantic_context_failures+=("$semantic_case_id")
     fi
-done < <(jq -r '.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3") | .id' "$research_evals")
-if [[ "$(jq '[.cases[] | select(.semantic_validator == "assistant-research.five_lens_v3")] | length' "$research_evals")" == "5" ]] \
+done < <(jq -r '.cases[] | select(.semantic_validator == "assistant-research.five_lens_v4") | .id' "$research_evals")
+if [[ "$(jq '[.cases[] | select(.semantic_validator == "assistant-research.five_lens_v4")] | length' "$research_evals")" == "5" ]] \
     && [[ "${#semantic_context_failures[@]}" -eq 0 ]]; then
     pass
 else

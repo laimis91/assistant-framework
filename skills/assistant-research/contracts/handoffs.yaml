@@ -1,7 +1,7 @@
 # Research Process Handoff Contracts
 # Parameterized five-lens dispatch and independent peer review.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: handoffs
 skill: assistant-research
 
@@ -51,7 +51,7 @@ dispatch_protocol:
   - name: orchestrator_to_lens_researcher
     delegated_compliance: "Requires five distinct native dispatch or agent identities covering every LensKind exactly once. The same model may serve multiple independent lens assignments; missing lens, duplicate lens, or root-authored lens in delegated mode fails delegated compliance."
     wave_rule: "Capacity-bounded waves are allowed only in delegated lens mode, when wave coverage is exact, disjoint, exhaustive, and each reported capacity is within the trusted adapter capacity. Offline fixture adapter context proves response consistency only; runtime orchestration retains its own actual adapter evidence. Sequential fallback forbids wave_coverage. Later waves cannot consume earlier results."
-    retry_rule: "one same-assignment schema-correction retry is allowed for one invalid lens return. After that retry, rerun the complete lens stage via evidenced fallback or block; never mix partial delegated and root-authored results while claiming independence."
+    retry_rule: "same-assignment correction uses the shared task guard. Retain valid evidence and use complete-stage evidenced fallback or block when needed; never mix partial delegated and root-authored results while claiming independence."
   - name: orchestrator_to_research_peer_reviewer
     peer_review_rule: "A distinct ResearchPeerReviewer reviews the root initial synthesis after synthesis. Reviewer-only failure may retain validated delegated lenses and use a separately recorded reviewer fallback."
 
@@ -217,7 +217,7 @@ handoffs:
       - {name: status_detail, type: string, required: conditional, condition: "status in [NEEDS_CONTEXT, BLOCKED]", description: "Why the assignment cannot produce a usable LensResearchResult without inventing research."}
       - {name: blocker_type, type: enum, required: conditional, condition: "status == BLOCKED", enum_values: [invalid_assignment, policy_blocked, tool_failure]}
       - {name: blocker_evidence, type: "string[]", required: conditional, condition: "status == BLOCKED", min_items: 1}
-    on_missing_field: "Re-dispatch the same LensResearcher assignment once with an explicit missing-field request. After that one schema-correction retry, rerun the complete lens stage through evidenced sequential fallback or block; do not accept a partial mixed result or invent fields."
+    on_missing_field: "Request the exact missing field on the same frozen assignment under the shared task guard. Retain valid lens evidence; use evidenced complete-stage sequential fallback or block with an honest gap. Never mix partial stages or invent fields."
 
   - name: orchestrator_to_research_peer_reviewer
     from: Orchestrator
@@ -405,7 +405,7 @@ handoffs:
       - {name: status_detail, type: string, required: conditional, condition: "status in [NEEDS_CONTEXT, BLOCKED]"}
       - {name: blocker_type, type: enum, required: conditional, condition: "status == BLOCKED", enum_values: [missing_review_context, policy_blocked, tool_failure]}
       - {name: blocker_evidence, type: "string[]", required: conditional, condition: "status == BLOCKED", min_items: 1}
-    on_missing_field: "Request one peer correction with the exact missing field. If it remains invalid or unusable, retain valid lens evidence and run a separate fresh reviewer-only fallback with concrete evidence, or block; do not invent peer fields or let the worker self-attest orchestration metadata."
+    on_missing_field: "Request the exact peer correction under the same shared guard. Retain valid lens evidence; use a fresh reviewer-only fallback with concrete evidence or block. Never invent fields or self-attest orchestration metadata."
 
 return_validation:
   - name: common_return_validation

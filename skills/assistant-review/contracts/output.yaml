@@ -1,12 +1,12 @@
 # Applicability: structured review batches, worker handoffs, persisted results,
-# and workflow/QA consumers use the canonical v8 protocol. Human summaries may
+# and workflow/QA consumers use the canonical v9 protocol. Human summaries may
 # omit empty/internal sections; frozen snapshots, independent passes, coverage,
-# verification, authorization, and round caps apply to every selected review.
+# verification, authorization, and the shared semantic guard apply to every selected review.
 
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "8.0"
+schema_version: "9.0"
 contract: output
 skill: assistant-review
 
@@ -109,7 +109,7 @@ artifacts:
   - name: pivot_restart_decision
     type: object
     required: conditional
-    condition: "review or QA loop observes STAGNATION, repeated DRIFT, repeated REGRESSION, rubric action PIVOT, or scoped domain action pivot"
+    condition: "the shared task guard reports the source-bound effective window of consecutive unproductive semantic cycles (default three) or a material change requires a new decision"
     description: "Orchestrator-owned decision packet created before another review/fix/QA/build dispatch after stagnant or pivot-triggered quality loops."
     validation: "Must include trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Reapproval is required when scope, files, behavior, risk, verification, or acceptance criteria change."
     on_fail: "Pause the loop and create the pivot_restart_decision before continuing; do not silently continue after stagnation or pivot."
@@ -208,7 +208,7 @@ artifacts:
     required: true
     condition: always
     description: "The single summary presented to the user after the loop completes"
-    validation: "Must include rounds (1-10), current final snapshot, the exact final_batch_plan, started batch summaries, obligation-level coverage ledger, aggregation ledger, aggregated findings, aggregate result, the evidence-bounded no-finding claim only when coverage is complete, additional-round evidence when rounds >= 2, fixed_items, remaining_items or coverage gaps when applicable, and nits before presenting review results. The current final batch snapshot_identity exactly equals final_snapshot_identity and its review_snapshot_id exactly equals final_review_snapshot_id. final_batch_plan exactly equals the current final review_batch topology and expected_passes, so required integration, architecture, security, and closure passes cannot be omitted before CLEAN. Recompute the result and rubric from the complete aggregated union after the response barrier, never from an early pass result. Historical batches remain accountable but only the current final snapshot requires complete replacement coverage for CLEAN or ISSUES_FIXED."
+    validation: "Must include rounds (positive integer), current final snapshot, the exact final_batch_plan, started batch summaries, obligation-level coverage ledger, aggregation ledger, aggregated findings, aggregate result, the evidence-bounded no-finding claim only when coverage is complete, additional-round evidence when rounds >= 2, fixed_items, remaining_items or coverage gaps when applicable, and nits before presenting review results. The current final batch snapshot_identity exactly equals final_snapshot_identity and its review_snapshot_id exactly equals final_review_snapshot_id. final_batch_plan exactly equals the current final review_batch topology and expected_passes, so required integration, architecture, security, and closure passes cannot be omitted before CLEAN. Recompute the result and rubric from the complete aggregated union after the response barrier, never from an early pass result. Historical batches remain accountable but only the current final snapshot requires complete replacement coverage for CLEAN or ISSUES_FIXED."
     object_fields:
       - name: reviewed_scope
         type: string[]
@@ -218,7 +218,7 @@ artifacts:
       - name: rounds
         type: int
         required: true
-        validation: ">= 1 and <= 10"
+        validation: "Positive integer; no ordinal ceiling"
       - name: final_review_snapshot_id
         type: string
         required: true
@@ -297,10 +297,6 @@ artifacts:
               - name: max_required_responses
                 type: int
                 required: true
-              - name: max_repair_attempts_per_pass
-                type: int
-                required: true
-                validation: "Exactly 1: one retry is permitted only for a transient or schema-invalid response."
           - name: expected_passes
             type: object[]
             required: true
@@ -416,7 +412,7 @@ artifacts:
           - name: started_batch_ordinal
             type: int
             required: true
-            validation: "Unique contiguous 1..rounds in started order; batch_summaries length equals rounds, including incomplete and invalidated batches, and 11 is invalid."
+            validation: "Unique contiguous 1..rounds in started order; batch_summaries length equals rounds, including incomplete and invalidated batches."
           - name: batch_id
             type: string
             required: true
@@ -595,7 +591,7 @@ artifacts:
           - name: round
             type: int
             required: true
-            validation: ">= 2 and <= 10"
+            validation: ">= 2; no ordinal ceiling"
           - name: reason
             type: enum
             required: true
@@ -629,7 +625,7 @@ artifacts:
           - name: fixed_in_round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: "Positive integer; no ordinal ceiling"
       - name: closure_results
         type: object[]
         required: conditional
@@ -652,7 +648,7 @@ artifacts:
         type: object[]
         required: false
         condition: "result == HAS_REMAINING_ITEMS"
-        description: "Items that could not be resolved within max rounds"
+        description: "Unresolved items at shared semantic stagnation or an actual authority/resource blocker"
         object_fields:
           - name: severity
             type: enum
@@ -689,13 +685,13 @@ artifacts:
     required: conditional
     condition: "qa_evaluation_mode == required"
     description: "Independent QA evaluation final result after build/test and code-review evidence"
-    validation: "Must include rounds (1-10), final_verdict, result, canonical acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, pivot_restart_signal when triggered, evidence, obligation result when carried, and open_questions when blocked; every successful pair accepted|accepted_with_concerns with CLEAN|ISSUES_FIXED is invalid until the carried obligation is fulfilled."
+    validation: "Must include rounds (positive integer), final_verdict, result, canonical acceptance_findings, qa_scorecard, selected_domain_rubrics/domain_quality_scores when scoped domain rubrics were used, score_progression, pivot_restart_signal when triggered, evidence, obligation result when carried, and open_questions when blocked; every successful pair accepted|accepted_with_concerns with CLEAN|ISSUES_FIXED is invalid until the carried obligation is fulfilled."
     on_fail: "Run the QA evaluation loop from references/qa-evaluation-loop.md or record why QA is blocked before presenting final review results"
     object_fields:
       - name: rounds
         type: int
         required: true
-        validation: ">= 1 and <= 10"
+        validation: "Positive integer; no ordinal ceiling"
       - name: final_verdict
         type: enum
         required: true
@@ -856,7 +852,7 @@ artifacts:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: "Positive integer; no ordinal ceiling"
           - name: weighted_score
             type: float
             required: true
@@ -874,8 +870,8 @@ artifacts:
             validation: "Derived from the immediately preceding score and failed_acceptance_count movement. REGRESSION is a negative delta. A positive delta is GENUINE when failed count falls, SUSPICIOUS when that improvement exceeds 1.00, and DRIFT otherwise. STAGNATION requires a two-transition zero-delta plateau with the same positive failed count; otherwise use NEUTRAL. Repeated DRIFT/REGRESSION means consecutive terminal transitions only."
       - name: pivot_restart_signal
         type: object
-        required: false
-        condition: "final score_progression entry drift_status == STAGNATION, repeated QA DRIFT/REGRESSION is detected, or any scoped domain_quality_scores action == pivot"
+        required: conditional
+        condition: "the shared task guard reports genuine semantic stagnation; score diagnostics alone are insufficient"
         description: "Signal that the QA loop needs orchestrator-owned pivot/restart handling before another QA/build dispatch."
         validation: "Preserves the terminal QAEvaluator signal unchanged; affected_round exactly equals qa_evaluation_result.rounds, the current final QA round."
         object_fields:
@@ -897,7 +893,7 @@ artifacts:
           - name: affected_round
             type: int
             required: true
-            validation: ">= 1 and <= 10; exactly equals current return round."
+            validation: "Positive integer; no ordinal ceiling"
           - name: recommended_recovery_focus
             type: string
             required: true
@@ -955,13 +951,13 @@ artifacts:
       - name: score_progression
         type: object[]
         required: true
-        description: "Weighted aggregate score and aggregated union finding count per round — used for drift detection and capped at the 10-round review limit"
-        validation: "v8.0 score tracking uses aggregated_finding_count. Persisted 6.0/7.0/7.1/7.2 packets are invalidated and rebuilt before score tracking; legacy finding_count remains historical evidence only."
+        description: "Weighted aggregate score and aggregated union finding count per round — used for drift detection and diagnostic only; shared semantic progress governs continuation"
+        validation: "v9.0 score tracking uses aggregated_finding_count. Persisted 6.0/7.0/7.1/7.2/8.0 packets are invalidated and rebuilt before score tracking; legacy finding_count remains historical evidence only."
         object_fields:
           - name: round
             type: int
             required: true
-            validation: ">= 1 and <= 10"
+            validation: "Positive integer; no ordinal ceiling"
           - name: weighted_score
             type: float
             required: true
@@ -980,7 +976,7 @@ artifacts:
     required: conditional
     condition: "agentic_loop_safety_review_required is true"
     description: "Review of runaway-loop and repeated-tool-call safety risks"
-    validation: "Must state whether bounded execution, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation were checked"
+    validation: "Must state whether shared semantic continuation or explicit application/tool/user/resource bounds, stop condition, retry/empty handling, tool-error handling, progress/stagnation detection, cost/token guardrails, and low-confidence escalation were checked"
     object_fields:
       - name: bounded_execution
         type: string
@@ -1275,4 +1271,4 @@ artifacts:
 # 8. If architecture_decision_pack_review_required=true: architecture_decision_pack_review is populated and Pack findings are included in final_summary/audit_report
 # 8. If qa_evaluation_mode=required: qa_evaluation_delegation_path and qa_evaluation_result are populated after build/test and code-review evidence; QA result does not replace final_summary or code-review artifacts
 # 9. If scoped domain rubrics were used: qa_evaluation_result includes selected_domain_rubrics and domain_quality_scores; if not scoped, no invented domain rubric output is required or accepted
-# 10. If review or QA triggered STAGNATION, repeated DRIFT, repeated REGRESSION, or pivot action: pivot_restart_decision is populated before any additional review/fix/QA/build dispatch
+# 10. Shared semantic stagnation retains the same outcome guard; material changes require the applicable decision. Score diagnostics alone never stop or reset work.

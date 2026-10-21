@@ -83,7 +83,7 @@ Loop / Experiment Routing:
 - workflow_experiment_ledger: [N/A unless explicit workflow experiment; otherwise compact ref with id/hypothesis/intervention/signal/measurement/baseline/status/evidence/decision/next_check]
 - Progressive activation provenance: [on first activation set positive activation_ordinal atomically on the canonical decision item; never-activated items omit it; keep ordinals immutable and unique across retained canonical decision-map history, including activation-marked items outside current-map refs, so ascending ordinals reconstruct activated_decision_item_refs before the second activation]
 - Progressive blocked recovery: [when progressive_discovery_state=blocked retain non-empty blocked_item_refs resolving to canonical status=blocked items with blocker_kind/blocker_reason/unblock_condition; readiness exhaustion keeps the proposed item inactive with blocker_kind=readiness_exhausted]
-- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; for loop_type=progressive_decision_sequence record progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained atomically with readiness_assessment_id/progressive_decision_map_ref/immutable max_iterations/cumulative_activation_count/ordered unique append-only activated_decision_item_refs/ordered unique resolved_decision_item_refs with canonical decision_resolution linkage; while active retain the same record through durable route-clear consumption, then set closed. After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination transition to terminally_archived permits omission. Task state: completed does not qualify, and terminally_archived cannot revert. Never reopen or reset, plus trigger/verifier/stop/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
+- loop_readiness_assessment: [N/A unless explicit repeat or optimization loop or second/sequential progressive decision activation; for loop_type=progressive_decision_sequence record progressive_sequence_readiness_state=active and progressive_artifact_retention_state=retained atomically with readiness_assessment_id/progressive_decision_map_ref/optional source-backed max_iterations/cumulative_activation_count/ordered unique append-only activated_decision_item_refs/ordered unique resolved_decision_item_refs with canonical decision_resolution linkage; while active retain the same record through durable route-clear consumption, then set closed. After progressive_sequence_readiness_state becomes closed, retain the same record while the task remains active/resumable or compacts; only explicit final archival/termination transition to terminally_archived permits omission. Task state: completed does not qualify, and terminally_archived cannot revert. Never reopen or reset, plus trigger/verifier/stop/budget/tool_access/state_tracking/retry_or_empty_result_handling/tool_error_handling/low_confidence_escalation/rollback/harness_routing/evidence]
 - loop_harness_routing: [ordinary medium+ keeps harness_capable=false; loop artifacts alone do not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation; appendix only when harness_capable=true or QA criteria independently apply]
 - Progressive current map: [N/A for ordinary bounded work with progressive_route_clear_consumption_state=not_applicable and progressive_sequence_readiness_state=not_applicable, or after progressive_artifact_retention_state=terminally_archived; otherwise retain the retained canonical reference chain. The current map decision_item_refs and deferred_uncertainty_refs are non-empty, ordered unique, and each resolves exactly once to canonical typed entries; every current-map deferred uncertainty retains unlocking_decision_item_ref to a current-map predecessor; retired/excluded/history entries may remain outside current refs]
 Plan approval: prepare_only optional readiness never waits; [N/A for none | readiness record only for inline] | execution_intent != prepare_only: [N/A for none/inline | yes/no + date for approval_required]
@@ -183,19 +183,18 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 - [x] Step 2: [what was done, files changed]
 - [ ] Step 3: [next]
 
-## Build Repair State
-[required only after an ordinary non-harness same-scope Build failure is retried]
-- Attempt: [1..3]
-- Max attempts: 3
-- No-progress count: [0..2]
-- No-progress limit: 2
-- Failure signatures: [normalized current and prior signatures]
-- Progress evidence: [new passing check, reduced failing scope, isolated cause, or explicit no progress]
-- Plan version: [approved plan ref, or stable no-plan task identity]
-- cumulative_attempt_count: [1..3; cumulative same-scope count, never reset by redispatch/context/compaction/continuation]
-- Status: [repairing | recovered | terminal_pivot | blocked]
-- terminal_route: [N/A | debugging | replan | restart_with_reapproval | block_for_user | block_for_environment]
-- Evidence ref: [validation output or carried-forward evidence]
+## Shared Progress State
+[conditional for repeated semantic work; retain one task/outcome guard]
+- Guard/outcome: [stable refs]
+- Policy: [window 3 by default; source ref and recorded explicit user policy changes]
+- Work ordinal: [completed semantic cycles]
+- Consecutive no-progress: [derived from retained observations]
+- Status: [active | stagnant | reactivated for bound action]
+- Baseline/frontier: [stable evidence refs; preserve oscillation and novelty history]
+- Current action/admission: [exact refs, or none after its completed checkpoint]
+- History/evidence: [checkpoint, policy-change and material-unblock refs]
+- Actual blocker/unblock condition: [reason and evidence]
+- Historical recovery observations: [retain supplied legacy totals only; never continuation authority]
 
 ## Canonical Packet Progress View
 
@@ -203,12 +202,12 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 second mutable collection. Resolve approved_plan_identity and packet_id exactly.
 prepare_only has no executable packets.]
 
-| Packet ref | Coordinator state | Evidence refs | Relevant input identity | Spent recovery |
+| Packet ref | Coordinator state | Evidence refs | Relevant input identity | Shared progress / historical observations |
 |---|---|---|---|---|
-| [implementation_steps packet_id] | [PENDING/RUNNING/VERIFIED/BLOCKED/INVALIDATED] | [canonical refs] | [identity] | [attempt/no-progress counters] |
+| [implementation_steps packet_id] | [PENDING/RUNNING/VERIFIED/BLOCKED/INVALIDATED] | [canonical refs] | [identity] | [guard/status/action-admission refs; legacy attempt/no-progress totals explicitly historical only] |
 
 Before resume, dispatch, verification and completion, run the installed pure packet
-admission helper with separately resolved authority. Preserve history/counters;
+admission helper with separately resolved authority. Preserve shared history/frontier/effective policy and explicitly historical legacy totals;
 invalidate changed relevant evidence and result-consuming dependents. Worker DONE
 alone is insufficient; all prerequisites must be current evidence-bound VERIFIED.
 
@@ -265,14 +264,14 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 - Required fixes: [none, or ordered fix list]
 
 ### Quality Review #1
-- Round: 1 of 10
+- Round: 1
 - Previously fixed: 0 items from prior rounds
 - Found this round: [count] must-fix, [count] should-fix, [count] nits (all fixed below)
 - Rubric: correctness=[score] quality=[score] architecture=[score] security=[score] coverage=[score]
 - Weighted: [score]
 - Delta from previous: — (first round)
 - Drift check: — (first round)
-- Pivot/Restart decision: [ref if STAGNATION, repeated DRIFT, repeated REGRESSION, or PIVOT occurred; otherwise N/A]
+- Pivot/Restart decision: [ref for evidenced shared guard stagnation or material change, including a domain pivot; otherwise N/A. Numeric score diagnostics alone do not require a decision]
 - Complexity: [ran / skipped (not C#) / tool unavailable]
   - [method (line N): score X — refactored to Y, or "within threshold"]
 - Must-fix:
@@ -282,14 +281,14 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 - Re-test: PASS
 
 ### Quality Review #2 (autonomous re-review)
-- Round: 2 of 10
+- Round: 2
 - Previously fixed: [count] items from prior rounds
 - Found this round: [count] must-fix, [count] should-fix, [count] nits (all fixed below)
 - Rubric: correctness=[score] quality=[score] architecture=[score] security=[score] coverage=[score]
 - Weighted: [score]
 - Delta from previous: [+/- amount]
 - Drift check: [GENUINE / SUSPICIOUS / DRIFT / REGRESSION / STAGNATION / NEUTRAL]
-- Pivot/Restart decision: [ref if STAGNATION, repeated DRIFT, repeated REGRESSION, or PIVOT occurred; otherwise N/A]
+- Pivot/Restart decision: [ref for evidenced shared guard stagnation or material change, including a domain pivot; otherwise N/A. Numeric score diagnostics alone do not require a decision]
 - Must-fix:
   - [x] [file:line] — [issue] → [fix applied]
 - Should-fix:
@@ -335,7 +334,7 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 2. **Triage** records task/risk/QA/harness/lane/state/gates/agents/subagent fields before leaving Triage; re-triage if evidence changes them.
 3. **Clarification** has no numeric cap or quota. Automatically apply only source-backed technical defaults, record source/rationale, and derive the applied flag from those entries. Convention or reversibility alone cannot settle material product choices. Ask every remaining admissible question by topic and wait for explicit answers where required. A `defaults` reply is an explicit user answer accepting displayed recommendations, not an automatic default.
 4. **Decompose/Plan** persists the canonical packet collection for medium+ work only when `execution_intent != prepare_only`. For `prepare_only`, retain readiness context and optionally record an inline no-wait Plan; do not create or persist Decompose slices. Plan is omitted only for eligible `plan_mode=none`; `approval_required` captures approval only when `execution_intent != prepare_only`.
-5. **Build** (`execution_intent != prepare_only`) updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, bounded Build Repair State when activated, and Canonical Packet Progress View before starting a dependent slice or another source-changing slice in a shared or unknown workspace.
+5. **Build** (`execution_intent != prepare_only`) updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, shared task progress state when repeated work has a consumer, and Canonical Packet Progress View before starting a dependent slice or another source-changing slice in a shared or unknown workspace.
 6. **Review** (`execution_intent != prepare_only`) owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.
 7. **Document/Handoff** (`execution_intent != prepare_only`) solely creates the developer handoff and fills Verification Summary, conditional Manual Verification Result, and Review Notes.
 8. **Preparation Completion** (`execution_intent=prepare_only`) records readiness only, then proceeds directly to Done without Build, Review, or developer handoff.

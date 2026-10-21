@@ -18,3 +18,5 @@ in `contracts/`; this reference does not reinterpret historical evidence.
 
 Use current input/output/phase-gate/handoff and admission rules for the selected
 boundary. A successful historical run is not evidence of current closure.
+
+- v14 → v15: validate the original definition/approval first. `normalize_v14` retains source and normalized digests and fixed packet mapping; persist returned canonical_plan/canonical_context together. Preserve scope, exact checks/TDD, actors, inputs, running admission and results. Historical counts do not establish progress or grant a new window; reconstruct only retained observations or report the gap. No new business approval solely for equivalent representation.

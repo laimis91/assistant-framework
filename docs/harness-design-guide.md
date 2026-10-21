@@ -142,16 +142,16 @@ inventing subjective bars.
 
 ## Review And QA Loops
 
-The code-review loop and QA loop are bounded at **max 10 rounds**.
+Code review and QA share the task-level three-consecutive-unproductive-cycle guard. Productive rounds have no cumulative ceiling.
 
 ```text
 round = 1
 previously_fixed = []
 score_history = []
 
-while round <= 10:
+while shared_progress_allows_work:
   REVIEW   -> fresh Code Reviewer with diff, acceptance context, and prior fixes
-  DECIDE   -> PASS, REFINE, or PIVOT from rubric score and findings
+  DECIDE   -> current acceptance/findings and shared semantic progress; scores diagnostic
   FIX      -> Code Writer fixes actionable findings when REFINE
   VERIFY   -> Builder/Tester records build/test evidence
   round += 1
@@ -164,7 +164,7 @@ round = 1
 previously_failed_acceptance_items = []
 score_progression = []
 
-while round <= 10:
+while shared_progress_allows_work:
   EVALUATE -> QA Evaluator checks Done Contract, criteria, evidence, domain scope
   SCORE    -> qa_scorecard and score_entry
   DECIDE   -> accepted, accepted_with_concerns, rejected, or blocked
@@ -172,18 +172,16 @@ while round <= 10:
   round += 1
 ```
 
-Round 10 is terminal. The controller reports remaining blockers or failed
-acceptance items instead of starting round 11.
+The shared guard records completed evidence before later blockers. Acceptance
+failures and incomplete coverage remain explicit at every positive ordinal.
 
 ### Finding Filter
 
 Review and QA findings must have concrete evidence and direct impact:
 
-| Rounds | Blocking bar |
+| Ordinal | Blocking bar |
 |---|---|
-| 1-7 | Evidence-backed must-fix or should-fix findings |
-| 8-9 | Must-fix or high-confidence should-fix findings |
-| 10 | Terminal report of remaining blockers or acceptance items |
+| Every positive round | Evidence-backed must-fix/should-fix and scoped acceptance failures with stable confidence standards |
 
 Speculative concerns stay non-blocking unless evidence connects them to
 correctness, security, architecture, test reliability, or acceptance criteria.
@@ -197,11 +195,16 @@ not mask stale or worsening output.
 
 | Signal | Meaning | Controller Response |
 |---|---|---|
-| GENUINE | Score improves and finding count decreases | Continue normally |
-| SUSPICIOUS | Score jumps sharply while findings drop | Log and continue skeptically |
-| DRIFT | Score improves while findings stay flat or rise | Reset evaluator with stricter context |
-| REGRESSION | Score drops | Investigate; repeated regression triggers pivot/restart |
-| STAGNATION | Findings remain across repeated unchanged scores | Create pivot/restart signal |
+| GENUINE | Score improves and finding count decreases | Record the diagnostic; apply the shared guard and current acceptance gates |
+| SUSPICIOUS | Score jumps sharply while findings drop | Inspect supporting evidence under the same guard and acceptance gates |
+| DRIFT | Score improves while findings stay flat or rise | Inspect evidence and evaluator context; the label grants no reset |
+| REGRESSION | Score drops | Investigate acceptance losses; score movement grants no pivot |
+| STAGNATION | Findings remain across repeated unchanged scores | Assess semantic evidence under the shared guard; unchanged scores establish no stall |
+
+Only evidenced shared semantic guard stagnation, an applicable material change
+including a source-backed domain pivot, or a genuine existing blocker requires
+recovery. Score labels alone do not require a decision, reset the evaluator, or
+pause productive work.
 
 The orchestrator owns `pivot_restart_decision`. It records the trigger, evidence,
 affected slice or round, options considered, selected action, reapproval need,
@@ -224,9 +227,11 @@ Controller routing:
 - `tdd_red_missing` -> return to TDD RED evidence before production code is
   accepted
 
-Review/QA stagnation, repeated drift/regression, domain action `pivot`,
-verification blockers, and stale task packets all route through the same
-Pivot/Restart Controller. Do not silently continue the loop after these signals.
+Evidenced shared semantic guard stagnation, an applicable material change including
+a source-backed domain pivot, genuine Code Writer or verification blockers, and
+stale task packets route through the same Pivot/Restart Controller before dependent
+corrective work. Score labels alone do not require a decision, reset the evaluator,
+or pause productive work.
 
 ---
 

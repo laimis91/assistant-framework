@@ -510,7 +510,8 @@ for role, model in [('intelligent-writer','opus'),('mechanical-writer','sonnet')
     metadata,body=claude.split('---\n',2)[1:]
     assert f'name: {role}\n' in metadata and f'model: {model}\n' in metadata
     assert 'tools: Read, Grep, Glob, LS, Edit, Write, Bash' in metadata
-    assert body.split('## Simplicity rules',1)[0].strip()==codex.strip(), role
+    nonblank_lines = lambda text: '\n'.join(line for line in text.strip().splitlines() if line.strip())
+    assert nonblank_lines(body.split('## Simplicity rules',1)[0])==nonblank_lines(codex), role
 PYTHON
 then pass; else fail "provider writer instruction or native metadata drift"; fi
 

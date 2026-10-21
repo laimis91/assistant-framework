@@ -5,6 +5,11 @@ description: "Generate and rank options. Use light mode for quick improvement sc
 
 # Generate Useful Options
 
+## Shared operating guidance
+
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+
+
 Produce distinct, constraint-respecting ideas and explain which are most promising. Infer the goal and relevant constraints from the request and context; ask only when a missing answer changes the useful option set or ranking. Inspect local capabilities when needed and reuse what already exists. Respect prior attempts; do not repeat rejected approaches unchanged.
 
 For a quick improvement scan or “what else” request, give a small set of meaningful alternatives, a qualitative ranking with the main trade-offs, and one recommended next step. Stop there. A numeric scoring matrix, mode label, phase transcript, or follow-up decision is unnecessary.

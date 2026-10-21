@@ -49,8 +49,8 @@ require_terms "harness design guide" "$harness_doc" \
     "Pivot/Restart Controller" \
     "legacy_code_bug" \
     "assistant-debugging" \
-    "max 10 rounds" \
-    "Round 10 is terminal"
+    "three-consecutive-unproductive-cycle guard" \
+    "Productive rounds have no cumulative ceiling."
 
 test_start "harness design guide avoids stale three-agent and 20-round wording"
 stale_harness_output="$(mktemp)"
@@ -68,7 +68,7 @@ require_terms "docs eval README" "$eval_readme" \
     "separate Code Reviewer and QA Evaluator evidence" \
     "QA loop behavior with conditional domain rubrics" \
     "pivot/restart decisions for stagnation and Code Writer blockers" \
-    "terminal max 10 review/QA round behavior"
+    "shared review/QA guard with productive ordinals beyond ten"
 
 test_start "skill contract guide describes process harness controller contracts"
 require_terms "skill contract guide" "$contract_guide" \
@@ -81,7 +81,7 @@ require_terms "skill contract guide" "$contract_guide" \
     'references/harness-patterns.md' \
     "Do not add this machinery to single-pass work" \
     "Keep review and QA responsibilities distinct" \
-    "at most 10 rounds" \
+    "source-bound effective window (default three consecutive unproductive semantic cycles)" \
     "an explicit pivot or restart decision"
 
 test_start "skill-creator harness patterns cover controller artifacts and loop safety"
@@ -94,7 +94,7 @@ require_terms "skill creator harness patterns" "$skill_creator_patterns" \
     "Code Review And QA Separation" \
     "Conditional Domain Rubrics" \
     "Bounded Review / QA Loops" \
-    "max 10 rounds" \
+    "default three consecutive unproductive semantic cycles" \
     "Pivot / Restart Decisions" \
     "legacy_code_bug" \
     "Agentic Loop Safety"
@@ -106,12 +106,14 @@ if jq -e '
     case_category("harness-done-contract-recipe-before-build"; "harness_controller")
     and case_category("code-reviewer-and-qa-evaluator-evidence-split"; "review_qa_split")
     and case_category("pivot-restart-on-stagnation-or-code-writer-blocker"; "pivot_restart")
-    and case_category("review-and-qa-terminal-cap-10"; "review_loop_cap")
+    and case_category("review-and-qa-productive-beyond-10"; "shared_progress")
+    and any(.cases[]; .id == "pivot-restart-on-stagnation-or-code-writer-blocker"
+      and any(.setup_context[]; contains("three consecutive completed unproductive semantic cycles")))
     and all(.cases[] | select(.id as $id | [
       "harness-done-contract-recipe-before-build",
       "code-reviewer-and-qa-evaluator-evidence-split",
       "pivot-restart-on-stagnation-or-code-writer-blocker",
-      "review-and-qa-terminal-cap-10"
+      "review-and-qa-productive-beyond-10"
     ] | index($id));
       (.machine_expectations.required_substrings | type == "array" and length > 0)
       and (.machine_expectations.forbidden_substrings | type == "array" and length > 0)
@@ -133,8 +135,8 @@ for case_and_term in \
     "code-reviewer-and-qa-evaluator-evidence-split::rubric_refs" \
     "pivot-restart-on-stagnation-or-code-writer-blocker::pivot_restart_decision" \
     "pivot-restart-on-stagnation-or-code-writer-blocker::legacy_code_bug" \
-    "review-and-qa-terminal-cap-10::max 10" \
-    "review-and-qa-terminal-cap-10::round 11"; do
+    "review-and-qa-productive-beyond-10::shared guard" \
+    "review-and-qa-productive-beyond-10::round 11"; do
     case_id="${case_and_term%%::*}"
     term="${case_and_term#*::}"
     if ! jq -e --arg case_id "$case_id" --arg term "$term" '
@@ -163,7 +165,7 @@ if jq -e '
         "Code Reviewer",
         "QA Evaluator",
         "pivot_restart_decision",
-        "max 10"
+        "shared guard"
       ]))
       and (.machine_expectations.forbidden_substrings | length > 0)
     )

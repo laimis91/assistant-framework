@@ -174,7 +174,7 @@ p0p4_register_cleanup "$packet_prompt_controls"
 packet_prompt_cases=()
 while IFS= read -r case_id; do
     packet_prompt_cases+=(--case "$case_id")
-done < <(jq -r '.cases[] | select(.semantic_validator == "assistant-workflow.packet_admission_v14") | .id' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json")
+done < <(jq -r '.cases[] | select(.semantic_validator == "assistant-workflow.packet_admission_v15") | .id' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json")
 if bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --emit-prompts "$packet_prompt_controls" --skill assistant-workflow \
     "${packet_prompt_cases[@]}" --case clarification-is-material-not-capped >/dev/null \
     && python3 - "$FRAMEWORK_DIR" "$packet_prompt_controls" <<'PYPROMPTS'
@@ -190,7 +190,7 @@ def require(condition, message):
 
 root, output = Path(sys.argv[1]), Path(sys.argv[2])
 fixture = json.loads((root / "skills/assistant-workflow/evals/cases.json").read_text())
-cases = [case for case in fixture["cases"] if case.get("semantic_validator") == "assistant-workflow.packet_admission_v14"]
+cases = [case for case in fixture["cases"] if case.get("semantic_validator") == "assistant-workflow.packet_admission_v15"]
 require(cases, "No fixed packet-admission cases exercised")
 requests, prompts = [], []
 for case in cases:
@@ -242,7 +242,7 @@ check_direct = lambda do |packet, request|
   end
 end
 fixture = JSON.parse(File.read("#{root}/skills/assistant-workflow/evals/cases.json"))
-cases = fixture.fetch('cases').select { |c| c['semantic_validator'] == 'assistant-workflow.packet_admission_v14' }
+cases = fixture.fetch('cases').select { |c| c['semantic_validator'] == 'assistant-workflow.packet_admission_v15' }
 raise 'no fixed packet requests' if cases.empty?
 cases.each do |item|
   fixed = item.fetch('semantic_context').fetch('packet_admission'); request = fixed.fetch('request')
@@ -344,7 +344,7 @@ def record(case_id,name,response,expected):
  (out/filename).write_text(json.dumps(response))
  controls.append((case_id,filename,str(expected)))
 for case in fixture['cases']:
- if case.get('semantic_validator')!='assistant-workflow.packet_admission_v14':continue
+ if case.get('semantic_validator')!='assistant-workflow.packet_admission_v15':continue
  actual=m.API.admission(case['semantic_context']['packet_admission']['request'])
  answer={key:value for key,value in actual.items() if key in ('status','code','canonical_plan','current_task_packet')}
  if actual['status']=='blocked':answer.pop('canonical_plan',None)
@@ -416,7 +416,7 @@ then
     semantic_failed=false
     for optimization in 0 1; do
         while IFS=$'\t' read -r case_id response_file expected; do
-            if PYTHONOPTIMIZE="$optimization" run_semantic_validator assistant-workflow.packet_admission_v14 "$semantic_controls/$response_file" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$case_id" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" >/dev/null 2>&1; then observed=0; else observed=1; fi
+            if PYTHONOPTIMIZE="$optimization" run_semantic_validator assistant-workflow.packet_admission_v15 "$semantic_controls/$response_file" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$case_id" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" >/dev/null 2>&1; then observed=0; else observed=1; fi
             if [[ "$observed" != "$expected" ]]; then
                 semantic_failed=true
                 printf 'Semantic control failed: %s PYTHONOPTIMIZE=%s expected=%s observed=%s\n' "$response_file" "$optimization" "$expected" "$observed" >&2
@@ -441,7 +441,7 @@ root, out = Path(sys.argv[1]), Path(sys.argv[2])
 spec = importlib.util.spec_from_file_location("blocked_envelope_controls", root / "tests/p0-p4/lib/task-packet-admission-controls.py")
 controls = importlib.util.module_from_spec(spec); sys.modules[spec.name] = controls; spec.loader.exec_module(controls)
 fixture = json.loads((root / "skills/assistant-workflow/evals/cases.json").read_text())
-case = next(case for case in fixture["cases"] if case.get("semantic_validator") == "assistant-workflow.packet_admission_v14"
+case = next(case for case in fixture["cases"] if case.get("semantic_validator") == "assistant-workflow.packet_admission_v15"
             and case["semantic_context"]["packet_admission"]["expected_status"] == "blocked"
             and "canonical_plan" in controls.API.admission(case["semantic_context"]["packet_admission"]["request"]))
 actual = controls.API.admission(case["semantic_context"]["packet_admission"]["request"])
@@ -520,7 +520,9 @@ def require(value, message):
     if not value: raise ValueError(message)
 def install_runner(target):
     shutil.copytree(root / "tools/evals", target / "tools/evals")
+    shutil.copytree(root / "tools/progress", target / "tools/progress")
 def install_workflow(target):
+    shutil.copytree(root / "tools/progress", target.parent.parent / "tools/progress", dirs_exist_ok=True)
     target.mkdir(parents=True, exist_ok=True)
     for relative in ("SKILL.md", "evals/cases.json", "scripts/task-packet-admission.py"):
         destination = target / relative; destination.parent.mkdir(parents=True, exist_ok=True)
@@ -550,7 +552,7 @@ def registered_split_review_envelope_current_owner(runner, selected, environment
     envelope_only = result.returncode == 1 and not result.stderr.strip() and ("FAIL\tassistant-workflow\t" + review_case["id"] + "\t") in result.stdout and counts.get("total") == "1" and counts.get("passed") == "0" and counts.get("failed") == "1" and counts.get("structured_json_assertion_failures") == "1" and all(counts.get(name) == "0" for name in zero_counts)
     require(not envelope_only, "Valid registered split review envelope was rejected by runner-sibling producer schemas")
     raise ValueError("Unexpected registered split review grading failure: " + result.stdout + result.stderr)
-def semantic(runner, selected, environment, response_file=response, fixture_file=None, validator="assistant-workflow.packet_admission_v14", case_id=None):
+def semantic(runner, selected, environment, response_file=response, fixture_file=None, validator="assistant-workflow.packet_admission_v15", case_id=None):
     fixture_file = fixture_file or selected.parent / "evals/cases.json"
     command = 'source "$1"; run_semantic_validator "$2" "$3" "$4" "$5" "$6"'
     return subprocess.run(["bash", "-c", command, "selected-helper", str(runner / "tools/evals/lib/skill-eval-semantic-validators.sh"), validator, str(response_file), str(fixture_file), case_id or case["id"], str(selected)], env=environment, text=True, capture_output=True)
@@ -656,7 +658,7 @@ for optimization in ("0", "1"):
     claimed_answer = deepcopy(answer); claimed_answer.update(helper_path=str(external / "scripts/task-packet-admission.py"), code_root=str(external))
     claimed_response = out / "claimed-response.json"; claimed_response.write_text(json.dumps(claimed_answer))
     require(semantic(configured, split_skill, split_env, claimed_response, claimed_fixture).returncode == 0, "Data code claims replaced the trusted helper")
-    for validator, case_id in (("unknown.validator", case["id"]), ("assistant-workflow.packet_admission_v14", "unknown-case")):
+    for validator, case_id in (("unknown.validator", case["id"]), ("assistant-workflow.packet_admission_v15", "unknown-case")):
         require(semantic(configured, split_skill, split_env, validator=validator, case_id=case_id).returncode != 0, "Unknown closed dispatch was accepted")
     require(not marker.exists(), "Untrusted helper code executed")
 PYLAYOUT
@@ -1003,9 +1005,9 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::R_PIVOT_RESTART_DECISION" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::INV_PIVOT_RESTART_REAPPROVAL" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-runtime-artifacts.md::## Pivot/Restart Controller" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-runtime-artifacts.md::Round 10 remains terminal" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-runtime-artifacts.md::Productive work may continue beyond round 10" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md::Code Writer Unexpected Blockers" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::STAGNATION, repeated DRIFT, repeated REGRESSION, or rubric action PIVOT" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::genuine shared semantic stagnation or material change" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-harness-appendix.md::## Pivot/Restart Log" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-harness-appendix.md::pivot_restart_decision"; do
     file="${file_and_term%%::*}"
@@ -1059,16 +1061,16 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/review-loop.md" \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/score-tracking.md" \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/qa-evaluation-loop.md" \
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::and a recorded pivot/restart decision before another pass" \
+    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Require a recorded pivot/restart decision before another pass only for evidenced" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::orchestrator records pivot_restart_decision" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::- name: pivot_restart_decision" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::ESCALATE_PIVOT_RESTART" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::QA STAGNATION, repeated DRIFT, repeated REGRESSION, or scoped domain action pivot" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::pivot_restart_decision" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::genuine semantic stagnation or material change" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::Pivot/Restart Decision Packet" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::repeated DRIFT triggers pivot_restart_decision" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::score diagnostics alone do not" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::Pivot/Restart Escalation" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::QA does not silently continue"; do
     file="${file_and_term%%::*}"
@@ -1102,50 +1104,21 @@ else
 fi
 
 
-test_start "workflow Build repair is bounded persistent and routes unknown or terminal failures"
+test_start "workflow repair uses canonical shared progress while retaining unknown-cause routing"
 repair_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
 repair_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
 repair_protocol="$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md"
-missing_repair_terms=()
-for file_and_term in \
-    "$repair_output::- name: build_repair_state" \
-    "$repair_output::- name: max_attempts" \
-    "$repair_output::- name: no_progress_limit" \
-    "$repair_output::- name: failure_signature" \
-    "$repair_output::- name: progress_evidence" \
-    "$repair_output::- name: cumulative_attempt_count" \
-    "$repair_output::- name: plan_version" \
-    "$repair_output::- name: terminal_route"; do
-    repair_file="${file_and_term%%::*}"
-    repair_term="${file_and_term#*::}"
-    if ! grep -Fq -- "$repair_term" "$repair_file"; then
-        missing_repair_terms+=("${repair_file#$FRAMEWORK_DIR/}: $repair_term")
-    fi
-done
-if [[ "${#missing_repair_terms[@]}" -gt 0 ]]; then
-    fail "build_repair_state contract fields missing: ${missing_repair_terms[*]}"
-elif ! p0p4_contains_text_ci "$repair_output" "max_attempts 3" \
-    || ! p0p4_contains_text_ci "$repair_output" "no_progress_limit 2"; then
-    fail "build_repair_state does not fix max_attempts=3 and no_progress_limit=2"
-elif ! p0p4_contains_text_ci "$repair_gates" "matching failure_signature" \
-    || ! p0p4_contains_text_ci "$repair_gates" "two consecutive" \
-    || ! p0p4_contains_text_ci "$repair_gates" "stagnation"; then
-    fail "Build gates do not classify two matching no-progress signatures as stagnation"
-elif ! p0p4_contains_text_ci "$repair_gates" "unknown-cause" \
-    || ! p0p4_contains_text_ci "$repair_gates" "assistant-debugging"; then
-    fail "Build gates do not route unknown-cause failures through assistant-debugging"
-elif ! p0p4_contains_text_ci "$repair_gates" "attempt 3" \
-    || ! p0p4_contains_text_ci "$repair_gates" "pivot_restart_decision" \
-    || ! p0p4_contains_text_ci "$repair_gates" "blocked"; then
-    fail "Build gates do not terminate attempt 3 with a pivot decision or blocked result"
-elif ! p0p4_contains_text_ci "$repair_protocol" "same plan version" \
-    || ! p0p4_contains_text_ci "$repair_protocol" "must not reset" \
-    || ! p0p4_contains_text_ci "$repair_protocol" "cumulative_attempt_count"; then
-    fail "same-scope restart can reset the cumulative Build repair budget"
-else
+if grep -Fq -- '- name: progress_state' "$repair_output" \
+    && grep -Fiq 'historical' "$repair_output" \
+    && grep -Fq 'source-bound effective window' "$repair_gates" \
+    && grep -Fq 'default three' "$repair_gates" \
+    && grep -Fq 'assistant-debugging' "$repair_gates" \
+    && grep -Fq 'Unknown causes go through debugging' "$repair_protocol" \
+    && grep -Fq 'Action-bound material unblock' "$repair_protocol"; then
     pass
+else
+    fail "shared progress contract, unknown-cause route or unblock boundary missing"
 fi
-
 
 
 test_start "writer_selection is identical across six packet projections and inline CodeWriter context"
@@ -1168,7 +1141,13 @@ shapes = packets.map { |f| f.fetch('object_fields').find { |x| x['name'] == 'wri
 raise 'selection drift/missing' if shapes.any?(&:nil?) || shapes.uniq.length != 1
 shape = shapes.first
 raise 'legacy omission broken' unless shape['required'] == 'conditional' && shape['condition'].include?('legacy packets')
-raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '14.0' }
+raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '15.0' }
+canonical_versions = o.fetch('artifacts').find { |f| f['name'] == 'plan_schema_version' }.fetch('enum_values')
+gates = YAML.load_file("#{root}/skills/assistant-workflow/contracts/phase-gates.yaml")
+p1 = gates.fetch('gates').find { |g| g['phase'] == 'PLAN' }.fetch('exit_assertions').find { |g| g['id'] == 'P1' }
+gate_version = p1.fetch('check')[/\bplan_schema_version=(\d+\.\d+)\b/, 1]
+producer_version = File.read("#{root}/skills/assistant-workflow/references/plan-template.md")[/New producers store `plan_schema_version: "([^"]+)"`/, 1]
+raise 'Plan gate/producer/output canonical version drift' unless canonical_versions == [o.fetch('schema_version')] && canonical_versions == [gate_version] && gate_version == producer_version
 fields = shape.fetch('object_fields').to_h { |f| [f['name'],f] }
 raise 'normal identity widened' unless fields.fetch('agent')['enum_values'] == %w[intelligent-writer mechanical-writer]
 eligibility = fields.fetch('mechanical_eligibility')
@@ -1252,7 +1231,7 @@ fi
 # Gap: old bounded-repair source checks did not distinguish invalid expectations
 # from regressions or challenge a check/worker/session switch with spent limits.
 source "$FRAMEWORK_DIR/tests/p0-p4/lib/ci-audit-response-fixtures.sh"
-test_start "expectation classification and switching failures preserve spent repair limits"
+test_start "expectation classification and switching failures preserve history and shared stagnation"
 s1_repair_root="$(mktemp -d)"
 p0p4_register_cleanup "$s1_repair_root"
 mkdir -p "$s1_repair_root/responses/assistant-workflow"
@@ -1265,7 +1244,7 @@ for s1_repair_variant in valid reset-on-switch production-for-brittle misclassif
         reset-on-switch) jq '.build_repair_state.cumulative_attempt_count = 1 | .build_repair_state.no_progress_count = 0' "$s1_repair_root/baseline.json" >"$s1_repair_response" ;;
         production-for-brittle) jq '.changed_files = ["filter.py"]' "$s1_repair_root/baseline.json" >"$s1_repair_response" ;;
         misclassified-regression) jq '.build_repair_state.failure_signatures[1] = "deny-nonowner:obsolete expectation"' "$s1_repair_root/baseline.json" >"$s1_repair_response" ;;
-        retry-after-terminal) jq '.build_repair_state.status = "repairing"' "$s1_repair_root/baseline.json" >"$s1_repair_response" ;;
+        retry-after-terminal) jq '.progress_state.status = "active"' "$s1_repair_root/baseline.json" >"$s1_repair_response" ;;
     esac
     if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$s1_repair_root/responses" --skill assistant-workflow --case repair-expectations-switch-and-resume >"$s1_repair_root/$s1_repair_variant.out" 2>&1; then
         [[ "$s1_repair_variant" == valid ]] || s1_repair_failures+=("$s1_repair_variant accepted")

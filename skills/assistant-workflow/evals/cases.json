@@ -65,8 +65,7 @@
           },
           "security_specialist_triggered": false,
           "closure_verification_required": false,
-          "max_required_responses": 2,
-          "max_repair_attempts_per_pass": 1
+          "max_required_responses": 2
         },
         "expected_passes": [
           {
@@ -148,8 +147,7 @@
           },
           "security_specialist_triggered": false,
           "closure_verification_required": true,
-          "max_required_responses": 3,
-          "max_repair_attempts_per_pass": 1
+          "max_required_responses": 3
         },
         "expected_passes": [
           {
@@ -1232,7 +1230,7 @@
       "id": "native-slice-execution-uses-dependencies-not-runner-topology",
       "title": "Canonical packet admission: unsafe-dependency",
       "category": "packet_admission",
-      "purpose": "Exercise actual v14 admission/materialization against independently fixed approval, obligation, evidence and workspace facts.",
+      "purpose": "Exercise current v15 admission with authenticated original v14 input/materialization against independently fixed approval, obligation, evidence and workspace facts.",
       "prompt_packet_mode": "task_only",
       "prompt": "Evaluate the fixed packet admission request supplied in semantic_context.packet_admission.request. Treat its context as independently resolved authoritative facts and its plan as the candidate. Return exactly one JSON object with packet_admission containing status and code. If accepted, include the full admitted canonical_plan and current_task_packet projection when materialized. If blocked, emit no ready/verified or worker projection. Do not alter fixed inputs or assert readiness from labels. This is a local consistency evaluation and does not establish native runtime capability.",
       "setup_context": [
@@ -1249,7 +1247,7 @@
         "Claims ready or VERIFIED for blocked work.",
         "Changes approval, selected decisions or canonical packet scope in the projection."
       ],
-      "semantic_validator": "assistant-workflow.packet_admission_v14",
+      "semantic_validator": "assistant-workflow.packet_admission_v15",
       "semantic_context": {
         "packet_admission": {
           "request": {
@@ -1806,7 +1804,7 @@
       "id": "isolated-independent-slices-integrate-before-review",
       "title": "Canonical packet admission: isolated-verified-dependency",
       "category": "packet_admission",
-      "purpose": "Exercise actual v14 admission/materialization against independently fixed approval, obligation, evidence and workspace facts.",
+      "purpose": "Exercise current v15 admission with authenticated original v14 input/materialization against independently fixed approval, obligation, evidence and workspace facts.",
       "prompt_packet_mode": "task_only",
       "prompt": "Evaluate the fixed packet admission request supplied in semantic_context.packet_admission.request. Treat its context as independently resolved authoritative facts and its plan as the candidate. Return exactly one JSON object with packet_admission containing status and code. If accepted, include the full admitted canonical_plan and current_task_packet projection when materialized. If blocked, emit no ready/verified or worker projection. Do not alter fixed inputs or assert readiness from labels. This is a local consistency evaluation and does not establish native runtime capability.",
       "setup_context": [
@@ -1823,7 +1821,7 @@
         "Claims ready or VERIFIED for blocked work.",
         "Changes approval, selected decisions or canonical packet scope in the projection."
       ],
-      "semantic_validator": "assistant-workflow.packet_admission_v14",
+      "semantic_validator": "assistant-workflow.packet_admission_v15",
       "semantic_context": {
         "packet_admission": {
           "request": {
@@ -3533,7 +3531,7 @@
         "Adds workflow_experiment_ledger only because the prompt explicitly asks for a workflow experiment.",
         "Adds loop_readiness_assessment only before starting an explicit repeat or optimization loop.",
         "Records hypothesis, intervention, expected signal, measurement method, baseline/control, evidence, decision, and next check.",
-        "Records verifier, stop condition, max iterations, budget limit, tool access, state tracking, retry or empty-result handling, tool-error handling, low-confidence escalation, and rollback/exit before any loop starts.",
+        "Records verifier, stop condition, shared guard, budget limit, tool access, state tracking, retry or empty-result handling, tool-error handling, low-confidence escalation, and rollback/exit before any loop starts; records max iterations only for an explicit user or evidenced resource bound and retains its source.",
         "Does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation from loop artifacts alone."
       ],
       "pass_criteria": [
@@ -3560,7 +3558,7 @@
           "baseline/control",
           "verifier",
           "stop condition",
-          "max iterations",
+          "shared guard",
           "budget limit",
           "state tracking",
           "retry_or_empty_result_handling",
@@ -4071,7 +4069,8 @@
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "Before readiness exists, the superseded/excluded first activated item retains activation_ordinal=1 through compaction even if it leaves current-map refs.",
-        "Before second activation, progressive_sequence_readiness_state=active and loop_readiness_assessment must be set atomically; the same record must retain its identity, map, immutable cap, and history after pause, compaction, and blocked continuation. No route-clear handoff exists yet because the dependent item remains active."
+        "Before second activation, progressive_sequence_readiness_state=active and loop_readiness_assessment must be set atomically; the same record must retain its identity, map, immutable cap, and history after pause, compaction, and blocked continuation. No route-clear handoff exists yet because the dependent item remains active.",
+        "For this bounded fixture only, max_iterations is an explicit user resource budget with source_ref=authority:fixture-user-budget. It is not a framework activation cap; productive discovery without that scoped bound can continue under the shared task guard."
       ],
       "expected_behavior": [
         "The first activation provenance is set atomically as activation_ordinal=1 and retained after superseded/excluded status and compaction before the second proposal.",
@@ -4146,7 +4145,8 @@
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "Durable route-clear consumption completed before progressive_sequence_readiness_state became closed.",
-        "The task is not terminated or finally archived, so future continuation and reference resolution remain possible."
+        "The task is not terminated or finally archived, so future continuation and reference resolution remain possible.",
+        "For this bounded fixture only, max_iterations is an explicit user resource budget with source_ref=authority:fixture-user-budget. It is not a framework activation cap; productive discovery without that scoped bound can continue under the shared task guard."
       ],
       "expected_behavior": [
         "After the atomic transition, keeps uncertainty_shape=bounded with progressive_route_clear_consumption_state=consumed, but loads retained progressive-discovery state so route_clear_handoff remains resolvable alongside loop_readiness_assessment.",
@@ -4684,7 +4684,8 @@
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "uncertainty_shape=progressive; the sequence readiness record is retained and its finite activation cap is exhausted.",
-        "consent-decision is the proposed next item but has not been activated."
+        "consent-decision is the proposed next item but has not been activated.",
+        "For this bounded fixture only, max_iterations is an explicit user resource budget with source_ref=authority:fixture-user-budget. It is not a framework activation cap; productive discovery without that scoped bound can continue under the shared task guard."
       ],
       "expected_behavior": [
         "Sets progressive_discovery_state=blocked while consent-decision remains inactive as status=blocked.",
@@ -4903,7 +4904,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -4911,7 +4912,7 @@
               "review_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals_path",
@@ -5560,7 +5561,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -5568,7 +5569,7 @@
               "fresh_review_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals_path",
@@ -6257,7 +6258,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -6265,7 +6266,7 @@
               "review_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals_path",
@@ -7145,7 +7146,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -7153,7 +7154,7 @@
               "review_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals_path",
@@ -7799,7 +7800,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -7813,7 +7814,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -7828,7 +7829,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -7843,7 +7844,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -7858,7 +7859,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -7873,7 +7874,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -7918,7 +7919,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -7934,7 +7935,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -8227,7 +8228,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -8592,7 +8593,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -8600,7 +8601,7 @@
               "review_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals_path",
@@ -9231,7 +9232,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -9245,7 +9246,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -9260,7 +9261,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -9275,7 +9276,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -9290,7 +9291,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -9305,7 +9306,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -9350,7 +9351,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -9366,7 +9367,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -9650,7 +9651,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -22409,7 +22410,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -22417,7 +22418,7 @@
               "review_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals_path",
@@ -22621,7 +22622,7 @@
               "qa_evaluation_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -23216,7 +23217,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -23230,7 +23231,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -23245,7 +23246,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -23260,7 +23261,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -23275,7 +23276,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -23290,7 +23291,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -23335,7 +23336,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -23351,7 +23352,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -23660,7 +23661,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -24377,6 +24378,14 @@
               "subagent_evidence",
               "delegated_dispatch_results"
             ]
+          },
+          {
+            "operator": "path_absent",
+            "path": [
+              "canonical_qa_result",
+              "artifact",
+              "pivot_restart_signal"
+            ]
           }
         ]
       }
@@ -24564,7 +24573,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -24572,7 +24581,7 @@
               "review_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals_path",
@@ -24776,7 +24785,7 @@
               "qa_evaluation_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -25350,7 +25359,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -25364,7 +25373,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -25379,7 +25388,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -25394,7 +25403,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -25409,7 +25418,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -25424,7 +25433,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -25469,7 +25478,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -25485,7 +25494,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -25793,7 +25802,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -26573,7 +26582,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -26834,7 +26843,7 @@
               "qa_evaluation_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "nonempty_string",
@@ -27027,7 +27036,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -27041,7 +27050,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -27056,7 +27065,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -27071,7 +27080,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -27086,7 +27095,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -27101,7 +27110,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -27146,7 +27155,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -27162,7 +27171,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -27464,7 +27473,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -27590,7 +27599,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -27604,7 +27613,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -27619,7 +27628,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -27634,7 +27643,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -27649,7 +27658,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -27664,7 +27673,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -27679,7 +27688,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -27868,7 +27877,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -27884,7 +27893,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -28364,7 +28373,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -28579,7 +28588,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -28593,7 +28602,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -28608,7 +28617,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -28623,7 +28632,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -28638,7 +28647,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -28653,7 +28662,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -28740,7 +28749,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -28756,7 +28765,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -28857,7 +28866,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "prior_canonical_qa_result",
               "artifact",
@@ -28983,7 +28992,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -28997,7 +29006,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -29012,7 +29021,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -29027,7 +29036,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -29042,7 +29051,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -29057,7 +29066,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -29072,7 +29081,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -29261,7 +29270,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -29277,7 +29286,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "current_canonical_qa_result",
               "artifact",
@@ -29743,7 +29752,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -29751,7 +29760,7 @@
               "review_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals_path",
@@ -29955,7 +29964,7 @@
               "qa_evaluation_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -30371,7 +30380,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -30385,7 +30394,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -30400,7 +30409,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -30415,7 +30424,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -30430,7 +30439,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -30445,7 +30454,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -30490,7 +30499,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -30506,7 +30515,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -30818,7 +30827,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -31730,7 +31739,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -31738,7 +31747,7 @@
               "review_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals_path",
@@ -31942,7 +31951,7 @@
               "qa_evaluation_result",
               "producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -32358,7 +32367,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -32372,7 +32381,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -32387,7 +32396,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -32402,7 +32411,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -32417,7 +32426,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -32432,7 +32441,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -32477,7 +32486,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -32493,7 +32502,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -32796,7 +32805,7 @@
               "current_assistant_review_contract",
               "schema_version"
             ],
-            "value": "8.0",
+            "value": "9.0",
             "path": [
               "canonical_qa_result",
               "artifact",
@@ -33838,11 +33847,11 @@
       "id": "stale-assistant-review-version-invalidates-persisted-results",
       "title": "Assistant-review producer version mismatch invalidates persisted refs",
       "category": "resume_integrity",
-      "purpose": "Prevents incompatible persisted 7.1 review/QA wrappers from resuming after the authoritative producer version moves to 8.0.",
+      "purpose": "Prevents incompatible persisted 7.1 review/QA wrappers from resuming after the authoritative producer version moves to 9.0.",
       "prompt": "Reconcile this persisted workflow after the assistant-review producer schema changed. Return one valid JSON object.",
       "setup_context": [
         "Persisted review and QA wrappers record producer_schema_version=7.1.",
-        "skills/assistant-review/contracts/index.yaml#schema_version is 8.0."
+        "skills/assistant-review/contracts/index.yaml#schema_version is 9.0."
       ],
       "expected_behavior": [
         "Classifies state stale, invalidates all affected refs, and selects rerun_review_and_qa."
@@ -33851,13 +33860,13 @@
         "No stale result, delegation, snapshot, Pack, or QA ref remains resumable."
       ],
       "fail_signals": [
-        "Treats the incompatible 7.1 wrapper as current under 8.0."
+        "Treats the incompatible 7.1 wrapper as current under 9.0."
       ],
       "machine_expectations": {
         "required_substrings": [
           "producer_schema_version",
           "7.1",
-          "8.0",
+          "9.0",
           "invalidated",
           "rerun_review_and_qa"
         ],
@@ -33891,7 +33900,7 @@
               "assistant_review_packet_compatibility",
               "current_producer_schema_version"
             ],
-            "expected": "8.0"
+            "expected": "9.0"
           },
           {
             "operator": "equals",
@@ -35667,7 +35676,7 @@
       "id": "packet-admission-coherent-medium-v14",
       "title": "Canonical packet admission: coherent",
       "category": "packet_admission",
-      "purpose": "Exercise actual v14 admission/materialization against independently fixed approval, obligation, evidence and workspace facts.",
+      "purpose": "Exercise current v15 admission with authenticated original v14 input/materialization against independently fixed approval, obligation, evidence and workspace facts.",
       "prompt_packet_mode": "task_only",
       "prompt": "Evaluate the fixed packet admission request supplied in semantic_context.packet_admission.request. Treat its context as independently resolved authoritative facts and its plan as the candidate. Return exactly one JSON object with packet_admission containing status and code. If accepted, include the full admitted canonical_plan and current_task_packet projection when materialized. If blocked, emit no ready/verified or worker projection. Do not alter fixed inputs or assert readiness from labels. This is a local consistency evaluation and does not establish native runtime capability.",
       "setup_context": [
@@ -35684,7 +35693,7 @@
         "Claims ready or VERIFIED for blocked work.",
         "Changes approval, selected decisions or canonical packet scope in the projection."
       ],
-      "semantic_validator": "assistant-workflow.packet_admission_v14",
+      "semantic_validator": "assistant-workflow.packet_admission_v15",
       "semantic_context": {
         "packet_admission": {
           "request": {
@@ -36559,17 +36568,17 @@
     },
     {
       "id": "repair-expectations-switch-and-resume",
-      "title": "Classify before repair and retain spent attempts",
+      "title": "Classify expectations and retain one shared semantic guard",
       "category": "scope_and_evidence_controls",
-      "purpose": "Reject production repair for incidental expectations and any reset of cumulative limits; keep regression, baseline and unknown evidence distinct.",
-      "prompt": "Resume the same approved filter-fix plan v1 after switching failing checks, writers and session. Classify the observations in failure_signatures, return current build_repair_state and changed_files. Can another repair start?",
+      "purpose": "Reject production repairs for incidental assertions; retain original observations and one shared guard across check, worker and session changes.",
+      "prompt": "Resume the same approved filter-fix plan v1 after switching failing checks, writers and session. Classify observations in failure_signatures; retain historical build_repair_state, current progress_state and changed_files. Can another repair start?",
       "setup_context": [
         "Accepted behavior uses any equivalent permission helper; docs:permissions-v2 retired the internal call ordering requirement. old-call-order fails solely on internal call order (implementation-coupled/duplicate); do not change production for it. deny-nonowner actually discloses another owner data (product regression). dependency-load fails unchanged on baseline due to missing local package (baseline/environment). cache-race cause remains unresolved.",
-        "One initial implementation plus two same-scope repair attempts are already spent. The last two attempts added no evidence. Retained state has attempt=3 cumulative_attempt_count=3 max_attempts=3 no_progress_count=2 no_progress_limit=2 plan_version=v1. No new plan approval, no new mutation or current cause evidence. Switching check/writer/session did not grant more allowance.",
-        "Normalize failure_signatures as old-call-order:implementation-coupled/duplicate, deny-nonowner:product regression, dependency-load:baseline/environment, cache-race:unresolved. Route terminal state blocked to debugging; preserve all evidence. A scoped obsolete/brittle test correction must retain unique important protection or source-backed invalid-expectation rationale and await the owning scope/authority."
+        "Normalize failure_signatures as old-call-order:implementation-coupled/duplicate, deny-nonowner:product regression, dependency-load:baseline/environment, cache-race:unresolved. Route terminal state blocked to debugging; preserve all evidence. A scoped obsolete/brittle test correction must retain unique important protection or source-backed invalid-expectation rationale and await the owning scope/authority.",
+        "Independent retained history establishes three completed unproductive semantic cycles for guard:filter-fix under the same outcome; each includes due executable verification/review and adds no durable acceptance gain or useful novel evidence. work_ordinal=3, consecutive_no_progress=3, status=stagnant. Historical v14 attempt=3/cumulative_attempt_count=3/no_progress_count=2/max_attempts=3/no_progress_limit=2 remains retained observation only, never continuation authority. cache-race cause is still unresolved; no current mutation is authorized by a generic continuation."
       ],
       "expected_behavior": [
-        "Reject production repair for incidental expectations and any reset of cumulative limits; keep regression, baseline and unknown evidence distinct."
+        "Preserves distinct regression, incidental assertion, baseline and unknown classifications; retains historical observations and the shared three-cycle stall; routes unknown cause to debugging without manufacturing progress."
       ],
       "pass_criteria": [
         "Decisions match the supplied independent observations; missing evidence stays missing."
@@ -36667,6 +36676,38 @@
             "path": [
               "changed_files"
             ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "progress_state",
+              "guard_id"
+            ],
+            "expected": "guard:filter-fix"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "progress_state",
+              "work_ordinal"
+            ],
+            "expected": 3
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "progress_state",
+              "consecutive_no_progress"
+            ],
+            "expected": 3
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "progress_state",
+              "status"
+            ],
+            "expected": "stagnant"
           }
         ]
       }
