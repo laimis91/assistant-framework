@@ -1,6 +1,0 @@
-{
-  "exported_at": "2026-10-21T15:00:00Z",
-  "incident_window": "2026-10-21T11:03:00Z/2026-10-21T11:03:05Z",
-  "current": {"captured_at":"2026-10-21T14:59:00Z","request_id":"probe-17","status":200,"body":{"healthy":true}},
-  "incident": {"availability":"unavailable","reason":"process events and packet traces expired before export","included":["access.jsonl"],"missing":["gateway request trace","catalog process events","connection telemetry"]}
-}

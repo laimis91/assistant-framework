@@ -1,8 +1,0 @@
-{
-  "spec_result": "PASS",
-  "approved_scope": "Six authoring source files only plus bounded pilot evidence. Conditional cue-to-method guidance; no generic expert mode, mandatory schema, debug changes or installation.",
-  "source_snapshot_ref": "impact/candidate-source-snapshot.json",
-  "verification_selection_ref": "review/selection-effective.json",
-  "test_boundary": "Reuse existing adequate checks; no new mirrored assertions. A distinct important uncovered failure and inadequate-evidence rationale is needed for test expansion.",
-  "findings_omitted": true
-}

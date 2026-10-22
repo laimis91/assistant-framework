@@ -1,9 +1,0 @@
-The supported diagnosis is an **upstream connection closing before response headers**, resulting in HTTP 502. **The root cause is undetermined.**
-
-- At `2026-10-21T11:03:02Z`, request `r-202` returned 502 against `catalog`, with `"upstream connection closed before response headers"`. Requests to the same upstream at `11:02:59Z` and `11:03:03Z` returned 200. This establishes a transient failure in the supplied sample. [Access log](/private/tmp/expert-pilot-runtime-20261022/trial-08/subject/access.jsonl:2)
-- The `current` command only reads a saved successful probe from `14:59:00Z`. It neither tests live health nor reproduces the incident.
-- The `incident` command returned the documented exit code **3**: historical telemetry is unavailable because process events and packet traces expired before export. Gateway request traces, catalog process events, and connection telemetry are missing. [Capture metadata](/private/tmp/expert-pilot-runtime-20261022/trial-08/subject/captures.json:5)
-
-The bundle cannot distinguish a catalog process interruption, a network/intermediary closure, or a connection-handling problem. Deployed gateway source is also absent, so no specific code defect or fix is supported.
-
-The narrow next step is to recover incident-time gateway connection/error details for `r-202`, correlated with catalog process events around `11:03:02Z`. If those records are irretrievable, the cause remains unresolved; a later healthy probe cannot establish it.

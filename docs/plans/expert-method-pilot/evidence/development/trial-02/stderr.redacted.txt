@@ -1,9 +1,0 @@
-2026-10-22T18:15:11.170159Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
-2026-10-22T18:15:11.188241Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
-2026-10-22T18:15:11.202786Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
-2026-10-22T18:15:11.216335Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
-2026-10-22T18:15:11.230626Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
-2026-10-22T18:15:11.245844Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
-2026-10-22T18:15:11.652417Z  WARN rmcp::transport::auth: rejecting authorization server metadata URL `[REDACTED_PRIVATE_ENDPOINT]`
-2026-10-22T18:15:49.862840Z  WARN codex_sandboxing::violation: recorded sandbox violation: resource=filesystem backend=seatbelt reason=operation_not_permitted path=unknown
-2026-10-22T18:16:20.283253Z  WARN codex_file_watcher: failed to unwatch /Users/laimis/.codex/skills: No watch was found.

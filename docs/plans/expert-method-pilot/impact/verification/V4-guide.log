@@ -1,8 +1,0 @@
-  - contract guide sync tool keeps docs source canonical ... ok
-  - contract guide sync fails closed on drift and apply restores parity ... ok
-
-P0-P4 Contract Tests
-====================
-  Passed: 2
-  Failed: 0
-  Elapsed: 0s

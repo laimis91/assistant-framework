@@ -11,16 +11,6 @@ routing and sufficient instructions can be the whole skill. Describe the outcome
 necessary steps, constraints, output, and when to ask or stop. Use headings only
 when they help. Move detailed examples to references loaded when needed.
 
-For new or materially changed capability guidance that depends on expert
-judgment, derive the consequential cue-to-method decisions from representative
-expert cases or an authoritative method. Connect raw inputs, expected artifacts,
-applicability limits, and an independent wrong-outcome check to existing
-success criteria. Keep unsupported model proposals provisional; more procedure
-or expert vocabulary does not establish improvement. Mechanical and
-preference-only changes do not require this process. The creator's
-`references/expert-method-design.md` contains the conditional detail; reuse
-existing design and verification outputs rather than adding an authoring report.
-
 Before adding a file, field, phase, controller, or dependency, name its consumer
 and the failure it prevents. Reuse an existing producer format or helper. Do not
 create contracts to satisfy a category, a field count, or a checklist. Utility,

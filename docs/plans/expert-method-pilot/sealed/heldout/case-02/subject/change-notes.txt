@@ -1,3 +1,0 @@
-Profile loader rollout: legacy upstream_timeout_seconds was retired. New profiles
-use upstream_timeout_ms. Normal dependency response is approximately 30ms. The
-previous profile snapshot here is normalized to the current field for replay.
