@@ -1,0 +1,381 @@
+{
+  "reviewed_scope": [
+    "skills/assistant-skill-creator/SKILL.md + skills/assistant-skill-creator/references/expert-method-design.md",
+    "skills/assistant-skill-creator/contracts/index.yaml + skills/assistant-skill-creator/contracts/phase-gates.yaml",
+    "docs/skill-contract-design-guide.md + skills/assistant-skill-creator/references/skill-contract-design-guide.md",
+    "docs/plans/expert-method-pilot/report-freeze.json (117 declared files)"
+  ],
+  "rounds": 2,
+  "final_review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+  "final_snapshot_identity": {
+    "basis": "content_digest",
+    "value": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+    "captured_at": "2026-10-22T18:35:50.699515+00:00",
+    "scope_manifest_digest": "sha256:cbf156285cf168b146658ab4a07f7fb127897a770f30a73e04c934a9e02b5ed1"
+  },
+  "coverage_complete": true,
+  "final_batch_plan": {
+    "batch_id": "expert-method-review-batch-2",
+    "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+    "scope_size": "medium",
+    "topology": {
+      "discovery_pass_count": 3,
+      "canonical_discovery_perspectives": {
+        "trivial_small": [
+          "contract_and_test_oracle",
+          "runtime_lifecycle_and_failure_paths"
+        ],
+        "medium": [
+          "contract_and_test_oracle",
+          "runtime_lifecycle_and_failure_paths",
+          "integration_compatibility_and_consumers"
+        ],
+        "large": [
+          "contract_and_test_oracle",
+          "runtime_lifecycle_and_failure_paths",
+          "integration_compatibility_and_consumers",
+          "architecture_maintainability_and_reuse"
+        ]
+      },
+      "security_specialist_triggered": false,
+      "closure_verification_required": false,
+      "max_required_responses": 3
+    },
+    "expected_passes": [
+      {
+        "review_pass_id": "P2-contracts",
+        "perspective": "contract_and_test_oracle",
+        "assigned_scope": [
+          "scope-creator-structured",
+          "scope-guide"
+        ],
+        "coverage_obligations": [
+          "validate-selectors-gate-recovery-and-retained-consumer-interfaces",
+          "validate-canonical-generated-guide-parity-and-scope",
+          "validate-material-capability-trigger-and-exclusions"
+        ],
+        "prior_finding_visibility": "none"
+      },
+      {
+        "review_pass_id": "P2-lifecycle",
+        "perspective": "runtime_lifecycle_and_failure_paths",
+        "assigned_scope": [
+          "scope-creator-human"
+        ],
+        "coverage_obligations": [
+          "validate-method-decisions-evidence-gaps-and-wrong-outcome-checks",
+          "validate-operation-authority-and-unsupported-claim-failure-paths"
+        ],
+        "prior_finding_visibility": "none"
+      },
+      {
+        "review_pass_id": "P2-integration",
+        "perspective": "integration_compatibility_and_consumers",
+        "assigned_scope": [
+          "scope-pilot-evidence"
+        ],
+        "coverage_obligations": [
+          "validate-pilot-oracles-traces-claims-and-resource-bound"
+        ],
+        "prior_finding_visibility": "none"
+      }
+    ],
+    "required_coverage_tuples": [
+      {
+        "review_pass_id": "P2-contracts",
+        "scope_item_id": "scope-creator-structured",
+        "applicable_concern": "concern-gate-loading-compatibility",
+        "review_perspective": "contract_and_test_oracle",
+        "coverage_obligation": "validate-selectors-gate-recovery-and-retained-consumer-interfaces"
+      },
+      {
+        "review_pass_id": "P2-contracts",
+        "scope_item_id": "scope-guide",
+        "applicable_concern": "concern-parity-consumers",
+        "review_perspective": "contract_and_test_oracle",
+        "coverage_obligation": "validate-canonical-generated-guide-parity-and-scope"
+      },
+      {
+        "review_pass_id": "P2-contracts",
+        "scope_item_id": "scope-guide",
+        "applicable_concern": "concern-conditionality",
+        "review_perspective": "contract_and_test_oracle",
+        "coverage_obligation": "validate-material-capability-trigger-and-exclusions"
+      },
+      {
+        "review_pass_id": "P2-lifecycle",
+        "scope_item_id": "scope-creator-human",
+        "applicable_concern": "concern-method-quality",
+        "review_perspective": "runtime_lifecycle_and_failure_paths",
+        "coverage_obligation": "validate-method-decisions-evidence-gaps-and-wrong-outcome-checks"
+      },
+      {
+        "review_pass_id": "P2-lifecycle",
+        "scope_item_id": "scope-creator-human",
+        "applicable_concern": "concern-downstream-integration",
+        "review_perspective": "runtime_lifecycle_and_failure_paths",
+        "coverage_obligation": "validate-operation-authority-and-unsupported-claim-failure-paths"
+      },
+      {
+        "review_pass_id": "P2-integration",
+        "scope_item_id": "scope-pilot-evidence",
+        "applicable_concern": "concern-evaluation-evidence",
+        "review_perspective": "integration_compatibility_and_consumers",
+        "coverage_obligation": "validate-pilot-oracles-traces-claims-and-resource-bound"
+      }
+    ]
+  },
+  "coverage_ledger": [
+    {
+      "batch_id": "expert-method-review-batch-1",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-1",
+      "review_pass_id": "P-authoring",
+      "perspective": "architecture_maintainability_and_reuse",
+      "coverage_obligation": "validate-expert-method-quality-and-source-fidelity",
+      "assigned_scope": [
+        "scope-creator-human",
+        "scope-guide"
+      ],
+      "scope_item_id": "scope-creator-human",
+      "applicable_concern": "concern-method-quality",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "SKILL.md:70-76 and expert-method-design.md:11-38 connect source-backed cues to method selection, raw inputs, expected artifacts, limitations, uncertainty, and a noncircular wrong-outcome check. Lines 40-46 label the latency example as a hypothesis. Lines 50-63 preserve authority boundaries and qualify source support. Checked both cited primary pages."
+    },
+    {
+      "batch_id": "expert-method-review-batch-1",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-1",
+      "review_pass_id": "P-authoring",
+      "perspective": "architecture_maintainability_and_reuse",
+      "coverage_obligation": "validate-material-capability-trigger-and-exclusions",
+      "assigned_scope": [
+        "scope-creator-human",
+        "scope-guide"
+      ],
+      "scope_item_id": "scope-guide",
+      "applicable_concern": "concern-conditionality",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "Canonical and generated guide:14-22, SKILL.md:70-76, expert-method-design.md:3-7, and DESIGN SD10:77-80 consistently condition this work on new/material capability guidance requiring expert judgment. Mechanical and preference-only exceptions are explicit in human guidance. Existing DESIGN remains the owner; no universal research, case quota, new phase, authoring report, schema, or expert mode is added."
+    },
+    {
+      "batch_id": "expert-method-review-batch-1",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-1",
+      "review_pass_id": "P-contracts",
+      "perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-selectors-gate-recovery-and-retained-consumer-interfaces",
+      "assigned_scope": [
+        "scope-creator-structured",
+        "scope-guide"
+      ],
+      "scope_item_id": "scope-creator-structured",
+      "applicable_concern": "concern-gate-loading-compatibility",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "index.yaml:82-91 selects existing skill_value_kind and success_criteria and resolves the new reference; declared closure is 1727 words, below 2400. phase-gates.yaml:39-80 keeps SD10 inside create/update DESIGN with a conditional trigger and actionable on_fail. SKILL.md:26-36,86-104 and unchanged input/output contracts retain assess/refresh read-only behavior, metadata/dependency preservation, canonical verification outputs and TDD ownership."
+    },
+    {
+      "batch_id": "expert-method-review-batch-1",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-1",
+      "review_pass_id": "P-contracts",
+      "perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-canonical-generated-guide-parity-and-scope",
+      "assigned_scope": [
+        "scope-creator-structured",
+        "scope-guide"
+      ],
+      "scope_item_id": "scope-guide",
+      "applicable_concern": "concern-parity-consumers",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "Both guide copies are byte-identical and have SHA-256 14ddcd2c780dbb99b61c0be6bd03c038759159599442fedd51e140bbd897bd1c. Lines 14-22 agree with creator root, SD10 and the reference on conditional expert judgment, mechanical/preference exclusions, provisional unsupported proposals and reuse of existing outputs. Existing sync consumer checks exact parity and rejects drift."
+    },
+    {
+      "batch_id": "expert-method-review-batch-1",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-1",
+      "review_pass_id": "P-evidence",
+      "perspective": "integration_compatibility_and_consumers",
+      "coverage_obligation": "validate-pilot-oracles-traces-claims-and-resource-bound",
+      "assigned_scope": [
+        "scope-pilot-evidence",
+        "scope-creator-human"
+      ],
+      "scope_item_id": "scope-pilot-evidence",
+      "applicable_concern": "concern-evaluation-evidence",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "Inspected all four implementations/oracles, all eight final responses and all 82 completed command events, including inline Python. Runnable cases contain discriminating interventions and adverse controls; historical-evidence cases actually observe exit 3 and abstain from exact causality. Independently reconciled command counts, referenced event lines/item IDs, final messages, native usage, starts/exits, preserved-file hashes and paired prompts. All 117 report-freeze file hashes and all frozen fixture/oracle hashes match. Eight recorded starts precede terminal exit 0; held-out starts follow the recorded no-change freeze. Reports retain the resource and isolation limits."
+    },
+    {
+      "batch_id": "expert-method-review-batch-1",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-1",
+      "review_pass_id": "P-evidence",
+      "perspective": "integration_compatibility_and_consumers",
+      "coverage_obligation": "validate-authoring-change-and-observation-claim-boundaries",
+      "assigned_scope": [
+        "scope-pilot-evidence",
+        "scope-creator-human"
+      ],
+      "scope_item_id": "scope-creator-human",
+      "applicable_concern": "concern-downstream-integration",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "SKILL.md:70-76 conditionally routes expert-judgment authoring. expert-method-design.md:11-38 reuses existing success criteria and canonical verification outputs; lines 40-46 and 58-63 explicitly withhold measured creator-benefit claims. results.md:11-14 and 122-125 separately disclose that no creator-task comparison occurred. The debugging tie is not presented as evidence of creator improvement or used to justify a debugging source change."
+    },
+    {
+      "batch_id": "expert-method-review-batch-2",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+      "review_pass_id": "P2-contracts",
+      "perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-selectors-gate-recovery-and-retained-consumer-interfaces",
+      "assigned_scope": [
+        "scope-creator-structured",
+        "scope-guide"
+      ],
+      "scope_item_id": "scope-creator-structured",
+      "applicable_concern": "concern-gate-loading-compatibility",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "index.yaml:58-91 selects existing DESIGN gates and input fields skill_value_kind/success_criteria; the new reference resolves inside the skill root. phase-gates.yaml:77-80 has a conditional SD10 assertion with actionable recovery to that load set. index.yaml:142-144 and SKILL.md:52-62 retain full-file fallback and structured v3 outputs. Input/output interfaces and read-only/metadata invariants remain unchanged. V1 passed; current six-source hashes match the supplied manifest."
+    },
+    {
+      "batch_id": "expert-method-review-batch-2",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+      "review_pass_id": "P2-contracts",
+      "perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-canonical-generated-guide-parity-and-scope",
+      "assigned_scope": [
+        "scope-creator-structured",
+        "scope-guide"
+      ],
+      "scope_item_id": "scope-guide",
+      "applicable_concern": "concern-parity-consumers",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "Both guide copies are byte-identical and match declared SHA-256 14ddcd2c780dbb99b61c0be6bd03c038759159599442fedd51e140bbd897bd1c. docs guide:3-5 declares the canonical/generated boundary; sync-skill-contract-guide.sh uses exact copy/comparison, and the retained guide fixture exercises drift rejection and restoration. V3 and V4-guide logs pass. The added paragraph leaves existing metadata, permissions, optional-contract, verification and evidence limits intact."
+    },
+    {
+      "batch_id": "expert-method-review-batch-2",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+      "review_pass_id": "P2-contracts",
+      "perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-material-capability-trigger-and-exclusions",
+      "assigned_scope": [
+        "scope-creator-structured",
+        "scope-guide"
+      ],
+      "scope_item_id": "scope-guide",
+      "applicable_concern": "concern-conditionality",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "docs guide:14-22, creator SKILL.md:70-76, expert-method-design.md:3-7 and SD10:77-80 consistently trigger only new/material capability guidance dependent on expert judgment. Mechanical/preference-only edits are explicitly excluded in prose; SD10 belongs to the create/update-only DESIGN phase. Existing criteria and canonical verification outputs are reused, with no additional required schema/report/phase. expert-method-design.md:25-38 and 58-63 keep unsupported proposals provisional and distinguish source rationale from demonstrated behavioral gain."
+    },
+    {
+      "batch_id": "expert-method-review-batch-2",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+      "review_pass_id": "P2-lifecycle",
+      "perspective": "runtime_lifecycle_and_failure_paths",
+      "coverage_obligation": "validate-method-decisions-evidence-gaps-and-wrong-outcome-checks",
+      "assigned_scope": [
+        "scope-creator-human"
+      ],
+      "scope_item_id": "scope-creator-human",
+      "applicable_concern": "concern-method-quality",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "SKILL.md:70-76 routes material expert-dependent capability authoring while excluding mechanical and preference-only changes. expert-method-design.md:11-28 starts from existing criteria, distinguishes source conduct/recommendation/inference, traces raw inputs through cues, choices, actions and artifacts, preserves uncertainty and limits, and asks only about consequential evidence gaps. Lines 32-38 require an independent check that can reject a plausible incorrect result, reject circular prose checks and limit behavioral-gain claims. Connected DESIGN SD10 at phase-gates.yaml:77-80 has the same condition and an evidence-gap recovery action."
+    },
+    {
+      "batch_id": "expert-method-review-batch-2",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+      "review_pass_id": "P2-lifecycle",
+      "perspective": "runtime_lifecycle_and_failure_paths",
+      "coverage_obligation": "validate-operation-authority-and-unsupported-claim-failure-paths",
+      "assigned_scope": [
+        "scope-creator-human"
+      ],
+      "scope_item_id": "scope-creator-human",
+      "applicable_concern": "concern-downstream-integration",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "SKILL.md:26-36 preserves approval before material BUILD and explicit read-only assess/refresh routes. expert-method-design.md:3-7 confines the detail to existing authoring DESIGN; lines 22, 46 and 50-54 preserve permission/access limits, target metadata, read-only operations and approval gates without installing tools or extending persistence. Structured DESIGN is create/update-only (phase-gates.yaml:39-42); ASSESS, REFRESH_GUIDANCE and INV3 retain no-write requirements (140-185). SKILL.md:91-110 and output.yaml:176-189 preserve canonical verification/evidence outputs, unsupported-claim limits and stop conditions."
+    },
+    {
+      "batch_id": "expert-method-review-batch-2",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+      "review_pass_id": "P2-integration",
+      "perspective": "integration_compatibility_and_consumers",
+      "coverage_obligation": "validate-pilot-oracles-traces-claims-and-resource-bound",
+      "assigned_scope": [
+        "scope-pilot-evidence"
+      ],
+      "scope_item_id": "scope-pilot-evidence",
+      "applicable_concern": "concern-evaluation-evidence",
+      "terminal_state": "completed",
+      "coverage_status": "complete",
+      "coverage_disposition": "inspected_no_risk",
+      "evidence": "All 117 freeze rows match bytes and SHA256; freeze digest a7282fd4ed8dc70c76dd5a554da6e3428bafbb9a881fdd45e15ad710e8aaf5d6 matches dispatch. Independently inspected 82 completed commands and eight finals against four subject/oracle pairs and 15 frozen smoke controls. All 41 grading references resolve to the stated completed item. Eight distinct start slots, exit-0 terminals, usage fields and elapsed values agree across captures/results. The no-change timestamp precedes every held-out start. Original capture hashes, live subject after-hashes and condition-specific guidance presence also match. No observed rubric/oracle read, source mutation or agent network command; reported limits prevent stronger isolation, causal or performance conclusions."
+    }
+  ],
+  "batch_summaries": [
+    {
+      "started_batch_ordinal": 1,
+      "batch_id": "expert-method-review-batch-1",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-1",
+      "snapshot_identity": {
+        "basis": "content_digest",
+        "value": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+        "captured_at": "2026-10-22T18:26:57.512055+00:00",
+        "scope_manifest_digest": "sha256:cbf156285cf168b146658ab4a07f7fb127897a770f30a73e04c934a9e02b5ed1"
+      },
+      "batch_status": "incomplete",
+      "expected_response_count": 3,
+      "terminal_response_count": 3,
+      "aggregate_rubric_recomputed": false
+    },
+    {
+      "started_batch_ordinal": 2,
+      "batch_id": "expert-method-review-batch-2",
+      "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+      "snapshot_identity": {
+        "basis": "content_digest",
+        "value": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+        "captured_at": "2026-10-22T18:35:50.699515+00:00",
+        "scope_manifest_digest": "sha256:cbf156285cf168b146658ab4a07f7fb127897a770f30a73e04c934a9e02b5ed1"
+      },
+      "batch_status": "complete",
+      "expected_response_count": 3,
+      "terminal_response_count": 3,
+      "aggregate_rubric_recomputed": true
+    }
+  ],
+  "aggregation_ledger": [],
+  "aggregated_findings": [],
+  "result": "CLEAN",
+  "evidence_bounded_claim": "No material findings within the reviewed scope and available evidence. Structural compatibility and bounded debugging observations are supported; creator behavioral benefit, native activation and general expert equivalence remain unmeasured.",
+  "additional_round_reasons": [
+    {
+      "round": 2,
+      "reason": "validation_failure",
+      "evidence_ref": "review/history/batch-1-invalidity.json",
+      "detail": "The first batch omitted runtime_lifecycle_and_failure_paths and lacked a canonical topology. Preserve its actual returns as historical incomplete evidence; do not relabel or reuse them as fresh current coverage. This replacement batch uses the same unchanged source and report bytes."
+    }
+  ],
+  "fixed_items": [],
+  "nits": [],
+  "protocol_interpretation": {
+    "issue": "The v9 additional_round_reasons prose restricts round 2 to changed_files, while review-loop/review-batch explicitly require replacement coverage for an incomplete/invalidated batch and count started batches.",
+    "resolution": "Retain the truthful validation_failure reason for the malformed-plan replacement. No source fix, refreshed execution or changed_files reason is fabricated. The complete current batch covers canonical medium perspectives at unchanged bytes. This interpretation changes no source, acceptance, budget or authorization."
+  }
+}

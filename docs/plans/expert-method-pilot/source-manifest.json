@@ -1,0 +1,205 @@
+{
+  "recorded_at": "2026-10-22",
+  "source_commit": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+  "branch": "feature/expert-method-pilot",
+  "source_root": "/private/tmp/assistant-expert-method-pilot-V1",
+  "current_skill_snapshot": {
+    "source": "skills/assistant-debugging/SKILL.md",
+    "snapshot": "baseline/assistant-debugging/SKILL.md",
+    "sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2"
+  },
+  "source_files": [
+    {
+      "path": "docs/skill-contract-design-guide.md",
+      "sha256": "0ae1fae2902688c632460932a3b990856c9e3cc1b9b3bcebedf7b769c0feb987"
+    },
+    {
+      "path": "skills/assistant-skill-creator/SKILL.md",
+      "sha256": "e68d7a9913663b088d18bba0eb8b9a7dd595a28a22a9c1b4323e2d821e3cad0f"
+    },
+    {
+      "path": "skills/assistant-verification/SKILL.md",
+      "sha256": "e69c4da3f9ac13206f12fd6bd723c832564ed0d8db7e625226aacd9151231ce7"
+    },
+    {
+      "path": "tools/progress/operating-guidance.md",
+      "sha256": "105d79dc847689673006bb0c0342082e0cfb73aaf0f2416370126f2394843c12"
+    }
+  ],
+  "frozen_artifacts": [
+    {
+      "path": "baseline/assistant-debugging/SKILL.md",
+      "sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2"
+    },
+    {
+      "path": "baseline/assistant-debugging/contracts/handoffs.yaml",
+      "sha256": "419ffc8a18a8c34eaa4fe0b6cee1e2060ef81431ffa625ce298aae9fe708e93e"
+    },
+    {
+      "path": "baseline/assistant-debugging/contracts/index.yaml",
+      "sha256": "0fe824bc07fa904c912569fc44b1f14445969275696ddad674cff5ebfad1be13"
+    },
+    {
+      "path": "baseline/assistant-debugging/contracts/input.yaml",
+      "sha256": "436d9d28864493b209fef3c4de37ef88111ba3f3012b74b940f64e4feada19a3"
+    },
+    {
+      "path": "baseline/assistant-debugging/contracts/output.yaml",
+      "sha256": "f8764f9fbbd11023f377717baa5715474eb4c89850c237603909c7fb01a8b2e8"
+    },
+    {
+      "path": "baseline/assistant-debugging/contracts/phase-gates.yaml",
+      "sha256": "64cf5ee45f236a4b1bd4fda5614f083880aa5f8baae4d8c1c01cfa2400906618"
+    },
+    {
+      "path": "baseline/assistant-debugging/evals/cases.json",
+      "sha256": "f041d93925b2bd0f314c22d2f9833d485f55b24d80dc8e276070ab2024907941"
+    },
+    {
+      "path": "baseline/assistant-debugging/references/change-impact.md",
+      "sha256": "747357cd1417e7bb908131e811db8172d0e05b6e2003bc6b477d958766161f1d"
+    },
+    {
+      "path": "baseline/tools/progress/operating-guidance.md",
+      "sha256": "105d79dc847689673006bb0c0342082e0cfb73aaf0f2416370126f2394843c12"
+    },
+    {
+      "path": "plan.md",
+      "sha256": "aa84dffd479f8f9b5807996e1d9e6bd874437db6e53179dcee3ef796028f33c6"
+    },
+    {
+      "path": "selection.json",
+      "sha256": "a606c442ab4038b239975761187a678054188510b54133c5c90ca8fb504bfb04"
+    },
+    {
+      "path": "prompts.json",
+      "sha256": "2bd259fa656e90b6da5f8fcb4584783f9d56a8cd73503aef312ebde5cb7b08a3"
+    },
+    {
+      "path": "rubric.md",
+      "sha256": "8a68fd8b5828d83b75907ad5827afea3c4e7cdcec17af0aad6bd14c112bba335"
+    },
+    {
+      "path": "conditions.md",
+      "sha256": "2da0e2ed0660468f122ad8a8f082b559bd308bd36471a67ef7a72fe22359c2b6"
+    },
+    {
+      "path": "development/smoke-results.json",
+      "sha256": "4b176fc1ecf5d5b217f0be3caaedfff39fb103b9bc8441b0a7c2757963f919e4"
+    },
+    {
+      "path": "sealed/smoke-results.json",
+      "sha256": "d588b0e10b2f6abbb7b2d448225f6c37412216bb8a81e7fd398900b0ea3220f7"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "case-01",
+      "partition": "development",
+      "subject_ref": "development/case-01/subject",
+      "subject_files": [
+        {
+          "path": "README.md",
+          "sha256": "6d21f8efe252d13c84a203ead1d25b2a4efeca8c57fbaabb98c31996aa4d6c96"
+        },
+        {
+          "path": "service.py",
+          "sha256": "f8ff12456ef7dd7a099ebc9edd5b67d2c01480a1594a7bb6cf77550c98bcb00e"
+        }
+      ],
+      "subject_digest_algorithm": "SHA256 of UTF8 JSON file rows, sorted paths, sort_keys=True, separators=(comma,colon)",
+      "subject_sha256": "83f151af62f5fd3558412459e3869915d3587d60844cf0c378c9a7a7f552f68d",
+      "oracle_ref": "development/case-01/oracle.md",
+      "oracle_sha256": "d1a99e151e00a5a5f8555ad6c9e27586157fcc00b676547dd485eea43c773b00"
+    },
+    {
+      "case_id": "case-02",
+      "partition": "heldout",
+      "subject_ref": "sealed/heldout/case-02/subject",
+      "subject_files": [
+        {
+          "path": "README.md",
+          "sha256": "7861d3ab8ae92890b53a404610a2c0fa6fc7cb425835bb8d28031af9f9c9f103"
+        },
+        {
+          "path": "change-notes.txt",
+          "sha256": "4dae0d258b4c4194e559535a1013979d6b2d5e4edfb496b263afe38f70b9308e"
+        },
+        {
+          "path": "configs/current.json",
+          "sha256": "4fa862d05ea7c9ba39eeb42ee2cae4657c61397b7259c7d47ca3d9d79f3f4a15"
+        },
+        {
+          "path": "configs/previous.json",
+          "sha256": "f0fd4c099d02f36198d4e8974adb3fa4ebbaf85b4931affdecb8a19f95bd2dcf"
+        },
+        {
+          "path": "request.py",
+          "sha256": "e6a27782db567e995f7a6eb7f39ac484d3807a889c81a2055376b25cd843e787"
+        }
+      ],
+      "subject_digest_algorithm": "SHA256 of UTF8 JSON file rows, sorted paths, sort_keys=True, separators=(comma,colon)",
+      "subject_sha256": "0fd8bfdc29cde78db555fc37d162b82fdc39acbebcd25e78ea49f276177609a7",
+      "oracle_ref": "sealed/heldout/case-02/oracle.md",
+      "oracle_sha256": "417c910da733239f7fa0adf74462a24461b947e9d4a0866b6c5987344b120b9a"
+    },
+    {
+      "case_id": "case-03",
+      "partition": "heldout",
+      "subject_ref": "sealed/heldout/case-03/subject",
+      "subject_files": [
+        {
+          "path": "README.md",
+          "sha256": "d6314d925392a1f6ff51d5057f6a98945a4dca74c9ae6f32b46224225b57b0f1"
+        },
+        {
+          "path": "replay.py",
+          "sha256": "bd78058c320de764e05968aaaada2fc5c2bd974743f2f961d96ab5cf6896c493"
+        }
+      ],
+      "subject_digest_algorithm": "SHA256 of UTF8 JSON file rows, sorted paths, sort_keys=True, separators=(comma,colon)",
+      "subject_sha256": "582066ed7c3d499837e597783c7f3a4dd138da3e11b336243b6d1d50f3e3d610",
+      "oracle_ref": "sealed/heldout/case-03/oracle.md",
+      "oracle_sha256": "7e6d966a60edbaa160aeeb455043aa267b45378f79384d95399fef5ee83d24d5"
+    },
+    {
+      "case_id": "case-04",
+      "partition": "heldout",
+      "subject_ref": "sealed/heldout/case-04/subject",
+      "subject_files": [
+        {
+          "path": "README.md",
+          "sha256": "dd0a6d6c2448bd9e3be96307cf865296554ebd71f87b49c26db99913e0ba80df"
+        },
+        {
+          "path": "access.jsonl",
+          "sha256": "9a094e2b86844a467515cb826e56bf97117ae9fb55ebe22038ff9dce2a8589e7"
+        },
+        {
+          "path": "bundle.py",
+          "sha256": "c265c57b2f3c26a4db1249828652591d2a5967217d59cfa0c2a3c21f886cab43"
+        },
+        {
+          "path": "captures.json",
+          "sha256": "8809ab6cf048aa21dfbf5a233cda8667ca97f0a9ee7320170266e35d66654a68"
+        }
+      ],
+      "subject_digest_algorithm": "SHA256 of UTF8 JSON file rows, sorted paths, sort_keys=True, separators=(comma,colon)",
+      "subject_sha256": "f09d38223101c2abe17031afad9fc46351256ca44be810ebea8ac84c8acd1df0",
+      "oracle_ref": "sealed/heldout/case-04/oracle.md",
+      "oracle_sha256": "feadaff2fb8b250e323ed2d2148a925db749b34b7902c8f570cc7685d69af1dc"
+    }
+  ],
+  "model_evaluation_starts": 0,
+  "smoke_summary": {
+    "commands": 15,
+    "all_expectations_passed": true,
+    "maximum_elapsed_seconds": 0.156227,
+    "model_calls": 0
+  },
+  "limits": [
+    "SHA256 binds bytes, not correctness or native activation.",
+    "Sealed paths require access control or selective distribution; path names alone provide no confidentiality.",
+    "Creator-procedure causal improvement is not evaluated by the debugging comparison."
+  ]
+}

@@ -1,0 +1,28 @@
+**Root cause found:** checkout deduplication has a concurrency race. Two requests using the same key can both miss the completed-payment cache and independently obtain accepted payments.
+
+In [Checkout.post](/private/tmp/expert-pilot-runtime-20261022/trial-06/subject/replay.py:26), the cache lock protects the lookup and subsequent write separately. Between those operations, either request can call the gateway. [Gateway.charge](/private/tmp/expert-pilot-runtime-20261022/trial-06/subject/replay.py:13) serializes its writes but accepts every call, including repeated keys.
+
+From `subject/`, `python3 -B replay.py` reproduced:
+
+- Two requests for `order-17`, both returning `cached: false`.
+- Two distinct receipts, both recorded as `accepted`.
+- One `completed` entry, because the later cache write overwrites the earlier receipt.
+
+The scheduling/key controls distinguished the causes:
+
+| Schedule | Keys | Accepted payments | Interpretation |
+|---|---|---:|---|
+| Parallel | Same | 2 | Duplicate payment reproduced |
+| Serial | Same | 1 | Retry returns cached receipt |
+| Parallel | Distinct | 2 | One payment per key |
+| Serial | Distinct | 2 | One payment per key |
+
+Thus, changing request keys is **not required** for this failure.
+
+The reproduction condition is that both same-key requests observe an absent cache entry before either publishes its receipt. The default replay forces that timing with a barrier after lookup. To check that the barrier wasn’t the sole explanation, I also ran an in-memory diagnostic that delayed the first gateway response **after acceptance**, without using the lookup barrier. The retry encountered an empty cache and created a second accepted payment. Concurrent submissions after cache publication both returned the cached receipt without another charge.
+
+This explains “sometimes”: the outcome depends on whether the retry’s lookup occurs before the original request publishes its receipt.
+
+Confidence is high for this local mechanism. The bundle does not establish production timing, occurrence frequency, or actual gateway idempotency guarantees. A narrow next step toward remediation is to retain the delayed-response scenario as a regression case requiring one accepted payment and the same receipt for both callers.
+
+No input files were changed.

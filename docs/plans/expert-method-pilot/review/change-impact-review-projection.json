@@ -1,0 +1,14 @@
+{
+  "artifact_identity": "creator-expert-method-completion-v1",
+  "status": "valid",
+  "capture_ref": "impact/capture.completion.json",
+  "expected_context_ref": "impact/expected.completion.json",
+  "assessment_ref": "impact/assessment.completion.json",
+  "review_projection_ref": "impact/review.completion.json",
+  "validator_result_ref": "impact/completion-result.json",
+  "scope_manifest_id": "expert-method-scope-manifest-2",
+  "coverage_ledger_id": "expert-method-coverage-ledger-2",
+  "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+  "snapshot_id": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+  "canonical_final_summary_ref": "review/final-summary.json"
+}

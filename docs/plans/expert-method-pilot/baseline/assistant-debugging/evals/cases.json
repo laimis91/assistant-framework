@@ -1,0 +1,169 @@
+{
+  "schema_version": "2.0",
+  "suite_id": "assistant-debugging-skill-behavior",
+  "skill": "assistant-debugging",
+  "title": "assistant-debugging Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for the assistant-debugging skill's evidence-first root-cause workflow.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "activation_cases": [
+    {"user_request": "Diagnose this flaky test failure.", "should_activate": true},
+    {"user_request": "Find the root cause before fixing.", "should_activate": true},
+    {"user_request": "Apply the known one-line fix from the accepted diagnosis.", "should_activate": false}
+  ],
+  "recommended_use": [
+    "Run each case with the assistant-debugging skill instructions loaded.",
+    "Compare the local response against reproduce, hypothesize, isolate, fix, verify, and residual-risk requirements.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "bugfix-reproduces-before-patching",
+      "title": "Bugfix reproduces before patching",
+      "category": "reproduction_gate",
+      "purpose": "Checks that a bug report is reproduced or blocked before code edits and that hypotheses are built from evidence.",
+      "prompt": "Debug why the checkout total is wrong after discounts and fix it.",
+      "setup_context": [
+        "The assistant-debugging skill instructions are active.",
+        "The repository contains tests and pricing code, but no failing command was supplied.",
+        "Code modification is allowed after diagnosis."
+      ],
+      "expected_behavior": [
+        "Defines symptom, expected behavior, and bounded scope before editing.",
+        "Runs or identifies the smallest safe reproduction path before patching.",
+        "Investigates evidence-grounded plausible causes without a numeric hypothesis quota.",
+        "Chooses diagnostics based on signal and safety.",
+        "Does not patch checkout code before reproduction evidence or blocker is recorded."
+      ],
+      "pass_criteria": [
+        "The response includes reproduction evidence or a specific reproduction blocker.",
+        "The response includes hypotheses with supporting and disconfirming evidence.",
+        "The response states that no code patch happens before reproduction or blocker.",
+        "The response reports status and confidence based on evidence."
+      ],
+      "fail_signals": [
+        "Immediately patches likely files without reproduction.",
+        "Claims a cause without supporting or distinguishing evidence.",
+        "Claims root cause from a stack trace alone.",
+        "Treats skipped tests as validation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "symptom",
+          "reproduction",
+          "hypotheses",
+          "disconfirming evidence",
+          "diagnostic",
+          "status",
+          "confidence",
+          "residual risks"
+        ],
+        "forbidden_substrings": [
+          "patched without reproduction",
+          "root cause from stack trace alone",
+          "skipped tests prove"
+        ]
+      }
+    },
+    {
+      "id": "flaky-test-isolates-competing-causes",
+      "title": "Flaky test isolates competing causes",
+      "category": "hypothesis_isolation",
+      "purpose": "Checks that flaky failures are diagnosed with competing causes, repeated/targeted checks, and residual uncertainty instead of overconfident fixes.",
+      "prompt": "Investigate this flaky test. It fails in CI sometimes but passes locally.",
+      "setup_context": [
+        "The assistant-debugging skill instructions are active.",
+        "The user supplied no CI logs yet.",
+        "The failure may involve timing, ordering, environment, or data dependency."
+      ],
+      "expected_behavior": [
+        "Records missing CI logs as a blocker or residual risk when unavailable.",
+        "Lists timing, order dependence, environment mismatch, and shared state/data hypotheses when plausible.",
+        "Uses repeated or targeted local runs only when safe and useful.",
+        "Avoids claiming fixed unless the flaky path is reproduced or confidence is otherwise justified.",
+        "Returns blocked, inconclusive, mitigated, or fixed status according to evidence."
+      ],
+      "pass_criteria": [
+        "The response includes multiple competing hypotheses.",
+        "The response distinguishes reproduced, partial, blocked, or not_reproduced status.",
+        "The response includes residual risks for unavailable CI evidence.",
+        "The response avoids overclaiming confidence."
+      ],
+      "fail_signals": [
+        "Assumes timing is the cause without checks.",
+        "Marks fixed after one local pass.",
+        "Ignores missing CI logs.",
+        "Runs destructive diagnostics."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "flaky",
+          "hypotheses",
+          "reproduced",
+          "blocked",
+          "residual risks",
+          "confidence",
+          "verification",
+          "CI logs"
+        ],
+        "forbidden_substrings": [
+          "timing is definitely the cause",
+          "fixed after one local pass",
+          "No CI logs needed",
+          "destructive diagnostics"
+        ]
+      }
+    },
+    {
+      "id": "shared-checkout-repair-rejects-symptom-only-locality",
+      "title": "Debugging carries shared consumer impact before a checkout fix",
+      "category": "impact_accounting",
+      "purpose": "Rejects a checkout-only fix claim when invoice, retry, and configuration consumers are supplied.",
+      "prompt": "Diagnose a checkout discount bug. The helper is also used by invoice export, retry recovery, and configuration-driven validation. A caller proposes calling it local because checkout is the reported symptom. Return the phase-correct debugging result.",
+      "setup_context": ["The change-impact checker is available but no pre-build assessment has been supplied.", "The reported checkout symptom is only one known consumer."],
+      "expected_behavior": ["Rejects symptom-only locality.", "Records bounded shared impact or an explicit evidence gap before a repair.", "Does not claim completed verification or clean review from diagnosis."],
+      "pass_criteria": ["The response names the omitted consumer categories and does not patch first.", "Completion remains unavailable without current verification and review."],
+      "fail_signals": ["Classifies the helper local solely because checkout reported the bug.", "Claims completion without current verification and review projection."],
+      "machine_expectations": {
+        "required_substrings": ["shared", "invoice", "retry", "configuration", "pre-build", "residual"],
+        "forbidden_substrings": ["local because checkout", "clean review is complete"]
+      }
+    },
+    {
+      "id": "local-debugging-retains-compact-causal-impact",
+      "title": "Local debugging retains compact causal impact",
+      "category": "impact_accounting",
+      "purpose": "Requires a locally bounded debugging result to retain causal evidence without carrying an expanded change-impact checker envelope.",
+      "prompt": "Diagnose a local draft-navigation bug. The trace proves that only this route reaches the guard. Return one valid JSON debugging result.",
+      "setup_context": ["The causal trace confines the defect to one route.", "No expanded change-impact artifact is carried into debugging."],
+      "expected_behavior": ["Records local applicability with a causal evidence reference.", "Keeps expanded_artifact_carried false.", "Does not fabricate expanded change-impact checker evidence for the local diagnosis."],
+      "pass_criteria": ["The compact applicability object has local scope, a reason, and a causal evidence reference.", "No expanded artifact or checker-envelope fields are present."],
+      "fail_signals": ["Omits local causal evidence.", "Carries an expanded change-impact artifact for the local diagnosis.", "Claims validator, capture, or expected-context checker references."],
+      "machine_expectations": {
+        "required_substrings": ["local", "change_impact_applicability", "causal_evidence_ref"],
+        "forbidden_substrings": ["change_impact_evidence", "validator_result_ref"],
+        "structured_json_assertions": [
+          {"operator":"equals","path":["status"],"expected":"root_cause_found"},
+          {"operator":"nonempty_string","path":["symptom_summary"]},
+          {"operator":"nonempty_string","path":["reproduction","target"]},
+          {"operator":"nonempty_string","path":["reproduction","command_or_steps"]},
+          {"operator":"nonempty_string","path":["reproduction","observed_result"]},
+          {"operator":"nonempty_string","path":["reproduction","reproduced"]},
+          {"operator":"array_items_nonempty_fields","path":["hypotheses"],"fields":["cause","supporting_evidence","disconfirming_evidence","diagnostic_check"]},
+          {"operator":"equals","path":["hypotheses",0,"rank"],"expected":1},
+          {"operator":"equals","path":["hypotheses",0,"result"],"expected":"confirmed"},
+          {"operator":"nonempty_string","path":["root_cause"]},
+          {"operator":"equals","path":["confidence"],"expected":"medium"},
+          {"operator":"array_items_nonempty_fields","path":["verification"],"fields":["command_or_check","result","evidence"]},
+          {"operator":"array_nonblank_strings","path":["residual_risks"],"allow_empty":false},
+          {"operator":"equals","path":["change_impact_applicability","impact_scope"],"expected":"local"},
+          {"operator":"nonempty_string","path":["change_impact_applicability","applicability_reason"]},
+          {"operator":"nonempty_string","path":["change_impact_applicability","causal_evidence_ref"]},
+          {"operator":"equals","path":["change_impact_applicability","expanded_artifact_carried"],"expected":false},
+          {"operator":"path_absent","path":["change_impact_evidence"]}
+        ]
+      }
+    }
+  ]
+}

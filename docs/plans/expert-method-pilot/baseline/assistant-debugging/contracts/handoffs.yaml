@@ -1,0 +1,154 @@
+# Debugging handoff contracts
+# Handoffs are optional; direct execution is valid when subagents are unavailable or policy-disallowed.
+
+schema_version: "2.0"
+contract: handoffs
+skill: assistant-debugging
+
+handoffs:
+  - name: debugging_investigation
+    from: DebuggingOrchestrator
+    to: Investigator
+    phase: ISOLATE
+    context_fields:
+      - name: symptom
+        type: string
+        required: true
+        description: "Observed failure to investigate"
+      - name: reproduction_evidence
+        type: object
+        required: true
+        description: "Command/steps/result from reproduction phase"
+      - name: hypotheses
+        type: object[]
+        required: true
+        description: "Ranked hypotheses and diagnostic checks to evaluate"
+      - name: constraints
+        type: string[]
+        required: false
+        description: "Safety and environment constraints"
+        default: []
+    return_fields:
+      - name: diagnostic_results
+        type: object[]
+        required: true
+        description: "Checks run with evidence and hypothesis status"
+      - name: confirmed_root_cause
+        type: string
+        required: conditional
+        condition: "when evidence identifies a cause"
+        description: "Confirmed or best-supported cause"
+      - name: residual_uncertainty
+        type: string[]
+        required: true
+        description: "Remaining unknowns or blocked diagnostics"
+    on_missing_field: "Re-dispatch Investigator with the missing field request or continue direct investigation with the missing evidence recorded as residual risk"
+
+  - name: debugging_fix
+    from: DebuggingOrchestrator
+    to: Fixer
+    phase: FIX
+    context_fields:
+      - name: change_impact_applicability
+        type: object
+        required: conditional
+        condition: "the diagnosis has a behavior-bearing or locality/shared/unresolved impact decision"
+        validation: "impact_scope and applicability_reason are carried unchanged. local has causal evidence without mandatory expanded refs; shared/unresolved or explicit expansion carries the matching artifact."
+      - name: change_impact_evidence
+        type: object
+        required: conditional
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        validation: "The common checker was freshly run, or was rerun with --receipt validator_result_ref against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity before Fixer dispatch; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, and discovery or completion evidence does not authorize a fix mutation."
+        object_fields:
+          - {name: artifact_identity, type: string, required: true}
+          - {name: phase, type: enum, required: true, enum_values: [pre_build]}
+          - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
+          - {name: capture_ref, type: string, required: true}
+          - {name: expected_context_ref, type: string, required: true}
+          - {name: assessment_ref, type: string, required: true}
+          - {name: validator_result_ref, type: string, required: true}
+          - {name: status, type: enum, required: true, enum_values: [valid]}
+      - name: root_cause
+        type: string
+        required: true
+        description: "Confirmed cause or explicitly labeled mitigation target"
+      - name: verification_decision
+        type: object
+        required: true
+        description: "Canonical assistant-verification decision resolved before mutation."
+        validation: "Conforms exactly to assistant-verification/contracts/output.yaml#verification_decision and is carried unchanged from debugging input."
+      - name: selected_check_ids
+        type: string[]
+        required: true
+        description: "Selected CheckSpec IDs due for this fix increment"
+        validation: "Ordered unique IDs resolving exactly once in the unchanged decision."
+      - name: binding_obligation_refs
+        type: object[]
+        required: true
+        description: "Exact applicable binding tuples due for this fix increment"
+        validation: "Each tuple exactly equals an applicable canonical policy constraint; do not create execution checks for unrelated constraints."
+        object_fields:
+          - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+          - {name: value, type: string, required: true}
+          - {name: source_ref, type: string, required: true}
+      - name: tdd_applies
+        type: boolean
+        required: true
+        description: "Whether meaningful RED is active for this fix; the generic debugging_fix handoff is permitted only when false."
+        validation: "True exactly when selected_check_ids intersect verification_decision.tdd_choice.applicable_check_ids; otherwise false. Preserve the task decision unchanged. When true, do not dispatch this Fixer; route through assistant-tdd's existing execution_lane before mutation."
+      - name: reproduction_evidence
+        type: object
+        required: true
+        description: "Original failing path used to verify the fix"
+      - name: constraints
+        type: string[]
+        required: false
+        description: "No-touch files, safety policy, and verification requirements"
+        default: []
+    return_fields:
+      - name: changed_files
+        type: string[]
+        required: true
+        description: "Files changed for fix or regression test"
+      - name: fix_rationale
+        type: string
+        required: true
+        description: "Why the change addresses root cause rather than only symptom"
+      - name: verification_run
+        type: object[]
+        required: true
+        description: "Per-check results bound to selected IDs and exact applicable tuples, with the original failure path"
+        validation: "Partial and unavailable retain their evidence and remain explicit gaps; never collapse them to passed or blocked."
+        object_fields:
+          - {name: command_or_check, type: string, required: true}
+          - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, blocked]}
+          - {name: evidence, type: string, required: true}
+          - {name: selected_check_ids, type: "string[]", required: true}
+          - name: binding_obligation_refs
+            type: object[]
+            required: true
+            object_fields:
+              - {name: kind, type: enum, required: true, enum_values: [required_scope, prohibited_scope, required_tdd, required_check, resource_constraint]}
+              - {name: value, type: string, required: true}
+              - {name: source_ref, type: string, required: true}
+          - name: executed_command
+            type: object
+            required: conditional
+            condition: "a command-based selected CheckSpec was started, regardless of outcome"
+            description: "Observed invocation identity for exactly one selected command check"
+            validation: "check_id is the sole selected_check_ids value and resolves exactly once in the unchanged verification_decision; argv and cwd exactly equal that CheckSpec.command.argv and CheckSpec.command.cwd. Missing or ambiguous invocation invalidates executed command evidence; checks never started retain their gap and omit this field."
+            object_fields:
+              - {name: check_id, type: string, required: true}
+              - {name: argv, type: "string[]", required: true, min_items: 1}
+              - {name: cwd, type: string, required: true}
+      - name: verification_decision
+        type: object
+        required: true
+        description: "The canonical decision returned unchanged from context."
+        validation: "Equals context_fields.verification_decision exactly; do not revise CheckSpecs or TddChoice during FIX."
+      - name: tdd_applies
+        type: boolean
+        required: true
+        description: "TDD projection returned unchanged from context."
+        validation: "Equals context_fields.tdd_applies, derived from selected_check_ids intersected with verification_decision.tdd_choice.applicable_check_ids."
+    on_missing_field: "Do not infer false when tdd_applies or its unchanged decision is missing or mismatched; derive it from the selected/applicable ID intersection. This generic Fixer may be dispatched only when false. When true, route the unchanged packet through assistant-tdd's existing execution_lane before mutation. For other missing fields, request the field or record the evidence gap; inspecting a diff does not authorize a TDD bypass."

@@ -1,0 +1,144 @@
+{
+  "status": "DONE",
+  "round": 2,
+  "batch_id": "expert-method-review-batch-2",
+  "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+  "snapshot_identity": {
+    "basis": "content_digest",
+    "value": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+    "captured_at": "2026-10-22T18:35:50.699515+00:00",
+    "scope_manifest_digest": "sha256:cbf156285cf168b146658ab4a07f7fb127897a770f30a73e04c934a9e02b5ed1"
+  },
+  "review_pass_id": "P2-lifecycle",
+  "review_attempt_id": "expert-method-review-attempt-2",
+  "review_perspective": "runtime_lifecycle_and_failure_paths",
+  "pass_completion_state": "completed",
+  "reviewed_scope": [
+    "scope-creator-human: skills/assistant-skill-creator/SKILL.md and skills/assistant-skill-creator/references/expert-method-design.md",
+    "Authoritative docs/plans/expert-method-pilot/impact/source.diff and impact/candidate-source-snapshot.json; all six declared source hashes verified",
+    "Connected DESIGN/load consumers: skills/assistant-skill-creator/contracts/index.yaml, contracts/phase-gates.yaml, contracts/input.yaml and contracts/output.yaml",
+    "Connected permission, evidence and retained-operation consumers: creator references/upstream-guidance.md, references/verified-skill-distillation.md, references/contract-design-checklist.md, evals/cases.json, selected portions of tests/p0-p4/skill-creator-semantic-contracts.sh and skills/assistant-verification/SKILL.md",
+    "Assigned criteria/pre-review evidence and existing V1, V3, V4-creator, V4-guide and V5 source-inspection logs; no model trials or broad tests run"
+  ],
+  "findings": [],
+  "coverage_entries": [
+    {
+      "scope_item_id": "scope-creator-human",
+      "applicable_concern": "concern-method-quality",
+      "review_perspective": "runtime_lifecycle_and_failure_paths",
+      "coverage_obligation": "validate-method-decisions-evidence-gaps-and-wrong-outcome-checks",
+      "status": "inspected_no_risk",
+      "evidence": "SKILL.md:70-76 routes material expert-dependent capability authoring while excluding mechanical and preference-only changes. expert-method-design.md:11-28 starts from existing criteria, distinguishes source conduct/recommendation/inference, traces raw inputs through cues, choices, actions and artifacts, preserves uncertainty and limits, and asks only about consequential evidence gaps. Lines 32-38 require an independent check that can reject a plausible incorrect result, reject circular prose checks and limit behavioral-gain claims. Connected DESIGN SD10 at phase-gates.yaml:77-80 has the same condition and an evidence-gap recovery action."
+    },
+    {
+      "scope_item_id": "scope-creator-human",
+      "applicable_concern": "concern-downstream-integration",
+      "review_perspective": "runtime_lifecycle_and_failure_paths",
+      "coverage_obligation": "validate-operation-authority-and-unsupported-claim-failure-paths",
+      "status": "inspected_no_risk",
+      "evidence": "SKILL.md:26-36 preserves approval before material BUILD and explicit read-only assess/refresh routes. expert-method-design.md:3-7 confines the detail to existing authoring DESIGN; lines 22, 46 and 50-54 preserve permission/access limits, target metadata, read-only operations and approval gates without installing tools or extending persistence. Structured DESIGN is create/update-only (phase-gates.yaml:39-42); ASSESS, REFRESH_GUIDANCE and INV3 retain no-write requirements (140-185). SKILL.md:91-110 and output.yaml:176-189 preserve canonical verification/evidence outputs, unsupported-claim limits and stop conditions."
+    }
+  ],
+  "summary": "No material findings within the reviewed scope and available evidence. The conditional method detail remains inside existing authoring DESIGN, retains read-only and approval boundaries, and connects evidence gaps and plausible wrong outcomes to the existing verification consumer. This is the P2 lifecycle verdict only; creator behavioral benefit and native activation are not established by the inspected structural evidence.",
+  "evidence": [
+    {
+      "source": "/Users/laimis/.codex/skills/assistant-review/contracts/handoffs.yaml#handoffs.orchestrator_to_reviewer.return_fields",
+      "detail": "Recursively traversed the parsed selected return_fields, including 126 object nodes, and confirmed exact parsed equality with /tmp/expert-pilot-review/batch2/return-schema.json before the first response. Python lacked PyYAML; Ruby YAML/JSON provided the successful read-only comparison."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/impact/candidate-source-snapshot.json and source.diff",
+      "detail": "Read the authoritative six-source diff and independently recalculated SHA-256 for every declared source. All six current files match the frozen manifest, including assigned SKILL.md 80ceb04c681401abca2a6492be9e971c8d72ee31269ef37e5a7d2dfc5d9577f4 and expert-method-design.md 84726d0a4767fbdc818936f099fc04abb697eb3ae7b0720365a975f06aecdaaf."
+    },
+    {
+      "source": "skills/assistant-skill-creator/SKILL.md:21-44,52-82,91-110; references/expert-method-design.md:3-54",
+      "detail": "Traced operation selection, approval, conditional load, unsupported candidates, consequential evidence-gap escalation, independent wrong-result checks, bounded output promotion and final evidence/stop behavior."
+    },
+    {
+      "source": "skills/assistant-skill-creator/contracts/index.yaml:58-91,133-144; contracts/phase-gates.yaml:39-80,140-189; contracts/input.yaml:55-75; contracts/output.yaml:9-75,176-189",
+      "detail": "The new load set selects existing skill_value_kind/success_criteria; DESIGN SD10 reaches the same detail and recovery. Existing operation-specific outputs and canonical verification/evidence consumers remain intact; no new output schema or authoring report is introduced."
+    },
+    {
+      "source": "/tmp/expert-pilot-review/batch2/criteria.json and pre-review-evidence.json",
+      "detail": "Retained the explicit scope: existing focused checks, zero new executable-test assertions, four diagnosis-only scenarios and at most 12 charged evaluation starts; no full suite until the actual diff is known. Expansion requires a distinct important uncovered failure and inadequate-existing-evidence rationale. No expansion was needed or performed. The carried assessment limits structural and observation claims and explicitly leaves creator behavior benefit unmeasured."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/impact/verification/V1.log, V3.log, V4-creator.log, V4-guide.log and V5-source-inspection.md",
+      "detail": "Existing V1 validation and guide parity passed; V4 creator and guide suites each report 2 passed, 0 failed. Creator log lines 39,166-188,197-210 and 220-225 retain approval, narrow-update, read-only, provenance, no-adoption and unsupported-comparison controls. Source test portions at tests/p0-p4/skill-creator-semantic-contracts.sh:759-790,825-860,1008-1022 were inspected to distinguish actual negative controls from reported prose. Expected rejection diagnostics in the log are negative-control evidence, not suite failures."
+    },
+    {
+      "source": "skills/assistant-verification/SKILL.md:13-35,49-66; creator references/upstream-guidance.md:18-57 and references/verified-skill-distillation.md:23-29",
+      "detail": "Connected consumers retain wrong-outcome-based selection, claim/evidence separation, insufficient/blocked results, registered refresh/adoption boundaries and independent approval before workflow-lesson promotion."
+    }
+  ],
+  "semantic_contract_checks": {
+    "inherited_contract_obligations": "Preserved. expert-method-design.md:3-7 and 50-54 confines the addition to existing DESIGN without a new phase/report/schema and preserves target metadata, dependencies, read-only operations and approvals. Existing operation-specific output conditions and structured v3 summaries/evidence remain unchanged.",
+    "template_contract_alignment": "Aligned within the inspected path. SKILL.md:70-76, index.yaml:82-91, DESIGN SD10 at phase-gates.yaml:77-80 and expert-method-design.md:3-38 consistently identify the conditional load, existing criteria, source-backed decision trace and wrong-outcome check. SD10 supplies recovery for consequential evidence gaps.",
+    "eval_inheritance_coverage": "The existing creator eval cases and inspected semantic-test controls retain inherited approval, narrow-update preservation, assess/refresh no-write, provenance and comparison obligations. Their current logs pass. They do not establish the new creator procedure's behavioral benefit; pre-review-evidence.json explicitly excludes that claim. The source-bound zero-new-assertion restriction was retained; no distinct important uncovered failure justified expansion.",
+    "external_method_signature_fidelity": "No externally named method is claimed as a complete implemented protocol. The reference labels its sources as rationale for an authoring hypothesis (56-63); its operative trace preserves source identity, observed conduct versus recommendation/inference, cues, raw evidence, alternatives and an independent wrong-outcome check (11-38). No expert-equivalence claim is made.",
+    "high_stakes_recommendation_guard": "No new domain recommendation authority is introduced. expert-method-design.md:22,46,50-54 retains actual system authorization, target permissions and approval gates; SKILL.md:106-110 stops on material requirements, approvals and correctness-affecting source gaps. Domain-specific target safety requirements remain inherited.",
+    "mirror_surface_sync": "Assigned root/reference instructions and connected structured DESIGN route agree. Both guide copies have the same frozen SHA-256; existing V3 and V4-guide parity controls pass. This confirms source parity only, without a native-runtime activation claim."
+  },
+  "principle_checks": {
+    "solid": "No concrete risk found. The new reference owns expert-dependent authoring decisions; operation selection, structured output contracts and verification evidence remain with their existing owners (SKILL.md:21-36,91-104; expert-method-design.md:3-7,32-38).",
+    "kiss": "No concrete risk found. Conditional loading and explicit mechanical/preference exclusions avoid adding a universal phase, schema, mode or case quota (expert-method-design.md:3-7,22-28).",
+    "dry": "No concrete risk found. The reference delegates selection/evidence to canonical outputs rather than defining a competing report (32-38); the guide mirror is generated and byte-identical.",
+    "yagni": "No concrete risk found. No new tool dependency, automatic installation, extended persistence or generic expert mode is introduced (expert-method-design.md:3-7,50-54).",
+    "readability": "No concrete risk found. The 63-line reference separates decision recovery, wrong-outcome checking, reusable guidance and source limits; the latency illustration explicitly limits its hypothesis (40-46).",
+    "design_coherence": "No concrete risk found. The affected unit is the creator's conditional DESIGN method. Its boundary accepts existing criteria and accessible source evidence and produces reusable target guidance under existing approval, permission and verification consumers. Method detail can change independently of operation selection or output schemas; the new reference and single SD10/load-set connection express that responsibility without hidden persisted state or a second control loop (SKILL.md:70-76; index.yaml:82-91; phase-gates.yaml:77-80; expert-method-design.md:3-7,32-54)."
+  },
+  "reuse_search": {
+    "applicability": "applicable",
+    "applicability_reason": "The change adds rule-like guidance for decision methods, evidence gaps and outcome checks; an independent bounded capability search was required.",
+    "searches": [
+      {
+        "query_or_path": "rg -n 'cue|wrong.outcome|source.backed|expert.judgment|independent check|unsupported.*claim|success_criteria|capability|preference'",
+        "scope": "creator contract-design-checklist.md and verified-skill-distillation.md; skills/assistant-verification/SKILL.md; docs/skill-contract-design-guide.md",
+        "outcome": "Found existing wrong-outcome-based verification selection and claim limits in assistant-verification, existing promotion verification for saved lessons, and the guide's new compact routing summary. No pre-existing general expert cue-elicitation method was found in these bounded surfaces."
+      },
+      {
+        "query_or_path": "rg -n 'expert_method|expert.method|expert judgment|expert-judgment|material_expert|unsupported.*claim|cue.*method|DESIGN|refresh|assess'",
+        "scope": "creator contracts, upstream-guidance reference, local guide and existing semantic contract tests",
+        "outcome": "Located the existing operation gates, criteria, canonical evidence outputs and no-adoption/no-write regression consumers; the new expert_method_design load set and SD10 extend existing DESIGN rather than create an independent lifecycle."
+      }
+    ],
+    "candidates": [
+      {
+        "name": "Canonical verification selection and evidence assessment",
+        "location": "skills/assistant-verification/SKILL.md:13-35,49-66",
+        "disposition": "reuse",
+        "rationale": "Already owns plausible-wrong-outcome check selection, reduced-testing constraints and actual claim/evidence assessment. The new reference correctly reuses these outputs when consumed."
+      },
+      {
+        "name": "Verified skill distillation",
+        "location": "skills/assistant-skill-creator/references/verified-skill-distillation.md:3-29",
+        "disposition": "reject_independent",
+        "rationale": "Owns promotion from completed workflow lessons and requires an approved verifier packet. Expert-method design can instead use existing authoritative methods or representative cases; merging the two would impose unrelated promotion artifacts. Existing distillation approval remains intact."
+      },
+      {
+        "name": "Existing creator DESIGN boundary",
+        "location": "skills/assistant-skill-creator/contracts/phase-gates.yaml:39-80; references/contract-design-checklist.md:3-27",
+        "disposition": "extend",
+        "rationale": "Already owns applicable design rules, transition approval and permission checks. Conditional SD10 and a focused reference add the missing decision-method detail at that owner."
+      }
+    ],
+    "decision": "extend",
+    "decision_rationale": "Extend the creator's existing conditional DESIGN guidance while reusing canonical verification/evidence consumers. The inspected implementation follows this boundary and introduces no duplicate authority."
+  },
+  "rubric_scores": {
+    "correctness": 4.5,
+    "code_quality": 5,
+    "architecture": 5,
+    "security": 5,
+    "test_coverage": 4,
+    "weighted_score": 4.7,
+    "action": "PASS",
+    "score_justification": {
+      "correctness": "The inspected branches connect trigger/exclusions, evidence gaps, wrong-outcome checks and preserved operation exits (SKILL.md:26-36,70-76,106-110; expert-method-design.md:11-38). Static lifecycle reasoning found no concrete defect; creator runtime benefit is outside the available evidence.",
+      "code_quality": "The focused 63-line reference exposes source distinctions, decision trace, uncertainty and claim limits directly; it avoids a second report, quota or broad new mode (expert-method-design.md:3-7,11-38,48-63).",
+      "architecture": "The addition uses the existing DESIGN/load-set boundary and canonical evidence producer, with unchanged operation/output ownership (index.yaml:82-91; phase-gates.yaml:39-80; output.yaml:176-189).",
+      "security": "Permission/access limits and target approval/read-only behavior remain explicit (expert-method-design.md:22,46,50-54; SKILL.md:26-36; phase-gates.yaml:140-185). No new tool, persistence or external-action authority was added.",
+      "test_coverage": "Current bounded validation/parity and inherited creator negative controls passed; inspected test source supports approval/read-only/provenance protections. The carried assessment explicitly leaves creator behavioral gain and native activation unmeasured. No claim was expanded and no extra tests or trials were run."
+    }
+  },
+  "verdict": "clean"
+}

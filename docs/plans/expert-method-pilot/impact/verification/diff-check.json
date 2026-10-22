@@ -1,0 +1,14 @@
+{
+  "check_id": "diff-check",
+  "executed_command": {
+    "argv": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "cwd": "/tmp/assistant-expert-method-pilot-V1"
+  },
+  "exit_code": 0,
+  "elapsed_seconds": 0.016,
+  "log_ref": "/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/impact/verification/diff-check.log"
+}

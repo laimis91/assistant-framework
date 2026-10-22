@@ -1,0 +1,171 @@
+{
+  "status": "DONE",
+  "round": 2,
+  "batch_id": "expert-method-review-batch-2",
+  "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+  "snapshot_identity": {
+    "basis": "content_digest",
+    "value": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+    "captured_at": "2026-10-22T18:35:50.699515+00:00",
+    "scope_manifest_digest": "sha256:cbf156285cf168b146658ab4a07f7fb127897a770f30a73e04c934a9e02b5ed1"
+  },
+  "review_pass_id": "P2-contracts",
+  "review_attempt_id": "expert-method-review-attempt-2",
+  "review_perspective": "contract_and_test_oracle",
+  "pass_completion_state": "completed",
+  "reviewed_scope": [
+    "skills/assistant-skill-creator/contracts/index.yaml",
+    "skills/assistant-skill-creator/contracts/phase-gates.yaml",
+    "docs/skill-contract-design-guide.md",
+    "skills/assistant-skill-creator/references/skill-contract-design-guide.md",
+    "Connected creator SKILL.md, expert-method-design.md, input/output contracts, contract-design-checklist.md and behavioral-evaluation.md",
+    "Connected guide sync tool and fixture, contract-index validator, creator semantic validator and relevant retained fixtures",
+    "Authoritative impact/source.diff, candidate-source-snapshot.json and supplied current verification logs"
+  ],
+  "findings": [],
+  "coverage_entries": [
+    {
+      "scope_item_id": "scope-creator-structured",
+      "applicable_concern": "concern-gate-loading-compatibility",
+      "review_perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-selectors-gate-recovery-and-retained-consumer-interfaces",
+      "status": "inspected_no_risk",
+      "evidence": "index.yaml:58-91 selects existing DESIGN gates and input fields skill_value_kind/success_criteria; the new reference resolves inside the skill root. phase-gates.yaml:77-80 has a conditional SD10 assertion with actionable recovery to that load set. index.yaml:142-144 and SKILL.md:52-62 retain full-file fallback and structured v3 outputs. Input/output interfaces and read-only/metadata invariants remain unchanged. V1 passed; current six-source hashes match the supplied manifest."
+    },
+    {
+      "scope_item_id": "scope-guide",
+      "applicable_concern": "concern-parity-consumers",
+      "review_perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-canonical-generated-guide-parity-and-scope",
+      "status": "inspected_no_risk",
+      "evidence": "Both guide copies are byte-identical and match declared SHA-256 14ddcd2c780dbb99b61c0be6bd03c038759159599442fedd51e140bbd897bd1c. docs guide:3-5 declares the canonical/generated boundary; sync-skill-contract-guide.sh uses exact copy/comparison, and the retained guide fixture exercises drift rejection and restoration. V3 and V4-guide logs pass. The added paragraph leaves existing metadata, permissions, optional-contract, verification and evidence limits intact."
+    },
+    {
+      "scope_item_id": "scope-guide",
+      "applicable_concern": "concern-conditionality",
+      "review_perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-material-capability-trigger-and-exclusions",
+      "status": "inspected_no_risk",
+      "evidence": "docs guide:14-22, creator SKILL.md:70-76, expert-method-design.md:3-7 and SD10:77-80 consistently trigger only new/material capability guidance dependent on expert judgment. Mechanical/preference-only edits are explicitly excluded in prose; SD10 belongs to the create/update-only DESIGN phase. Existing criteria and canonical verification outputs are reused, with no additional required schema/report/phase. expert-method-design.md:25-38 and 58-63 keep unsupported proposals provisional and distinguish source rationale from demonstrated behavioral gain."
+    }
+  ],
+  "summary": "No material findings within the reviewed scope and available evidence. This pass found consistent conditional loading and recovery, preserved v3 consumer interfaces and read-only boundaries, and exact canonical/generated guide parity. The source claims remain limited to an authoring hypothesis; creator behavioral benefit is unmeasured. This is the P2 contract-and-oracle result only.",
+  "evidence": [
+    {
+      "source": "/Users/laimis/.codex/skills/assistant-review/contracts/handoffs.yaml#handoffs.orchestrator_to_reviewer.return_fields",
+      "detail": "Parsed the full named return_fields recursively with Ruby YAML and compared the resulting object with /tmp/expert-pilot-review/batch2/return-schema.json; exact equality was true. The supplied reviewer context, principles, semantic checklist and rubric were applied."
+    },
+    {
+      "source": "/tmp/expert-pilot-review/batch2/P2-contracts.json",
+      "detail": "Assigned scope, all three exact coverage tuples, frozen identities and pass perspective controlled this review. No sibling outputs, batch-context file, batch-1 history, or parent-session records were inspected."
+    },
+    {
+      "source": "/tmp/expert-pilot-review/batch2/criteria.json and pre-review-evidence.json",
+      "detail": "Retained the six-authoring-source scope and reuse-first reduced-testing boundary from selection.json/review/selection-effective.json. No new tests, model trials, installs or broad checks were run. The supplied Spec PASS and evidence claims were consumed at their stated boundaries."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/impact/source.diff and candidate-source-snapshot.json",
+      "detail": "Read the authoritative six-file diff and verified every current source SHA-256 against the declared manifest; all six matched. Independently compared canonical/generated guide bytes; parity was true."
+    },
+    {
+      "source": "skills/assistant-skill-creator/contracts/index.yaml:58-91,142-144; contracts/phase-gates.yaml:40-80,173-189",
+      "detail": "Traced current DESIGN selection, the new bounded criteria/reference load set, SD10 applicability and recovery, full-file fallback, and retained metadata/read-only invariants. The new decision method extends an existing phase rather than adding another controller or output contract."
+    },
+    {
+      "source": "tools/skills/validate-skills.sh:210-280,336-410,457-524",
+      "detail": "Inspected selector declaration/address checks, authoritative-file membership, unambiguous field resolution, reference containment, full-file fallback requirements and strict static budget enforcement. New names map to existing input fields; V1 corroborates structural resolution."
+    },
+    {
+      "source": "tools/skills/sync-skill-contract-guide.sh and tests/p0-p4/skill-contract-guide-sync.sh",
+      "detail": "Inspected exact-copy generation and byte-parity verification, including fixture controls rejecting drift and restoring parity. This is the explicit divergence control for the intentional installed-skill mirror."
+    },
+    {
+      "source": "tools/evals/lib/skill-creator-semantic-validator.cjs:257-286,358-376,843-879; skills/assistant-skill-creator/references/behavioral-evaluation.md",
+      "detail": "Inspected inherited typed design/recovery requirements, canonical evidence_assessment producer alias, approval-before-write checks, preserved update artifacts/metadata and read-only rejection of artifacts/write actions. These retained consumers remain compatible with the unchanged creator input/output interfaces."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/impact/verification/V1.log, V3.log, V4-creator.log, V4-guide.log, aggregate-skills.log and aggregate-fixtures.log",
+      "detail": "Existing logs show creator validation and guide parity passed, creator semantic suite 2 passed/0 failed, guide suite 2 passed/0 failed, 16 skills validated and 16 fixtures validated. Negative-control diagnostics in the creator log are followed by their expected rejection assertions; they are not suite failures. These results support structural/retained-consumer claims, not expert equivalence or creator gain."
+    },
+    {
+      "source": "skills/assistant-skill-creator/references/expert-method-design.md:11-38,50-63",
+      "detail": "Source identity, observed conduct/recommendation/inference separation, cue-to-method decisions, independent wrong-outcome checks and preserved permissions are explicit. The rationale is calibrated: [Rieseberg's article](https://felixrieseberg.com/how-to-be-more-ambitious-a-tutorial-for-humans-with-models/) supports field methods, raw evidence and outside checks; [FRA's CTA page](https://railroads.dot.gov/human-factors/elearning-attention/cognitive-task-analysis) describes incident accounts and elicitation of expert judgments/cues. Neither is presented as measured benefit of this creator procedure."
+    }
+  ],
+  "semantic_contract_checks": {
+    "inherited_contract_obligations": "No concrete risk found. Creator input/output schemas remain v3 and unchanged; required operation_summary/evidence_assessment, conditional authoring artifacts, metadata/dependencies, approvals and assess/refresh read-only behavior are retained. SD10 adds a conditional DESIGN obligation only.",
+    "template_contract_alignment": "No concrete risk found. SKILL.md:70-76, index.yaml:82-91, SD10:77-80 and expert-method-design.md:3-38 name the same load set, criteria and method elements. Recovery loads the reference; no additional output/template artifact is introduced.",
+    "eval_inheritance_coverage": "Retained semantic validator and current V4-creator log cover canonical outputs, design approval, real artifacts, update preservation and read-only operations. Existing fixtures do not establish adherence to the new expert-method guidance or creator improvement, and neither is claimed as measured. The explicit reduced-testing scope is preserved; no distinct important uncovered failure justified expansion in this pass.",
+    "external_method_signature_fidelity": "No concrete risk found. The detail adapts source-informed cue/judgment elicitation and independent checks as an authoring hypothesis, rather than claiming complete implementation of a named external algorithm. The live linked sources support the limited rationale stated at expert-method-design.md:58-63.",
+    "high_stakes_recommendation_guard": "No new domain recommendation route is introduced. expert-method-design.md:21-23,46,50-53 preserves permission, access and approval limits and requires controls appropriate to the actual system; existing policy/host guards remain controlling.",
+    "mirror_surface_sync": "Canonical docs and installed-skill reference match exactly. Existing sync and drift-recovery consumers remain intact. No metadata, dependency, installer, invocation-policy or other behavior-driving mirror change is required by this six-source addition."
+  },
+  "principle_checks": {
+    "solid": "No concrete risk found. Decision-method detail is isolated in the focused reference; the index selects inputs and the existing DESIGN gate owns applicability/recovery. No new unrelated consumer responsibility was added.",
+    "kiss": "No concrete risk found. The addition uses one existing-phase load set and one conditional gate, with existing criteria and evidence outputs. Mechanical/preference exclusions prevent unnecessary method work.",
+    "dry": "No concrete risk found. Canonical verification envelopes are reused. The guide mirror is intentional and controlled by the existing exact-copy sync tool and drift fixture; concise routing/gate summaries delegate detail to the reference.",
+    "yagni": "No concrete risk found. No new expert mode, report schema, controller, installation dependency, persistence mechanism, or fixed case/step quota was added.",
+    "readability": "No concrete risk found. The small added paragraphs state the trigger, evidence chain and exclusions; the 63-line method reference separates elicitation, wrong-outcome checking, reusable guidance and claim limits.",
+    "design_coherence": "No concrete risk found. The affected responsibility is capability-method design inside creator DESIGN. Control flows from SKILL routing or SD10 recovery to the index/reference, then reuses existing criteria and verification selection/evidence. Metadata, authoring approval and read-only operation ownership remain with the existing contracts. Canonical guide authorship and generated portability copy retain one explicit sync boundary. No additional hidden mutable state or independent policy owner was introduced."
+  },
+  "reuse_search": {
+    "applicability": "applicable",
+    "applicability_reason": "The change adds rule-like capability design and recovery guidance, so existing criteria, verification and guide synchronization capabilities needed an independent bounded search.",
+    "searches": [
+      {
+        "query_or_path": "rg expert.method|method.design|material.*capabil|cue-to across creator source/contracts, tools/skills, tests/p0-p4 and canonical guide",
+        "scope": "Assigned structured/guide surfaces and connected consumers",
+        "outcome": "Found consistent routing, expert_method_design selector, SD10 and both guide copies; no alternate authoritative expert-method implementation was found in this bounded scope."
+      },
+      {
+        "query_or_path": "rg success_criteria|skill_value_kind|evidence_assessment|capability|read.only|metadata|permission in creator references and assistant-verification/SKILL.md; inspect creator input/output",
+        "scope": "Existing creator design/evidence and canonical verification boundary",
+        "outcome": "Found reusable existing criteria/value-kind fields, canonical verification selection/evidence contracts, preserved policy/metadata and independent capture/comparison guidance."
+      },
+      {
+        "query_or_path": "Inspect sync-skill-contract-guide.sh, skill-contract-guide-sync.sh, validate-skills.sh selector validation and creator semantic validator",
+        "scope": "Existing generator, structural validator and retained oracle consumers",
+        "outcome": "Found existing exact guide generation/parity, selector/fallback/budget protection and inherited metadata/approval/read-only oracle checks; extending existing boundaries is sufficient."
+      }
+    ],
+    "candidates": [
+      {
+        "name": "Existing creator DESIGN and criteria fields",
+        "location": "skills/assistant-skill-creator/contracts/input.yaml:55-75; phase-gates.yaml:40-80; contracts/index.yaml:58-91",
+        "disposition": "extend",
+        "rationale": "The new conditional gate and load set reuse the existing value-kind/criteria boundary without changing serialized producer fields."
+      },
+      {
+        "name": "Canonical verification selection and evidence",
+        "location": "skills/assistant-verification/SKILL.md:17-60; creator SKILL.md:91-104; expert-method-design.md:32-38",
+        "disposition": "reuse",
+        "rationale": "Independent wrong-outcome checks and evidence limits belong to existing verification outputs; the change explicitly avoids a competing authoring report."
+      },
+      {
+        "name": "Canonical guide synchronization",
+        "location": "tools/skills/sync-skill-contract-guide.sh; tests/p0-p4/skill-contract-guide-sync.sh",
+        "disposition": "reuse",
+        "rationale": "Existing copy/comparison and drift-recovery controls already protect the generated portability copy."
+      }
+    ],
+    "decision": "extend",
+    "decision_rationale": "Extend the creator's existing DESIGN loading/gate and reuse canonical criteria, evidence and synchronization capabilities. No duplicated authoritative schema or independent controller is introduced."
+  },
+  "rubric_scores": {
+    "correctness": 4.5,
+    "code_quality": 4.5,
+    "architecture": 5,
+    "security": 5,
+    "test_coverage": 4.5,
+    "weighted_score": 4.675,
+    "action": "PASS",
+    "score_justification": {
+      "correctness": "Assigned trigger, loading, recovery and mirror obligations align at index.yaml:82-91, SD10:77-80 and guide:14-22. Static hashes and parity match; execution adherence remains outside what source inspection can establish.",
+      "code_quality": "The small routing/gate changes and 63-line focused method reference expose applicability, evidence and limits clearly, while preserving existing consumer contracts.",
+      "architecture": "The new guidance extends existing DESIGN and reuses canonical verification outputs; index.yaml and the sync tool retain established loading and canonical/generated ownership boundaries.",
+      "security": "expert-method-design.md:21-23,46,50-53 preserves access, permissions, approvals and tool limits; creator read-only invariants and validator enforcement remain unchanged.",
+      "test_coverage": "Current V1/V3/V4 and aggregate logs address selected structural and retained-consumer claims with adverse controls. New-method behavioral gain remains explicitly unmeasured, with no claim or scope expansion based on these checks."
+    }
+  },
+  "verdict": "clean"
+}

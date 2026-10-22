@@ -1,0 +1,96 @@
+# Applicability: structured diagnosis/fix results, persisted continuations,
+# and selected handoffs. Human diagnosis may summarize evidence without empty
+# report slots. Fix authorization, reproduction, verification, and active TDD
+# prerequisites apply regardless of presentation.
+
+schema_version: "2.0"
+contract: index
+skill: assistant-debugging
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+  - path: contracts/handoffs.yaml
+    contract: handoffs
+
+load_sets:
+  entry:
+    selectors:
+      - id: debugging-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [symptom, expected_behavior, scope, reproduction_target, severity, constraints, can_modify_code]
+    budget_words: 1500
+  change_impact:
+    references: [references/change-impact.md]
+    selectors:
+      - id: debugging-change-impact-input
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [change_impact_applicability, change_impact_context]
+      - id: debugging-change-impact-output
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [change_impact_applicability, change_impact_evidence]
+    budget_words: 1800
+  fix_verification:
+    selectors:
+      - id: debugging-fix-verification-input
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [verification_decision, selected_check_ids, binding_obligation_refs]
+      - id: debugging-fix-verification-gate
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        names: [FIX]
+      - id: debugging-fix-verification-output
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [verification_decision, tdd_cycle_log_ref, verification]
+    budget_words: 3500
+  current_phase:
+    selectors:
+      - id: debugging-current-phase
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_debugging_phase
+        allowed_names: [SCOPE, REPRODUCE, HYPOTHESIZE, ISOLATE, FIX, VERIFY]
+      - id: debugging-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [INV1, INV2, INV3, INV_CHANGE_IMPACT]
+    budget_words: 4000
+  selected_handoff:
+    selectors:
+      - id: debugging-selected-handoff
+        path: contracts/handoffs.yaml
+        section: handoffs
+        key: name
+        name_from: selected_handoff_name
+        allowed_names: [debugging_investigation, debugging_fix]
+    budget_words: 4000
+  completion:
+    selectors:
+      - id: debugging-completion-artifact
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        name_from: applicable_completion_artifact
+        allowed_names: [status, symptom_summary, reproduction, hypotheses, fewer_hypotheses_reason, root_cause, confidence, fix_summary, verification_decision, tdd_cycle_log_ref, verification, residual_risks, change_impact_applicability, change_impact_evidence]
+    budget_words: 5000
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

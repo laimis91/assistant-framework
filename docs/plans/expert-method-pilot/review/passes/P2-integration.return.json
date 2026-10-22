@@ -1,0 +1,131 @@
+{
+  "status": "DONE",
+  "round": 2,
+  "batch_id": "expert-method-review-batch-2",
+  "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+  "snapshot_identity": {
+    "basis": "content_digest",
+    "value": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+    "captured_at": "2026-10-22T18:35:50.699515+00:00",
+    "scope_manifest_digest": "sha256:cbf156285cf168b146658ab4a07f7fb127897a770f30a73e04c934a9e02b5ed1"
+  },
+  "review_pass_id": "P2-integration",
+  "review_attempt_id": "expert-method-review-attempt-2",
+  "review_perspective": "integration_compatibility_and_consumers",
+  "pass_completion_state": "completed",
+  "reviewed_scope": [
+    "docs/plans/expert-method-pilot/report-freeze.json: all 117 declared files independently rehashed; detailed content review covers the following boundaries",
+    "docs/plans/expert-method-pilot/results.md and results.json, rubric.md, plan.md, conditions.md, conditions-addendum.md, prompts.json and nochange-decision.json",
+    "docs/plans/expert-method-pilot/development/case-01 and sealed/heldout/case-02 through case-04: all subject files, four oracles and both smoke-results.json files",
+    "docs/plans/expert-method-pilot/evidence: all eight events.jsonl command traces, finals, prompts, starts, exits, redacted stderr, capture manifests, runtime identity and preflight summary",
+    "docs/plans/expert-method-pilot/source-manifest.json and impact/candidate-source-snapshot.json; connected creator-method reference and source.diff inspected only for claim separation",
+    "Original runtime captures and subject/guidance trees referenced by the capture manifest; bounded existing-capability search in docs/evals/README.md and tools/evals"
+  ],
+  "findings": [],
+  "coverage_entries": [
+    {
+      "scope_item_id": "scope-pilot-evidence",
+      "applicable_concern": "concern-evaluation-evidence",
+      "review_perspective": "integration_compatibility_and_consumers",
+      "coverage_obligation": "validate-pilot-oracles-traces-claims-and-resource-bound",
+      "status": "inspected_no_risk",
+      "evidence": "All 117 freeze rows match bytes and SHA256; freeze digest a7282fd4ed8dc70c76dd5a554da6e3428bafbb9a881fdd45e15ad710e8aaf5d6 matches dispatch. Independently inspected 82 completed commands and eight finals against four subject/oracle pairs and 15 frozen smoke controls. All 41 grading references resolve to the stated completed item. Eight distinct start slots, exit-0 terminals, usage fields and elapsed values agree across captures/results. The no-change timestamp precedes every held-out start. Original capture hashes, live subject after-hashes and condition-specific guidance presence also match. No observed rubric/oracle read, source mutation or agent network command; reported limits prevent stronger isolation, causal or performance conclusions."
+    }
+  ],
+  "summary": "No material findings within the reviewed scope and available evidence. The four paired observations support the bounded correctness/authority tie, including justified inconclusive diagnosis for expired telemetry. The report retains the additional current-arm concurrency probe, source and runtime limits, and eight-of-twelve allocation without claiming creator-method benefit, general equivalence, native activation or time/token savings. This is a pass-level result for pilot evidence only.",
+  "evidence": [
+    {
+      "source": "/Users/laimis/.codex/skills/assistant-review/contracts/handoffs.yaml -> orchestrator_to_reviewer.return_fields; /tmp/expert-pilot-review/batch2/return-schema.json",
+      "detail": "Loaded the complete recursive field/type/enum/cardinality tree with Ruby YAML and confirmed exact parsed equality before inspection and immediately before return. No sibling outputs, batch-context.json or batch-1 material read."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/report-freeze.json and source-manifest.json",
+      "detail": "Rehashed 117/117 files twice, including a final unchanged check. Ordered compact-JSON file-list digest equals e550f88140317640849515b6b19101ada10a2a8c8b7b94c6d229fc41960266f9. Independently verified subject row digests, oracle hashes and frozen artifact hashes. Initial source hashes match git base c920fd89ee232032aafd2541dd51c9c5bd9744f3; six current creator-source hashes match candidate snapshot and dispatch."
+    },
+    {
+      "source": "development/case-01; sealed/heldout/case-02, case-03 and case-04; development/smoke-results.json; sealed/smoke-results.json",
+      "detail": "Read every subject and oracle. Controls reject exception-label attribution, dependency-slowness attribution from a unit regression, classifying distinct-key payments as duplicates, and inferring historical cause from later saved health. All 15 retained smoke results agree with the inspected fixture behavior. No smoke rerun or model trial performed."
+    },
+    {
+      "source": "evidence/development/trial-01 through trial-02 and evidence/heldout/trial-03 through trial-08",
+      "detail": "Read all 82 completed commands, inline Python bodies, diagnostic results and eight finals. Admission and timeout-unit comparisons discriminate the claimed mechanisms; concurrency schedule/key controls and trial-06/item_16 support the reported extra probe; trial-07/item_8 and trial-08/item_7 preserve exit 3 as unavailable evidence. All 41 results.json item/line references resolve correctly."
+    },
+    {
+      "source": "evidence/capture-manifest.json; evidence/runtime-final.json; original runtime tree at /tmp/expert-pilot-runtime-20261022",
+      "detail": "All 48 original captured file hashes match preservation records. Directly rehashed all eight runtime subject trees; each matches its canonical case and recorded after identity. Current guidance bodies/common instructions appear verbatim in actual reads; disabled runs have no guidance directory. Normalized CLI invocations match. Preflight capture digest/length and zero target-name count independently match without displaying raw host context. Each stderr differs from its original only by one disclosed endpoint replacement; three unknown-path sandbox warnings remain qualified."
+    },
+    {
+      "source": "results.md:3-14, 21-33, 49-66, 70-92 and 96-125; results.json; rubric.md:17-61; nochange-decision.json",
+      "detail": "Report and separate grading dimensions agree with observed conclusions, commands and authority. Candidate/debugging bytes remain identical to the base; recorded freeze at 18:18:23.325686 UTC precedes the first held-out start at 18:18:39.248228 UTC. Slots 1-8 are terminal with exit 0; native token categories and measured elapsed values agree exactly with retained captures. Four omitted identical candidate starts are disclosed and unused. Pre-start identity, unblinded grading, host context, concurrent load, backend attestation and monetary-cost limits are explicit."
+    },
+    {
+      "source": "criteria.json; pre-review-evidence.json; plan.md; skills/assistant-skill-creator/references/expert-method-design.md:31-67",
+      "detail": "Retained existing-check/reuse-first scope and zero new executable-test assertions; no test expansion or broad suite run. Creator source review and debugging observations remain distinct: the connected reference and results expressly reject creator-method causal gain from this pilot. The existing expert-method-pilot guard and 12-start resource cap were not reset or expanded."
+    }
+  ],
+  "semantic_contract_checks": {
+    "inherited_contract_obligations": "Within the pilot scope, diagnosis-only authority, supported-cause calibration and unavailable-evidence handling remain consistent with the frozen assistant-debugging body. No fix or verified-fix claim is substituted for diagnosis.",
+    "template_contract_alignment": "prompts.json, rubric.md, condition records, runtime labels, manifests and results use matching cases/conditions and evidence locations. Source inspection is explicitly separated from runtime observation and creator-task benefit.",
+    "eval_inheritance_coverage": "Each runnable case retains reproduction and discriminating evidence; the unavailable case retains the observed availability failure. Four dimensions keep correctness and authority independent of work counts. All 41 action references identify completed evidence, with adverse outcomes assessed against the frozen controls.",
+    "external_method_signature_fidelity": "No named external method implementation is evaluated by these runs. The connected creator reference labels its sources as motivation for an authoring hypothesis and disclaims measured or causal gains; no external-method fidelity result is inferred from debugging outcomes.",
+    "high_stakes_recommendation_guard": "The payment fixture is local in-memory diagnosis. Commands do not perform real payments or repairs; conclusions qualify production applicability and recommend narrow evidence or follow-up only. No unsupported high-impact action claim found.",
+    "mirror_surface_sync": "results.md and results.json agree on outcomes, identities, allocation, raw resources and limitations; report hashes remain frozen. Connected current creator-source hashes match their separately declared snapshot. Installation/native-routing evidence is expressly out of scope."
+  },
+  "principle_checks": {
+    "solid": "No concrete risk found: fixture subjects model the reported failure, grader-only oracles specify discriminators, captures preserve observations and results interpret them; these responsibilities remain separate.",
+    "kiss": "No concrete risk found: no-change is an explicit disposition and the identical third arm is omitted transparently. The pilot adds no reusable runner or mandatory framework phase.",
+    "dry": "No concrete risk found: repeated results are evidence projections bound by exact capture references and freeze hashes; comparison obligations reuse existing repository guidance without introducing a second production policy.",
+    "yagni": "No concrete risk found: no speculative debugging change, additional model trial or general expert-mode claim follows from successful development observations.",
+    "readability": "No concrete risk found: results.md distinguishes outcomes, allocation, observations and limitations; results.json preserves separate per-run dimensions and exact evidence references. Large JSON/JSONL files are cohesive retained evidence rather than mixed executable responsibilities.",
+    "design_coherence": "No concrete risk found. Affected unit is the bounded pilot evidence package. Data flows from frozen subjects and optional supplied guidance to fresh native runs, retained captures, grader-only oracle comparison and report claims. Independent reasons to change are fixture correctness, execution identity and interpretation; manifests and references expose those boundaries. Creator-method source changes remain a separate hypothesis, with no hidden causal link asserted from debugging observations."
+  },
+  "reuse_search": {
+    "applicability": "applicable",
+    "applicability_reason": "The pilot applies comparison, evidence-provenance and grading rules; an independent bounded search is needed to check reuse and avoid a competing evaluation policy.",
+    "searches": [
+      {
+        "query_or_path": "rg -n oracle|rubric|capture-manifest|trial|freeze|comparative over tools/evals, tests/p0-p4 and assistant-debugging contracts/references",
+        "scope": "Existing evaluation capabilities and connected diagnosis contracts in the frozen checkout",
+        "outcome": "Located framework-comparison.jq and repository evaluation conventions; narrowed further inspection to their comparison/provenance semantics."
+      },
+      {
+        "query_or_path": "docs/evals/README.md:13-24, 563-667; tools/evals/lib/framework-comparison.jq:1-180; tools/evals/run-framework-instruction-evals.sh:1-90",
+        "scope": "Existing comparison guidance, adapter boundary and deterministic aggregation",
+        "outcome": "Existing guidance already separates source validity, explicit loading, native activation and task success. The paired execution adapter is Workflow-specific and its aggregate promotion gates differ from this diagnosis-only no-change pilot."
+      }
+    ],
+    "candidates": [
+      {
+        "name": "Existing instruction-evaluation comparison guidance",
+        "location": "docs/evals/README.md:13-24",
+        "disposition": "reuse",
+        "rationale": "The pilot uses the existing matched-input, wrong-outcome-control and claim-separation obligations; no second production authority is introduced."
+      },
+      {
+        "name": "Workflow paired execution and framework comparison engine",
+        "location": "tools/evals/run-codex-framework-evals.sh and tools/evals/lib/framework-comparison.jq",
+        "disposition": "reject_independent",
+        "rationale": "The existing execution adapter is scoped to Workflow and the comparison engine expects baseline/candidate provenance and promotion metrics. This bounded disabled/current debugging observation with an identical omitted candidate has different consumers and makes no promotion or population-performance claim; retaining raw captures with semantic grading does not duplicate that engine."
+      }
+    ],
+    "decision": "reuse",
+    "decision_rationale": "Reuse existing evidence and comparison principles; preserve this task-specific report as bounded observations. No reusable implementation or mandatory new evaluation protocol was added."
+  },
+  "rubric_scores": {
+    "correctness": 4.5,
+    "code_quality": 4.5,
+    "architecture": 4.5,
+    "security": 4.5,
+    "test_coverage": 4.5,
+    "weighted_score": 4.5,
+    "action": "PASS",
+    "score_justification": {
+      "correctness": "results.md:3-14 and results.json match four independently checked oracle/trace pairs, including appropriate inconclusive treatment; no material overclaim found. Conclusions remain bounded to constructed observations.",
+      "code_quality": "rubric.md:17-44 and results.json keep conclusions, action evidence, authority and work separate with resolvable references; results.md:70-125 makes resource and preservation limits recoverable.",
+      "architecture": "report-freeze.json, source-manifest.json and nochange-decision.json preserve fixture, runtime and interpretation boundaries. The connected expert-method-design.md:31-67 does not conflate creator-source intent with debugging evidence.",
+      "security": "All observed commands stay within supplied subject/guidance content and diagnosis authority; eight endpoint redactions were independently verified. results.md:105-120 correctly limits the audit because hard read isolation and unknown sandbox-warning attribution are unavailable.",
+      "test_coverage": "Selected inspection and controlled-observation evidence is current and discriminating: 117 rehashes, 82 command completions, eight finals and 41 valid grading references. results.md:96-125 explicitly retains missing independent pre-start records and host/runtime limitations; no generic test expansion is warranted."
+    }
+  },
+  "verdict": "clean"
+}

@@ -1,0 +1,90 @@
+{
+  "base_id": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+  "candidate_id": "sha256:913570b34ed29499518ab84ba308ba76997092fd320d916bf10afcb1e14f76e7",
+  "bounded_roots": [
+    "creator human route and authoritative structured contracts",
+    "canonical and generated guide parity consumer",
+    "existing selected validator/semantic/guide/eval and installer reference-copy consumers",
+    "unchanged debugging target"
+  ],
+  "files": [
+    {
+      "path": "docs/skill-contract-design-guide.md",
+      "base_sha256": "0ae1fae2902688c632460932a3b990856c9e3cc1b9b3bcebedf7b769c0feb987",
+      "candidate_sha256": "14ddcd2c780dbb99b61c0be6bd03c038759159599442fedd51e140bbd897bd1c"
+    },
+    {
+      "path": "install.sh",
+      "base_sha256": "7e4ea518a5b8ba2dc073c005df6216947df33ae2c8c448b112f4dd5f51112ee2",
+      "candidate_sha256": "7e4ea518a5b8ba2dc073c005df6216947df33ae2c8c448b112f4dd5f51112ee2"
+    },
+    {
+      "path": "skills/assistant-debugging/SKILL.md",
+      "base_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+      "candidate_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2"
+    },
+    {
+      "path": "skills/assistant-skill-creator/SKILL.md",
+      "base_sha256": "e68d7a9913663b088d18bba0eb8b9a7dd595a28a22a9c1b4323e2d821e3cad0f",
+      "candidate_sha256": "80ceb04c681401abca2a6492be9e971c8d72ee31269ef37e5a7d2dfc5d9577f4"
+    },
+    {
+      "path": "skills/assistant-skill-creator/contracts/index.yaml",
+      "base_sha256": "ed1c4cbfaaf2da3da5a3ee0be47545124228fbb874291356fd0886bd4069341b",
+      "candidate_sha256": "84d10aaceec9afb8c13cde09ca750a999b29cbe0a1958b560c1574e7b44b5d5e"
+    },
+    {
+      "path": "skills/assistant-skill-creator/contracts/input.yaml",
+      "base_sha256": "d6d41d804b8bb7a8c6faaaba5e182eea67de07e0b960c7a33739912a124a2658",
+      "candidate_sha256": "d6d41d804b8bb7a8c6faaaba5e182eea67de07e0b960c7a33739912a124a2658"
+    },
+    {
+      "path": "skills/assistant-skill-creator/contracts/output.yaml",
+      "base_sha256": "0fb2ab964ca0661cfd253840b352550d14b305d667f0eb55083ac7526faf354b",
+      "candidate_sha256": "0fb2ab964ca0661cfd253840b352550d14b305d667f0eb55083ac7526faf354b"
+    },
+    {
+      "path": "skills/assistant-skill-creator/contracts/phase-gates.yaml",
+      "base_sha256": "50e3779f410bd230880a49540e778644b9e3190c239ffedb87e2ee1d313b8b49",
+      "candidate_sha256": "2a42ed1869f4519f360327295e4465b22cafb69515c54684735377757bd2a9c6"
+    },
+    {
+      "path": "skills/assistant-skill-creator/references/expert-method-design.md",
+      "base_sha256": null,
+      "candidate_sha256": "84726d0a4767fbdc818936f099fc04abb697eb3ae7b0720365a975f06aecdaaf"
+    },
+    {
+      "path": "skills/assistant-skill-creator/references/skill-contract-design-guide.md",
+      "base_sha256": "0ae1fae2902688c632460932a3b990856c9e3cc1b9b3bcebedf7b769c0feb987",
+      "candidate_sha256": "14ddcd2c780dbb99b61c0be6bd03c038759159599442fedd51e140bbd897bd1c"
+    },
+    {
+      "path": "tests/p0-p4/skill-contract-guide-sync.sh",
+      "base_sha256": "60021e6cd3d0e6056fd67c4aa4d28170a7829ed73647c4f76c53c2ad285a2211",
+      "candidate_sha256": "60021e6cd3d0e6056fd67c4aa4d28170a7829ed73647c4f76c53c2ad285a2211"
+    },
+    {
+      "path": "tests/p0-p4/skill-creator-semantic-contracts.sh",
+      "base_sha256": "2c65d555feae6486641a9b1cf4e2d12860a02af69ccfbf08141f721ed07d9117",
+      "candidate_sha256": "2c65d555feae6486641a9b1cf4e2d12860a02af69ccfbf08141f721ed07d9117"
+    },
+    {
+      "path": "tools/evals/run-skill-evals.sh",
+      "base_sha256": "019f29096ccbc19aa9ece62fcf8d540b8d217c6db2da540feb99dae95dab05fb",
+      "candidate_sha256": "019f29096ccbc19aa9ece62fcf8d540b8d217c6db2da540feb99dae95dab05fb"
+    },
+    {
+      "path": "tools/skills/sync-skill-contract-guide.sh",
+      "base_sha256": "6c789f35dc344a8c1698e0282272ef5ac8d3a23186f49b4511571c931ff8ce92",
+      "candidate_sha256": "6c789f35dc344a8c1698e0282272ef5ac8d3a23186f49b4511571c931ff8ce92"
+    },
+    {
+      "path": "tools/skills/validate-skills.sh",
+      "base_sha256": "db1ffcf85a3f051561fcc2c3f7bf830f3853a082a01c89e41b899c685162f25a",
+      "candidate_sha256": "db1ffcf85a3f051561fcc2c3f7bf830f3853a082a01c89e41b899c685162f25a"
+    }
+  ],
+  "selection_original_sha256": "a606c442ab4038b239975761187a678054188510b54133c5c90ca8fb504bfb04",
+  "discovery_limit": "Direct authoring interfaces and selected existing source consumers. Installer is inspected only; no install or native activation claim. Model observations have their separate frozen fixture and runtime manifests.",
+  "universe_id": "sha256:c18dbb59803e66912fa8866f97acd994488f0b5a792eedde25edfc8dfce38b91"
+}

@@ -74,6 +74,10 @@ gates:
       - id: SD9
         check: "No fixed input-field or output-artifact count is used to justify contract design"
         on_fail: "Remove count-driven fields and artifacts; retain only outcome-relevant items"
+      - id: SD10
+        check: "Expert-method design connects source-backed cues and method choices to raw inputs, expected artifacts, applicability limits, and an independent wrong-outcome check against existing success criteria; unsupported model proposals remain candidates"
+        condition: "authoring adds or materially changes capability guidance whose quality depends on expert judgment"
+        on_fail: "Load expert_method_design; reuse representative expert cases or an authoritative method, resolve consequential evidence gaps, and keep unsupported improvement claims out of the design"
 
   - phase: VERIFIED_DISTILLATION
     checkpoint_start: "--- PHASE: VERIFIED DISTILLATION ---"

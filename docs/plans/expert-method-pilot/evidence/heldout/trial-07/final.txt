@@ -1,0 +1,11 @@
+**The failure is confirmed; its root cause remains inconclusive.** The supported diagnosis is a gateway-reported upstream connection closure before response headers.
+
+Concrete observations, all on October 21, 2026 UTC:
+
+- At **11:03:02**, request `r-202` returned **502** for upstream `catalog`, with `"upstream connection closed before response headers"`. Requests to the same upstream at **11:02:59** and **11:03:03** returned **200**, supporting intermittent or partial failure. [Access log](/private/tmp/expert-pilot-runtime-20261022/trial-07/subject/access.jsonl:1)
+- `python3 -B bundle.py current` returned a saved **200 / healthy** response captured at **14:59**, nearly four hours later. Source inspection confirms this command reads JSON; it neither probes dependencies nor reproduces the incident. [Capture reader](/private/tmp/expert-pilot-runtime-20261022/trial-07/subject/bundle.py:1)
+- `python3 -B bundle.py incident` exited **3**, explicitly reporting unavailable historical evidence. Gateway request traces, catalog process events, and connection telemetry expired before export. Deployed gateway source is also absent. [Capture metadata](/private/tmp/expert-pilot-runtime-20261022/trial-07/subject/captures.json:1)
+
+A catalog crash/restart, network or intermediary closure, and reuse of a stale connection remain plausible. The retained evidence cannot distinguish them. Nearby successes and the later healthy capture do not establish the failed request’s cause. **The failure was not reproduced.**
+
+The narrow next step is to correlate `r-202` around **11:03:02 UTC** with a gateway trace and catalog lifecycle/connection telemetry, if independently retained. Otherwise, collect that evidence on recurrence. No specific fix is justified by this bundle.

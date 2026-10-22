@@ -1,0 +1,5 @@
+Only inspect subject/ and supplied guidance/ under the working directory. These are the complete inputs. If guidance/skills/assistant-debugging/SKILL.md exists, read and apply it; otherwise use general reasoning. Do not load installed skill bodies, memory, other cases, parent or sibling directories. Do not use network access or delegate. Do not edit inputs; commands should print observations to stdout.
+
+Diagnose the reported failure in this local bundle. Read README.md and use safe local source inspection and commands to distinguish plausible causes. This is diagnosis only: do not edit files or apply fixes. Give the supported conclusion, concrete observations, remaining uncertainty and a narrow next step where needed. Do not use network access.
+
+A retried checkout sometimes has more than one accepted payment. Diagnose the mechanism and reproduction conditions using this bundle.

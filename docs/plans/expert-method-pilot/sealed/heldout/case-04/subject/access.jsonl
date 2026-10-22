@@ -1,0 +1,3 @@
+{"ts":"2026-10-21T11:02:59Z","request_id":"r-201","status":200,"upstream":"catalog"}
+{"ts":"2026-10-21T11:03:02Z","request_id":"r-202","status":502,"upstream":"catalog","message":"upstream connection closed before response headers"}
+{"ts":"2026-10-21T11:03:03Z","request_id":"r-203","status":200,"upstream":"catalog"}

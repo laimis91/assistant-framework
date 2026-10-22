@@ -67,6 +67,14 @@ and `references/upstream-guidance.md`. Ask for missing refresh scope; stop only
 when an unavailable source fact affects correctness, otherwise continue offline
 with the limitation. Do not silently adopt guidance.
 
+For new or materially changed capability guidance whose quality depends on
+expert judgment, load `expert_method_design` and
+`references/expert-method-design.md`. Use representative expert cases or an
+authoritative method to connect observed cues, method choices, raw inputs,
+expected artifacts, applicability limits, and an independent wrong-outcome
+check to existing success criteria. Mechanical and preference-only changes
+do not trigger this work. Model guesses without evidence remain candidates.
+
 For actual controller/review/QA loops, load `harness_design` and
 `references/harness-patterns.md`. For a saved workflow or lesson, load
 `references/verified-skill-distillation.md`; require verifier-approved

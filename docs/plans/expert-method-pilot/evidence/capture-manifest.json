@@ -1,0 +1,1615 @@
+{
+  "stage": "all_eight_terminal",
+  "source_runtime_root": "/tmp/expert-pilot-runtime-20261022",
+  "runtime_ref": "evidence/runtime-final.json",
+  "runtime_sha256": "aacf245867fbf023a2e554dadfead99b76ff75482d57077aea6da6f66ce2bb1a",
+  "original_frozen_source_manifest_sha256": "b0e94bd2b514f20b0082ea3e7bcbd7b4bc616daec5c6f1f639ae45ce70393efc",
+  "frozen_nochange_decision_sha256": "e0e33853f2a7230ac30c2abd0a743a8c83b159d6c6c34ddd80cba7278cb3deac",
+  "raw_global_config_preserved": false,
+  "raw_preflight_context_preserved": false,
+  "redaction_disclosure": "All events/final/start/exit/prompt captures are byte-identical to originals. Each stderr replaces one private connector URL; original and redacted SHA256 retained per trial. No secret values or private endpoint URL are reproduced.",
+  "runs": [
+    {
+      "trial_id": "trial-01",
+      "case_id": "case-01",
+      "partition": "development",
+      "condition": "disabled",
+      "capture_directory": "evidence/development/trial-01",
+      "start": {
+        "slot": 1,
+        "started_at": "2026-10-22T18:14:59.138587+00:00",
+        "argv": [
+          "/opt/homebrew/bin/codex",
+          "exec",
+          "--ephemeral",
+          "--json",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"xhigh\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "skills.config=[{path=\"/Users/laimis/.codex/skills/assistant-debugging/SKILL.md\",enabled=false}]",
+          "-c",
+          "features.memories=false",
+          "-c",
+          "features.apps=false",
+          "-c",
+          "features.plugins=false",
+          "-c",
+          "agents.enabled=false",
+          "-o",
+          "/tmp/expert-pilot-runtime-20261022/trial-01/final.txt",
+          "-"
+        ],
+        "cwd": "/tmp/expert-pilot-runtime-20261022/trial-01"
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 45.84454650000407
+      },
+      "native_usage": {
+        "input_tokens": 60282,
+        "cached_input_tokens": 47104,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1596,
+        "reasoning_output_tokens": 771
+      },
+      "command_execution_starts": 10,
+      "command_execution_completions": 10,
+      "command_inventory": [
+        {
+          "item_id": "item_1",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:5",
+          "exit_code": 2,
+          "status": "failed"
+        },
+        {
+          "item_id": "item_3",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:8",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_2",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:9",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_5",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:12",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_6",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:14",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_11",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:20",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_9",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:21",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_8",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:22",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_7",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:23",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_10",
+          "evidence_ref": "evidence/development/trial-01/events.jsonl:24",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "input_identity": {
+        "subject_before_sha256": "83f151af62f5fd3558412459e3869915d3587d60844cf0c378c9a7a7f552f68d",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "83f151af62f5fd3558412459e3869915d3587d60844cf0c378c9a7a7f552f68d",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "6d21f8efe252d13c84a203ead1d25b2a4efeca8c57fbaabb98c31996aa4d6c96"
+          },
+          {
+            "path": "service.py",
+            "sha256": "f8ff12456ef7dd7a099ebc9edd5b67d2c01480a1594a7bb6cf77550c98bcb00e"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": null,
+        "target_guidance_absent": true,
+        "prompt_sha256": "4cac504be107fde570906933a3ba80b88c3a255bb455adfb235b5f20200c0b65"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      },
+      "preserved_files": [
+        {
+          "path": "evidence/development/trial-01/events.jsonl",
+          "source_sha256": "dbf927a1a3625d4e00f7c26a3d3b9cdb948159c05040e1a6101d651e9a822777",
+          "preserved_sha256": "dbf927a1a3625d4e00f7c26a3d3b9cdb948159c05040e1a6101d651e9a822777",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-01/final.txt",
+          "source_sha256": "8cc1b8bbb83b3e6d70ede9181bacc915df4c49a75015535ffb079791bdd70cd3",
+          "preserved_sha256": "8cc1b8bbb83b3e6d70ede9181bacc915df4c49a75015535ffb079791bdd70cd3",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-01/start.json",
+          "source_sha256": "61569fe4985adb1e2873b279114658d710cd5ce887393e76642eae28a7ed6bac",
+          "preserved_sha256": "61569fe4985adb1e2873b279114658d710cd5ce887393e76642eae28a7ed6bac",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-01/exit.json",
+          "source_sha256": "6d67595b0a806bb9d55fd0b34711f8cb912528cefe0b751da899998926f869e7",
+          "preserved_sha256": "6d67595b0a806bb9d55fd0b34711f8cb912528cefe0b751da899998926f869e7",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-01/prompt.txt",
+          "source_sha256": "4cac504be107fde570906933a3ba80b88c3a255bb455adfb235b5f20200c0b65",
+          "preserved_sha256": "4cac504be107fde570906933a3ba80b88c3a255bb455adfb235b5f20200c0b65",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-01/stderr.redacted.txt",
+          "source_sha256": "7dbc8147eed9f6313f66e3332a37aa89c6abf8882c41a1dfda31e0e2837da2af",
+          "preserved_sha256": "c0d10fb90769c6ada1b816949cc2671e4ae35035387803b257a12bed05f9721c",
+          "preservation": "one_private_endpoint_URL_redacted",
+          "redactions": [
+            {
+              "category": "private_connector_endpoint",
+              "count": 1,
+              "replacement": "[REDACTED_PRIVATE_ENDPOINT]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trial_id": "trial-02",
+      "case_id": "case-01",
+      "partition": "development",
+      "condition": "current",
+      "capture_directory": "evidence/development/trial-02",
+      "start": {
+        "slot": 2,
+        "started_at": "2026-10-22T18:15:11.043925+00:00",
+        "argv": [
+          "/opt/homebrew/bin/codex",
+          "exec",
+          "--ephemeral",
+          "--json",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"xhigh\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "skills.config=[{path=\"/Users/laimis/.codex/skills/assistant-debugging/SKILL.md\",enabled=false}]",
+          "-c",
+          "features.memories=false",
+          "-c",
+          "features.apps=false",
+          "-c",
+          "features.plugins=false",
+          "-c",
+          "agents.enabled=false",
+          "-o",
+          "/tmp/expert-pilot-runtime-20261022/trial-02/final.txt",
+          "-"
+        ],
+        "cwd": "/tmp/expert-pilot-runtime-20261022/trial-02"
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 69.6611959590009
+      },
+      "native_usage": {
+        "input_tokens": 116182,
+        "cached_input_tokens": 90880,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2879,
+        "reasoning_output_tokens": 1161
+      },
+      "command_execution_starts": 12,
+      "command_execution_completions": 12,
+      "command_inventory": [
+        {
+          "item_id": "item_1",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:5",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_2",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:7",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_3",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:10",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_4",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:11",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_6",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:14",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_7",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:16",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_8",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:18",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_10",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:23",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_12",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:24",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_9",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:25",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_11",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:26",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_13",
+          "evidence_ref": "evidence/development/trial-02/events.jsonl:28",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "input_identity": {
+        "subject_before_sha256": "83f151af62f5fd3558412459e3869915d3587d60844cf0c378c9a7a7f552f68d",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "83f151af62f5fd3558412459e3869915d3587d60844cf0c378c9a7a7f552f68d",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "6d21f8efe252d13c84a203ead1d25b2a4efeca8c57fbaabb98c31996aa4d6c96"
+          },
+          {
+            "path": "service.py",
+            "sha256": "f8ff12456ef7dd7a099ebc9edd5b67d2c01480a1594a7bb6cf77550c98bcb00e"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+        "target_guidance_absent": false,
+        "prompt_sha256": "4cac504be107fde570906933a3ba80b88c3a255bb455adfb235b5f20200c0b65"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 1,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      },
+      "preserved_files": [
+        {
+          "path": "evidence/development/trial-02/events.jsonl",
+          "source_sha256": "24efefb4c89bd8fbc7934631f9bddb02956685f0a560ecda5027b95938bb6180",
+          "preserved_sha256": "24efefb4c89bd8fbc7934631f9bddb02956685f0a560ecda5027b95938bb6180",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-02/final.txt",
+          "source_sha256": "8857a14a9f7d73694aec73c3d079a3a5560d4f2f452ca5d66f9e02a7470d72b9",
+          "preserved_sha256": "8857a14a9f7d73694aec73c3d079a3a5560d4f2f452ca5d66f9e02a7470d72b9",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-02/start.json",
+          "source_sha256": "5acd0aef0ea10fde7011d950e6cbdd94ff4695114ee3d4fbbe4797f5f51c7d6e",
+          "preserved_sha256": "5acd0aef0ea10fde7011d950e6cbdd94ff4695114ee3d4fbbe4797f5f51c7d6e",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-02/exit.json",
+          "source_sha256": "fbd76d3ce698dc7df5c1aaca2231408eb196c68dc636d1830c605c4a8e20ee39",
+          "preserved_sha256": "fbd76d3ce698dc7df5c1aaca2231408eb196c68dc636d1830c605c4a8e20ee39",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-02/prompt.txt",
+          "source_sha256": "4cac504be107fde570906933a3ba80b88c3a255bb455adfb235b5f20200c0b65",
+          "preserved_sha256": "4cac504be107fde570906933a3ba80b88c3a255bb455adfb235b5f20200c0b65",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/development/trial-02/stderr.redacted.txt",
+          "source_sha256": "1a59531ba26294d16cd41f9b27222314f6d998215fc04831059c2a00f84194c2",
+          "preserved_sha256": "fc2dd392804344573468f099c4ece54a6e248d12731eb699f0220f0e034feae1",
+          "preservation": "one_private_endpoint_URL_redacted",
+          "redactions": [
+            {
+              "category": "private_connector_endpoint",
+              "count": 1,
+              "replacement": "[REDACTED_PRIVATE_ENDPOINT]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trial_id": "trial-03",
+      "case_id": "case-02",
+      "partition": "heldout",
+      "condition": "current",
+      "capture_directory": "evidence/heldout/trial-03",
+      "start": {
+        "slot": 3,
+        "started_at": "2026-10-22T18:18:39.248228+00:00",
+        "argv": [
+          "/opt/homebrew/bin/codex",
+          "exec",
+          "--ephemeral",
+          "--json",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"xhigh\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "skills.config=[{path=\"/Users/laimis/.codex/skills/assistant-debugging/SKILL.md\",enabled=false}]",
+          "-c",
+          "features.memories=false",
+          "-c",
+          "features.apps=false",
+          "-c",
+          "features.plugins=false",
+          "-c",
+          "agents.enabled=false",
+          "-o",
+          "/tmp/expert-pilot-runtime-20261022/trial-03/final.txt",
+          "-"
+        ],
+        "cwd": "/tmp/expert-pilot-runtime-20261022/trial-03"
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 60.93018837500131,
+        "timed_out": false
+      },
+      "native_usage": {
+        "input_tokens": 95997,
+        "cached_input_tokens": 77952,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1875,
+        "reasoning_output_tokens": 826
+      },
+      "command_execution_starts": 11,
+      "command_execution_completions": 11,
+      "command_inventory": [
+        {
+          "item_id": "item_1",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:5",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_2",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:8",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_3",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:9",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_5",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:12",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_7",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:16",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_6",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:17",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_8",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:18",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_9",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:20",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_10",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:22",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_12",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:25",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_11",
+          "evidence_ref": "evidence/heldout/trial-03/events.jsonl:26",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "input_identity": {
+        "subject_before_sha256": "0fd8bfdc29cde78db555fc37d162b82fdc39acbebcd25e78ea49f276177609a7",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "0fd8bfdc29cde78db555fc37d162b82fdc39acbebcd25e78ea49f276177609a7",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "7861d3ab8ae92890b53a404610a2c0fa6fc7cb425835bb8d28031af9f9c9f103"
+          },
+          {
+            "path": "change-notes.txt",
+            "sha256": "4dae0d258b4c4194e559535a1013979d6b2d5e4edfb496b263afe38f70b9308e"
+          },
+          {
+            "path": "configs/current.json",
+            "sha256": "4fa862d05ea7c9ba39eeb42ee2cae4657c61397b7259c7d47ca3d9d79f3f4a15"
+          },
+          {
+            "path": "configs/previous.json",
+            "sha256": "f0fd4c099d02f36198d4e8974adb3fa4ebbaf85b4931affdecb8a19f95bd2dcf"
+          },
+          {
+            "path": "request.py",
+            "sha256": "e6a27782db567e995f7a6eb7f39ac484d3807a889c81a2055376b25cd843e787"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+        "target_guidance_absent": false,
+        "prompt_sha256": "1e51646dd4440d50fc720db579b532a7350bb057e198e5ce136fdb4a2316931f"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      },
+      "preserved_files": [
+        {
+          "path": "evidence/heldout/trial-03/events.jsonl",
+          "source_sha256": "12c2cd3d0044115719c2abb10140b71b1a64d98bc792adca26b684790b0cffaf",
+          "preserved_sha256": "12c2cd3d0044115719c2abb10140b71b1a64d98bc792adca26b684790b0cffaf",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-03/final.txt",
+          "source_sha256": "58dcc7ac2cf3bf36c9942a4a07b996041832279e8646a7a1984542ded31dad4d",
+          "preserved_sha256": "58dcc7ac2cf3bf36c9942a4a07b996041832279e8646a7a1984542ded31dad4d",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-03/start.json",
+          "source_sha256": "1b794c4ee4c65839685c32a4776880ae878da18566a11c8c93dffdae9ba34523",
+          "preserved_sha256": "1b794c4ee4c65839685c32a4776880ae878da18566a11c8c93dffdae9ba34523",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-03/exit.json",
+          "source_sha256": "ca247410c6868f3effe678f5b901a6705ea3380b13c1c37d9faea1e9697148bb",
+          "preserved_sha256": "ca247410c6868f3effe678f5b901a6705ea3380b13c1c37d9faea1e9697148bb",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-03/prompt.txt",
+          "source_sha256": "1e51646dd4440d50fc720db579b532a7350bb057e198e5ce136fdb4a2316931f",
+          "preserved_sha256": "1e51646dd4440d50fc720db579b532a7350bb057e198e5ce136fdb4a2316931f",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-03/stderr.redacted.txt",
+          "source_sha256": "24d6c961dd0325ea61dc5eccc73d65d09c6fabee3b2189f72f1a9bc420f775c5",
+          "preserved_sha256": "2a069bbad4d2fd7e7eac010ad45f70a3b3535bf344d189ebeb5e96f2170f4f3f",
+          "preservation": "one_private_endpoint_URL_redacted",
+          "redactions": [
+            {
+              "category": "private_connector_endpoint",
+              "count": 1,
+              "replacement": "[REDACTED_PRIVATE_ENDPOINT]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trial_id": "trial-04",
+      "case_id": "case-02",
+      "partition": "heldout",
+      "condition": "disabled",
+      "capture_directory": "evidence/heldout/trial-04",
+      "start": {
+        "slot": 4,
+        "started_at": "2026-10-22T18:18:39.250651+00:00",
+        "argv": [
+          "/opt/homebrew/bin/codex",
+          "exec",
+          "--ephemeral",
+          "--json",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"xhigh\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "skills.config=[{path=\"/Users/laimis/.codex/skills/assistant-debugging/SKILL.md\",enabled=false}]",
+          "-c",
+          "features.memories=false",
+          "-c",
+          "features.apps=false",
+          "-c",
+          "features.plugins=false",
+          "-c",
+          "agents.enabled=false",
+          "-o",
+          "/tmp/expert-pilot-runtime-20261022/trial-04/final.txt",
+          "-"
+        ],
+        "cwd": "/tmp/expert-pilot-runtime-20261022/trial-04"
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 44.29816345899599,
+        "timed_out": false
+      },
+      "native_usage": {
+        "input_tokens": 74728,
+        "cached_input_tokens": 58624,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1305,
+        "reasoning_output_tokens": 453
+      },
+      "command_execution_starts": 10,
+      "command_execution_completions": 10,
+      "command_inventory": [
+        {
+          "item_id": "item_1",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:5",
+          "exit_code": 2,
+          "status": "failed"
+        },
+        {
+          "item_id": "item_2",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:7",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_3",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:9",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_4",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:12",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_5",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:13",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_6",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:15",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_8",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:18",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_9",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:21",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_10",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:22",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_11",
+          "evidence_ref": "evidence/heldout/trial-04/events.jsonl:24",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "input_identity": {
+        "subject_before_sha256": "0fd8bfdc29cde78db555fc37d162b82fdc39acbebcd25e78ea49f276177609a7",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "0fd8bfdc29cde78db555fc37d162b82fdc39acbebcd25e78ea49f276177609a7",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "7861d3ab8ae92890b53a404610a2c0fa6fc7cb425835bb8d28031af9f9c9f103"
+          },
+          {
+            "path": "change-notes.txt",
+            "sha256": "4dae0d258b4c4194e559535a1013979d6b2d5e4edfb496b263afe38f70b9308e"
+          },
+          {
+            "path": "configs/current.json",
+            "sha256": "4fa862d05ea7c9ba39eeb42ee2cae4657c61397b7259c7d47ca3d9d79f3f4a15"
+          },
+          {
+            "path": "configs/previous.json",
+            "sha256": "f0fd4c099d02f36198d4e8974adb3fa4ebbaf85b4931affdecb8a19f95bd2dcf"
+          },
+          {
+            "path": "request.py",
+            "sha256": "e6a27782db567e995f7a6eb7f39ac484d3807a889c81a2055376b25cd843e787"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": null,
+        "target_guidance_absent": true,
+        "prompt_sha256": "1e51646dd4440d50fc720db579b532a7350bb057e198e5ce136fdb4a2316931f"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      },
+      "preserved_files": [
+        {
+          "path": "evidence/heldout/trial-04/events.jsonl",
+          "source_sha256": "f95cc4c1441c30105cc31794cae99f5239a8449b389a104259f7e1049660773c",
+          "preserved_sha256": "f95cc4c1441c30105cc31794cae99f5239a8449b389a104259f7e1049660773c",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-04/final.txt",
+          "source_sha256": "e4e805500f48e614283f8cf52d651e81081b043e2e8df6eef9e741077fa7df63",
+          "preserved_sha256": "e4e805500f48e614283f8cf52d651e81081b043e2e8df6eef9e741077fa7df63",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-04/start.json",
+          "source_sha256": "907a754c3b2814e3a18c1a2177a045e2200b0d4ae120cc55b392f259deb37c86",
+          "preserved_sha256": "907a754c3b2814e3a18c1a2177a045e2200b0d4ae120cc55b392f259deb37c86",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-04/exit.json",
+          "source_sha256": "0418055d2f76f51e8328f7af207f29a95f7fda4c2ed16190ef2c4f9e619c865c",
+          "preserved_sha256": "0418055d2f76f51e8328f7af207f29a95f7fda4c2ed16190ef2c4f9e619c865c",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-04/prompt.txt",
+          "source_sha256": "1e51646dd4440d50fc720db579b532a7350bb057e198e5ce136fdb4a2316931f",
+          "preserved_sha256": "1e51646dd4440d50fc720db579b532a7350bb057e198e5ce136fdb4a2316931f",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-04/stderr.redacted.txt",
+          "source_sha256": "1df6886067a2844bebd37876c6b0f08c71e75568bf07db9fd4672464c07cd38b",
+          "preserved_sha256": "db399dbd1f2020b61b224d14c03ae35d719383d0836338ecf118ab3bc46ab707",
+          "preservation": "one_private_endpoint_URL_redacted",
+          "redactions": [
+            {
+              "category": "private_connector_endpoint",
+              "count": 1,
+              "replacement": "[REDACTED_PRIVATE_ENDPOINT]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trial_id": "trial-05",
+      "case_id": "case-03",
+      "partition": "heldout",
+      "condition": "disabled",
+      "capture_directory": "evidence/heldout/trial-05",
+      "start": {
+        "slot": 5,
+        "started_at": "2026-10-22T18:18:39.252647+00:00",
+        "argv": [
+          "/opt/homebrew/bin/codex",
+          "exec",
+          "--ephemeral",
+          "--json",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"xhigh\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "skills.config=[{path=\"/Users/laimis/.codex/skills/assistant-debugging/SKILL.md\",enabled=false}]",
+          "-c",
+          "features.memories=false",
+          "-c",
+          "features.apps=false",
+          "-c",
+          "features.plugins=false",
+          "-c",
+          "agents.enabled=false",
+          "-o",
+          "/tmp/expert-pilot-runtime-20261022/trial-05/final.txt",
+          "-"
+        ],
+        "cwd": "/tmp/expert-pilot-runtime-20261022/trial-05"
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 51.34548579099646,
+        "timed_out": false
+      },
+      "native_usage": {
+        "input_tokens": 60452,
+        "cached_input_tokens": 53888,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1479,
+        "reasoning_output_tokens": 661
+      },
+      "command_execution_starts": 9,
+      "command_execution_completions": 9,
+      "command_inventory": [
+        {
+          "item_id": "item_1",
+          "evidence_ref": "evidence/heldout/trial-05/events.jsonl:5",
+          "exit_code": 2,
+          "status": "failed"
+        },
+        {
+          "item_id": "item_2",
+          "evidence_ref": "evidence/heldout/trial-05/events.jsonl:7",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_3",
+          "evidence_ref": "evidence/heldout/trial-05/events.jsonl:9",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_4",
+          "evidence_ref": "evidence/heldout/trial-05/events.jsonl:11",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_6",
+          "evidence_ref": "evidence/heldout/trial-05/events.jsonl:17",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_5",
+          "evidence_ref": "evidence/heldout/trial-05/events.jsonl:18",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_7",
+          "evidence_ref": "evidence/heldout/trial-05/events.jsonl:19",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_8",
+          "evidence_ref": "evidence/heldout/trial-05/events.jsonl:20",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_9",
+          "evidence_ref": "evidence/heldout/trial-05/events.jsonl:21",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "input_identity": {
+        "subject_before_sha256": "582066ed7c3d499837e597783c7f3a4dd138da3e11b336243b6d1d50f3e3d610",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "582066ed7c3d499837e597783c7f3a4dd138da3e11b336243b6d1d50f3e3d610",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "d6314d925392a1f6ff51d5057f6a98945a4dca74c9ae6f32b46224225b57b0f1"
+          },
+          {
+            "path": "replay.py",
+            "sha256": "bd78058c320de764e05968aaaada2fc5c2bd974743f2f961d96ab5cf6896c493"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": null,
+        "target_guidance_absent": true,
+        "prompt_sha256": "5dd4d31aed204e50114bcfdd1f0cd07bb3081f243ef59e63d7a7c3b407ec54ac"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      },
+      "preserved_files": [
+        {
+          "path": "evidence/heldout/trial-05/events.jsonl",
+          "source_sha256": "4a67b9da4617548d8445eec269e0ffad64447ae6b7d659fe32ffba74a5810e2f",
+          "preserved_sha256": "4a67b9da4617548d8445eec269e0ffad64447ae6b7d659fe32ffba74a5810e2f",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-05/final.txt",
+          "source_sha256": "08497fde1c1006f73b2f070b702d4614850fcb88be255b3b2f2f70eea90723ca",
+          "preserved_sha256": "08497fde1c1006f73b2f070b702d4614850fcb88be255b3b2f2f70eea90723ca",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-05/start.json",
+          "source_sha256": "1f6339766c19e909b7161044a3fe78616035ecf98ea2970054c0a8500754f4f0",
+          "preserved_sha256": "1f6339766c19e909b7161044a3fe78616035ecf98ea2970054c0a8500754f4f0",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-05/exit.json",
+          "source_sha256": "2c66b21b159ce1032306263a9a1e83799ad1aed852e335e84b005b777f464afd",
+          "preserved_sha256": "2c66b21b159ce1032306263a9a1e83799ad1aed852e335e84b005b777f464afd",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-05/prompt.txt",
+          "source_sha256": "5dd4d31aed204e50114bcfdd1f0cd07bb3081f243ef59e63d7a7c3b407ec54ac",
+          "preserved_sha256": "5dd4d31aed204e50114bcfdd1f0cd07bb3081f243ef59e63d7a7c3b407ec54ac",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-05/stderr.redacted.txt",
+          "source_sha256": "f3dae7c928aa70c1f56c7b14dcc5be7de5302df2a0230b53ce13992c3856316b",
+          "preserved_sha256": "fd3ca497d8827078393ddea4e562fbbbc944c61007d4079a7d75d684cc7999de",
+          "preservation": "one_private_endpoint_URL_redacted",
+          "redactions": [
+            {
+              "category": "private_connector_endpoint",
+              "count": 1,
+              "replacement": "[REDACTED_PRIVATE_ENDPOINT]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trial_id": "trial-06",
+      "case_id": "case-03",
+      "partition": "heldout",
+      "condition": "current",
+      "capture_directory": "evidence/heldout/trial-06",
+      "start": {
+        "slot": 6,
+        "started_at": "2026-10-22T18:19:24.056558+00:00",
+        "argv": [
+          "/opt/homebrew/bin/codex",
+          "exec",
+          "--ephemeral",
+          "--json",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"xhigh\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "skills.config=[{path=\"/Users/laimis/.codex/skills/assistant-debugging/SKILL.md\",enabled=false}]",
+          "-c",
+          "features.memories=false",
+          "-c",
+          "features.apps=false",
+          "-c",
+          "features.plugins=false",
+          "-c",
+          "agents.enabled=false",
+          "-o",
+          "/tmp/expert-pilot-runtime-20261022/trial-06/final.txt",
+          "-"
+        ],
+        "cwd": "/tmp/expert-pilot-runtime-20261022/trial-06"
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 87.59704329200031,
+        "timed_out": false
+      },
+      "native_usage": {
+        "input_tokens": 157602,
+        "cached_input_tokens": 113920,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3578,
+        "reasoning_output_tokens": 1348
+      },
+      "command_execution_starts": 14,
+      "command_execution_completions": 14,
+      "command_inventory": [
+        {
+          "item_id": "item_1",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:5",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_2",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:7",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_3",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:10",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_4",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:11",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_5",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:13",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_8",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:17",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_7",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:18",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_9",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:20",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_10",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:22",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_12",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:25",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_11",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:26",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_13",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:28",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_14",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:30",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_16",
+          "evidence_ref": "evidence/heldout/trial-06/events.jsonl:33",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "input_identity": {
+        "subject_before_sha256": "582066ed7c3d499837e597783c7f3a4dd138da3e11b336243b6d1d50f3e3d610",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "582066ed7c3d499837e597783c7f3a4dd138da3e11b336243b6d1d50f3e3d610",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "d6314d925392a1f6ff51d5057f6a98945a4dca74c9ae6f32b46224225b57b0f1"
+          },
+          {
+            "path": "replay.py",
+            "sha256": "bd78058c320de764e05968aaaada2fc5c2bd974743f2f961d96ab5cf6896c493"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+        "target_guidance_absent": false,
+        "prompt_sha256": "5dd4d31aed204e50114bcfdd1f0cd07bb3081f243ef59e63d7a7c3b407ec54ac"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 1,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      },
+      "preserved_files": [
+        {
+          "path": "evidence/heldout/trial-06/events.jsonl",
+          "source_sha256": "9eca0274d82aa8456af79abf48f1adf8cecfdc0d4b924f909f3d563d953a992a",
+          "preserved_sha256": "9eca0274d82aa8456af79abf48f1adf8cecfdc0d4b924f909f3d563d953a992a",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-06/final.txt",
+          "source_sha256": "6597bb798d55b3964e699b25c38150faea4732a6b5c03b18bec29048aec0e513",
+          "preserved_sha256": "6597bb798d55b3964e699b25c38150faea4732a6b5c03b18bec29048aec0e513",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-06/start.json",
+          "source_sha256": "0f6b22ca967b9eba0431afa2ec4599e5d212a9456351495e0c1b9c3efc2e6548",
+          "preserved_sha256": "0f6b22ca967b9eba0431afa2ec4599e5d212a9456351495e0c1b9c3efc2e6548",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-06/exit.json",
+          "source_sha256": "e25afd4d88deff104d72d2173630ea3769d605e0d834739499004e3049aa7a3e",
+          "preserved_sha256": "e25afd4d88deff104d72d2173630ea3769d605e0d834739499004e3049aa7a3e",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-06/prompt.txt",
+          "source_sha256": "5dd4d31aed204e50114bcfdd1f0cd07bb3081f243ef59e63d7a7c3b407ec54ac",
+          "preserved_sha256": "5dd4d31aed204e50114bcfdd1f0cd07bb3081f243ef59e63d7a7c3b407ec54ac",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-06/stderr.redacted.txt",
+          "source_sha256": "1b52b070e2a34acf0e7c0577e73ef500e4a3e5ec148b3ca13647f8822d428d72",
+          "preserved_sha256": "3d19d63325d6dab4d8be272838c0d2bd81decf97a644b331a49548a6cc4c9e78",
+          "preservation": "one_private_endpoint_URL_redacted",
+          "redactions": [
+            {
+              "category": "private_connector_endpoint",
+              "count": 1,
+              "replacement": "[REDACTED_PRIVATE_ENDPOINT]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trial_id": "trial-07",
+      "case_id": "case-04",
+      "partition": "heldout",
+      "condition": "current",
+      "capture_directory": "evidence/heldout/trial-07",
+      "start": {
+        "slot": 7,
+        "started_at": "2026-10-22T18:19:31.104540+00:00",
+        "argv": [
+          "/opt/homebrew/bin/codex",
+          "exec",
+          "--ephemeral",
+          "--json",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"xhigh\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "skills.config=[{path=\"/Users/laimis/.codex/skills/assistant-debugging/SKILL.md\",enabled=false}]",
+          "-c",
+          "features.memories=false",
+          "-c",
+          "features.apps=false",
+          "-c",
+          "features.plugins=false",
+          "-c",
+          "agents.enabled=false",
+          "-o",
+          "/tmp/expert-pilot-runtime-20261022/trial-07/final.txt",
+          "-"
+        ],
+        "cwd": "/tmp/expert-pilot-runtime-20261022/trial-07"
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 82.0562978750022,
+        "timed_out": false
+      },
+      "native_usage": {
+        "input_tokens": 115554,
+        "cached_input_tokens": 73472,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3573,
+        "reasoning_output_tokens": 1501
+      },
+      "command_execution_starts": 9,
+      "command_execution_completions": 9,
+      "command_inventory": [
+        {
+          "item_id": "item_1",
+          "evidence_ref": "evidence/heldout/trial-07/events.jsonl:5",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_2",
+          "evidence_ref": "evidence/heldout/trial-07/events.jsonl:8",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_3",
+          "evidence_ref": "evidence/heldout/trial-07/events.jsonl:9",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_6",
+          "evidence_ref": "evidence/heldout/trial-07/events.jsonl:13",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_5",
+          "evidence_ref": "evidence/heldout/trial-07/events.jsonl:14",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_7",
+          "evidence_ref": "evidence/heldout/trial-07/events.jsonl:17",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_8",
+          "evidence_ref": "evidence/heldout/trial-07/events.jsonl:18",
+          "exit_code": 3,
+          "status": "failed"
+        },
+        {
+          "item_id": "item_9",
+          "evidence_ref": "evidence/heldout/trial-07/events.jsonl:20",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_10",
+          "evidence_ref": "evidence/heldout/trial-07/events.jsonl:22",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "input_identity": {
+        "subject_before_sha256": "f09d38223101c2abe17031afad9fc46351256ca44be810ebea8ac84c8acd1df0",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "f09d38223101c2abe17031afad9fc46351256ca44be810ebea8ac84c8acd1df0",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "dd0a6d6c2448bd9e3be96307cf865296554ebd71f87b49c26db99913e0ba80df"
+          },
+          {
+            "path": "access.jsonl",
+            "sha256": "9a094e2b86844a467515cb826e56bf97117ae9fb55ebe22038ff9dce2a8589e7"
+          },
+          {
+            "path": "bundle.py",
+            "sha256": "c265c57b2f3c26a4db1249828652591d2a5967217d59cfa0c2a3c21f886cab43"
+          },
+          {
+            "path": "captures.json",
+            "sha256": "8809ab6cf048aa21dfbf5a233cda8667ca97f0a9ee7320170266e35d66654a68"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+        "target_guidance_absent": false,
+        "prompt_sha256": "d45430d609706fd9ec6f49766e7b970eea0b7ba189f52c77f4b5390111859f2c"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 1,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      },
+      "preserved_files": [
+        {
+          "path": "evidence/heldout/trial-07/events.jsonl",
+          "source_sha256": "b8805c557c170867c7e904a64733ecf1aa61c2238395f0f5095fd72412dc770e",
+          "preserved_sha256": "b8805c557c170867c7e904a64733ecf1aa61c2238395f0f5095fd72412dc770e",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-07/final.txt",
+          "source_sha256": "717bb3d0f992a3ec022e36634bdae371a77416b713d9971bf4de9d8386a0b356",
+          "preserved_sha256": "717bb3d0f992a3ec022e36634bdae371a77416b713d9971bf4de9d8386a0b356",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-07/start.json",
+          "source_sha256": "52b6538d6a60477e90c4665049b8c35d945b0aade7fd9de78fff10d65e6ba699",
+          "preserved_sha256": "52b6538d6a60477e90c4665049b8c35d945b0aade7fd9de78fff10d65e6ba699",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-07/exit.json",
+          "source_sha256": "ef02726ed1487e289c957dfc720a77764a57e849d0c57c3a8f8608aeda304d5e",
+          "preserved_sha256": "ef02726ed1487e289c957dfc720a77764a57e849d0c57c3a8f8608aeda304d5e",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-07/prompt.txt",
+          "source_sha256": "d45430d609706fd9ec6f49766e7b970eea0b7ba189f52c77f4b5390111859f2c",
+          "preserved_sha256": "d45430d609706fd9ec6f49766e7b970eea0b7ba189f52c77f4b5390111859f2c",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-07/stderr.redacted.txt",
+          "source_sha256": "701c2e93adc07391b84c02825f3fdc7e611298f208d43ed51acdc1bb2fc6d8db",
+          "preserved_sha256": "00089479c770ed33008ae6b6cd6e364ba9287d0289713b4a1b89ded6318f0605",
+          "preservation": "one_private_endpoint_URL_redacted",
+          "redactions": [
+            {
+              "category": "private_connector_endpoint",
+              "count": 1,
+              "replacement": "[REDACTED_PRIVATE_ENDPOINT]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trial_id": "trial-08",
+      "case_id": "case-04",
+      "partition": "heldout",
+      "condition": "disabled",
+      "capture_directory": "evidence/heldout/trial-08",
+      "start": {
+        "slot": 8,
+        "started_at": "2026-10-22T18:19:40.682785+00:00",
+        "argv": [
+          "/opt/homebrew/bin/codex",
+          "exec",
+          "--ephemeral",
+          "--json",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"xhigh\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "skills.config=[{path=\"/Users/laimis/.codex/skills/assistant-debugging/SKILL.md\",enabled=false}]",
+          "-c",
+          "features.memories=false",
+          "-c",
+          "features.apps=false",
+          "-c",
+          "features.plugins=false",
+          "-c",
+          "agents.enabled=false",
+          "-o",
+          "/tmp/expert-pilot-runtime-20261022/trial-08/final.txt",
+          "-"
+        ],
+        "cwd": "/tmp/expert-pilot-runtime-20261022/trial-08"
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 44.795785542002704,
+        "timed_out": false
+      },
+      "native_usage": {
+        "input_tokens": 59467,
+        "cached_input_tokens": 54144,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1387,
+        "reasoning_output_tokens": 630
+      },
+      "command_execution_starts": 7,
+      "command_execution_completions": 7,
+      "command_inventory": [
+        {
+          "item_id": "item_1",
+          "evidence_ref": "evidence/heldout/trial-08/events.jsonl:5",
+          "exit_code": 2,
+          "status": "failed"
+        },
+        {
+          "item_id": "item_2",
+          "evidence_ref": "evidence/heldout/trial-08/events.jsonl:7",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_3",
+          "evidence_ref": "evidence/heldout/trial-08/events.jsonl:9",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_4",
+          "evidence_ref": "evidence/heldout/trial-08/events.jsonl:11",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_7",
+          "evidence_ref": "evidence/heldout/trial-08/events.jsonl:15",
+          "exit_code": 3,
+          "status": "failed"
+        },
+        {
+          "item_id": "item_6",
+          "evidence_ref": "evidence/heldout/trial-08/events.jsonl:16",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "item_id": "item_8",
+          "evidence_ref": "evidence/heldout/trial-08/events.jsonl:18",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "input_identity": {
+        "subject_before_sha256": "f09d38223101c2abe17031afad9fc46351256ca44be810ebea8ac84c8acd1df0",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "f09d38223101c2abe17031afad9fc46351256ca44be810ebea8ac84c8acd1df0",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "dd0a6d6c2448bd9e3be96307cf865296554ebd71f87b49c26db99913e0ba80df"
+          },
+          {
+            "path": "access.jsonl",
+            "sha256": "9a094e2b86844a467515cb826e56bf97117ae9fb55ebe22038ff9dce2a8589e7"
+          },
+          {
+            "path": "bundle.py",
+            "sha256": "c265c57b2f3c26a4db1249828652591d2a5967217d59cfa0c2a3c21f886cab43"
+          },
+          {
+            "path": "captures.json",
+            "sha256": "8809ab6cf048aa21dfbf5a233cda8667ca97f0a9ee7320170266e35d66654a68"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": null,
+        "target_guidance_absent": true,
+        "prompt_sha256": "d45430d609706fd9ec6f49766e7b970eea0b7ba189f52c77f4b5390111859f2c"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      },
+      "preserved_files": [
+        {
+          "path": "evidence/heldout/trial-08/events.jsonl",
+          "source_sha256": "f2a73e6b652157a90d28089d1e40f0df201677e9173285aaa5ea927af05135ac",
+          "preserved_sha256": "f2a73e6b652157a90d28089d1e40f0df201677e9173285aaa5ea927af05135ac",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-08/final.txt",
+          "source_sha256": "d07daa74a494db2d2029d0a36c1795b40fba49a8ca4ff0880b944bd097654d3e",
+          "preserved_sha256": "d07daa74a494db2d2029d0a36c1795b40fba49a8ca4ff0880b944bd097654d3e",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-08/start.json",
+          "source_sha256": "99c9b39ed1c9befadc9d91d01b3b203e14da0501cffcfc92928eb6278a896eb7",
+          "preserved_sha256": "99c9b39ed1c9befadc9d91d01b3b203e14da0501cffcfc92928eb6278a896eb7",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-08/exit.json",
+          "source_sha256": "044291747e15d00c3941bcafe90ccceaf57dc6cbb3eb334afac9db951cc46efc",
+          "preserved_sha256": "044291747e15d00c3941bcafe90ccceaf57dc6cbb3eb334afac9db951cc46efc",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-08/prompt.txt",
+          "source_sha256": "d45430d609706fd9ec6f49766e7b970eea0b7ba189f52c77f4b5390111859f2c",
+          "preserved_sha256": "d45430d609706fd9ec6f49766e7b970eea0b7ba189f52c77f4b5390111859f2c",
+          "preservation": "byte_identical"
+        },
+        {
+          "path": "evidence/heldout/trial-08/stderr.redacted.txt",
+          "source_sha256": "d2076d8a44771a5a4f1811fbcb8033a059d09042dacb46dba3dbdc5371807197",
+          "preserved_sha256": "ee7e80c11c5c97982a3cd13814cf1c19521466eae8dbeb344ce6b7e61a629fd4",
+          "preservation": "one_private_endpoint_URL_redacted",
+          "redactions": [
+            {
+              "category": "private_connector_endpoint",
+              "count": 1,
+              "replacement": "[REDACTED_PRIVATE_ENDPOINT]"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

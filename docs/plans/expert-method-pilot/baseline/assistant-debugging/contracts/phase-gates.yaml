@@ -1,0 +1,134 @@
+# Applicability: structured diagnosis/fix results, persisted continuations,
+# and selected handoffs. Human diagnosis may summarize evidence without empty
+# report slots. Fix authorization, reproduction, verification, and active TDD
+# prerequisites apply regardless of presentation.
+
+schema_version: "2.0"
+contract: phase-gates
+skill: assistant-debugging
+
+gates:
+  - phase: SCOPE
+    checkpoint_start: "--- PHASE: SCOPE ---"
+    checkpoint_end: "--- PHASE: SCOPE COMPLETE ---"
+    exit_assertions:
+      - id: SC1
+        check: "Symptom is described as an observable failure or behavior difference"
+        on_fail: "Ask for the missing symptom or extract it from the supplied logs, error, failing command, or test output"
+      - id: SC2
+        check: "Scope is bounded to files, command, test, endpoint, workflow, or subsystem before diagnostics begin"
+        on_fail: "Inspect local context to infer scope or ask every remaining material, non-discoverable narrowing question grouped by topic"
+      - id: SC3
+        check: "Safety constraints and destructive/production boundaries are recorded before commands run"
+        on_fail: "Record constraints and avoid destructive or production-affecting diagnostics until approved"
+
+  - phase: REPRODUCE
+    checkpoint_start: "--- PHASE: REPRODUCE ---"
+    checkpoint_end: "--- PHASE: REPRODUCE COMPLETE ---"
+    exit_assertions:
+      - id: RP1
+        check: "A smallest safe reproduction target was attempted or a concrete blocker was recorded"
+        on_fail: "Find and run the narrowest safe local command/test/manual path, or document why none is available"
+      - id: RP2
+        check: "Reproduction evidence includes command_or_steps, observed_result, and match to reported symptom"
+        on_fail: "Re-run or document reproduction with exact input/output and symptom match"
+      - id: RP3
+        check: "No code changes were made before reproduction or reproduction blocker was recorded"
+        on_fail: "Revert speculative edits or label them as discarded, then return to reproduction evidence"
+
+  - phase: HYPOTHESIZE
+    checkpoint_start: "--- PHASE: HYPOTHESIZE ---"
+    checkpoint_end: "--- PHASE: HYPOTHESIZE COMPLETE ---"
+    exit_assertions:
+      - id: HY1
+        check: "Plausible causes are grounded in current evidence; their number follows the uncertainty, with no numeric quota"
+        on_fail: "Inspect relevant code, config, data, environment, or recent changes for a plausible cause and a distinguishing check; do not invent alternatives to fill a quota"
+      - id: HY2
+        check: "Every hypothesis has supporting evidence, disconfirming evidence or refutation signal, and next diagnostic check"
+        on_fail: "Complete the hypothesis table before running more diagnostics"
+      - id: HY3
+        check: "The next diagnostic is chosen by highest signal and lowest safe cost, not by edit convenience"
+        on_fail: "Re-rank diagnostic checks by evidence value, safety, and cost"
+
+  - phase: ISOLATE
+    checkpoint_start: "--- PHASE: ISOLATE ---"
+    checkpoint_end: "--- PHASE: ISOLATE COMPLETE ---"
+    exit_assertions:
+      - id: IS1
+        check: "At least one diagnostic result confirms, refutes, or materially narrows a hypothesis"
+        on_fail: "Run a targeted diagnostic or inspect evidence that can distinguish between hypotheses"
+      - id: IS2
+        check: "Root cause claim is backed by evidence that explains the observed symptom"
+        on_fail: "Downgrade to inconclusive/mitigated or continue diagnostics before claiming root cause"
+      - id: IS3
+        check: "Disconfirming evidence is recorded for major rejected hypotheses"
+        on_fail: "Record why competing hypotheses were refuted or remain residual risk"
+
+  - phase: FIX
+    checkpoint_start: "--- PHASE: FIX ---"
+    checkpoint_end: "--- PHASE: FIX COMPLETE ---"
+    condition: "when can_modify_code is true and a fix or mitigation is attempted"
+    entry_assertions:
+      - id: FX_VERIFICATION_DECISION
+        check: "Before any source/test mutation or mutation dispatch, resolve verification_decision through the existing assistant-verification Analysis owner and carry it unchanged; derive this fix's tdd_applies from selected_check_ids intersecting tdd_choice.applicable_check_ids. When true, route the unchanged decision, due selected IDs, exact binding tuples, reproduction, confirmed cause, and scope through assistant-tdd using its existing execution_lane; do not dispatch debugging_fix or mutate before authorizing RED. Dispatch debugging_fix only when tdd_applies is false."
+        on_fail: "Stop before mutation; select or refresh the decision and current-fix IDs through assistant-verification, then route active TDD through assistant-tdd. Never coerce tdd_applies to false; establish valid RED before active-TDD edits."
+      - id: FX_CHANGE_IMPACT_APPLICABILITY
+        check: "Before any source/test mutation or mutation dispatch, record change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
+        on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
+      - id: FX_CHANGE_IMPACT_PREBUILD
+        check: "Before any source/test mutation or mutation dispatch, shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Evidenced local repairs keep ordinary regression verification and self-review."
+        condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+        on_fail: "Do not patch, write a regression test, or dispatch Fixer; load references/change-impact.md and repair the assessment or report its explicit blocker."
+    exit_assertions:
+      - id: FX1
+        check: "Each changed file maps to the confirmed cause, mitigation, or regression test"
+        on_fail: "Remove unrelated changes or document approved scope expansion"
+      - id: FX2
+        check: "The fix preserves the original failure path, unchanged verification_decision, and every selected and binding obligation for VERIFY. Retain completed results and pending checks; automated regression tests are required only when selected."
+        on_fail: "Restore the decision and pending obligations before entering VERIFY; retain material blockers without inventing test infeasibility."
+      - id: FX3
+        check: "Fix is the smallest durable change and does not rely on temporary diagnostics"
+        on_fail: "Remove temporary logging/debug changes or justify their retention"
+
+  - phase: VERIFY
+    checkpoint_start: "--- PHASE: VERIFY ---"
+    checkpoint_end: "--- PHASE: VERIFY COMPLETE ---"
+    exit_assertions:
+      - id: VF_CHANGE_IMPACT_COMPLETION
+        check: "A triggered completed repair retains the same artifact identity, actual current verification, and assistant-review projection of the canonical review scope/ledger/snapshot bindings; its impact result does not replace assistant-review terminal coverage or result."
+        condition: "a source fix occurred and (impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried)"
+        on_fail: "Report verification incomplete or blocked; refresh and rerun the common completion gate and canonical review as applicable."
+      - id: VF1
+        check: "Original reproduction path passes or status is not_reproduced/blocked/inconclusive with explanation"
+        on_fail: "Run original reproduction path again or downgrade the status"
+      - id: VF_COMMAND_INVOCATION
+        check: "A fixed outcome requires every due selected command-based check for the current fix increment to have a passed result whose executed_command.check_id is its sole selected_check_ids value and whose argv and cwd exactly match the unchanged CheckSpec; skipped, blocked, or missing invocations remain gaps and cannot establish fixed."
+        condition: "status == fixed"
+        on_fail: "Retain the gap and downgrade fixed until each due command check has a matching observed invocation."
+      - id: VF2
+        check: "Every due selected and binding check runs against the fix or reuses admissible current evidence. Preserve observed passed/failed/partial/unavailable/skipped/blocked results and supporting evidence; a fixed outcome requires passing evidence for every due check. When tdd_applies is true and a cycle has started, preserve its actual tdd_cycle_log_ref even for partial/blocked outcomes. When tdd_applies is true and status == fixed, that ref must resolve the complete current assistant-tdd cycle_log against the unchanged decision and selected/applicable IDs: right-reason authorizing RED, passing GREEN and REFACTOR invocations, and all due guards."
+        on_fail: "Run due available checks; retain partial/unavailable observations and their reasons as explicit evidence gaps. For active TDD, preserve actual partial cycle_log for blocked/partial outcomes; absent or incomplete cycle evidence blocks fixed."
+      - id: VF3
+        check: "Partial, unavailable, skipped, or blocked checks are listed as residual risks and not counted as proof"
+        on_fail: "Record each evidence gap in residual_risks and adjust confidence; never count it as passed"
+
+invariants:
+  - id: INV_CHANGE_IMPACT
+    check: "Every behavior diagnosis retains compact applicability evidence. An expanded diagnosis carries the same common artifact identity across investigation, repair, and verification; absent or stale expanded evidence remains a gap, not a local or clean claim."
+    condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
+    scope: all_phases
+    on_fail: "Refresh the bounded evidence or report the residual blocker."
+  - id: INV1
+    check: "No random patching: every edit traces to a confirmed or strongly supported hypothesis"
+    scope: all_phases
+    on_fail: "Revert or isolate speculative edits and return to hypothesis testing"
+
+  - id: INV2
+    check: "Reports redact secrets, tokens, customer data, private payloads, and sensitive hostnames"
+    scope: all_phases
+    on_fail: "Redact sensitive values and cite only safe locations or descriptions"
+
+  - id: INV3
+    check: "Root cause, status, and confidence never exceed the available evidence"
+    scope: all_phases
+    on_fail: "Downgrade status/confidence and list missing evidence as residual risk"

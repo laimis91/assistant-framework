@@ -1,0 +1,102 @@
+{
+  "schema_version": "change-impact-assessment/v1",
+  "capture_id": "creator-expert-method-completion-v1",
+  "snapshot": {
+    "base_id": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+    "candidate_id": "sha256:913570b34ed29499518ab84ba308ba76997092fd320d916bf10afcb1e14f76e7",
+    "universe_id": "sha256:c18dbb59803e66912fa8866f97acd994488f0b5a792eedde25edfc8dfce38b91"
+  },
+  "impact_scope": "shared",
+  "assessment_kind": "behavior",
+  "obligations": [
+    {
+      "id": "obligation-natural",
+      "requirement_id": "req-natural",
+      "disposition": "change",
+      "rationale_ref": "docs/plans/expert-method-pilot/impact/change-outline.md#natural",
+      "authorization_ref": "user:2026-10-22:approve",
+      "verification_id": "verify-natural",
+      "equivalence_group_id": null
+    },
+    {
+      "id": "obligation-structured",
+      "requirement_id": "req-structured",
+      "disposition": "change",
+      "rationale_ref": "docs/plans/expert-method-pilot/impact/change-outline.md#structured",
+      "authorization_ref": "user:2026-10-22:approve",
+      "verification_id": "verify-structured",
+      "equivalence_group_id": null
+    },
+    {
+      "id": "obligation-guide",
+      "requirement_id": "req-guide",
+      "disposition": "change",
+      "rationale_ref": "docs/plans/expert-method-pilot/impact/change-outline.md#guide",
+      "authorization_ref": "user:2026-10-22:approve",
+      "verification_id": "verify-guide",
+      "equivalence_group_id": null
+    }
+  ],
+  "verification_plans": [
+    {
+      "id": "verify-natural",
+      "contract_id": "expert-method-design",
+      "state_transition": "material-capability-authoring",
+      "oracle": "V5 inspection resolves the conditional creator route, actual cue-to-method choice, raw inputs, expected artifact, applicability limit and independent wrong-outcome check; unsupported model guesses remain candidates and existing canonical evidence outputs remain unchanged. No creator-behavior improvement is inferred.",
+      "steps_ref": "docs/plans/expert-method-pilot/selection.json#V5",
+      "source_identity": "selection.json#V5"
+    },
+    {
+      "id": "verify-structured",
+      "contract_id": "expert-method-design",
+      "state_transition": "material-capability-design-gate",
+      "oracle": "V4-creator existing semantic suite exits 0, preserving fixture capture, artifact evidence and semantic consumers. V5 separately inspects the new conditional DESIGN assertion and index path; this suite alone does not establish the new prose method or model benefit.",
+      "steps_ref": "docs/plans/expert-method-pilot/selection.json#V4-creator",
+      "source_identity": "selection.json#V4-creator"
+    },
+    {
+      "id": "verify-guide",
+      "contract_id": "canonical-guide-parity",
+      "state_transition": "canonical-guide-update",
+      "oracle": "V3 existing sync --check exits 0 with byte-identical canonical and skill-local guide. V5 inspects guidance applicability; parity alone does not establish behavioral benefit.",
+      "steps_ref": "docs/plans/expert-method-pilot/selection.json#V3",
+      "source_identity": "selection.json#V3"
+    }
+  ],
+  "equivalence_groups": [],
+  "actual_verifications": [
+    {
+      "verification_id": "verify-natural",
+      "outcome": "passed",
+      "executed_snapshot": {
+        "base_id": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+        "candidate_id": "sha256:913570b34ed29499518ab84ba308ba76997092fd320d916bf10afcb1e14f76e7",
+        "universe_id": "sha256:c18dbb59803e66912fa8866f97acd994488f0b5a792eedde25edfc8dfce38b91"
+      },
+      "executed_source_identity": "selection.json#V5",
+      "evidence_ref": "docs/plans/expert-method-pilot/review/pre-review-evidence.json#V5 + impact/verification/V5-source-inspection.md"
+    },
+    {
+      "verification_id": "verify-structured",
+      "outcome": "passed",
+      "executed_snapshot": {
+        "base_id": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+        "candidate_id": "sha256:913570b34ed29499518ab84ba308ba76997092fd320d916bf10afcb1e14f76e7",
+        "universe_id": "sha256:c18dbb59803e66912fa8866f97acd994488f0b5a792eedde25edfc8dfce38b91"
+      },
+      "executed_source_identity": "selection.json#V4-creator",
+      "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/V4-creator.json + V4-creator.log + review/pre-review-evidence.json#V5"
+    },
+    {
+      "verification_id": "verify-guide",
+      "outcome": "passed",
+      "executed_snapshot": {
+        "base_id": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+        "candidate_id": "sha256:913570b34ed29499518ab84ba308ba76997092fd320d916bf10afcb1e14f76e7",
+        "universe_id": "sha256:c18dbb59803e66912fa8866f97acd994488f0b5a792eedde25edfc8dfce38b91"
+      },
+      "executed_source_identity": "selection.json#V3",
+      "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/V3.json + V3.log"
+    }
+  ]
+}

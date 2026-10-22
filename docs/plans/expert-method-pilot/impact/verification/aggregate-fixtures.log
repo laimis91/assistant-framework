@@ -1,0 +1,17 @@
+Fixture valid: skills/assistant-ci-audit/evals/cases.json
+Fixture valid: skills/assistant-clarify/evals/cases.json
+Fixture valid: skills/assistant-debugging/evals/cases.json
+Fixture valid: skills/assistant-diagrams/evals/cases.json
+Fixture valid: skills/assistant-docs/evals/cases.json
+Fixture valid: skills/assistant-ideate/evals/cases.json
+Fixture valid: skills/assistant-onboard/evals/cases.json
+Fixture valid: skills/assistant-research/evals/cases.json
+Fixture valid: skills/assistant-review/evals/cases.json
+Fixture valid: skills/assistant-security/evals/cases.json
+Fixture valid: skills/assistant-skill-creator/evals/cases.json
+Fixture valid: skills/assistant-tdd/evals/cases.json
+Fixture valid: skills/assistant-telos/evals/cases.json
+Fixture valid: skills/assistant-thinking/evals/cases.json
+Fixture valid: skills/assistant-verification/evals/cases.json
+Fixture valid: skills/assistant-workflow/evals/cases.json
+OK skill eval fixtures: 16 fixture(s) validated

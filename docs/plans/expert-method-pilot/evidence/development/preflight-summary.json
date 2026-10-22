@@ -1,0 +1,11 @@
+{
+  "capture_ref": "/tmp/expert-pilot-disabled-prompt.json",
+  "raw_capture_sha256": "f6a89f1538953daf91475838edf9782fabd406db3ba4b286a6644f626865b98a",
+  "raw_capture_bytes": 25309,
+  "observation": "Captured CLI prompt-input JSON contains zero occurrences of assistant-debugging.",
+  "target_name_occurrences": 0,
+  "source": "Root native preflight plus fixture-owner direct count of retained capture; no subject model call.",
+  "scope_limit": "Absence of target name in preflight is not full host activation or global skill-inventory equivalence proof.",
+  "raw_capture_preserved_in_repository": false,
+  "reason": "Contains full host prompt context unrelated to synthetic case; retain bounded summary only."
+}

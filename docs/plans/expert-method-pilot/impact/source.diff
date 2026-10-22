@@ -1,0 +1,166 @@
+diff --git a/docs/skill-contract-design-guide.md b/docs/skill-contract-design-guide.md
+index b0f4263..fcfe43a 100644
+--- a/docs/skill-contract-design-guide.md
++++ b/docs/skill-contract-design-guide.md
+@@ -11,6 +11,16 @@ routing and sufficient instructions can be the whole skill. Describe the outcome
+ necessary steps, constraints, output, and when to ask or stop. Use headings only
+ when they help. Move detailed examples to references loaded when needed.
+ 
++For new or materially changed capability guidance that depends on expert
++judgment, derive the consequential cue-to-method decisions from representative
++expert cases or an authoritative method. Connect raw inputs, expected artifacts,
++applicability limits, and an independent wrong-outcome check to existing
++success criteria. Keep unsupported model proposals provisional; more procedure
++or expert vocabulary does not establish improvement. Mechanical and
++preference-only changes do not require this process. The creator's
++`references/expert-method-design.md` contains the conditional detail; reuse
++existing design and verification outputs rather than adding an authoring report.
++
+ Before adding a file, field, phase, controller, or dependency, name its consumer
+ and the failure it prevents. Reuse an existing producer format or helper. Do not
+ create contracts to satisfy a category, a field count, or a checklist. Utility,
+diff --git a/skills/assistant-skill-creator/SKILL.md b/skills/assistant-skill-creator/SKILL.md
+index 6c24723..8d59da1 100644
+--- a/skills/assistant-skill-creator/SKILL.md
++++ b/skills/assistant-skill-creator/SKILL.md
+@@ -67,6 +67,14 @@ and `references/upstream-guidance.md`. Ask for missing refresh scope; stop only
+ when an unavailable source fact affects correctness, otherwise continue offline
+ with the limitation. Do not silently adopt guidance.
+ 
++For new or materially changed capability guidance whose quality depends on
++expert judgment, load `expert_method_design` and
++`references/expert-method-design.md`. Use representative expert cases or an
++authoritative method to connect observed cues, method choices, raw inputs,
++expected artifacts, applicability limits, and an independent wrong-outcome
++check to existing success criteria. Mechanical and preference-only changes
++do not trigger this work. Model guesses without evidence remain candidates.
++
+ For actual controller/review/QA loops, load `harness_design` and
+ `references/harness-patterns.md`. For a saved workflow or lesson, load
+ `references/verified-skill-distillation.md`; require verifier-approved
+diff --git a/skills/assistant-skill-creator/contracts/index.yaml b/skills/assistant-skill-creator/contracts/index.yaml
+index 0b89dd1..9af15f1 100644
+--- a/skills/assistant-skill-creator/contracts/index.yaml
++++ b/skills/assistant-skill-creator/contracts/index.yaml
+@@ -79,6 +79,16 @@ load_sets:
+         key: name
+         names: [skill_category, skill_value_kind, success_criteria]
+     budget_words: 6000
++  expert_method_design:
++    references:
++      - references/expert-method-design.md
++    selectors:
++      - id: skill-creator-expert-method-criteria
++        path: contracts/input.yaml
++        section: fields
++        key: name
++        names: [skill_value_kind, success_criteria]
++    budget_words: 2400
+   harness_design:
+     references:
+       - references/skill-contract-design-guide.md
+diff --git a/skills/assistant-skill-creator/contracts/phase-gates.yaml b/skills/assistant-skill-creator/contracts/phase-gates.yaml
+index 2dfcbe2..3863715 100644
+--- a/skills/assistant-skill-creator/contracts/phase-gates.yaml
++++ b/skills/assistant-skill-creator/contracts/phase-gates.yaml
+@@ -74,6 +74,10 @@ gates:
+       - id: SD9
+         check: "No fixed input-field or output-artifact count is used to justify contract design"
+         on_fail: "Remove count-driven fields and artifacts; retain only outcome-relevant items"
++      - id: SD10
++        check: "Expert-method design connects source-backed cues and method choices to raw inputs, expected artifacts, applicability limits, and an independent wrong-outcome check against existing success criteria; unsupported model proposals remain candidates"
++        condition: "authoring adds or materially changes capability guidance whose quality depends on expert judgment"
++        on_fail: "Load expert_method_design; reuse representative expert cases or an authoritative method, resolve consequential evidence gaps, and keep unsupported improvement claims out of the design"
+ 
+   - phase: VERIFIED_DISTILLATION
+     checkpoint_start: "--- PHASE: VERIFIED DISTILLATION ---"
+diff --git a/skills/assistant-skill-creator/references/skill-contract-design-guide.md b/skills/assistant-skill-creator/references/skill-contract-design-guide.md
+index b0f4263..fcfe43a 100644
+--- a/skills/assistant-skill-creator/references/skill-contract-design-guide.md
++++ b/skills/assistant-skill-creator/references/skill-contract-design-guide.md
+@@ -11,6 +11,16 @@ routing and sufficient instructions can be the whole skill. Describe the outcome
+ necessary steps, constraints, output, and when to ask or stop. Use headings only
+ when they help. Move detailed examples to references loaded when needed.
+ 
++For new or materially changed capability guidance that depends on expert
++judgment, derive the consequential cue-to-method decisions from representative
++expert cases or an authoritative method. Connect raw inputs, expected artifacts,
++applicability limits, and an independent wrong-outcome check to existing
++success criteria. Keep unsupported model proposals provisional; more procedure
++or expert vocabulary does not establish improvement. Mechanical and
++preference-only changes do not require this process. The creator's
++`references/expert-method-design.md` contains the conditional detail; reuse
++existing design and verification outputs rather than adding an authoring report.
++
+ Before adding a file, field, phase, controller, or dependency, name its consumer
+ and the failure it prevents. Reuse an existing producer format or helper. Do not
+ create contracts to satisfy a category, a field count, or a checklist. Utility,
+diff --git a/skills/assistant-skill-creator/references/expert-method-design.md b/skills/assistant-skill-creator/references/expert-method-design.md
+new file mode 100644
+index 0000000..f29c0b1
+--- /dev/null
++++ b/skills/assistant-skill-creator/references/expert-method-design.md
+@@ -0,0 +1,63 @@
++# Expert-method design
++
++Use this detail during existing DESIGN work when authoring new or materially
++changed capability guidance whose quality depends on expert judgment. Mechanical
++and preference-only edits do not trigger it. Reuse adequate existing cases,
++methods and verification evidence before collecting more; this adds no phase,
++report, schema or expert mode.
++
++## Recover the decision method
++
++Start from existing `success_criteria` and a consequential decision where an
++inexperienced approach can produce a plausible wrong outcome. Inspect a
++representative expert case or authoritative method. Preserve its source identity
++and distinguish observed conduct, the source's recommendation, and your
++inference. Role labels, expert vocabulary and a longer procedure are not evidence;
++an evidence-free model proposal remains a candidate to check.
++
++Trace the decision from the raw inputs. Identify the cue that matters, the method
++it selects or rules out, the action that follows, and the artifact or observation
++that method should produce. Retain decision-relevant uncertainty, alternative
++explanations and conditions under which the method is inappropriate. Preserve
++permission, tool and access limits. Choose sufficient representative cases for
++the consequential decisions; impose no case, hypothesis or step quota.
++
++Use accessible evidence already supplied or retained when adequate. Missing
++material evidence limits the design and any improvement claim; do not invent
++expert facts or require external research for every edit. Ask only for unresolved
++consequential source or outcome gaps.
++
++## Check the plausible wrong outcome
++
++Against the existing criteria, choose an independent check capable of rejecting
++a plausible incorrect result: expected observations, adverse cases or external
++evidence. A check that merely repeats the authored prose is circular. Reuse
++canonical verification selection and evidence outputs when those have a consumer;
++do not create a separate authoring report. Source inspection and a plausible
++method do not establish behavioral gain. Match each claim to the evidence actually
++available.
++
++For example, rising request latency alone cannot select database tuning. A
++diagnosis method could compare queue or lock wait with query duration, then vary
++suspected contributors independently. The expected artifact is a timing
++comparison locating the delay; a real query-delay control can reject an incorrect
++upstream-wait conclusion. This illustrates a method hypothesis, not a claim that
++all latency problems share a cause or that this authoring procedure improves
++creator behavior. Use controls appropriate to the actual system and authorization.
++
++## Keep only reusable guidance
++
++Put reusable cue-to-method decisions and their limits in the target instructions;
++move supporting detail to references when useful. Preserve the target's metadata,
++dependencies, read-only operations, permissions and existing approval gates. Do
++not install tools, exaggerate targets or extend persistence to support the method.
++More procedure or expert vocabulary alone is not an improvement.
++
++## Source rationale and limits
++
++[Felix Rieseberg's article](https://felixrieseberg.com/how-to-be-more-ambitious-a-tutorial-for-humans-with-models/)
++motivates using field methods, raw evidence and external checks.
++[FRA cognitive task analysis](https://railroads.dot.gov/human-factors/elearning-attention/cognitive-task-analysis)
++describes incident-based elicitation of expert cues and judgments. These sources
++motivate an authoring hypothesis; they do not establish best-expert equivalence,
++measured framework benefit or causal gains from this creator procedure.

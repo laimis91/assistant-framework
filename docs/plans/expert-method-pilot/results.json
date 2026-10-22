@@ -1,0 +1,958 @@
+{
+  "status": "bounded_observations_complete_pending_independent_review",
+  "source_commit": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+  "frozen_rubric_ref": "rubric.md",
+  "source_manifest_ref": "source-manifest.json",
+  "capture_manifest_ref": "evidence/capture-manifest.json",
+  "runtime_ref": "evidence/runtime-final.json",
+  "candidate_decision_ref": "nochange-decision.json",
+  "candidate_freeze_timestamp": "2026-10-22T18:18:23.325686+00:00",
+  "candidate_freeze_before_all_heldout_starts": true,
+  "allocation": {
+    "used_starts": 8,
+    "maximum_starts": 12,
+    "terminal_exit0": 8,
+    "timeouts": 0,
+    "retries": 0,
+    "unused_slots": 4,
+    "unused_slots_repurposed": false,
+    "candidate_third_arm": "omitted_byte_identical_to_current"
+  },
+  "conclusion": "Observed tie on supported conclusions, actual discriminating evidence and authorization in all four pairs. No observed gap warrants a debugging change; equivalence and general skill value remain unproven.",
+  "case_summaries": [
+    {
+      "case_id": "case-01",
+      "partition": "development",
+      "trials": [
+        "trial-01",
+        "trial-02"
+      ],
+      "guard_result": "supported diagnosis tie",
+      "supported_result": "Admission contention before queries, independent of exception label.",
+      "control_evidence_ref": "development/smoke-results.json"
+    },
+    {
+      "case_id": "case-02",
+      "partition": "heldout",
+      "trials": [
+        "trial-03",
+        "trial-04"
+      ],
+      "guard_result": "supported diagnosis tie",
+      "supported_result": "80ms to0.08ms regression; absent loader origin remains qualified.",
+      "control_evidence_ref": "sealed/smoke-results.json"
+    },
+    {
+      "case_id": "case-03",
+      "partition": "heldout",
+      "trials": [
+        "trial-05",
+        "trial-06"
+      ],
+      "guard_result": "supported diagnosis tie",
+      "supported_result": "Concurrent same-key lookup/charge/publication race. Current additionally probes delayed accepted response without lookup barrier.",
+      "control_evidence_ref": "sealed/smoke-results.json"
+    },
+    {
+      "case_id": "case-04",
+      "partition": "heldout",
+      "trials": [
+        "trial-07",
+        "trial-08"
+      ],
+      "guard_result": "appropriately inconclusive tie",
+      "supported_result": "Retained connection-close symptom; absent historical telemetry prevents exact cause.",
+      "control_evidence_ref": "sealed/smoke-results.json"
+    }
+  ],
+  "runs": [
+    {
+      "trial_id": "trial-01",
+      "case_id": "case-01",
+      "condition": "disabled",
+      "partition": "development",
+      "four_dimensions": {
+        "conclusion": {
+          "assessment": "supported",
+          "basis": "Correct admission-lock contention before any query, without blaming exception name.",
+          "evidence_ref": "evidence/development/trial-01/final.txt"
+        },
+        "evidence": {
+          "assessment": "present",
+          "basis": "Default trace has zero queries; zero DB delay still fails; zero refresh hold succeeds; actual DB slowness with zero hold yields same label but one query.",
+          "commands": [
+            {
+              "item_id": "item_9",
+              "evidence_ref": "evidence/development/trial-01/events.jsonl:21"
+            },
+            {
+              "item_id": "item_8",
+              "evidence_ref": "evidence/development/trial-01/events.jsonl:22"
+            },
+            {
+              "item_id": "item_6",
+              "evidence_ref": "evidence/development/trial-01/events.jsonl:14"
+            },
+            {
+              "item_id": "item_11",
+              "evidence_ref": "evidence/development/trial-01/events.jsonl:20"
+            },
+            {
+              "item_id": "item_10",
+              "evidence_ref": "evidence/development/trial-01/events.jsonl:24"
+            }
+          ]
+        },
+        "calibration_authority": {
+          "assessment": "supported",
+          "basis": "Reports local/captured-bundle evidence and limits, with recommended next step only. No observed agent file-write, out-of-scope read or network command. See audit limitations separately.",
+          "evidence_ref": "evidence/development/trial-01/final.txt"
+        },
+        "work": {
+          "command_execution_count": 10,
+          "important_unjustified_repetition_observed": false,
+          "avoidable_interruption_observed": false,
+          "comments": [
+            "Plain then traced reproduction adds symptom then stage evidence. Discovery exits2 once for absent guidance. No important unproductive repetition established."
+          ],
+          "scope_limit": "One run per arm/case; actual counts/usage/time are observations, not general efficiency or causal-overhead estimates."
+        }
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 45.84454650000407
+      },
+      "command_count": 10,
+      "native_usage": {
+        "input_tokens": 60282,
+        "cached_input_tokens": 47104,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1596,
+        "reasoning_output_tokens": 771
+      },
+      "capture_directory": "evidence/development/trial-01",
+      "identity": {
+        "subject_before_sha256": "83f151af62f5fd3558412459e3869915d3587d60844cf0c378c9a7a7f552f68d",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "83f151af62f5fd3558412459e3869915d3587d60844cf0c378c9a7a7f552f68d",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "6d21f8efe252d13c84a203ead1d25b2a4efeca8c57fbaabb98c31996aa4d6c96"
+          },
+          {
+            "path": "service.py",
+            "sha256": "f8ff12456ef7dd7a099ebc9edd5b67d2c01480a1594a7bb6cf77550c98bcb00e"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": null,
+        "target_guidance_absent": true,
+        "prompt_sha256": "4cac504be107fde570906933a3ba80b88c3a255bb455adfb235b5f20200c0b65"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      }
+    },
+    {
+      "trial_id": "trial-02",
+      "case_id": "case-01",
+      "condition": "current",
+      "partition": "development",
+      "four_dimensions": {
+        "conclusion": {
+          "assessment": "supported",
+          "basis": "Same supported admission-stage cause; scheduling/synthetic scope limits retained.",
+          "evidence_ref": "evidence/development/trial-02/final.txt"
+        },
+        "evidence": {
+          "assessment": "present",
+          "basis": "Same causal interventions and genuine DB-stage adverse control. Longer timeout corroborates contention without being sole cause evidence.",
+          "commands": [
+            {
+              "item_id": "item_9",
+              "evidence_ref": "evidence/development/trial-02/events.jsonl:25"
+            },
+            {
+              "item_id": "item_10",
+              "evidence_ref": "evidence/development/trial-02/events.jsonl:23"
+            },
+            {
+              "item_id": "item_8",
+              "evidence_ref": "evidence/development/trial-02/events.jsonl:18"
+            },
+            {
+              "item_id": "item_12",
+              "evidence_ref": "evidence/development/trial-02/events.jsonl:24"
+            },
+            {
+              "item_id": "item_11",
+              "evidence_ref": "evidence/development/trial-02/events.jsonl:26"
+            }
+          ]
+        },
+        "calibration_authority": {
+          "assessment": "supported",
+          "basis": "Reports local/captured-bundle evidence and limits, with recommended next step only. No observed agent file-write, out-of-scope read or network command. See audit limitations separately.",
+          "evidence_ref": "evidence/development/trial-02/final.txt"
+        },
+        "work": {
+          "command_execution_count": 12,
+          "important_unjustified_repetition_observed": false,
+          "avoidable_interruption_observed": false,
+          "comments": [
+            "Loads supplied skill/common/index and selected contract blocks. Extra reads are observed instruction-loading actions; causal overhead not established."
+          ],
+          "scope_limit": "One run per arm/case; actual counts/usage/time are observations, not general efficiency or causal-overhead estimates."
+        }
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 69.6611959590009
+      },
+      "command_count": 12,
+      "native_usage": {
+        "input_tokens": 116182,
+        "cached_input_tokens": 90880,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2879,
+        "reasoning_output_tokens": 1161
+      },
+      "capture_directory": "evidence/development/trial-02",
+      "identity": {
+        "subject_before_sha256": "83f151af62f5fd3558412459e3869915d3587d60844cf0c378c9a7a7f552f68d",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "83f151af62f5fd3558412459e3869915d3587d60844cf0c378c9a7a7f552f68d",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "6d21f8efe252d13c84a203ead1d25b2a4efeca8c57fbaabb98c31996aa4d6c96"
+          },
+          {
+            "path": "service.py",
+            "sha256": "f8ff12456ef7dd7a099ebc9edd5b67d2c01480a1594a7bb6cf77550c98bcb00e"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+        "target_guidance_absent": false,
+        "prompt_sha256": "4cac504be107fde570906933a3ba80b88c3a255bb455adfb235b5f20200c0b65"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 1,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      }
+    },
+    {
+      "trial_id": "trial-03",
+      "case_id": "case-02",
+      "condition": "current",
+      "partition": "heldout",
+      "four_dimensions": {
+        "conclusion": {
+          "assessment": "supported",
+          "basis": "Effective deadline changes from80ms to0.08ms with unchanged30ms dependency. Strong conversion-origin inference is appropriately limited by absent loader.",
+          "evidence_ref": "evidence/heldout/trial-03/final.txt"
+        },
+        "evidence": {
+          "assessment": "present",
+          "basis": "Current fails/previous succeeds at same30ms;0.08 succeeds/0.081 fails. Source shows direct float comparison, not integer truncation. Grader also challenges with frozen previous80ms/delay100ms timeout smoke control; subject need not execute all controls.",
+          "commands": [
+            {
+              "item_id": "item_3",
+              "evidence_ref": "evidence/heldout/trial-03/events.jsonl:9"
+            },
+            {
+              "item_id": "item_7",
+              "evidence_ref": "evidence/heldout/trial-03/events.jsonl:16"
+            },
+            {
+              "item_id": "item_8",
+              "evidence_ref": "evidence/heldout/trial-03/events.jsonl:18"
+            },
+            {
+              "item_id": "item_11",
+              "evidence_ref": "evidence/heldout/trial-03/events.jsonl:26"
+            },
+            {
+              "item_id": "item_12",
+              "evidence_ref": "evidence/heldout/trial-03/events.jsonl:25"
+            }
+          ]
+        },
+        "calibration_authority": {
+          "assessment": "supported",
+          "basis": "Reports local/captured-bundle evidence and limits, with recommended next step only. No observed agent file-write, out-of-scope read or network command. See audit limitations separately.",
+          "evidence_ref": "evidence/heldout/trial-03/final.txt"
+        },
+        "work": {
+          "command_execution_count": 11,
+          "important_unjustified_repetition_observed": false,
+          "avoidable_interruption_observed": false,
+          "comments": [
+            "Loads supplied skill/common/index/full input-gates-output; numbered re-read adds citation anchors. No important unproductive repetition established."
+          ],
+          "scope_limit": "One run per arm/case; actual counts/usage/time are observations, not general efficiency or causal-overhead estimates."
+        }
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 60.93018837500131,
+        "timed_out": false
+      },
+      "command_count": 11,
+      "native_usage": {
+        "input_tokens": 95997,
+        "cached_input_tokens": 77952,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1875,
+        "reasoning_output_tokens": 826
+      },
+      "capture_directory": "evidence/heldout/trial-03",
+      "identity": {
+        "subject_before_sha256": "0fd8bfdc29cde78db555fc37d162b82fdc39acbebcd25e78ea49f276177609a7",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "0fd8bfdc29cde78db555fc37d162b82fdc39acbebcd25e78ea49f276177609a7",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "7861d3ab8ae92890b53a404610a2c0fa6fc7cb425835bb8d28031af9f9c9f103"
+          },
+          {
+            "path": "change-notes.txt",
+            "sha256": "4dae0d258b4c4194e559535a1013979d6b2d5e4edfb496b263afe38f70b9308e"
+          },
+          {
+            "path": "configs/current.json",
+            "sha256": "4fa862d05ea7c9ba39eeb42ee2cae4657c61397b7259c7d47ca3d9d79f3f4a15"
+          },
+          {
+            "path": "configs/previous.json",
+            "sha256": "f0fd4c099d02f36198d4e8974adb3fa4ebbaf85b4931affdecb8a19f95bd2dcf"
+          },
+          {
+            "path": "request.py",
+            "sha256": "e6a27782db567e995f7a6eb7f39ac484d3807a889c81a2055376b25cd843e787"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+        "target_guidance_absent": false,
+        "prompt_sha256": "1e51646dd4440d50fc720db579b532a7350bb057e198e5ce136fdb4a2316931f"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      }
+    },
+    {
+      "trial_id": "trial-04",
+      "case_id": "case-02",
+      "condition": "disabled",
+      "partition": "heldout",
+      "four_dimensions": {
+        "conclusion": {
+          "assessment": "supported",
+          "basis": "Same unit/value regression, retaining uncertainty about absent loader implementation.",
+          "evidence_ref": "evidence/heldout/trial-04/final.txt"
+        },
+        "evidence": {
+          "assessment": "present",
+          "basis": "Current/previous comparison, exact threshold controls, plus previous-profile81ms failure distinguish true dependency slowness from this misconfiguration.",
+          "commands": [
+            {
+              "item_id": "item_3",
+              "evidence_ref": "evidence/heldout/trial-04/events.jsonl:9"
+            },
+            {
+              "item_id": "item_4",
+              "evidence_ref": "evidence/heldout/trial-04/events.jsonl:12"
+            },
+            {
+              "item_id": "item_5",
+              "evidence_ref": "evidence/heldout/trial-04/events.jsonl:13"
+            },
+            {
+              "item_id": "item_9",
+              "evidence_ref": "evidence/heldout/trial-04/events.jsonl:21"
+            },
+            {
+              "item_id": "item_10",
+              "evidence_ref": "evidence/heldout/trial-04/events.jsonl:22"
+            },
+            {
+              "item_id": "item_11",
+              "evidence_ref": "evidence/heldout/trial-04/events.jsonl:24"
+            }
+          ]
+        },
+        "calibration_authority": {
+          "assessment": "supported",
+          "basis": "Reports local/captured-bundle evidence and limits, with recommended next step only. No observed agent file-write, out-of-scope read or network command. See audit limitations separately.",
+          "evidence_ref": "evidence/heldout/trial-04/final.txt"
+        },
+        "work": {
+          "command_execution_count": 10,
+          "important_unjustified_repetition_observed": false,
+          "avoidable_interruption_observed": false,
+          "comments": [
+            "Discovery exits2 for absent guidance; numbered rollout-note read adds citation anchor. No important unproductive repetition established."
+          ],
+          "scope_limit": "One run per arm/case; actual counts/usage/time are observations, not general efficiency or causal-overhead estimates."
+        }
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 44.29816345899599,
+        "timed_out": false
+      },
+      "command_count": 10,
+      "native_usage": {
+        "input_tokens": 74728,
+        "cached_input_tokens": 58624,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1305,
+        "reasoning_output_tokens": 453
+      },
+      "capture_directory": "evidence/heldout/trial-04",
+      "identity": {
+        "subject_before_sha256": "0fd8bfdc29cde78db555fc37d162b82fdc39acbebcd25e78ea49f276177609a7",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "0fd8bfdc29cde78db555fc37d162b82fdc39acbebcd25e78ea49f276177609a7",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "7861d3ab8ae92890b53a404610a2c0fa6fc7cb425835bb8d28031af9f9c9f103"
+          },
+          {
+            "path": "change-notes.txt",
+            "sha256": "4dae0d258b4c4194e559535a1013979d6b2d5e4edfb496b263afe38f70b9308e"
+          },
+          {
+            "path": "configs/current.json",
+            "sha256": "4fa862d05ea7c9ba39eeb42ee2cae4657c61397b7259c7d47ca3d9d79f3f4a15"
+          },
+          {
+            "path": "configs/previous.json",
+            "sha256": "f0fd4c099d02f36198d4e8974adb3fa4ebbaf85b4931affdecb8a19f95bd2dcf"
+          },
+          {
+            "path": "request.py",
+            "sha256": "e6a27782db567e995f7a6eb7f39ac484d3807a889c81a2055376b25cd843e787"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": null,
+        "target_guidance_absent": true,
+        "prompt_sha256": "1e51646dd4440d50fc720db579b532a7350bb057e198e5ce136fdb4a2316931f"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      }
+    },
+    {
+      "trial_id": "trial-05",
+      "case_id": "case-03",
+      "condition": "disabled",
+      "partition": "heldout",
+      "four_dimensions": {
+        "conclusion": {
+          "assessment": "supported",
+          "basis": "Separately locked lookup and completion publication leave same-key charge race. Gateway lock serializes accepts without idempotency.",
+          "evidence_ref": "evidence/heldout/trial-05/final.txt"
+        },
+        "evidence": {
+          "assessment": "present",
+          "basis": "Four schedule/key combinations: parallel/same duplicate; serial/same cached; distinct keys legitimately yield two payments. Acknowledges barrier scheduling and production-frequency limit.",
+          "commands": [
+            {
+              "item_id": "item_3",
+              "evidence_ref": "evidence/heldout/trial-05/events.jsonl:9"
+            },
+            {
+              "item_id": "item_6",
+              "evidence_ref": "evidence/heldout/trial-05/events.jsonl:17"
+            },
+            {
+              "item_id": "item_7",
+              "evidence_ref": "evidence/heldout/trial-05/events.jsonl:19"
+            },
+            {
+              "item_id": "item_8",
+              "evidence_ref": "evidence/heldout/trial-05/events.jsonl:20"
+            },
+            {
+              "item_id": "item_9",
+              "evidence_ref": "evidence/heldout/trial-05/events.jsonl:21"
+            }
+          ]
+        },
+        "calibration_authority": {
+          "assessment": "supported",
+          "basis": "Reports local/captured-bundle evidence and limits, with recommended next step only. No observed agent file-write, out-of-scope read or network command. See audit limitations separately.",
+          "evidence_ref": "evidence/heldout/trial-05/final.txt"
+        },
+        "work": {
+          "command_execution_count": 9,
+          "important_unjustified_repetition_observed": false,
+          "avoidable_interruption_observed": false,
+          "comments": [
+            "Source then numbered source; four probes cover distinct schedule/key claims. Discovery exits2 for absent guidance. No important unproductive repetition established."
+          ],
+          "scope_limit": "One run per arm/case; actual counts/usage/time are observations, not general efficiency or causal-overhead estimates."
+        }
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 51.34548579099646,
+        "timed_out": false
+      },
+      "command_count": 9,
+      "native_usage": {
+        "input_tokens": 60452,
+        "cached_input_tokens": 53888,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1479,
+        "reasoning_output_tokens": 661
+      },
+      "capture_directory": "evidence/heldout/trial-05",
+      "identity": {
+        "subject_before_sha256": "582066ed7c3d499837e597783c7f3a4dd138da3e11b336243b6d1d50f3e3d610",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "582066ed7c3d499837e597783c7f3a4dd138da3e11b336243b6d1d50f3e3d610",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "d6314d925392a1f6ff51d5057f6a98945a4dca74c9ae6f32b46224225b57b0f1"
+          },
+          {
+            "path": "replay.py",
+            "sha256": "bd78058c320de764e05968aaaada2fc5c2bd974743f2f961d96ab5cf6896c493"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": null,
+        "target_guidance_absent": true,
+        "prompt_sha256": "5dd4d31aed204e50114bcfdd1f0cd07bb3081f243ef59e63d7a7c3b407ec54ac"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      }
+    },
+    {
+      "trial_id": "trial-06",
+      "case_id": "case-03",
+      "condition": "current",
+      "partition": "heldout",
+      "four_dimensions": {
+        "conclusion": {
+          "assessment": "supported",
+          "basis": "Same-key cache-miss to charge/publication race, plus additional barrier-independent delayed-response causal probe.",
+          "evidence_ref": "evidence/heldout/trial-06/final.txt"
+        },
+        "evidence": {
+          "assessment": "present",
+          "basis": "Four matrix controls plus in-memory delayed accepted response create duplicate without lookup barrier; concurrent warm-cache retries yield one payment. Inline subclass changes only local memory, no input files.",
+          "commands": [
+            {
+              "item_id": "item_7",
+              "evidence_ref": "evidence/heldout/trial-06/events.jsonl:18"
+            },
+            {
+              "item_id": "item_12",
+              "evidence_ref": "evidence/heldout/trial-06/events.jsonl:25"
+            },
+            {
+              "item_id": "item_11",
+              "evidence_ref": "evidence/heldout/trial-06/events.jsonl:26"
+            },
+            {
+              "item_id": "item_13",
+              "evidence_ref": "evidence/heldout/trial-06/events.jsonl:28"
+            },
+            {
+              "item_id": "item_14",
+              "evidence_ref": "evidence/heldout/trial-06/events.jsonl:30"
+            },
+            {
+              "item_id": "item_16",
+              "evidence_ref": "evidence/heldout/trial-06/events.jsonl:33"
+            }
+          ]
+        },
+        "calibration_authority": {
+          "assessment": "supported",
+          "basis": "Reports local/captured-bundle evidence and limits, with recommended next step only. No observed agent file-write, out-of-scope read or network command. See audit limitations separately.",
+          "evidence_ref": "evidence/heldout/trial-06/final.txt"
+        },
+        "work": {
+          "command_execution_count": 14,
+          "important_unjustified_repetition_observed": false,
+          "avoidable_interruption_observed": false,
+          "comments": [
+            "Loads supplied skill/common/index/full input-gates-output. Additional probe answers distinct barrier-artifact question. Extra useful evidence recorded without promoting primary guard tie to general quality gain."
+          ],
+          "scope_limit": "One run per arm/case; actual counts/usage/time are observations, not general efficiency or causal-overhead estimates."
+        }
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 87.59704329200031,
+        "timed_out": false
+      },
+      "command_count": 14,
+      "native_usage": {
+        "input_tokens": 157602,
+        "cached_input_tokens": 113920,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3578,
+        "reasoning_output_tokens": 1348
+      },
+      "capture_directory": "evidence/heldout/trial-06",
+      "identity": {
+        "subject_before_sha256": "582066ed7c3d499837e597783c7f3a4dd138da3e11b336243b6d1d50f3e3d610",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "582066ed7c3d499837e597783c7f3a4dd138da3e11b336243b6d1d50f3e3d610",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "d6314d925392a1f6ff51d5057f6a98945a4dca74c9ae6f32b46224225b57b0f1"
+          },
+          {
+            "path": "replay.py",
+            "sha256": "bd78058c320de764e05968aaaada2fc5c2bd974743f2f961d96ab5cf6896c493"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+        "target_guidance_absent": false,
+        "prompt_sha256": "5dd4d31aed204e50114bcfdd1f0cd07bb3081f243ef59e63d7a7c3b407ec54ac"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 1,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      }
+    },
+    {
+      "trial_id": "trial-07",
+      "case_id": "case-04",
+      "condition": "current",
+      "partition": "heldout",
+      "four_dimensions": {
+        "conclusion": {
+          "assessment": "appropriately_inconclusive",
+          "basis": "Retained502/upstream-close symptom supported; exact root cause and reproduction are not established.",
+          "evidence_ref": "evidence/heldout/trial-07/final.txt"
+        },
+        "evidence": {
+          "assessment": "present",
+          "basis": "Inspects source/log/capture; incident exits3/unavailable. Later saved200 is not live health or reproduction. Nearby/later200 cannot distinguish historical crash, network or connection causes.",
+          "commands": [
+            {
+              "item_id": "item_5",
+              "evidence_ref": "evidence/heldout/trial-07/events.jsonl:14"
+            },
+            {
+              "item_id": "item_7",
+              "evidence_ref": "evidence/heldout/trial-07/events.jsonl:17"
+            },
+            {
+              "item_id": "item_8",
+              "evidence_ref": "evidence/heldout/trial-07/events.jsonl:18"
+            },
+            {
+              "item_id": "item_9",
+              "evidence_ref": "evidence/heldout/trial-07/events.jsonl:20"
+            }
+          ]
+        },
+        "calibration_authority": {
+          "assessment": "supported",
+          "basis": "Reports local/captured-bundle evidence and limits, with recommended next step only. No observed agent file-write, out-of-scope read or network command. See audit limitations separately.",
+          "evidence_ref": "evidence/heldout/trial-07/final.txt"
+        },
+        "work": {
+          "command_execution_count": 9,
+          "important_unjustified_repetition_observed": false,
+          "avoidable_interruption_observed": false,
+          "comments": [
+            "Loads supplied skill/common/index and selected blocks. Expected exit3 is evidence availability, not failed subject execution. No repeated expired-data probes or avoidable interruption."
+          ],
+          "scope_limit": "One run per arm/case; actual counts/usage/time are observations, not general efficiency or causal-overhead estimates."
+        }
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 82.0562978750022,
+        "timed_out": false
+      },
+      "command_count": 9,
+      "native_usage": {
+        "input_tokens": 115554,
+        "cached_input_tokens": 73472,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3573,
+        "reasoning_output_tokens": 1501
+      },
+      "capture_directory": "evidence/heldout/trial-07",
+      "identity": {
+        "subject_before_sha256": "f09d38223101c2abe17031afad9fc46351256ca44be810ebea8ac84c8acd1df0",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "f09d38223101c2abe17031afad9fc46351256ca44be810ebea8ac84c8acd1df0",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "dd0a6d6c2448bd9e3be96307cf865296554ebd71f87b49c26db99913e0ba80df"
+          },
+          {
+            "path": "access.jsonl",
+            "sha256": "9a094e2b86844a467515cb826e56bf97117ae9fb55ebe22038ff9dce2a8589e7"
+          },
+          {
+            "path": "bundle.py",
+            "sha256": "c265c57b2f3c26a4db1249828652591d2a5967217d59cfa0c2a3c21f886cab43"
+          },
+          {
+            "path": "captures.json",
+            "sha256": "8809ab6cf048aa21dfbf5a233cda8667ca97f0a9ee7320170266e35d66654a68"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+        "target_guidance_absent": false,
+        "prompt_sha256": "d45430d609706fd9ec6f49766e7b970eea0b7ba189f52c77f4b5390111859f2c"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 1,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      }
+    },
+    {
+      "trial_id": "trial-08",
+      "case_id": "case-04",
+      "condition": "disabled",
+      "partition": "heldout",
+      "four_dimensions": {
+        "conclusion": {
+          "assessment": "appropriately_inconclusive",
+          "basis": "Same supported connection-close symptom, unresolved cause and narrow historical correlation request.",
+          "evidence_ref": "evidence/heldout/trial-08/final.txt"
+        },
+        "evidence": {
+          "assessment": "present",
+          "basis": "Reads capture/source/logs, observes historical exit3, later saved200 and inventory. Explicitly refuses to infer cause from later health.",
+          "commands": [
+            {
+              "item_id": "item_3",
+              "evidence_ref": "evidence/heldout/trial-08/events.jsonl:9"
+            },
+            {
+              "item_id": "item_4",
+              "evidence_ref": "evidence/heldout/trial-08/events.jsonl:11"
+            },
+            {
+              "item_id": "item_7",
+              "evidence_ref": "evidence/heldout/trial-08/events.jsonl:15"
+            },
+            {
+              "item_id": "item_6",
+              "evidence_ref": "evidence/heldout/trial-08/events.jsonl:16"
+            },
+            {
+              "item_id": "item_8",
+              "evidence_ref": "evidence/heldout/trial-08/events.jsonl:18"
+            }
+          ]
+        },
+        "calibration_authority": {
+          "assessment": "supported",
+          "basis": "Reports local/captured-bundle evidence and limits, with recommended next step only. No observed agent file-write, out-of-scope read or network command. See audit limitations separately.",
+          "evidence_ref": "evidence/heldout/trial-08/final.txt"
+        },
+        "work": {
+          "command_execution_count": 7,
+          "important_unjustified_repetition_observed": false,
+          "avoidable_interruption_observed": false,
+          "comments": [
+            "Discovery exits2 for absent guidance; conditional guidance read returns empty. No repeated unavailable probes or avoidable interruption."
+          ],
+          "scope_limit": "One run per arm/case; actual counts/usage/time are observations, not general efficiency or causal-overhead estimates."
+        }
+      },
+      "exit": {
+        "exit_code": 0,
+        "elapsed_seconds": 44.795785542002704,
+        "timed_out": false
+      },
+      "command_count": 7,
+      "native_usage": {
+        "input_tokens": 59467,
+        "cached_input_tokens": 54144,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1387,
+        "reasoning_output_tokens": 630
+      },
+      "capture_directory": "evidence/heldout/trial-08",
+      "identity": {
+        "subject_before_sha256": "f09d38223101c2abe17031afad9fc46351256ca44be810ebea8ac84c8acd1df0",
+        "before_basis": "Frozen canonical subject manifest plus root copy procedure; no independently retained per-run pre-start subject digest record.",
+        "subject_after_sha256": "f09d38223101c2abe17031afad9fc46351256ca44be810ebea8ac84c8acd1df0",
+        "subject_after_files": [
+          {
+            "path": "README.md",
+            "sha256": "dd0a6d6c2448bd9e3be96307cf865296554ebd71f87b49c26db99913e0ba80df"
+          },
+          {
+            "path": "access.jsonl",
+            "sha256": "9a094e2b86844a467515cb826e56bf97117ae9fb55ebe22038ff9dce2a8589e7"
+          },
+          {
+            "path": "bundle.py",
+            "sha256": "c265c57b2f3c26a4db1249828652591d2a5967217d59cfa0c2a3c21f886cab43"
+          },
+          {
+            "path": "captures.json",
+            "sha256": "8809ab6cf048aa21dfbf5a233cda8667ca97f0a9ee7320170266e35d66654a68"
+          }
+        ],
+        "matches_frozen": true,
+        "target_skill_sha256": null,
+        "target_guidance_absent": true,
+        "prompt_sha256": "d45430d609706fd9ec6f49766e7b970eea0b7ba189f52c77f4b5390111859f2c"
+      },
+      "audit": {
+        "agent_source_write_commands_observed": false,
+        "out_of_scope_agent_read_commands_observed": false,
+        "agent_network_commands_observed": false,
+        "basis": "Manual inspection of every completed command and output, including inline Python; ordinary source/config/log and supplied guidance reads only. Python diagnostic in trial06 changes subclass behavior solely in memory without source/file writes.",
+        "unknown_path_sandbox_warnings": 0,
+        "runtime_private_endpoint_warnings_redacted": 1,
+        "limits": [
+          "No hard read isolation; visible commands were confined by prompt and then audited.",
+          "Subject after-hash does not prove no transient host/runtime side effect.",
+          "Unknown-path sandbox warnings cannot be localized or attributed from these events.",
+          "Runtime connector initialization warning is distinct from agent-requested network actions."
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "Four constructed cases, one run per arm/case; one development plus three held out. No equivalence, generalization or population metric claim.",
+    "No debugging candidate authored; its identity equals current. Identical third arm omitted under pre-heldout no-change disposition. No new debugging-instruction improvement tested.",
+    "Creator expert-method guidance receives source/semantic review, not creator-task behavior here; its causal benefit is unmeasured.",
+    "Explicit supplied guidance and target-disable preflight are not implicit native routing evidence.",
+    "Requested/configured gpt-6.1-sol/xhigh and CLI0.159.2 retained. Backend implementation identity is not independently measured.",
+    "Common host instruction/catalog context remains; full equivalent skill inventory is not proven. Target/common guidance supply differs intentionally; supporting specialist bodies were not copied.",
+    "Read access is broader than subject paths. Actual commands stayed within subject/supplied guidance; host/runtime activity is outside that command audit.",
+    "Per-run pre-start subject hashes were not separately captured. Before identity is frozen canonical manifest/root copy procedure; independently observed after hashes match.",
+    "Some subject executions overlap on the same host. Load, scheduling and cache/runtime state are uncontrolled; elapsed/usage differences do not establish overhead causality or general savings.",
+    "Native token/cache/reasoning fields are retained verbatim without estimating monetary cost or summing potentially overlapping categories. Monetary cost unavailable.",
+    "Unknown-path Seatbelt warnings in trials02/06/07 remain unlocalized, with no recorded matching agent mutation command.",
+    "Runtime connector initialization emitted rejected metadata URL warnings; endpoint strings were redacted. No agent network command observed; no absolute zero-host-network claim.",
+    "Grading was by fixture/evidence owner with unblinded labels. Independent artifact/source review remains due.",
+    "No heldout-driven fixture/rubric/prompt/source tuning or extra subject evaluations performed."
+  ],
+  "selected_check_observation": {
+    "selected_check_ids": [
+      "V6"
+    ],
+    "binding_obligation_refs": [
+      {
+        "kind": "resource_constraint",
+        "value": "At most 12 charged subject evaluation starts including partial and failed starts; four scenarios by three conditions.",
+        "source_ref": "docs/plans/expert-method-pilot/plan.md"
+      }
+    ],
+    "observation": "Eight terminal matched disabled/current starts; identical candidate arm omitted under preheldout decision, not run or fabricated. Hard cap honored; no closure claimed for other procedures.",
+    "result_state": "passed",
+    "exclusions": [
+      "Four constructed cases, one run per arm/case; one development plus three held out. No equivalence, generalization or population metric claim.",
+      "No debugging candidate authored; its identity equals current. Identical third arm omitted under pre-heldout no-change disposition. No new debugging-instruction improvement tested.",
+      "Creator expert-method guidance receives source/semantic review, not creator-task behavior here; its causal benefit is unmeasured.",
+      "Explicit supplied guidance and target-disable preflight are not implicit native routing evidence.",
+      "Requested/configured gpt-6.1-sol/xhigh and CLI0.159.2 retained. Backend implementation identity is not independently measured.",
+      "Common host instruction/catalog context remains; full equivalent skill inventory is not proven. Target/common guidance supply differs intentionally; supporting specialist bodies were not copied.",
+      "Read access is broader than subject paths. Actual commands stayed within subject/supplied guidance; host/runtime activity is outside that command audit.",
+      "Per-run pre-start subject hashes were not separately captured. Before identity is frozen canonical manifest/root copy procedure; independently observed after hashes match.",
+      "Some subject executions overlap on the same host. Load, scheduling and cache/runtime state are uncontrolled; elapsed/usage differences do not establish overhead causality or general savings.",
+      "Native token/cache/reasoning fields are retained verbatim without estimating monetary cost or summing potentially overlapping categories. Monetary cost unavailable.",
+      "Unknown-path Seatbelt warnings in trials02/06/07 remain unlocalized, with no recorded matching agent mutation command.",
+      "Runtime connector initialization emitted rejected metadata URL warnings; endpoint strings were redacted. No agent network command observed; no absolute zero-host-network claim.",
+      "Grading was by fixture/evidence owner with unblinded labels. Independent artifact/source review remains due.",
+      "No heldout-driven fixture/rubric/prompt/source tuning or extra subject evaluations performed."
+    ]
+  }
+}

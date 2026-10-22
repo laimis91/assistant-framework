@@ -1,0 +1,41 @@
+{
+  "decision_stage": "after_development_trials_01_02_before_heldout",
+  "authority": "Root message directing evidence-supported no-change debugging disposition after both development runs.",
+  "source_commit": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+  "debugging_candidate_disposition": "no_change",
+  "current_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+  "candidate_skill_sha256": "f628d37b86e1831fee38e08a2f0827028a09edec32e7cf7cab60ccad815cccd2",
+  "evidence_refs": [
+    "evidence/development/rubric-assessment.json",
+    "evidence/development/trial-01/events.jsonl",
+    "evidence/development/trial-01/final.txt",
+    "evidence/development/trial-02/events.jsonl",
+    "evidence/development/trial-02/final.txt"
+  ],
+  "basis": "Disabled and current both produce correct causal localization, actual discriminating interventions/adverse control and bounded synthetic-workload claims, without observed agent mutation. No actual development deficit justifies speculative target additions.",
+  "scope": "Only debugging candidate disposition. Approved conditional creator guidance proceeds under source/semantic review; no creator-method causal gain claimed.",
+  "evaluation_allocation": {
+    "hard_cap_starts": 12,
+    "development_starts_completed": 2,
+    "remaining_planned_starts": 6,
+    "total_planned_starts": 8,
+    "conditions": [
+      "disabled",
+      "current"
+    ],
+    "omitted_candidate_starts": 4,
+    "omission_reason": "Candidate source is byte-identical to current. Four third-arm copies are redundant; omitted slots remain unused and are not repurposed.",
+    "failed_or_partial_starts_consume_cap": true,
+    "heldout_tuning_allowed": false
+  },
+  "unchanged_freeze": [
+    "prompts.json",
+    "rubric.md",
+    "source-manifest.json"
+  ],
+  "limits": [
+    "Development tie does not prove equivalence, general expertise or target skill benefit.",
+    "Held-out evidence remains unavailable at this decision stage.",
+    "Creator guidance cannot claim causal behavioral benefit from this debugging comparison."
+  ]
+}

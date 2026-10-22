@@ -1,0 +1,32 @@
+{
+  "base_id": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+  "candidate_source_identity": "sha256:913570b34ed29499518ab84ba308ba76997092fd320d916bf10afcb1e14f76e7",
+  "identity_method": "SHA-256 of sorted-key compact JSON source_files array in declared order",
+  "source_files": [
+    {
+      "path": "docs/skill-contract-design-guide.md",
+      "sha256": "14ddcd2c780dbb99b61c0be6bd03c038759159599442fedd51e140bbd897bd1c"
+    },
+    {
+      "path": "skills/assistant-skill-creator/SKILL.md",
+      "sha256": "80ceb04c681401abca2a6492be9e971c8d72ee31269ef37e5a7d2dfc5d9577f4"
+    },
+    {
+      "path": "skills/assistant-skill-creator/contracts/index.yaml",
+      "sha256": "84d10aaceec9afb8c13cde09ca750a999b29cbe0a1958b560c1574e7b44b5d5e"
+    },
+    {
+      "path": "skills/assistant-skill-creator/contracts/phase-gates.yaml",
+      "sha256": "2a42ed1869f4519f360327295e4465b22cafb69515c54684735377757bd2a9c6"
+    },
+    {
+      "path": "skills/assistant-skill-creator/references/expert-method-design.md",
+      "sha256": "84726d0a4767fbdc818936f099fc04abb697eb3ae7b0720365a975f06aecdaaf"
+    },
+    {
+      "path": "skills/assistant-skill-creator/references/skill-contract-design-guide.md",
+      "sha256": "14ddcd2c780dbb99b61c0be6bd03c038759159599442fedd51e140bbd897bd1c"
+    }
+  ],
+  "scope": "Six authoring sources only; frozen pilot baseline and fixture manifest unchanged by writer."
+}

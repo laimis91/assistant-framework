@@ -1,0 +1,269 @@
+{
+  "work_scope": {
+    "source_refs": [
+      "selection.json",
+      "review/selection-effective.json"
+    ],
+    "source_snapshot_ref": "impact/candidate-source-snapshot.json"
+  },
+  "verification_decision_ref": "review/selection-effective.json",
+  "source_snapshot_ref": "impact/candidate-source-snapshot.json",
+  "evidence_assessment": {
+    "status": "sufficient",
+    "scope_and_evidence_refs": [
+      {
+        "evidence_ref": "root handoff verification selection 2026-10-22",
+        "claim_kind": "other",
+        "claim_scope": [
+          "Existing focused checks; zero new executable-test assertions; four diagnosis-only scenarios and at most 12 charged evaluation starts; no full suite until actual diff is known."
+        ],
+        "selected_check_ids": [],
+        "binding_obligation_refs": [],
+        "result_state": "not_applicable",
+        "freshness": "current",
+        "exclusions": []
+      },
+      {
+        "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/V1.log",
+        "claim_kind": "structural_validity",
+        "claim_scope": [
+          "Bounded source/consumer validity only; exact command and log retained."
+        ],
+        "selected_check_ids": [
+          "V1"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No native activation, creator behavioral gain or general expert-equivalence claim."
+        ],
+        "executed_command": {
+          "check_id": "V1",
+          "argv": [
+            "tools/skills/validate-skills.sh",
+            "--skill",
+            "assistant-skill-creator"
+          ],
+          "cwd": "/tmp/assistant-expert-method-pilot-V1"
+        }
+      },
+      {
+        "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/V3.log",
+        "claim_kind": "structural_validity",
+        "claim_scope": [
+          "Bounded source/consumer validity only; exact command and log retained."
+        ],
+        "selected_check_ids": [
+          "V3"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No native activation, creator behavioral gain or general expert-equivalence claim."
+        ],
+        "executed_command": {
+          "check_id": "V3",
+          "argv": [
+            "tools/skills/sync-skill-contract-guide.sh",
+            "--check"
+          ],
+          "cwd": "/tmp/assistant-expert-method-pilot-V1"
+        }
+      },
+      {
+        "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/V4-creator.log",
+        "claim_kind": "structural_validity",
+        "claim_scope": [
+          "Bounded source/consumer validity only; exact command and log retained."
+        ],
+        "selected_check_ids": [
+          "V4-creator"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No native activation, creator behavioral gain or general expert-equivalence claim."
+        ],
+        "executed_command": {
+          "check_id": "V4-creator",
+          "argv": [
+            "bash",
+            "tests/p0-p4/skill-creator-semantic-contracts.sh"
+          ],
+          "cwd": "/tmp/assistant-expert-method-pilot-V1"
+        }
+      },
+      {
+        "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/V4-guide.log",
+        "claim_kind": "structural_validity",
+        "claim_scope": [
+          "Bounded source/consumer validity only; exact command and log retained."
+        ],
+        "selected_check_ids": [
+          "V4-guide"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No native activation, creator behavioral gain or general expert-equivalence claim."
+        ],
+        "executed_command": {
+          "check_id": "V4-guide",
+          "argv": [
+            "bash",
+            "tests/p0-p4/skill-contract-guide-sync.sh"
+          ],
+          "cwd": "/tmp/assistant-expert-method-pilot-V1"
+        }
+      },
+      {
+        "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/aggregate-skills.log",
+        "claim_kind": "structural_validity",
+        "claim_scope": [
+          "Bounded source/consumer validity only; exact command and log retained."
+        ],
+        "selected_check_ids": [
+          "V8"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No native activation, creator behavioral gain or general expert-equivalence claim."
+        ],
+        "executed_command": {
+          "check_id": "V8",
+          "argv": [
+            "tools/skills/validate-skills.sh"
+          ],
+          "cwd": "/tmp/assistant-expert-method-pilot-V1"
+        }
+      },
+      {
+        "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/aggregate-fixtures.log",
+        "claim_kind": "structural_validity",
+        "claim_scope": [
+          "Bounded source/consumer validity only; exact command and log retained."
+        ],
+        "selected_check_ids": [
+          "V9"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No native activation, creator behavioral gain or general expert-equivalence claim."
+        ],
+        "executed_command": {
+          "check_id": "V9",
+          "argv": [
+            "tools/evals/run-skill-evals.sh",
+            "--validate-fixture"
+          ],
+          "cwd": "/tmp/assistant-expert-method-pilot-V1"
+        }
+      },
+      {
+        "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/diff-check.log",
+        "claim_kind": "structural_validity",
+        "claim_scope": [
+          "Bounded source/consumer validity only; exact command and log retained."
+        ],
+        "selected_check_ids": [
+          "V10"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No native activation, creator behavioral gain or general expert-equivalence claim."
+        ],
+        "executed_command": {
+          "check_id": "V10",
+          "argv": [
+            "git",
+            "diff",
+            "--check"
+          ],
+          "cwd": "/tmp/assistant-expert-method-pilot-V1"
+        }
+      },
+      {
+        "evidence_ref": "docs/plans/expert-method-pilot/impact/verification/V5-source-inspection.md",
+        "claim_kind": "other",
+        "claim_scope": [
+          "Authored source and reference/gate paths only; root separately closes fixture smoke and subject/oracle separation."
+        ],
+        "selected_check_ids": [
+          "V5"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No native activation, creator behavioral gain or general expert-equivalence claim."
+        ]
+      },
+      {
+        "evidence_ref": "development/smoke-results.json + sealed/smoke-results.json + source-manifest.json + report-freeze.json",
+        "claim_kind": "other",
+        "claim_scope": [
+          "V5 fixture/oracle separation and actual adverse-control evidence independently inspected; immutable source/subject/oracle identities match. P2-integration independently reviews this claim."
+        ],
+        "selected_check_ids": [
+          "V5"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "Constructed scenarios do not represent all workloads."
+        ]
+      },
+      {
+        "evidence_ref": "nochange-decision.json + impact/candidate-source-snapshot.json",
+        "claim_kind": "other",
+        "claim_scope": [
+          "V2 is not due: debugging source was not changed. Candidate/current debugging identities are equal."
+        ],
+        "selected_check_ids": [
+          "V2"
+        ],
+        "binding_obligation_refs": [],
+        "result_state": "not_applicable",
+        "freshness": "current",
+        "exclusions": []
+      },
+      {
+        "evidence_ref": "results.json + results.md + evidence/capture-manifest.json",
+        "claim_kind": "comparative_value",
+        "claim_scope": [
+          "V6 completed eight recorded fresh subject runs, all terminal exit 0 without retries; four paired supported or appropriately inconclusive conclusions, extra current concurrency control retained; no demonstrated general gain. Eight of twelve starts used, four skipped identical candidate starts remain unused."
+        ],
+        "selected_check_ids": [
+          "V6"
+        ],
+        "binding_obligation_refs": [
+          {
+            "kind": "resource_constraint",
+            "value": "At most 12 charged subject evaluation starts including partial and failed starts; four scenarios by three conditions.",
+            "source_ref": "docs/plans/expert-method-pilot/plan.md"
+          }
+        ],
+        "result_state": "passed",
+        "freshness": "current",
+        "exclusions": [
+          "No creator-task comparison, population performance claim, guaranteed hard read isolation or backend equivalence."
+        ]
+      }
+    ],
+    "gaps_and_limitations": [
+      "Sufficient for pre-review source and bounded observation claims only. V7 is pending this replacement batch and is not a Build prerequisite. Creator behavior benefit remains unmeasured; all report limits apply."
+    ],
+    "next_action": "Complete the independently frozen batch and rehash before closing V7."
+  }
+}

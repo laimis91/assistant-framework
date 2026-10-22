@@ -1,0 +1,161 @@
+{
+  "status": "DONE",
+  "round": 1,
+  "batch_id": "expert-method-review-batch-1",
+  "review_snapshot_id": "expert-method-source-and-pilot-snapshot-1",
+  "snapshot_identity": {
+    "basis": "content_digest",
+    "value": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+    "captured_at": "2026-10-22T18:26:57.512055+00:00",
+    "scope_manifest_digest": "sha256:cbf156285cf168b146658ab4a07f7fb127897a770f30a73e04c934a9e02b5ed1"
+  },
+  "review_pass_id": "P-evidence",
+  "review_attempt_id": "expert-method-review-attempt-1",
+  "review_perspective": "integration_compatibility_and_consumers",
+  "pass_completion_state": "completed",
+  "reviewed_scope": [
+    "docs/plans/expert-method-pilot/results.md and results.json",
+    "docs/plans/expert-method-pilot/plan.md, selection.json, conditions.md, conditions-addendum.md, prompts.json, rubric.md, source-manifest.json, nochange-decision.json and report-freeze.json",
+    "All four subject implementations, supporting inputs, case oracles and retained smoke controls",
+    "All eight retained events.jsonl, final.txt, prompt.txt, start.json, exit.json and stderr.redacted.txt captures",
+    "docs/plans/expert-method-pilot/evidence/capture-manifest.json, runtime-final.json and development/preflight-summary.json",
+    "skills/assistant-skill-creator/SKILL.md and references/expert-method-design.md, limited to downstream integration and observation-claim boundaries"
+  ],
+  "findings": [
+
+  ],
+  "coverage_entries": [
+    {
+      "scope_item_id": "scope-pilot-evidence",
+      "applicable_concern": "concern-evaluation-evidence",
+      "review_perspective": "integration_compatibility_and_consumers",
+      "coverage_obligation": "validate-pilot-oracles-traces-claims-and-resource-bound",
+      "status": "inspected_no_risk",
+      "evidence": "Inspected all four implementations/oracles, all eight final responses and all 82 completed command events, including inline Python. Runnable cases contain discriminating interventions and adverse controls; historical-evidence cases actually observe exit 3 and abstain from exact causality. Independently reconciled command counts, referenced event lines/item IDs, final messages, native usage, starts/exits, preserved-file hashes and paired prompts. All 117 report-freeze file hashes and all frozen fixture/oracle hashes match. Eight recorded starts precede terminal exit 0; held-out starts follow the recorded no-change freeze. Reports retain the resource and isolation limits."
+    },
+    {
+      "scope_item_id": "scope-creator-human",
+      "applicable_concern": "concern-downstream-integration",
+      "review_perspective": "integration_compatibility_and_consumers",
+      "coverage_obligation": "validate-authoring-change-and-observation-claim-boundaries",
+      "status": "inspected_no_risk",
+      "evidence": "SKILL.md:70-76 conditionally routes expert-judgment authoring. expert-method-design.md:11-38 reuses existing success criteria and canonical verification outputs; lines 40-46 and 58-63 explicitly withhold measured creator-benefit claims. results.md:11-14 and 122-125 separately disclose that no creator-task comparison occurred. The debugging tie is not presented as evidence of creator improvement or used to justify a debugging source change."
+    }
+  ],
+  "summary": "No material findings within the reviewed scope and available evidence. The retained executions support the reported four-case diagnosis/authority tie, including appropriate inconclusive outcomes. The report preserves the useful extra concurrency observation without promoting it to a stable advantage. Creator guidance remains an authoring hypothesis assessed separately from this debugging comparison. This is the P-evidence verdict only.",
+  "evidence": [
+    {
+      "source": "/Users/laimis/.codex/skills/assistant-review/contracts/handoffs.yaml",
+      "detail": "Resolved fresh_reviewer_context.worker_return_schema_selector to handoffs.orchestrator_to_reviewer.return_fields and loaded its recursive required/conditional field shapes; this return follows that schema."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/rubric.md and four case oracles",
+      "detail": "Accept equivalent causal explanations and actual discriminating observations; reject exception-label diagnosis, dependency-slowdown assumptions, distinct-key false duplicates and invented historical causes."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/evidence/development/trial-01/events.jsonl:20",
+      "detail": "Genuine database-delay control reaches one query, while lines 21-22 show admission failure with zero queries even at zero database delay. Trial-02 independently provides the same distinction."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/evidence/heldout/trial-03/events.jsonl:16",
+      "detail": "Current profile fails at 30 ms versus 0.08 ms; line 18 shows previous profile succeeding at the same delay. Both arms probe the threshold and qualify the missing producer/loader implementation."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/evidence/heldout/trial-06/events.jsonl:33",
+      "detail": "Inspected the entire in-memory delayed-response probe and its output. It demonstrates two accepted same-key payments without the lookup barrier, then demonstrates cached replies after publication. No source write occurs. Both concurrency arms also execute serial/same and distinct-key controls."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/evidence/heldout/trial-07/events.jsonl:18",
+      "detail": "Historical capture actually exits 3 as unavailable; line 20 returns a later saved health response. Trial-08 independently observes the same distinction, and both final answers leave the exact cause unresolved."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/evidence/capture-manifest.json",
+      "detail": "Reconciliation found no mismatches among completed-command counts, inventory references, result references, native usage, start/exit records, final agent messages and all 48 preserved capture-file hashes. All four current traces contain the exact frozen target body; disabled traces do not. All paired prompts and common CLI arguments match."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/report-freeze.json and source-manifest.json",
+      "detail": "Independently verified all 117 declared file hashes, report-list digest, frozen artifacts, four subject file sets/tree digests and oracle hashes. This verifies retained bytes, not historical pre-start hashing or all host state."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/results.md:94",
+      "detail": "Clearly records the independent per-run pre-start hash gap, broader read access, unlocalized sandbox warnings and limits of command auditing. Warning counts reconcile to trials 02, 06 and 07."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/results.md:113",
+      "detail": "Redaction disclosures match one private-endpoint replacement per stderr. Retained evidence contains no HTTP(S) URL strings; raw configuration and full preflight context are excluded. Original stderr redaction correctness is supported by recorded hashes/disclosure, not independently reconstructed here."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/results.md:68",
+      "detail": "Resource figures match native turn-completed usage and exit elapsed records. No overlapping categories are summed, monetary cost is unavailable, and concurrent host/load/cache confounding is explicit."
+    },
+    {
+      "source": "docs/plans/expert-method-pilot/selection.json",
+      "detail": "Preserved the selected boundary: existing checks, zero new executable-test assertions, TDD false/not_selected and a 12-start hard cap. This pass used read-only artifact inspection and reconciliation; no model evaluations, fixture executions, edits or additional tests were performed."
+    }
+  ],
+  "semantic_contract_checks": {
+    "inherited_contract_obligations": "Within this pass, diagnosis-only authority and calibrated evidence are retained. Creator detail reuses existing success criteria and verification carriers. No claim of full debugging output-schema conformance is inferred from the pilot.",
+    "template_contract_alignment": "No competing report/schema is introduced by the inspected creator reference. Detailed selector/gate validation belongs to the separate assigned contract pass.",
+    "eval_inheritance_coverage": "The pilot checks conclusions, actual evidence, authority and observed work separately; frozen controls reject plausible wrong outcomes and accept supported inconclusive results.",
+    "external_method_signature_fidelity": "No measured benefit is attributed to the cited authoring methods. External-source fidelity itself is outside this integration pass.",
+    "high_stakes_recommendation_guard": "Synthetic payment and incident tasks remain local diagnosis-only observations; no real payment, remote access or applied repair is authorized or observed.",
+    "mirror_surface_sync": "No runtime result is used to claim native activation or generated-surface correctness. Guide parity is assigned to the separate contract pass."
+  },
+  "principle_checks": {
+    "solid": "No concrete risk found within the inspected integration boundary.",
+    "kiss": "No concrete risk found; the no-change disposition avoids an unsupported debugging addition and redundant identical third-arm observations.",
+    "dry": "No concrete risk found; creator detail reuses canonical success criteria and verification outputs.",
+    "yagni": "No concrete risk found; no universal expert mode, new schema, quota or dependency is introduced by the inspected authoring detail.",
+    "readability": "No concrete risk found; results separate conclusions, commands, authority, resources and preservation limits.",
+    "design_coherence": "No concrete risk found. Creator guidance owns authoring decisions; the pilot owns bounded debugging observations. Neither claims the other's validation."
+  },
+  "reuse_search": {
+    "applicability": "applicable",
+    "applicability_reason": "Checked whether authoring and evaluation claim rules reuse existing verification semantics rather than establish competing authority.",
+    "searches": [
+      {
+        "query_or_path": "skills/assistant-verification/references/methods/behavioral-evals.md",
+        "scope": "Existing behavioral-evaluation guidance",
+        "outcome": "Already distinguishes forced loading/native routing, actual observations, adverse outcomes, frozen comparisons, ties and resource limits."
+      },
+      {
+        "query_or_path": "skills/assistant-skill-creator/SKILL.md:84-104",
+        "scope": "Existing creator validation and evidence consumers",
+        "outcome": "Canonical selection/evidence, TDD choice and runtime claim boundaries remain the consumed interfaces."
+      }
+    ],
+    "candidates": [
+      {
+        "name": "Canonical behavioral-evaluation guidance",
+        "location": "skills/assistant-verification/references/methods/behavioral-evals.md",
+        "disposition": "reuse",
+        "rationale": "The pilot follows these existing claim and observation distinctions."
+      },
+      {
+        "name": "Creator canonical verification carriers",
+        "location": "skills/assistant-skill-creator/SKILL.md:91-104",
+        "disposition": "reuse",
+        "rationale": "The new reference directs existing consumers to unchanged carriers."
+      }
+    ],
+    "decision": "reuse",
+    "decision_rationale": "No conflicting authoritative evaluation rule or additional universal output requirement was found within the assigned scope."
+  },
+  "rubric_scores": {
+    "correctness": 5.0,
+    "code_quality": 5.0,
+    "architecture": 5.0,
+    "security": 5.0,
+    "test_coverage": 4.0,
+    "weighted_score": 4.85,
+    "action": "PASS",
+    "score_justification": {
+      "correctness": "results.md:3-14 and 42-66 agree with inspected commands and final answers; claims remain bounded to the observed cases.",
+      "code_quality": "results.md separates outcome, evidence, resource observations and limits; exact event references resolve.",
+      "architecture": "expert-method-design.md:32-38 retains canonical verification ownership; creator and debugging evidence boundaries remain separate.",
+      "security": "Captured commands stay local and diagnosis-only; stderr endpoints are redacted with disclosure. Broader host effects remain explicitly unknown.",
+      "test_coverage": "Selected artifact/behavior evidence is discriminating and current. Independent per-run pre-start hashes and complete host/backend/inventory equality remain explicit limitations, without stronger claims."
+    }
+  },
+  "verdict": "clean"
+}

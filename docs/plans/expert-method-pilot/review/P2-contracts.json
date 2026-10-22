@@ -1,0 +1,153 @@
+{
+  "batch_id": "expert-method-review-batch-2",
+  "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2",
+  "snapshot_identity": {
+    "basis": "content_digest",
+    "value": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+    "captured_at": "2026-10-22T18:35:50.699515+00:00",
+    "scope_manifest_digest": "sha256:cbf156285cf168b146658ab4a07f7fb127897a770f30a73e04c934a9e02b5ed1"
+  },
+  "round": 2,
+  "review_attempt_id": "expert-method-review-attempt-2",
+  "scope_size": "medium",
+  "semantic_contract_review_required": true,
+  "behavioral_contract_review_required": false,
+  "agentic_loop_safety_review_required": false,
+  "architecture_decision_pack_review_required": false,
+  "architecture_design_mode": "not_applicable",
+  "additional_round_reason": {
+    "reason": "coverage_gap",
+    "evidence_ref": "review/history/batch-1-invalidity.json",
+    "detail": "The first batch omitted runtime_lifecycle_and_failure_paths and lacked a canonical topology. Preserve its actual returns as historical incomplete evidence; do not relabel or reuse them as fresh current coverage. This replacement batch uses the same unchanged source and report bytes."
+  },
+  "review_preparation_mode": "workflow_composed",
+  "pre_batch_criteria_ref": "/tmp/expert-pilot-review/batch2/criteria.json",
+  "build_test_verification_ref": {
+    "evidence_ref": "/tmp/expert-pilot-review/batch2/pre-review-evidence.json"
+  },
+  "review_material_snapshot": {
+    "kind": "task_snapshot",
+    "summary": "Approved six-source authoring guidance and frozen pilot observations.",
+    "material": "/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/impact/source.diff",
+    "files": [
+      {
+        "path": "docs/skill-contract-design-guide.md",
+        "sha256": "14ddcd2c780dbb99b61c0be6bd03c038759159599442fedd51e140bbd897bd1c"
+      },
+      {
+        "path": "skills/assistant-skill-creator/SKILL.md",
+        "sha256": "80ceb04c681401abca2a6492be9e971c8d72ee31269ef37e5a7d2dfc5d9577f4"
+      },
+      {
+        "path": "skills/assistant-skill-creator/contracts/index.yaml",
+        "sha256": "84d10aaceec9afb8c13cde09ca750a999b29cbe0a1958b560c1574e7b44b5d5e"
+      },
+      {
+        "path": "skills/assistant-skill-creator/contracts/phase-gates.yaml",
+        "sha256": "2a42ed1869f4519f360327295e4465b22cafb69515c54684735377757bd2a9c6"
+      },
+      {
+        "path": "skills/assistant-skill-creator/references/expert-method-design.md",
+        "sha256": "84726d0a4767fbdc818936f099fc04abb697eb3ae7b0720365a975f06aecdaaf"
+      },
+      {
+        "path": "skills/assistant-skill-creator/references/skill-contract-design-guide.md",
+        "sha256": "14ddcd2c780dbb99b61c0be6bd03c038759159599442fedd51e140bbd897bd1c"
+      }
+    ],
+    "scope_manifest": [
+      {
+        "scope_item_id": "scope-creator-human",
+        "locator": "skills/assistant-skill-creator/SKILL.md + skills/assistant-skill-creator/references/expert-method-design.md",
+        "content_digest": "sha256:f1d6275bf2c81a7030c485d2265f142f9f01d3cfbdd9ad5dfcb8c1451e221e65",
+        "applicable_concerns": [
+          "concern-method-quality",
+          "concern-downstream-integration"
+        ]
+      },
+      {
+        "scope_item_id": "scope-creator-structured",
+        "locator": "skills/assistant-skill-creator/contracts/index.yaml + skills/assistant-skill-creator/contracts/phase-gates.yaml",
+        "content_digest": "sha256:430061261fb275f84350aebb52b0c93b6b66258954b68b493ba519353b3e4919",
+        "applicable_concerns": [
+          "concern-gate-loading-compatibility"
+        ]
+      },
+      {
+        "scope_item_id": "scope-guide",
+        "locator": "docs/skill-contract-design-guide.md + skills/assistant-skill-creator/references/skill-contract-design-guide.md",
+        "content_digest": "sha256:e5c0c260b18270572da144924d438513c0ac5938db09e18141c7482d84826c27",
+        "applicable_concerns": [
+          "concern-conditionality",
+          "concern-parity-consumers"
+        ]
+      },
+      {
+        "scope_item_id": "scope-pilot-evidence",
+        "locator": "docs/plans/expert-method-pilot/report-freeze.json (117 declared files)",
+        "content_digest": "sha256:a7282fd4ed8dc70c76dd5a554da6e3428bafbb9a881fdd45e15ad710e8aaf5d6",
+        "applicable_concerns": [
+          "concern-evaluation-evidence"
+        ]
+      }
+    ],
+    "snapshot_identity": {
+      "basis": "content_digest",
+      "value": "sha256:fa0979e10c8e6e9ae6832b0fd49c0e6be39cc229ae96ef2ba94874b2cd382c3e",
+      "captured_at": "2026-10-22T18:35:50.699515+00:00",
+      "scope_manifest_digest": "sha256:cbf156285cf168b146658ab4a07f7fb127897a770f30a73e04c934a9e02b5ed1"
+    },
+    "review_snapshot_id": "expert-method-source-and-pilot-snapshot-2"
+  },
+  "review_pass_id": "P2-contracts",
+  "review_perspective": "contract_and_test_oracle",
+  "assigned_scope": [
+    "scope-creator-structured",
+    "scope-guide"
+  ],
+  "coverage_obligations": [
+    "validate-selectors-gate-recovery-and-retained-consumer-interfaces",
+    "validate-canonical-generated-guide-parity-and-scope",
+    "validate-material-capability-trigger-and-exclusions"
+  ],
+  "coverage_tuples": [
+    {
+      "review_pass_id": "P2-contracts",
+      "scope_item_id": "scope-creator-structured",
+      "applicable_concern": "concern-gate-loading-compatibility",
+      "review_perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-selectors-gate-recovery-and-retained-consumer-interfaces"
+    },
+    {
+      "review_pass_id": "P2-contracts",
+      "scope_item_id": "scope-guide",
+      "applicable_concern": "concern-parity-consumers",
+      "review_perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-canonical-generated-guide-parity-and-scope"
+    },
+    {
+      "review_pass_id": "P2-contracts",
+      "scope_item_id": "scope-guide",
+      "applicable_concern": "concern-conditionality",
+      "review_perspective": "contract_and_test_oracle",
+      "coverage_obligation": "validate-material-capability-trigger-and-exclusions"
+    }
+  ],
+  "review_focus": [
+    "spec",
+    "regression",
+    "semantic_contract",
+    "design_coherence"
+  ],
+  "previously_fixed": [],
+  "finding_filter_policy": "Only concrete evidence-backed defects; no taste, speculation or score-only work.",
+  "project_type": "framework",
+  "quality_principles_required": true,
+  "reuse_search_instruction": "Perform a fresh bounded independent search for existing capability relevant to your pass; carried mapper results are not enough.",
+  "rubric_required": true,
+  "worker_return_schema_selector": {
+    "return_schema_ref": "handoffs.orchestrator_to_reviewer.return_fields",
+    "source_path": "/Users/laimis/.codex/skills/assistant-review/contracts/handoffs.yaml",
+    "resolution": "Recursively load the named return_fields and confirm the parsed schema equals /tmp/expert-pilot-review/batch2/return-schema.json before response; do not guess a partial schema."
+  }
+}

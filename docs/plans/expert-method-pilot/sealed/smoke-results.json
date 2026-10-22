@@ -1,0 +1,358 @@
+{
+  "kind": "fixture_preparation_not_model_evaluation",
+  "observations": [
+    {
+      "case_id": "case-02",
+      "argv": [
+        "python3",
+        "request.py"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-02/subject",
+      "exit_code": 0,
+      "stdout": {
+        "dependency_delay_ms": 30,
+        "profile": "after-rollout",
+        "status": "upstream_timeout",
+        "timeout_ms": 0.08
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.032527,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-02",
+      "argv": [
+        "python3",
+        "request.py",
+        "--profile",
+        "configs/previous.json"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-02/subject",
+      "exit_code": 0,
+      "stdout": {
+        "dependency_delay_ms": 30,
+        "profile": "before-rollout",
+        "status": "ok",
+        "timeout_ms": 80.0
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.033119,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-02",
+      "argv": [
+        "python3",
+        "request.py",
+        "--dependency-delay-ms",
+        "0"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-02/subject",
+      "exit_code": 0,
+      "stdout": {
+        "dependency_delay_ms": 0.0,
+        "profile": "after-rollout",
+        "status": "ok",
+        "timeout_ms": 0.08
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.033618,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-02",
+      "argv": [
+        "python3",
+        "request.py",
+        "--profile",
+        "configs/previous.json",
+        "--dependency-delay-ms",
+        "100"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-02/subject",
+      "exit_code": 0,
+      "stdout": {
+        "dependency_delay_ms": 100.0,
+        "profile": "before-rollout",
+        "status": "upstream_timeout",
+        "timeout_ms": 80.0
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.034106,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-03",
+      "argv": [
+        "python3",
+        "replay.py"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-03/subject",
+      "exit_code": 0,
+      "stdout": {
+        "completed": {
+          "order-17": "receipt-2"
+        },
+        "gateway_attempts": 2,
+        "gateway_payments": [
+          {
+            "checkout_key": "order-17",
+            "receipt": "receipt-1",
+            "status": "accepted"
+          },
+          {
+            "checkout_key": "order-17",
+            "receipt": "receipt-2",
+            "status": "accepted"
+          }
+        ],
+        "replies": [
+          {
+            "cached": false,
+            "key": "order-17",
+            "receipt": "receipt-2"
+          },
+          {
+            "cached": false,
+            "key": "order-17",
+            "receipt": "receipt-1"
+          }
+        ],
+        "request_keys": [
+          "order-17",
+          "order-17"
+        ],
+        "schedule": "parallel"
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.048994,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-03",
+      "argv": [
+        "python3",
+        "replay.py",
+        "--schedule",
+        "serial"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-03/subject",
+      "exit_code": 0,
+      "stdout": {
+        "completed": {
+          "order-17": "receipt-1"
+        },
+        "gateway_attempts": 1,
+        "gateway_payments": [
+          {
+            "checkout_key": "order-17",
+            "receipt": "receipt-1",
+            "status": "accepted"
+          }
+        ],
+        "replies": [
+          {
+            "cached": false,
+            "key": "order-17",
+            "receipt": "receipt-1"
+          },
+          {
+            "cached": true,
+            "key": "order-17",
+            "receipt": "receipt-1"
+          }
+        ],
+        "request_keys": [
+          "order-17",
+          "order-17"
+        ],
+        "schedule": "serial"
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.035559,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-03",
+      "argv": [
+        "python3",
+        "replay.py",
+        "--keys",
+        "distinct"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-03/subject",
+      "exit_code": 0,
+      "stdout": {
+        "completed": {
+          "order-17": "receipt-2",
+          "order-18": "receipt-1"
+        },
+        "gateway_attempts": 2,
+        "gateway_payments": [
+          {
+            "checkout_key": "order-18",
+            "receipt": "receipt-1",
+            "status": "accepted"
+          },
+          {
+            "checkout_key": "order-17",
+            "receipt": "receipt-2",
+            "status": "accepted"
+          }
+        ],
+        "replies": [
+          {
+            "cached": false,
+            "key": "order-17",
+            "receipt": "receipt-2"
+          },
+          {
+            "cached": false,
+            "key": "order-18",
+            "receipt": "receipt-1"
+          }
+        ],
+        "request_keys": [
+          "order-17",
+          "order-18"
+        ],
+        "schedule": "parallel"
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.035625,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-03",
+      "argv": [
+        "python3",
+        "replay.py",
+        "--schedule",
+        "serial",
+        "--keys",
+        "distinct"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-03/subject",
+      "exit_code": 0,
+      "stdout": {
+        "completed": {
+          "order-17": "receipt-1",
+          "order-18": "receipt-2"
+        },
+        "gateway_attempts": 2,
+        "gateway_payments": [
+          {
+            "checkout_key": "order-17",
+            "receipt": "receipt-1",
+            "status": "accepted"
+          },
+          {
+            "checkout_key": "order-18",
+            "receipt": "receipt-2",
+            "status": "accepted"
+          }
+        ],
+        "replies": [
+          {
+            "cached": false,
+            "key": "order-17",
+            "receipt": "receipt-1"
+          },
+          {
+            "cached": false,
+            "key": "order-18",
+            "receipt": "receipt-2"
+          }
+        ],
+        "request_keys": [
+          "order-17",
+          "order-18"
+        ],
+        "schedule": "serial"
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.0338,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-04",
+      "argv": [
+        "python3",
+        "bundle.py",
+        "inventory"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-04/subject",
+      "exit_code": 0,
+      "stdout": {
+        "exported_at": "2026-10-21T15:00:00Z",
+        "files": [
+          "README.md",
+          "access.jsonl",
+          "bundle.py",
+          "captures.json"
+        ],
+        "incident_window": "2026-10-21T11:03:00Z/2026-10-21T11:03:05Z"
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.032121,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-04",
+      "argv": [
+        "python3",
+        "bundle.py",
+        "current"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-04/subject",
+      "exit_code": 0,
+      "stdout": {
+        "body": {
+          "healthy": true
+        },
+        "captured_at": "2026-10-21T14:59:00Z",
+        "request_id": "probe-17",
+        "status": 200
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.031497,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    },
+    {
+      "case_id": "case-04",
+      "argv": [
+        "python3",
+        "bundle.py",
+        "incident"
+      ],
+      "cwd": "/private/tmp/assistant-expert-method-pilot-V1/docs/plans/expert-method-pilot/sealed/heldout/case-04/subject",
+      "exit_code": 3,
+      "stdout": {
+        "availability": "unavailable",
+        "included": [
+          "access.jsonl"
+        ],
+        "missing": [
+          "gateway request trace",
+          "catalog process events",
+          "connection telemetry"
+        ],
+        "reason": "process events and packet traces expired before export"
+      },
+      "stderr": "",
+      "elapsed_seconds": 0.032205,
+      "timeout_seconds": 5,
+      "expectation_passed": true
+    }
+  ]
+}

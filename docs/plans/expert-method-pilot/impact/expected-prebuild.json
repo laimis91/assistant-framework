@@ -1,0 +1,64 @@
+{
+  "schema_version": "change-impact-expected-context/v1",
+  "authority_id": "root-independent-approved-source-inventory-2026-10-22",
+  "capture_id": "creator-expert-method-prebuild-v1",
+  "snapshot": {
+    "base_id": "c920fd89ee232032aafd2541dd51c9c5bd9744f3",
+    "candidate_id": "approved-creator-method-design-v1",
+    "universe_id": "sha256:7430fd29ea9e156556f8afb1c8614045405a3574aae0c8dfa0cd296ff5943983"
+  },
+  "required_impact_scope": "shared",
+  "required_edges": [
+    {
+      "id": "edge-natural",
+      "consumer_id": "creator-human-authoring",
+      "contract_id": "expert-method-design",
+      "dependency_kind": "public",
+      "presence": "both",
+      "source_id": "skills/assistant-skill-creator/SKILL.md@sha256:e68d7a9913663b088d18bba0eb8b9a7dd595a28a22a9c1b4323e2d821e3cad0f"
+    },
+    {
+      "id": "edge-structured",
+      "consumer_id": "creator-DESIGN-consumer",
+      "contract_id": "expert-method-design",
+      "dependency_kind": "config",
+      "presence": "both",
+      "source_id": "skills/assistant-skill-creator/contracts/phase-gates.yaml@sha256:50e3779f410bd230880a49540e778644b9e3190c239ffedb87e2ee1d313b8b49"
+    },
+    {
+      "id": "edge-guide",
+      "consumer_id": "generated-guide-consumer",
+      "contract_id": "canonical-guide-parity",
+      "dependency_kind": "config",
+      "presence": "both",
+      "source_id": "docs/skill-contract-design-guide.md@sha256:0ae1fae2902688c632460932a3b990856c9e3cc1b9b3bcebedf7b769c0feb987"
+    }
+  ],
+  "required_requirements": [
+    {
+      "id": "req-natural",
+      "edge_id": "edge-natural",
+      "contract_id": "expert-method-design",
+      "state_transition": "material-capability-authoring",
+      "source_id": "skills/assistant-skill-creator/SKILL.md@sha256:e68d7a9913663b088d18bba0eb8b9a7dd595a28a22a9c1b4323e2d821e3cad0f",
+      "verification_source_id": "selection.json#V5"
+    },
+    {
+      "id": "req-structured",
+      "edge_id": "edge-structured",
+      "contract_id": "expert-method-design",
+      "state_transition": "material-capability-design-gate",
+      "source_id": "skills/assistant-skill-creator/contracts/phase-gates.yaml@sha256:50e3779f410bd230880a49540e778644b9e3190c239ffedb87e2ee1d313b8b49",
+      "verification_source_id": "selection.json#V4-creator"
+    },
+    {
+      "id": "req-guide",
+      "edge_id": "edge-guide",
+      "contract_id": "canonical-guide-parity",
+      "state_transition": "canonical-guide-update",
+      "source_id": "docs/skill-contract-design-guide.md@sha256:0ae1fae2902688c632460932a3b990856c9e3cc1b9b3bcebedf7b769c0feb987",
+      "verification_source_id": "selection.json#V3"
+    }
+  ],
+  "review_context": null
+}
