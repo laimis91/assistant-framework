@@ -30,7 +30,7 @@ gates:
         check: "A smallest safe reproduction target was attempted or a concrete blocker was recorded"
         on_fail: "Find and run the narrowest safe local command/test/manual path, or document why none is available"
       - id: RP2
-        check: "Reproduction evidence includes command_or_steps, observed_result, and match to reported symptom"
+        check: "Reproduction evidence includes command_or_steps, observed_result, and match to reported symptom; for affected lifecycle symptoms load references/lifecycle-verification.md and distinguish the actual boundary and resource ownership"
         on_fail: "Re-run or document reproduction with exact input/output and symptom match"
       - id: RP3
         check: "No code changes were made before reproduction or reproduction blocker was recorded"
@@ -99,7 +99,7 @@ gates:
         condition: "a source fix occurred and (impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried)"
         on_fail: "Report verification incomplete or blocked; refresh and rerun the common completion gate and canonical review as applicable."
       - id: VF1
-        check: "Original reproduction path passes or status is not_reproduced/blocked/inconclusive with explanation"
+        check: "Original reproduction path passes or status is not_reproduced/blocked/inconclusive with explanation; for affected lifecycle paths use references/lifecycle-verification.md to retain outcomes, unresolved owners and actual settlement evidence"
         on_fail: "Run original reproduction path again or downgrade the status"
       - id: VF_COMMAND_INVOCATION
         check: "A fixed outcome requires every due selected command-based check for the current fix increment to have a passed result whose executed_command.check_id is its sole selected_check_ids value and whose argv and cwd exactly match the unchanged CheckSpec; skipped, blocked, or missing invocations remain gaps and cannot establish fixed."

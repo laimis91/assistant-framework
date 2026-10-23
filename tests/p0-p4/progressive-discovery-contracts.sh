@@ -358,6 +358,9 @@ write_workflow_eval_responses() {
         required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$fixture" | paste -sd ' ' -)"
         if jq -e --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | ((.machine_expectations.structured_json_assertions? // [] | length > 0) or .semantic_validator != null)' "$fixture" >/dev/null; then
             case "$case_id" in
+                mcp-stateless-manifest-contract|mcp-capture-partial-complete-source)
+                    write_lifecycle_mcp_response "$case_id" "$response_path" || return 1
+                    ;;
                 reduced-testing-carried-boundary|repair-expectations-switch-and-resume)
                     write_s1_response "$case_id" "$response_path"
                     ;;

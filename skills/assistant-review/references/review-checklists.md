@@ -132,3 +132,8 @@ Use this checklist only when a workflow Architecture Decision Pack or equivalent
    - Confirm the Pack reference and its unresolved risks reach the implementation packet, tests, review result, and final handoff without duplicating unrelated task memory.
 
 Treat stale source facts, hidden primitive leakage, undocumented exceptions, unmeasured quality claims, public-contract evolution gaps, and missing verification/rollback paths as must-fix or should-fix depending on affected risk.
+
+For assigned_scope or coverage_obligations affecting lifecycle boundaries, use
+[lifecycle verification](lifecycle-verification.md) for precise cancellation,
+settlement and ownership observations. Synchronous/cosmetic changes alone do not
+load it; this is no new gate or universal test matrix.

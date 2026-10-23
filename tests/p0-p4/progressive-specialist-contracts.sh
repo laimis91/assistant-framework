@@ -372,4 +372,19 @@ else
     fail "research method loading leaked or lost five-lens obligations: ${research_loading_failures[*]}"
 fi
 
+test_start "lifecycle detail remains a separate conditional specialist load set"
+if ruby -ryaml -e '
+  valid = %w[assistant-debugging assistant-verification].all? do |skill|
+    root = File.join(ARGV.fetch(0), "skills", skill)
+    index = YAML.load_file(File.join(root, "contracts/index.yaml"))
+    sets = index.fetch("load_sets")
+    local = "references/lifecycle-verification.md"
+    conditional = sets.fetch("lifecycle").fetch("references") == [local]
+    ordinary = sets.reject { |name, _| name == "lifecycle" }.values.all? { |set| !set.fetch("references", []).include?(local) }
+    text = File.read(File.join(root, "SKILL.md"))
+    conditional && ordinary && text.include?(local) && text.match?(/Synchronous|synchronous/)
+  end
+  exit valid ? 0 : 1
+' "$FRAMEWORK_DIR"; then pass; else fail "lifecycle detail leaks into ordinary specialist context or lacks its local conditional path"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

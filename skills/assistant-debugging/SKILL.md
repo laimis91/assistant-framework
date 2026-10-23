@@ -51,6 +51,11 @@ named contract. Current v2 fix contracts preserve canonical verification/TDD
 bindings; a persisted v1.1 fix needs a refreshed decision, never inferred checks
 or RED.
 
+For affected acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry, load
+`lifecycle` from the index and [lifecycle-verification.md](references/lifecycle-verification.md)
+during reproduction/isolation and before fix verification. Synchronous or cosmetic
+work alone adds no lifecycle loading or gate.
+
 Load [change-impact.md](references/change-impact.md) when diagnosis/repair
 consumer impact matters. Record compact applicability; shared, materially
 unresolved, or explicitly carried expanded repairs retain the common artifact
