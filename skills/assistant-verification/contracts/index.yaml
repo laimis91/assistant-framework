@@ -42,6 +42,15 @@ load_sets:
         name_from: active_verification_phase
         allowed_names: [CAPTURE, SELECT, ASSESS, RETURN]
     budget_words: 1800
+  lifecycle:
+    references: [references/lifecycle-verification.md]
+    selectors:
+      - id: assistant-verification-lifecycle-scope
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [work_scope]
+    budget_words: 1800
   selection:
     references: [references/selection.md]
     selectors:

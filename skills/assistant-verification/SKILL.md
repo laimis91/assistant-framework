@@ -27,16 +27,15 @@ dispatch, repair, retry, edit, or approve delivery.
    add tests only for a real uncovered behavior or failure. Zero new tests still
    needs evidence and meaningful exclusions. Choose scope, technique, and TDD
    independently; meaningful RED is required only when TDD is active.
-4. Assess actual assertions, source/config identity, freshness, results, and
-   limitations. A phrase/schema/file-existence pass is structural evidence,
-   not proof of behavior or model quality. Missing, failed, partial, stale,
-   skipped, and unavailable observations remain gaps.
-5. Stop when binding checks and material claims have credible evidence. Expand
-   only for a new gap, change, failure, material risk, request, or mandate.
+4. Assess assertions, source/config identity, freshness, results and limits.
+   Phrase/schema/file-existence passes prove structure, not behavior/model quality.
+   Missing, failed, partial, stale, skipped and unavailable evidence remains gaps.
+5. Stop with credible evidence for binding checks/material claims; expand only
+   for new gaps, changes, failures, material risks, requests or mandates.
 
-Use [selection.md](references/selection.md) for disputed policy, coverage, cost,
-or TDD selection and [evidence-quality.md](references/evidence-quality.md) for
-reused, ambiguous, or incomplete evidence. Load only the method being considered:
+For disputed policy/coverage/cost/TDD use [selection.md](references/selection.md);
+for reused/ambiguous/incomplete evidence use [evidence-quality.md](references/evidence-quality.md).
+Load only the considered method:
 [unit](references/methods/unit.md), [integration](references/methods/integration.md),
 [end-to-end](references/methods/end-to-end.md),
 [artifact validation](references/methods/artifact-validation.md),
@@ -44,10 +43,13 @@ reused, ambiguous, or incomplete evidence. Load only the method being considered
 [property/mutation](references/methods/property-and-mutation.md), or
 [performance/resilience](references/methods/performance-and-resilience.md).
 
+Load `lifecycle` and [lifecycle guidance](references/lifecycle-verification.md) only
+for affected lifecycle claims; exclude synchronous/cosmetic-only work.
+
 ## Consumed results
 
-An ordinary human-only assessment can state the selected checks or evidence,
-conclusion, gaps, and next action concisely; no serialized object is required.
+Human-only assessments can concisely state checks/evidence, conclusion, gaps
+and next action without serialization.
 When workflow, skill-creator, a carried decision, or an executable consumer needs
 structured results, load `contracts/index.yaml` and the applicable entry,
 selection/assessment, current-phase, and completion sets. Missing/invalid selectors

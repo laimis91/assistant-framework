@@ -40,6 +40,15 @@ load_sets:
         key: name
         names: [change_impact_applicability, change_impact_evidence]
     budget_words: 1800
+  lifecycle:
+    references: [references/lifecycle-verification.md]
+    selectors:
+      - id: assistant-debugging-lifecycle-scope
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [scope]
+    budget_words: 1800
   fix_verification:
     selectors:
       - id: debugging-fix-verification-input

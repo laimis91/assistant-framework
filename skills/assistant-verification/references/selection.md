@@ -59,3 +59,7 @@ For a human-only selection, summarize the checks, rationale, and exclusions. Whe
 a workflow/creator or other structured consumer needs a result, return the canonical
 decision fields unchanged inline or in the existing packet; human summaries need
 not serialize them. In an evidence assessment, bind each result to exact selected check IDs and exact `{kind,value,source_ref}` obligations it actually observes; close every due selected ID and applicable due/executable binding tuple with resolved current procedures/oracles. Do not invent execution checks for unrelated policy constraints solely to fill evidence arrays. Resolve a carried decision through the existing `work_scope.source_refs`; without one, qualify the scope assessment and do not claim unknown selected-check closure. Record meaningful exclusions and significant rejected duplication, not every possible test layer. Stop when applicable binding checks and material claims have credible evidence. Expand only for a new gap, changed scope, failure, material risk, relevant request, or mandate.
+
+For affected lifecycle claims, conditionally load [lifecycle verification](lifecycle-verification.md).
+Select only material boundary/ownership observations and reuse adequate evidence;
+this adds no mandatory scenario matrix or execution authority.

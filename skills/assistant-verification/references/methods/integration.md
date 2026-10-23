@@ -15,3 +15,7 @@ Drive the changed contract through its owning boundary and inspect the other sid
 A mocked collaborator can prove local request formation, not the real serialization, storage, wiring, or service behavior it replaces. Avoid broad environment setup when a focused component boundary observes the claim. Capture identities, relevant configuration, result, and cleanup; redact sensitive values.
 
 Further end-to-end or external-service evidence is warranted only for an uncovered material user journey or real boundary. Do not add unit tests merely because integration testing was selected.
+
+For affected lifecycle claims, conditionally load [lifecycle verification](../lifecycle-verification.md).
+Select only material boundary/ownership observations and reuse adequate evidence;
+this adds no mandatory scenario matrix or execution authority.

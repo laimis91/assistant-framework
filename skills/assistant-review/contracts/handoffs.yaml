@@ -65,6 +65,9 @@ dispatch_context_bundles:
       - path: references/review-rubric.md
         sections: [all]
         condition: "medium/large scope or rubric_required"
+      - path: references/lifecycle-verification.md
+        sections: [all]
+        condition: "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"
     direct_fallback: "Sibling-blind; two passes."
     excludes: [review_batch, pre_batch_findings, sibling_outputs]
     worker_return_schema_selector:

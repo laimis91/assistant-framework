@@ -636,6 +636,10 @@ p0p4_write_skill_eval_responses() {
             response_path="$output_dir/$skill_name/$id.txt"
             required_summary="$(jq -r --arg id "$id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$fixture_file" | paste -sd ' ' -)"
             case "$skill_name:$id" in
+                assistant-verification:lifecycle-finalization-and-owned-recovery|assistant-workflow:mcp-stateless-manifest-contract|assistant-workflow:mcp-capture-partial-complete-source)
+                    write_lifecycle_mcp_response "$id" "$response_path" || return 1
+                    continue
+                    ;;
                 assistant-ci-audit:*|assistant-workflow:reduced-testing-carried-boundary|assistant-workflow:repair-expectations-switch-and-resume)
                     write_s1_response "$id" "$response_path" || return 1
                     continue
@@ -1159,6 +1163,13 @@ fi
 if [[ "${BASH_SOURCE[0]}" == "$0" && "${1:-}" == --fixtures-only ]]; then
     finish
     exit 0
+fi
+
+test_start "lifecycle/MCP captures preserve recovery decisions and inherited canonical shapes"
+if python3 "$FRAMEWORK_DIR/tests/p0-p4/lib/lifecycle-mcp-oracle-controls.py"; then
+    pass
+else
+    fail "lifecycle/MCP recovery or canonical-output oracle controls failed"
 fi
 
 test_start "skill eval runner exists and is executable"

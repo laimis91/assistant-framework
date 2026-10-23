@@ -36711,6 +36711,1050 @@
           }
         ]
       }
+    },
+    {
+      "id": "mcp-stateless-manifest-contract",
+      "title": "Small stateless inspection preserves meaningful optional inputs",
+      "category": "mcp_tool_design",
+      "purpose": "Reject misleading valid-schema contracts while preserving useful provider-neutral design and evidence limits.",
+      "prompt": "Design the smallest tool for \u201cWhich operations are declared by this local manifest?\u201d Return existing verification_decision and evidence_assessment JSON, with the design in scope. Retain the supplied independent check IDs and success/failure oracles; no new output schema or actual execution is requested.",
+      "setup_context": [
+        "Existing inspect_manifest has the same read authority and outcome. operation_names absent=all, []=none, null=invalid; no runtime health source exists. A small bounded manifest needs no persistent resources. Source types are available; SDK/client/native observations are not.",
+        "Check oracle catalog: [[\"manifest-inputs\", \"Optional inputs and malformed reads retain truthful semantics.\", \"Compare absent, [], null and unreadable manifest calls at the designed public boundary.\", \"Absent selects all, [] none, null rejects; unreadable reports a diagnostic.\", \"Null is ignored or unreadable input returns an empty success list.\"], [\"manifest-consumer\", \"Advertised schema and intended-client behavior match the source contract.\", \"Inspect SDK-converted schema and intended-client calls; qualify provider and native-selection gaps.\", \"Converted optionality and client calls preserve semantics; native selection remains unverified.\", \"Source types or keyword matches alone are used to claim client usability or native selection.\"]]"
+      ],
+      "expected_behavior": [
+        "States the concrete question, nearest-operation reuse/add decision, meaningful inputs, actual effects, identity, coverage and bounded evidence.",
+        "Uses existing verification ownership and local lifecycle guidance only for affected resource behavior; keeps stateless/synchronous controls light."
+      ],
+      "pass_criteria": [
+        "Design preserves the meaningful distinctions and independent success/failure checks; actual execution remains planned."
+      ],
+      "fail_signals": [
+        "Valid source schema or keyword discovery is claimed to prove real-client/provider/native behavior.",
+        "Ignored inputs, unauthorized target effects or incomplete coverage become success."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "verification_decision",
+          "evidence_assessment",
+          "Reuse inspect_manifest",
+          "absent=all",
+          "[]=none",
+          "null=invalid",
+          "runtime health unknown",
+          "no process/network/UI",
+          "no retention store",
+          "SDK-converted",
+          "native selection needs actual"
+        ],
+        "forbidden_substrings": [
+          "schema validity proves client usability",
+          "null is silently ignored",
+          "every tool needs retained capture"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "test_change"
+            ],
+            "expected": "none"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "planned"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_id"
+            ],
+            "expected": "manifest-inputs"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "Absent selects all, [] none, null rejects; unreadable reports a diagnostic."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "Null is ignored or unreadable input returns an empty success list."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_id"
+            ],
+            "expected": "manifest-consumer"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "Converted optionality and client calls preserve semantics; native selection remains unverified."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "Source types or keyword matches alone are used to claim client usability or native selection."
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision"
+            ],
+            "fields": [
+              "scope",
+              "policy_basis",
+              "test_change",
+              "checks",
+              "tdd_choice",
+              "omitted_checks_and_rationale",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis"
+            ],
+            "fields": [
+              "binding_constraints",
+              "preferences_applied",
+              "capability_limits"
+            ]
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "tdd_choice"
+            ],
+            "fields": [
+              "mode",
+              "applicable_check_ids",
+              "basis",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "applicable_check_ids"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "basis"
+            ],
+            "expected": "not_selected"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "check_ref_or_method",
+              "rationale",
+              "method_refs"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "claim_or_risk"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "action"
+            ],
+            "expected": "inspect"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method"
+            ],
+            "expected": "artifact_inspection"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "technique"
+            ],
+            "expected": "exploratory"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              1
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "check_ref_or_method",
+              "rationale",
+              "method_refs"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "claim_or_risk"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "action"
+            ],
+            "expected": "inspect"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method"
+            ],
+            "expected": "artifact_inspection"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "technique"
+            ],
+            "expected": "exploratory"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method_refs"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "mcp-capture-partial-complete-source",
+      "title": "Resource capture preserves partial coverage and complete-source identity",
+      "category": "mcp_tool_design",
+      "purpose": "Reject misleading valid-schema contracts while preserving useful provider-neutral design and evidence limits.",
+      "prompt": "Design tools for \u201cWhat failed across these workers during this interval, and can I inspect every collected event?\u201d Return existing verification_decision and evidence_assessment JSON, with the design in scope. Retain the supplied independent check IDs and success/failure oracles; no new output schema or actual execution is requested.",
+      "setup_context": [
+        "inspect_capture already reads a stored capture with matching authority. Acquisition is a distinct authorized outcome. Launch may own children; attach owns only a connection. Optional facets absent=default, []=none, null=invalid. One collection may fail and response output may truncate. Actual SDK/client/provider/native observations are unavailable.",
+        "Check oracle catalog: [[\"capture-coverage\", \"Partial failure and cleanup retain truthful ownership and outcomes.\", \"Observe one controlled collection failure and marked finalization cancellation with success control, retaining per-target outcomes and owner settlement.\", \"Partial data and primary diagnostic survive; unknown facets stay unknown; attached target remains running.\", \"Missing health becomes healthy, cleanup replaces primary failure or attach terminates its target.\"], [\"capture-source\", \"Large output retains complete-source access and stable identity.\", \"Follow supported pages/reference for one retained capture and compare source identity across all pages.\", \"All collected events remain accessible under one source identity without capture rerun.\", \"Truncated output reruns acquisition or page exhaustion is misreported as complete source coverage.\"]]"
+      ],
+      "expected_behavior": [
+        "States the concrete question, nearest-operation reuse/add decision, meaningful inputs, actual effects, identity, coverage and bounded evidence.",
+        "Uses existing verification ownership and local lifecycle guidance only for affected resource behavior; keeps stateless/synchronous controls light."
+      ],
+      "pass_criteria": [
+        "Design preserves the meaningful distinctions and independent success/failure checks; actual execution remains planned."
+      ],
+      "fail_signals": [
+        "Valid source schema or keyword discovery is claimed to prove real-client/provider/native behavior.",
+        "Ignored inputs, unauthorized target effects or incomplete coverage become success."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "verification_decision",
+          "evidence_assessment",
+          "Reuse inspect_capture",
+          "add capture_workers only",
+          "null=invalid",
+          "attached target remains running",
+          "before allocation",
+          "without capture rerun",
+          "missing health remains unknown",
+          "finalization marker",
+          "injected provider cannot prove real-provider",
+          "native choice requires actual"
+        ],
+        "forbidden_substrings": [
+          "schema validity proves real-provider behavior",
+          "truncated output requires capture rerun",
+          "transport disconnect proves all release",
+          "cleanup terminates attached target"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "test_change"
+            ],
+            "expected": "none"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "mode"
+            ],
+            "expected": false
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "planned"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_id"
+            ],
+            "expected": "capture-coverage"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "Partial data and primary diagnostic survive; unknown facets stay unknown; attached target remains running."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "Missing health becomes healthy, cleanup replaces primary failure or attach terminates its target."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_id"
+            ],
+            "expected": "capture-source"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "expected_success"
+            ],
+            "expected": "All collected events remain accessible under one source identity without capture rerun."
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "meaningful_failure"
+            ],
+            "expected": "Truncated output reruns acquisition or page exhaustion is misreported as complete source coverage."
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision"
+            ],
+            "fields": [
+              "scope",
+              "policy_basis",
+              "test_change",
+              "checks",
+              "tdd_choice",
+              "omitted_checks_and_rationale",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "policy_basis"
+            ],
+            "fields": [
+              "binding_constraints",
+              "preferences_applied",
+              "capability_limits"
+            ]
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "binding_constraints"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "preferences_applied"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "policy_basis",
+              "capability_limits"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "omitted_checks_and_rationale"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "stop_rule"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "tdd_choice"
+            ],
+            "fields": [
+              "mode",
+              "applicable_check_ids",
+              "basis",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "empty_array",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "applicable_check_ids"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "basis"
+            ],
+            "expected": "not_selected"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "tdd_choice",
+              "rationale"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "check_ref_or_method",
+              "rationale",
+              "method_refs"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "claim_or_risk"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "action"
+            ],
+            "expected": "inspect"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method"
+            ],
+            "expected": "artifact_inspection"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "technique"
+            ],
+            "expected": "exploratory"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "method_refs"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              0,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              1
+            ],
+            "fields": [
+              "check_id",
+              "claim_or_risk",
+              "action",
+              "method",
+              "technique",
+              "check_ref_or_method",
+              "rationale",
+              "method_refs"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "claim_or_risk"
+            ]
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "action"
+            ],
+            "expected": "inspect"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method"
+            ],
+            "expected": "artifact_inspection"
+          },
+          {
+            "operator": "equals",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "technique"
+            ],
+            "expected": "exploratory"
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "rationale"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "method_refs"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method"
+            ],
+            "fields": [
+              "reference_or_procedure",
+              "prerequisites",
+              "exclusions",
+              "expected_success",
+              "meaningful_failure"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "reference_or_procedure"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "prerequisites"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "verification_decision",
+              "checks",
+              1,
+              "check_ref_or_method",
+              "exclusions"
+            ],
+            "allow_empty": true
+          }
+        ]
+      }
     }
   ],
   "canonical_feature_preparation_result_expectations": {

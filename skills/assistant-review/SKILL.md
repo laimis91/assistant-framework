@@ -10,11 +10,10 @@ description: "Review code, fix actionable findings, and run one fresh re-review.
 Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
 
 
-Find concrete defects and regressions within scope. Read the diff and connected
-callers, contracts, tests and configuration, including affected consumers outside
-the diff. Findings require real input/situation, file/line evidence, impact,
-calibrated confidence and the smallest useful fix. Style taste/speculation stays
-non-blocking. Preserve carried reduced-testing boundary/source through criteria,
+Find scoped defects/regressions in diff and connected callers/contracts/tests/
+configuration, including outside-diff consumers. Findings need real situations,
+file/line evidence, impact, calibrated confidence and smallest useful fixes.
+Style/speculation stays non-blocking. Preserve carried reduced-testing boundary/source through criteria,
 verification evidence and material snapshot refs. Additional tests require a
 distinct important uncovered failure and inadequate-existing-evidence rationale;
 scores/generic coverage advice cannot expand scope. Return material expansion
@@ -22,13 +21,11 @@ to selection/approval.
 
 ## Authority and scope
 
-Resolve reviewed material from explicit scope, then uncommitted changes, carried
-packet/journal, or current files. Block if required material is unavailable or
-empty. A report-only request is audit; clear edit authorization permits review-fix
-within its approved scope. If edit authority is materially unresolved, ask whether
-to report only or implement and verify fixes; do not review or mutate while unresolved.
-Ownership or access alone never grants edit authority.
-Standalone `review this` does not require a task journal.
+Resolve material in order: explicit scope, uncommitted changes, carried packet/
+journal, current files. Block on unavailable/empty required material. Report-only
+selects audit; clear edit authorization permits scoped review-fix. For unresolved
+edit authority, ask report-only versus implement/verify; do not review or mutate
+until resolved. Ownership/access grants no edit authority. Standalone `review this` does not require a task journal.
 
 Use local company-safe diffs/checks; external scans, reviews, and installs retain
 explicit approval. Redact secrets and private data. Preserve dirty work and return
@@ -43,22 +40,23 @@ change-impact artifact, or a locality/shared/unresolved decision, load
 or dispatch. Keep this guidance outside Reviewer bundles.
 
 Load [review-loop.md](references/review-loop.md) before the first batch; it owns
-transitions, frozen snapshot identity, response
-barriers, aggregation, and pivots. The current v9 protocol remains authoritative:
+transitions, frozen snapshots, response barriers, aggregation and pivots under
+the authoritative v9 protocol:
 
 - Each frozen batch plans and attempts at least two independent, sibling-blind
-  passes. Resolve `reviewer_context` for each pass, the selected handoff before
+  passes. Resolve `reviewer_context` for each pass, or `lifecycle_reviewer_context`
+  only when assigned_scope or coverage_obligations affect lifecycle boundaries;
+  synchronous/cosmetic scope alone uses ordinary context. Load the selected handoff before
   dispatch/return, and `return_validation` before aggregation. Account for every
   expected pass; incomplete coverage returns `HAS_REMAINING_ITEMS`.
 - Standalone review checks the user's specification. Audit retains mismatches
   as findings and finishes one read-only batch. Review-fix repairs authorized
   mismatches and requires Spec PASS before quality review. Workflow-composed
   review consumes carried Spec PASS and current due-check evidence.
-- Review only relevant spec, regression, testing, maintainability, bugfix,
-  semantic/behavioral contract, loop-safety, and security concerns. Fresh bundles
-  use applicable sections of [review-checklists.md](references/review-checklists.md)
-  and [review-principles.md](references/review-principles.md); do not fill every
-  checklist for unrelated work. Medium+ retains its Design Coherence Pass.
+- Review relevant spec, regression, testing, maintainability, bugfix,
+  semantic/behavioral contract, loop-safety and security concerns. Apply matching
+  [checklists](references/review-checklists.md) and [principles](references/review-principles.md);
+  exclude unrelated sections. Medium+ retains its Design Coherence Pass.
 - Review applicable Architecture Decision Packs, including invalid ones, for
   freshness, ownership/lifecycle, design pressures, types/primitive exceptions,
   quality evidence, compatibility, and handoff. Preserve independent challenge
@@ -68,9 +66,8 @@ barriers, aggregation, and pivots. The current v9 protocol remains authoritative
   back to the Build owner with its identities, oracle, scope, IDs, and bindings;
   the review fixer cannot bypass RED. Standalone review-fix retains build/tests.
 - After a fix, verify due selected/binding checks against the new source, freeze
-  a fresh snapshot, and run a fresh complete review batch. No-build admission
-  applies only when no fix is required/occurred and no due selected or executable
-  binding check exists. A source fix forbids it.
+  a fresh snapshot, and run a fresh complete review batch. No-build admission requires
+  no required/completed fix or due selected/executable binding check.
 
 The change-impact projection does not replace canonical snapshot/coverage closure. Missing/invalid
 selectors load the full named contract. Load
@@ -98,7 +95,7 @@ alone do not require a decision, reset the evaluator, or pause productive work.
 
 ## Result
 
-Report findings/fixes, scope, verification and material limits. No findings means
+Report findings/fixes, scope, verification and limits. No findings means
 "No material findings within the reviewed scope and available evidence";
 `CLEAN` is an enum, not proof. Consumers retain
 `contracts/output.yaml`, canonical reviewed scope, batch/round evidence, required
@@ -108,6 +105,6 @@ Omit empty checklist and internal protocol sections from the human summary.
 
 Load [review-finding-permanent-rule.md](references/review-finding-permanent-rule.md)
 only for evidence of recurring process gaps or high-impact repeatable failures.
-A finding does not automatically require a permanent rule or new framework.
-Existing mapped all-ID distillation fixtures retain their consumed classification
-envelope; that compatibility requirement does not govern ordinary human summaries.
+Findings require no automatic permanent rule/framework. Retain classification
+envelopes for existing mapped all-ID distillation fixtures; omit them from
+ordinary human summaries.
