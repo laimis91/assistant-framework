@@ -86,13 +86,19 @@ array_contains() {
 }
 
 preflight_workflow_python() {
-    array_contains assistant-workflow "${SKILLS[@]}" || return 0
+    local review_helper="${1:-}"
+    array_contains assistant-workflow "${SKILLS[@]}" || [[ -n "$review_helper" ]] || return 0
     local version=""
     if ! command -v python3 >/dev/null 2>&1 \
         || ! version="$(python3 -B -c 'import sys; print("%d.%d.%d" % sys.version_info[:3]); sys.exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null)" \
         || [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] \
         || ! (( 10#${BASH_REMATCH[1]} > 3 || (10#${BASH_REMATCH[1]} == 3 && 10#${BASH_REMATCH[2]} >= 9) )); then
+        if [[ -n "$review_helper" ]]; then fail "assistant-review requires Python 3.9+ and its bundled passive YAML parser. Restore a supported python3 and the complete skill bundle. No installation files have been changed."; fi
         fail "Python 3.9+ is required when the selected skill closure includes assistant-workflow. Install a supported python3 and rerun. No installation files have been changed."
+    fi
+    if [[ -n "$review_helper" ]]; then
+        python3 -I -S -B "$review_helper" --probe >/dev/null 2>&1 \
+            || fail "assistant-review requires Python 3.9+ and its bundled passive YAML parser. Restore a supported python3 and the complete skill bundle. No installation files have been changed."
     fi
     info "Workflow Python 3.9+ invocation: python3 (Python $version)"
 }
@@ -696,6 +702,7 @@ remove_source_only_promotion_tools() {
     done <<'EOF'
 context-budget-report.sh
 evals/run-codex-framework-evals.sh
+evals/review-efficiency-report.rb
 evals/finalize-workflow-kernel-review.sh
 evals/lib/context-budget-evidence.sh
 evals/validate-promotion-decision-schema.cjs
@@ -802,6 +809,11 @@ fi
 # second pass also covers full installs and catches changes before copying.
 preflight_managed_skill_closure "${SKILLS[@]}"
 preflight_workflow_python
+# Review is independently installable: probe its actual skill-local runtime
+# before any target writes, including preview mode.
+if array_contains "assistant-review" "${SKILLS[@]}"; then
+    preflight_workflow_python "$SKILLS_SOURCE/assistant-review/scripts/review-tools.py"
+fi
 preflight_workflow_role_compatibility
 
 SETTINGS_FILE="$AGENT_HOME/settings.json"
@@ -901,6 +913,7 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
             --exclude='/memory-graph' \
             --exclude='/context-budget-report.sh' \
             --exclude='/evals/run-codex-framework-evals.sh' \
+            --exclude='/evals/review-efficiency-report.rb' \
             --exclude='/evals/finalize-workflow-kernel-review.sh' \
             --exclude='/evals/lib/context-budget-evidence.sh' \
             --exclude='/evals/validate-promotion-decision-schema.cjs' \

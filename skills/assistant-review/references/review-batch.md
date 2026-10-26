@@ -14,3 +14,9 @@ Observe all started batches, including incomplete/invalidated, under the same
 task guard. Ordinals count batches, never sibling passes. Retain historical
 batches; only a complete replacement current final snapshot supports clean.
 Every active expected response and assigned coverage tuple requires exact closure.
+
+Retain raw payload/SHA-256 and occurrence refs in caller evidence. Same-event
+replay is idempotent; only byte-identical transport-complete returns deduplicate.
+Preserve changed payloads/findings/conflicts. Stale/duplicate replies never close
+coverage or advance progress. Use completion notifications/bounded waits, inventories
+only for discovery/recovery.

@@ -350,3 +350,16 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 - On context continuation: read the configured task journal first without acting on it, then reconcile it against the newest user request and current repository evidence using `references/task-state-reconciliation.md`; resume only a reconciled active journal
 - Never delete constraints unless the user explicitly removes them
 - The Replay Packet in `references/task-journal-harness-appendix.md` replaces context-handoff templates during active harness work
+
+Review result consumption reuses v9 `pass_attempt_ledger`/`response_events` and
+caller evidence: canonical complete raw UTF-8 payload/ref/SHA-256, task/native
+invocation, batch/snapshot/pass/active attempt, producer identity/version and
+occurrence event bindings. Same-event replay is idempotent; only distinct
+byte-identical complete delivery is duplicate. Changed payloads retain both raw
+returns and validated findings; unresolved conflicts use existing repair/failure
+accounting, never a new wire disposition. Stale/duplicate replies cannot close
+coverage or advance progress. Carry these bindings, unresolved conflicts and
+archive refs across compaction; on resume reconcile source/producer freshness
+and resolve/rehash archives. Missing history is unknown. Use completion
+notifications/bounded waits; reserve full agent inventories for discovery/recovery,
+not repeated retrieval. Host-injected reports remain; measure avoidable processing.

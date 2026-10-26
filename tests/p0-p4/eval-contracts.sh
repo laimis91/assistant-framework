@@ -1276,4 +1276,239 @@ else
     fail "stale-journal workspace failures are not traceable through bounded verifier ids"
 fi
 
+
+test_start "review efficiency importer counts native responses once and rejects unsupported claims"
+review_measurement_sample="$(mktemp)"
+p0p4_register_cleanup "$review_measurement_sample"
+if ruby -rjson - <<'RUBY' "$FRAMEWORK_DIR/tools/evals/review-efficiency-report.rb" "$review_measurement_sample"
+require ARGV.fetch(0)
+def copy(v);Marshal.load(Marshal.dump(v));end
+def check(v,label);abort label unless v;end
+model={'requested_model'=>'model-test','observed_model'=>'model-test','reasoning_effort'=>'high','identity_evidence_ref'=>'native:model-effort'}
+frozen={'task_snapshot'=>'sha256:task','source_snapshot'=>'sha256:A','loaded_skill_digest'=>'sha256:skill-A','models_efforts'=>[model],'tools'=>['local'],'concurrency'=>2,'stopping_conditions'=>'same acceptance','acceptance_state'=>'review complete','oracle_ref'=>'oracle:frozen','cache_observation'=>'observed zero cache'}
+response={'native_response_id'=>'response:1','usage_evidence_ref'=>'native:usage','observed_model'=>'model-test','observed_effort'=>'high','model_evidence_ref'=>'native:model','effort_evidence_ref'=>'native:effort','input_tokens'=>100,'cached_input_tokens'=>10,'output_tokens'=>20,'reasoning_output_tokens'=>5}
+node={'invocation_id'=>'root','parent_id'=>nil,'children'=>[],'inventory_complete'=>true,'inventory_evidence_ref'=>'native:children','responses_complete'=>true,'responses'=>[response,copy(response)]}
+q={'variant_blind'=>true,'adjudicator_ref'=>'human:blind','oracle_ref'=>'oracle:frozen','evidence_ref'=>'adjudication:1','required_material_finding_ids'=>['material:1'],'found_material_finding_ids'=>['material:1'],'first_batch_found_ids'=>['material:1'],'later_only_ids'=>[],'false_positive_ids'=>[],'lost_finding_ids'=>[],'false_clean'=>false,'broken_closure'=>false}
+metrics=ReviewEfficiencyReport::METRICS.to_h{|k|[k,k=='latency_ms' ? 100 : 1]}
+a={'run_id'=>'a','variant'=>'A','case_id'=>'canary','case_class'=>'canary','held_out'=>false,'repetition'=>1,'run_order'=>1,'frozen'=>frozen,'native_tree'=>[node],'metrics'=>metrics,'adjudication'=>q}
+b=copy(a);b.merge!('run_id'=>'b','variant'=>'B','run_order'=>2);b['frozen'].merge!('source_snapshot'=>'sha256:B','loaded_skill_digest'=>'sha256:skill-B');b['native_tree'][0]['responses']=[response.merge('native_response_id'=>'response:b','input_tokens'=>90)]
+input={'schema_version'=>'1.0','workload_ceiling'=>{'max_runs'=>10,'max_tokens'=>10000,'max_elapsed_ms'=>10000},'rate_table'=>{'as_of'=>'2026-10-23','source_ref'=>'test-only-independent-rates','currency'=>'USD','rates'=>[{'model'=>'model-test','input_per_million'=>2,'cached_input_per_million'=>1,'output_per_million'=>4}]},'runs'=>[a,b]}
+result=ReviewEfficiencyReport.report(input)
+File.write(ARGV.fetch(1), JSON.generate({'input'=>input,'result'=>result}))
+check(result['runs'][0]['capture']['unique_response_count']==1,'replayed response double counted')
+check(result['runs'][0]['capture']['usage']=={'input_tokens'=>100,'cached_input_tokens'=>10,'output_tokens'=>20,'reasoning_output_tokens'=>5},'subset usage double counted')
+check(result['runs'][0]['capture']['normalized_cost']=='0.00027','independent normalized arithmetic expectation')
+check(result['comparisons'][0]['decision']=='inconclusive','single canary improperly promoted')
+check(result['comparisons'][0]['quality_evidence']=='incomplete_held_out_workload','canary treated as discovery-quality proof')
+# Independent generations permit actual repetitions; one captured response cannot
+# become a separate trial, even when its bytes agree with the earlier occurrence.
+repeated=copy(input)
+a2=copy(a);a2.merge!('run_id'=>'a2','repetition'=>2,'run_order'=>4)
+b2=copy(b);b2.merge!('run_id'=>'b2','repetition'=>2,'run_order'=>3)
+a2['native_tree'][0]['responses'].each{|r|r['native_response_id']='response:a2'}
+b2['native_tree'][0]['responses'].each{|r|r['native_response_id']='response:b2'}
+repeated['runs'] += [a2,b2]
+check(ReviewEfficiencyReport.report(repeated)['comparisons'][0]['decision']=='observed_saving_within_workload','distinct native generations rejected as repetitions')
+# Stable baseline alone cannot hide large candidate or paired-saving variation.
+variable=copy(repeated)
+variable['runs'][1]['native_tree'][0]['responses'][0]['input_tokens']=10
+variable['runs'][3]['native_tree'][0]['responses'][0]['input_tokens']=150
+variable_report=ReviewEfficiencyReport.report(variable)['comparisons'][0]
+check(variable_report['observed_baseline_cost_range']=='0.0','baseline range lost its original meaning')
+check(variable_report['mean_normalized_cost_saving']=='0.00004' && variable_report['effective_cost_variation_bound']=='0.00028' && variable_report['decision']=='inconclusive','candidate variability incorrectly promoted saving')
+{
+ 'identical cross-variant response'=>->(x){x['runs'][1]['native_tree'][0]['responses']=[copy(x['runs'][0]['native_tree'][0]['responses'][0])]},
+ 'conflicting cross-variant response'=>->(x){x['runs'][1]['native_tree'][0]['responses'][0]['native_response_id']='response:1'},
+ 'identical repeated-trial response'=>->(x){x['runs'][2]['native_tree'][0]['responses']=copy(x['runs'][0]['native_tree'][0]['responses'])}
+}.each do |label,mutate|
+ trial=copy(repeated);mutate.call(trial);diagnostic=nil
+ begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+ check(diagnostic=='native_response_reused_across_runs',label+' accepted reuse as an independent generation')
+end
+# Complete actual model inventory must equal the declared observed inventory.
+multimodel=copy(repeated)
+multimodel['rate_table']['rates']<<{'model'=>'model-cheap','input_per_million'=>1,'cached_input_per_million'=>0.5,'output_per_million'=>2}
+multimodel['runs'].each do |run|
+ run['frozen']['models_efforts']<<{'requested_model'=>'model-cheap','observed_model'=>'model-cheap','reasoning_effort'=>'high','identity_evidence_ref'=>'native:cheap:'+run['run_id']}
+ extra=copy(response);extra.merge!('native_response_id'=>'response:cheap:'+run['run_id'],'observed_model'=>'model-cheap','input_tokens'=>20,'cached_input_tokens'=>0,'output_tokens'=>10,'reasoning_output_tokens'=>0)
+ run['native_tree'][0]['responses']<<extra
+end
+multi_report=ReviewEfficiencyReport.report(multimodel)
+check(multi_report['runs'].all?{|run|run['capture']['complete']} && multi_report['comparisons'][0]['decision']=='observed_saving_within_workload','legitimate complete multi-model captures rejected')
+check(multi_report['runs'].each_with_index.all?{|run,index|run['frozen']['models_efforts']==multimodel['runs'][index]['frozen']['models_efforts']},'requested models or per-run inventory evidence discarded')
+concealed=copy(multimodel)
+concealed['runs'].each do |run|
+ run['native_tree'][0]['responses'].select!{|item|item['observed_model']==(run['variant']=='A' ? 'model-test' : 'model-cheap')}
+end
+diagnostic=nil
+begin;ReviewEfficiencyReport.report(concealed);rescue ArgumentError=>error;diagnostic=error.message;end
+check(diagnostic=='observed_model_inventory_mismatch','shared overdeclared inventory concealed different actual models')
+partitioned=copy(input);partitioned['runs'][0]['adjudication'].merge!('first_batch_found_ids'=>[],'later_only_ids'=>['material:1'])
+partition=ReviewEfficiencyReport.report(partitioned)['runs'][0]['quality']
+check(partition['first_batch_recall']==0.0 && partition['later_only_findings']==['material:1'] && partition['material_misses']==[],'valid exhaustive later-only partition rejected')
+# An omitted parent cannot silently establish the explicit-null root identity.
+{
+ 'missing parent'=>->(node){node.delete('parent_id')},
+ 'nonstring parent'=>->(node){node['parent_id']=0},
+ 'blank parent'=>->(node){node['parent_id']=' '}
+}.each do |label,mutate|
+ trial=copy(repeated);trial['runs'].each{|run|run['native_tree'].each{|node|mutate.call(node)}};diagnostic=nil
+ begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+ check(diagnostic=='parent_identity_invalid',label+' promoted complete usage instead of explicit tree identity')
+end
+# Trial identity must be unique even when each native generation is distinct.
+trial=copy(input);duplicate=copy(a2);duplicate.merge!('repetition'=>1,'run_order'=>3);trial['runs']<<duplicate
+diagnostic=nil
+begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+check(diagnostic=='trial_identity_duplicate','one candidate reused for duplicate baseline trial')
+# Each native model observation has its own evidence reference; values still match.
+provenance=copy(repeated)
+provenance['runs'].each{|run|run['frozen']['models_efforts'][0]['identity_evidence_ref']='native:identity:'+run['run_id'];run['frozen']['cache_observation']='cache:'+run['run_id']}
+matched=ReviewEfficiencyReport.report(provenance)
+check(matched['comparisons'][0]['decision']=='observed_saving_within_workload','distinct model evidence references rejected')
+check(matched['runs'].map{|run|run['frozen']['models_efforts'][0]['identity_evidence_ref']}.uniq.length==4,'model evidence references discarded')
+{
+ 'source snapshot drift'=>->(x){x['runs'][2]['frozen']['source_snapshot']='sha256:A-changed'},
+ 'loaded skill drift'=>->(x){x['runs'][3]['frozen']['loaded_skill_digest']='sha256:skill-B-changed'},
+ 'matched controls drift'=>->(x){x['runs'][2..3].each{|run|run['frozen']['concurrency']=3}}
+}.each do |label,mutate|
+ trial=copy(repeated);mutate.call(trial);diagnostic=nil
+ begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+ check(diagnostic==(label=='matched controls drift' ? 'variant_source_or_control_drift' : 'variant_source_drift'),label+' pooled into repetitions')
+end
+trial=copy(input);trial['runs'][1]['frozen']['models_efforts'][0]['requested_model']='other-request'
+diagnostic=nil
+begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+check(diagnostic=='unmatched_comparison','changed controlled model accepted')
+# One variant remains one implementation across different task/oracle cases.
+second=copy(repeated);second['runs'].each_with_index do |run,index|
+ run.merge!('run_id'=>run['run_id']+':case2','case_id'=>'case2','run_order'=>index+5)
+ run['native_tree'][0]['responses'].each{|response|response['native_response_id']+=':case2'}
+ run['frozen']['task_snapshot']='sha256:other-task';run['frozen']['oracle_ref']='oracle:other';run['adjudication']['oracle_ref']='oracle:other'
+end
+multi=copy(repeated);multi['runs']+=second['runs']
+check(ReviewEfficiencyReport.report(multi)['comparisons'][0]['actual_pair_count']==4,'valid distinct task controls across cases rejected')
+trial=copy(multi);trial['runs'][4..7].each{|run|run['frozen']['source_snapshot']+=':changed';run['frozen']['loaded_skill_digest']+=':changed'}
+diagnostic=nil
+begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+check(diagnostic=='variant_source_drift','cross-case implementation drift pooled')
+%w[tools concurrency stopping_conditions cache_observation].each do |field|
+ trial=copy(repeated);trial['runs'].each{|run|run['frozen'][field]=nil};diagnostic=nil
+ begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+ check(diagnostic=='frozen_controls_invalid','null runtime control accepted: '+field)
+end
+{'tools'=>[' '],'concurrency'=>0,'stopping_conditions'=>' ','cache_observation'=>''}.each do |field,value|
+ trial=copy(repeated);trial['runs'].each{|run|run['frozen'][field]=value};diagnostic=nil
+ begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+ check(diagnostic=='frozen_controls_invalid','malformed runtime value accepted: '+field)
+end
+partial_samples=[]
+%w[model_evidence_ref input_tokens output_tokens].each do |missing|
+ trial=copy(input);trial['runs'][1]['native_tree'][0]['responses'][0].delete(missing)
+ observed=ReviewEfficiencyReport.report(trial);capture=observed['runs'][1]['capture']
+ check(capture['unique_response_count']==1 && capture['usage'].nil? && !capture['reasons'].include?('native_response_inventory_empty'),'partial telemetry erased known response')
+ expected=missing=='input_tokens' ? 20 : missing=='output_tokens' ? 90 : 110
+ check(capture['observed_token_lower_bound']==expected,'partial observed component erased or subsets added')
+ partial_samples<<{'input'=>trial,'result'=>observed}
+end
+%w[inventory_complete model_evidence_ref input_tokens output_tokens rate].each do |missing|
+ trial=copy(input);trial['workload_ceiling']['max_tokens']=100
+ target=trial['runs'][1]['native_tree'][0];response=target['responses'][0];response.merge!('input_tokens'=>1000,'output_tokens'=>200)
+ case missing
+ when 'inventory_complete' then target[missing]=false
+ when 'rate' then trial['rate_table']['rates']=[]
+ else response.delete(missing)
+ end
+ diagnostic=nil
+ begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+ check(diagnostic=='workload_ceiling_exceeded','known partial token excess accepted: '+missing)
+end
+# Anonymous usage remains a conservative bound without invented response IDs.
+%w[both input_only output_only].each do |components|
+ trial=copy(input);trial['runs']=[copy(a)];trial['workload_ceiling']['max_tokens']=100
+ response=trial['runs'][0]['native_tree'][0]['responses'][0];response.delete('native_response_id');response.merge!('input_tokens'=>1000,'output_tokens'=>200)
+ response.delete('output_tokens') if components=='input_only'
+ response.delete('input_tokens') if components=='output_only'
+ trial['runs'][0]['native_tree'][0]['responses']=[response]
+ diagnostic=nil
+ begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+ check(diagnostic=='workload_ceiling_exceeded','anonymous '+components+' observed excess disappeared')
+end
+trial=copy(input);trial['workload_ceiling']['max_tokens']=230
+anonymous=copy(response);anonymous.merge!('input_tokens'=>100,'output_tokens'=>20);anonymous.delete('native_response_id')
+trial['runs'].each{|run|run['native_tree'][0]['responses']+=[copy(anonymous),copy(anonymous)]}
+observed=ReviewEfficiencyReport.report(trial)
+check(observed['runs'].all?{|run|run['capture']['unique_response_count']==1 && run['capture']['usage'].nil? && run['capture']['normalized_cost'].nil?},'anonymous overlap invented response count or complete usage')
+check(observed['runs'].map{|run|run['capture']['observed_token_lower_bound']}==[120,120],'anonymous duplicate/known overlap was blindly added')
+partial_samples<<{'input'=>trial,'result'=>observed}
+trial=copy(input);trial['workload_ceiling']['max_tokens']=300
+trial['runs'].each{|run|run['native_tree'][0]['responses']=[anonymous.merge('input_tokens'=>300,'output_tokens'=>0)]}
+observed=ReviewEfficiencyReport.report(trial)
+check(observed['runs'].all?{|run|run['capture']['unique_response_count']==0 && run['capture']['observed_token_lower_bound']==300 && run['capture']['usage'].nil?},'anonymous cross-run replay was summed or identity invented')
+partial_samples<<{'input'=>trial,'result'=>observed}
+# Identity registration and conflict detection precede metadata availability.
+trial=copy(input);response=trial['runs'][0]['native_tree'][0]['responses'][0];response.delete('model_evidence_ref');trial['runs'][0]['native_tree'][0]['responses']=[response,copy(response)]
+check(ReviewEfficiencyReport.report(trial)['runs'][0]['capture']['unique_response_count']==1,'partial replay counted twice')
+trial['runs'][0]['native_tree'][0]['responses'][1]['input_tokens']=101;diagnostic=nil
+begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError=>error;diagnostic=error.message;end
+check(diagnostic=='native_response_identity_conflict','partial conflicting response escaped identity check')
+File.write(ARGV.fetch(1), JSON.generate({'input'=>input,'result'=>result,'partial_samples'=>partial_samples}))
+mutations={
+ 'missing usage'=>->(x){x['runs'][1]['native_tree'][0]['responses'][0].delete('input_tokens')},
+ 'missing descendants'=>->(x){x['runs'][1]['native_tree'][0]['children']=['missing-child']},
+ 'requested model only'=>->(x){x['runs'][1]['native_tree'][0]['responses'][0].delete('model_evidence_ref')},
+ 'subset exceeds input'=>->(x){x['runs'][1]['native_tree'][0]['responses'][0]['cached_input_tokens']=1000}
+}
+mutations.each do |label,mutate|
+ trial=copy(input);mutate.call(trial);r=ReviewEfficiencyReport.report(trial)
+ check(r['runs'][1]['capture']['usage'].nil? && r['comparisons'][0]['decision']=='rejected',label+' did not block total-cost claim')
+end
+{
+ 'candidate-only material miss'=>->(x){x['runs'][1]['adjudication']['found_material_finding_ids']=[];x['runs'][1]['adjudication']['first_batch_found_ids']=[]},
+ 'false-clean'=>->(x){x['runs'][1]['adjudication']['false_clean']=true},
+ 'lost finding'=>->(x){x['runs'][1]['adjudication']['lost_finding_ids']=['material:1']},
+ 'broken closure'=>->(x){x['runs'][1]['adjudication']['broken_closure']=true},
+ 'clean-control false positive'=>->(x){x['runs'][1]['adjudication']['false_positive_ids']=['invented:1']}
+}.each do |label,mutate|
+ trial=copy(input);mutate.call(trial);check(ReviewEfficiencyReport.report(trial)['comparisons'][0]['decision']=='rejected',label+' improperly promoted')
+end
+{
+ 'unclassified found finding'=>->(x){x['runs'][1]['adjudication']['first_batch_found_ids']=[]},
+ 'contradictory finding timing'=>->(x){x['runs'][1]['adjudication']['later_only_ids']=['material:1']},
+ 'changed actual model'=>->(x){x['runs'][1]['native_tree'][0]['responses'][0]['observed_model']='cheaper-model'},
+ 'changed actual effort'=>->(x){x['runs'][1]['native_tree'][0]['responses'][0]['observed_effort']='low'},
+ 'unblinded adjudication'=>->(x){x['runs'][1]['adjudication']['variant_blind']=false},
+ 'changed oracle'=>->(x){x['runs'][1]['adjudication']['required_material_finding_ids']=[]},
+ 'conflicting native response'=>->(x){x['runs'][0]['native_tree'][0]['responses'][1]['output_tokens']=99},
+ 'workload ceiling'=>->(x){x['workload_ceiling']['max_runs']=1}
+}.each do |label,mutate|
+ trial=copy(input);mutate.call(trial)
+ rejected=false
+ begin;ReviewEfficiencyReport.report(trial);rescue ArgumentError;rejected=true;end
+ check(rejected,label+' accepted invalid comparison')
+end
+# An actual wrong accounting function must fail the independent cost oracle.
+original=ReviewEfficiencyReport.method(:usage_for)
+ReviewEfficiencyReport.define_singleton_method(:usage_for){|run,rates|original.call(run,rates).merge('normalized_cost'=>'0.0')}
+check(ReviewEfficiencyReport.report(input)['runs'][0]['capture']['normalized_cost']!='0.00027','fault-injected zero-cost validator escaped oracle')
+puts 'native replay, usage, matching, quality and fault-injection cases passed'
+RUBY
+then pass; else fail "review efficiency importer independent oracle failed"; fi
+
+test_start "review efficiency schema independently validates capture and reporting examples"
+if node - "$FRAMEWORK_DIR/tools/evals" "$FRAMEWORK_DIR/docs/evals/review-efficiency-result.schema.json" "$review_measurement_sample" <<'JS'
+const fs = require('fs');
+const Ajv = require(process.argv[2] + '/node_modules/ajv/dist/2020');
+const schema = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+const sample = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
+const ajv = new Ajv({strict: false, validateFormats: false});
+if (!ajv.compile(schema)(sample.result) || !ajv.compile(schema.$defs.capture_input)(sample.input)) process.exit(1);
+for (const partial of sample.partial_samples) {
+  if (!ajv.compile(schema)(partial.result) || !ajv.compile(schema.$defs.capture_input)(partial.input)) process.exit(1);
+}
+const mutant = structuredClone(sample.result); mutant.runs[0].capture.usage.input_tokens = '100';
+if (ajv.compile(schema)(mutant)) process.exit(1);
+JS
+then pass; else fail "review capture/report schema drift or false-pass mutant"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

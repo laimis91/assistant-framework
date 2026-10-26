@@ -1,6 +1,111 @@
 # Emit the fixed tool-owned companion schema policy for fixture and grade readers.
 skill_eval_companion_contracts_ruby() {
     cat <<'RUBY'
+# Repository-only bridge: independent Ruby fixtures call the Python library.
+# The installed helper has no bridge operation and never spawns this child.
+require 'json'
+require 'open3'
+require 'timeout'
+module ReviewTools
+  MAX_BYTES = 8 * 1024 * 1024
+  class Invalid < StandardError; end
+  module_function
+  def use(path)
+    path = File.realpath(path)
+    raise Invalid, 'helper_identity_changed' if @path && @path != path
+    @path = path
+  end
+  def normalize(value)
+    case value
+    when Hash then value.to_h { |key, item| [normalize(key), normalize(item)] }
+    when Array then value.map { |item| normalize(item) }
+    when String
+      text = value.dup.force_encoding(Encoding::UTF_8)
+      raise Invalid, 'primitive_json_required' unless text.valid_encoding?
+      text
+    when Integer, TrueClass, FalseClass, NilClass then value
+    when Numeric
+      raise Invalid, 'primitive_json_required' unless value.finite?
+      value.to_f
+    else raise Invalid, 'primitive_json_required'
+    end
+  end
+  def close
+    @input.close rescue nil
+    if @wait && !@wait.join(2)
+      Process.kill('TERM', @wait.pid) rescue nil
+      unless @wait.join(2)
+        Process.kill('KILL', @wait.pid) rescue nil
+        @wait.join
+      end
+    end
+    @output.close rescue nil
+    @errors.close rescue nil
+    @drain.join(2) if @drain
+    @input = nil
+  end
+  def invoke(method, *arguments)
+    raise Invalid, 'helper_unselected' unless @path
+    unless @input
+      program = <<~'PYTHON'
+        import importlib.util,json,sys
+        spec=importlib.util.spec_from_file_location('review_tools',sys.argv[1])
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        names=('call','parse_json','shape_valid','snapshot_identity_valid','summary_projection_valid','validate_return','same_set','primitive_copy')
+        methods={name:getattr(module,name) for name in names}
+        for line in sys.stdin.buffer:
+            try:
+                module.require_fact(len(line)<=module.MAX_BYTES,'input_too_large')
+                request=module.primitive_copy(module.parse_json(line))
+                result=methods[request['method']](*request['arguments'])
+                reply={'ok':True,'result':result}
+            except Exception as error:
+                reply={'ok':False,'diagnostic':str(error) if type(error) is module.Invalid else 'adapter_input_invalid'}
+            output=module.encoded(reply)
+            if len(output)>module.MAX_BYTES:output=module.encoded({'ok':False,'diagnostic':'output_too_large'})
+            sys.stdout.buffer.write(output+b'\n');sys.stdout.buffer.flush()
+      PYTHON
+      @input, @output, @errors, @wait = Open3.popen3(ENV.fetch('REVIEW_TOOLS_PYTHON', 'python3'), '-I', '-S', '-B', '-c', program, @path)
+      @error_prefix = ''.b
+      @drain = Thread.new do
+        begin
+          loop do
+            chunk = @errors.readpartial(4096)
+            @error_prefix << chunk if @error_prefix.bytesize < 16384
+          end
+        rescue EOFError, IOError
+        end
+      end
+    end
+    raw = JSON.generate({'method'=>method,'arguments'=>normalize(arguments)})
+    raise Invalid, 'input_too_large' if raw.bytesize > MAX_BYTES
+    line = Timeout.timeout(10) do
+      @input.write(raw + "\n"); @input.flush
+      @output.gets(MAX_BYTES + 1)
+    end
+    raise Invalid, 'adapter_response_unavailable' unless line && line.bytesize <= MAX_BYTES && line.end_with?("\n")
+    reply = JSON.parse(line)
+    raise Invalid, reply.fetch('diagnostic') unless reply['ok']
+    reply['result']
+  rescue IOError, Errno::EPIPE, JSON::ParserError, Timeout::Error
+    close
+    raise Invalid, 'adapter_response_unavailable'
+  end
+  def call(request)
+    invoke('call', request)
+  rescue Invalid => error
+    {'valid'=>false,'diagnostics'=>[error.message],'input_receipts'=>{}}
+  end
+  def parse_json(value); invoke('parse_json', value); end
+  def shape_valid?(value, field, context=nil); invoke('shape_valid', value, field, context); end
+  def snapshot_identity_valid?(value); invoke('snapshot_identity_valid', value); end
+  def summary_projection_valid?(authority, summary); invoke('summary_projection_valid', authority, summary); end
+  def validate_return(authority, reply); invoke('validate_return', authority, reply); end
+  def same_set(actual, expected, code); invoke('same_set', actual, expected, code); end
+  def primitive_copy(value); invoke('primitive_copy', value); end
+end
+at_exit { ReviewTools.close }
+
 class SkillEvalCompanionContracts
   def initialize(repo_root, fixture_file, skill_name = nil)
     contracts_dir = File.expand_path("../contracts", File.dirname(fixture_file))
@@ -41,12 +146,12 @@ class SkillEvalCompanionContracts
 
   def path(producer_skill, contract_file, required = true)
     registered = (producer_skill == "assistant-verification" && contract_file == "output.yaml") ||
-      (producer_skill == "assistant-review" && %w[index.yaml output.yaml].include?(contract_file))
+      (producer_skill == "assistant-review" && %w[index.yaml output.yaml handoffs.yaml review-tools.py].include?(contract_file))
     raise "unregistered fixed producer contract" unless registered
     base = File.realpath(@skills_owner)
     raise "producer skills base escapes its owner" unless @contained.call(base, @owner_boundary)
     producer = File.join(base, producer_skill)
-    output = File.join(producer, "contracts", contract_file)
+    output = File.join(producer, contract_file == "review-tools.py" ? "scripts" : "contracts", contract_file)
     return output unless required || File.exist?(output) || File.symlink?(output)
 
     physical_producer = File.realpath(producer)

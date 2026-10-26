@@ -114,8 +114,8 @@ function Test-IsWindowsHost {
 }
 
 function Assert-WorkflowPythonRuntime {
-    param([string[]]$SelectedSkills)
-    if ($SelectedSkills -notcontains 'assistant-workflow') { return }
+    param([string[]]$SelectedSkills, [string]$ReviewHelper = '')
+    if ($SelectedSkills -notcontains 'assistant-workflow' -and [string]::IsNullOrWhiteSpace($ReviewHelper)) { return }
     # Avoid embedded quotes so Windows PowerShell 5.1 preserves the literal -c argument.
     $probe = 'import sys; print(chr(46).join(map(str, sys.version_info[:3]))); sys.exit(0 if sys.version_info >= (3, 9) else 1)'
     $candidates = @(
@@ -139,12 +139,27 @@ function Assert-WorkflowPythonRuntime {
             if ($exitCode -eq 0 -and $output.Count -eq 1 -and
                 [string]$output[0] -match '^\d+\.\d+\.\d+$' -and
                 [version]::TryParse([string]$output[0], [ref]$version) -and $version -ge [version]'3.9') {
+                if (-not [string]::IsNullOrWhiteSpace($ReviewHelper)) {
+                    $savedProbePreference = $ErrorActionPreference
+                    try {
+                        $ErrorActionPreference = 'Continue'
+                        $arguments = @($candidate.Prefix) + @('-I', '-S', '-B', $ReviewHelper, '--probe')
+                        $capabilities = @(& $command.Source @arguments 2>$null)
+                        $ready = ($LASTEXITCODE -eq 0) -and (($capabilities -join '') -match '"valid"\s*:\s*true')
+                    }
+                    catch { $ready = $false }
+                    finally { $ErrorActionPreference = $savedProbePreference }
+                    if (-not $ready) { continue }
+                }
                 $invocation = "& '" + $command.Source.Replace("'", "''") + "'"
                 if ($candidate.Prefix.Count -gt 0) { $invocation += ' ' + ($candidate.Prefix -join ' ') }
                 Write-Info "Workflow Python 3.9+ invocation: $invocation (Python $version)"
                 return
             }
         }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ReviewHelper)) {
+        throw 'assistant-review requires Python 3.9+ and its bundled passive YAML parser. Restore a supported py -3, python3 or python and the complete skill bundle. No installation files have been changed.'
     }
     throw 'Python 3.9+ is required when the selected skill closure includes assistant-workflow. Install a supported py -3, python3 or python interpreter and rerun. No installation files have been changed.'
 }
@@ -2408,6 +2423,13 @@ function Assert-WorkflowRoleCompatibility {
     }
 }
 
+function Assert-ReviewPythonRuntime {
+    param([string[]]$SelectedSkills, [string]$SkillsSource)
+    if ($SelectedSkills -contains 'assistant-review') {
+        Assert-WorkflowPythonRuntime -SelectedSkills $SelectedSkills -ReviewHelper (Join-Path $SkillsSource 'assistant-review/scripts/review-tools.py')
+    }
+}
+
 function Invoke-AssistantFrameworkInstall {
     if ([string]::IsNullOrWhiteSpace($Agent)) { throw 'Missing -Agent. Supported: claude, codex, gemini.' }
     $agentName = $Agent.Trim().ToLowerInvariant()
@@ -2477,6 +2499,7 @@ function Invoke-AssistantFrameworkInstall {
     $selectedSkills = @($skillSelection.SkillNames)
     $preflightedSkills = @($skillSelection.PreflightedNames)
     Assert-WorkflowPythonRuntime -SelectedSkills $selectedSkills
+    Assert-ReviewPythonRuntime -SelectedSkills $selectedSkills -SkillsSource $skillsSource
     $toolsTarget = Join-Path $agentHome 'tools'
     $evalDocsTarget = Join-Path (Join-Path $agentHome 'docs') 'evals'
     $hooksRoot = Join-Path $agentHome 'hooks'
@@ -2508,6 +2531,7 @@ function Invoke-AssistantFrameworkInstall {
     $sourceOnlyFiles = @(
         'context-budget-report.sh',
         'evals/run-codex-framework-evals.sh',
+        'evals/review-efficiency-report.rb',
         'evals/finalize-workflow-kernel-review.sh',
         'evals/lib/context-budget-evidence.sh',
         'evals/validate-promotion-decision-schema.cjs',

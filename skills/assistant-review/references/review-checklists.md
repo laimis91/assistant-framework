@@ -132,3 +132,15 @@ Use this checklist only when a workflow Architecture Decision Pack or equivalent
    - Confirm the Pack reference and its unresolved risks reach the implementation packet, tests, review result, and final handoff without duplicating unrelated task memory.
 
 Treat stale source facts, hidden primitive leakage, undocumented exceptions, unmeasured quality claims, public-contract evolution gaps, and missing verification/rollback paths as must-fix or should-fix depending on affected risk.
+
+## Initial discovery across assigned surfaces
+
+Apply the invariant → producer/consumer trace → violating input/event sequence
+→ supporting/rejecting evidence procedure within each perspective's assignment.
+Contract/oracle passes challenge declared behavior and discriminating expectations;
+runtime passes trace temporal/failure sequences; integration passes follow
+compatibility/installer consumers; architecture passes challenge affected boundaries.
+Original requirements/full change remain the anchor after repairs. Do not repeat
+a whole-codebase survey or manufacture coverage for unassigned surfaces.
+NEEDS_CONTEXT/BLOCKED retain findings=[] and verdict=not_assessed; preserve
+supporting discoveries in existing evidence/observations/open_questions for resolution.

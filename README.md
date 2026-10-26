@@ -2,6 +2,15 @@
 
 A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
 
+Review, including standalone/selective `assistant-review`, requires Python3.9+.
+Its pinned pure-Python YAML parser is bundled privately with the skill; users need
+neither Ruby nor pip/LibYAML. Both installers probe the source helper and parser
+before any writes, including dry-run. No package is installed or downloaded.
+If Python or the parser is later removed, stop validation, restore the prerequisite
+and rerun `python3 -I -S -B <loaded-review-skill>/scripts/review-tools.py --probe`.
+The helper lives with the skill, including Windows Codex `.agents/skills`;
+the measurement importer `tools/evals/review-efficiency-report.rb` stays source-only.
+
 ## What it does
 
 1. **Structured Workflow** — adaptive Discover > optional Plan > Build > Review > Document flow with bounded repair and evidence-gated handoff
@@ -22,7 +31,7 @@ A Personal AI Assistant framework for developers. 16 first-class `assistant-*` s
 
 ## Installation
 
-Installations whose selected bundled closure includes `assistant-workflow` require Python 3.9+ for its packet-admission helper and Workflow eval adapter. Both installers probe a usable supported interpreter before writes, including dry-run; closures without Workflow remain Python-independent. Install the runtime yourself, then rerun the installer. Unix probes `python3`; native Windows probes `py -3`, `python3`, then `python` and reports the supported invocation. No runtime is downloaded.
+Installations whose selected bundled closure includes `assistant-workflow` require Python 3.9+ for its packet-admission helper and Workflow eval adapter. Both installers probe a usable supported interpreter before writes, including dry-run; closures without Workflow or Review remain Python-independent. Install the runtime yourself, then rerun the installer. Unix probes `python3`; native Windows probes `py -3`, `python3`, then `python` and reports the supported invocation. No runtime is downloaded.
 
 Install all skills for any supported agent:
 
@@ -719,3 +728,7 @@ Productive attempts and review/QA rounds have no cumulative ceiling. Historical
 counters/labels remain evidence; missing progress history is an explicit gap.
 No native/model pilot, reduced-friction, quality, time or cost improvement has
 been established by structural checks alone.
+
+Review helper input details: run `python3 -I -S -B <loaded-review-skill>/scripts/review-tools.py --help`.
+Mechanical validation consumes independently retained caller authority and keeps
+transport receipts outside canonical v9 returns.

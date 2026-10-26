@@ -226,36 +226,8 @@ else
   ["final_summary"]
 end
 
-valid = nil
-valid = lambda do |value, field|
-  type = field.fetch("type")
-  type_valid = case type
-               when "string", "file", "jsonl_line" then value.is_a?(String) && !value.strip.empty?
-               when "int" then value.is_a?(Integer)
-               when "float" then value.is_a?(Numeric)
-               when "boolean" then value == true || value == false
-               when "enum" then value.is_a?(String) && field.fetch("enum_values").include?(value)
-               when "string[]" then value.is_a?(Array) && value.all? { |item| item.is_a?(String) && !item.strip.empty? }
-               when "object" then value.is_a?(Hash)
-               when "object[]" then value.is_a?(Array) && value.all? { |item| item.is_a?(Hash) }
-               else false
-               end
-  return false unless type_valid
-  return false if field["min_items"] && value.length < field["min_items"]
-
-  children = field["object_fields"]
-  return true unless children
-  validate_object = lambda do |object|
-    allowed = children.map { |child| child.fetch("name") }
-    return false unless (object.keys - allowed).empty?
-    children.all? do |child|
-      name = child.fetch("name")
-      next false if child["required"] == true && !object.key?(name)
-      !object.key?(name) || valid.call(object[name], child)
-    end
-  end
-  type == "object" ? validate_object.call(value) : value.all? { |item| validate_object.call(item) }
-end
+ReviewTools.use(companion_contracts.path("assistant-review", "review-tools.py"))
+valid = ->(value, field) { ReviewTools.shape_valid?(value, field) }
 
 valid_packet = artifact_names.all? do |name|
   value = response_root.empty? ? response[name] : response.dig(response_root, "artifact")
@@ -297,10 +269,9 @@ nonblank = ->(value) { value.is_a?(String) && !value.strip.empty? }
 nonblank_strings = ->(value) { value.is_a?(Array) && !value.empty? && value.all? { |item| nonblank.call(item) } }
 integer_in = ->(value, range) { value.is_a?(Integer) && range.cover?(value) }
 decimal = ->(value) { value.is_a?(Numeric) ? BigDecimal(value.to_s) : nil }
-identity_valid = lambda do |identity|
-  identity.is_a?(Hash) && %w[basis value captured_at scope_manifest_digest].all? { |key| nonblank.call(identity[key]) } &&
-    %w[git_revision diff_digest content_digest task_or_pr_revision].include?(identity["basis"])
-end
+ReviewTools.use(companion_contracts.path("assistant-review", "review-tools.py"))
+identity_valid = ->(identity) { ReviewTools.snapshot_identity_valid?(identity) }
+
 snapshot_projection = lambda do |batch|
   batch.is_a?(Hash) ? batch.slice("batch_id", "review_snapshot_id", "snapshot_identity") : nil
 end
@@ -346,31 +317,9 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     rounds = summary["rounds"]
     batches = summary["batch_summaries"]
     ledger = summary["coverage_ledger"]
-    valid &&= (rounds.is_a?(Integer) && rounds.positive?) && batches.is_a?(Array) && batches.length == rounds
-    valid &&= batches.each_with_index.all? do |batch, index|
-      batch.is_a?(Hash) && batch["started_batch_ordinal"] == index + 1 &&
-        nonblank.call(batch["batch_id"]) && nonblank.call(batch["review_snapshot_id"]) &&
-        identity_valid.call(batch["snapshot_identity"]) &&
-        integer_in.call(batch["expected_response_count"], 2..6) &&
-        batch["terminal_response_count"].is_a?(Integer) && batch["terminal_response_count"].between?(0, batch["expected_response_count"]) &&
-        case batch["batch_status"]
-        when "complete"
-          batch["terminal_response_count"] == batch["expected_response_count"] && batch["aggregate_rubric_recomputed"] == true
-        when "incomplete"
-          batch["terminal_response_count"] <= batch["expected_response_count"] && batch["aggregate_rubric_recomputed"] == false
-        when "invalidated"
-          batch["aggregate_rubric_recomputed"] == false
-        else
-          false
-        end
-    end
-    valid &&= batches.map { |batch| batch["batch_id"] }.uniq.length == batches.length
-    valid &&= batches.map { |batch| batch["review_snapshot_id"] }.uniq.length == batches.length
-    current_batch = batches.last
+    valid &&= ReviewTools.summary_projection_valid?({"plan" => frozen_final_batch_plan, "review_snapshot_id" => frozen_snapshot_authority && frozen_snapshot_authority["final_review_snapshot_id"], "snapshot_identity" => frozen_snapshot_authority && frozen_snapshot_authority["final_snapshot_identity"]}, summary)
+    current_batch = batches.is_a?(Array) ? batches.last : nil
     identity = summary["final_snapshot_identity"]
-    valid &&= nonblank.call(summary["final_review_snapshot_id"]) && identity_valid.call(identity)
-    valid &&= summary["final_review_snapshot_id"] == current_batch["review_snapshot_id"]
-    valid &&= identity == current_batch["snapshot_identity"]
     if snapshot_authority_valid.call(frozen_snapshot_authority)
       valid &&= summary["final_review_snapshot_id"] == frozen_snapshot_authority["final_review_snapshot_id"]
       valid &&= identity == frozen_snapshot_authority["final_snapshot_identity"]
@@ -599,8 +548,10 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
       closure_pass_ids = closure_passes.map { |pass| pass["review_pass_id"] }
       closure_entries = current_ledger.select { |entry| closure_pass_ids.include?(entry["review_pass_id"]) }
       valid &&= !closure_entries.empty? && closure_entries.all? do |entry|
-        entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete" &&
-          %w[inspected_no_risk finding].include?(entry["coverage_disposition"])
+        (entry["terminal_state"] == "completed" && entry["coverage_status"] == "complete" &&
+          %w[inspected_no_risk finding].include?(entry["coverage_disposition"])) ||
+          (%w[needs_context blocked timed_out failed invalidated].include?(entry["terminal_state"]) &&
+            %w[incomplete invalidated].include?(entry["coverage_status"]) && entry["coverage_disposition"] == "incomplete")
       end
       fixed_ids = fixed.map { |item| item.is_a?(Hash) ? item["aggregate_finding_id"] : nil }
       closure_ids = closure_results.is_a?(Array) ? closure_results.map { |item| item.is_a?(Hash) ? item["aggregate_finding_id"] : nil } : []
@@ -634,8 +585,14 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
         matching_findings = finding_rows.select { |finding| finding["aggregate_finding_id"] == finding_id }
         matching_retained = retained_ledger.select { |entry| entry["aggregate_finding_id"] == finding_id }
         current_source_pass_ids = matching_findings.length == 1 ? review_pass_ids_from_findings.call(matching_findings.first["source_finding_ids"]) : []
-        matching_findings.length == 1 && %w[must-fix should-fix].include?(matching_findings.first["severity"]) && matching_retained.length == 1 &&
-          !(current_source_pass_ids & closure_pass_ids).empty?
+        outcome = closure_results.find { |item| item["aggregate_finding_id"] == finding_id }
+        unassessed = outcome["status"] == "incomplete" && closure_entries.any? { |entry| entry["terminal_state"] != "completed" && entry["evidence"] == outcome["evidence"] }
+        if unassessed
+          matching_findings.empty? && matching_retained.empty? && summary["result"] == "HAS_REMAINING_ITEMS"
+        else
+          matching_findings.length == 1 && %w[must-fix should-fix].include?(matching_findings.first["severity"]) && matching_retained.length == 1 &&
+            !(current_source_pass_ids & closure_pass_ids).empty?
+        end
       end
       valid &&= verified_ids.all? do |finding_id|
         finding_rows.none? { |finding| finding["aggregate_finding_id"] == finding_id } &&

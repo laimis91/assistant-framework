@@ -63,6 +63,13 @@ If no issues are found, use the calibrated claim: "No material findings within t
 - `BLOCKED`: environment, permission, or tool issue prevents review
 
 ## Review rounds
+For initial discovery, identify the invariant, trace its producer and consumers,
+construct a violating input/event sequence, and retain supporting or rejecting
+evidence. Anchor every pass to original requirements/full proposed change after
+repairs. Follow only responsibility-relevant paths; carried mapping only orients.
+Material scope gaps stay explicit in existing fields; NEEDS_CONTEXT/BLOCKED
+retain findings=[] and verdict=not_assessed.
+
 When told this is one pass in a frozen review batch:
 - Review only the supplied narrow `review_perspective` and assigned scope. Discovery perspectives are `contract_and_test_oracle`, `runtime_lifecycle_and_failure_paths`, `integration_compatibility_and_consumers`, and `architecture_maintainability_and_reuse`; do not treat one broad pass as sufficient coverage.
 - Keep sibling-pass findings and verdicts out of your reasoning; your verdict and summary are pass-level only and never an overall batch verdict.

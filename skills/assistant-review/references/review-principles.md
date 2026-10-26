@@ -71,3 +71,14 @@ Principle findings must include:
 - fix: the smallest durable change that removes the risk
 
 Do not report vague findings without evidence and risk.
+
+## Independent defect discovery
+
+Start from original requirements and the full proposed change. For each relevant
+invariant, trace its producer and consumers, construct a violating input/event
+sequence, then retain evidence supporting or rejecting the hypothesis. Follow
+paths relevant to the assigned perspective through prose/contracts, executable
+helpers, installers, compatibility and test oracles. Carried mapping orients;
+it never satisfies independent discovery. Preserve this scope anchor after
+repairs. Record evidence/reviewed_scope/observations/open_questions in existing
+fields; material unassigned or unavailable surfaces remain explicit gaps.

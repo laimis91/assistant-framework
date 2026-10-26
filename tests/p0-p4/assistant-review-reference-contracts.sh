@@ -1475,7 +1475,11 @@ else
 fi
 
 test_start "assistant-review v7 nested packet oracle rejects schema and lifecycle mutations"
-if ruby -ryaml -e '
+source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-fixtures.sh"
+if {
+  skill_eval_companion_contracts_ruby
+  cat <<'RUBY_REVIEW_ORACLE'
+
   input, handoffs, output = ARGV.map { |path| YAML.load_file(path) }
   reviewer_handoff = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
   qa_handoff = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_qa_evaluator" }
@@ -1529,44 +1533,16 @@ if ruby -ryaml -e '
     else false
     end
   }
-  shape_ok = nil
-  shape_ok = ->(value, fields) {
-    return false unless value.is_a?(Hash)
-    names = fields.map { |field| field["name"] }
-    return false unless (value.keys - names).empty?
-    fields.all? do |field|
-      name = field["name"]
-      next false if field["required"] == true && !value.key?(name)
-      next true unless value.key?(name)
-      item = value[name]
-      next false unless type_ok.call(item, field["type"])
-      next false if field["type"] == "enum" && field["enum_values"] && !field["enum_values"].include?(item)
-      next false if field["min_items"] && item.respond_to?(:length) && item.length < field["min_items"]
-      children = field["object_fields"]
-      if children && field["type"] == "object"
-        shape_ok.call(item, children)
-      elsif children && field["type"] == "object[]"
-        item.all? { |entry| shape_ok.call(entry, children) }
-      else
-        true
-      end
-    end
-  }
+  ReviewTools.use(File.expand_path("../scripts/review-tools.py", File.dirname(ARGV[1])))
+  shape_ok = ->(value, fields) { ReviewTools.shape_valid?(value, {"type" => "object", "object_fields" => fields}) }
   tuple_key = ->(tuple) { %w[review_pass_id scope_item_id applicable_concern review_perspective coverage_obligation].map { |key| tuple[key] }.join("\u0000") }
   reviewer_valid = ->(reply, pass, full_packet) {
-    return false unless shape_ok.call(reply, reviewer_fields)
-    return false unless reply["batch_id"] == full_packet.dig("review_batch", "batch_id") && reply["review_snapshot_id"] == full_packet.dig("review_material_snapshot", "review_snapshot_id") && reply["snapshot_identity"] == full_packet.dig("review_material_snapshot", "snapshot_identity")
-    return false unless reply["review_pass_id"] == pass["review_pass_id"] && reply["review_attempt_id"] == "#{pass["review_pass_id"]}:attempt-1" && reply["review_perspective"] == pass["perspective"] && reply["reviewed_scope"] == pass["assigned_scope"]
-    coverage_keys = reply["coverage_entries"].map { |entry| [reply["review_pass_id"], entry["scope_item_id"], entry["applicable_concern"], entry["review_perspective"], entry["coverage_obligation"]].join("\u0000") }
-    required_keys = full_packet.dig("review_batch", "required_coverage_tuples").select { |tuple| tuple["review_pass_id"] == pass["review_pass_id"] }.map { |tuple| tuple_key.call(tuple) }
-    return false unless coverage_keys == required_keys
-    case reply["status"]
-    when "DONE" then reply["pass_completion_state"] == "completed" && reply["verdict"] == "clean" && reply["findings"].empty? && reply["coverage_entries"].all? { |entry| %w[inspected_no_risk finding].include?(entry["status"]) } && !reply.key?("open_questions")
-    when "DONE_WITH_CONCERNS" then reply["pass_completion_state"] == "completed" && %w[has_must_fix has_should_fix has_nits_only].include?(reply["verdict"]) && !reply["findings"].empty? && reply["coverage_entries"].all? { |entry| %w[inspected_no_risk finding].include?(entry["status"]) } && !reply.key?("open_questions")
-    when "NEEDS_CONTEXT" then reply["pass_completion_state"] == "needs_context" && reply["verdict"] == "not_assessed" && reply["findings"].empty? && reply["coverage_entries"].all? { |entry| entry["status"] == "blocked" } && reply["open_questions"].is_a?(Array) && !reply["open_questions"].empty?
-    when "BLOCKED" then reply["pass_completion_state"] == "blocked" && reply["verdict"] == "not_assessed" && reply["findings"].empty? && reply["coverage_entries"].all? { |entry| entry["status"] == "blocked" } && reply["open_questions"].is_a?(Array) && !reply["open_questions"].empty?
-    else false
-    end
+    # Frozen fixture expectations remain independent of shared production checks.
+    context = {"round" => 1, "batch_id" => full_packet.dig("review_batch", "batch_id"), "review_snapshot_id" => full_packet.dig("review_material_snapshot", "review_snapshot_id"), "snapshot_identity" => full_packet.dig("review_material_snapshot", "snapshot_identity"), "review_pass_id" => pass["review_pass_id"], "review_attempt_id" => "#{pass["review_pass_id"]}:attempt-1", "review_perspective" => pass["perspective"], "assigned_scope" => pass["assigned_scope"], "scope_size" => "small", "quality_principles_required" => false}
+    required = full_packet.dig("review_batch", "required_coverage_tuples").select { |tuple| tuple["review_pass_id"] == pass["review_pass_id"] }
+    return false unless ReviewTools.call({"operation" => "validate_return", "authority" => {"context" => context, "required_coverage_tuples" => required}, "candidate" => reply})["valid"]
+    # This fixture specifically expects ordered tuples; production accepts a multiset.
+    reply["reviewed_scope"] == pass["assigned_scope"] && reply["coverage_entries"].map { |entry| tuple_key.call(entry.merge("review_pass_id" => reply["review_pass_id"])) } == required.map { |tuple| tuple_key.call(tuple) }
   }
   lifecycle_valid = ->(full_packet) {
     batch = full_packet["review_batch"]
@@ -1652,7 +1628,8 @@ if ruby -ryaml -e '
   mutation_valid = mutations.all? { |_name, mutate| trial = duplicate.call(packet); mutate.call(trial); !packet_valid.call(trial) }
   valid = input.fetch("schema_version") == "9.0" && handoffs.fetch("schema_version") == "9.0" && output.fetch("schema_version") == "9.0" && packet_valid.call(packet) && truth_valid && mutation_valid
   exit valid ? 0 : 1
-' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
+RUBY_REVIEW_ORACLE
+} | ruby -ryaml - "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
     pass
 else
     fail "assistant-review nested v7 packet oracle accepts an invalid schema, truth-table, lifecycle, closure, or QA packet"

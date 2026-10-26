@@ -1228,4 +1228,61 @@ p0p4_register_cleanup "$ownership_matrix_root"
 ownership_matrix_failure=''
 if ownership_install_compatibility_matrix "$ownership_matrix_root"; then pass; else fail "$ownership_matrix_failure"; fi
 
+test_start "standalone review runtime refusal writes nothing, including dry-run and custom homes"
+review_runtime_root="$(mktemp -d)"
+p0p4_register_cleanup "$review_runtime_root"
+mkdir -p "$review_runtime_root/bin"
+for runtime_command in bash dirname basename find sort rsync sed awk uname readlink; do
+    runtime_path="$(command -v "$runtime_command")"
+    ln -s "$runtime_path" "$review_runtime_root/bin/$runtime_command"
+done
+runtime_failed=false
+for preview in false true; do
+    runtime_args=(--agent gemini --skill assistant-review)
+    if $preview; then runtime_args+=(--dry-run); fi
+    if HOME="$review_runtime_root/home" PATH="$review_runtime_root/bin" /bin/bash "$FRAMEWORK_DIR/install.sh" "${runtime_args[@]}" >"$review_runtime_root/result" 2>&1; then
+        runtime_failed=true
+    elif ! grep -Fq 'assistant-review requires Python' "$review_runtime_root/result" || [[ -e "$review_runtime_root/home" ]]; then
+        runtime_failed=true
+    fi
+done
+if $runtime_failed; then fail "review runtime refusal accepted missing Python or wrote target files"; else pass; fi
+
+test_start "review source capability preflight rejects missing or corrupt private parser before writes"
+review_bundle_source="$review_runtime_root/source"
+mkdir -p "$review_bundle_source/skills"
+cp "$FRAMEWORK_DIR/install.sh" "$review_bundle_source/install.sh"
+cp -R "$FRAMEWORK_DIR/skills/assistant-review" "$review_bundle_source/skills/assistant-review"
+review_bundle_file="$review_bundle_source/skills/assistant-review/scripts/_vendor/pyyaml/yaml/constructor.py"
+cp "$review_bundle_file" "$review_runtime_root/constructor.original"
+review_capability_failed=false
+for fault in missing corrupt; do
+    if [[ "$fault" == missing ]]; then rm "$review_bundle_file"; else printf 'raise RuntimeError("corrupt private parser must never execute")\n' > "$review_bundle_file"; fi
+    for preview in false true; do
+        runtime_args=(--agent gemini --skill assistant-review)
+        if $preview; then runtime_args+=(--dry-run); fi
+        if HOME="$review_runtime_root/fault-home" bash "$review_bundle_source/install.sh" "${runtime_args[@]}" >"$review_runtime_root/fault-install" 2>&1; then
+            review_capability_failed=true
+        elif ! grep -Fq 'assistant-review requires Python' "$review_runtime_root/fault-install" || [[ -e "$review_runtime_root/fault-home" ]]; then
+            review_capability_failed=true
+        fi
+    done
+    cp "$review_runtime_root/constructor.original" "$review_bundle_file"
+done
+if $review_capability_failed; then fail "missing/corrupt private parser passed source preflight or wrote files"; else pass; fi
+
+test_start "selective review ships portable helper and excludes source-only report"
+ln -s "$(command -v python3)" "$review_runtime_root/bin/python3"
+for runtime_command in cp mkdir chmod diff rm cat tr grep head tail wc cut touch mktemp mv sh jq cksum stat tee sleep xargs comm uniq ln; do
+    runtime_path="$(command -v "$runtime_command")"
+    [[ -e "$review_runtime_root/bin/$runtime_command" ]] || ln -s "$runtime_path" "$review_runtime_root/bin/$runtime_command"
+done
+review_install_home="$(mktemp -d)"
+p0p4_register_cleanup "$review_install_home"
+if (cd /private/tmp && PATH="$review_runtime_root/bin" HOME="$review_install_home" CODEX_HOME="$review_install_home/custom codex" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-review >"$review_install_home/install.log" 2>&1) &&
+    python3 -I -S -B "$review_install_home/custom codex/skills/assistant-review/scripts/review-tools.py" --probe >/dev/null &&
+    [[ ! -e "$review_install_home/custom codex/tools/evals/review-efficiency-report.rb" ]]; then
+    pass
+else fail "selective review custom-home/unrelated-cwd helper or source-only exclusion failed"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

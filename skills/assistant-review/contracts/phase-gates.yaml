@@ -23,6 +23,10 @@ gates:
     checkpoint_end: null
     exit_assertions:
 
+      - id: E_REVIEW_RUNTIME
+        check: "Isolated Python3.9+ skill-local scripts/review-tools.py --probe succeeds before deterministic return validation; no Workflow runtime assumption."
+        on_fail: "Stop validation, restore Python3.9+ and the complete bundled passive YAML parser, and rerun; never accept unchecked returns."
+
       - id: E1
         check: "review_scope is resolved to one of: files, changes, task, pr, content"
         on_fail: "Determine scope from git state and task journal, or ask user"
@@ -123,6 +127,10 @@ gates:
       - id: RS3
         check: "Only after the Reviewer or direct-fallback result exists: reviewer_return_validation is resolved and the canonical return fields, including findings[], summary, evidence, applicable checks, verdict, and rubric scores when required, are validated before EVALUATE"
         on_fail: "Resolve reviewer_return_validation after the result, then use the shared task guard for transient/schema correction; otherwise record failed/timed_out terminal evidence and continue incomplete aggregation."
+
+      - id: RS_RETURN_RECEIPTS
+        check: "Use scripts/review-tools.py identify_return/validate_return/validate_terminal_barrier with independent caller authority. Preserve canonical payload archives, event bindings, current source/producer and unresolved conflicts; exact replay is idempotent, stale/duplicate cannot close coverage or advance progress."
+        on_fail: "Retain raw evidence and validated findings, resolve conflicts through existing failure/repair accounting; missing history remains unknown."
 
       - id: RS_BATCH_BARRIER
         check: "Before aggregation, fixes, or EVALUATE: planned/dispatched batches may have empty or pending zero-attempt ledger records and collecting batches may be partial; at the terminal barrier all expected passes reach terminal accounting. Response-backed terminal states completed, needs_context, and blocked require exactly one active_terminal response for the active dispatch attempt; timed_out, failed, and invalidated may have zero active responses only with typed failure evidence. Stale/duplicate attempts are audited but cannot complete coverage. Every response matches its active review_attempt_id dispatch, every response matches assigned five-dimensional closure (pass/item/concern/perspective/obligation) and frozen identity, and recomputed scope-manifest/content identity still matches; early aggregation is forbidden and otherwise coverage is incomplete."

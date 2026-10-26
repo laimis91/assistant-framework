@@ -578,4 +578,15 @@ else
     fail "${metrics_doc_failures[*]}"
 fi
 
+test_start "independent discovery preserves invariant traces, original scope and role mirrors"
+if ruby -rjson - "$FRAMEWORK_DIR" <<'RUBY'
+root=ARGV.fetch(0)
+prompts=%w[agents/codex/code-reviewer.toml agents/codex/reviewer.toml agents/claude/code-reviewer.md agents/claude/reviewer.md].map{|p|File.read(File.join(root,p))}
+terms=['identify the invariant','trace its producer and consumers','violating input/event sequence','supporting or rejecting','original requirements/full proposed change','carried mapping only orients','findings=[] and verdict=not_assessed']
+ids=JSON.parse(File.read(File.join(root,'skills/assistant-review/evals/cases.json'))).fetch('cases').map{|c|c.fetch('id')}
+expected=%w[discovery-cross-file-producer-consumer discovery-temporal-late-event discovery-compatibility-consumer discovery-authority-boundary discovery-clean-control-no-invented-finding]
+exit(prompts.all?{|p|terms.all?{|t|p.include?(t)}} && (expected-ids).empty? ? 0 : 1)
+RUBY
+then pass; else fail "discovery scope/procedure or role mirrors drifted"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

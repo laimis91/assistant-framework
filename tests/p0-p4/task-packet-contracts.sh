@@ -530,6 +530,11 @@ def install_workflow(target):
     shutil.copytree(root / "skills/assistant-workflow/contracts", target / "contracts", dirs_exist_ok=True)
     for companion in ("assistant-verification", "assistant-review"):
         shutil.copytree(root / "skills" / companion / "contracts", target.parent / companion / "contracts", dirs_exist_ok=True)
+    # Installed review consumers include their local executable schema reader.
+    review_helper = target.parent / "assistant-review/scripts/review-tools.py"
+    review_helper.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(root / "skills/assistant-review/scripts/review-tools.py", review_helper)
+    shutil.copytree(root / "skills/assistant-review/scripts/_vendor", review_helper.parent / "_vendor", dirs_exist_ok=True)
     return target / "SKILL.md"
 def grade(runner, selected, environment):
     return subprocess.run(["bash", str(runner / "tools/evals/run-skill-evals.sh"), "--responses", str(responses), "--skill", str(selected), "--case", case["id"]], env=environment, text=True, capture_output=True)
@@ -602,6 +607,18 @@ for optimization in ("0", "1"):
     stale_review_index.write_bytes(stale_review_index_bytes)
     for reader in ("schema", "lifecycle"):
         require(review_reader(configured, split_skill, split_env, reader).returncode == 0, "Selected split review reader failed: " + reader)
+    # The Python reader is code authority in a distinct scripts path. Existing
+    # Python-helper and contract-data escape controls do not exercise this import.
+    selected_review_helper = split_skill.parent.parent / "assistant-review/scripts/review-tools.py"
+    helper_bytes = selected_review_helper.read_bytes(); selected_review_helper.unlink()
+    require(grade_review(configured, split_skill, split_env).returncode != 0, "Missing selected review helper fell back to stale sibling")
+    selected_review_helper.write_bytes(helper_bytes)
+    outside_review_helper = out / "outside-review-tools.py"
+    outside_review_helper.write_text("from pathlib import Path\nPath(" + repr(str(marker)) + ").write_text('UNTRUSTED')\nraise RuntimeError('wrong review helper imported')\n")
+    selected_review_helper.unlink(); selected_review_helper.symlink_to(outside_review_helper)
+    require(grade_review(configured, split_skill, split_env).returncode != 0, "Escaping selected review helper accepted")
+    require(not marker.exists(), "Escaping selected review helper executed code")
+    selected_review_helper.unlink(); selected_review_helper.write_bytes(helper_bytes)
     for contract_name in ("index.yaml", "output.yaml"):
         selected_contract = split_skill.parent.parent / "assistant-review/contracts" / contract_name
         original_contract = selected_contract.read_bytes(); selected_contract.unlink()

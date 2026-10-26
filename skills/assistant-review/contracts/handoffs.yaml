@@ -93,6 +93,7 @@ return_validation_bundles:
     return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
     activation: "Resolve only after the Reviewer or direct-fallback result exists and before EVALUATE."
     validation: "Validate batch_id, review_pass_id, review_attempt_id against the active dispatch, review_snapshot_id, perspective, terminal pass state, non-empty reviewed_scope, assigned scope/obligation membership, structured finding aggregation keys, coverage_entries, summary, evidence, applicable checklist/principle checks including architecture_decision_pack_checks when triggered, canonical architecture_design_mode equals architecture_decision_pack.mode, review_intensive independent challenge evidence, verdict, rubric scores when required, and pivot_restart_signal when applicable."
+    mechanical_validation: "Use scripts/review-tools.py with independently retained caller authority; keep raw payload/digest and occurrence refs in caller evidence, never in v9 return fields. Changed payload conflicts retain evidence and block closure until resolved."
     dispatch_context_excluded: true
 
   - name: qa_evaluator_return_validation
@@ -875,7 +876,7 @@ handoffs:
         required: conditional
         condition: "review_perspective == closure_verification"
         min_items: 1
-        validation: "Exact equality with pending previously_fixed IDs; preserve their source IDs/provenance. Missing, incomplete, or regressed IDs remain findings and block CLEAN."
+        validation: "Exact equality with pending previously_fixed IDs; preserve their source IDs/provenance. Missing IDs are invalid. Assessed incomplete/regressed IDs remain findings and block CLEAN. Unassessed closure returns NEEDS_CONTEXT/BLOCKED with incomplete rows for every pending fixed ID and evidence explaining the unavailable assessment; findings stay empty and coverage remains blocked/incomplete. Never invent a finding to represent nonassessment."
         object_fields:
           - name: aggregate_finding_id
             type: string

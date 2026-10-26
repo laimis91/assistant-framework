@@ -22,3 +22,9 @@ fix must refresh its frozen snapshot after mutation. Fresh runs omit
 `validator_result_ref`, which must match the current parsed inputs. A valid impact projection
 never replaces `final_summary.coverage_complete`, required terminal passes, or
 the CLEAN/ISSUES_FIXED decision.
+
+Initial discovery uses original requirements plus the full proposed change,
+following relevant producer/consumer paths through prose, contracts, helpers,
+installers, compatibility and test oracles. Repairs cannot replace that scope
+anchor. Independent hypothesis evidence belongs in existing review fields;
+carried impact mapping helps orientation but cannot establish independent discovery.

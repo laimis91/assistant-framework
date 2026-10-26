@@ -84,3 +84,16 @@ immutable source identity, complete source-bound mapping/allocation and conserva
 all-prerequisite expansion described in plan-template.md. Block unknown/mixed/stale,
 unsafe or ambiguous forms; retain original artifacts/results unchanged and record
 normalization mapping in this reconciliation provenance, never a permanent ledger. Genuine verified normalization creates initial provenance. Later direct canonical Plan, resume, dispatch, verification and completion require the independently retained accepted previous_plan whenever either snapshot carries provenance; compare provenance presence and canonical JSON digest, including scalar types. Fresh canonical plans cannot invent it, and migrated canonical calls cannot alter or discard it.
+
+Review result consumption reuses v9 `pass_attempt_ledger`/`response_events` and
+caller evidence: canonical complete raw UTF-8 payload/ref/SHA-256, task/native
+invocation, batch/snapshot/pass/active attempt, producer identity/version and
+occurrence event bindings. Same-event replay is idempotent; only distinct
+byte-identical complete delivery is duplicate. Changed payloads retain both raw
+returns and validated findings; unresolved conflicts use existing repair/failure
+accounting, never a new wire disposition. Stale/duplicate replies cannot close
+coverage or advance progress. Carry these bindings, unresolved conflicts and
+archive refs across compaction; on resume reconcile source/producer freshness
+and resolve/rehash archives. Missing history is unknown. Use completion
+notifications/bounded waits; reserve full agent inventories for discovery/recovery,
+not repeated retrieval. Host-injected reports remain; measure avoidable processing.

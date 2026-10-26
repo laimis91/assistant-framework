@@ -8,12 +8,12 @@ previously_fixed = validated_entry.previously_fixed || []
 score_history = []
 
 PREPARE
-  - Validate entry fields, then seed `previously_fixed` from the validated entry value; use `[]` only when it is absent. Retain raw persisted history. For invalidated persisted 7.1, 7.2, or 8.0 packets, retain every aggregate_finding_id, source_finding_ids, and source_provenance entry while invalidating current result/delegation/snapshot/Pack/QA/plan/coverage refs. Before closure dispatch, normalize only records missing any canonical identity tuple field: preserve complete v6, 7.0, 7.1, 7.2, 8.0, and current tuples unchanged; for a partial v6/7.0 tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration or review_pass:persisted-v7-0-migration. When the aggregate ID is absent, use the matching UTF-8 NFC(description)/SHA-256/collision rule and legacy-v6:<fixed_in_round>:<first-24-hex> or legacy-v7-0:<fixed_in_round>:<first-24-hex>, then fill only missing source_finding_ids and source_provenance. Invalidate persisted 6.0/7.0/7.1/7.2/8.0 score-tracking refs before rebuilding the fresh 9.0 batch.
+  - Validate entry; seed `previously_fixed` from validated entry, `[]` only when absent. Retain raw persisted history. For invalidated persisted 7.1, 7.2, or 8.0 packets, retain every aggregate_finding_id, source_finding_ids, and source_provenance entry while invalidating current result/delegation/snapshot/Pack/QA/plan/coverage refs. Before closure dispatch, normalize only records missing any canonical identity tuple field: preserve complete v6, 7.0, 7.1, 7.2, 8.0, and current tuples unchanged; for a partial v6/7.0 tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration or review_pass:persisted-v7-0-migration. When the aggregate ID is absent, use the matching UTF-8 NFC(description)/SHA-256/collision rule and legacy-v6:<fixed_in_round>:<first-24-hex> or legacy-v7-0:<fixed_in_round>:<first-24-hex>, then fill only missing source_finding_ids and source_provenance. Invalidate persisted 6.0/7.0/7.1/7.2/8.0 score-tracking refs before rebuilding the fresh 9.0 batch.
   - Infer review mode before review or mutation. Report-only selects audit;
     in-scope authority selects review-fix. If unresolved, ask
     exactly: "Should I only report findings, or also implement and verify fixes?"
   - Standalone Spec Review on scope. Validate FIX_STEP entry_assertions before repair or mutation dispatch. On mismatch, run only in review-fix mode to repair evidence-backed must-fix and should-fix items. In audit, retain and stay read-only. Dispatch every planned read-only Reviewer pass with sanitized criteria; never expose the mismatch details to discovery siblings. Return it to the composing workflow for planning or approval when it changes scope, risk, or acceptance.
-  - Workflow consumes Spec PASS and current evidence for every due selected check and applicable due/executable binding check. In workflow-composed review, `no_build_scope` is allowed only when no fix is required or occurred and no such check is due; after any fix, a current passed `evidence_ref` is mandatory and `not_applicable` is invalid. Standalone review-fix retains mandatory build and tests.
+  - Workflow consumes Spec PASS/current due-check evidence. `no_build_scope` requires no fix required/occurred and no due selected/executable binding check. Any fix requires current passed `evidence_ref`, never `not_applicable`. Standalone review-fix retains build/tests.
 
 while shared_progress_allows_work:
   Round 3+ requires a recorded `additional_round_reason` with new evidence.
@@ -21,6 +21,7 @@ while shared_progress_allows_work:
 
   1. REVIEW
      - Freeze snapshot/manifest/identity; mutation invalidates. Rebuild persisted 6.0/7.0/7.1/7.2/8.0 under 9.0 before clean while retaining raw history and complete closure tuples. Load `references/review-batch.md` before batch planning.
+     - Preserve original requirements/full-change scope after repairs; mapping only orients.
      - Derive canonical discovery passes. Without trigger, trivial/small uses two purpose-specific isolated direct-fallback passes; trigger delegates scope. Security/post-fix closure are additive, max six.
      - First resolve `reviewer_context` from `contracts/index.yaml` strictly below 5653 words; carry bounded selector before response; siblings are blind; only closure gets ledger.
      - Load principles/rubric/triggered checklist sections. Medium+ returns Design Coherence evidence or `no concrete risk found`. Run a bounded independent capability search; carried Mapper evidence cannot satisfy review.
@@ -28,19 +29,21 @@ while shared_progress_allows_work:
 
   2. EVALUATE
      - Incomplete coverage -> `HAS_REMAINING_ITEMS`, never CLEAN/ISSUES_FIXED; history does not block replacement. Audit exits after one started terminal batch; retry exhaustion never starts another.
-     - Complete aggregate exits if actionable items are absent; otherwise perform authorized fixes while the shared guard permits work or report remaining. Rubric never manufactures work.
-     - On genuine shared semantic stagnation or material change, the orchestrator records pivot_restart_decision. Score diagnostics alone never force this decision.
+     - Exit complete aggregation without actionable items; otherwise fix within authority/shared guard or report remaining. Rubric never manufactures work.
+     - The orchestrator records pivot_restart_decision for genuine shared stagnation/material change; scores alone never force it.
 
   3. FIX / VALIDATE
-     - Validate FIX_STEP entry_assertions before source/test mutation or dispatch. Only review-fix repairs authorized evidence; record closure.
+     - Validate FIX_STEP entry_assertions before mutation/dispatch; only review-fix repairs authorized evidence. Record closure.
      - Before mutation, enforce `F_REVIEW_VERIFICATION_SELECTION`.
      - For workflow-composed active TDD, return finding identities/provenance and unchanged context to Build per `F_REVIEW_VERIFICATION_SELECTION`; require completed cycle/checks before fresh Review. Preserve `previously_fixed`, source IDs/provenance, round, and `score_history`; incomplete remains `HAS_REMAINING_ITEMS`/blocked. Audit and inactive-TDD paths remain unchanged.
      - Standalone review-fix runs build and tests. Workflow-composed review runs every due selected check and applicable due/executable binding check; any source fix invalidates the batch and requires a current passed evidence reference before the next pass.
 
   4. NEXT ROUND
-     - After round 1 fixes, start fresh round 2. Round 3+ needs new evidence. The round counts started review batches, not individual perspective passes, including incomplete or invalidated batches; the shared guard governs continuation.
+     - After round 1 fixes, start fresh round 2. Round 3+ needs new evidence. The round counts started review batches, not individual perspective passes, including incomplete/invalidated; retain the shared guard.
 ```
 
-With complete coverage: **No material findings within the reviewed scope and available evidence**. `CLEAN` is not proof.
+With complete coverage: **No material findings within the reviewed scope and available evidence**.
 
-When required, load `qa-evaluation-loop.md` before dispatching QAEvaluator. That reference owns the detailed QA algorithm. Rehash before QA; mutation requires validation, invalidation, and a fresh complete review batch before QA resumes, except exact snapshot digest equality. QA is the separate acceptance lane.
+When required, load `qa-evaluation-loop.md` before dispatching QAEvaluator. That reference owns the detailed QA algorithm. Rehash; mutation requires validation/invalidation/fresh complete review, except exact snapshot digest equality. QA is the separate acceptance lane.
+
+Validate returns/barriers/aggregates with skill-local `scripts/review-tools.py` (`--probe`, `--help`).

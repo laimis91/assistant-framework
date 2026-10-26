@@ -1,0 +1,1085 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "review-efficiency-result.schema.json",
+  "title": "Bounded review efficiency report",
+  "description": "Reporting result; $defs.capture_input describes the read-only normalized native capture input. Schema validity is not semantic adjudication or evidence authenticity.",
+  "$defs": {
+    "capture_input": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "workload_ceiling": {
+          "type": "object",
+          "properties": {
+            "max_runs": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_tokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_elapsed_ms": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "max_runs",
+            "max_tokens",
+            "max_elapsed_ms"
+          ],
+          "additionalProperties": false
+        },
+        "rate_table": {
+          "type": "object",
+          "properties": {
+            "as_of": {
+              "type": "string",
+              "format": "date"
+            },
+            "source_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "currency": {
+              "const": "USD"
+            },
+            "rates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "input_per_million": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "cached_input_per_million": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "output_per_million": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "model",
+                  "input_per_million",
+                  "cached_input_per_million",
+                  "output_per_million"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "as_of",
+            "source_ref",
+            "currency",
+            "rates"
+          ],
+          "additionalProperties": false
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "run_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "variant": {
+                "enum": [
+                  "A",
+                  "B",
+                  "C"
+                ]
+              },
+              "case_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "repetition": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "run_order": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "frozen": {
+                "type": "object",
+                "properties": {
+                  "task_snapshot": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  },
+                  "source_snapshot": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  },
+                  "loaded_skill_digest": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  },
+                  "oracle_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  },
+                  "acceptance_state": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  },
+                  "models_efforts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "requested_model": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "\\S"
+                        },
+                        "observed_model": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "\\S"
+                        },
+                        "reasoning_effort": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "\\S"
+                        },
+                        "identity_evidence_ref": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "\\S"
+                        }
+                      },
+                      "required": [
+                        "requested_model",
+                        "observed_model",
+                        "reasoning_effort",
+                        "identity_evidence_ref"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    }
+                  },
+                  "concurrency": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "stopping_conditions": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  },
+                  "cache_observation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  }
+                },
+                "required": [
+                  "task_snapshot",
+                  "source_snapshot",
+                  "loaded_skill_digest",
+                  "oracle_ref",
+                  "acceptance_state",
+                  "models_efforts",
+                  "tools",
+                  "concurrency",
+                  "stopping_conditions",
+                  "cache_observation"
+                ],
+                "additionalProperties": false
+              },
+              "native_tree": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "invocation_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "parent_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "children": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "inventory_complete": {
+                      "type": "boolean"
+                    },
+                    "inventory_evidence_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "responses_complete": {
+                      "type": "boolean"
+                    },
+                    "responses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "native_response_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "usage_evidence_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "observed_model": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "model_evidence_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "input_tokens": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "cached_input_tokens": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "output_tokens": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "reasoning_output_tokens": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "observed_effort": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "effort_evidence_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [],
+                        "additionalProperties": false,
+                        "description": "Partial native observations omit unknown telemetry; a missing identity cannot count as a known unique response. Present telemetry remains typed."
+                      }
+                    }
+                  },
+                  "required": [
+                    "invocation_id",
+                    "parent_id",
+                    "children",
+                    "inventory_complete",
+                    "inventory_evidence_ref",
+                    "responses_complete",
+                    "responses"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metrics": {
+                "type": "object",
+                "properties": {
+                  "repeated_processing_bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repeated_retrieval_bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "validation_calls": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "schema_repair_calls": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "coordination_turns": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "latency_ms": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repair_work_units": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "repeated_processing_bytes",
+                  "repeated_retrieval_bytes",
+                  "validation_calls",
+                  "schema_repair_calls",
+                  "coordination_turns",
+                  "latency_ms",
+                  "repair_work_units"
+                ],
+                "additionalProperties": false
+              },
+              "adjudication": {
+                "type": "object",
+                "properties": {
+                  "variant_blind": {
+                    "const": true
+                  },
+                  "adjudicator_ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "oracle_ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidence_ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "false_clean": {
+                    "type": "boolean"
+                  },
+                  "broken_closure": {
+                    "type": "boolean"
+                  },
+                  "required_material_finding_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "found_material_finding_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "first_batch_found_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "later_only_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "false_positive_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "lost_finding_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "required": [
+                  "variant_blind",
+                  "adjudicator_ref",
+                  "oracle_ref",
+                  "evidence_ref",
+                  "false_clean",
+                  "broken_closure",
+                  "required_material_finding_ids",
+                  "found_material_finding_ids",
+                  "first_batch_found_ids",
+                  "later_only_ids",
+                  "false_positive_ids",
+                  "lost_finding_ids"
+                ],
+                "additionalProperties": false
+              },
+              "case_class": {
+                "enum": [
+                  "canary",
+                  "development",
+                  "cross_file",
+                  "temporal",
+                  "compatibility",
+                  "authority_boundary",
+                  "clean_control"
+                ]
+              },
+              "held_out": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "run_id",
+              "variant",
+              "case_id",
+              "repetition",
+              "run_order",
+              "frozen",
+              "native_tree",
+              "metrics",
+              "adjudication",
+              "case_class",
+              "held_out"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schema_version",
+        "workload_ceiling",
+        "rate_table",
+        "runs"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rate_table": {
+      "type": "object",
+      "properties": {
+        "as_of": {
+          "type": "string",
+          "format": "date"
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "currency": {
+          "const": "USD"
+        },
+        "rates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string",
+                "minLength": 1
+              },
+              "input_per_million": {
+                "type": "number",
+                "minimum": 0
+              },
+              "cached_input_per_million": {
+                "type": "number",
+                "minimum": 0
+              },
+              "output_per_million": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "model",
+              "input_per_million",
+              "cached_input_per_million",
+              "output_per_million"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "as_of",
+        "source_ref",
+        "currency",
+        "rates"
+      ],
+      "additionalProperties": false
+    },
+    "actual_run_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "variant": {
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ]
+          },
+          "case_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "repetition": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "run_order": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "frozen": {
+            "type": "object",
+            "properties": {
+              "task_snapshot": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "source_snapshot": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "loaded_skill_digest": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "oracle_ref": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "acceptance_state": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "models_efforts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "requested_model": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    },
+                    "observed_model": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    },
+                    "reasoning_effort": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    },
+                    "identity_evidence_ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    }
+                  },
+                  "required": [
+                    "requested_model",
+                    "observed_model",
+                    "reasoning_effort",
+                    "identity_evidence_ref"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                }
+              },
+              "concurrency": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "stopping_conditions": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "cache_observation": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            },
+            "required": [
+              "task_snapshot",
+              "source_snapshot",
+              "loaded_skill_digest",
+              "oracle_ref",
+              "acceptance_state",
+              "models_efforts",
+              "tools",
+              "concurrency",
+              "stopping_conditions",
+              "cache_observation"
+            ],
+            "additionalProperties": false
+          },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "repeated_processing_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "repeated_retrieval_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "validation_calls": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "schema_repair_calls": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "coordination_turns": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "latency_ms": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "repair_work_units": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "repeated_processing_bytes",
+              "repeated_retrieval_bytes",
+              "validation_calls",
+              "schema_repair_calls",
+              "coordination_turns",
+              "latency_ms",
+              "repair_work_units"
+            ],
+            "additionalProperties": false
+          },
+          "capture": {
+            "type": "object",
+            "properties": {
+              "complete": {
+                "type": "boolean"
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "unique_response_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "usage": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "input_tokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cached_input_tokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "output_tokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reasoning_output_tokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "input_tokens",
+                      "cached_input_tokens",
+                      "output_tokens",
+                      "reasoning_output_tokens"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "normalized_cost": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "observed_token_lower_bound": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Maximum of the sum of unique known-ID valid observed input/output components and the largest single anonymous observation valid input/output sum. Anonymous observations may overlap known IDs or each other, including across runs; per-run bounds are not additive. Zero is only the known observed bound, never proof of total zero."
+              }
+            },
+            "required": [
+              "complete",
+              "reasons",
+              "unique_response_count",
+              "usage",
+              "normalized_cost",
+              "observed_token_lower_bound"
+            ],
+            "additionalProperties": false
+          },
+          "quality": {
+            "type": "object",
+            "properties": {
+              "material_misses": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "first_batch_recall": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 1
+              },
+              "false_positives": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "later_only_findings": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "lost_findings": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "false_clean": {
+                "type": "boolean"
+              },
+              "broken_closure": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "material_misses",
+              "first_batch_recall",
+              "false_positives",
+              "later_only_findings",
+              "lost_findings",
+              "false_clean",
+              "broken_closure"
+            ],
+            "additionalProperties": false
+          },
+          "case_class": {
+            "enum": [
+              "canary",
+              "development",
+              "cross_file",
+              "temporal",
+              "compatibility",
+              "authority_boundary",
+              "clean_control"
+            ]
+          },
+          "held_out": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "run_id",
+          "variant",
+          "case_id",
+          "repetition",
+          "run_order",
+          "frozen",
+          "metrics",
+          "capture",
+          "quality",
+          "case_class",
+          "held_out"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "comparisons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "baseline": {
+            "enum": [
+              "A",
+              "B"
+            ]
+          },
+          "candidate": {
+            "enum": [
+              "B",
+              "C"
+            ]
+          },
+          "pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "baseline_run_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "candidate_run_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "case_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "repetition": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "baseline_first": {
+                  "type": "boolean"
+                },
+                "rejection_reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "normalized_cost_saving": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "metric_reductions": {
+                  "type": "object",
+                  "properties": {
+                    "repeated_processing_bytes": {
+                      "type": "integer"
+                    },
+                    "repeated_retrieval_bytes": {
+                      "type": "integer"
+                    },
+                    "validation_calls": {
+                      "type": "integer"
+                    },
+                    "schema_repair_calls": {
+                      "type": "integer"
+                    },
+                    "coordination_turns": {
+                      "type": "integer"
+                    },
+                    "latency_ms": {
+                      "type": "integer"
+                    },
+                    "repair_work_units": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "repeated_processing_bytes",
+                    "repeated_retrieval_bytes",
+                    "validation_calls",
+                    "schema_repair_calls",
+                    "coordination_turns",
+                    "latency_ms",
+                    "repair_work_units"
+                  ],
+                  "additionalProperties": false
+                },
+                "case_class": {
+                  "enum": [
+                    "canary",
+                    "development",
+                    "cross_file",
+                    "temporal",
+                    "compatibility",
+                    "authority_boundary",
+                    "clean_control"
+                  ]
+                },
+                "held_out": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "baseline_run_id",
+                "candidate_run_id",
+                "case_id",
+                "repetition",
+                "baseline_first",
+                "rejection_reasons",
+                "normalized_cost_saving",
+                "metric_reductions",
+                "case_class",
+                "held_out"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "actual_pair_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "observed_baseline_cost_range": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mean_normalized_cost_saving": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decision": {
+            "enum": [
+              "rejected",
+              "inconclusive",
+              "observed_saving_within_workload"
+            ]
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "quality_evidence": {
+            "enum": [
+              "bounded_held_out_evidence",
+              "incomplete_held_out_workload"
+            ]
+          },
+          "effective_cost_variation_bound": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Maximum observed within-case range among baseline cost, candidate cost, and matched-pair savings. Savings at or below this bound remain inconclusive."
+          }
+        },
+        "required": [
+          "baseline",
+          "candidate",
+          "pairs",
+          "actual_pair_count",
+          "observed_baseline_cost_range",
+          "mean_normalized_cost_saving",
+          "decision",
+          "limitations",
+          "quality_evidence",
+          "effective_cost_variation_bound"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "claims": {
+      "type": "object",
+      "properties": {
+        "universal_non_regression": {
+          "const": false
+        },
+        "subscription_limit_percentage": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "universal_non_regression",
+        "subscription_limit_percentage"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "input_sha256",
+    "rate_table",
+    "actual_run_count",
+    "runs",
+    "comparisons",
+    "claims"
+  ],
+  "additionalProperties": false
+}

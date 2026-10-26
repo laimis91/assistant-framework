@@ -84,6 +84,7 @@ load_sets:
         names: [fresh_reviewer_context]
     budget_words: 5653
   return_validation:
+    references: [references/review-batch.md]
     selectors:
       - id: review-return-validation-bundle
         path: contracts/handoffs.yaml

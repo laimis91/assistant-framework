@@ -209,3 +209,16 @@ Continue Discovery — ask remaining questions.
 ```
 
 Writer continuation: retain worker_stage (`test_authoring`, `production`, `refactor`), SAME selected writer identity, actual cumulative changes and canonical cycle ref. Test authoring may lack incoming RED and edits tests only; active production requires current matching RED; refactor requires current passing GREEN. Stage-only DONE does not complete Build or permit Review. Builder/Tester executes already authored checks and routes every authored fix to that writer.
+
+Review result consumption reuses v9 `pass_attempt_ledger`/`response_events` and
+caller evidence: canonical complete raw UTF-8 payload/ref/SHA-256, task/native
+invocation, batch/snapshot/pass/active attempt, producer identity/version and
+occurrence event bindings. Same-event replay is idempotent; only distinct
+byte-identical complete delivery is duplicate. Changed payloads retain both raw
+returns and validated findings; unresolved conflicts use existing repair/failure
+accounting, never a new wire disposition. Stale/duplicate replies cannot close
+coverage or advance progress. Carry these bindings, unresolved conflicts and
+archive refs across compaction; on resume reconcile source/producer freshness
+and resolve/rehash archives. Missing history is unknown. Use completion
+notifications/bounded waits; reserve full agent inventories for discovery/recovery,
+not repeated retrieval. Host-injected reports remain; measure avoidable processing.
