@@ -106,6 +106,9 @@ if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent cod
 
     if [[ ! -d "$installed_skills_dir/assistant-workflow" || ! -d "$installed_skills_dir/assistant-review" || ! -f "$installed_skills_dir/assistant-tdd/contracts/output.yaml" ]]; then
         fail "expected assistant-workflow and its canonical assistant-review and assistant-tdd producers to be installed"
+    elif ! cmp -s "$FRAMEWORK_DIR/docs/lifecycle-verification.md" "$installed_skills_dir/assistant-verification/references/lifecycle-verification.md" \
+        || ! grep -Fq "references/lifecycle-verification.md" "$installed_skills_dir/assistant-verification/SKILL.md"; then
+        fail "workflow verification dependency cannot resolve its exact installed local lifecycle guide"
     elif [[ -d "$installed_skills_dir/assistant-docs" ]]; then
         fail "expected selected workflow install to avoid unrelated assistant-docs"
     elif [[ "$assistant_skill_rows" != "0" ]]; then
@@ -818,6 +821,14 @@ for change_impact_skill in assistant-debugging assistant-review; do
         break
     elif [[ ! -f "$change_impact_skill_file" || ! -f "$change_impact_tool" || ! -f "$change_impact_protocol" || ! -f "$change_impact_example" || ! -f "$(dirname "$change_impact_skill_file")/../../tools/progress/operating-guidance.md" || ! -f "$(dirname "$change_impact_skill_file")/../../tools/progress/stagnation.py" ]]; then
         change_impact_install_failure="$change_impact_skill selective install omitted common validator resources at the path resolved from its loaded SKILL.md"
+        break
+    elif ! cmp -s "$FRAMEWORK_DIR/docs/lifecycle-verification.md" "$(dirname "$change_impact_skill_file")/references/lifecycle-verification.md" \
+        || ! grep -Eq "references/lifecycle-verification.md|lifecycle_reviewer_context" "$change_impact_skill_file" \
+        || ! grep -Fq "references/lifecycle-verification.md" "$(dirname "$change_impact_skill_file")/contracts/index.yaml"; then
+        change_impact_install_failure="$change_impact_skill cannot resolve its exact portable lifecycle guide from root/index"
+        break
+    elif [[ "$change_impact_skill" == "assistant-review" && -d "$change_impact_home/.codex/skills/assistant-verification" ]]; then
+        change_impact_install_failure="standalone review acquired a verification dependency solely for guidance"
         break
     elif [[ -d "$change_impact_home/.codex/skills/assistant-workflow" || ! -f "$change_impact_reference" ]] \
         || ! grep -Fq '../../tools/change-impact/validate-change-impact.cjs' "$change_impact_reference"; then

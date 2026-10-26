@@ -83,6 +83,19 @@ load_sets:
         key: name
         names: [fresh_reviewer_context]
     budget_words: 5653
+  lifecycle_reviewer_context:
+    references:
+      - references/review-principles.md
+      - references/review-checklists.md
+      - references/review-rubric.md
+      - references/lifecycle-verification.md
+    selectors:
+      - id: lifecycle-reviewer-context-bundle
+        path: contracts/handoffs.yaml
+        section: dispatch_context_bundles
+        key: name
+        names: [fresh_reviewer_context]
+    budget_words: 5653
   return_validation:
     references: [references/review-batch.md]
     selectors:

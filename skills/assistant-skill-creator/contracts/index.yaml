@@ -79,6 +79,16 @@ load_sets:
         key: name
         names: [skill_category, skill_value_kind, success_criteria]
     budget_words: 6000
+  expert_method_design:
+    references:
+      - references/expert-method-design.md
+    selectors:
+      - id: skill-creator-expert-method-criteria
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [skill_value_kind, success_criteria]
+    budget_words: 2400
   harness_design:
     references:
       - references/skill-contract-design-guide.md

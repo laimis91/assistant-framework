@@ -15,3 +15,7 @@ Measure relevant latency, throughput, memory, CPU, or cost with units and collec
 Synthetic workloads, warm-cache-only samples, uncontrolled shared hosts, unbounded fault loops, and unsupported telemetry can create false precision. Record workload, environment, raw observations, variability, baseline identity, and exclusions. Repeat enough to interpret variability and stakes, not to reach a fixed count.
 
 Do not claim memory, performance, or resilience improvement without comparable observations and a stated failure condition. If no material quality target or failure concern exists, use ordinary functional evidence and stop.
+
+For affected lifecycle claims, conditionally load [lifecycle verification](../lifecycle-verification.md).
+Select only material boundary/ownership observations and reuse adequate evidence;
+this adds no mandatory scenario matrix or execution authority.

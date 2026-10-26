@@ -4775,6 +4775,419 @@
           {"id":"both_checks_are_closed","operator":"equals","path":["evidence_assessment","status"],"expected":"sufficient"}
         ]
       }
+    },
+    {
+      "id": "lifecycle-finalization-and-owned-recovery",
+      "title": "Finalization cancellation retains outcomes and unresolved owners",
+      "category": "lifecycle_evidence",
+      "purpose": "One coupled lifecycle case covers wrong-phase evidence and mixed cleanup/retry ownership without duplicate debugging/review cases.",
+      "prompt": "Assess the supplied boundary and release checks using existing evidence_assessment only. Preserve exact observation summaries supplied below as claim_scope entries and bind each result to its actual due check. Include the nearby-negative scope control. Do not execute or repair anything. For this deterministic fixture, choose exactly one supplied safe recovery action for next_action and classify the supplied observations as task_behavior evidence.",
+      "setup_context": [
+        "Selected due checks boundary (retained outcome and settled finalization cancellation) and release (all owned handles released) use manual observation; there is no TDD requirement. The following captured trace facts are fixture data, not a live provider run.",
+        "trace:finalize: Finalization marker reached before cancel; result R and primary A failure retained, abort reason recorded, operation settled.",
+        "trace:recovery: A owned handle unresolved; B cleanup retained; attached C untouched; retry only A; disconnect and leader exit do not prove descendant release.",
+        "trace:success: Matched successful control retains R and releases its owned resources.",
+        "scope:label: Synchronous calculation and cosmetic label change require no lifecycle guide or new gate; shared-work/publication cases apply only when present.",
+        "A timed sleep during active work is not evidence that finalization was reached. The trace has an actual finalization marker and matched successful control; only A handle release is unresolved.",
+        "Deterministic fixture contract: next_action is exactly one of these independently supplied safe recovery choices: [\"Reuse boundary evidence; select an owned-handle release observation, without rerunning successful B cleanup or terminating attached C.\", \"Observe release of A's unresolved owned handle; reuse boundary evidence and successful B cleanup, preserve attached C, and keep descendant release unknown until observed.\"]. The traces support task_behavior only; they do not observe native activation or comparative value."
+      ],
+      "expected_behavior": [
+        "Conditionally uses lifecycle guidance for boundary/release; excludes the nearby synchronous/cosmetic change.",
+        "Retains primary failure, result, abort reason, settlement, mixed per-owner outcomes and successful cleanup; retries only unresolved owned resources.",
+        "Reports release incomplete without treating disconnect/exit as complete release or inventing shared/publication semantics."
+      ],
+      "pass_criteria": [
+        "Correlates all supplied observations, check identities and outcome states; insufficiency is limited to unresolved release."
+      ],
+      "fail_signals": [
+        "Claims active-work cancellation or timed sleep alone establishes finalization.",
+        "Replaces the primary failure, drops a child outcome, kills attached C or treats transport loss as complete release."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "evidence_assessment",
+          "insufficient"
+        ],
+        "forbidden_substrings": [
+          "active-work cancellation proves finalization",
+          "all handles released because transport disconnected"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "equals",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected": "insufficient"
+          },
+          {
+            "operator": "array_object_values_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "claim_scope",
+              "selected_check_ids",
+              "result_state",
+              "freshness"
+            ],
+            "expected_objects": [
+              {
+                "evidence_ref": "trace:finalize",
+                "claim_scope": [
+                  "Finalization marker reached before cancel; result R and primary A failure retained, abort reason recorded, operation settled."
+                ],
+                "selected_check_ids": [
+                  "boundary"
+                ],
+                "result_state": "passed",
+                "freshness": "current",
+                "claim_kind": "task_behavior"
+              },
+              {
+                "evidence_ref": "trace:recovery",
+                "claim_scope": [
+                  "A owned handle unresolved; B cleanup retained; attached C untouched; retry only A; disconnect and leader exit do not prove descendant release."
+                ],
+                "selected_check_ids": [
+                  "release"
+                ],
+                "result_state": "partial",
+                "freshness": "current",
+                "claim_kind": "task_behavior"
+              },
+              {
+                "evidence_ref": "trace:success",
+                "claim_scope": [
+                  "Matched successful control retains R and releases its owned resources."
+                ],
+                "selected_check_ids": [
+                  "boundary"
+                ],
+                "result_state": "passed",
+                "freshness": "current",
+                "claim_kind": "task_behavior"
+              },
+              {
+                "evidence_ref": "scope:label",
+                "claim_scope": [
+                  "Synchronous calculation and cosmetic label change require no lifecycle guide or new gate; shared-work/publication cases apply only when present."
+                ],
+                "selected_check_ids": [],
+                "result_state": "not_applicable",
+                "freshness": "current",
+                "claim_kind": "task_behavior"
+              }
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "one_of",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ],
+            "expected_values": [
+              "Reuse boundary evidence; select an owned-handle release observation, without rerunning successful B cleanup or terminating attached C.",
+              "Observe release of A's unresolved owned handle; reuse boundary evidence and successful B cleanup, preserve attached C, and keep descendant release unknown until observed."
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              0
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "claim_scope",
+              "selected_check_ids",
+              "binding_obligation_refs",
+              "result_state",
+              "freshness",
+              "exclusions"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              0,
+              "evidence_ref"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              0,
+              "claim_scope"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              0,
+              "selected_check_ids"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              0,
+              "binding_obligation_refs"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              0,
+              "exclusions"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              1
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "claim_scope",
+              "selected_check_ids",
+              "binding_obligation_refs",
+              "result_state",
+              "freshness",
+              "exclusions"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              1,
+              "evidence_ref"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              1,
+              "claim_scope"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              1,
+              "selected_check_ids"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              1,
+              "binding_obligation_refs"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              1,
+              "exclusions"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              2
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "claim_scope",
+              "selected_check_ids",
+              "binding_obligation_refs",
+              "result_state",
+              "freshness",
+              "exclusions"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              2,
+              "evidence_ref"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              2,
+              "claim_scope"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              2,
+              "selected_check_ids"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              2,
+              "binding_obligation_refs"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              2,
+              "exclusions"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              3
+            ],
+            "fields": [
+              "evidence_ref",
+              "claim_kind",
+              "claim_scope",
+              "selected_check_ids",
+              "binding_obligation_refs",
+              "result_state",
+              "freshness",
+              "exclusions"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              3,
+              "evidence_ref"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              3,
+              "claim_scope"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              3,
+              "selected_check_ids"
+            ],
+            "allow_empty": true
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              3,
+              "binding_obligation_refs"
+            ]
+          },
+          {
+            "operator": "array_nonblank_strings",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs",
+              3,
+              "exclusions"
+            ],
+            "allow_empty": true
+          }
+        ]
+      }
     }
   ]
 }

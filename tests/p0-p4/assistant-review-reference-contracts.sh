@@ -1959,4 +1959,23 @@ else
     fail "assistant-review clean claim has periodized or missing producer literal: ${clean_claim_failures[*]}"
 fi
 
+test_start "review lifecycle context preserves conditional reference agreement and the existing ceiling"
+if ruby -ryaml -e '
+  index = YAML.load_file(ARGV.fetch(0))
+  handoffs = YAML.load_file(ARGV.fetch(1))
+  sets = index.fetch("load_sets")
+  ordinary = sets.fetch("reviewer_context")
+  lifecycle = sets.fetch("lifecycle_reviewer_context")
+  guide = "references/lifecycle-verification.md"
+  bundle = handoffs.fetch("dispatch_context_bundles").find { |b| b["name"] == "fresh_reviewer_context" }
+  ref = bundle.fetch("worker_references").find { |r| r["path"] == guide }
+  condition = "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"
+  loop_text = File.read(ARGV.fetch(2))
+  valid = !ordinary.fetch("references").include?(guide) && lifecycle.fetch("references") == ordinary.fetch("references") + [guide] &&
+    lifecycle.fetch("budget_words") == 5653 && ordinary.fetch("budget_words") == 5653 &&
+    lifecycle.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } == ordinary.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } &&
+    ref && ref["condition"] == condition && loop_text.include?(condition) && loop_text.include?("condition worker references identically")
+  exit valid ? 0 : 1
+' "$review_index" "$review_handoffs" "$review_loop"; then pass; else fail "review lifecycle load set or worker condition diverged"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

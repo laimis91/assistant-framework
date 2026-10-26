@@ -144,3 +144,10 @@ Original requirements/full change remain the anchor after repairs. Do not repeat
 a whole-codebase survey or manufacture coverage for unassigned surfaces.
 NEEDS_CONTEXT/BLOCKED retain findings=[] and verdict=not_assessed; preserve
 supporting discoveries in existing evidence/observations/open_questions for resolution.
+
+## Conditional lifecycle verification
+
+For assigned_scope or coverage_obligations affecting lifecycle boundaries, use
+[lifecycle verification](lifecycle-verification.md) for precise cancellation,
+settlement and ownership observations. Synchronous/cosmetic changes alone do not
+load it; this is no new gate or universal test matrix.
