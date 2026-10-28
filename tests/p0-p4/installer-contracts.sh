@@ -989,6 +989,30 @@ done
 grep -Fq "private rule" "$claude_mode_file" || claude_mode_ok=false
 if [[ "$claude_mode_ok" == true ]]; then pass; else fail "Claude install must preserve the original CLAUDE.md file mode"; fi
 
+test_start "Claude install reinstalls over a read-only CLAUDE.md and leaves a symlinked CLAUDE.md alone"
+claude_edge_home="$(mktemp -d "${TMPDIR:-/tmp}/claude-edge-install.XXXXXX")"
+p0p4_register_cleanup "$claude_edge_home"
+mkdir -p "$claude_edge_home/.claude" "$claude_edge_home/dotfiles"
+claude_edge_ok=true
+claude_edge_file="$claude_edge_home/.claude/CLAUDE.md"
+printf '%s\n' 'read-only user rule' >"$claude_edge_file"
+chmod 444 "$claude_edge_file"
+for claude_edge_pass in 1 2; do
+    HOME="$claude_edge_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks >"$claude_edge_home/ro$claude_edge_pass.out" 2>&1 || claude_edge_ok=false
+    [[ "$(ls -l "$claude_edge_file" | cut -c1-10)" == "-r--r--r--" ]] || claude_edge_ok=false
+    [[ "$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$claude_edge_file")" == "1" ]] || claude_edge_ok=false
+    grep -Fq "read-only user rule" "$claude_edge_file" || claude_edge_ok=false
+done
+chmod 644 "$claude_edge_file"
+rm -f "$claude_edge_file"
+printf '%s\n' 'dotfile rule' >"$claude_edge_home/dotfiles/CLAUDE.md"
+ln -s "$claude_edge_home/dotfiles/CLAUDE.md" "$claude_edge_file"
+HOME="$claude_edge_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks >"$claude_edge_home/link.out" 2>&1 || claude_edge_ok=false
+[[ -L "$claude_edge_file" ]] || claude_edge_ok=false
+[[ "$(cat "$claude_edge_home/dotfiles/CLAUDE.md")" == "dotfile rule" ]] || claude_edge_ok=false
+grep -Fq "symbolic link; preserved unchanged" "$claude_edge_home/link.out" || claude_edge_ok=false
+if [[ "$claude_edge_ok" == true ]]; then pass; else fail "Claude install must handle a read-only CLAUDE.md and leave a symlinked CLAUDE.md unchanged"; fi
+
 # Fixed declared-protocol fixture: independent of the installer's compatibility reader.
 write_ownership_workflow_fixture() {
     local workflow="$1" variant="$2" file

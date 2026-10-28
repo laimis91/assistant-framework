@@ -1111,26 +1111,41 @@ Do not ask for routine confirmation or repeat an approval already given for the 
             }' "$AGENTS_MD")"
     fi
 
+    # Build the replacement in a private temp file beside the target, restore the
+    # original mode on it, then rename. The original stays untouched on any failure,
+    # and a read-only original does not block writing the replacement.
+    replace_agents_md() {
+        local tmp mode
+        tmp="$(mktemp "${AGENTS_MD}.XXXXXX")" || return 1
+        {
+            echo "$AGENTS_MD_CONTENT"
+            if [[ -f "$AGENTS_MD" ]]; then
+                echo ""
+                if [[ "$AGENTS_MD_MARKER_STATE" == "block" ]]; then
+                    sed "/^[[:space:]]*<!-- $AGENTS_MD_MARKER_START -->[[:space:]]*\$/,/^[[:space:]]*<!-- $AGENTS_MD_MARKER_END -->[[:space:]]*\$/d" "$AGENTS_MD"
+                else
+                    cat "$AGENTS_MD"
+                fi
+            fi
+        } > "$tmp" || { rm -f "$tmp"; return 1; }
+        if [[ -f "$AGENTS_MD" ]]; then
+            mode="$(stat -f %Lp "$AGENTS_MD" 2>/dev/null || stat -c %a "$AGENTS_MD" 2>/dev/null)" || mode=""
+            [[ -n "$mode" ]] && chmod "$mode" "$tmp" || { rm -f "$tmp"; return 1; }
+        fi
+        mv -f "$tmp" "$AGENTS_MD" || { rm -f "$tmp"; return 1; }
+    }
+
     if $DRY_RUN; then
         dry "Would generate/update $AGENTS_MD with the managed installer section"
+    elif [[ -L "$AGENTS_MD" ]]; then
+        info "WARNING: $AGENTS_MD is a symbolic link; preserved unchanged. Add the Assistant Framework guidance to the link target yourself if you want it."
     elif [[ "$AGENTS_MD_MARKER_STATE" == "ambiguous" ]]; then
         info "WARNING: Ambiguous, duplicate, or unbalanced Assistant Framework markers in $AGENTS_MD; preserved unchanged."
     elif [[ "$AGENTS_MD_MARKER_STATE" == "block" ]]; then
-        # Re-install: strip old installer block (exact marker lines), preserve user content
-        sed -i.bak "/^[[:space:]]*<!-- $AGENTS_MD_MARKER_START -->[[:space:]]*\$/,/^[[:space:]]*<!-- $AGENTS_MD_MARKER_END -->[[:space:]]*\$/d" "$AGENTS_MD"
-        rm -f "${AGENTS_MD}.bak"
-        # Prepend installer block (it should come first)
-        # cp -p first so the rewritten file keeps the original mode and owner
-        cp -p "$AGENTS_MD" "${AGENTS_MD}.tmp" \
-            && { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
-            && mv "${AGENTS_MD}.tmp" "$AGENTS_MD"
+        replace_agents_md || fail "Could not update $AGENTS_MD; the original file was left unchanged."
         ok "Updated installer section in $AGENTS_MD (user customizations preserved)"
     elif [[ -f "$AGENTS_MD" ]]; then
-        # Existing file without markers — prepend installer block, keep user content
-        # cp -p first so the rewritten file keeps the original mode and owner
-        cp -p "$AGENTS_MD" "${AGENTS_MD}.tmp" \
-            && { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
-            && mv "${AGENTS_MD}.tmp" "$AGENTS_MD"
+        replace_agents_md || fail "Could not update $AGENTS_MD; the original file was left unchanged."
         ok "Prepended installer section to existing $AGENTS_MD (user content preserved)"
     else
         # First install
