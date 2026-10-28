@@ -957,6 +957,23 @@ grep -Fq "Keep this line." "$claude_md_file" || claude_md_ok=false
 LC_ALL=C grep -q '[^ -~]' "$claude_md_file" && claude_md_ok=false
 if [[ "$claude_md_ok" == true ]]; then pass; else fail "Claude install must write one ASCII managed block in CLAUDE.md and preserve user content"; fi
 
+test_start "Claude install preserves CLAUDE.md with prose-only or unbalanced installer markers"
+claude_marker_home="$(mktemp -d "${TMPDIR:-/tmp}/claude-marker-install.XXXXXX")"
+p0p4_register_cleanup "$claude_marker_home"
+mkdir -p "$claude_marker_home/.claude"
+claude_marker_ok=true
+claude_marker_file="$claude_marker_home/.claude/CLAUDE.md"
+printf '%s\n' 'Prose mentions ASSISTANT_FRAMEWORK_AGENTS_MD_START here.' 'Keep my rule.' >"$claude_marker_file"
+HOME="$claude_marker_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks >"$claude_marker_home/prose.out" 2>&1 || claude_marker_ok=false
+grep -Fq "Prose mentions ASSISTANT_FRAMEWORK_AGENTS_MD_START here." "$claude_marker_file" || claude_marker_ok=false
+grep -Fq "Keep my rule." "$claude_marker_file" || claude_marker_ok=false
+printf '%s\n' 'before' '<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->' 'orphan user rule' >"$claude_marker_file"
+cp "$claude_marker_file" "$claude_marker_home/orphan.before"
+HOME="$claude_marker_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks >"$claude_marker_home/orphan.out" 2>&1 || claude_marker_ok=false
+cmp -s "$claude_marker_file" "$claude_marker_home/orphan.before" || claude_marker_ok=false
+grep -Fq "preserved unchanged" "$claude_marker_home/orphan.out" || claude_marker_ok=false
+if [[ "$claude_marker_ok" == true ]]; then pass; else fail "Claude install must keep user content when installer markers are prose-only or unbalanced"; fi
+
 # Fixed declared-protocol fixture: independent of the installer's compatibility reader.
 write_ownership_workflow_fixture() {
     local workflow="$1" variant="$2" file

@@ -1096,11 +1096,28 @@ Do not ask for routine confirmation or repeat an approval already given for the 
 - Keep credentials, secrets, PII, and private endpoints out of code, logs, task state, and memory.
 <!-- $AGENTS_MD_MARKER_END -->"
 
+    # Count exact marker lines; any unbalanced, nested, or duplicate marker is
+    # ambiguous, so the file is preserved unchanged instead of risking user content.
+    AGENTS_MD_MARKER_STATE="none"
+    if [[ -f "$AGENTS_MD" ]]; then
+        AGENTS_MD_MARKER_STATE="$(awk -v s="<!-- $AGENTS_MD_MARKER_START -->" -v e="<!-- $AGENTS_MD_MARKER_END -->" '
+            { t = $0; gsub(/^[ \t]+|[ \t\r]+$/, "", t) }
+            t == s { if (open || starts > 0) bad = 1; starts++; open = 1; next }
+            t == e { if (!open) bad = 1; ends++; open = 0 }
+            END {
+                if (bad || open || starts > 1 || ends > 1) print "ambiguous"
+                else if (starts == 1) print "block"
+                else print "none"
+            }' "$AGENTS_MD")"
+    fi
+
     if $DRY_RUN; then
         dry "Would generate/update $AGENTS_MD with the managed installer section"
-    elif [[ -f "$AGENTS_MD" ]] && grep -q "$AGENTS_MD_MARKER_START" "$AGENTS_MD" 2>/dev/null; then
-        # Re-install: strip old installer block, preserve user content
-        sed -i.bak "/$AGENTS_MD_MARKER_START/,/$AGENTS_MD_MARKER_END/d" "$AGENTS_MD"
+    elif [[ "$AGENTS_MD_MARKER_STATE" == "ambiguous" ]]; then
+        info "WARNING: Ambiguous, duplicate, or unbalanced Assistant Framework markers in $AGENTS_MD; preserved unchanged."
+    elif [[ "$AGENTS_MD_MARKER_STATE" == "block" ]]; then
+        # Re-install: strip old installer block (exact marker lines), preserve user content
+        sed -i.bak "/^[[:space:]]*<!-- $AGENTS_MD_MARKER_START -->[[:space:]]*\$/,/^[[:space:]]*<!-- $AGENTS_MD_MARKER_END -->[[:space:]]*\$/d" "$AGENTS_MD"
         rm -f "${AGENTS_MD}.bak"
         # Prepend installer block (it should come first)
         { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
