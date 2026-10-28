@@ -1129,8 +1129,10 @@ Do not ask for routine confirmation or repeat an approval already given for the 
             fi
         } > "$tmp" || { rm -f "$tmp"; return 1; }
         if [[ -f "$AGENTS_MD" ]]; then
-            mode="$(stat -f %Lp "$AGENTS_MD" 2>/dev/null || stat -c %a "$AGENTS_MD" 2>/dev/null)" || mode=""
-            [[ -n "$mode" ]] && chmod "$mode" "$tmp" || { rm -f "$tmp"; return 1; }
+            # GNU stat takes -c; BSD stat takes -f. Capture each attempt separately because
+            # GNU stat -f prints filesystem status, which would contaminate a combined result.
+            mode="$(stat -c %a "$AGENTS_MD" 2>/dev/null)" || mode="$(stat -f %Lp "$AGENTS_MD" 2>/dev/null)" || mode=""
+            [[ "$mode" =~ ^[0-7]+$ ]] && chmod "$mode" "$tmp" || { rm -f "$tmp"; return 1; }
         fi
         mv -f "$tmp" "$AGENTS_MD" || { rm -f "$tmp"; return 1; }
     }

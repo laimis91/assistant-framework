@@ -1013,6 +1013,28 @@ HOME="$claude_edge_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill
 grep -Fq "symbolic link; preserved unchanged" "$claude_edge_home/link.out" || claude_edge_ok=false
 if [[ "$claude_edge_ok" == true ]]; then pass; else fail "Claude install must handle a read-only CLAUDE.md and leave a symlinked CLAUDE.md unchanged"; fi
 
+test_start "Claude reinstall works when stat behaves like GNU coreutils"
+gnu_stat_home="$(mktemp -d "${TMPDIR:-/tmp}/gnu-stat-install.XXXXXX")"
+p0p4_register_cleanup "$gnu_stat_home"
+mkdir -p "$gnu_stat_home/.claude" "$gnu_stat_home/bin"
+real_stat="$(command -v stat)"
+cat >"$gnu_stat_home/bin/stat" <<GNUSTAT
+#!/bin/bash
+# GNU stat: -f prints filesystem status and fails on %Lp; -c %a prints the mode.
+if [[ "\$1" == "-f" && "\$2" == "%Lp" ]]; then echo "  File: \$3"; echo "    ID: 0 Namelen: 255"; exit 1; fi
+if [[ "\$1" == "-c" && "\$2" == "%a" ]]; then exec "$real_stat" -f %Lp "\$3"; fi
+exec "$real_stat" "\$@"
+GNUSTAT
+chmod +x "$gnu_stat_home/bin/stat"
+gnu_stat_ok=true
+printf '%s\n' 'user rule' >"$gnu_stat_home/.claude/CLAUDE.md"
+for gnu_stat_pass in 1 2; do
+    PATH="$gnu_stat_home/bin:$PATH" HOME="$gnu_stat_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks >"$gnu_stat_home/pass$gnu_stat_pass.out" 2>&1 || gnu_stat_ok=false
+done
+[[ "$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$gnu_stat_home/.claude/CLAUDE.md")" == "1" ]] || gnu_stat_ok=false
+grep -Fq "user rule" "$gnu_stat_home/.claude/CLAUDE.md" || gnu_stat_ok=false
+if [[ "$gnu_stat_ok" == true ]]; then pass; else fail "Claude reinstall must not depend on BSD-only stat flags"; fi
+
 # Fixed declared-protocol fixture: independent of the installer's compatibility reader.
 write_ownership_workflow_fixture() {
     local workflow="$1" variant="$2" file
