@@ -974,6 +974,21 @@ cmp -s "$claude_marker_file" "$claude_marker_home/orphan.before" || claude_marke
 grep -Fq "preserved unchanged" "$claude_marker_home/orphan.out" || claude_marker_ok=false
 if [[ "$claude_marker_ok" == true ]]; then pass; else fail "Claude install must keep user content when installer markers are prose-only or unbalanced"; fi
 
+test_start "Claude install keeps the existing CLAUDE.md file mode when adding or refreshing the managed block"
+claude_mode_home="$(mktemp -d "${TMPDIR:-/tmp}/claude-mode-install.XXXXXX")"
+p0p4_register_cleanup "$claude_mode_home"
+mkdir -p "$claude_mode_home/.claude"
+claude_mode_ok=true
+claude_mode_file="$claude_mode_home/.claude/CLAUDE.md"
+printf '%s\n' 'private rule' >"$claude_mode_file"
+chmod 600 "$claude_mode_file"
+for claude_mode_pass in 1 2; do
+    (umask 022; HOME="$claude_mode_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks >"$claude_mode_home/pass$claude_mode_pass.out" 2>&1) || claude_mode_ok=false
+    [[ "$(ls -l "$claude_mode_file" | cut -c1-10)" == "-rw-------" ]] || claude_mode_ok=false
+done
+grep -Fq "private rule" "$claude_mode_file" || claude_mode_ok=false
+if [[ "$claude_mode_ok" == true ]]; then pass; else fail "Claude install must preserve the original CLAUDE.md file mode"; fi
+
 # Fixed declared-protocol fixture: independent of the installer's compatibility reader.
 write_ownership_workflow_fixture() {
     local workflow="$1" variant="$2" file

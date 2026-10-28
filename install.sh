@@ -1120,12 +1120,16 @@ Do not ask for routine confirmation or repeat an approval already given for the 
         sed -i.bak "/^[[:space:]]*<!-- $AGENTS_MD_MARKER_START -->[[:space:]]*\$/,/^[[:space:]]*<!-- $AGENTS_MD_MARKER_END -->[[:space:]]*\$/d" "$AGENTS_MD"
         rm -f "${AGENTS_MD}.bak"
         # Prepend installer block (it should come first)
-        { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
+        # cp -p first so the rewritten file keeps the original mode and owner
+        cp -p "$AGENTS_MD" "${AGENTS_MD}.tmp" \
+            && { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
             && mv "${AGENTS_MD}.tmp" "$AGENTS_MD"
         ok "Updated installer section in $AGENTS_MD (user customizations preserved)"
     elif [[ -f "$AGENTS_MD" ]]; then
         # Existing file without markers — prepend installer block, keep user content
-        { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
+        # cp -p first so the rewritten file keeps the original mode and owner
+        cp -p "$AGENTS_MD" "${AGENTS_MD}.tmp" \
+            && { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
             && mv "${AGENTS_MD}.tmp" "$AGENTS_MD"
         ok "Prepended installer section to existing $AGENTS_MD (user content preserved)"
     else
