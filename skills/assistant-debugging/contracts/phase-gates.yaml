@@ -3,7 +3,7 @@
 # report slots. Fix authorization, reproduction, verification, and active TDD
 # prerequisites apply regardless of presentation.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: phase-gates
 skill: assistant-debugging
 
@@ -76,7 +76,7 @@ gates:
         check: "Before any source/test mutation or mutation dispatch, record change_impact_applicability with impact_scope and applicability_reason; local behavior requires causal_evidence_ref. Shared/unresolved or explicitly carried expanded work sets expanded_artifact_carried=true. Cosmetic work records not_applicable."
         on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
       - id: FX_CHANGE_IMPACT_PREBUILD
-        check: "Before any source/test mutation or mutation dispatch, shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Evidenced local repairs keep ordinary regression verification and self-review."
+        check: "Before any source/test mutation or mutation dispatch, shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Evidenced local repairs keep ordinary regression verification with a local self-check plus fresh independent review."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         on_fail: "Do not patch, write a regression test, or dispatch Fixer; load references/change-impact.md and repair the assessment or report its explicit blocker."
     exit_assertions:
@@ -106,7 +106,7 @@ gates:
         condition: "status == fixed"
         on_fail: "Retain the gap and downgrade fixed until each due command check has a matching observed invocation."
       - id: VF2
-        check: "Every due selected and binding check runs against the fix or reuses admissible current evidence. Preserve observed passed/failed/partial/unavailable/skipped/blocked results and supporting evidence; a fixed outcome requires passing evidence for every due check. When tdd_applies is true and a cycle has started, preserve its actual tdd_cycle_log_ref even for partial/blocked outcomes. When tdd_applies is true and status == fixed, that ref must resolve the complete current assistant-tdd cycle_log against the unchanged decision and selected/applicable IDs: right-reason authorizing RED, passing GREEN and REFACTOR invocations, and all due guards."
+        check: "Every due selected and binding check runs against the fix or reuses admissible current evidence. Preserve observed passed/failed/partial/unavailable/skipped/blocked results and supporting evidence; a fixed outcome requires passing evidence for every due check. When tdd_applies is true and a cycle has started, preserve its actual tdd_cycle_log_ref even for partial/blocked outcomes. When tdd_applies is true and status == fixed, that ref must resolve the complete current assistant-tdd cycle_log against the unchanged decision and selected/applicable IDs: right-reason authorizing RED, passing GREEN plus executed REFACTOR or validated TDD v3 reuse_green, and all due guards."
         on_fail: "Run due available checks; retain partial/unavailable observations and their reasons as explicit evidence gaps. For active TDD, preserve actual partial cycle_log for blocked/partial outcomes; absent or incomplete cycle evidence blocks fixed."
       - id: VF3
         check: "Partial, unavailable, skipped, or blocked checks are listed as residual risks and not counted as proof"

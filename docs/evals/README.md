@@ -41,9 +41,9 @@ under common operating conditions:
 - TDD RED-before-GREEN handoff behavior
 - executable task packet requirements before build
 - per-slice verification before advancing
-- separate spec review and quality review gates
+- spec obligations folded into the final acceptance review, not replaced by quality findings
 - structured worker status packets from subagents
-- subagent opt-out direct fallback
+- subagent opt-out keeps review isolation
 - Native Codex role constraints without extra runtime reinforcement
 - Done Contract debate and Harness Recipe before Build
 - trace/replay artifacts and typed artifact refs for harness recovery
@@ -1424,3 +1424,94 @@ productive-later-round and genuine-stall scenarios; an optional authorized
 matched native evaluation must freeze outcome oracles, report correctness,
 avoidable user interruptions and limits before claiming reduced friction.
 No such native pilot is implied by source or installer checks.
+
+## Review efficiency capture and reporting
+
+`ruby tools/evals/review-efficiency-report.rb < capture.json` imports normalized
+native capture JSON read-only and writes a report to stdout. It never invokes a
+model, creates an API key, accesses the network or writes files. The source-only
+tool is excluded by both installers. The result schema is
+`review-efficiency-result.schema.json`; its `$defs.capture_input` specifies inputs.
+A normalization adapter must retain raw native evidence refs, never synthesize
+missing children, model identities or usage. The Workflow CLI adapter's last
+turn totals do not establish whole-tree Review usage.
+
+Freeze A=current baseline, B=deduplication/shared validation and C=B plus discovery.
+Compare A/B and B/C separately, preserving source/task snapshots, actual loaded
+skill digests, requested and observed model/effort identities, tools, concurrency,
+stopping conditions, acceptance state and independent oracle. Alternate run order;
+record cache observations. Pin source and loaded-skill identity for each variant
+throughout all cases; task/oracle controls may differ by case. Start with one paired canary to validate capture, then
+expand only under a declared workload ceiling (`max_runs`, `max_tokens`,
+`max_elapsed_ms`) and actual authorization. Never silently use separately billed
+APIs. One pair establishes capture feasibility at most, not savings or quality.
+
+Each run includes native parent/descendant invocation inventory, independently
+captured child lists/completeness refs and per-response provider identities,
+observed model/evidence, complete input/output usage and optional-subset counts
+represented explicitly (zero only if observed). Identical native response replay
+is counted once across the full tree; conflicting identity fails. Cached input
+is a subset of input; reasoning output a subset of output. Partial captures omit unknown response telemetry rather than fabricating values.
+Missing usage, actual model evidence or children produces unavailable total
+usage/cost, never a zero. Known native response IDs still count once before
+metadata checks; conflicting replay fails even with incomplete telemetry.
+`observed_token_lower_bound` is the maximum of the unique known-ID observed
+nonnegative input/output component sum and the largest single anonymous
+observation's valid input/output component sum. It does not add cached/reasoning
+subsets or assume anonymous observations are distinct from known IDs or each
+other. The ceiling uses that same bound over the entire workload, allowing
+anonymous overlap across runs; per-run bounds must not be added. A known bound
+exceeding the ceiling rejects even without complete usage, rates, model or tree
+evidence. Missing IDs do not invent unique responses or complete usage/cost;
+a bound of zero describes known observations, never a proven total of zero.
+Complete captures reconcile the actual deduplicated observed model/effort pairs
+exactly with the declared observed inventory before matching; an overdeclared
+shared list cannot conceal different models. Requested models and per-run
+provenance references remain retained. Turn totals cannot masquerade as unique
+model-response evidence. Use a dated,
+sourced USD rate table keyed by observed model for normalized cost. This is not
+subscription-limit utilization.
+
+Retain repeated processing/retrieval bytes, validation and schema-repair calls,
+coordination turns, complete-cycle latency and repair work through the same
+acceptance state. Variant-blind independent semantic adjudication must record
+first-batch recall, material misses, false positives on clean controls, later-only
+findings (together with disjoint first-batch IDs, exactly partitioning found
+material findings), lost findings, false-clean outcomes and closure. Required finding IDs
+must agree across matched variants. JSON, declared coverage and lexical markers
+are not quality proof. Reject candidate-only material misses, false clean, lost
+findings, broken closure or increased clean-control false positives. Repetitions,
+actual cases, cache behavior and uncertainty remain visible.
+`observed_baseline_cost_range` retains its baseline meaning. The decision uses
+`effective_cost_variation_bound`, the maximum observed within-case range of
+baseline costs, candidate costs and matched-pair savings. Savings at/below that
+bound, absent repetitions, or unalternated order are inconclusive.
+The importer validates accounting and supplied attestations; it cannot authenticate
+raw native evidence or replace semantic judgment.
+
+Held-out workload design must use distinct cross-file invariants, temporal event
+sequences, compatibility surfaces, authority-boundary cases and clean controls.
+Keep these acceptance oracles frozen and hidden from candidate reviewers; include
+material errors and zero-error controls. Historical PR72 score-trigger and
+selective-installer stale-controller defects remain development regressions.
+The new prompt fixtures exercise process mechanics; they are not held-out native
+quality evidence. On 2026-10-23, an authorized capture-only A/B canary observed
+one model response per variant under GPT-6.1 Sol/high, with zero tools or children:
+A used 25,832 input (7,168 cached), 468 output (288 reasoning) tokens; B used
+24,072 input (0 cached), 540 output (294 reasoning). The pair observed
+50,912 input+output tokens; cached/reasoning counts are subsets. Both reported the
+synthetic stale-attempt defect. Auxiliary blind adjudication then made seven
+responses: 357,868 input (315,904 cached) plus 2,601 output (1,456 reasoning),
+adding 360,469 tokens. Observed pair-plus-adjudication input+output was therefore
+at least 411,381 across nine responses, exceeding the authorized 120,000-token pilot
+ceiling. Nine responses also exceed a conservative four-model-response
+interpretation of the invocation ceiling. Further measurement calls stopped.
+The pilot is non-promotable; agent-session counts cannot conceal response count.
+Mixed orchestration, preparation and postprocessing were not separately allocated,
+so 411,381 is an observed lower bound, not complete experiment/workflow cost. This was one A-first pair with different cache
+behavior: the B helper/deduplication did not execute, C did not run, and there were
+no held-out cases, clean controls or variation measurements. The captured B
+snapshot also predates final integration corrections, so this does not
+compare the final integrated B/C sources. No full-cycle efficiency, savings,
+quality promotion or universal non-regression claim follows. Detailed captures
+and variant-blind adjudication remain distinct from local contract-check evidence.

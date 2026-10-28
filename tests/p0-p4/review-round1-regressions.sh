@@ -228,7 +228,8 @@ if ! ruby -ryaml -e '
   valid = spec_ref.fetch("required") == true &&
     spec_ref.fetch("description").include?("user request/review scope before batch planning") &&
     spec_ref.fetch("validation").include?("Standalone points to Spec Review against user request/review scope") &&
-    spec_ref.fetch("validation").include?("workflow_composed points to carried Spec PASS") &&
+    spec_ref.fetch("validation").include?("workflow_composed points to the final acceptance batch\u0027s spec obligations (missing acceptance criteria, extra scope, changed-files mismatch, verification mismatch), with no separate Spec agent") &&
+    e9.include?("Workflow-composed review needs no separate Spec PASS; the final acceptance batch (review_subject acceptance) assigns coverage obligations for missing acceptance criteria, extra scope, changed-files mismatch and verification mismatch") &&
     verification_ref.fetch("required") == true &&
     ref_fields.fetch("evidence_ref").fetch("required") == "conditional" &&
     evidence_condition.include?("due selected check") &&
@@ -512,12 +513,12 @@ workflow_output="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
 workflow_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
 workflow_controller="$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md"
 
-if ! grep -Fq 'For controller_intensity=light small low-risk localized source changes, use not_applicable' "$workflow_input"; then
+if ! grep -Fq 'direct_main is permitted at every size/risk' "$workflow_input"; then
     intensity_failures+=("light input routing no longer permits native inline execution")
 fi
-if ! grep -Fq 'fresh self-review' "$workflow_controller" \
+if ! grep -Fq 'formal review retains fresh independent' "$workflow_controller" \
     || ! grep -Fq 'subagent_execution_mode=not_applicable' "$workflow_controller"; then
-    intensity_failures+=("light controller routing lost native fresh-self-review/not-applicable behavior")
+    intensity_failures+=("light controller routing lost native fresh independent review/direct execution behavior")
 fi
 for role in 'Code Writer' 'Builder/Tester' 'Code Reviewer'; do
     if ! grep -Fq "$role" "$workflow_gates" || ! grep -Fq "$role" "$workflow_output"; then
@@ -577,5 +578,122 @@ if [[ "${#metrics_doc_failures[@]}" -eq 0 ]]; then
 else
     fail "${metrics_doc_failures[*]}"
 fi
+
+test_start "independent discovery preserves invariant traces, original scope and role mirrors"
+if ruby -rjson - "$FRAMEWORK_DIR" <<'RUBY'
+root=ARGV.fetch(0)
+prompts=%w[agents/codex/code-reviewer.toml agents/codex/reviewer.toml agents/claude/code-reviewer.md agents/claude/reviewer.md].map{|p|File.read(File.join(root,p))}
+terms=['identify the invariant','trace its producer and consumers','violating input/event sequence','supporting or rejecting','original requirements/full proposed change','carried mapping only orients','findings=[] and verdict=not_assessed']
+ids=JSON.parse(File.read(File.join(root,'skills/assistant-review/evals/cases.json'))).fetch('cases').map{|c|c.fetch('id')}
+expected=%w[discovery-cross-file-producer-consumer discovery-temporal-late-event discovery-compatibility-consumer discovery-authority-boundary discovery-clean-control-no-invented-finding]
+exit(prompts.all?{|p|terms.all?{|t|p.include?(t)}} && (expected-ids).empty? ? 0 : 1)
+RUBY
+then pass; else fail "discovery scope/procedure or role mirrors drifted"; fi
+
+test_start "acceptance review owns spec reconciliation and light review is compact and explicitly gated"
+if ruby -ryaml -rjson - "$FRAMEWORK_DIR" <<'RUBY'
+root=ARGV.fetch(0); review=File.join(root,'skills/assistant-review')
+text=->(path){File.read(File.join(review,path)).gsub(/\s+/,' ')}
+skill=text.('SKILL.md'); loop_text=text.('references/review-loop.md')
+input,handoffs,output,index=%w[input handoffs output index].map{|n|YAML.load_file(File.join(review,"contracts/#{n}.yaml"))}
+failures=[]
+need=->(label,ok){failures << label unless ok}
+# U1: the final acceptance review is the single reconciliation owner and carries the spec obligations.
+need.('SKILL acceptance owner',skill.include?('Final acceptance review solely owns request/plan/delivery reconciliation, including task-wide work and spec obligations: missing criteria, extra scope, changed-files or verification mismatch.'))
+need.('SKILL composed review drops carried Spec PASS',skill.include?('Workflow-composed review consumes current due-check evidence; acceptance review owns spec checks.') && !skill.include?('consumes carried Spec PASS'))
+need.('review-loop acceptance owner',loop_text.include?('no separate Spec agent runs (historical Spec PASS records stay readable). The final fresh acceptance review (`review_subject=acceptance`) solely owns request/plan/delivery reconciliation: its frozen batch assigns the spec obligations (missing acceptance criteria, extra scope, changed-files mismatch, verification mismatch)'))
+subject=input.fetch('fields').find{|f|f['name']=='review_subject'}
+need.('input review_subject owner',subject.fetch('description').include?('The final acceptance review is the single owner of request, plan and delivery reconciliation; its batch carries the spec obligations (missing acceptance criteria, extra scope, changed-files mismatch, verification mismatch) and no separate Spec agent runs.'))
+# U2: ordinary light review records a compact result; the structured path stays valid when required.
+need.('SKILL compact light',skill.include?('trivial/small light review (controller_intensity light) uses one newly created reviewer covering both concerns (another after a fix); light review records the compact result unless admission, a Pack or expanded impact requires structure (plan review: persisted/executable admission only)'))
+need.('review-loop compact light',loop_text.include?('records a compact result: fresh actor ID, native invocation ID, lowercase runtime (codex requires fork_turns=none), PASS or findings (stable id such as `light-1`, file/line, description), evidence refs and reviewed scope; its post-fix re-review by a different newly created reviewer receives the fixed findings as `{aggregate_finding_id, description}` rows and returns `closure_results` (`verified_closed`, `regressed` or `incomplete`) per `aggregate_finding_id`. It needs no batch plan, ledgers, 13-key fresh_dispatch or review-tools validation unless persisted/executable admission, an Architecture Pack or expanded impact requires the structured path'))
+artifacts=output.fetch('artifacts').to_h{|a|[a['name'],a]}
+structured='structured review path; an ordinary compact light review records only its compact result'
+output_text=File.read(File.join(review,'contracts/output.yaml')).gsub(/\s*#\s*/,' ')
+need.('output compact result runtime and re-review',output_text.include?('records only a compact result: fresh reviewer actor_id, native_invocation_id, lowercase runtime (codex requires fork_turns=none), PASS or findings (each with a stable id such as light-1, file/line and description), evidence refs and reviewed scope') && output_text.include?('A compact re-review after a fix uses a different newly created reviewer, receives the fixed findings as {aggregate_finding_id, description} rows and records closure_results (verified_closed, regressed or incomplete) for each aggregate_finding_id.'))
+# Y2: one closure vocabulary; the round-7 compact names are gone.
+retired=['fixed_finding_ids','fixed_finding_closures','`closure_status` `closed` or `open`','closure_status closed or open','as `closed` or `open`']
+%w[SKILL.md references/review-loop.md references/review-batch.md contracts/output.yaml contracts/handoffs.yaml contracts/input.yaml].each{|p|t=File.read(File.join(review,p));retired.each{|w|need.("#{p} retired #{w}",!t.include?(w))}}
+%w[agents/claude/reviewer.md agents/claude/code-reviewer.md agents/codex/reviewer.toml agents/codex/code-reviewer.toml].each{|p|t=File.read(File.join(root,p));retired.each{|w|need.("#{p} retired #{w}",!t.include?(w))}}
+# Y3: the medium minimum names the canonical final-batch count.
+need.('review-loop medium minimum',loop_text.include?('Medium minimum is plan review plus a final batch at the canonical per-size count (medium 3).') && !loop_text.include?('>=2 quality passes'))
+need.('output structured-path conditions',%w[final_summary review_delegation_path].all?{|n|artifacts.fetch(n)['condition']==structured})
+# K4: explicit light indicator and caller intensity.
+intensity=input.fetch('fields').find{|f|f['name']=='controller_intensity'}
+need.('input controller_intensity enum',intensity && intensity['type']=='enum' && intensity['enum_values']==%w[light standard strict] && intensity['on_missing']=='infer' && intensity['infer_from'].include?('Absent from review-tools authority is not light.'))
+need.('entry loads controller_intensity',index.dig('load_sets','entry','selectors',0,'names').include?('controller_intensity'))
+batch=handoffs.fetch('handoffs').find{|h|h['name']=='orchestrator_to_reviewer'}.fetch('context_fields').find{|f|f['name']=='review_batch'}
+topologies=[batch.fetch('object_fields').find{|f|f['name']=='topology'}, artifacts.fetch('final_summary').fetch('object_fields').find{|f|f['name']=='final_batch_plan'}.fetch('object_fields').find{|f|f['name']=='topology'}]
+need.('topology.light_review optional boolean',topologies.all?{|t|(f=t.fetch('object_fields').find{|x|x['name']=='light_review'}) && f['type']=='boolean' && f['required']==false})
+# W1: the light re-review receives the closure ledger and returns closure_results in every reviewer role.
+roles=%w[agents/claude/reviewer.md agents/claude/code-reviewer.md agents/codex/reviewer.toml agents/codex/code-reviewer.toml]
+need.('role light closure bullets',roles.all?{|r|t=File.read(File.join(root,r)); t.include?('Also include them for a `light_contract_and_runtime` re-review with non-empty `previously_fixed`.') && t.include?('or for a `light_contract_and_runtime` re-review with non-empty `previously_fixed`, use the supplied closure ledger, return `closure_results` for every fixed ID')})
+# E4/E5: current light eval controls, medium+ audit expectation and v10 discovery wording.
+cases=JSON.parse(File.read(File.join(review,'evals/cases.json'))).fetch('cases').to_h{|c|[c['id'],c]}
+need.('light eval compact runtime',cases.fetch('light-review-records-compact-fresh-result')['expected_behavior'].include?('Records a compact result: reviewer actor ID, native invocation ID, lowercase runtime, PASS or findings, evidence refs and reviewed scope.'))
+need.('light eval positive/negative',cases.key?('light-review-records-compact-fresh-result') && cases.key?('light-review-standard-small-keeps-two-passes') && cases['light-review-standard-small-keeps-two-passes']['setup_context'].join(' ').include?('controller_intensity is standard'))
+need.('audit-one-pass medium+',cases.fetch('audit-one-pass')['expected_behavior'].include?('For this medium+ scope, freezes one review snapshot and plans at least two independent narrow review passes.'))
+need.('discovery v10 schema wording',!File.read(File.join(review,'evals/cases.json')).include?('unchanged v9 return schema'))
+abort failures.join('; ') unless failures.empty?
+RUBY
+then pass; else fail "acceptance spec ownership, compact light review, light indicator, closure bullets or light evals drifted"; fi
+
+test_start "plan review is one fresh pass, compact light reviewers skip the batch schema, and review contracts stay aligned"
+if ruby -ryaml -rjson - "$FRAMEWORK_DIR" <<'RUBY'
+root=ARGV.fetch(0); review=File.join(root,'skills/assistant-review')
+text=->(path){File.read(File.join(review,path)).gsub(/\s+/,' ')}
+skill=text.('SKILL.md'); loop_text=text.('references/review-loop.md'); batch_text=text.('references/review-batch.md')
+input,handoffs,output=%w[input handoffs output].map{|n|YAML.load_file(File.join(review,"contracts/#{n}.yaml"))}
+failures=[]
+need=->(label,ok){failures << label unless ok}
+plan_p='plan_coverage_and_feasibility'
+# U4: plan review topology and its post-fix closure re-review.
+reviewer=handoffs.fetch('handoffs').find{|h|h['name']=='orchestrator_to_reviewer'}
+context=reviewer.fetch('context_fields').to_h{|f|[f['name'],f]}; returns=reviewer.fetch('return_fields').to_h{|f|[f['name'],f]}
+final_plan=output.fetch('artifacts').find{|a|a['name']=='final_summary'}.fetch('object_fields').find{|f|f['name']=='final_batch_plan'}
+plans=[context.fetch('review_batch'),final_plan]
+topologies=plans.map{|b|b.fetch('object_fields').find{|f|f['name']=='topology'}}
+need.('topology.plan_review optional boolean',topologies.all?{|t|(f=t.fetch('object_fields').find{|x|x['name']=='plan_review'}) && f['type']=='boolean' && f['required']==false && f['validation'].include?('plan_coverage_and_feasibility')})
+need.('handoff plan_review rule',topologies[0].fetch('object_fields').find{|x|x['name']=='plan_review'}['validation'].start_with?('true only when review_subject is plan; required true for a plan_coverage_and_feasibility pass. True requires exactly one plan_coverage_and_feasibility discovery pass, discovery_pass_count 1 and closure_verification_required false'))
+perspectives=plans.flat_map{|b|[b.fetch('object_fields').find{|f|f['name']=='expected_passes'},b.fetch('object_fields').find{|f|f['name']=='required_coverage_tuples'}].map{|f|f.fetch('object_fields').find{|x|%w[perspective review_perspective].include?(x['name'])}}}+[context.fetch('review_perspective'),returns.fetch('review_perspective')]
+need.('plan perspective enum',perspectives.length==6 && perspectives.all?{|f|f.fetch('enum_values').last==plan_p})
+need.('plan closure_results condition',returns.fetch('closure_results')['condition']=='review_perspective == closure_verification, or (review_perspective in [light_contract_and_runtime, plan_coverage_and_feasibility] and previously_fixed is non-empty)')
+# R1: the structured previously_fixed ledger no longer names the compact re-review (Workflow owns its rows).
+need.('previously_fixed structured-only condition',context.fetch('previously_fixed')['condition']=='review_perspective == closure_verification, or a post-fix re-review with review_perspective in [light_contract_and_runtime, plan_coverage_and_feasibility]' && !context.fetch('previously_fixed')['description'].include?('compact'))
+need.('topology plan text',topologies[0]['validation'].include?('plan review (review_subject plan, plan_review true)=1 fresh plan_coverage_and_feasibility pass at any scope size') && topologies[0]['validation'].include?('(historical multi-pass plan reviews stay readable; new plan reviews use exactly one pass)') && topologies[0].fetch('object_fields').find{|x|x['name']=='plan_review'}['validation'].include?('Absent or false keeps the canonical topology; historical multi-pass plan reviews stay readable; new plan reviews use exactly one pass.'))
+need.('input review_subject plan topology',input.fetch('fields').find{|f|f['name']=='review_subject'}['description'].include?('Plan review uses one fresh plan_coverage_and_feasibility pass with topology.plan_review true; historical multi-pass plan reviews stay readable; new plan reviews use exactly one pass.'))
+need.('SKILL plan review',skill.include?('One fresh `plan_coverage_and_feasibility` plan-review pass checks original requirements') && skill.include?('Corrections receive fresh closure review before approval'))
+need.('review-loop plan review',loop_text.include?('Plan review (`review_subject` plan) is one fresh `plan_coverage_and_feasibility` pass at any size and records the compact result unless the structured path is required: reviewer identity, PASS or findings rows `{aggregate_finding_id, file_line, description}`, `reviewed_scope`, request/plan coverage (`request_plan_reconciliation` field names) and, after a material plan fix, `closure_results` from a new fresh re-reviewer. Its structured path is one `topology.plan_review` pass; post-fix, one new pass with the closure ledger (historical multi-pass plan reviews stay readable).') && loop_text.include?('only closure or a light/plan re-review gets ledger'))
+need.('review-batch plan review',batch_text.include?('structured plan review (`topology.plan_review` true) is one `plan_coverage_and_feasibility` pass (post-fix: one new pass with the closure ledger)'))
+# U5: plan review is compact unless structured; one-pass plan batches expect one response; the multi-pass label names v10 acceptance.
+rc=output.fetch('artifacts').find{|a|a['name']=='final_summary'}.fetch('object_fields').find{|f|f['name']=='batch_summaries'}
+rc=rc && rc.fetch('object_fields').find{|f|f['name']=='expected_response_count'}
+need.('output expected_response_count plan',rc && rc['validation']=='1 to 6; 1 only for trivial/small light review or plan review (topology.plan_review true)')
+need.('output plan compact header',File.read(File.join(review,'contracts/output.yaml')).gsub(/\s*#\s*/,' ').include?('Plan review (review_subject plan) records the compact result unless the structured path is required: reviewer identity, PASS or findings rows {aggregate_finding_id, file_line, description}, reviewed scope, request/plan coverage using the request_plan_reconciliation field names, and closure_results after a material plan fix by a new fresh re-reviewer.'))
+tools_test=File.read(File.join(root,'tests/p0-p4/review-tools-contracts.sh'))
+need.('review-tools multi-pass plan label',tools_test.include?("'v10 multi-pass plan batch accepted; one-pass is prose-enforced'") && !tools_test.include?('historical multi-pass plan reviews stay readable'))
+# N1/N2/Y4: the pre-10.0 migration header and the current one-pass plan review label.
+handoffs_raw=File.read(File.join(review,'contracts/handoffs.yaml')); tools_raw=File.read(File.join(review,'scripts/review-tools.py'))
+need.('handoffs pre-10.0 migration header',handoffs_raw.include?("\n# pre-10.0 migration: persisted 6.0 and incompatible 7.0/7.1/7.2/8.0 packets") && !handoffs_raw.include?('v9.0 migration'))
+need.('review-tools HELP and comment plan label',tools_raw.include?("\nHistorical multi-pass plan reviews stay readable; new plan reviews use exactly one pass.\n") && tools_raw.include?("Historical multi-pass plan reviews stay\n    # readable; new plan reviews use exactly one pass.\n"))
+need.('retired plan-review label',[tools_raw,handoffs_raw,File.read(File.join(review,'contracts/input.yaml')),File.read(File.join(review,'references/review-batch.md')),File.read(File.join(review,'references/review-loop.md'))].none?{|t|t.downcase.include?('plan review remains acceptable')})
+roles=%w[agents/claude/reviewer.md agents/claude/code-reviewer.md agents/codex/reviewer.toml agents/codex/code-reviewer.toml].map{|r|File.read(File.join(root,r))}
+need.('role plan pass and closure',roles.all?{|t|t.include?('Plan review uses one newly created fresh `plan_coverage_and_feasibility` pass') && t.include?('Also include them for a `plan_coverage_and_feasibility` re-review with non-empty `previously_fixed`.') && t.include?('A `plan_coverage_and_feasibility` re-review with non-empty `previously_fixed` follows the same closure rule.')})
+# M2: a compact light reviewer without a frozen batch skips worker_return_schema; the Review root loads the loop only for structured batches.
+compact='When no frozen batch is supplied (compact light or plan review), return only `status`, PASS or findings each with a stable id (for example `light-1`) plus file/line and description, `reviewed_scope` and evidence refs; skip `worker_return_schema` resolution and do not invent batch identity. A compact re-review after a fix is a different newly created agent from the first reviewer; it receives the fixed findings as `{aggregate_finding_id, description}` rows and returns `closure_results` (`verified_closed`, `regressed` or `incomplete`) for each `aggregate_finding_id`. Plan review records the compact result unless the structured path is required: reviewer identity, PASS or findings rows `{aggregate_finding_id, file_line, description}`, `reviewed_scope`, request/plan coverage using the `request_plan_reconciliation` field names, and, after a material plan fix, `closure_results` from a different newly created re-reviewer. A structured frozen batch keeps the canonical return below.'
+need.('role compact light return',roles.all?{|t|(i=t.index(compact)) && (j=t.index('Before first response, resolve `worker_return_schema`')) && i<j && !t.include?('fixed_finding_ids') && !t.include?('closure_status')})
+need.('SKILL structured-only loop load',skill.include?('Structured batches load [review-loop.md](references/review-loop.md) before the first batch; v10 rules:') && !skill.include?('Load [review-loop.md](references/review-loop.md) before the first batch.'))
+# L5: spec_review_pass_ref description matches its workflow-composed validation.
+need.('spec_review_pass_ref description',context.fetch('spec_review_pass_ref')['description']=="Standalone: pointer to the current Spec Review result recorded against the user request/review scope before batch planning. Workflow-composed: pointer to the final acceptance batch's spec obligations; it needs no separate Spec PASS.")
+# L7: processing comments appear once, after the last input field.
+lines=File.readlines(File.join(review,'contracts/input.yaml'),chomp:true)
+steps=lines.each_index.select{|i|lines[i].start_with?('# 1. Resolve review_scope')}
+need.('input processing comments at end',steps.length==1 && lines[steps[0]..].all?{|l|l.empty? || l.start_with?('#')})
+# L8: the compact light eval expects fork_turns=none on Codex.
+light_case=JSON.parse(File.read(File.join(review,'evals/cases.json'))).fetch('cases').find{|c|c['id']=='light-review-records-compact-fresh-result'}
+need.('light eval fork_turns',light_case.fetch('expected_behavior').include?('On Codex, creates the fresh reviewer with fork_turns=none so no parent turns are inherited.'))
+abort failures.join('; ') unless failures.empty?
+RUBY
+then pass; else fail "plan review topology, compact plan or light reviewer return, plan response count, spec ref wording, input comment placement or light eval drifted"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

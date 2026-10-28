@@ -16,8 +16,8 @@ compact applicability evidence. Only shared, materially unresolved, or
 explicitly carried expanded work requires the common pre-build result and its
 completion projection when `execution_intent != prepare_only`; prepare-only
 work retains discovery applicability and artifact identity without implementation
-completion claims. Evidenced local work keeps ordinary relevant verification and
-self-review without a Node gate. Shared fanout alone does not activate an
+completion claims. Evidenced local work keeps ordinary relevant verification, a
+local self-check and fresh independent review without a Node gate. Shared fanout alone does not activate an
 Architecture Decision Pack, strict controller, QA, or a different Build/delegation lane.
 
 ## Progress Updates
@@ -192,8 +192,10 @@ requested, stays inline, and never waits for implementation approval. Preserve
 open decisions and exact existing-system preparation evidence, or typed
 `preparation_basis=not_applicable` without an invented evidence ref. Omit
 Artifact Contracts, executable steps/packets, implementation blueprints, and
-Done/Harness artifacts. Load `references/plans/prepare-only.md` and return to
-Preparation Completion.
+Done/Harness artifacts. Requested/required readiness plans receive fresh independent
+review and fresh review after fixes; a review PASS grants no implementation approval.
+Selected research lenses/peer retain their isolation. Load
+`references/plans/prepare-only.md` and return to Preparation Completion.
 
 ### Execution plan
 
@@ -237,7 +239,15 @@ assistant-tdd (or its available fallback) without changing task-wide `tdd_mode`.
 
 An inline bounded small plan proceeds without waiting. Medium+, risky,
 destructive, public-contract/data/security, material architecture/scope, explicit
-policy, or user approval triggers require `approval_required`; present the
+policy, or user approval triggers require `approval_required`. Before seeking
+approval, a requested/required plan needs a validated fresh independent plan
+review (PASS (compact) or CLEAN/ISSUES_FIXED (structured)) from a newly created reviewer through `assistant-review`
+with `review_subject=plan`, bound to the current plan identity, as one fresh
+`plan_coverage_and_feasibility` pass; a material plan fix gets one newly created
+fresh re-review of the same perspective. Record the compact `plan_review_result`
+(reviewer identity, PASS or finding rows, request/plan coverage, closure results)
+unless persisted/executable admission applies, which keeps the structured plan
+batch and review-tools validation. Then present the
 concrete plan and wait before Build. Reuse existing approval for its unchanged
 scope; a material change returns to Discover/Plan and reapproval as needed.
 A readiness plan authorizes no implementation.
@@ -280,6 +290,18 @@ logs/reasoning, prune stale or unsafe residue, and end with the exact next
 action.
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
+
+### Direct execution and plan review
+
+Main-agent direct execution is permitted at every size/risk. Choose optional
+execution delegation for concrete benefit. Required/requested plans receive fresh
+independent review before approval and implementation: one fresh
+`plan_coverage_and_feasibility` pass. Fix material plan findings and obtain one
+fresh re-review; already-running approved plans keep their authority on
+upgrade. Trivial work does not create a plan solely to review planning.
+At the final acceptance review (`review_subject=acceptance`) reconcile original
+request/approved plan and task-wide completion allocation against actual
+evidence; missing work prevents a completed verdict.
 
 ### Reuse before creating
 
@@ -327,7 +349,7 @@ for every `depends_on` prerequisite to be `VERIFIED`. Print `>> Slice
 [S]/[total]: [packet_id] [name]`. In `bounded_executor`, the bounded executor
 owns selected implementation and verification; RED/GREEN/REFACTOR apply only
 when the canonical decision activates TDD. In `separated_workers`, active TDD
-runs SAME selected Code Writer `worker_stage=test_authoring` when selected assertions need authoring or repair (tests only, no incoming RED), then execution-only Builder/Tester `pre_production_red`; explicit reuse of unchanged assertions skips authoring without fabricated edits. It forwards unchanged current typed RED to that SAME actual writer `worker_stage=production`, then runs Builder/Tester GREEN. Only after current GREEN passes does that writer `worker_stage=refactor` return before distinct Builder/Tester REFACTOR verification. Stage-only DONE never completes Build or permits Review; inactive TDD runs
+runs SAME selected Code Writer `worker_stage=test_authoring` when selected assertions need authoring or repair (tests only, no incoming RED), then execution-only Builder/Tester `pre_production_red`; explicit reuse of unchanged assertions skips authoring without fabricated edits. It forwards unchanged current typed RED to that SAME actual writer `worker_stage=production`, then runs Builder/Tester GREEN. Only after current GREEN passes does that writer `worker_stage=refactor` return before Builder/Tester executed REFACTOR or validated unchanged GREEN reuse. Stage-only DONE never completes Build or permits Review; inactive TDD runs
 Code Writer tests plus code then execution-only Builder/Tester `final_verification`. Verify each acceptance
 criterion, record lane-matched canonical packet execution evidence, and mark the slice
 `VERIFIED` before a dependent packet starts.
@@ -395,11 +417,10 @@ Print: `--- PHASE: BUILD COMPLETE ---`
 Print: `--- PHASE: REVIEW ---`
 
 Load `references/review-qa-router.md`. Reused validation evidence never replaces
-Spec Review, independent code review, or a current final review snapshot. Light work uses its compact fresh-review
-lane as a fresh self-review without worker or independent-review dispatch
-evidence. Expanded impact instead records canonical `assistant-review` final-summary and delegation-path refs, without changing light Build. Standard/strict work uses Stage 1 Spec Review and Stage 2 independent
-Code Quality Review through `assistant-review`; Stage 3 QA Evaluation runs only
-when `qa_evaluation_mode=required`.
+the final fresh acceptance review or a current final review snapshot. Light work records a compact review result. Local self-check prepares the required
+newly created fresh-context independent reviewer (Codex `fork_turns=none`,
+self-contained handoff); no author fallback certifies completion. Persisted/executable admission uses the structured review path; a Pack or expanded impact instead records canonical `assistant-review` final-summary and delegation-path refs, without changing light Build. Standard/strict work uses one final fresh acceptance review through `assistant-review` (`review_subject=acceptance`) that also owns the spec obligations; Stage 1 Spec Review is retired. Stage 3 QA Evaluation runs only
+when `qa_evaluation_mode=required`. Always pass the triage `controller_intensity` to assistant-review.
 
 Before any review lane, pass the unchanged `verification_decision`, current
 `evidence_assessment`, actual selected-check results, and omitted-check
@@ -413,15 +434,15 @@ advice or a score cannot expand scope without an important gap and the existing
 selection/approval route. Preserve unresolved evidence gaps;
 review cannot upgrade them to sufficient or replace validation.
 
-For standard/strict work, run the stages in order:
+For standard/strict work, run the stages in order (Stage 1 Spec Review is retired):
 
-1. Print `>> Stage 1: Spec Review`; load `references/prompts/spec-review.md`
-   and require Spec Review PASS before quality review.
-2. Print `>> Stage 2: Code Quality Review - loading assistant-review SKILL.md`;
-   load and follow `assistant-review` SKILL.md and contracts. When an Architecture Decision Pack applies, pass its fresh compact review projection, including design-pressure checks, and require `architecture_decision_pack_review_required=true`; assistant-review then owns the checklist result. Add Code Reviewer
-   to `Required agents` before Stage 2; assistant-review solely owns Reviewer
+- Print `>> Stage 2: Acceptance Review - loading assistant-review SKILL.md`;
+   load and follow `assistant-review` SKILL.md and contracts with
+   `review_subject=acceptance`. Assign the `references/prompts/spec-review.md`
+   obligations (original request, requirement IDs, approved plan and delivery)
+   to a pass of this batch; a fix needs a fresh complete batch. When an Architecture Decision Pack applies, pass its fresh compact review projection, including design-pressure checks, and require `architecture_decision_pack_review_required=true`; assistant-review then owns the checklist result. assistant-review solely owns Reviewer
    and QAEvaluator packet schemas and any Reviewer compatibility routing.
-3. Print `>> Stage 3: QA Evaluation - loading assistant-review references/qa-evaluation-loop.md` only when QA is required.
+- Print `>> Stage 3: QA Evaluation - loading assistant-review references/qa-evaluation-loop.md` only when QA is required.
 
 After review, write `review_result` with current producer version, canonical
 result/delegation refs, exact `final_review_snapshot_id`, and final identity
@@ -463,7 +484,9 @@ blocked QA, return the explicit non-complete status and next action instead.
 ## Phase: Preparation Completion
 
 **Run condition:** `execution_intent=prepare_only` after Discover. Optional
-readiness planning does not create executable packets or delay completion.
+readiness planning creates no executable packets or implementation-approval wait.
+A fresh plan review is due only when that readiness plan was requested or is
+required; never create a readiness plan solely to review it.
 Print: `--- PHASE: PREPARATION COMPLETION ---` before the completion checks and
 `--- PHASE: PREPARATION COMPLETE ---` after they pass. These exact markers are
 declared by `contracts/phase-gates.yaml`; do not derive a synthetic
@@ -471,7 +494,7 @@ declared by `contracts/phase-gates.yaml`; do not derive a synthetic
 Return `completion_policy`, `validation_results`, and `feature_preparation_result`
 as required by PC1 and the `preparation_only` completion tier, plus complete
 `feature_preparation_evidence` for existing-system work. Keep execution
-`not_started`; do not claim Build, changed files, tests, review, final handoff,
+`not_started`; do not claim Build, changed files, tests, post-Build review, final handoff,
 or implementation documentation. Keep `qa_evaluation_mode=not_required` and
 `harness_capable=false`. When explicitly requested future QA/acceptance or
 harness work exists, return it only through the corresponding typed

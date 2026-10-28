@@ -8,7 +8,7 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "15.0"
+schema_version: "16.0"
 contract: input
 skill: assistant-workflow
 
@@ -62,7 +62,7 @@ fields:
     type: string[]
     required: false
     description: "Routing-required roles."
-    validation: "Entries are known workflow roles, installed skills, or a justified project role. For execution_intent=prepare_only, required_agents contains only concrete Discover/preparation roles and excludes QA Evaluator, Build, Review, Code Writer, Builder/Tester, and Code Reviewer roles; retain explicit QA or harness requests only in feature_preparation_result.future_qa_acceptance_obligation or future_harness_obligation. For execution_intent != prepare_only, bounded_executor requires one implementation and selected-verification owner plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Code Mapper, Explorer, and Architect need concrete mapping, lifecycle, or Pack uncertainty; Reviewer may satisfy only compatibility routing. Light low-risk work may keep required_agents empty with selected verification and fresh review."
+    validation: "Entries are known workflow roles, installed skills, or a justified project role. For execution_intent=prepare_only, required_agents contains only concrete Discover/preparation roles, including requested/required fresh plan review and selected research lenses/peer; excludes post-Build code/QA acceptance and implementation roles; retain explicit QA or harness requests only in feature_preparation_result.future_qa_acceptance_obligation or future_harness_obligation. For execution_intent != prepare_only, bounded_executor requires one implementation and selected-verification owner plus independent Code Reviewer responsibility; separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities. Code Mapper, Explorer, and Architect need concrete mapping, lifecycle, or Pack uncertainty; Reviewer may satisfy only compatibility routing. Light low-risk work may keep required_agents empty with selected verification and fresh review."
     default: []
     on_missing: skip
 
@@ -81,10 +81,10 @@ fields:
     required: false
     enum_values: [delegated, direct_fallback, not_applicable]
     description: "Role execution mode."
-    validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires delegation_opted_out, subagents_unavailable, or policy_disallowed and equivalent evidence; policy_disallowed direct_fallback also requires policy_blocking_source; not_applicable is invalid for Build except controller_intensity=light inline/direct work with no subagent role requirement"
+    validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires delegation_opted_out, subagents_unavailable, or policy_disallowed and equivalent evidence; policy_disallowed direct_fallback also requires policy_blocking_source; not_applicable describes direct_main Build at every size/risk without worker-only records; required fresh review remains separate"
     default: not_applicable
     on_missing: infer
-    infer_from: "For controller_intensity=light small low-risk localized source changes, use not_applicable with subagent_policy_state=not_required, direct implementation, selected checks and binding project verification, and fresh self-review evidence. For standard/strict work, if required_agents is empty and no project source/test/docs/config artifact will change, use not_applicable. If standard/strict work changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts, not_applicable is invalid for Build; use delegated only when subagent_policy_state=delegation_triggered from a direct user, applicable AGENTS.md, or active skill instruction. Use direct_fallback only for delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source; record equivalent role evidence."
+    infer_from: "Use not_applicable/not_required for direct_main Build at any size/risk. Choose actual optional delegation for concrete execution benefit. Formal review/lens isolation remains mandatory and cannot fall back to authors."
 
   - name: subagent_trigger_scope
     type: string[]
@@ -306,12 +306,12 @@ fields:
   - name: build_execution_lane
     type: enum
     required: false
-    enum_values: [none, inline_direct, bounded_executor, separated_workers]
+    enum_values: [none, direct_main, bounded_executor, separated_workers]
     description: "Build lane."
-    default: bounded_executor
+    default: direct_main
     on_missing: infer
-    infer_from: "For execution_intent == prepare_only, use none; otherwise light local -> inline_direct, ordinary medium -> bounded_executor, separated_workers only for high/critical, broad/noisy, environment-heavy, independent TDD, or explicit separation."
-    validation: "For execution_intent == prepare_only, none records that no Build lane runs. Size alone never requires separated_workers; bounded_executor records selected implementation and verification evidence, with RED/GREEN evidence only when the canonical TDD choice is active; independent Code Reviewer evidence belongs to Review."
+    infer_from: "For execution_intent == prepare_only, use none for Build only; otherwise direct_main is permitted at every size/risk. Choose bounded_executor or separated_workers for concrete optional execution benefit."
+    validation: "For execution_intent == prepare_only, Build is inactive; requested/required fresh plan review and selected research isolation still apply. All lanes retain approval, exact verification, meaningful RED, dependencies, workspace isolation and shared guard. direct_main has actual main identity and no child worker projections; fresh independent review is required separately."
 
   - name: plan_mode
     type: enum
@@ -713,3 +713,473 @@ fields:
     description: "True only for a concrete acceptance, ownership/context, prerequisite, recovery/rollout or binding protocol boundary; size alone does not select it. Coherent implementation defaults to one canonical packet."
     validation: "prepare_only and unresolved progressive discovery have no executable packets; eligible light work stays direct."
     on_missing: infer
+
+# v16 direct execution is actor-bound at persisted/executable boundaries only.
+# context.execution_actor_bindings[packet_id] resolves the independently retained
+# ExecutionActorBinding {kind: main|delegated, actor_id, runtime_evidence_ref}.
+# direct_main uses execution_stage, execution_actor_id, canonical plan/context;
+# worker-only current_task_packet/worker_role/worker_stage/builder fields are absent.
+# Ordinary direct single-pass work does not acquire packet serialization.
+
+  - name: execution_actor_bindings
+    type: object
+    required: conditional
+    condition: "build_execution_lane == direct_main and a persisted or executable consumer is used"
+    description: "Packet ID to independently retained ExecutionActorBinding with kind main or delegated, actual actor_id and native runtime_evidence_ref; parsed by task-packet-admission.py"
+    validation: "Actual native main identity, never a pretend child. Optional delegated bindings must match existing writer ownership when resolved; absence remains compatible and creation/session refs retain their own semantics. Single-pass direct work without a consumer does not acquire this object."
+    on_missing: fail
+  - name: execution_stage
+    type: enum
+    required: conditional
+    condition: "build_execution_lane == direct_main and a persisted or executable consumer is used"
+    enum_values: [implementation, test_authoring, pre_production_red, production, green, refactor, refactor_verification, final_verification]
+    description: "Actor-neutral direct execution stage, with existing TDD and verification gates; direct_main only (delegated lanes use worker_stage and reject this key)"
+    validation: "Selected-TDD packets use test_authoring, pre_production_red, production, green, refactor or refactor_verification. Non-TDD packets use implementation, test_authoring, production or final_verification. Advancing a RUNNING direct_main packet requires this key explicitly."
+    on_missing: infer
+    infer_from: "For a PENDING non-TDD packet, infer implementation. A selected-TDD packet has no default: block with worker_stage and request the concrete stage. A RUNNING packet without the key is blocked with invalid_state."
+
+# Executable admission readiness and review authority (task-packet-admission.py).
+# Review facts are workflow projections of the canonical Review v10 aggregate.
+# Only request_plan_reconciliation keeps the producer's names
+# (assistant-review/scripts/review-tools.py); fresh_dispatch_evidence_ref is the
+# ref to Review's retained fresh_dispatch / fresh_context_evidence.
+
+  - name: readiness
+    type: object
+    required: conditional
+    condition: "An executable packet admission boundary is evaluated"
+    description: "Current readiness and plan-review applicability consumed at packet dispatch, verification and completion"
+    validation: "execution_intent is implement_only or end_to_end, ready and route_clear are true. At dispatch, verification and completion, plan review is required unless plan_review_required is false with a resolved applicability exception, or the plan is an attested unchanged migrated approval."
+    on_missing: fail
+    object_fields:
+      - name: execution_intent
+        type: enum
+        required: true
+        on_missing: fail
+        enum_values: [prepare_only, implement_only, end_to_end]
+        validation: "prepare_only produces no executable work and blocks with no_execution."
+      - name: ready
+        type: boolean
+        required: true
+        on_missing: fail
+      - name: route_clear
+        type: boolean
+        required: true
+        on_missing: fail
+      - name: plan_review_required
+        type: boolean
+        required: false
+        validation: "When absent, review is required unless the plan is an attested unchanged migrated approval. Non-boolean values block with review_authority."
+      - name: plan_review_ref
+        type: string
+        required: conditional
+        condition: "Plan review is required at dispatch, verification or completion"
+        validation: "Resolves exactly one review_authorities entry with review_subject plan."
+        on_missing: fail
+        on_fail: "Missing blocks with review_authority (plan_review_missing) at plan.review_ref; an unresolved or invalid review blocks with review_authority. Obtain a completed validated fresh delegated plan review of the current definition, record the approval that references it, then rerun admission."
+      - name: plan_review_applicability_ref
+        type: string
+        required: conditional
+        condition: "plan_review_required == false and the plan is not an attested unchanged migrated approval"
+        validation: "Resolves one plan_review_applicability_authority entry."
+        on_missing: fail
+        on_fail: "Missing or unresolved blocks with malformed; a mismatched exception blocks with review_authority. Resolve an exception bound to the current approved_plan_identity, or set plan_review_required true and supply plan_review_ref."
+
+  - name: plan_review_applicability_authority
+    type: object
+    required: conditional
+    condition: "readiness.plan_review_applicability_ref is consumed"
+    description: "Reference to an independently resolved plan-review applicability exception"
+    validation: "The referenced entry binds the current approved_plan_identity exactly and its reason is no_plan_required or unchanged_already_running_approved_plan. unchanged_already_running_approved_plan also needs a retained previous_plan with the same approved_plan_identity and at least one packet whose state is not PENDING; otherwise it blocks with review_authority."
+    on_missing: fail
+    object_fields:
+      - name: approved_plan_identity
+        type: object
+        required: true
+        on_missing: fail
+      - name: reason
+        type: enum
+        required: true
+        on_missing: fail
+        enum_values: [no_plan_required, unchanged_already_running_approved_plan]
+
+  - name: historical_plan_attestation
+    type: object
+    required: conditional
+    condition: "A plan_schema_version 14.0 or 15.0 plan claims its original approval without a current plan review"
+    description: "Independently retained attestation that a verified historical Workflow producer created this approved v14/v15 definition; a version label alone is not provenance"
+    validation: "Exactly schema_version equal to the plan's label, verified true, nonblank producer_ref and definition_sha256 equal to the approved definition_digest and the recomputed definition digest. Absent leaves provenance unknown: plan review stays due and historical 9.0 direct_fallback cannot close completion. A supplied contradicting attestation blocks with legacy_provenance. Verified v12/v13 legacy producer provenance attests its own normalized plan. A retained 16.0 migration grandfathers only when every migration row and this attestation re-derive from the current definition and identity. Caller-trust boundary: caller-resolved attestation, current digests and actor ids are trusted inputs; admission checks consistency, not truth, and independence comes from fresh reviewers. A caller that attests a migrated plan and relabels a current-snapshot acceptance as a v9 direct_fallback is outside this boundary."
+    on_missing: skip
+    object_fields:
+      - name: schema_version
+        type: enum
+        required: true
+        enum_values: ["14.0", "15.0"]
+        on_missing: fail
+      - name: verified
+        type: boolean
+        required: true
+        on_missing: fail
+      - name: producer_ref
+        type: string
+        required: true
+        on_missing: fail
+      - name: definition_sha256
+        type: string
+        required: true
+        on_missing: fail
+
+  - name: writer_actor_ids
+    type: object
+    required: conditional
+    condition: "build_execution_lane is bounded_executor or separated_workers and a persisted or executable consumer is used"
+    description: "Packet ID to the independently resolved native writer actor of delegated work"
+    validation: "Each value is a nonblank actual native actor, never a configured role name. Verification requires it; direct_main context carries none. Review actors must differ from every writer."
+    on_missing: fail
+  - name: builder_actor_ids
+    type: object
+    required: conditional
+    condition: "build_execution_lane == separated_workers and packet evidence carries builder_evidence_ref"
+    description: "Packet ID to the independently resolved native Builder/Tester actor, or a nonempty list of actors"
+    validation: "Every packet with Builder evidence resolves to nonblank actors; a missing entry blocks current completion with review_authority instead of failing open. Review actors must differ from every Builder. direct_main context carries none."
+    on_missing: fail
+
+  - name: review_authorities
+    type: object
+    required: conditional
+    condition: "A plan review is required at dispatch, verification or completion, or completion resolves an independent_review or qa terminal gate"
+    description: "Canonical review ref to the retained Review v10 (or historical v9 acceptance) projection"
+    validation: "Each entry has the same canonical_review_ref as its key. Current entries have producer_version 10.0, result CLEAN or ISSUES_FIXED, coverage_complete true and a fresh_dispatch_evidence_ref. A plan entry binds reviewed_plan_identity (never approved_plan_identity), is delegated, validated and completed, and its actor_id is not a writer, Builder or execution actor (including the main binding). An acceptance entry binds the current approved_plan_identity; its actor_id is likewise outside the reviewed work unless it is a completed historical 9.0 direct_fallback source under an attested unchanged approval. Each current 10.0 entry consumed at completion differs from every other consumed review authority (plan review, final review, QA) in actor_id, native_invocation_id and fresh_dispatch_evidence_ref. Plan and final acceptance entries carry request_plan_reconciliation whose required and observed requirement IDs both equal the accepted requirement IDs, with explicit empty unresolved_requirement_ids and unresolved_finding_ids; a missing unresolved list is unknown and blocks. Only acceptance also requires explicit empty unfinished_task_wide_work; a pre-Build plan review does not gate it. QA entries use covered_acceptance_criteria instead."
+    on_missing: fail
+    object_fields:
+      - name: review_subject
+        type: enum
+        required: true
+        enum_values: [plan, acceptance]
+        on_missing: fail
+      - name: producer_version
+        type: enum
+        required: true
+        enum_values: ["10.0", "9.0"]
+        validation: "9.0 is readable only for completed historical acceptance under its attested original approval."
+        on_missing: fail
+      - name: result
+        type: enum
+        required: true
+        enum_values: [CLEAN, ISSUES_FIXED, HAS_REMAINING_ITEMS]
+        validation: "HAS_REMAINING_ITEMS blocks admission with review_authority."
+        on_missing: fail
+      - name: coverage_complete
+        type: boolean
+        required: true
+        on_missing: fail
+      - name: approved_plan_identity
+        type: object
+        required: conditional
+        condition: "review_subject == acceptance"
+        validation: "Equals the current approved_plan_identity (historical 9.0: an authenticated original approval). A plan entry carrying it blocks with review_authority: plan review precedes approval."
+        on_missing: fail
+      - name: reviewed_plan_identity
+        type: object
+        required: conditional
+        condition: "review_subject == plan"
+        description: "Reviewed plan definition, recorded before approval exists"
+        validation: "Exactly task_identity, plan_version and definition_digest, each equal to the current approved_plan_identity; an approval_ref key blocks with review_authority."
+        on_missing: fail
+        object_fields:
+          - name: task_identity
+            type: string
+            required: true
+            on_missing: fail
+          - name: plan_version
+            type: string
+            required: true
+            on_missing: fail
+          - name: definition_digest
+            type: string
+            required: true
+            on_missing: fail
+      - name: canonical_review_ref
+        type: string
+        required: true
+        on_missing: fail
+      - name: fresh_dispatch_evidence_ref
+        type: string
+        required: conditional
+        condition: "producer_version == 10.0"
+        description: "Ref to Review's retained fresh_dispatch / fresh_context_evidence"
+        validation: "A current 10.0 entry consumed at completion differs from every other consumed review authority."
+        on_missing: fail
+      - name: subagent_execution_mode
+        type: enum
+        required: conditional
+        condition: "review_subject == plan, or the entry is a completion terminal-gate source"
+        enum_values: [delegated, direct_fallback]
+        validation: "Plan and current 10.0 acceptance require delegated. direct_fallback is readable only as the original label of a completed historical 9.0 acceptance source."
+        on_missing: fail
+      - name: validation_status
+        type: enum
+        required: conditional
+        condition: "review_subject == plan, or producer_version == 10.0 and the entry is a completion terminal-gate source"
+        enum_values: [validated, invalid]
+        validation: "Must be validated; invalid blocks with review_authority."
+        on_missing: fail
+      - name: terminal_state
+        type: enum
+        required: conditional
+        condition: "review_subject == plan, or the entry is a completion terminal-gate source"
+        enum_values: [completed, needs_context, blocked, timed_out, failed, invalidated]
+        validation: "Must be completed; any other state blocks with review_authority."
+        on_missing: fail
+      - name: actor_id
+        type: string
+        required: conditional
+        condition: "review_subject == plan, or the entry is a completion terminal-gate source"
+        description: "Actual native reviewer actor"
+        validation: "Nonblank, exact and not in writer_actor_ids, builder_actor_ids or any execution_actor_bindings actor_id, except a completed historical 9.0 direct_fallback acceptance source under an attested unchanged approval. A current 10.0 acceptance actor differs from the plan reviewer and every other consumed review authority. Ids compare exactly: surrounding whitespace on this id or a reviewed-work actor id blocks with review_authority."
+        on_missing: fail
+      - name: role
+        type: enum
+        required: conditional
+        condition: "The entry is a completion terminal-gate source"
+        enum_values: [CodeReviewer, Reviewer, QAEvaluator]
+        validation: "independent_review uses CodeReviewer or Reviewer; qa uses QAEvaluator."
+        on_missing: fail
+      - name: canonical_contract
+        type: enum
+        required: conditional
+        condition: "The entry is a completion terminal-gate source"
+        enum_values: ["assistant-review/contracts/output.yaml#final_summary", "assistant-review/contracts/output.yaml#qa_evaluation_result"]
+        validation: "final_summary for independent_review; qa_evaluation_result for qa."
+        on_missing: fail
+      - name: canonical_result_ref
+        type: string
+        required: conditional
+        condition: "The entry is a completion terminal-gate source"
+        validation: "Equals canonical_review_ref; required QA uses a different ref from the final review."
+        on_missing: fail
+      - name: native_invocation_id
+        type: string
+        required: conditional
+        condition: "The entry is a completion terminal-gate source"
+        validation: "Nonblank actual native invocation; a current 10.0 entry differs from every other consumed review authority."
+        on_missing: fail
+      - name: native_evidence_ref
+        type: string
+        required: conditional
+        condition: "The entry is a completion terminal-gate source"
+        on_missing: fail
+      - name: final_verdict
+        type: enum
+        required: conditional
+        condition: "role == QAEvaluator"
+        enum_values: [accepted, accepted_with_concerns, rejected, blocked]
+        validation: "accepted or accepted_with_concerns; rejected or blocked blocks with review_authority."
+        on_missing: fail
+      - name: covered_acceptance_criteria
+        type: string[]
+        required: conditional
+        condition: "role == QAEvaluator"
+        min_items: 1
+        validation: "Unique and exactly equal to qa_acceptance_context.acceptance_criteria."
+        on_missing: fail
+      - name: acceptance_source_ref
+        type: string
+        required: conditional
+        condition: "role == QAEvaluator"
+        validation: "Equals qa_acceptance_context.source_ref."
+        on_missing: fail
+      - name: snapshot_identity
+        type: string
+        required: conditional
+        condition: "review_subject == acceptance"
+        on_missing: fail
+      - name: request_plan_reconciliation
+        type: object
+        required: conditional
+        condition: "producer_version == 10.0 and the entry is a plan review or the final independent_review gate"
+        on_missing: fail
+        object_fields:
+          - name: original_request_ref
+            type: string
+            required: true
+            on_missing: fail
+          - name: approved_plan_ref
+            type: string
+            required: true
+            validation: "For review_subject plan, the reviewed plan-definition ref bound to reviewed_plan_identity; it never equals the approval_ref recorded afterwards (blocks with review_authority). For acceptance, the approved plan."
+            on_missing: fail
+          - name: required_requirement_ids
+            type: string[]
+            required: true
+            min_items: 1
+            on_missing: fail
+          - name: observed_requirement_ids
+            type: string[]
+            required: true
+            on_missing: fail
+          - name: unresolved_requirement_ids
+            type: string[]
+            required: true
+            validation: "Missing is unknown, never empty; it blocks with review_authority."
+            on_missing: fail
+          - name: unresolved_finding_ids
+            type: string[]
+            required: true
+            validation: "Missing is unknown, never empty; it blocks with review_authority."
+            on_missing: fail
+          - name: unfinished_task_wide_work
+            type: string[]
+            required: conditional
+            condition: "review_subject == acceptance"
+            validation: "Must be explicitly empty for final acceptance. Optional for a pre-Build plan review; when present every item is a nonblank string, it may be non-empty and it is not gated."
+            on_missing: fail
+
+  - name: plan_approval_authorities
+    type: object
+    required: conditional
+    condition: "A plan review is required at dispatch, verification or completion"
+    description: "approval_ref to the independently retained approval record, recorded after the plan review it references"
+    validation: "The entry for the current approved_plan_identity.approval_ref has approval_ref equal to its key, approved_plan_identity equal to the current identity, and plan_review_ref equal to the validated readiness.plan_review_ref. A missing or different plan_review_ref is approval before review and blocks with review_authority."
+    on_missing: fail
+    object_fields:
+      - name: approval_ref
+        type: string
+        required: true
+        on_missing: fail
+      - name: approved_plan_identity
+        type: object
+        required: true
+        on_missing: fail
+      - name: plan_review_ref
+        type: string
+        required: true
+        on_missing: fail
+
+  - name: qa_acceptance_context
+    type: object
+    required: conditional
+    condition: "required_terminal_gates includes qa at completion"
+    description: "Accepted QA scope from the QA handoff or Done Contract, never a result's own narrower self-declaration"
+    validation: "acceptance_criteria are unique and nonempty; the QA source's covered_acceptance_criteria and acceptance_source_ref must match exactly."
+    on_missing: fail
+    object_fields:
+      - name: source_ref
+        type: string
+        required: true
+        on_missing: fail
+      - name: acceptance_criteria
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+
+  - name: current_input_identities
+    type: object
+    required: conditional
+    condition: "An executable packet admission boundary is evaluated"
+    description: "Packet ID to the independently resolved current relevant-input identity"
+    validation: "Nonempty per packet; evidence, applicability and execution bind it exactly. Digest GREEN reuse additionally requires reuse_digest; detailed GREEN reuse requires relevant_input_identity."
+    on_missing: fail
+    object_fields:
+      - name: reuse_digest
+        type: string
+        required: conditional
+        condition: "The packet's REFACTOR verification_disposition is reuse_green and reuse_identity_mode is digest or absent"
+        description: "Caller-resolved digest of the current snapshot, never copied from the TDD log; the caller computes it with the canonical recipe of assistant-tdd contracts/output.yaml green.reuse_digest (referenced, not restated)"
+        validation: "Digest-shaped: lowercase sha256: followed by 64 lowercase hex characters. Equals the TDD v3 green.reuse_digest computed by that same recipe. Missing, blank, a sentinel such as unknown, n/a or none in any case, another format, or a different value blocks reuse with tdd_reuse; run the affected checks."
+        on_missing: fail
+      - name: relevant_input_identity
+        type: object
+        required: conditional
+        condition: "The packet's REFACTOR verification_disposition is reuse_green and reuse_identity_mode == detailed"
+        validation: "Exactly source, tests, configuration, dependencies, toolchain, environment and external_inputs, each with identity and freshness current. Missing blocks reuse with tdd_reuse."
+        on_missing: fail
+
+  - name: previous_plan
+    type: object
+    required: conditional
+    condition: "Resume; or dispatch that would replace an existing stamp; or dispatch, verification or completion of a plan with a dispatched, started or VERIFIED packet lacking its own dispatch stamps; or an unchanged_already_running_approved_plan exception"
+    description: "The canonical_plan of the last accepted admission (returned as canonical_context.previous_plan), retained independently by the caller"
+    validation: "Binds the same approved_plan_identity. The current plan retains its VERIFIED states, progress guard, dispatch stamps, spent recovery counters, history prefix and evidence_refs. Only a newly admitted dispatch replaces a stamp (including a lane-only stamp gaining execution_actor_id), before start and old-actor stage evidence, with this snapshot retaining the packet; a same-stamp re-dispatch needs no snapshot. With this snapshot, a same-lane RUNNING worker_stage fills a lane-only actor once, matching evidence actors, appending {state, filled_stamps, reason: actor resolved for lane-only stamp}. Writing the first stamp or replacing one appends the history row {state, stamp_baseline: {evidence_refs, tdd_cycle_log_ref when present}, reason}, plus replaced_stamps when replacing. A move from a retained started state to any non-started state appends once the row {state: the retained started state, input_identity, evidence_refs, reason}; reason is started packet returned to PENDING for a move to PENDING and started packet left started state for any other move. Observing a stamped RUNNING packet appends once per stamp {state: RUNNING, input_identity, evidence_refs, reason: started under current stamp}; the lock covers only starts committed through admission, so coordinators commit PENDING->RUNNING through an admission call before the worker starts. Only admission writes stamps and stamp_baseline, fill or started-marker rows; a caller row carrying either beyond the retained history prefix is recovery_mismatch. A stamp_baseline is an object with evidence_refs strings and optional string tdd_cycle_log_ref; execution tdd_cycle_log_ref, when present, is a nonblank string; retained states are known states; otherwise malformed. Started means current RUNNING, retained RUNNING, BLOCKED or VERIFIED, or such a history row appended after the latest stamp_baseline row (any row for a stamp without one); earlier rows, including carried legacy history, never lock a newly written stamp. History rows cannot be dropped, so a later PENDING never unlocks the stamp. Old-actor evidence is packet evidence bound to the stamped actor or lane, or evidence_refs or a tdd_cycle_log_ref beyond the latest stamp_baseline; without a baseline row compare against this snapshot, and without either every ref counts. Dispatch never admits BLOCKED: a retry is an admitted dispatch of the packet reset to PENDING."
+    on_missing: fail
+    on_fail: "Resume blocks with resume_identity; unstamped started or VERIFIED work blocks with lane_evidence; replacing the stamp of started or old-actor work, or replacing any stamp without this snapshot, blocks with lane_evidence when the lane differs, otherwise execution_actor; the already-running exception blocks with review_authority. Supply the retained snapshot, or rerun from an admitted dispatch."
+
+  - name: verification_reuse_authority
+    type: object
+    required: conditional
+    condition: "A TDD v3 REFACTOR record has verification_disposition reuse_green and the cycle opts into reuse_identity_mode detailed"
+    description: "Detailed mode only: reuse_assessment_ref to the current canonical no-change GREEN reuse assessment"
+    validation: "The referenced entry has result sufficient, evidence_ref equal to its key, the same packet_id, green_invocation_refs equal to REFACTOR green_invocation_refs, the unchanged verification_decision_ref, the packet's red check_id/command/cwd/oracle, empty post_green_changes and fresh_run_obligations, and green_input_identity and current_input_identity both equal GREEN relevant_input_identity and current_input_identities[packet_id].relevant_input_identity. The assessment's current identity is never trusted alone."
+    on_missing: fail
+    object_fields:
+      - name: result
+        type: enum
+        required: true
+        on_missing: fail
+        enum_values: [sufficient, insufficient]
+      - name: evidence_ref
+        type: string
+        required: true
+        on_missing: fail
+      - name: packet_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: green_invocation_refs
+        type: string[]
+        required: true
+        on_missing: fail
+        min_items: 1
+      - name: verification_decision_ref
+        type: object
+        required: true
+        on_missing: fail
+      - name: check_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: command
+        type: string[]
+        required: true
+        on_missing: fail
+      - name: cwd
+        type: string
+        required: true
+        on_missing: fail
+      - name: oracle
+        type: string
+        required: true
+        on_missing: fail
+      - name: green_input_identity
+        type: object
+        required: true
+        on_missing: fail
+      - name: current_input_identity
+        type: object
+        required: true
+        on_missing: fail
+      - name: post_green_changes
+        type: object[]
+        required: true
+        on_missing: fail
+      - name: fresh_run_obligations
+        type: object[]
+        required: true
+        on_missing: fail
+
+# Current completion resolves each independent_review/required qa terminal gate's
+# canonical_review_ref through existing context.review_authorities. Completed
+# source facts bind canonical_result_ref/contract, review_subject=acceptance,
+# role CodeReviewer|Reviewer|QAEvaluator, actual actor_id/native_invocation_id/native_evidence_ref,
+# producer_version, terminal_state=completed, approval and snapshot. Current v10
+# has validation_status=validated, delegated mode and fresh_dispatch_evidence_ref.
+# Required QA retains actual final_verdict/result and covered_acceptance_criteria
+# matching context.qa_acceptance_context.acceptance_criteria plus its source_ref
+# through acceptance_source_ref. This context comes from the accepted QA handoff/
+# Done Contract, never a result's narrower self-declaration. Final review separately
+# reconciles the whole original request. QA ref, actor, invocation and fresh dispatch
+# cannot substitute final-review authority. Pure check execution stays discretionary.
+# Explicit completed historical v9 sources retain original actor/fallback/verdict,
+# original ref/snapshot and authenticated original approval chain. Plan migration
+# alone cannot waive due current authority; missing historical facts stay unknown.

@@ -47,9 +47,9 @@ Use the reuse-first ordering in the Build reference before creating code or help
    obtain renewed approval when required before further edits.
 4. **Verify.** Run the selected and binding checks or reuse adequate current
    evidence, assess the results, and report gaps. Active TDD also requires
-   passing GREEN and separate REFACTOR verification.
-5. **Review.** Small low-risk local work uses a fresh self-review. Standard and
-   strict work uses independent assistant-review after verification; expanded
+   passing GREEN and executed REFACTOR verification or explicit validated unchanged GREEN reuse.
+5. **Review.** A local self-check prepares review. Every formal completion review uses a newly created
+   independent agent with fresh context after verification; expanded
    change impact also retains its canonical review evidence. QA runs only when
    required by its acceptance triggers. Fixes require current verification and
    a fresh review of the changed snapshot.
@@ -63,10 +63,10 @@ Use [triage-rubric.md](references/triage-rubric.md) and
 [workflow-controller.md](references/workflow-controller.md) when risk, approval,
 state, delegation, harness, or QA routing needs resolution. Light work stays
 hands-on; ordinary medium+ work defaults to standard, non-harness, non-QA with
-one Build owner. Required delegation follows
+one Build owner. Optional execution delegation and mandatory fresh-review isolation follow
 [the dispatch rules](references/subagent-dispatch.md) without a separate spawn
-permission question; permitted fallback needs actual opt-out, policy, or
-unavailability evidence. Separate writer/verifier ownership only when triggered.
+permission question. Only optional Build delegation may fall back, with actual
+opt-out, policy, or unavailability evidence; review isolation never falls back. Choose execution delegation for concrete benefit; size/risk alone never forces it.
 
 Load generated `references/phases/<current-phase>.md` for the phase requiring
 detail; use authoritative [phases.md](references/phases.md) if the view is missing
@@ -108,10 +108,12 @@ or user request. Other updates use concise natural language.
 
 For canonical plans/task packets, persisted state, delegated handoffs, or
 executable admission/evaluation, load `contracts/index.yaml` and the relevant
-entry, current-phase, selected-handoff, packet-admission, and completion sets.
-These existing v14 interfaces and prerequisites remain authoritative. Load
+entry, current-phase, selected-handoff, packet-admission, and completion sets;
+executable admission also loads `build_admission` or `completion_admission`.
+These current v16 interfaces and prerequisites remain authoritative. Load
 [build-worker-protocol.md](references/build-worker-protocol.md) for packet/worker
 Build execution; generated size plans remain views of `references/plan-template.md`.
+Persisted progress state follows [the progress wire boundary](../../tools/progress/wire-boundary.md).
 Use [legacy compatibility](references/legacy-compatibility.md) only when resuming
 older packets. Missing/invalid selectors load the full named authoritative file.
 

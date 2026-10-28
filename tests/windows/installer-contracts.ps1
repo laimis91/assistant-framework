@@ -1520,7 +1520,7 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
             Assert-NotContains $config '"-Command"' 'MCP config uses command-text execution'
             Assert-NotContains $config 'Invoke-Expression' 'MCP config introduces evaluated command text'
 
-            foreach ($excluded in @('context-budget-report.sh', 'evals\run-codex-framework-evals.sh', 'evals\finalize-workflow-kernel-review.sh', 'evals\lib\context-budget-evidence.sh', 'evals\validate-promotion-decision-schema.cjs', 'evals\package.json', 'evals\package-lock.json', 'evals\node_modules')) {
+            foreach ($excluded in @('context-budget-report.sh', 'evals\run-codex-framework-evals.sh', 'evals\review-efficiency-report.rb', 'evals\finalize-workflow-kernel-review.sh', 'evals\lib\context-budget-evidence.sh', 'evals\validate-promotion-decision-schema.cjs', 'evals\package.json', 'evals\package-lock.json', 'evals\node_modules')) {
                 Assert-False (Test-Path -LiteralPath (Join-Path (Join-Path $hostileCodexHome 'tools') $excluded)) "Source-only tool was installed: $excluded"
             }
         }
@@ -1711,7 +1711,7 @@ requires:
             $toolsRoot = Join-Path $codexHome 'tools'
             $retiredManagedTargets = @(
                 'context-budget-report.sh',
-                'evals\run-codex-framework-evals.sh',
+                'evals\run-codex-framework-evals.sh', 'evals\review-efficiency-report.rb',
                 'evals\finalize-workflow-kernel-review.sh',
                 'evals\lib\context-budget-evidence.sh',
                 'evals\validate-promotion-decision-schema.cjs',
@@ -2631,10 +2631,10 @@ requires:
             [void][System.IO.Directory]::CreateDirectory((Join-Path $Workflow 'contracts'))
             $utf8 = New-Object System.Text.UTF8Encoding($false)
             $skillText = "---`nname: assistant-workflow`ndescription: Retained ownership protocol fixture.`n---`n"
-            $indexText = "schema_version: `"15.0`"`ncontract: index`nskill: assistant-workflow`n"
+            $indexText = "schema_version: `"16.0`"`ncontract: index`nskill: assistant-workflow`n"
             # Fixed declared tuples, independent of the production compatibility reader.
             $handoffsText = @'
-schema_version: "15.0"
+schema_version: "16.0"
 contract: handoffs
 skill: assistant-workflow
 worker_stage_protocol:
@@ -2654,17 +2654,18 @@ worker_stage_protocol:
 '@
             $handoffsText = $handoffsText.Replace("`r`n", "`n") + "`n"
             switch ($Variant) {
-                'old13' { $indexText = $indexText.Replace('15.0', '13.0'); $handoffsText = $handoffsText.Replace('15.0', '13.0') }
-                'old14' { $indexText = $indexText.Replace('15.0', '14.0'); $handoffsText = $handoffsText.Replace('15.0', '14.0') }
-                'unknown-version' { $indexText = $indexText.Replace('15.0', '16.0'); $handoffsText = $handoffsText.Replace('15.0', '16.0') }
-                'mixed-version' { $indexText = $indexText.Replace('15.0', '14.0') }
-                { $_ -in @('old', 'recovery', 'full') } { $indexText = $indexText.Replace('15.0', '12.0') }
+                'old13' { $indexText = $indexText.Replace('16.0', '13.0'); $handoffsText = $handoffsText.Replace('16.0', '13.0') }
+                'old14' { $indexText = $indexText.Replace('16.0', '14.0'); $handoffsText = $handoffsText.Replace('16.0', '14.0') }
+                'old15' { $indexText = $indexText.Replace('16.0', '15.0'); $handoffsText = $handoffsText.Replace('16.0', '15.0') }
+                'unknown-version' { $indexText = $indexText.Replace('16.0', '17.0'); $handoffsText = $handoffsText.Replace('16.0', '17.0') }
+                'mixed-version' { $indexText = $indexText.Replace('16.0', '14.0') }
+                { $_ -in @('old', 'recovery', 'full') } { $indexText = $indexText.Replace('16.0', '12.0') }
                 'no-stages' { $handoffsText = $handoffsText.Substring(0, $handoffsText.IndexOf('worker_stage_protocol:')) }
                 'stage-mismatch' { $handoffsText = $handoffsText.Replace('current_matching_red', 'none') }
                 'early-completion' { $handoffsText = $handoffsText.Replace('completes_build: false', 'completes_build: true') }
                 'duplicate-index' { $indexText += "skill: assistant-workflow`n" }
-                'duplicate-handoffs' { $handoffsText += "schema_version: `"15.0`"`n" }
-                'malformed' { $indexText = "schema_version: `"15.0`ncontract: index`nskill: assistant-workflow`n" }
+                'duplicate-handoffs' { $handoffsText += "schema_version: `"16.0`"`n" }
+                'malformed' { $indexText = "schema_version: `"16.0`ncontract: index`nskill: assistant-workflow`n" }
                 'wrong-identity' { $indexText = $indexText.Replace('contract: index', 'contract: output') }
                 'bom-crlf' {
                     $utf8 = New-Object System.Text.UTF8Encoding($true)
@@ -2694,7 +2695,7 @@ worker_stage_protocol:
         }
 
         foreach ($agent in @('codex', 'claude', 'gemini')) {
-            foreach ($variant in @('old13', 'old14', 'old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'current15', 'unknown-version', 'mixed-version', 'bom-crlf', 'recovery', 'full')) {
+            foreach ($variant in @('old13', 'old14', 'old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'old15', 'unknown-version', 'mixed-version', 'bom-crlf', 'recovery', 'full')) {
                 foreach ($mode in @('normal', 'dry-run')) {
                     if ($mode -eq 'dry-run' -and $variant -in @('recovery', 'full')) { continue }
                     Use-IsolatedEnvironment ("ownership-$agent-$variant-$mode") {
@@ -2742,11 +2743,11 @@ worker_stage_protocol:
                         $result = Invoke-Installer -Arguments $installArguments
                         $after = Get-TreeFingerprint -LiteralPath $root
                         $label = "$agent/$variant/$mode"
-                        if ($variant -in @('absent', 'current', 'current15', 'bom-crlf', 'recovery', 'full')) {
+                        if ($variant -in @('absent', 'current', 'bom-crlf', 'recovery', 'full')) {
                             Assert-Equal 0 $result.ExitCode "$label unexpectedly rejected: $($result.Output)"
                             if ($mode -eq 'dry-run') { Assert-Equal $before $after "$label dry-run mutated scratch tree" }
                             if ($variant -eq 'absent') { Assert-False (Test-Path -LiteralPath $workflow) "$label added unselected workflow" }
-                            if ($variant -in @('current', 'current15', 'bom-crlf')) {
+                            if ($variant -in @('current', 'bom-crlf')) {
                                 Assert-Equal $workflowBefore (Get-TreeFingerprint -LiteralPath $workflow) "$label refreshed retained compatible controller"
                             }
                             if ($variant -in @('recovery', 'full')) {
@@ -2773,6 +2774,70 @@ worker_stage_protocol:
                         }
                     }
                 }
+            }
+        }
+        # Mirrors the Unix mixed-protocol test: Assert-ProtocolCompatibility rejects a
+        # retained incompatible producer/consumer before any normal or dry-run write.
+        foreach ($protocolAgent in @('codex', 'claude', 'gemini')) {
+            foreach ($protocolCase in @('review-with-old-workflow', 'workflow-with-old-debugging', 'review-with-old-debugging')) {
+                foreach ($protocolMode in @('normal', 'dry-run')) {
+                    Use-IsolatedEnvironment ("protocol-$protocolAgent-$protocolCase-$protocolMode") {
+                        param($root, $isolatedUserProfile)
+                        if ($protocolAgent -eq 'codex') {
+                            [Environment]::SetEnvironmentVariable('CODEX_HOME', (Join-Path $isolatedUserProfile '.codex'), 'Process')
+                            $protocolTarget = Join-Path $isolatedUserProfile '.agents/skills'
+                        }
+                        else {
+                            [Environment]::SetEnvironmentVariable('CODEX_HOME', [System.IO.Path]::GetPathRoot($root), 'Process')
+                            $protocolTarget = Join-Path $isolatedUserProfile ('.' + $protocolAgent + '/skills')
+                        }
+                        [void][System.IO.Directory]::CreateDirectory($protocolTarget)
+                        $protocolArguments = @('-Agent', $protocolAgent, '-NoHooks')
+                        if ($protocolCase -eq 'review-with-old-workflow') {
+                            Write-OwnershipWorkflowFixture -Workflow (Join-Path $protocolTarget 'assistant-workflow') -Variant 'old15'
+                            $protocolArguments += @('-Skill', 'assistant-review')
+                        }
+                        else {
+                            $debugging = Join-Path $protocolTarget 'assistant-debugging'
+                            [void][System.IO.Directory]::CreateDirectory((Join-Path $debugging 'contracts'))
+                            [System.IO.File]::WriteAllText((Join-Path $debugging 'SKILL.md'), "---`nname: assistant-debugging`ndescription: Original v2 debugging consumer.`n---`n")
+                            [System.IO.File]::WriteAllText((Join-Path $debugging 'contracts/index.yaml'), "schema_version: `"2.0`"`ncontract: index`nskill: assistant-debugging`n")
+                            # review-with-old-debugging exercises the debugging/review protocol pair alone.
+                            if ($protocolCase -eq 'review-with-old-debugging') { $protocolArguments += @('-Skill', 'assistant-review') }
+                            else { $protocolArguments += @('-Skill', 'assistant-workflow') }
+                        }
+                        if ($protocolMode -eq 'dry-run') { $protocolArguments += '-DryRun' }
+                        $protocolLabel = "$protocolAgent/$protocolCase/$protocolMode"
+                        $protocolBefore = Get-TreeFingerprint -LiteralPath $root
+                        $protocolResult = Invoke-Installer -Arguments $protocolArguments
+                        Assert-True ($protocolResult.ExitCode -ne 0) "$protocolLabel accepted incompatible retained consumer"
+                        Assert-Contains $protocolResult.Output 'INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE' "$protocolLabel rejected for wrong reason"
+                        Assert-Equal $protocolBefore (Get-TreeFingerprint -LiteralPath $root) "$protocolLabel wrote before rejection"
+                    }
+                }
+            }
+        }
+        # Missing retained protocol metadata reports the protocol diagnostic, matching install.sh.
+        foreach ($protocolAgent in @('codex', 'claude', 'gemini')) {
+            Use-IsolatedEnvironment ("protocol-missing-index-$protocolAgent") {
+                param($root, $isolatedUserProfile)
+                if ($protocolAgent -eq 'codex') {
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', (Join-Path $isolatedUserProfile '.codex'), 'Process')
+                    $protocolTarget = Join-Path $isolatedUserProfile '.agents/skills'
+                }
+                else {
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', [System.IO.Path]::GetPathRoot($root), 'Process')
+                    $protocolTarget = Join-Path $isolatedUserProfile ('.' + $protocolAgent + '/skills')
+                }
+                $debugging = Join-Path $protocolTarget 'assistant-debugging'
+                [void][System.IO.Directory]::CreateDirectory((Join-Path $debugging 'contracts'))
+                [System.IO.File]::WriteAllText((Join-Path $debugging 'SKILL.md'), "---`nname: assistant-debugging`ndescription: Retained debugging consumer.`n---`n")
+                $protocolLabel = "$protocolAgent/missing-index"
+                $protocolBefore = Get-TreeFingerprint -LiteralPath $root
+                $protocolResult = Invoke-Installer -Arguments @('-Agent', $protocolAgent, '-NoHooks', '-Skill', 'assistant-workflow', '-DryRun')
+                Assert-True ($protocolResult.ExitCode -ne 0) "$protocolLabel accepted missing protocol metadata"
+                Assert-Contains $protocolResult.Output 'INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE: missing or unreadable contracts/index.yaml' "$protocolLabel rejected for wrong reason"
+                Assert-Equal $protocolBefore (Get-TreeFingerprint -LiteralPath $root) "$protocolLabel wrote before rejection"
             }
         }
         # Representative callers of the same pre-mode source completeness guard.
@@ -2835,6 +2900,90 @@ worker_stage_protocol:
                 Assert-Contains $result.Output $expectedDefinition "$label lacks missing source path"
                 Assert-Contains $result.Output 'No installation files have been changed' "$label lacks no-write diagnostic"
             }
+        }
+    }
+
+    Invoke-Contract 'tool sync excludes compiled Python bytecode like install.sh' {
+        & {
+            $tokens = $null; $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:InstallerPath, [ref]$tokens, [ref]$errors)
+            foreach ($statement in $ast.EndBlock.Statements) {
+                if ($statement -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $statement.Name -eq 'Test-ExcludedRelativePath') {
+                    . ([scriptblock]::Create($statement.Extent.Text))
+                }
+            }
+            $installerText = [System.IO.File]::ReadAllText($script:InstallerPath)
+            Assert-Contains $installerText "`$toolExclusions = @('.DS_Store', '.publish', 'bin', 'obj', '__pycache__', '*.pyc')" 'Tool exclusions omit *.pyc parity with install.sh'
+            $names = @('.DS_Store', '.publish', 'bin', 'obj', '__pycache__', '*.pyc')
+            Assert-True (Test-ExcludedRelativePath -RelativePath 'change-impact/check.cpython-312.pyc' -ExcludedNames $names -ExcludedExactPaths @()) 'Stray .pyc outside __pycache__ is copied'
+            Assert-True (Test-ExcludedRelativePath -RelativePath 'progress/__pycache__/stagnation.cpython-312.pyc' -ExcludedNames $names -ExcludedExactPaths @()) '__pycache__ is no longer excluded'
+            Assert-False (Test-ExcludedRelativePath -RelativePath 'progress/stagnation.py' -ExcludedNames $names -ExcludedExactPaths @()) 'Python source is excluded'
+            Assert-False (Test-ExcludedRelativePath -RelativePath 'evals/binder.sh' -ExcludedNames $names -ExcludedExactPaths @()) 'Exact names became prefix matches'
+        }
+    }
+
+    Invoke-Contract 'review Python capability probe is selective and no-write for missing or broken runtimes' {
+        & {
+            $tokens = $null; $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:InstallerPath, [ref]$tokens, [ref]$errors)
+            foreach ($statement in $ast.EndBlock.Statements) {
+                if ($statement -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $statement.Name -in @('Assert-WorkflowPythonRuntime', 'Assert-ReviewPythonRuntime')) {
+                    . ([scriptblock]::Create($statement.Extent.Text))
+                }
+            }
+            $script:ReviewPythonAvailable = $false; $script:ReviewPythonWorks = $false; $script:ReviewPythonCalls = 0
+            function Write-Info { param($Message) }
+            function Get-Command {
+                param($Name, $CommandType, $ErrorAction)
+                Assert-True ($Name -in @('py','python3','python')) 'Review probe discovered unexpected application'
+                if ($Name -eq 'python3' -and $script:ReviewPythonAvailable) { [pscustomobject]@{ Source = 'ReviewTestPython' } }
+            }
+            function ReviewTestPython {
+                $script:ReviewPythonCalls++
+                if ($args -contains '-c') { $global:LASTEXITCODE = 0; '3.14.8'; return }
+                Assert-Equal @('-I','-S','-B') @($args[0..2]) 'Review probe did not isolate Python/site imports'
+                Assert-Equal '--probe' $args[4] 'Review probe did not use capability entry point'
+                if ($script:ReviewPythonWorks) { $global:LASTEXITCODE = 0; '{"valid":true}' }
+                else { $global:LASTEXITCODE = 86; 'broken private parser/runtime' }
+            }
+            foreach ($selection in @('assistant-docs', 'assistant-review')) {
+                foreach ($available in @($false, $true)) {
+                    foreach ($working in @($false, $true)) {
+                        $script:ReviewPythonAvailable = $available; $script:ReviewPythonWorks = $working; $script:ReviewPythonCalls = 0
+                        $before = Get-TreeFingerprint -LiteralPath $script:SuiteRoot; $caught = ''
+                        try { Assert-ReviewPythonRuntime -SelectedSkills @($selection) -SkillsSource (Join-Path $script:FrameworkRoot 'skills') } catch { $caught = $_.Exception.Message }
+                        Assert-Equal $before (Get-TreeFingerprint -LiteralPath $script:SuiteRoot) 'Review preflight wrote files'
+                        if ($selection -eq 'assistant-docs') { Assert-Equal 0 $script:ReviewPythonCalls 'Unrelated selection probed Python'; Assert-Equal '' $caught 'Unrelated selection required Python' }
+                        elseif ($available -and $working) { Assert-Equal '' $caught 'Supported Python was rejected'; Assert-Equal 2 $script:ReviewPythonCalls 'Version/capability probes were not both executed' }
+                        else { Assert-Contains $caught 'assistant-review requires Python' 'Missing/broken runtime lacked clear recovery'; Assert-Contains $caught 'No installation files have been changed' 'Runtime refusal lacked no-write guarantee' }
+                    }
+                }
+            }
+        }
+    }
+
+    Invoke-Contract 'standalone review helper uses physical Windows split skill path from unrelated cwd' {
+        Use-IsolatedEnvironment 'review-helper' {
+            param($root, $isolatedUserProfile)
+            $customHome = Join-Path $root 'custom codex'
+            $env:CODEX_HOME = $customHome
+            Push-Location $root
+            try { $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-review') }
+            finally { Pop-Location }
+            Assert-Equal 0 $result.ExitCode 'Standalone review installation failed'
+            $helper = Join-Path $isolatedUserProfile '.agents/skills/assistant-review/scripts/review-tools.py'
+            Assert-True ([System.IO.File]::Exists($helper)) 'Review helper did not ship inside physical skill root'
+            $ready = $false
+            foreach ($candidate in @(@{Name='py';Prefix=@('-3')}, @{Name='python3';Prefix=@()}, @{Name='python';Prefix=@()})) {
+                foreach ($command in @(Get-Command $candidate.Name -CommandType Application -ErrorAction SilentlyContinue)) {
+                    $arguments = @($candidate.Prefix) + @('-I','-S','-B',$helper,'--probe')
+                    $probe = @(& $command.Source @arguments 2>&1) -join ''
+                    if ($LASTEXITCODE -eq 0 -and $probe -match '"valid"\s*:\s*true') { $ready = $true; break }
+                }
+                if ($ready) { break }
+            }
+            Assert-True $ready 'Installed review helper/bundle failed isolated Python probe'
+            Assert-False ([System.IO.File]::Exists((Join-Path $customHome 'tools/evals/review-efficiency-report.rb'))) 'Source-only reporter shipped'
         }
     }
 

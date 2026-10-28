@@ -106,7 +106,7 @@ for file_and_term in \
     "$review_loop::Dispatch every planned read-only Reviewer pass" \
     "$review_loop::never expose the mismatch details to discovery siblings" \
     "$review_loop::Return it to the composing workflow for planning or approval" \
-    "$review_router::Before Stage 1 Spec Review or source inspection/mutation" \
+    "$review_router::Before the acceptance review or source inspection/mutation" \
     "$review_router::only when review-fix authority is explicit or carried by the" \
     "$review_router::Audit mode reports findings without source changes" \
     "$review_router::In audit mode, report the mismatch without source changes" \
@@ -370,39 +370,25 @@ else
     fail "assistant-review reuse-search principle/eval coverage is incomplete: ${reuse_search_principle_failures[*]}"
 fi
 
-test_start "assistant-review direct fallback does not require reviewer dispatch"
-review_fallback_failures=()
 review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
-
-for file_and_term in \
-    "$review_loop::Infer review mode before review or mutation" \
-    "$review_loop::In direct fallback, start a fresh isolated pass with the same bounded bundle" \
-    "$review_input::subagent_execution_mode" \
-    "$review_input::direct_fallback" \
-    "$review_output::review_delegation_path" \
-    "$review_output::fresh direct-fallback context" \
-    "$review_phases::RS1A" \
-    "$review_phases::In direct fallback mode, complete" \
-    "$review_handoffs::when subagent_execution_mode=delegated" \
-    "$review_handoffs::Direct fallback uses the same review" \
-    "$review_handoffs::In direct fallback mode, complete the local review evidence"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
-        review_fallback_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-
-if [[ "${#review_fallback_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review direct fallback still implies mandatory Reviewer dispatch: ${review_fallback_failures[*]}"
-fi
+test_start "current formal review requires fresh native isolation and retains historical fallback"
+if ruby -ryaml - "$review_input" "$review_output" "$review_phases" <<'RUBY'
+input, output, gates = ARGV.map { |p| YAML.load_file(p) }
+mode = input.fetch('fields').find { |f| f['name'] == 'subagent_execution_mode' }
+path = output.fetch('artifacts').find { |f| f['name'] == 'review_delegation_path' }
+fields = path.fetch('object_fields').to_h { |f| [f['name'], f] }
+rs = gates.fetch('gates').find { |g| g['phase'] == 'REVIEW_STEP' }.fetch('exit_assertions').to_h { |g| [g['id'], g] }
+historical_only = ->(f) { f['enum_values'] == %w[delegated not_applicable direct_fallback] && f['validation'].include?('historical v9 reader-only') && f['validation'].include?('never emits') }
+abort unless historical_only.(mode) && historical_only.(fields['subagent_execution_mode'])
+abort unless path['required'] == true && path['validation'].include?('Historical v9') && rs['RS1A']['check'].include?('fresh native creation')
+abort unless rs['RS1B']['check'].include?('two purpose-specific independent newly created passes')
+RUBY
+then pass; else fail "current review permits author fallback or loses fresh small-scope passes/history"; fi
 
 test_start "assistant-thinking dispatches from applicable delegation triggers and records evidenced fallback"
 thinking_delegation_proof_failures=()
 thinking_delegation_proof_terms=(
-    "$thinking_skill::A direct user request or applicable AGENTS.md or active-skill instruction"
+    "$thinking_skill::Thinking perspectives are discretionary"
     "$thinking_skill::contracts/input.yaml"
     "$thinking_skill::contracts/output.yaml"
     "$thinking_skill::contracts/phase-gates.yaml"
@@ -412,8 +398,8 @@ thinking_delegation_proof_terms=(
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml::policy_blocking_source"
     "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml::sequential_fallback"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::dispatch without a separate permission question"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::Independent high-risk challenge uses a newly created fresh-context reviewer"
+    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::sequential role-play is not independent evidence"
     "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::SKILL.md#independence-and-delegation"
     "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::SKILL.md#integrated-and-structured-output"
     "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::SKILL.md#independence-and-delegation"
@@ -477,7 +463,7 @@ for reviewer_agent in \
     done
 done
 for review_term in \
-    'schema_version: "9.0"' \
+    'schema_version: "10.0"' \
     "risk_selected_specialist" \
     "assistant-security"; do
     if ! grep -Fq "$review_term" "$review_handoffs"; then

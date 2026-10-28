@@ -1,6 +1,111 @@
 # Emit the fixed tool-owned companion schema policy for fixture and grade readers.
 skill_eval_companion_contracts_ruby() {
     cat <<'RUBY'
+# Repository-only bridge: independent Ruby fixtures call the Python library.
+# The installed helper has no bridge operation and never spawns this child.
+require 'json'
+require 'open3'
+require 'timeout'
+module ReviewTools
+  MAX_BYTES = 8 * 1024 * 1024
+  class Invalid < StandardError; end
+  module_function
+  def use(path)
+    path = File.realpath(path)
+    raise Invalid, 'helper_identity_changed' if @path && @path != path
+    @path = path
+  end
+  def normalize(value)
+    case value
+    when Hash then value.to_h { |key, item| [normalize(key), normalize(item)] }
+    when Array then value.map { |item| normalize(item) }
+    when String
+      text = value.dup.force_encoding(Encoding::UTF_8)
+      raise Invalid, 'primitive_json_required' unless text.valid_encoding?
+      text
+    when Integer, TrueClass, FalseClass, NilClass then value
+    when Numeric
+      raise Invalid, 'primitive_json_required' unless value.finite?
+      value.to_f
+    else raise Invalid, 'primitive_json_required'
+    end
+  end
+  def close
+    @input.close rescue nil
+    if @wait && !@wait.join(2)
+      Process.kill('TERM', @wait.pid) rescue nil
+      unless @wait.join(2)
+        Process.kill('KILL', @wait.pid) rescue nil
+        @wait.join
+      end
+    end
+    @output.close rescue nil
+    @errors.close rescue nil
+    @drain.join(2) if @drain
+    @input = nil
+  end
+  def invoke(method, *arguments)
+    raise Invalid, 'helper_unselected' unless @path
+    unless @input
+      program = <<~'PYTHON'
+        import importlib.util,json,sys
+        spec=importlib.util.spec_from_file_location('review_tools',sys.argv[1])
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        names=('call','parse_json','shape_valid','snapshot_identity_valid','summary_projection_valid','validate_return','same_set','primitive_copy')
+        methods={name:getattr(module,name) for name in names}
+        for line in sys.stdin.buffer:
+            try:
+                module.require_fact(len(line)<=module.MAX_BYTES,'input_too_large')
+                request=module.primitive_copy(module.parse_json(line))
+                result=methods[request['method']](*request['arguments'])
+                reply={'ok':True,'result':result}
+            except Exception as error:
+                reply={'ok':False,'diagnostic':str(error) if type(error) is module.Invalid else 'adapter_input_invalid'}
+            output=module.encoded(reply)
+            if len(output)>module.MAX_BYTES:output=module.encoded({'ok':False,'diagnostic':'output_too_large'})
+            sys.stdout.buffer.write(output+b'\n');sys.stdout.buffer.flush()
+      PYTHON
+      @input, @output, @errors, @wait = Open3.popen3(ENV.fetch('REVIEW_TOOLS_PYTHON', 'python3'), '-I', '-S', '-B', '-c', program, @path)
+      @error_prefix = ''.b
+      @drain = Thread.new do
+        begin
+          loop do
+            chunk = @errors.readpartial(4096)
+            @error_prefix << chunk if @error_prefix.bytesize < 16384
+          end
+        rescue EOFError, IOError
+        end
+      end
+    end
+    raw = JSON.generate({'method'=>method,'arguments'=>normalize(arguments)})
+    raise Invalid, 'input_too_large' if raw.bytesize > MAX_BYTES
+    line = Timeout.timeout(10) do
+      @input.write(raw + "\n"); @input.flush
+      @output.gets(MAX_BYTES + 1)
+    end
+    raise Invalid, 'adapter_response_unavailable' unless line && line.bytesize <= MAX_BYTES && line.end_with?("\n")
+    reply = JSON.parse(line)
+    raise Invalid, reply.fetch('diagnostic') unless reply['ok']
+    reply['result']
+  rescue IOError, Errno::EPIPE, JSON::ParserError, Timeout::Error
+    close
+    raise Invalid, 'adapter_response_unavailable'
+  end
+  def call(request)
+    invoke('call', request)
+  rescue Invalid => error
+    {'valid'=>false,'diagnostics'=>[error.message],'input_receipts'=>{}}
+  end
+  def parse_json(value); invoke('parse_json', value); end
+  def shape_valid?(value, field, context=nil); invoke('shape_valid', value, field, context); end
+  def snapshot_identity_valid?(value); invoke('snapshot_identity_valid', value); end
+  def summary_projection_valid?(authority, summary); invoke('summary_projection_valid', authority, summary); end
+  def validate_return(authority, reply); invoke('validate_return', authority, reply); end
+  def same_set(actual, expected, code); invoke('same_set', actual, expected, code); end
+  def primitive_copy(value); invoke('primitive_copy', value); end
+end
+at_exit { ReviewTools.close }
+
 class SkillEvalCompanionContracts
   def initialize(repo_root, fixture_file, skill_name = nil)
     contracts_dir = File.expand_path("../contracts", File.dirname(fixture_file))
@@ -41,12 +146,12 @@ class SkillEvalCompanionContracts
 
   def path(producer_skill, contract_file, required = true)
     registered = (producer_skill == "assistant-verification" && contract_file == "output.yaml") ||
-      (producer_skill == "assistant-review" && %w[index.yaml output.yaml].include?(contract_file))
+      (producer_skill == "assistant-review" && %w[index.yaml output.yaml handoffs.yaml review-tools.py].include?(contract_file))
     raise "unregistered fixed producer contract" unless registered
     base = File.realpath(@skills_owner)
     raise "producer skills base escapes its owner" unless @contained.call(base, @owner_boundary)
     producer = File.join(base, producer_skill)
-    output = File.join(producer, "contracts", contract_file)
+    output = File.join(producer, contract_file == "review-tools.py" ? "scripts" : "contracts", contract_file)
     return output unless required || File.exist?(output) || File.symlink?(output)
 
     physical_producer = File.realpath(producer)
@@ -237,7 +342,7 @@ inline_eval_only_roots = {
     { "name" => "status", "type" => "enum", "required" => false, "enum_values" => %w[DONE NEEDS_CONTEXT BLOCKED DEVIATED] },
     { "name" => "failure_class", "type" => "string", "required" => false },
     { "name" => "next_action", "type" => "enum", "required" => false, "enum_values" => %w[review orchestrator] },
-    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["9.0"] }] },
+    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["10.0"] }] },
     { "name" => "current_final_batch", "type" => "object", "required" => false, "object_fields" => [{ "name" => "review_snapshot_id", "type" => "string", "required" => true }, final_snapshot_identity_schema] },
     { "name" => "harness_entry_state", "type" => "object", "required" => false },
     {
@@ -575,7 +680,9 @@ closure_authority_valid = lambda do |authority|
     end
   end && authority.map { |entry| entry["aggregate_finding_id"] }.uniq.length == authority.length
 end
-perspectives = %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse risk_selected_specialist closure_verification]
+# light_contract_and_runtime (trivial/small light) and plan_coverage_and_feasibility
+# (plan review) are single fresh passes outside the canonical discovery matrix (take(n) below).
+perspectives = %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse risk_selected_specialist closure_verification light_contract_and_runtime plan_coverage_and_feasibility]
 canonical_perspectives = {
   "trivial_small" => perspectives.take(2),
   "medium" => perspectives.take(3),
@@ -669,18 +776,35 @@ templates.each do |template_ref, template|
   fail_with.call("templates.#{template_ref}.scope_size must be trivial, small, medium, or large") unless %w[trivial small medium large].include?(template["scope_size"])
   topology = template["topology"]
   topology_fields = %w[canonical_discovery_perspectives closure_verification_required discovery_pass_count max_required_responses security_specialist_triggered]
-  fail_with.call("templates.#{template_ref}.topology must contain exactly #{topology_fields.join(', ')}") unless topology.is_a?(Hash) && topology.keys.sort == topology_fields
-  fail_with.call("templates.#{template_ref}.topology.discovery_pass_count must be an integer from 2 through 4") unless topology["discovery_pass_count"].is_a?(Integer) && (2..4).cover?(topology["discovery_pass_count"])
-  fail_with.call("templates.#{template_ref}.topology.max_required_responses must be an integer from 2 through 6") unless topology["max_required_responses"].is_a?(Integer) && (2..6).cover?(topology["max_required_responses"])
+  fail_with.call("templates.#{template_ref}.topology must contain exactly #{topology_fields.join(', ')} plus optional light_review and plan_review") unless topology.is_a?(Hash) && (topology.keys - %w[light_review plan_review]).sort == topology_fields
+  # Light trivial/small review: one fresh light_contract_and_runtime pass, no separate
+  # closure pass, selected only by explicit topology.light_review true. Absent/false
+  # keeps the canonical >=2-pass topology (historical two-pass trivial/small stays valid).
+  fail_with.call("templates.#{template_ref}.topology.light_review must be boolean when present") if topology.key?("light_review") && ![true, false].include?(topology["light_review"])
+  light = topology["light_review"] == true
+  fail_with.call("templates.#{template_ref}.topology.light_review true requires trivial/small scope_size and discovery_pass_count 1") if light && !(%w[trivial small].include?(template["scope_size"]) && topology["discovery_pass_count"] == 1)
+  # Plan review (U4): one fresh plan_coverage_and_feasibility pass at any scope size, no
+  # closure pass, selected only by topology.plan_review true. Templates carry no
+  # review_subject, so plan_review true is accepted only on that one-pass plan shape and
+  # absent/false keeps multi-pass plan review acceptable.
+  fail_with.call("templates.#{template_ref}.topology.plan_review must be boolean when present") if topology.key?("plan_review") && ![true, false].include?(topology["plan_review"])
+  plan_review = topology["plan_review"] == true
+  fail_with.call("templates.#{template_ref}.topology.plan_review true requires discovery_pass_count 1 and no light_review") if plan_review && (light || topology["discovery_pass_count"] != 1)
+  fail_with.call("templates.#{template_ref}.topology.closure_verification_required must be false for plan review") if plan_review && topology["closure_verification_required"] != false
+  single_pass = light || plan_review
+  min_passes = single_pass ? 1 : 2
+  fail_with.call("templates.#{template_ref}.topology.discovery_pass_count must be 1 for light_review trivial/small or plan_review, or an integer from 2 through 4") unless topology["discovery_pass_count"].is_a?(Integer) && (single_pass || (2..4).cover?(topology["discovery_pass_count"]))
+  fail_with.call("templates.#{template_ref}.topology.max_required_responses must be an integer from #{min_passes} through 6") unless topology["max_required_responses"].is_a?(Integer) && (min_passes..6).cover?(topology["max_required_responses"])
+  fail_with.call("templates.#{template_ref}.topology.closure_verification_required must be false for light trivial/small review") if light && topology["closure_verification_required"] != false
   %w[security_specialist_triggered closure_verification_required].each { |field| fail_with.call("templates.#{template_ref}.topology.#{field} must be boolean") unless [true, false].include?(topology[field]) }
   fail_with.call("templates.#{template_ref}.topology.canonical_discovery_perspectives must exactly match the canonical perspective matrix") unless topology["canonical_discovery_perspectives"] == canonical_perspectives
   passes, tuples = template.values_at("expected_passes", "required_coverage_tuples")
   fail_with.call("templates.#{template_ref}.expected_passes must be a non-empty array") unless passes.is_a?(Array) && !passes.empty?
-  fail_with.call("templates.#{template_ref}.expected_passes must contain 2 through 6 records") unless (2..6).cover?(passes.length)
+  fail_with.call("templates.#{template_ref}.expected_passes must contain #{min_passes} through 6 records") unless (min_passes..6).cover?(passes.length)
   fail_with.call("templates.#{template_ref}.topology.max_required_responses must equal expected_passes length") unless topology["max_required_responses"] == passes.length
   fail_with.call("templates.#{template_ref}.required_coverage_tuples must be a non-empty array") unless tuples.is_a?(Array) && !tuples.empty?
   discovery_key = %w[trivial small].include?(template["scope_size"]) ? "trivial_small" : template["scope_size"]
-  required_discovery_perspectives = canonical_perspectives.fetch(discovery_key)
+  required_discovery_perspectives = plan_review ? %w[plan_coverage_and_feasibility] : light ? %w[light_contract_and_runtime] : canonical_perspectives.fetch(discovery_key)
   fail_with.call("templates.#{template_ref}.topology.discovery_pass_count must match scope_size canonical discovery count") unless topology["discovery_pass_count"] == required_discovery_perspectives.length
   pass_perspectives = passes.map { |review_pass| review_pass.is_a?(Hash) ? review_pass["perspective"] : nil }
   expected_perspectives = required_discovery_perspectives.dup
@@ -694,8 +818,12 @@ templates.each do |template_ref, template|
     required_fields = %w[assigned_scope coverage_obligations perspective prior_finding_visibility review_pass_id]
     fail_with.call("templates.#{template_ref}.expected_passes[#{index}] must contain exactly #{required_fields.join(', ')}") unless review_pass.is_a?(Hash) && review_pass.keys.sort == required_fields
     fail_with.call("templates.#{template_ref}.expected_passes[#{index}] is malformed") unless nonblank.call(review_pass["review_pass_id"]) && perspectives.include?(review_pass["perspective"]) && nonblank_strings.call(review_pass["assigned_scope"]) && nonblank_strings.call(review_pass["coverage_obligations"]) && %w[none closure_ledger].include?(review_pass["prior_finding_visibility"])
-    expected_prior_visibility = review_pass["perspective"] == "closure_verification" ? "closure_ledger" : "none"
-    fail_with.call("templates.#{template_ref}.expected_passes[#{index}].prior_finding_visibility must match its perspective") unless review_pass["prior_finding_visibility"] == expected_prior_visibility
+    allowed_visibility = case review_pass["perspective"]
+                         when "closure_verification" then %w[closure_ledger]
+                         when "light_contract_and_runtime", "plan_coverage_and_feasibility" then %w[none closure_ledger]
+                         else %w[none]
+                         end
+    fail_with.call("templates.#{template_ref}.expected_passes[#{index}].prior_finding_visibility must match its perspective") unless allowed_visibility.include?(review_pass["prior_finding_visibility"])
     fail_with.call("templates.#{template_ref}.expected_passes[#{index}] references scope outside its manifest") unless review_pass["assigned_scope"].all? { |scope_item_id| manifest_by_id.key?(scope_item_id) }
     pass_ids << review_pass["review_pass_id"]
     assigned_scope_ids.concat(review_pass["assigned_scope"])
@@ -1302,6 +1430,8 @@ validate_fixture() {
 
     validation_error="$(jq -r --arg skill_name "$skill_name" '
         def five_lens_case_ids:
+          ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-quick-normalizes-to-standard", "five-lens-retains-all-material-follow-ups"];
+        def historical_v4_five_lens_case_ids:
           ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-delegated-lenses-sequential-peer-fallback", "five-lens-quick-normalizes-to-standard", "five-lens-retains-all-material-follow-ups", "five-lens-sequential-fallback-preserves-process-evidence"];
         def packet_case_ids:
           ["packet-admission-coherent-medium-v14", "native-slice-execution-uses-dependencies-not-runner-topology", "isolated-independent-slices-integrate-before-review"];
@@ -1313,8 +1443,9 @@ validate_fixture() {
           elif $skill_name == "assistant-skill-creator" and (creator_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "creator behavior cases must declare their semantic validator"
           elif $skill_name == "assistant-workflow" and (packet_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "packet admission cases must declare their semantic validator"
           elif ($declared | length) == 0 then empty
-          elif $skill_name == "assistant-research" and ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the five five-lens assistant-research cases"
-          elif $skill_name == "assistant-research" and ($declared | all(.semantic_validator == "assistant-research.five_lens_v4")) then empty
+          elif $skill_name == "assistant-research" and ($declared | map(.id) | sort) == historical_v4_five_lens_case_ids and ($declared | all(.semantic_validator == "assistant-research.five_lens_v4")) then empty
+          elif $skill_name == "assistant-research" and ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the three current v5 five-lens assistant-research cases, or by exactly the five frozen historical v4 cases"
+          elif $skill_name == "assistant-research" and ($declared | all(.semantic_validator == "assistant-research.five_lens_v5")) then empty
           elif $skill_name == "assistant-skill-creator" and ($declared | map(.id) | sort) != (creator_case_ids | sort) then "semantic_validator must be declared by exactly the six fixed assistant-skill-creator cases"
           elif $skill_name == "assistant-skill-creator" and ($declared | all(.semantic_validator == "assistant-skill-creator.behavior_v1")) then empty
           elif $skill_name == "assistant-workflow" and ($declared | map(.id) | sort) != (packet_case_ids | sort) then "semantic_validator must be declared by exactly the three fixed packet-admission cases"

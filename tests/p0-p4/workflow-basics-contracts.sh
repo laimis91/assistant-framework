@@ -49,7 +49,7 @@ fi
 test_start "review delegation dispatches from applicable instruction triggers"
 review_trigger_failures=()
 for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::schema_version: \"9.0\"" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::schema_version: \"10.0\"" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::sole owner of Reviewer and QAEvaluator worker packet schemas" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::id: review-entry-fields" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::reviewed_scope" \
@@ -57,8 +57,8 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::policy_blocking_source" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::qa_evaluation_mode" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::delegation_triggered" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::delegation_opted_out" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::direct user request or applicable AGENTS.md or active skill instruction" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::subagents_unavailable" \
+    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::Formal review always triggers independent isolation" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::subagent_trigger_scope" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::subagent_trigger_scope" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::without a separate permission question"; do
@@ -172,7 +172,7 @@ for term in \
     "T10" \
     "risk_tier is set" \
     "controller_intensity is set" \
-    "build_execution_lane and required_agents/fallback roles are populated" \
+    "build_execution_lane permits direct_main at every size/risk" \
     "subagent_policy_state, subagent_execution_mode, and subagent_trigger_scope are initialized" \
     "candidate_scope_scan is populated from a quick read-only scan"; do
     if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
@@ -649,6 +649,10 @@ if ruby -ryaml -e '
   intensity_gate = gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_CONTROLLER_INTENSITY" }
   valid = input.fetch("execution_intent").fetch("infer_from").include?("When a request combines preparation/planning with an affirmative implementation request, use end_to_end unless the user explicitly prohibits implementation") &&
     input.fetch("build_execution_lane").fetch("infer_from").include?("For execution_intent == prepare_only, use none") &&
+    input.fetch("build_execution_lane").fetch("validation").include?("Build is inactive") &&
+    input.fetch("required_agents").fetch("validation").include?("requested/required fresh plan review") &&
+    input.fetch("required_agents").fetch("validation").include?("selected research lenses/peer") &&
+    gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_PREPARATION_ADMISSIBILITY" }.fetch("check").include?("requested/required fresh plan review and selected research lenses/peer") &&
     triage.include?("For execution_intent != prepare_only, medium+ work") &&
     input.fetch("controller_intensity").fetch("infer_from").include?("QA or harness requests alone never promote strict") &&
     input.fetch("controller_intensity").fetch("validation").include?("For execution_intent != prepare_only") &&

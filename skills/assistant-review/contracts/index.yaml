@@ -1,9 +1,7 @@
-# Applicability: structured review batches, worker handoffs, persisted results,
-# and workflow/QA consumers use the canonical v9 protocol. Human summaries may
-# omit empty/internal sections; frozen snapshots, independent passes, coverage,
-# verification, authorization, and the shared semantic guard apply to every selected review.
+# Canonical v10 applies to structured batches, handoffs, persisted results and
+# workflow/QA consumers; SKILL.md governs human-summary omissions.
 
-schema_version: "9.0"
+schema_version: "10.0"
 contract: index
 skill: assistant-review
 
@@ -24,8 +22,24 @@ load_sets:
         path: contracts/input.yaml
         section: fields
         key: name
-        names: [review_scope, review_material_snapshot, scope_size, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, harness_capable, qa_evaluation_mode, feature_preparation_scope, approved_feature_preparation_qa_acceptance_obligation, previously_fixed, persisted_v6_packet_migration, persisted_v7_0_packet_invalidation, persisted_v7_1_packet_invalidation, persisted_v7_2_packet_invalidation, persisted_v8_packet_invalidation]
+        names: [review_scope, review_material_snapshot, scope_size, controller_intensity, mode, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, architecture_decision_pack_review_required, architecture_design_mode, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source, harness_capable, qa_evaluation_mode, feature_preparation_scope, approved_feature_preparation_qa_acceptance_obligation, previously_fixed, review_subject, producer_version, fresh_dispatch]
     budget_words: 5000
+  legacy_history:
+    selectors:
+      - id: review-legacy-history-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [persisted_v6_packet_migration, persisted_v7_0_packet_invalidation, persisted_v7_1_packet_invalidation, persisted_v7_2_packet_invalidation, persisted_v8_packet_invalidation, historical_dispatch_binding]
+    budget_words: 3000
+  request_plan:
+    selectors:
+      - id: review-request-plan-reconciliation
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [request_plan_reconciliation]
+    budget_words: 2000
   architecture_pack_input:
     selectors:
       - id: review-architecture-pack-input
@@ -97,6 +111,7 @@ load_sets:
         names: [fresh_reviewer_context]
     budget_words: 5653
   return_validation:
+    references: [references/review-batch.md]
     selectors:
       - id: review-return-validation-bundle
         path: contracts/handoffs.yaml

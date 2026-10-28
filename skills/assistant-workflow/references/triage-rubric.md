@@ -57,8 +57,8 @@ through the existing post-Build Code Reviewer then QA Evaluator route.
 
 | Intensity | Use when |
 |---|---|
-| `light` | Small low-risk localized work; shared fanout alone does not promote Build. |
-| `standard` | Ordinary medium+ source-changing work when `harness_capable=false` and `qa_evaluation_mode=not_required`. |
+| `light` | Small low-risk localized work; shared fanout alone does not promote Build. Review uses one fresh-context reviewer with a compact result, plus one fresh re-review after a fix. |
+| `standard` | Ordinary medium+ source-changing work when `harness_capable=false` and `qa_evaluation_mode=not_required`. Review uses one fresh `plan_coverage_and_feasibility` plan-review pass (plus a fresh re-review after a material plan fix) and one final acceptance batch at the canonical per-size pass count (medium 3) that owns the spec obligations. |
 | `strict` | High/critical risk, or—only when `execution_intent != prepare_only`—`harness_capable == true`, `qa_evaluation_mode == required`, explicit harness/QA acceptance, or trace/replay. |
 
 Never infer `strict` from size/delegation. Small strict or required-QA execution
@@ -138,4 +138,4 @@ Explore feasibility; no unsupported claims.
 ## Required Agents
 
 Use `references/subagent-dispatch.md`; in `prepare_only`, QA is future only.
-Security -> `assistant-security`; parity -> Explorer; docs-only skips non-runnable Build.
+Security -> `assistant-security`; parity investigation may use Explorer when useful; docs-only skips non-runnable Build.

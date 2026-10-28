@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Pure v15 packet admission with authenticated v14/v12/v13 reconciliation.
+"""Pure v16 packet admission with authenticated v15/v14/v12/v13 reconciliation.
 
 See references/plan-template.md, Packet admission wire boundary. CLI reads one JSON
 request from stdin and writes one result. It cannot attest the caller's runtime facts.
+
+Caller-trust boundary: caller-resolved values, such as historical attestation,
+current digests and actor ids, are trusted inputs; the helper checks their
+consistency, not their truth. Independence comes from fresh reviewers, not from
+this script. For example, a caller that attests a migrated plan and relabels a
+current-snapshot acceptance as a historical v9 direct_fallback is outside it.
 """
 
 import sys
@@ -167,7 +173,7 @@ class PacketTestApplicability:
                 and identity.packet_definition_digest == digest(packet_definition(packet))
                 and digest(identity.input_identity) == digest(context["current_input_identities"][pid])
                 and row["build_execution_lane"] == context.get("build_execution_lane")
-                and row["build_execution_lane"] in {"bounded_executor", "separated_workers"}
+                and row["build_execution_lane"] in {"direct_main", "bounded_executor", "separated_workers"}
                 and CanonicalVerificationRef.parse(row["verification_decision_ref"], pid)
                     == CanonicalVerificationRef.parse(context["verification_decision_ref"], pid)
                 and strings(row["selected_check_ids"], pid) == packet["selected_check_ids"]
@@ -180,7 +186,7 @@ class PacketTestApplicability:
         return cls(row["status"], text(row["resolution_ref"], pid + ".resolution_ref"),
                    text(row["rationale"], pid + ".rationale"))
 
-    def assertion_source(self, evidence, actor, pid):
+    def assertion_source(self, evidence, actor, pid, actor_field="writer_actor_id"):
         if self.status == "not_applicable":
             require("tests" not in evidence, "test_applicability", pid,
                     "No-tests resolution requires omitted assertion-source evidence")
@@ -189,7 +195,7 @@ class PacketTestApplicability:
         require(tests.get("mode") in {"authored", "reuse"}, "test_ownership", pid, "Resolve selected assertion source")
         text(tests.get("evidence_ref"), pid + ".tests.evidence_ref")
         if tests["mode"] == "authored":
-            require(actor is not None and tests.get("writer_actor_id") == actor,
+            require(actor is not None and tests.get(actor_field) == actor,
                     "writer_lineage", pid, "Retain the actual native test author")
         return tests
 
@@ -497,8 +503,8 @@ def allocation(owner, checks, canonical_bindings, requirements, path):
     return ids, tuples, reqs
 
 
-def validate_plan(plan, context, version="15.0"):
-    require(plan.get("plan_schema_version") == version, "unsupported_version", "plan_schema_version", "Only canonical v15 is writable; validate original v14 before migration")
+def validate_plan(plan, context, version="16.0"):
+    require(plan.get("plan_schema_version") == version, "unsupported_version", "plan_schema_version", "Only canonical v16 is writable; authenticate historical definitions before migration")
     require(not any(key in plan for key in ("slice_manifest", "single_slice_rationale", "slice_verification_summary",
                                            "decomposition_plan_review", "current_task_packet", "verification_decision", "red_evidence", "red_phase", "worker_stage", "test_applicability")),
             "mixed_schema", "plan", "Plan has one packet collection and one specialist reference")
@@ -525,6 +531,8 @@ def validate_plan(plan, context, version="15.0"):
         pid = ExecutionPacketId.parse(packet.get("packet_id"), "packet_id").value
         require(pid not in seen, "duplicate", pid, "Duplicate canonical packet ID")
         seen.add(pid)
+        if context.get("build_execution_lane") in {"bounded_executor", "separated_workers"}:
+            ExecutionActorBinding.validate_delegated(context, pid)
         require(not any(key in packet for key in ("slice_id", "slice_name", "task_id", "verification_decision", "evidence_assessment", "tdd_cycle_log_ref", "red_evidence", "red_phase", "worker_stage", "test_applicability")),
                 "mixed_schema", pid, "Stored packets cannot contain legacy keys or mutable specialist copies")
         for field in ("name", "description", "observable_increment", "expected_success_signal", "deviation_rollback_rule"):
@@ -573,9 +581,22 @@ def validate_plan(plan, context, version="15.0"):
         execution = object_value(packet.get("execution"), pid + ".execution")
         require(execution.get("state") in STATES, "invalid_state", pid, "Unknown coordinator state")
         strings(execution.get("evidence_refs"), pid + ".evidence_refs")
+        require("build_execution_lane" not in execution or (isinstance(execution["build_execution_lane"], str)
+                and execution["build_execution_lane"] in {"direct_main", "bounded_executor", "separated_workers"}),
+                "malformed", pid + ".build_execution_lane", "Unknown dispatch lane stamp")
+        if "execution_actor_id" in execution:
+            actor = text(execution["execution_actor_id"], pid + ".execution_actor_id")
+            require(actor == actor.strip(), "malformed", pid + ".execution_actor_id", "Actor stamps compare exactly")
+        if "tdd_cycle_log_ref" in execution:
+            text(execution["tdd_cycle_log_ref"], pid + ".execution.tdd_cycle_log_ref")
         object_value(execution.get("input_identity"), pid + ".input_identity")
         for entry in array(execution.get("history"), pid + ".history"):
             object_value(entry, pid + ".history[]")
+            if "stamp_baseline" in entry:
+                baseline = object_value(entry["stamp_baseline"], pid + ".history[].stamp_baseline")
+                strings(baseline.get("evidence_refs"), pid + ".history[].stamp_baseline.evidence_refs")
+                require("tdd_cycle_log_ref" not in baseline or isinstance(baseline["tdd_cycle_log_ref"], str), "malformed",
+                        pid + ".history[].stamp_baseline.tdd_cycle_log_ref", "Expected string")
         if version == "14.0" or "recovery" in execution:
             recovery = object_value(execution.get("recovery"), pid + ".recovery")
             for field in ("attempt_count", "no_progress_count"):
@@ -676,6 +697,155 @@ def actual_red(packet, evidence):
     return cycle
 
 
+@dataclass(frozen=True)
+class ExecutionActorBinding:
+    kind: str
+    actor_id: str
+    runtime_evidence_ref: str
+
+    @classmethod
+    def parse(cls, context, pid):
+        value = object_value(object_value(context.get("execution_actor_bindings"),
+                             "execution_actor_bindings").get(pid), pid + ".execution_actor_binding")
+        require(set(value) == {"kind", "actor_id", "runtime_evidence_ref"}
+                and value.get("kind") in {"main", "delegated"}, "execution_actor", pid,
+                "Resolve independently retained actual execution actor")
+        return cls(value["kind"], text(value.get("actor_id"), pid), text(value.get("runtime_evidence_ref"), pid))
+
+    @classmethod
+    def validate_delegated(cls, context, pid):
+        if "execution_actor_bindings" not in context:
+            return
+        table = object_value(context["execution_actor_bindings"], "execution_actor_bindings")
+        if pid not in table:
+            return  # Existing delegated ownership remains sufficient.
+        binding = cls.parse(context, pid)
+        actor = object_value(context.get("writer_actor_ids", {}), "context.writer_actor_ids").get(pid)
+        require(binding.kind == "delegated" and (actor is None or binding.actor_id == actor),
+                "execution_actor", pid, "Supplied delegated binding must retain actual writer ownership")
+
+
+@dataclass(frozen=True)
+class RelevantVerificationInputIdentity:
+    values: dict
+
+    @classmethod
+    def parse(cls, value, pid):
+        fields = {"source", "tests", "configuration", "dependencies", "toolchain", "environment", "external_inputs"}
+        value = object_value(value, pid + ".relevant_input_identity")
+        require(set(value) == fields, "tdd_reuse", pid, "Resolve all relevant verification input categories")
+        for field in fields:
+            row = object_value(value[field], pid + "." + field)
+            require(set(row) == {"identity", "freshness"} and row.get("freshness") == "current",
+                    "tdd_reuse", pid, "Unknown, stale or mutable-unchecked inputs cannot support reuse")
+            text(row.get("identity"), pid + "." + field)
+        return cls(deepcopy(value))
+
+
+def reuse_green_requested(packet, evidence):
+    cycle = evidence.get("tdd_cycle") if isinstance(evidence, dict) else None
+    refactor = cycle.get("refactor") if isinstance(cycle, dict) else None
+    return bool(packet["tdd_applies"]) and isinstance(refactor, dict) and refactor.get("verification_disposition") == "reuse_green"
+
+
+def reject_failed_green_reuse(packet, evidence):
+    """Failed GREEN is never reused, before ordinary result validation runs."""
+    pid = packet["packet_id"]
+    green = evidence["tdd_cycle"].get("green")
+    require(isinstance(green, dict) and green.get("all_tests_pass") is True
+            and all(row.get("result") == "passed" for row in array(evidence.get("validation_results"), pid + ".validation_results")
+                    if isinstance(row, dict) and row.get("invocation_ref") == green.get("invocation_ref")),
+            "tdd_reuse", pid, "Failed GREEN is never reused; run the affected checks")
+
+
+# Real digests only: sentinel words such as unknown, n/a or none never match.
+REUSE_DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z", re.ASCII)
+
+
+def validate_green_reuse(packet, evidence, context):
+    """Validate a reference to original runs, never append or count a new result.
+
+    Default digest mode: no edit after GREEN and green.reuse_digest equals the
+    caller's independently resolved current_input_identities[pid].reuse_digest.
+    Detailed mode (explicit opt-in) keeps the seven-category identity and assessment.
+    """
+    pid = packet["packet_id"]
+    cycle = evidence["tdd_cycle"]
+    green, refactor = cycle["green"], cycle["refactor"]
+    require(cycle.get("schema_version") == "3.0" and refactor.get("changes_made") == "none needed"
+            and refactor.get("command_results") == [], "tdd_reuse", pid,
+            "Only explicit no-change v3 reuse has zero new invocations")
+    require(refactor["invocation_ref"] == green["invocation_ref"], "tdd_reuse", pid,
+            "Reuse retains the original GREEN invocation")
+    mode = cycle.get("reuse_identity_mode", "digest")
+    require(mode in {"digest", "detailed"}, "tdd_reuse", pid, "Unknown reuse identity mode")
+    require(any(row.get("selected_check_ids") == [packet["red_check_id"]]
+                and row.get("invocation_ref") == green["invocation_ref"] for row in evidence["validation_results"]),
+            "tdd_reuse", pid, "The singular compatibility reference identifies the actual GREEN target")
+    if mode == "detailed":
+        validate_detailed_reuse(packet, evidence, context)
+        return
+    resolved = object_value(context["current_input_identities"].get(pid), "current_input_identities." + pid)
+    current = resolved.get("reuse_digest")
+    original = green.get("reuse_digest")
+    require(isinstance(current, str) and bool(REUSE_DIGEST_PATTERN.fullmatch(current)), "tdd_reuse", pid,
+            "Missing, unknown or non-digest current snapshot digest cannot support reuse; use lowercase sha256:<64 hex>")
+    require(isinstance(original, str) and original == current, "tdd_reuse", pid,
+            "Snapshot changed after GREEN; run the affected checks")
+    if "green_invocation_refs" in refactor:
+        refs = strings(refactor["green_invocation_refs"], pid, True)
+        observed = {row["invocation_ref"] for row in evidence["validation_results"] + evidence.get("binding_results", [])
+                    if "invocation_ref" in row}
+        require(green["invocation_ref"] in refs and observed == set(refs), "tdd_reuse", pid,
+                "Reuse references exactly the real original due run set")
+
+
+def validate_detailed_reuse(packet, evidence, context):
+    """Opt-in detailed identity: seven categories plus a canonical reuse assessment."""
+    pid = packet["packet_id"]
+    green, refactor = evidence["tdd_cycle"]["green"], evidence["tdd_cycle"]["refactor"]
+    require(isinstance(refactor.get("green_invocation_refs"), list), "tdd_reuse", pid,
+            "Detailed reuse needs the retained original GREEN run set")
+    refs = strings(refactor["green_invocation_refs"], pid, True)
+    require(green["invocation_ref"] in refs, "tdd_reuse", pid, "Reuse retains the original GREEN invocation")
+    ref = text(refactor.get("reuse_assessment_ref"), pid)
+    table = object_value(context.get("verification_reuse_authority"), "context.verification_reuse_authority")
+    require(ref in table, "tdd_reuse", pid, "Resolve the referenced current canonical reuse assessment")
+    authority = object_value(table[ref], pid + ".reuse_authority")
+    require(authority.get("result") == "sufficient" and authority.get("evidence_ref") == ref
+            and authority.get("packet_id") == pid and authority.get("green_invocation_refs") == refs
+            and authority.get("verification_decision_ref") == context["verification_decision_ref"]
+            and authority.get("check_id") == packet["red_check_id"]
+            and authority.get("command") == packet["red_command"] and authority.get("cwd") == packet["red_cwd"]
+            and authority.get("oracle") == packet["expected_red_failure"]
+            and authority.get("post_green_changes") == [] and authority.get("fresh_run_obligations") == [],
+            "tdd_reuse", pid, "Current canonical assessment must resolve original runs and unchanged decision/oracle without fresh-run mandates")
+    original = RelevantVerificationInputIdentity.parse(green.get("relevant_input_identity"), pid)
+    # The assessment's current identity is self-attested; bind it to the
+    # independently resolved current packet inputs, never to the assessment alone.
+    resolved = object_value(context["current_input_identities"].get(pid), "current_input_identities." + pid)
+    require("relevant_input_identity" in resolved, "tdd_reuse", pid,
+            "Unknown current relevant verification inputs cannot support reuse")
+    current = RelevantVerificationInputIdentity.parse(resolved["relevant_input_identity"], pid)
+    require(original == RelevantVerificationInputIdentity.parse(authority.get("green_input_identity"), pid)
+            == RelevantVerificationInputIdentity.parse(authority.get("current_input_identity"), pid) == current,
+            "tdd_reuse", pid, "Relevant source/tests/commands/environment/external identity changed")
+    # Existing result rows remain the sole owners of each original invocation.
+    original_rows = evidence["validation_results"] + evidence.get("binding_results", [])
+    observed_refs = set()
+    commands = {}
+    for row in original_rows:
+        invocation = text(row.get("invocation_ref"), pid + ".invocation_ref")
+        require(invocation in refs, "tdd_reuse", pid,
+                "Every due target/regression/binding result must resolve to an original GREEN run")
+        observed_refs.add(invocation)
+        if "executed_command" in row:
+            command = row["executed_command"]
+            prior = commands.setdefault(invocation, command)
+            require(prior == command, "tdd_reuse", pid, "One retained invocation cannot identify different commands")
+    require(observed_refs == set(refs), "tdd_reuse", pid, "Reuse references exactly the real original due run set")
+
+
 def verified_packet(packet, evidence, plan, context, checks):
     pid = packet["packet_id"]
     workspace = object_value(context.get("workspace"), "context.workspace")
@@ -691,21 +861,40 @@ def verified_packet(packet, evidence, plan, context, checks):
             and digest(identity.input_identity) == digest(context["current_input_identities"][pid]),
             "stale_evidence", pid, "Evidence must bind current approved definition and relevant input identity")
     require(evidence.get("build_execution_lane") == context.get("build_execution_lane")
-            and context.get("build_execution_lane") in {"bounded_executor", "separated_workers"},
+            and context.get("build_execution_lane") in {"direct_main", "bounded_executor", "separated_workers"},
             "lane_evidence", pid, "Evidence must match the selected Build lane")
     text(evidence.get("implementation_evidence_ref"), pid)
     text(evidence.get("native_evidence_ref"), pid)
     if context["build_execution_lane"] == "separated_workers":
         text(evidence.get("builder_evidence_ref"), pid)
         require(evidence["builder_evidence_ref"] != evidence["implementation_evidence_ref"], "lane_evidence", pid, "Independent verification owner required")
-    actor = object_value(context.get("writer_actor_ids", {}), "context.writer_actor_ids").get(pid)
-    require(actor is not None and evidence.get("writer_actor_id") == actor,
+    direct = context["build_execution_lane"] == "direct_main"
+    actor_binding = ExecutionActorBinding.parse(context, pid) if direct else None
+    if direct:
+        require(actor_binding.kind == "main" and not any(key in evidence for key in
+                ("writer_actor_id", "builder_evidence_ref", "worker_role", "worker_stage")),
+                "execution_actor", pid, "Direct work retains actual main identity without child fields")
+        require(evidence.get("native_evidence_ref") == actor_binding.runtime_evidence_ref,
+                "execution_actor", pid, "Bind actual native main evidence")
+        require(not context.get("writer_actor_ids") and not context.get("builder_actor_ids"),
+                "execution_actor", pid, "Direct main context cannot claim child worker actors")
+    actor = actor_binding.actor_id if direct else object_value(context.get("writer_actor_ids", {}), "context.writer_actor_ids").get(pid)
+    require(actor is not None and evidence.get("execution_actor_id" if direct else "writer_actor_id") == actor,
             "writer_lineage", pid, "Verification retains the independently resolved native producer")
     text(actor, "writer_actor_ids." + pid)
-    PacketTestApplicability.parse(packet, plan, context).assertion_source(evidence, actor, pid)
+    # Dispatch stamps record the admitted lane/actor; verification and
+    # reconciliation cannot certify the packet under another lane or actor.
+    stamps = packet["execution"]
+    require(stamps.get("build_execution_lane", context["build_execution_lane"]) == context["build_execution_lane"],
+            "lane_evidence", pid, "Verification lane must match the admitted dispatch lane stamp")
+    require(stamps.get("execution_actor_id", actor) == actor, "execution_actor", pid,
+            "Verification actor must match the admitted dispatch actor stamp")
+    PacketTestApplicability.parse(packet, plan, context).assertion_source(evidence, actor, pid, "execution_actor_id" if direct else "writer_actor_id")
     self_check = object_value(evidence.get("self_check"), pid + ".self_check")
     require(self_check.get("result") == "passed", "self_check", pid, "Current self-check must pass")
     text(self_check.get("evidence_ref"), pid)
+    if reuse_green_requested(packet, evidence):
+        reject_failed_green_reuse(packet, evidence)
     validate_results(packet, evidence, checks, pid)
     if packet["tdd_applies"]:
         cycle = actual_red(packet, evidence)
@@ -715,7 +904,12 @@ def verified_packet(packet, evidence, plan, context, checks):
             require(entry.get("command") == packet["red_command"] and entry.get("cwd") == packet["red_cwd"],
                     "tdd_evidence", pid, "TDD phases must retain the authorizing invocation")
             text(entry.get("invocation_ref"), pid)
-        require(cycle["green"]["invocation_ref"] != cycle["refactor"]["invocation_ref"], "tdd_evidence", pid, "REFRACTOR rerun must be distinct")
+        if cycle["refactor"].get("verification_disposition") == "reuse_green":
+            validate_green_reuse(packet, evidence, context)
+        else:
+            require(cycle["refactor"].get("verification_disposition", "executed") == "executed",
+                    "tdd_evidence", pid, "Unknown REFACTOR verification disposition")
+            require(cycle["green"]["invocation_ref"] != cycle["refactor"]["invocation_ref"], "tdd_evidence", pid, "REFACTOR rerun must be distinct")
         text(cycle["green"].get("production_file"), pid)
         text(cycle["refactor"].get("changes_made"), pid)
 
@@ -724,9 +918,20 @@ def worker_stage(request, packet, context, plan):
     """Materialize the same packet through existing bounded/separated role stages."""
     pid = packet["packet_id"]
     lane = context.get("build_execution_lane")
-    require(lane in {"bounded_executor", "separated_workers"}, "lane_evidence", pid, "Resolve selected Build lane")
+    require(lane in {"direct_main", "bounded_executor", "separated_workers"}, "lane_evidence", pid, "Resolve selected Build lane")
     applicability = PacketTestApplicability.parse(packet, plan, context)
-    stage = request.get("worker_stage", "implementation")
+    direct = lane == "direct_main"
+    actor_field = "execution_actor_id" if direct else "writer_actor_id"
+    if direct:
+        require(not any(key in request for key in ("worker_stage", "worker_role", "current_task_packet", "inline_worker_stage")),
+                "execution_actor", pid, "Direct execution has no worker projection")
+        require(ExecutionActorBinding.parse(context, pid).kind == "main", "execution_actor", pid, "Direct main binding required")
+        require(not context.get("writer_actor_ids") and not context.get("builder_actor_ids"),
+                "execution_actor", pid, "Direct main context cannot claim child worker actors")
+    else:
+        require("execution_stage" not in request, "worker_stage", pid,
+                "Delegated lanes select worker_stage; execution_stage belongs to direct_main")
+    stage = request.get("execution_stage" if direct else "worker_stage", "implementation")
     tdd = packet["tdd_applies"]
     require(stage not in {"test_authoring", "pre_production_red"} or applicability.status == "required",
             "test_applicability", pid, "Test authoring/RED requires applicable tests")
@@ -736,14 +941,14 @@ def worker_stage(request, packet, context, plan):
     require(request.get("worker_role", role) == role, "worker_stage", pid, "Stage must retain selected-lane role ownership")
     # Resolve native actors, never configured role names.
     actors = object_value(context.get("writer_actor_ids", {}), "context.writer_actor_ids")
-    actor = actors.get(pid)
+    actor = ExecutionActorBinding.parse(context, pid).actor_id if direct else actors.get(pid)
     if actor is not None:
         text(actor, "writer_actor_ids." + pid)
     evidence = context.get("packet_evidence", {}).get(pid)
     if evidence is not None:
         object_value(evidence, pid + ".evidence")
         if applicability.status == "not_applicable":
-            applicability.assertion_source(evidence, actor, pid)
+            applicability.assertion_source(evidence, actor, pid, actor_field)
     cycle_progress = evidence.get("tdd_cycle") if isinstance(evidence, dict) else None
     if tdd and stage in {"test_authoring", "pre_production_red"}:
         require(cycle_progress is None and packet["execution"].get("tdd_cycle_log_ref") is None,
@@ -756,10 +961,10 @@ def worker_stage(request, packet, context, plan):
         if stage == "production":
             require(not (isinstance(prior_green, dict) and prior_green.get("all_tests_pass") is True)
                     and not prior_refactor, "worker_stage", pid, "Production cannot replay passed GREEN or REFACTOR")
-    if stage in {"test_authoring", "implementation"} or (stage == "production" and packet["execution"]["state"] == "PENDING" and (not tdd or lane == "bounded_executor")):
+    if stage in {"test_authoring", "implementation"} or (stage == "production" and packet["execution"]["state"] == "PENDING" and (not tdd or lane in {"direct_main", "bounded_executor"})):
         # Record actual actor; never force bootstrap or fabricate identity.
-        if evidence is not None and evidence.get("writer_actor_id") is not None:
-            require(actor is not None and evidence["writer_actor_id"] == actor,
+        if evidence is not None and evidence.get(actor_field) is not None:
+            require(actor is not None and evidence[actor_field] == actor,
                     "writer_lineage", pid, "Observed prior writer must match current native actor")
         return
     if stage == "pre_production_red":
@@ -773,7 +978,7 @@ def worker_stage(request, packet, context, plan):
         require(tests.get("mode") in {"authored", "reuse"}, "test_ownership", pid, "Resolve selected assertion source")
         text(tests.get("evidence_ref"), pid + ".tests.evidence_ref")
         if tests["mode"] == "authored":
-            require(actor is not None and tests.get("writer_actor_id") == actor == source.get("writer_actor_id"),
+            require(actor is not None and tests.get(actor_field) == actor == source.get(actor_field),
                     "writer_lineage", pid, "Selected tests must belong to the same actual writer")
         return
     require(packet["execution"]["state"] == "RUNNING", "worker_stage", pid, "Later stages materialize the same started packet")
@@ -784,10 +989,10 @@ def worker_stage(request, packet, context, plan):
             and digest(identity.input_identity) == digest(context["current_input_identities"][pid])
             and evidence.get("build_execution_lane") == lane, "stale_evidence", pid, "Stage evidence must bind current packet, inputs and lane")
     text(evidence.get("native_evidence_ref"), pid)
-    tests = applicability.assertion_source(evidence, actor, pid)
+    tests = applicability.assertion_source(evidence, actor, pid, actor_field)
     first_unobserved_production = (stage == "production" and (tests is None or tests["mode"] == "reuse")
-                                  and evidence.get("writer_actor_id") is None)
-    require(first_unobserved_production or (actor is not None and evidence.get("writer_actor_id") == actor),
+                                  and evidence.get(actor_field) is None)
+    require(first_unobserved_production or (actor is not None and evidence.get(actor_field) == actor),
             "writer_lineage", pid, "Later stages require the same observed native writer")
     if not tdd:
         text(evidence.get("implementation_evidence_ref"), pid)
@@ -803,6 +1008,122 @@ def worker_stage(request, packet, context, plan):
         text(green.get("invocation_ref"), pid)
     if stage == "refactor_verification":
         text(object_value(cycle.get("refactor"), pid + ".refactor").get("changes_made"), pid)
+
+
+STAMP_CODES = {"build_execution_lane": "lane_evidence", "execution_actor_id": "execution_actor"}
+
+
+STARTED_STATES = {"RUNNING", "BLOCKED", "VERIFIED"}
+STARTED_MARKER_REASONS = ("started packet returned to PENDING", "started packet left started state")
+STARTED_UNDER_STAMP_REASON = "started under current stamp"
+
+
+def retained_execution(packet, context):
+    """The packet's execution in the retained previous_plan, or None when absent."""
+    return next((row["execution"] for row in (context.get("previous_plan") or {}).get("implementation_steps", [])
+                 if row["packet_id"] == packet["packet_id"]), None)
+
+
+def retained_start(packet, context):
+    """Whether the packet started under its current stamp.
+
+    A retained started state counts, as does a started history row after the
+    latest stamp_baseline row (every row for a stamp without one). Rows before the
+    current stamp, such as carried legacy history, do not. Reconciliation records
+    a started row whenever a packet leaves a started state, and history rows cannot
+    be dropped, so the start marker is durable. Reconciliation already proved the
+    retained history is a prefix of the current one, so the current history suffices."""
+    old = retained_execution(packet, context)
+    history = packet["execution"]["history"]
+    marks = [index for index, row in enumerate(history) if "stamp_baseline" in row]
+    rows = history[marks[-1] + 1:] if marks else history
+    return (old is not None and old["state"] in STARTED_STATES) or any(row.get("state") in STARTED_STATES for row in rows)
+
+
+def stamp_baseline(execution):
+    """The evidence baseline recorded when the current stamp was written, or None for older stamps."""
+    rows = [row for row in execution["history"] if "stamp_baseline" in row]
+    if not rows:
+        return None
+    baseline = object_value(rows[-1]["stamp_baseline"], "execution.history[].stamp_baseline")
+    strings(baseline.get("evidence_refs"), "execution.history[].stamp_baseline.evidence_refs")
+    return baseline
+
+
+def stage_evidence_actors(proof):
+    """The packet evidence records and the actors they name."""
+    source = proof.get("test_source")
+    records = [proof] + [row for row in (proof.get("tests"), source, source.get("tests") if isinstance(source, dict) else None)
+                         if isinstance(row, dict)]
+    return records, {row.get(field) for row in records for field in ("writer_actor_id", "execution_actor_id")} - {None}
+
+
+def old_actor_stage_evidence(packet, context, old_lane, old_actor):
+    """Whether the stamped actor already left stage evidence on this packet.
+
+    Refs and the TDD log in the stamp baseline predate the stamp; only newer ones
+    are the old actor's. Stamps without a baseline row fall back to the retained
+    previous_plan; without either, attribution is unknown, so any of them count."""
+    execution = packet["execution"]
+    old = stamp_baseline(execution) or retained_execution(packet, context) or {}
+    if (set(execution["evidence_refs"]) - set(old.get("evidence_refs", []))
+            or ("tdd_cycle_log_ref" in execution and execution["tdd_cycle_log_ref"] != old.get("tdd_cycle_log_ref"))):
+        return True
+    proof = context.get("packet_evidence", {}).get(packet["packet_id"])
+    if not isinstance(proof, dict):
+        return False
+    records, actors = stage_evidence_actors(proof)
+    if old_actor is not None:
+        return old_actor in actors
+    # A lane-only stamp cannot attribute evidence; any stage output under that lane is the old actor's.
+    return (old_lane in {row.get("build_execution_lane") for row in records}
+            and bool(actors or {"implementation_evidence_ref", "builder_evidence_ref", "tdd_cycle", "test_source"} & proof.keys()))
+
+
+def dispatch_execution_stamps(packet, context, stage_call=False):
+    """Lane/actor stamps a dispatch writes only after every dispatch gate passes.
+
+    Returns the stamps, the replaced prior stamps (empty when none differ) and
+    whether this call fills the actor of a lane-only stamp."""
+    target, execution = packet["packet_id"], packet["execution"]
+    lane = context.get("build_execution_lane")
+    actual_actor = (ExecutionActorBinding.parse(context, target).actor_id if lane == "direct_main"
+                    else context.get("writer_actor_ids", {}).get(target))
+    stamps = {"build_execution_lane": lane}
+    if actual_actor is not None:
+        stamps["execution_actor_id"] = actual_actor
+    old = {field: execution[field] for field in STAMP_CODES if field in execution}
+    differing = [field for field in STAMP_CODES if field in old and old[field] != stamps.get(field)]
+    # A stamp lacking a field this dispatch writes is replaced too, under the same gate.
+    added = [field for field in STAMP_CODES if old and field not in old and field in stamps]
+    if not differing and not added:
+        return stamps, {}, False
+    # A lane-owned stage of the RUNNING packet fills a lane-only stamp's actor once.
+    if not differing and added == ["execution_actor_id"] and execution["state"] == "RUNNING" and stage_call:
+        require(retained_execution(packet, context) is not None, "execution_actor", target,
+                "stamp replacement needs the retained previous_plan")
+        require(not any("filled_stamps" in row for row in execution["history"]), "execution_actor", target,
+                "A lane-only stamp fills its actor once")
+        proof = context.get("packet_evidence", {}).get(target)
+        require(not isinstance(proof, dict) or stage_evidence_actors(proof)[1] <= {actual_actor}, "execution_actor", target,
+                "Stage evidence names another actor than the one filling the lane-only stamp")
+        return stamps, {}, True
+    # Only the retained previous_plan proves the packet never started under the
+    # current stamp; without it a RUNNING->PENDING regression is indistinguishable.
+    require(retained_execution(packet, context) is not None,
+            "lane_evidence" if "build_execution_lane" in differing else "execution_actor", target,
+            "stamp replacement needs the retained previous_plan")
+    # A newly admitted dispatch may replace the stamp of a packet that is not RUNNING,
+    # never started (a retained started state or any started history row; a
+    # RUNNING->PENDING regression cannot unlock it) and has no stage evidence from
+    # the old actor beyond the stamp baseline; otherwise stamps are immutable.
+    replaceable = (execution["state"] != "RUNNING" and not retained_start(packet, context)
+                   and not old_actor_stage_evidence(packet, context, old.get("build_execution_lane"), old.get("execution_actor_id")))
+    require(replaceable or "build_execution_lane" not in differing, "lane_evidence", target,
+            "A started packet or one with old-actor evidence cannot relabel its execution lane")
+    require(replaceable, "execution_actor", target,
+            "Retain the actual execution actor of a started packet or one with old-actor evidence")
+    return stamps, old, False
 
 
 def reconcile_execution(plan, context, checks):
@@ -826,15 +1147,40 @@ def reconcile_execution(plan, context, checks):
         require(bool(current[pid]), "input_identity", pid, "Current relevant-input identity required")
         if pid in previous_packets:
             old = previous_packets[pid]["execution"]
+            require(isinstance(old, dict) and old.get("state") in STATES, "malformed", "previous_plan." + pid + ".execution.state",
+                    "Retained execution state must be a known coordinator state")
             if "progress_guard_ref" in old:
                 require("progress_guard_ref" in execution and execution["progress_guard_ref"] == old["progress_guard_ref"],
                         "progress_mismatch", pid, "Retain the independently recorded task guard across canonical snapshots")
             require(old["state"] != "VERIFIED" or execution["state"] == "VERIFIED",
                     "invalid_state", pid, "Caller cannot downgrade retained VERIFIED work; only helper reconciliation invalidates it")
+            # Dispatch stamps persist (dispatch may leave PENDING); only a newly admitted
+            # dispatch replaces them, and stripping them cannot relabel lane or actor.
+            for field, code in STAMP_CODES.items():
+                require(field not in old or execution.get(field) == old[field], code, pid,
+                        "Retain the admitted dispatch " + field + " stamp")
+                require(field in old or field not in execution, code, pid,
+                        "Only an admitted dispatch writes the " + field + " stamp")
             # Recovery owner attests progress resets; spent attempts never reset.
             require(("recovery" not in old or ("recovery" in execution and execution["recovery"]["attempt_count"] >= old["recovery"]["attempt_count"]))
                     and digest(execution["history"][:len(old["history"])]) == digest(old["history"])
                     and set(old["evidence_refs"]) <= set(execution["evidence_refs"]), "recovery_mismatch", pid, "Resume cannot reset spent attempts or discard history/evidence")
+            # Only admission writes stamp-baseline and started-marker rows; rows appended
+            # beyond the retained prefix are the caller's and cannot carry them.
+            require(not any("stamp_baseline" in row or "filled_stamps" in row or row.get("reason") in STARTED_MARKER_REASONS
+                            for row in execution["history"][len(old["history"]):]), "recovery_mismatch", pid,
+                    "Only admission writes stamp_baseline / started-marker rows")
+            # A started packet that leaves its started state keeps a durable started marker.
+            if old["state"] in STARTED_STATES and execution["state"] not in STARTED_STATES:
+                reason = STARTED_MARKER_REASONS[0] if execution["state"] == "PENDING" else STARTED_MARKER_REASONS[1]
+                execution["history"].append({"state": old["state"], "input_identity": deepcopy(old.get("input_identity")),
+                                             "evidence_refs": deepcopy(old["evidence_refs"]), "reason": reason})
+        # Committing a stamped packet to RUNNING records, once per stamp, a durable started row.
+        if execution["state"] == "RUNNING" and any(field in execution for field in STAMP_CODES):
+            marks = [index for index, row in enumerate(execution["history"]) if "stamp_baseline" in row]
+            if not any(row.get("state") in STARTED_STATES for row in execution["history"][marks[-1] + 1 if marks else 0:]):
+                execution["history"].append({"state": "RUNNING", "input_identity": deepcopy(execution.get("input_identity")),
+                                             "evidence_refs": deepcopy(execution["evidence_refs"]), "reason": STARTED_UNDER_STAMP_REASON})
         if digest(execution.get("input_identity")) != digest(current[pid]):
             invalid.add(pid)
         if execution["state"] == "INVALIDATED" or set(packet["depends_on"]) & invalid:
@@ -855,23 +1201,45 @@ def reconcile_execution(plan, context, checks):
     return invalid
 
 
-def normalize_v14(source, context):
+def historical_attestation(source, context, version):
+    """Caller-attested historical producer of an approved v14/v15 definition.
+
+    A version label alone is not provenance. Absent attestation stays unknown
+    (current plan review remains due); a supplied contradicting one blocks.
+    """
+    value = context.get("historical_plan_attestation")
+    if value is None:
+        return None
+    path = "context.historical_plan_attestation"
+    obj = object_value(value, path)
+    require(set(obj) == {"schema_version", "verified", "producer_ref", "definition_sha256"}
+            and obj.get("schema_version") == version and obj.get("verified") is True
+            and obj.get("definition_sha256") == source["approved_plan_identity"]["definition_digest"] == digest(definition(source)),
+            "legacy_provenance", path, "Attestation must verify this historical version and approved definition")
+    text(obj.get("producer_ref"), path + ".producer_ref")
+    return deepcopy(obj)
+
+
+def _normalize_version(source, context, source_version, target_version, provenance_key, mapping_ref,
+                       attestation=None, resolved=False):
     """Normalize independently approved v14 representation and matching authority.
 
     Preserve original approval provenance; return canonical context for caller retention.
     """
-    validate_plan(source, context, "14.0")
+    validate_plan(source, context, source_version)
+    if not resolved:
+        attestation = historical_attestation(source, context, source_version)
     original_identity = deepcopy(source["approved_plan_identity"])
     plan, current = deepcopy(source), deepcopy(context)
-    plan["plan_schema_version"] = "15.0"
+    plan["plan_schema_version"] = target_version
     normalized_identity = {**original_identity, "definition_digest": digest(definition(plan))}
     plan["approved_plan_identity"] = deepcopy(normalized_identity)
     provenance = plan.setdefault("reconciliation_provenance", {})
-    provenance["workflow_migration"] = {
-        "producer_schema_version": "14.0", "consumer_schema_version": "15.0",
+    provenance[provenance_key] = {
+        "producer_schema_version": source_version, "consumer_schema_version": target_version,
         "source_sha256": digest(source), "original_approved_plan_identity": original_identity,
         "normalized_definition_digest": normalized_identity["definition_digest"],
-        "mapping_ref": "task-packet-admission.py#normalize_v14",
+        "mapping_ref": mapping_ref, "historical_attestation": deepcopy(attestation),
         "packet_mapping": [{"source_packet_id": p["packet_id"], "packet_id": p["packet_id"],
                             "packet_definition_digest": digest(packet_definition(p))} for p in source["implementation_steps"]]}
     # Identity-only migration; preserve execution facts literally.
@@ -894,11 +1262,22 @@ def normalize_v14(source, context):
         prior = current["previous_plan"]
         require(prior.get("approved_plan_identity") == original_identity, "resume_identity", "previous_plan", "Original migration snapshot must bind original approval")
         require(digest(definition(prior)) == original_identity["definition_digest"], "resume_identity", "previous_plan", "Original retained definition changed")
-        prior["plan_schema_version"] = "15.0"
+        prior["plan_schema_version"] = target_version
         prior["approved_plan_identity"] = deepcopy(normalized_identity)
         prior["reconciliation_provenance"] = deepcopy(provenance)
     current["approved_plan_identity"] = deepcopy(normalized_identity)
     return plan, current
+
+
+def normalize_v14(source, context, attestation=None, resolved=False):
+    return _normalize_version(source, context, "14.0", "15.0", "workflow_migration",
+                              "task-packet-admission.py#normalize_v14", attestation, resolved)
+
+
+def normalize_v15(source, context, attestation=None, resolved=False):
+    """Authenticate original v15 approval before identity-only representation migration."""
+    return _normalize_version(source, context, "15.0", "16.0", "workflow_v16_migration",
+                              "task-packet-admission.py#normalize_v15", attestation, resolved)
 
 
 def progress_checkpoint(context):
@@ -1052,9 +1431,259 @@ def authenticate_provenance(plan, context):
             "legacy_provenance", "reconciliation_provenance", "Canonical calls cannot add, alter or discard retained migration provenance")
 
 
+def unchanged_migrated_approval(plan):
+    """Only an attested historical producer grandfathers its unchanged original approval.
+
+    Retained provenance is re-derived, never trusted by shape: each migration row
+    must bind the current definition relabelled to its producer version, and the
+    attestation must pass the historical_attestation shape/digest checks against
+    that original identity. Callers still own the attestation itself (U3).
+    """
+    provenance = plan.get("reconciliation_provenance")
+    identity = plan["approved_plan_identity"]
+    current = definition(plan)
+    if not isinstance(provenance, dict) or identity["definition_digest"] != digest(current):
+        return False
+
+    def original_digest(version):
+        return digest({**current, "plan_schema_version": version})
+
+    def bound(row, producer, consumer, normalized):
+        return (isinstance(row, dict) and row.get("producer_schema_version") == producer
+                and row.get("consumer_schema_version") == consumer
+                and row.get("normalized_definition_digest") == normalized
+                and row.get("original_approved_plan_identity") == {**identity, "definition_digest": original_digest(producer)})
+
+    v16 = provenance.get("workflow_v16_migration")
+    if not bound(v16, "15.0", "16.0", identity["definition_digest"]):
+        return False
+    attestation = v16.get("historical_attestation")
+    if not isinstance(attestation, dict):
+        return False
+    if "workflow_migration" not in provenance:
+        version = "15.0"
+    else:
+        v15 = provenance["workflow_migration"]
+        if not (bound(v15, "14.0", "15.0", original_digest("15.0"))
+                and digest(v15.get("historical_attestation")) == digest(attestation)):
+            return False
+        version = "14.0"
+        if attestation.get("schema_version") in {"12.0", "13.0"}:
+            # Verified v12/v13 producer provenance attests its own normalized v14 plan.
+            producer = provenance.get("producer")
+            return (isinstance(producer, dict) and producer.get("verified") is True
+                    and attestation == {"schema_version": producer.get("schema_version"), "verified": True,
+                                        "producer_ref": producer.get("producer_ref"),
+                                        "source_sha256": provenance.get("source_sha256")}
+                    and isinstance(attestation["producer_ref"], str) and bool(attestation["producer_ref"].strip()))
+    return (set(attestation) == {"schema_version", "verified", "producer_ref", "definition_sha256"}
+            and attestation.get("schema_version") == version and attestation.get("verified") is True
+            and isinstance(attestation.get("producer_ref"), str) and bool(attestation["producer_ref"].strip())
+            and attestation.get("definition_sha256") == original_digest(version))
+
+
+def current_review_required(plan, context):
+    """Grandfather only the authenticated unchanged original approval/definition."""
+    unchanged = unchanged_migrated_approval(plan)
+    required = context["readiness"].get("plan_review_required")
+    if required is not None:
+        require(type(required) is bool, "review_authority", "readiness", "Review applicability must resolve independently")
+        if not required and not unchanged:
+            ref = text(context["readiness"].get("plan_review_applicability_ref"), "plan_review_applicability_ref")
+            fact = object_value(context.get("plan_review_applicability_authority", {}).get(ref), ref)
+            require(fact.get("approved_plan_identity") == plan["approved_plan_identity"]
+                    and fact.get("reason") in {"no_plan_required", "unchanged_already_running_approved_plan"},
+                    "review_authority", ref, "Resolve the exact current plan-review applicability exception")
+            if fact["reason"] == "unchanged_already_running_approved_plan":
+                previous = context.get("previous_plan")
+                require(isinstance(previous, dict) and previous.get("approved_plan_identity") == plan["approved_plan_identity"]
+                        and any(isinstance(p, dict) and isinstance(p.get("execution"), dict)
+                                and p["execution"].get("state") != "PENDING"
+                                for p in previous.get("implementation_steps") or []),
+                        "review_authority", ref,
+                        "An already-running exception needs the retained previous_plan of the same approval with started work")
+        return required
+    return not unchanged
+
+
+def exact_actor_id(value, path):
+    """Actor ids compare exactly; surrounding whitespace is rejected, never normalized.
+    Blank ids keep their existing missing/blank handling."""
+    require(not isinstance(value, str) or not value.strip() or value == value.strip(), "review_authority", path,
+            "Actor ids cannot carry surrounding whitespace")
+    return value
+
+
+def reviewed_work_actor_ids(context):
+    """Writer, Builder and execution actors (including the main binding) of reviewed work."""
+    actors = set()
+    for key in ("writer_actor_ids", "builder_actor_ids"):
+        for value in object_value(context.get(key) or {}, "context." + key).values():
+            actors.update(exact_actor_id(actor, "context." + key) for actor in (value if isinstance(value, list) else [value]))
+    for row in object_value(context.get("execution_actor_bindings") or {}, "context.execution_actor_bindings").values():
+        actors.add(exact_actor_id(object_value(row, "context.execution_actor_bindings[]").get("actor_id"),
+                                  "context.execution_actor_bindings"))
+    return actors
+
+
+def require_builder_actors_resolved(context, path):
+    """Separated Builder evidence needs its native actor, or independence fails open."""
+    if context.get("build_execution_lane") != "separated_workers":
+        return
+    builders = object_value(context.get("builder_actor_ids") or {}, "context.builder_actor_ids")
+    for pid, proof in object_value(context.get("packet_evidence") or {}, "context.packet_evidence").items():
+        if isinstance(proof, dict) and "builder_evidence_ref" in proof:
+            actors = builders.get(pid)
+            actors = actors if isinstance(actors, list) else [actors]
+            require(bool(actors) and all(isinstance(a, str) and a.strip() for a in actors),
+                    "review_authority", path, "Resolve builder_actor_ids for every packet with Builder evidence")
+
+
+def require_distinct_review_authorities(facts, path):
+    """Each current v10 review authority is a different native actor/invocation/dispatch."""
+    for ref, fact in facts.items():
+        if fact.get("producer_version") != "10.0":
+            continue
+        exact_actor_id(fact.get("actor_id"), path)
+        for other_ref, other in facts.items():
+            if other_ref == ref:
+                continue
+            for field in ("actor_id", "native_invocation_id", "fresh_dispatch_evidence_ref"):
+                require(fact.get(field) is None or fact.get(field) != other.get(field), "review_authority", path,
+                        "A current review authority cannot reuse another review's " + field)
+
+
+def require_independent_reviewer(fact, context, path):
+    actor = exact_actor_id(text(fact.get("actor_id"), path + ".actor_id"), path + ".actor_id")
+    require(actor not in reviewed_work_actor_ids(context), "review_authority", path,
+            "A review actor cannot be a writer, Builder or execution actor of the reviewed work")
+
+
+def validate_plan_review_order(ref, fact, plan, context):
+    """Plan review precedes approval: it binds the reviewed definition, never an approval_ref,
+    and the approval authority must reference that validated plan review."""
+    identity = plan["approved_plan_identity"]
+    reviewed = object_value(fact.get("reviewed_plan_identity"), "plan.reviewed_plan_identity")
+    require("approved_plan_identity" not in fact and set(reviewed) == {"task_identity", "plan_version", "definition_digest"}
+            and all(reviewed[key] == identity[key] for key in reviewed),
+            "review_authority", "plan.reviewed_plan_identity",
+            "Plan review binds exactly the approved task, plan version and definition without an approval_ref")
+    approvals = object_value(context.get("plan_approval_authorities"), "context.plan_approval_authorities")
+    approval = object_value(approvals.get(identity["approval_ref"]), "plan_approval_authorities." + identity["approval_ref"])
+    require(approval.get("approval_ref") == identity["approval_ref"]
+            and approval.get("approved_plan_identity") == identity
+            and approval.get("plan_review_ref") == ref,
+            "review_authority", "plan_approval_authorities", "Approval must reference the validated plan review; approval before review cannot authorize Build")
+
+
+def validate_review_authority(ref, subject, plan, context, snapshot=None):
+    """Consume the canonical Review v10 aggregate projection, never another progress ledger.
+
+    Only request_plan_reconciliation keeps the producer's names (review-tools.py);
+    fresh_dispatch_evidence_ref is the ref to Review's retained fresh_dispatch /
+    fresh_context_evidence.
+    A pre-Build plan review reconciles request and plan allocation (observed means
+    allocated); only final acceptance additionally proves delivered task-wide work
+    is finished with an explicit empty unfinished_task_wide_work.
+    """
+    text(ref, subject + ".review_ref")
+    require(subject in {"plan", "acceptance"}, "review_authority", subject, "Only plan or acceptance reviews reconcile the request")
+    authorities = context.get("review_authorities")
+    require(isinstance(authorities, dict) and ref in authorities, "review_authority", subject + ".review_ref",
+            subject + "_review_missing: the referenced current review is not retained in review_authorities")
+    fact = object_value(authorities[ref], subject)
+    require(fact.get("review_subject") == subject and fact.get("producer_version") == "10.0"
+            and fact.get("result") in {"CLEAN", "ISSUES_FIXED"} and fact.get("coverage_complete") is True
+            and (subject == "plan" or fact.get("approved_plan_identity") == plan["approved_plan_identity"])
+            and fact.get("canonical_review_ref") == ref,
+            "review_authority", subject, "Current canonical fresh independent review must bind this approved plan")
+    text(fact.get("fresh_dispatch_evidence_ref"), subject + ".fresh_dispatch_evidence_ref")
+    if subject == "plan":
+        require(fact.get("subagent_execution_mode") == "delegated" and fact.get("validation_status") == "validated"
+                and fact.get("terminal_state") == "completed", "review_authority", subject,
+                "Plan review needs completed validated fresh delegated authority; author, fallback or unvalidated review cannot substitute")
+        require_independent_reviewer(fact, context, subject)
+        validate_plan_review_order(ref, fact, plan, context)
+    coverage = object_value(fact.get("request_plan_reconciliation"), subject + ".request_plan_reconciliation")
+    for field in ("original_request_ref", "approved_plan_ref"):
+        text(coverage.get(field), subject + ".request_plan_reconciliation." + field)
+    # Plan review precedes approval: approved_plan_ref names the reviewed definition
+    # bound by reviewed_plan_identity, never the approval recorded afterwards.
+    require(subject != "plan" or coverage["approved_plan_ref"] != plan["approved_plan_identity"]["approval_ref"],
+            "review_authority", subject + ".request_plan_reconciliation.approved_plan_ref",
+            "Plan review references the reviewed plan definition, not a later approval")
+    expected = {row["requirement_id"] for row in context["requirements"]}
+    required = strings(coverage.get("required_requirement_ids"), subject + ".required_requirement_ids", True)
+    observed = strings(coverage.get("observed_requirement_ids"), subject + ".observed_requirement_ids")
+    require(set(required) == expected and set(observed) == expected
+            and coverage.get("unresolved_requirement_ids") == [] and coverage.get("unresolved_finding_ids") == [],
+            "review_authority", subject, "Original request and approved plan must reconcile without unresolved requirements or findings")
+    if subject == "acceptance":
+        require(coverage.get("unfinished_task_wide_work") == [], "review_authority", subject,
+                "Final reconciliation requires no unfinished task-wide work in the actual outcome")
+    elif "unfinished_task_wide_work" in coverage:
+        # Plan review: optional, may be nonempty and is not gated; type is string[].
+        for item in array(coverage["unfinished_task_wide_work"], subject + ".unfinished_task_wide_work"):
+            text(item, subject + ".unfinished_task_wide_work[]")
+    if snapshot is not None:
+        require(fact.get("snapshot_identity") == snapshot, "snapshot_mismatch", subject,
+                "Final review must bind the integrated current snapshot")
+    return fact
+
+
+def validate_completion_authority(gate, terminal, plan, context, snapshot):
+    """Bind current or genuinely completed historical acceptance to its owner."""
+    ref = text(terminal.get("canonical_review_ref"), gate + ".canonical_review_ref")
+    fact = object_value(object_value(context.get("review_authorities"), "review_authorities").get(ref), ref)
+    qa = gate == "qa"
+    roles = {"QAEvaluator"} if qa else {"CodeReviewer", "Reviewer"}
+    contract = "assistant-review/contracts/output.yaml#" + ("qa_evaluation_result" if qa else "final_summary")
+    require(fact.get("review_subject") == "acceptance" and fact.get("role") in roles
+            and fact.get("canonical_contract") == contract and fact.get("canonical_result_ref") == ref
+            and fact.get("canonical_review_ref") == ref and fact.get("terminal_state") == "completed"
+            and fact.get("coverage_complete") is True and fact.get("result") in {"CLEAN", "ISSUES_FIXED"},
+            "review_authority", gate, "Resolve the actual completed canonical acceptance source and role")
+    require(fact.get("snapshot_identity") == snapshot, "snapshot_mismatch", gate,
+            "Acceptance source must bind the actual current snapshot")
+    for field in ("actor_id", "native_invocation_id", "native_evidence_ref"):
+        text(fact.get(field), gate + "." + field)
+    version = fact.get("producer_version")
+    if not (version == "9.0" and fact.get("subagent_execution_mode") == "direct_fallback"
+            and unchanged_migrated_approval(plan)):
+        # Only the attested unchanged historical v9 fallback retains its original same-session policy.
+        require_independent_reviewer(fact, context, gate)
+        require_builder_actors_resolved(context, gate)
+    if version == "9.0":
+        provenance = plan.get("reconciliation_provenance", {})
+        original = [row.get("original_approved_plan_identity") for key, row in provenance.items()
+                    if key in {"workflow_migration", "workflow_v16_migration"} and isinstance(row, dict)]
+        require(unchanged_migrated_approval(plan) and fact.get("approved_plan_identity") in original
+                and fact.get("subagent_execution_mode") in {"delegated", "direct_fallback"},
+                "review_authority", gate, "Historical completion needs original approval/provenance and actual original policy")
+    else:
+        require(version == "10.0" and fact.get("approved_plan_identity") == plan["approved_plan_identity"]
+                and fact.get("validation_status") == "validated"
+                and fact.get("subagent_execution_mode") == "delegated",
+                "review_authority", gate, "Current acceptance needs validated fresh native authority independently of plan review")
+        text(fact.get("fresh_dispatch_evidence_ref"), gate + ".fresh_dispatch_evidence_ref")
+    if qa:
+        require(fact.get("final_verdict") in {"accepted", "accepted_with_concerns"},
+                "review_authority", gate, "Retain the actual QAEvaluator verdict; never manufacture CLEAN")
+        expected = object_value(context.get("qa_acceptance_context"), "qa_acceptance_context")
+        source = text(expected.get("source_ref"), "qa_acceptance_context.source_ref")
+        criteria = strings(expected.get("acceptance_criteria"), "qa_acceptance_context.acceptance_criteria", True)
+        observed = strings(fact.get("covered_acceptance_criteria"), gate + ".covered_acceptance_criteria", True)
+        require(len(criteria) == len(set(criteria)) and len(observed) == len(set(observed))
+                and set(observed) == set(criteria) and fact.get("acceptance_source_ref") == source,
+                "review_authority", gate, "Actual QA coverage must exactly match independently accepted scoped criteria")
+    elif version == "10.0":
+        validate_review_authority(ref, "acceptance", plan, context, snapshot)
+    return fact
+
+
 def admission(request):
     """Calculate an admission result without mutating the request or external state."""
-    snapshot, progress = None, None
+    snapshot, progress, rollback = None, None, []
     try:
         object_value(request, "request")
         boundary = request.get("boundary")
@@ -1071,14 +1700,25 @@ def admission(request):
         require(readiness.get("ready") is True and readiness.get("route_clear") is True,
                 "not_ready", "readiness", "Unresolved discovery/route-clear gates block executable work")
         source = object_value(request.get("plan"), "plan")
+        current_schema = source.get("plan_schema_version") == "16.0"
+        attestation, resolved = None, False
         if "plan_schema_version" not in source and ("schema_version" in source or "legacy" in context):
             snapshot = normalize_legacy(source, context)
+            # normalize_legacy already verified this producer and source digest.
+            producer = snapshot["reconciliation_provenance"]["producer"]
+            attestation = {"schema_version": producer["schema_version"], "verified": True,
+                           "producer_ref": producer["producer_ref"],
+                           "source_sha256": snapshot["reconciliation_provenance"]["source_sha256"]}
+            resolved = True
         else:
             require("schema_version" not in source, "mixed_schema", "plan", "Explicit verified legacy admission required")
             authenticate_provenance(source, context)
             snapshot = deepcopy(source)
         if snapshot.get("plan_schema_version") == "14.0":
-            snapshot, context = normalize_v14(snapshot, context)
+            snapshot, context = normalize_v14(snapshot, context, attestation, resolved)
+            attestation, resolved = snapshot["reconciliation_provenance"]["workflow_migration"]["historical_attestation"], True
+        if snapshot.get("plan_schema_version") == "15.0":
+            snapshot, context = normalize_v15(snapshot, context, attestation, resolved)
         checks, _ = validate_plan(snapshot, context)
         if boundary == "resume":
             require(context.get("previous_plan") is not None, "resume_identity", "context.previous_plan", "Resume needs independently retained last snapshot")
@@ -1105,10 +1745,26 @@ def admission(request):
             require(not any(packets[dep]["execution"]["state"] != "VERIFIED" for dep in packet["depends_on"]),
                     "prerequisite_unverified", target, "Every prerequisite must be evidence-bound VERIFIED")
             require(target not in invalid, "invalidated", target, "Reconcile invalidated inputs and evidence before dispatch or verification")
+        if boundary == "completion":
+            require(all(p["execution"]["state"] == "VERIFIED" for p in packets.values()), "incomplete_packets", "implementation_steps", "Every canonical packet must be VERIFIED")
+            # As at verification, unstamped current-schema VERIFIED work needs the retained
+            # snapshot; a historical plan normalized by this call predates stamps.
+            for pid, p in packets.items():
+                require(not current_schema or "build_execution_lane" in p["execution"] or context.get("previous_plan") is not None,
+                        "lane_evidence", pid, "VERIFIED work needs its admission stamps or the retained previous_plan")
+        plan_review = None
+        if boundary in {"dispatch", "verification", "completion"} and current_review_required(snapshot, context):
+            # Dispatch, verification and completion each re-evaluate the one plan-review authority.
+            require(context["readiness"].get("plan_review_ref") is not None, "review_authority", "plan.review_ref",
+                    "plan_review_missing: a current plan review is due; obtain it and record the approval that references it")
+            plan_review = validate_review_authority(context["readiness"]["plan_review_ref"], "plan", snapshot, context)
         if boundary == "dispatch":
-            require(packet["execution"]["state"] == "PENDING" or (packet["execution"]["state"] == "RUNNING" and "worker_stage" in request),
-                    "invalid_state", target, "Materialize PENDING work or an explicit stage of the same RUNNING packet")
+            lane = context.get("build_execution_lane")
+            stage_key = "execution_stage" if lane == "direct_main" else "worker_stage"
+            require(packet["execution"]["state"] == "PENDING" or (packet["execution"]["state"] == "RUNNING" and stage_key in request),
+                    "invalid_state", target, "Materialize PENDING work or an explicit lane-owned stage of the same RUNNING packet")
             worker_stage(request, packet, context, snapshot)
+            execution_stamps, replaced_stamps, filled_actor = dispatch_execution_stamps(packet, context, stage_key in request)
             source_writer = bool(packet["files_to_create"] or packet["files_to_modify"])
             workspace = object_value(context.get("workspace"), "context.workspace")
             active_ids = set(strings(workspace.get("active_source_writer_ids"), "workspace.active_source_writer_ids"))
@@ -1136,10 +1792,13 @@ def admission(request):
             require(packet["execution"]["state"] in {"RUNNING", "VERIFIED"}, "invalid_state", target, "Only started work can verify")
             if "action_admission_ref" in packet["execution"]:
                 _execution_lineage(packet, packet["execution"], context, progress)
+            # Without a retained snapshot, stripped stamps are indistinguishable from absent ones.
+            require("build_execution_lane" in packet["execution"] or context.get("previous_plan") is not None,
+                    "lane_evidence", target, "Dispatched work needs its admission stamps or the retained previous_plan")
             verified_packet(packet, context["packet_evidence"].get(target), snapshot, context, checks)
+            rollback.append((packet, deepcopy(packet["execution"])))
             packet["execution"]["state"] = "VERIFIED"
         if boundary == "completion":
-            require(all(p["execution"]["state"] == "VERIFIED" for p in packets.values()), "incomplete_packets", "implementation_steps", "Every canonical packet must be VERIFIED")
             for pid, execution in marked_executions:
                 if "action_admission_ref" in execution:
                     lineage = _execution_lineage(packets[pid], execution, context, progress)
@@ -1171,6 +1830,19 @@ def admission(request):
             gates = strings(context.get("required_terminal_gates"), "required_terminal_gates")
             require("independent_review" in gates, "terminal_gate", "required_terminal_gates", "Packet plans retain independent review")
             gate_evidence = object_value(completion.get("terminal_gates"), "completion.terminal_gates")
+            review = validate_completion_authority("independent_review",
+                object_value(gate_evidence.get("independent_review"), "completion.independent_review"),
+                snapshot, context, current_snapshot)
+            consumed = {review["canonical_review_ref"]: review}
+            if plan_review is not None:
+                consumed[plan_review["canonical_review_ref"]] = plan_review
+            if "qa" in gates:
+                qa = validate_completion_authority("qa", object_value(gate_evidence.get("qa"), "completion.qa"),
+                                                   snapshot, context, current_snapshot)
+                consumed[qa["canonical_review_ref"]] = qa
+            # QA and final review differ by role, so their refs differ; this also
+            # covers QA versus final review actor/invocation/dispatch reuse.
+            require_distinct_review_authorities(consumed, "completion.terminal_gates")
             for gate in gates:
                 fact = object_value(gate_evidence.get(gate), "completion." + gate)
                 require(fact.get("passed") is True and fact.get("snapshot_identity") == current_snapshot
@@ -1180,7 +1852,7 @@ def admission(request):
                   "canonical_plan": snapshot}
         if progress is not None:
             result["canonical_progress_state"] = progress.wire()
-        if packet is not None:
+        if packet is not None and context["build_execution_lane"] != "direct_main":
             projection = deepcopy(packet)
             projection["verification_decision"] = deepcopy(context["verification_decision"])
             projection["evidence_assessment"] = deepcopy(object_value(context.get("evidence_assessment"), "context.evidence_assessment"))
@@ -1211,15 +1883,38 @@ def admission(request):
             result["current_task_packet"] = projection
         final_progress = progress
         prior_execution = deepcopy(packet["execution"]) if boundary == "dispatch" else None
-        if boundary == "dispatch":
-            # Projection gates precede unblock consumption and admission writes.
-            final_progress = progress_admission(packet, context, progress, snapshot)
-            if final_progress is not None:
-                admission_ref = final_progress.action_admission.admission_ref
-                packet["execution"]["action_admission_ref"] = admission_ref
-                result["current_task_packet"]["execution"]["action_admission_ref"] = admission_ref
-                result["current_task_packet"]["progress_state"] = final_progress.wire()
         try:
+            if boundary == "dispatch":
+                # Projection gates precede unblock consumption and admission writes.
+                final_progress = progress_admission(packet, context, progress, snapshot)
+                writes = dict(execution_stamps)
+                if final_progress is not None:
+                    writes["action_admission_ref"] = final_progress.action_admission.admission_ref
+                if replaced_stamps or not any(field in packet["execution"] for field in STAMP_CODES):
+                    # Writing or replacing a stamp records its evidence baseline.
+                    baseline = {"evidence_refs": deepcopy(packet["execution"]["evidence_refs"])}
+                    if isinstance(packet["execution"].get("tdd_cycle_log_ref"), str):
+                        baseline["tdd_cycle_log_ref"] = deepcopy(packet["execution"]["tdd_cycle_log_ref"])
+                    row = {"state": packet["execution"]["state"], "stamp_baseline": baseline,
+                           "reason": "dispatch stamp baseline"}
+                    if replaced_stamps:
+                        row = {"state": packet["execution"]["state"], "replaced_stamps": deepcopy(replaced_stamps),
+                               "input_identity": deepcopy(packet["execution"].get("input_identity")),
+                               "evidence_refs": deepcopy(packet["execution"]["evidence_refs"]), "stamp_baseline": baseline,
+                               "reason": "stamp replaced by a newly admitted dispatch before start or old-actor evidence"}
+                    writes["history"] = packet["execution"]["history"] + [row]
+                if filled_actor:
+                    writes["history"] = packet["execution"]["history"] + [{"state": "RUNNING", "filled_stamps": {"execution_actor_id": execution_stamps["execution_actor_id"]},
+                                                                           "reason": "actor resolved for lane-only stamp"}]
+                packet["execution"].update(writes)
+                if "current_task_packet" in result:
+                    result["current_task_packet"]["execution"].update(deepcopy(writes))
+                    if final_progress is not None:
+                        result["current_task_packet"]["progress_state"] = final_progress.wire()
+                if replaced_stamps and "execution_actor_id" not in execution_stamps:
+                    # The replacing dispatch resolved no actor; the old actor stamp is history only.
+                    packet["execution"].pop("execution_actor_id", None)
+                    result.get("current_task_packet", {}).get("execution", {}).pop("execution_actor_id", None)
             preserve_execution_pairs(snapshot, context, final_progress)
         except Exception:
             if prior_execution is not None:
@@ -1238,6 +1933,8 @@ def admission(request):
         return result
     except AdmissionError as error:
         result = {"status": "blocked", "code": error.code, "path": error.path, "details": error.details}
+        for owner, execution in rollback:  # A blocked result never reports VERIFIED.
+            owner["execution"] = execution
         if snapshot is not None:
             result["canonical_plan"] = snapshot
         if progress is not None:
@@ -1245,6 +1942,8 @@ def admission(request):
         return result
     except PROGRESS.ProgressError as error:
         result = {"status": "blocked", "code": error.code, "path": "context.progress", "details": str(error)}
+        for owner, execution in rollback:
+            owner["execution"] = execution
         if snapshot is not None:
             result["canonical_plan"] = snapshot
         if progress is not None:

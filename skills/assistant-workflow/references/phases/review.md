@@ -18,8 +18,8 @@ compact applicability evidence. Only shared, materially unresolved, or
 explicitly carried expanded work requires the common pre-build result and its
 completion projection when `execution_intent != prepare_only`; prepare-only
 work retains discovery applicability and artifact identity without implementation
-completion claims. Evidenced local work keeps ordinary relevant verification and
-self-review without a Node gate. Shared fanout alone does not activate an
+completion claims. Evidenced local work keeps ordinary relevant verification, a
+local self-check and fresh independent review without a Node gate. Shared fanout alone does not activate an
 Architecture Decision Pack, strict controller, QA, or a different Build/delegation lane.
 
 ## Progress Updates
@@ -37,11 +37,10 @@ deviation, dispatch, and verification signals remain explicit when applicable.
 Print: `--- PHASE: REVIEW ---`
 
 Load `references/review-qa-router.md`. Reused validation evidence never replaces
-Spec Review, independent code review, or a current final review snapshot. Light work uses its compact fresh-review
-lane as a fresh self-review without worker or independent-review dispatch
-evidence. Expanded impact instead records canonical `assistant-review` final-summary and delegation-path refs, without changing light Build. Standard/strict work uses Stage 1 Spec Review and Stage 2 independent
-Code Quality Review through `assistant-review`; Stage 3 QA Evaluation runs only
-when `qa_evaluation_mode=required`.
+the final fresh acceptance review or a current final review snapshot. Light work records a compact review result. Local self-check prepares the required
+newly created fresh-context independent reviewer (Codex `fork_turns=none`,
+self-contained handoff); no author fallback certifies completion. Persisted/executable admission uses the structured review path; a Pack or expanded impact instead records canonical `assistant-review` final-summary and delegation-path refs, without changing light Build. Standard/strict work uses one final fresh acceptance review through `assistant-review` (`review_subject=acceptance`) that also owns the spec obligations; Stage 1 Spec Review is retired. Stage 3 QA Evaluation runs only
+when `qa_evaluation_mode=required`. Always pass the triage `controller_intensity` to assistant-review.
 
 Before any review lane, pass the unchanged `verification_decision`, current
 `evidence_assessment`, actual selected-check results, and omitted-check
@@ -55,15 +54,15 @@ advice or a score cannot expand scope without an important gap and the existing
 selection/approval route. Preserve unresolved evidence gaps;
 review cannot upgrade them to sufficient or replace validation.
 
-For standard/strict work, run the stages in order:
+For standard/strict work, run the stages in order (Stage 1 Spec Review is retired):
 
-1. Print `>> Stage 1: Spec Review`; load `references/prompts/spec-review.md`
-   and require Spec Review PASS before quality review.
-2. Print `>> Stage 2: Code Quality Review - loading assistant-review SKILL.md`;
-   load and follow `assistant-review` SKILL.md and contracts. When an Architecture Decision Pack applies, pass its fresh compact review projection, including design-pressure checks, and require `architecture_decision_pack_review_required=true`; assistant-review then owns the checklist result. Add Code Reviewer
-   to `Required agents` before Stage 2; assistant-review solely owns Reviewer
+- Print `>> Stage 2: Acceptance Review - loading assistant-review SKILL.md`;
+   load and follow `assistant-review` SKILL.md and contracts with
+   `review_subject=acceptance`. Assign the `references/prompts/spec-review.md`
+   obligations (original request, requirement IDs, approved plan and delivery)
+   to a pass of this batch; a fix needs a fresh complete batch. When an Architecture Decision Pack applies, pass its fresh compact review projection, including design-pressure checks, and require `architecture_decision_pack_review_required=true`; assistant-review then owns the checklist result. assistant-review solely owns Reviewer
    and QAEvaluator packet schemas and any Reviewer compatibility routing.
-3. Print `>> Stage 3: QA Evaluation - loading assistant-review references/qa-evaluation-loop.md` only when QA is required.
+- Print `>> Stage 3: QA Evaluation - loading assistant-review references/qa-evaluation-loop.md` only when QA is required.
 
 After review, write `review_result` with current producer version, canonical
 result/delegation refs, exact `final_review_snapshot_id`, and final identity

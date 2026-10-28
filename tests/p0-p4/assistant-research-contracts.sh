@@ -10,7 +10,16 @@ research_index="$FRAMEWORK_DIR/skills/assistant-research/contracts/index.yaml"
 research_output="$FRAMEWORK_DIR/skills/assistant-research/contracts/output.yaml"
 research_phase_gates="$FRAMEWORK_DIR/skills/assistant-research/contracts/phase-gates.yaml"
 research_handoffs="$FRAMEWORK_DIR/skills/assistant-research/contracts/handoffs.yaml"
-research_evals="$FRAMEWORK_DIR/skills/assistant-research/evals/cases.json"
+current_research_evals="$FRAMEWORK_DIR/skills/assistant-research/evals/cases.json"
+# Original v4 source-policy contexts and verdicts are historical compatibility
+# controls, never current-v5 completion. Fixture bytes are the integrated e9a93f30
+# skills/assistant-research/evals/cases.json, preserved without model rewriting.
+historical_research_skill="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-v4-reader.XXXXXX")/assistant-research"
+p0p4_register_cleanup "$(dirname "$historical_research_skill")"
+cp -R "$FRAMEWORK_DIR/skills/assistant-research" "$historical_research_skill"
+cp "$FRAMEWORK_DIR/tests/p0-p4/fixtures/research-v4-cases.json" "$historical_research_skill/evals/cases.json"
+cmp "$FRAMEWORK_DIR/tests/p0-p4/fixtures/research-v4-cases.json" "$historical_research_skill/evals/cases.json"
+research_evals="$historical_research_skill/evals/cases.json"
 research_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assistant-research-fixtures.sh"
 
@@ -342,7 +351,7 @@ research_forbidden_response_is_rejected() {
     write_research_eval_responses "$eval_dir"
     printf '%s\n' "$forbidden" >>"$eval_dir/assistant-research/$case_id.txt"
 
-    if "$research_eval_runner" --responses "$eval_dir" --skill assistant-research >"$eval_output" 2>&1; then
+    if "$research_eval_runner" --responses "$eval_dir" --skill "$historical_research_skill" >"$eval_output" 2>&1; then
         return 1
     fi
 
@@ -368,7 +377,7 @@ research_old_five_lens_response_is_rejected() {
         printf '%s\n' 'PERSPECTIVE SCAN' 'QUESTION TRACE / EVIDENCE LEDGER' 'CONTRADICTION MAP' 'SYNTHESIS' 'PEER REVIEW' 'SOURCES / VERIFIED URLS' 'GAPS'
     } >"$eval_dir/assistant-research/$case_id.txt"
 
-    if "$research_eval_runner" --responses "$eval_dir" --skill assistant-research >"$eval_output" 2>&1; then
+    if "$research_eval_runner" --responses "$eval_dir" --skill "$historical_research_skill" >"$eval_output" 2>&1; then
         return 1
     fi
 
@@ -443,7 +452,7 @@ research_official_response_mutation_is_rejected() {
     fi
     write_research_eval_responses "$eval_dir"
     response_path="$eval_dir/assistant-research/$case_id.txt"
-    if ! "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1; then
+    if ! "$research_eval_runner" --responses "$eval_dir" --skill "$historical_research_skill" --case "$case_id" >"$eval_output" 2>&1; then
         printf 'official runner rejected its generated baseline: %s\n' "$mutation" >&2
         return 1
     fi
@@ -640,7 +649,7 @@ research_official_response_mutation_is_rejected() {
             ;;
     esac
 
-    if "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1; then
+    if "$research_eval_runner" --responses "$eval_dir" --skill "$historical_research_skill" --case "$case_id" >"$eval_output" 2>&1; then
         printf 'official runner accepted mutation: %s\n' "$mutation" >&2
         return 1
     fi
@@ -673,7 +682,7 @@ research_mixed_peer_fallback_official_runner_is_accepted() {
     response_path="$eval_dir/assistant-research/$case_id.txt"
     report="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings | join("\\n")' "$research_evals")"
     research_jcs_node build delegated_peer_fallback "$report" >"$response_path"
-    "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1
+    "$research_eval_runner" --responses "$eval_dir" --skill "$historical_research_skill" --case "$case_id" >"$eval_output" 2>&1
 }
 
 research_high_stakes_stronger_official_runner_is_accepted() {
@@ -767,7 +776,7 @@ research_fallback_revise_official_runner_is_accepted() {
     response_path="$eval_dir/assistant-research/$case_id.txt"
     report="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings | join("\\n")' "$research_evals")"
     research_jcs_node build sequential_fallback_revise "$report" >"$response_path"
-    "$research_eval_runner" --responses "$eval_dir" --skill assistant-research --case "$case_id" >"$eval_output" 2>&1
+    "$research_eval_runner" --responses "$eval_dir" --skill "$historical_research_skill" --case "$case_id" >"$eval_output" 2>&1
 }
 
 research_typed_url_label_validators_match() {
@@ -1089,7 +1098,7 @@ for file in \
     "$research_output" \
     "$research_phase_gates" \
     "$research_handoffs"; do
-    if ! grep -Fq -- 'schema_version: "4.0"' "$file"; then
+    if ! grep -Fq -- 'schema_version: "5.0"' "$file"; then
         five_lens_process_missing+=("${file#$FRAMEWORK_DIR/}: v3 schema version")
     fi
 done
@@ -1118,7 +1127,7 @@ for file_and_term in \
     "$research_handoffs::all lens assignment packets are frozen before first dispatch" \
     "$research_phase_gates::root-only contradiction map and initial synthesis" \
     "$research_handoffs::ResearchPeerReviewer" \
-    "$research_skill::five independent sibling-blind assignments"; do
+    "$research_skill::five distinct sibling-blind lens actors"; do
     file="${file_and_term%%::*}"
     term="${file_and_term#*::}"
     if ! p0p4_contains_text "$file" "$term"; then
@@ -1128,8 +1137,8 @@ done
 for term in \
     'capacity-bounded waves' \
     'later assignments cannot consume earlier returns or synthesis' \
-    'sequential root passes are never called independent delegation' \
-    'reduced independence' \
+    'Current v5 has no sequential fallback for lenses or peer review' \
+    'record the run blocked/incomplete' \
     'A distinct peer reviewer, separate from all five lens agents'; do
     if ! p0p4_contains_text_ci "$five_lens_reference" "$term"; then
         five_lens_process_missing+=("five-lens-briefing.md: $term")
@@ -1164,7 +1173,7 @@ for term in \
     '- name: subagent_policy_state' \
     'enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]' \
     '- name: subagent_execution_mode' \
-    'enum_values: [delegated, sequential_fallback, not_applicable]' \
+    'enum_values: [delegated, not_applicable]' \
     '- name: subagent_trigger_scope' \
     '- name: policy_blocking_source' \
     '- name: sequential_fallback_evidence'; do
@@ -1177,11 +1186,16 @@ for term in \
     'subagent_execution_mode' \
     'subagent_trigger_scope' \
     'policy_blocking_source' \
-    'sequential_fallback_evidence'; do
+    'research_dispatch_authority' \
+    'producer_version'; do
     if ! grep -Fq -- "$term" "$research_index"; then
-        policy_and_fallback_missing+=("contracts/index.yaml entry selector: $term")
+        policy_and_fallback_missing+=("contracts/index.yaml load set: $term")
     fi
 done
+# Historical v4 fallback evidence is not part of the current v5 entry load set.
+if awk '/^  entry:/ { active = 1 } active && /^  current_phase:/ { exit } active { print }' "$research_index" | grep -Fq -- 'sequential_fallback_evidence'; then
+    policy_and_fallback_missing+=("contracts/index.yaml entry selector still loads historical sequential_fallback_evidence")
+fi
 for term in \
     '- name: lens_execution_mode' \
     '- name: peer_review_execution_mode' \
@@ -1419,10 +1433,10 @@ for term in \
     'condition: "research_method == five_lens_briefing and lens_execution_mode == delegated"' \
     'exactly five frozen root passes' \
     'no native dispatch identity' \
-    'reviewer-only fallback' \
+    'Historical v4 only, never current v5 completion: a reviewer-only sequential peer record' \
     'fresh peer fallback pass ID' \
     'no fabricated native identity' \
-    'valid fresh fallback completed'; do
+    'valid fresh peer fallback that completed under original v4 authority'; do
     if ! printf '%s\n%s\n%s\n' "$search_gate_schema" "$synthesize_gate_schema" "$verify_gate_schema" | grep -Fq -- "$term"; then
         v3_process_repair_missing+=("phase gates: $term")
     fi
@@ -1551,7 +1565,7 @@ for file in \
     "$FRAMEWORK_DIR/skills/assistant-research/contracts/output.yaml" \
     "$FRAMEWORK_DIR/skills/assistant-research/contracts/phase-gates.yaml" \
     "$research_handoffs"; do
-    if ! grep -Fq -- 'schema_version: "4.0"' "$file"; then
+    if ! grep -Fq -- 'schema_version: "5.0"' "$file"; then
         follow_up_missing+=("${file#$FRAMEWORK_DIR/}: v3 migration version")
     fi
 done
@@ -2111,10 +2125,25 @@ jq 'del(.cases[] | select(.id == "five-lens-quick-normalizes-to-standard") | .se
     "$semantic_fixture" >"$semantic_fixture.next" && mv "$semantic_fixture.next" "$semantic_fixture"
 partial_semantic_validator_declaration_rejected=false
 if ! "$research_eval_runner" --validate-fixture --skill "$semantic_fixture_root/assistant-research" >"$semantic_fixture_output" 2>&1 \
-    && grep -Fq -- 'semantic_validator must be declared by exactly the five five-lens assistant-research cases' "$semantic_fixture_output"; then
+    && grep -Fq -- 'semantic_validator must be declared by exactly the three current v5 five-lens assistant-research cases, or by exactly the five frozen historical v4 cases' "$semantic_fixture_output"; then
     partial_semantic_validator_declaration_rejected=true
 fi
-if [[ "$unknown_semantic_validator_rejected" == true && "$partial_semantic_validator_declaration_rejected" == true ]]; then
+cp "$current_research_evals" "$semantic_fixture"
+jq 'del(.cases[] | select(.id == "five-lens-quick-normalizes-to-standard") | .semantic_validator)' \
+    "$semantic_fixture" >"$semantic_fixture.next" && mv "$semantic_fixture.next" "$semantic_fixture"
+current_partial_semantic_validator_declaration_rejected=false
+if ! "$research_eval_runner" --validate-fixture --skill "$semantic_fixture_root/assistant-research" >"$semantic_fixture_output" 2>&1 \
+    && grep -Fq -- 'semantic_validator must be declared by exactly the three current v5 five-lens assistant-research cases' "$semantic_fixture_output"; then
+    current_partial_semantic_validator_declaration_rejected=true
+fi
+cp "$current_research_evals" "$semantic_fixture"
+jq '(.cases[] | select(.id == "five-lens-quick-normalizes-to-standard") | .semantic_validator) = "assistant-research.five_lens_v4"' \
+    "$semantic_fixture" >"$semantic_fixture.next" && mv "$semantic_fixture.next" "$semantic_fixture"
+current_v4_relabel_rejected=false
+if ! "$research_eval_runner" --validate-fixture --skill "$semantic_fixture_root/assistant-research" >"$semantic_fixture_output" 2>&1; then
+    current_v4_relabel_rejected=true
+fi
+if [[ "$unknown_semantic_validator_rejected" == true && "$partial_semantic_validator_declaration_rejected" == true && "$current_partial_semantic_validator_declaration_rejected" == true && "$current_v4_relabel_rejected" == true ]]; then
     pass
 else
     fail "assistant-research fixture validation accepted an unknown or partially declared semantic evaluator"
@@ -2219,14 +2248,14 @@ for handoff_name in orchestrator_to_lens_researcher orchestrator_to_research_pee
         pr53_missing+=("$handoff_name actionable on_missing_field")
     elif [[ "$handoff_name" == "orchestrator_to_lens_researcher" ]] \
         && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'same frozen assignment under the shared task guard' \
-            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'complete-stage' \
-            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'fallback or block'); then
-        pr53_missing+=("lens on_missing_field must cap retry then fallback-or-block")
+            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'current v5 isolation is unavailable' \
+            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'block with an honest gap'); then
+        pr53_missing+=("lens on_missing_field must preserve shared guard and block unavailable current isolation")
     elif [[ "$handoff_name" == "orchestrator_to_research_peer_reviewer" ]] \
         && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'exact peer correction' \
-            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'reviewer-only fallback' \
+            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'newly created independent peer' \
             || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'or block'); then
-        pr53_missing+=("peer on_missing_field must cap correction then reviewer fallback-or-block")
+        pr53_missing+=("peer on_missing_field must preserve correction and current independent-peer boundary")
     fi
 done
 if ! jq -e '.cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence") | .machine_expectations.forbidden_substrings | index("dispatch_identity")' "$research_evals" >/dev/null; then
@@ -2469,7 +2498,7 @@ while IFS= read -r public_path; do
     jq --arg source "$public_path" '.peer_review.evidence[0].source = $source' "$public_path_response" >"$public_path_response.next" && mv "$public_path_response.next" "$public_path_response"
     research_refresh_response_derivatives "$public_path_response"
     if ! research_response_oracle_is_valid "$public_path_response" "five-lens-decision-briefing-uses-storm-style-workflow" \
-        || ! "$research_eval_runner" --responses "$public_path_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then
+        || ! "$research_eval_runner" --responses "$public_path_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then
         public_path_failures+=("$public_path")
     fi
 done <<'EOF'
@@ -2500,7 +2529,7 @@ while IFS='|' read -r expected matrix_name source; do
     ' "$encoded_url_response" >"$encoded_url_response.next" && mv "$encoded_url_response.next" "$encoded_url_response"
     research_refresh_response_derivatives "$encoded_url_response"
     if private_output="$(research_response_oracle_is_valid "$encoded_url_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
-    if official_output="$("$research_eval_runner" --responses "$encoded_url_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+    if official_output="$("$research_eval_runner" --responses "$encoded_url_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
     [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || encoded_url_failures+=("$matrix_name:$private_actual/$official_actual")
 done <<'EOF'
 accept|public-depth-1-lower|https%3a%2f%2fwww.iana.org%2fresearch
@@ -2548,7 +2577,7 @@ while IFS='|' read -r matrix_name scheme host; do
         ' "$encoded_scheme_response" >"$encoded_scheme_response.next" && mv "$encoded_scheme_response.next" "$encoded_scheme_response"
         research_refresh_response_derivatives "$encoded_scheme_response"
         if private_output="$(research_response_oracle_is_valid "$encoded_scheme_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
-        if official_output="$("$research_eval_runner" --responses "$encoded_scheme_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+        if official_output="$("$research_eval_runner" --responses "$encoded_scheme_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
         [[ "$private_actual" == reject && "$official_actual" == reject ]] || encoded_scheme_letter_failures+=("${matrix_name}-depth-${depth}:$private_actual/$official_actual")
     done
 done <<'EOF'
@@ -2577,7 +2606,7 @@ for depth in 2 3 6; do
     ' "$encoded_scheme_response" >"$encoded_scheme_response.next" && mv "$encoded_scheme_response.next" "$encoded_scheme_response"
     research_refresh_response_derivatives "$encoded_scheme_response"
     if private_output="$(research_response_oracle_is_valid "$encoded_scheme_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
-    if official_output="$("$research_eval_runner" --responses "$encoded_scheme_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+    if official_output="$("$research_eval_runner" --responses "$encoded_scheme_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
     [[ "$private_actual" == reject && "$official_actual" == reject ]] || encoded_scheme_letter_failures+=("mixed-prefix-depth-${depth}:$private_actual/$official_actual")
 done
 typed_encoded_url_failures=()
@@ -2593,7 +2622,7 @@ while IFS='|' read -r expected matrix_name source; do
     ' "$typed_response" >"$typed_response.next" && mv "$typed_response.next" "$typed_response"
     research_refresh_response_derivatives "$typed_response"
     if private_output="$(research_response_oracle_is_valid "$typed_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
-    if official_output="$("$research_eval_runner" --responses "$typed_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+    if official_output="$("$research_eval_runner" --responses "$typed_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
     [[ "$ruby_actual" == "$expected" && "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || typed_encoded_url_failures+=("$matrix_name:$ruby_actual/$private_actual/$official_actual")
 done <<'EOF'
 accept|raw-public|https://www.iana.org/research
@@ -2635,7 +2664,7 @@ while IFS='|' read -r expected matrix_name confidence evidence; do
     ' "$candidate_response" >"$candidate_response.next" && mv "$candidate_response.next" "$candidate_response"
     research_refresh_response_derivatives "$candidate_response"
     if private_output="$(research_response_oracle_is_valid "$candidate_response" "five-lens-decision-briefing-uses-storm-style-workflow" 2>&1)"; then private_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$private_output"; then private_actual=crash; else private_actual=reject; fi
-    if official_output="$("$research_eval_runner" --responses "$candidate_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
+    if official_output="$("$research_eval_runner" --responses "$candidate_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow 2>&1)"; then official_actual=accept; elif grep -Eq 'ReferenceError|SyntaxError|TypeError' <<<"$official_output"; then official_actual=crash; else official_actual=reject; fi
     [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || candidate_confidence_failures+=("$matrix_name:$private_actual/$official_actual")
 done <<'EOF'
 accept|low-single-source-backed|low|[{"source":"source:research-corpus:candidate-a","detail":"One source-backed observation.","evidence_status":"source_backed"}]
@@ -2666,7 +2695,7 @@ while IFS='|' read -r expected matrix_name source; do
     jq --arg source "$source" '.peer_review.evidence[0].source = $source' "$scheme_response" >"$scheme_response.next" && mv "$scheme_response.next" "$scheme_response"
     research_refresh_response_derivatives "$scheme_response"
     if research_response_oracle_is_valid "$scheme_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then private_actual=accept; else private_actual=reject; fi
-    if "$research_eval_runner" --responses "$scheme_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    if "$research_eval_runner" --responses "$scheme_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
     [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || scheme_reference_failures+=("$matrix_name:$private_actual/$official_actual")
 done <<'EOF'
 reject|ftp-url|ftp://www.iana.org/research
@@ -2692,7 +2721,7 @@ while IFS='|' read -r expected literal_ip_source; do
     jq --arg source "$literal_ip_source" '.peer_review.evidence[0].source = $source' "$literal_ip_response" >"$literal_ip_response.next" && mv "$literal_ip_response.next" "$literal_ip_response"
     research_refresh_response_derivatives "$literal_ip_response"
     if research_response_oracle_is_valid "$literal_ip_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then private_actual=accept; else private_actual=reject; fi
-    if "$research_eval_runner" --responses "$literal_ip_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    if "$research_eval_runner" --responses "$literal_ip_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
     [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || literal_ip_policy_failures+=("$literal_ip_source:$private_actual/$official_actual")
 done <<'EOF'
 reject|https://192.88.99.2/research
@@ -2730,7 +2759,7 @@ while IFS='|' read -r typed_source typed_method typed_reference; do
     ' "$typed_response" >"$typed_response.next" && mv "$typed_response.next" "$typed_response"
     research_refresh_response_derivatives "$typed_response"
     if ! research_response_oracle_is_valid "$typed_response" "five-lens-decision-briefing-uses-storm-style-workflow" \
-        || ! "$research_eval_runner" --responses "$typed_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then
+        || ! "$research_eval_runner" --responses "$typed_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then
         typed_evidence_failures+=("$typed_method")
     fi
 done <<'EOF'
@@ -2774,7 +2803,7 @@ for identity_confidence in medium high; do
     fi
     research_refresh_response_derivatives "$identity_response"
     if ! research_response_oracle_is_valid "$identity_response" "five-lens-decision-briefing-uses-storm-style-workflow" \
-        || ! "$research_eval_runner" --responses "$identity_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then
+        || ! "$research_eval_runner" --responses "$identity_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then
         typed_evidence_failures+=("fully-encoded-$identity_confidence")
     fi
 done
@@ -2808,7 +2837,7 @@ while IFS='|' read -r expected fixture_name fixture_kind source; do
     ' "$fixture_response" >"$fixture_response.next" && mv "$fixture_response.next" "$fixture_response"
     research_refresh_response_derivatives "$fixture_response"
     if research_response_oracle_is_valid "$fixture_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then private_actual=accept; else private_actual=reject; fi
-    if "$research_eval_runner" --responses "$fixture_eval_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    if "$research_eval_runner" --responses "$fixture_eval_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
     [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || fixture_safety_failures+=("$fixture_name:$private_actual/$official_actual")
 done <<'EOF'
 accept|typed-public-control|typed|https://www.iana.org/typed-fixture
@@ -2919,7 +2948,7 @@ while IFS='|' read -r expected fixture_name mutation; do
     if research_response_oracle_is_valid "$semantic_closeout_response" "five-lens-decision-briefing-uses-storm-style-workflow"; then private_actual=accept; else private_actual=reject; fi
     if [[ "$fixture_name" == "delegated-peer-accepted" ]]; then
         if ( source "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-semantic-validators.sh"; assistant_research_five_lens_v4_valid "$semantic_closeout_response" "$research_evals" five-lens-decision-briefing-uses-storm-style-workflow ) >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
-    elif "$research_eval_runner" --responses "$semantic_closeout_dir" --skill assistant-research --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
+    elif "$research_eval_runner" --responses "$semantic_closeout_dir" --skill "$historical_research_skill" --case five-lens-decision-briefing-uses-storm-style-workflow >/dev/null 2>&1; then official_actual=accept; else official_actual=reject; fi
     [[ "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || semantic_closeout_failures+=("$fixture_name:$private_actual/$official_actual")
 done <<'EOF'
 reject|source-empty-high|source_empty_high
@@ -3084,5 +3113,44 @@ if research_empty_findings_producer_controls; then
 else
     fail "assistant-research empty-findings producer controls failed"
 fi
+
+research_runner_live_authority_fails_closed() {
+    local case_id="five-lens-quick-normalizes-to-standard"
+    local eval_dir original_research_evals authority_file
+    eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-live-authority.XXXXXX")"
+    p0p4_register_cleanup "$eval_dir"
+    original_research_evals="$research_evals"
+    research_evals="$current_research_evals"
+    write_research_eval_responses "$eval_dir/responses"
+    research_evals="$original_research_evals"
+    authority_file="$eval_dir/runtime-authority.json"
+    jq --arg id "$case_id" '{cases: {($id): (.cases[] | select(.id == $id) | .research_dispatch_authority)}}' \
+        "$current_research_evals" >"$authority_file"
+    "$research_eval_runner" --responses "$eval_dir/responses" --skill "$research_skill" --case "$case_id" \
+        >"$eval_dir/fixture.out" 2>&1 || { cat "$eval_dir/fixture.out" >&2; return 1; }
+    if "$research_eval_runner" --responses "$eval_dir/responses" --skill "$research_skill" --case "$case_id" \
+        --research-dispatch-authority "$authority_file" >"$eval_dir/live.out" 2>&1; then
+        echo "live grading accepted fixture-only authority" >&2; return 1
+    fi
+    grep -Fq "fixture-only authority cannot satisfy live grading" "$eval_dir/live.out" || { cat "$eval_dir/live.out" >&2; return 1; }
+    printf '{"cases":{}}' >"$authority_file"
+    if "$research_eval_runner" --responses "$eval_dir/responses" --skill "$research_skill" --case "$case_id" \
+        --research-dispatch-authority "$authority_file" >"$eval_dir/missing.out" 2>&1; then
+        echo "live grading accepted a case without runtime authority" >&2; return 1
+    fi
+    grep -Fq "live grading requires retained runtime dispatch authority" "$eval_dir/missing.out" || { cat "$eval_dir/missing.out" >&2; return 1; }
+    if "$research_eval_runner" --validate-fixture --skill "$research_skill" \
+        --research-dispatch-authority "$authority_file" >"$eval_dir/mode.out" 2>&1; then
+        echo "runtime authority accepted outside --responses" >&2; return 1
+    fi
+    grep -Fq "supported only with --responses" "$eval_dir/mode.out"
+}
+
+test_start "live Research v5 grading uses retained runtime authority and fails closed on fixture-only authority"
+if node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs" --live-authority "$FRAMEWORK_DIR" "$current_research_evals" \
+    && research_runner_live_authority_fails_closed; then pass; else fail "live runtime authority injection or fail-closed grading failed"; fi
+
+test_start "current Research v5 requires fresh native isolation and preserves original v4 fallback verdicts"
+if node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs" --current-v5 "$FRAMEWORK_DIR" "$current_research_evals"; then pass; else fail "current-v5 actor/context/source/fallback/version isolation failed"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -3,7 +3,7 @@
 # report slots. Fix authorization, reproduction, verification, and active TDD
 # prerequisites apply regardless of presentation.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: output
 skill: assistant-debugging
 
@@ -24,7 +24,7 @@ artifacts:
     type: object
     required: conditional
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-    validation: "Records unchanged artifact_identity, phase, impact_scope, capture/expected/assessment refs, and checker result for expanded impact. Local diagnosis records causal evidence with ordinary regression verification and self-review without checker refs. Before a source fix, shared or unresolved diagnosis has valid pre-build evidence; after a fix, completion requires actual verification and assistant-review's canonical review projection. Audit-only diagnosis may report gaps without claiming a future repair or clean review."
+    validation: "Records unchanged artifact_identity, phase, impact_scope, capture/expected/assessment refs, and checker result for expanded impact. Local diagnosis records causal evidence with ordinary regression verification and a local self-check plus fresh independent review, without checker refs. Before a source fix, shared or unresolved diagnosis has valid pre-build evidence; after a fix, completion requires actual verification and assistant-review's canonical review projection. Audit-only diagnosis may report gaps without claiming a future repair or clean review."
     on_fail: "Preserve the incomplete diagnosis and report the blocked/unverified gate; do not narrow consumers to the reported symptom or substitute manual validation."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
@@ -166,7 +166,7 @@ artifacts:
     condition: "selected_check_ids intersects verification_decision.tdd_choice.applicable_check_ids and current cycle has started"
     description: "Reference to assistant-tdd's canonical cycle_log; do not duplicate its schema."
     on_missing: fail
-    validation: "Resolve to the actual current cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log. Preserve actual partial cycle_log for blocked/partial outcomes. For status == fixed, validate the complete current cycle against the unchanged verification_decision and selected/applicable IDs: right-reason authorizing RED, passing GREEN and REFACTOR, and all due checks. Omit when TDD is inactive or cycle unstarted; never reconstruct phases or invocations."
+    validation: "Resolve to the actual current cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log. Preserve actual partial cycle_log for blocked/partial outcomes. For status == fixed, validate the complete current cycle against the unchanged verification_decision and selected/applicable IDs: right-reason authorizing RED, passing GREEN and REFACTOR (executed REFACTOR runs, or a validated TDD v3 reuse_green that references the original passing GREEN runs with zero new invocations), and all due checks. Omit when TDD is inactive or cycle unstarted; never reconstruct phases or invocations."
     on_fail: "Preserve an actual started partial cycle_log for blocked/partial outcomes; downgrade fixed if its current complete cycle or due checks are missing."
 
   - name: verification

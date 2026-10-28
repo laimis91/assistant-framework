@@ -205,9 +205,9 @@ else
 fi
 
 test_start "review and QA graders accept unbounded positive ordinals while retaining complete evidence"
-if grep -Fq 'rounds.positive?' "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh" \
+if grep -Fq "summary['rounds'] > 0" "$FRAMEWORK_DIR/skills/assistant-review/scripts/review-tools.py" \
     && grep -Fq 'qa["rounds"].positive?' "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh" \
-    && grep -Fq 'batches.length == rounds' "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh" \
+    && grep -Fq "len(batches) == summary['rounds']" "$FRAMEWORK_DIR/skills/assistant-review/scripts/review-tools.py" \
     && grep -Fq 'progression.length == qa["rounds"]' "$FRAMEWORK_DIR/tools/evals/lib/skill-eval-grade.sh"; then
     pass
 else

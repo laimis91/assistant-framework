@@ -22,7 +22,7 @@ If the runtime does not expose model overrides for subagents, keep the role sepa
 
 ## Installed agents
 
-Dispatch the configured role through the active runtime's supported delegation mechanism. Resolve triggers and evidenced fallback through [Delegation Policy State](subagent-dispatch.md#delegation-policy-state).
+Dispatch the configured role through the active runtime's supported delegation mechanism. Resolve triggers through [Execution policy](subagent-dispatch.md#execution-policy); evidenced fallback applies only to optional Build/execution roles, never to formal review, QA/acceptance, or research lens isolation.
 
 The prompt you provide is the **task context** — what to do, not how to do it. The agent's built-in system prompt handles the "how."
 
@@ -41,14 +41,24 @@ The prompt you provide is the **task context** — what to do, not how to do it.
 
 ## Dispatch rules by task size (`execution_intent != prepare_only`)
 
-| Size | Agents used | Flow |
+| Size | Execution options | Required judgments and boundaries |
 |---|---|---|
-| **Small** | Light: direct implementation and fresh self-review; standard/strict: selected Build lane → Code Reviewer | No Decompose; expanded impact retains canonical review evidence; QA only when required |
-| **Medium** | Code Mapper when mapping is needed → Architect only for design uncertainty → bounded executor → Code Reviewer → QA Evaluator when required | Ordinary default; add Builder/Tester only for separated_workers triggers |
-| **Large** | Code Mapper/Explorer/Architect only for concrete uncertainty → selected Build lane → Code Reviewer → QA Evaluator when required | Use bounded_executor or separated_workers as selected, with slice verification; Reviewer is compatibility routing |
-| **Mega** | Code Mapper/Explorer/Architect only for concrete mapping/lifecycle/Pack uncertainty; Build roles follow the selected lane | Use the selected bounded_executor or separated_workers Build lane, then independent Code Reviewer, with QA Evaluator only when required at integration. Source-changing packets are sequential in shared or unknown workspaces; parallel Writers require runtime proof of isolated workspaces. Independent read-only analysis may run in parallel. |
+| **Small** | Direct main implementation/verification or optional selected Build lane | Fresh independent formal review; no Decompose; expanded impact retains canonical review evidence; QA only when required |
+| **Medium** | Direct main or optional bounded_executor/separated_workers; mapping/design roles only for concrete uncertainty | Approved plan, selected verification and fresh independent review; QA only when required |
+| **Large** | Direct main or optional selected Build lane; mapping/lifecycle/Pack specialists only for concrete benefit | Preserve slice verification, approval and fresh independent review; Reviewer remains compatibility routing |
+| **Mega** | Direct main or optional selected Build lane and specialists for concrete mapping/lifecycle/Pack uncertainty | Preserve integration review and required QA. Shared/unknown source writers serialize; parallel writers need runtime-proven workspace isolation. Independent read-only analysis may run in parallel. |
 
-For `prepare_only`, dispatch only concretely triggered Discover or preparation roles, such as read-only mapping, research, security, thinking, documentation, or diagrams when their own trigger applies. Do not dispatch Architect decomposition, Code Writer, Builder/Tester, Code Reviewer, Reviewer, or QA Evaluator solely because task size is medium+; preparation ends without executable slices, Build, Review, or final handoff.
+At every size/risk, direct main execution records its actual identity without
+fabricated worker records or a fallback exemption. Formal plan, code, closure and
+acceptance reviews use newly created independent actors with fresh self-contained
+context (Codex `fork_turns=none`); selected research lenses remain sibling-blind.
+
+For `prepare_only`, dispatch only concretely triggered Discover or preparation roles,
+such as mapping, research, security, thinking, documentation, or diagrams. Size alone
+requires no agent. Requested/required readiness plans retain fresh independent review,
+and selected research lenses/peer retain isolation. Preparation creates no executable
+slices, Build, post-Build code/QA Review or developer handoff; a plan-review PASS grants
+no implementation approval.
 
 ## Reviewer dispatch (review rounds)
 

@@ -1,5 +1,16 @@
 # Five-lens research briefing
 
+Current Research v5 requires five separate sibling-blind lens agents and a newly
+created independent peer, disjoint from root and lenses. Codex uses fork_turns=none
+with frozen self-contained handoffs; other runtimes retain their actual supported
+isolation evidence. Trusted native creation/context/source authority is required.
+Unavailable isolation is incomplete. All fallback procedures/fields below are
+historical v4 interpretation only; they retain original reduced-independence
+verdicts and cannot certify or be relabelled as current v5 work. Explicit user
+method change may choose ordinary source research without claiming five-lens
+independence. Current synthesis/peer responsibilities and lens counts remain.
+
+
 Use for an explicit five-lens request, or a consequential contested decision
 where independent perspectives, contradiction mapping, and peer critique can
 change the recommendation. Comparisons, broad topics, high stakes, or requests
@@ -32,12 +43,13 @@ briefly before choosing this method.
    Address required revisions or downgrade claims before presenting. Preserve
    valid lens evidence if only the peer stage needs recovery.
 
-The method triggers delegation without separate spawn consent. Fallback requires
-explicit opt-out, real unavailable/failed spawning, supported configuration proof,
-or the exact active policy block. Record the basis and reduced independence;
-sequential root passes are never called independent delegation. Global opt-out or
-a policy block also forbids peer dispatch. Never mix partial delegated/root lens
-results and claim an independent complete stage.
+The method triggers delegation without separate spawn consent. Current v5 has no
+sequential fallback for lenses or peer review: when spawning is unavailable,
+fails, or an active policy blocks it, record the run blocked/incomplete with the
+actual cause and an honest gap. An explicit user opt-out may change the method to
+ordinary source research; record that method change and do not present the result
+as a five-lens briefing. Never mix partial delegated/root lens results and claim
+an independent complete stage.
 
 Check source identity, freshness, independence, and directness for each material
 claim; verify decision-critical claims and every presented URL per `url-verify.md`.
@@ -51,11 +63,15 @@ context explicit. A stronger recommendation requires verified decision-critical
 evidence, explicit relevant context, and peer support; otherwise investigate
 further. Research does not authorize an irreversible external action.
 
-## Current v4 consumer protocol
+## Structured consumer protocol (current v5; historical v4 reader)
 
 Load `contracts/index.yaml` and selected `five_lens`, `selected_handoff`,
-`current_phase`, and `completion` sets only when an existing structured v4
-consumer, persisted run, or audit/eval requires that protocol. It retains these
+`current_phase`, and `completion` sets only when an existing structured v5
+consumer, persisted run, or audit/eval requires that protocol. A current v5
+structured result declares `producer_version: "5.0"`, and the trusted
+`research_dispatch_authority` (not the research payload) carries the same
+producer version, root actor, frozen source identity, five lens dispatches and the
+peer dispatch. Historical v4 records keep their original selector and verdict. It retains these
 canonical rules; ordinary human-only research need not manufacture its full
 serialized artifact:
 
@@ -67,12 +83,12 @@ serialized artifact:
   project those exact bodies, including source-empty unresolved results and their
   own gaps. Typed follow-ups retain every material item or one `none_needed`.
 - Current input/output/phase-gate schemas define tier normalization, fixed numeric
-  budgets/count-based confidence, actual usage/termination, capacity waves, fallback
-  evidence, and same-assignment schema correction under the shared task guard. These numeric rules are retained
+  budgets/count-based confidence, actual usage/termination, capacity waves, historical
+  v4 fallback evidence, and same-assignment schema correction under the shared task guard. These numeric rules are retained
   for compatibility fixtures, not universal research quotas. A failed lens stage
-  after that repair reruns completely through admissible fallback or blocks.
+  after that repair is redispatched to newly created separate actors or blocks.
 - Root-only contradiction map and initial synthesis; separate peer assignment,
-  native/fallback identity, canonical peer-input preimage/digest, exact accepted
+  native identity (historical v4: fallback pass), canonical peer-input preimage/digest, exact accepted
   results, verified evidence, high-stakes context, and final-equal artifacts.
   `accepted`/`accepted_with_concerns` have no required revisions and unchanged
   synthesis. `revise` requires root-owned disposition for every required synthesis

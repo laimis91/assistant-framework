@@ -43,7 +43,7 @@ Architecture design mode: [not_applicable | lightweight | required | review_inte
 Architecture Decision Pack ref: [ref, or N/A with concrete reason]
 Pack handoff binding: [prepare_only: discover_only context/journal ref only through Preparation Completion, including optional readiness Plan and no downstream packet refs | execution_intent != prepare_only: Plan binds downstream context/journal + plan/task-packet + review-scope refs before Build; plan_mode=none binds compact inline task-packet/execution + review-scope refs before Build]
 Independent challenge evidence: [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
-Build execution lane: [prepare_only: none | execution_intent != prepare_only: inline_direct | bounded_executor | separated_workers]
+Build execution lane: [prepare_only: none | execution_intent != prepare_only: direct_main | bounded_executor | separated_workers]
 Verification decision: [canonical assistant-verification/contracts/output.yaml#verification_decision object or stable ref, unchanged]
 Evidence assessment: [canonical assistant-verification/contracts/output.yaml#evidence_assessment object or ref; planned before results, current gaps/status before Review]
 TDD mode: [exact verification_decision.tdd_choice.mode projection; RED applies only when true]
@@ -67,7 +67,7 @@ Unresolved clarification topics:
 Required gates:
 - [common gate or task-category gate from references/triage-rubric.md]
 Required agents:
-- [workflow role or skill required by size/risk/type]
+- [mandatory fresh-context review/QA/lens isolation or skill required by type; size/risk alone does not mandate execution workers]
 Subagent policy state: [not_required | delegation_triggered | delegation_opted_out | subagents_unavailable | policy_disallowed]
 Subagent execution mode: [delegated | direct_fallback | not_applicable]
 Subagent trigger scope:
@@ -90,27 +90,27 @@ Plan approval: prepare_only optional readiness never waits; [N/A for none | read
 Approved preparation result: [for implement_only, retain the complete typed approved_feature_preparation_result and feature_preparation_scope unchanged through resume, Plan, and every task packet; otherwise N/A]
 
 ## Agent Dispatch Log
-[subagent evidence required by completion gates]
-- Required roles: bounded executor during ordinary medium Build; Code Writer + Builder/Tester during separated Build; Code Reviewer during Review for both standard/strict lanes; QA Evaluator when required; Code Mapper/Explorer/Architect only for concrete mapping/lifecycle/design uncertainty; Reviewer for legacy compatibility.
-- Build execution lane: [prepare_only: none | execution_intent != prepare_only: inline_direct | bounded_executor | separated_workers]
-- Execution mode: delegated | direct_fallback | not_applicable
+[Reference only actual selected role evidence; direct_main Build has no child-worker records. Formal review and selected research isolation retain native evidence.]
+- Required roles: actual main owner for direct_main; optional bounded executor or Code Writer + Builder/Tester for the selected delegated Build lane; newly created independent Code Reviewer during formal Review; fresh QA Evaluator when required; mapping/lifecycle/design specialists only for concrete benefit; Reviewer remains compatibility routing.
+- Build execution lane: [prepare_only: none | execution_intent != prepare_only: direct_main | bounded_executor | separated_workers]
+- Execution mode: delegated | direct_fallback | not_applicable [direct_main Build uses not_applicable; formal review records its own actual isolation]
 - Native dispatch evidence: delegated roles reference the agent id, task name, thread, or tool result exposed by the runtime and bind it to this journal's `Created:` identity.
-- Direct fallback reason: [delegation_opted_out | subagents_unavailable | policy_disallowed | N/A]
+- Direct fallback reason: [execution-only compatibility: delegation_opted_out | subagents_unavailable | policy_disallowed | N/A; required review/lens isolation remains incomplete when unavailable]
 - Policy blocking source: [exact active rule plus no-applicable-exception confirmation; required when Direct fallback reason is policy_disallowed]
-- Evidence shorthand: delegated refs | role-equivalent direct evidence | N/A only when role not required.
+- Evidence shorthand: delegated refs | actual direct execution evidence | N/A only when responsibility is inapplicable; direct execution cannot substitute for independent review.
 - Code Mapper dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
 - Explorer dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
 - Architect dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
 - Code Writer dispatch/result/direct evidence: [delegated refs | direct evidence | N/A]
-- Writer stages: [record only actually executed stages with evidence refs; inactive TDD: writer tests + code then selected verification, no invented RED; active separated TDD, tests need creation or repair: test_authoring (tests only, no incoming RED) -> independent RED -> SAME writer production -> GREEN -> SAME writer refactor -> distinct REFACTOR; active separated TDD, reused tests: independent RED -> SAME writer production -> GREEN -> SAME writer refactor -> distinct REFACTOR; active bounded_executor: SAME executor RED before production -> GREEN -> refactor -> distinct REFACTOR verification; stage-only DONE never completes Build]
-- Builder/Tester dispatch/result/direct evidence: [delegated refs | direct evidence | N/A when bounded_executor]
-- Code Reviewer dispatch/result/direct evidence: [delegated refs | Code Reviewer direct evidence | Reviewer legacy compatibility | N/A]
-- Reviewer dispatch/result/direct evidence: [compatibility refs/direct evidence when used | N/A]
-- QA Evaluator dispatch/result/direct evidence: [delegated QA refs | direct evidence | N/A when not required]
+- Writer stages: [record only actually executed stages with evidence refs; inactive TDD: writer tests + code then selected verification, no invented RED; active separated TDD, tests need creation or repair: test_authoring (tests only, no incoming RED) -> independent RED -> SAME writer production -> GREEN -> SAME writer refactor -> executed REFACTOR or validated unchanged GREEN reuse; active separated TDD, reused tests: independent RED -> SAME writer production -> GREEN -> SAME writer refactor -> executed REFACTOR or validated unchanged GREEN reuse; active bounded_executor: SAME executor RED before production -> GREEN -> refactor -> executed REFACTOR verification or validated unchanged GREEN reuse; stage-only DONE never completes Build]
+- Builder/Tester dispatch/result/direct evidence: [actual selected-lane refs | N/A unless separated_workers]
+- Code Reviewer dispatch/result evidence: [fresh native refs | actual incomplete isolation evidence | Reviewer native compatibility refs | N/A when formal review is inapplicable]
+- Reviewer dispatch/result evidence: [fresh native compatibility refs when used | N/A]
+- QA Evaluator dispatch/result evidence: [fresh delegated QA refs | actual incomplete isolation evidence | N/A when not required]
 - Per-slice Build ref: N/A for prepare_only; typed execution ref otherwise.
 - Per-slice Review ref: N/A for prepare_only; typed execution ref otherwise.
-- Per-slice Build dispatch evidence: [execution_intent != prepare_only: packet_id -> bounded executor ref, or Code Writer + Builder/Tester refs for separated_workers]
-- Review-owned independent evidence: [execution_intent != prepare_only: Code Reviewer dispatch/result or fresh direct-fallback ref, created after Build]
+- Per-slice Build dispatch evidence: [execution_intent != prepare_only: packet_id -> actual direct_main ref or optional bounded executor/selected separated-worker refs]
+- Review-owned independent evidence: [post-Build: newly created independent Code Reviewer dispatch/result; unavailable isolation stays incomplete. Requested/required plan reviews reference their original native evidence in readiness context.]
 
 ## Constraints
 - [user-stated boundaries, e.g. "Do not modify ProjectA"]
@@ -118,10 +118,10 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 - [scope limits, e.g. "Backend only, no UI changes"]
 
 ## Plan
-[prepare_only: with plan_mode=none, retain readiness evidence/context only through Preparation Completion and do not create downstream task/review refs; an explicitly requested readiness plan is inline/no-wait and records implications, open decisions, and next state without executable steps. existing_system carries the exact unchanged feature-preparation evidence ref; not_applicable records preparation_basis=not_applicable and no feature-evidence ref. Files: N/A for prepare_only. Tasks: N/A for prepare_only. Plan/task/review refs: absent for prepare_only; typed execution refs otherwise. Plan/task packet/review refs: absent for prepare_only; typed execution refs otherwise. execution_intent != prepare_only: paste the approved implementation plan verbatim — include the canonical implementation_steps once with packet_id, file scope, approved definition identity and execution evidence and downstream task/review refs.]
+[prepare_only: with plan_mode=none, retain readiness evidence/context only through Preparation Completion and do not create downstream implementation task/post-Build review refs; an explicitly requested readiness plan is inline/no-wait and records implications, open decisions, and next state without executable steps. existing_system carries the exact unchanged feature-preparation evidence ref; not_applicable records preparation_basis=not_applicable and no feature-evidence ref. Files: N/A for prepare_only. Tasks: N/A for prepare_only. Implementation plan/task/post-Build review refs: absent for prepare_only; typed execution refs otherwise. Implementation plan/task packet/post-Build review refs: absent for prepare_only; typed execution refs otherwise. Requested/required readiness plan review and selected research isolation retain actual preparation evidence. execution_intent != prepare_only: paste the approved implementation plan verbatim — include the canonical implementation_steps once with packet_id, file scope, approved definition identity and execution evidence and downstream task/review refs.]
 
 ## Preparation Readiness
-[prepare_only: completion_policy, validation_results, and feature_preparation_evidence plus feature_preparation_result; execution remains not_started, Pack handoff stays discover_only, and no downstream task/review refs exist. execution_intent != prepare_only: use downstream implementation refs before Build.]
+[prepare_only: completion_policy, validation_results, and feature_preparation_evidence plus feature_preparation_result; execution remains not_started, Pack handoff stays discover_only, and no downstream implementation task/post-Build review refs exist; requested/required readiness plan review and selected research evidence remain preparation context. execution_intent != prepare_only: use downstream implementation refs before Build.]
 
 ## Requirement Acceptance Map
 [paste or reference the canonical map from `references/requirement-acceptance-map.md` for medium+ work, small required/review_intensive Architecture Decision Pack work, or retained route-clear consumption. Status is pending only when execution_intent=prepare_only readiness is complete and execution remains not started; otherwise every accepted requirement id must end passed or approved_exclusion for execution completion. Requirement Acceptance Map is not required while progressive_route_clear_consumption_state=pending; prepare it from the pending handoff. Requirement Acceptance Map is required when progressive_route_clear_consumption_state=consumed and progressive_artifact_retention_state=retained; medium+ keeps the map after terminal archival]
@@ -134,7 +134,7 @@ Approved preparation result: [for implement_only, retain the complete typed appr
 - Independent challenge evidence: [required for review_intensive: challenge, dissent/validation, resolution, selected-design impact]
 - Boundary / design-pressure / Type Ledger / quality scenario refs: [compact refs]
 - Handoff binding: [prepare_only: discover_only through Preparation Completion, forbids invented future/downstream task/review refs; execution_intent != prepare_only: Plan atomically sets downstream_bound with plan/task-packet and review-scope refs before Build; invalidation clears stale refs through refresh/re-plan/reapproval]
-- Plan-mode-none binding: [prepare_only: no downstream task/review refs through Preparation Completion; execution_intent != prepare_only: pre-Build atomically sets downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action]
+- Plan-mode-none binding: [prepare_only: no downstream implementation task/post-Build review refs through Preparation Completion; execution_intent != prepare_only: pre-Build atomically sets downstream_bound with compact inline task-packet/execution and inline review-scope refs before any Build action]
 - Material questions: [none before Plan, or grouped refs]
 - Plan/task packet/review refs: [prepare_only: absent/N/A through Preparation Completion; execution_intent != prepare_only: typed execution locations]
 
@@ -252,11 +252,13 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 - [anything not covered or deferred]
 
 ## Review Log
-[required only when `execution_intent != prepare_only`; prepare_only has no review or final-handoff claim. Append entries; Spec Review first (structured PASS/FAIL from `references/prompts/spec-review.md`), then Quality Review (assistant-review quality loop); never overwrite previous entries]
+[Requested/required fresh plan reviews, including prepare_only readiness, reference canonical native evidence without duplicating it. Post-Build review applies only when `execution_intent != prepare_only`; preparation makes no implementation-review or final-handoff claim. Append entries from the one final acceptance review: its spec obligations (structured PASS/FAIL from `references/prompts/spec-review.md`) and its Quality Review (assistant-review quality loop); historical Stage 1 Spec Review entries stay readable; never overwrite previous entries]
 
 ### Spec Review #1
 - Result: PASS | FAIL
+- Acceptance review: [final_review_snapshot_id]
 - Scope reviewed: [plan step(s), task packet(s), or slice(s)]
+- Request/plan reconciliation: [ref to that review's request_plan_reconciliation, which owns unfinished or omitted items]
 - Missing acceptance criteria: [none, or list]
 - Extra scope: [none, or list with file paths and disposition]
 - Changed files mismatch: [none, or expected vs actual]
@@ -335,9 +337,9 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 3. **Clarification** has no numeric cap or quota. Automatically apply only source-backed technical defaults, record source/rationale, and derive the applied flag from those entries. Convention or reversibility alone cannot settle material product choices. Ask every remaining admissible question by topic and wait for explicit answers where required. A `defaults` reply is an explicit user answer accepting displayed recommendations, not an automatic default.
 4. **Decompose/Plan** persists the canonical packet collection for medium+ work only when `execution_intent != prepare_only`. For `prepare_only`, retain readiness context and optionally record an inline no-wait Plan; do not create or persist Decompose slices. Plan is omitted only for eligible `plan_mode=none`; `approval_required` captures approval only when `execution_intent != prepare_only`.
 5. **Build** (`execution_intent != prepare_only`) updates Progress, Artifact Registry, Key Decisions, Status, triggered harness refs, Milestones, shared task progress state when repeated work has a consumer, and Canonical Packet Progress View before starting a dependent slice or another source-changing slice in a shared or unknown workspace.
-6. **Review** (`execution_intent != prepare_only`) owns independent reviewer dispatch/result evidence, runs Spec Review, then one Quality Review pass; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.
+6. **Review** (`execution_intent != prepare_only`) owns independent reviewer dispatch/result evidence: one fresh pass covering spec and quality for trivial/small light work, at least two sibling-blind passes for medium+; review-fix work fixes/validates and performs one fresh re-review. Round 3+ requires an evidence-backed `additional_round_reason`; fill Final Result but not the developer handoff.
 7. **Document/Handoff** (`execution_intent != prepare_only`) solely creates the developer handoff and fills Verification Summary, conditional Manual Verification Result, and Review Notes.
-8. **Preparation Completion** (`execution_intent=prepare_only`) records readiness only, then proceeds directly to Done without Build, Review, or developer handoff.
+8. **Preparation Completion** (`execution_intent=prepare_only`) records readiness after any requested/required fresh plan review and selected research isolation, then proceeds to Done without Build, post-Build code/QA Review, or developer handoff.
 9. **Done** sets `Status: DONE` and `Task state: completed`, then leaves the ignored state file unless cleanup is requested.
 
 ## Rules
@@ -350,3 +352,16 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 - On context continuation: read the configured task journal first without acting on it, then reconcile it against the newest user request and current repository evidence using `references/task-state-reconciliation.md`; resume only a reconciled active journal
 - Never delete constraints unless the user explicitly removes them
 - The Replay Packet in `references/task-journal-harness-appendix.md` replaces context-handoff templates during active harness work
+
+Review result consumption reuses v9 `pass_attempt_ledger`/`response_events` and
+caller evidence: canonical complete raw UTF-8 payload/ref/SHA-256, task/native
+invocation, batch/snapshot/pass/active attempt, producer identity/version and
+occurrence event bindings. Same-event replay is idempotent; only distinct
+byte-identical complete delivery is duplicate. Changed payloads retain both raw
+returns and validated findings; unresolved conflicts use existing repair/failure
+accounting, never a new wire disposition. Stale/duplicate replies cannot close
+coverage or advance progress. Carry these bindings, unresolved conflicts and
+archive refs across compaction; on resume reconcile source/producer freshness
+and resolve/rehash archives. Missing history is unknown. Use completion
+notifications/bounded waits; reserve full agent inventories for discovery/recovery,
+not repeated retrieval. Host-injected reports remain; measure avoidable processing.

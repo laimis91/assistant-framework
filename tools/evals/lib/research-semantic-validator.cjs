@@ -36,7 +36,7 @@ function nonGlobalLiteralIp(host) {
   if (family === 4) return !ianaGlobalIpv4Exceptions.has(host) && ianaNonGlobalIpv4Cidrs.some(cidr => ipv4InCidr(host, cidr));
   return family === 6 && !ianaGlobalIpv6Exceptions.some(cidr => ipv6InCidr(host, cidr)) && ianaNonGlobalIpv6Cidrs.some(cidr => ipv6InCidr(host, cidr));
 }
-function validateResearchResponse(response, fixtureCase, requireFixture = true) {
+function validateResearchResponse(response, fixtureCase, requireFixture = true, producerAuthority = fixtureCase?.research_dispatch_authority) {
 const errors = [];
 const fail = message => errors.push(message);
 const nonblank = value => typeof value === "string" && value.trim().length > 0;
@@ -133,13 +133,13 @@ function overallUsageValid(overall, budget, records, mode, process, trustedAdapt
   const keys = ["actual_queries", "actual_sources", "elapsed_minutes", "termination_state", "exhausted_dimensions", "exhaustion_gap", "confidence_downgraded"];
   allowedKeys(overall, keys, "overall usage");
   if (!overall || !["actual_queries", "actual_sources", "elapsed_minutes"].every(key => Number.isInteger(overall[key]) && overall[key] >= 0)) { fail("overall usage: non-negative integer actuals required"); return; }
-  const querySum = records.reduce((sum, record) => sum + (record.search_resource_usage?.actual_queries ?? 0), 0);
-  const sourceSum = records.reduce((sum, record) => sum + (record.search_resource_usage?.actual_sources ?? 0), 0);
+  const querySum = records.reduce((sum, record) => sum + (record?.search_resource_usage?.actual_queries ?? 0), 0);
+  const sourceSum = records.reduce((sum, record) => sum + (record?.search_resource_usage?.actual_sources ?? 0), 0);
   if (overall.actual_queries !== querySum || overall.actual_sources !== sourceSum || overall.actual_queries > budget.overall_max_queries || overall.actual_sources > budget.overall_max_sources || overall.elapsed_minutes > budget.overall_max_minutes) fail("overall usage: sums or ceilings");
   let elapsedLowerBound;
   if (mode === "sequential_fallback") {
     if (Object.hasOwn(process, "wave_coverage")) fail("sequential fallback: wave coverage is delegated-only");
-    elapsedLowerBound = records.reduce((sum, record) => sum + (record.search_resource_usage?.elapsed_minutes ?? 0), 0);
+    elapsedLowerBound = records.reduce((sum, record) => sum + (record?.search_resource_usage?.elapsed_minutes ?? 0), 0);
   }
   else {
     const waves = process.wave_coverage;
@@ -151,9 +151,9 @@ function overallUsageValid(overall, budget, records, mode, process, trustedAdapt
         if (!exactKeys(wave, ["wave_id", "capacity", "lens_kinds"], "wave coverage") || !nonblank(wave.wave_id) || !Number.isInteger(wave.capacity) || wave.capacity < 1 || !Array.isArray(wave.lens_kinds) || wave.lens_kinds.length === 0) { fail("delegated schedule: invalid wave"); continue; }
         if (waveIds.has(wave.wave_id) || wave.capacity > trustedAdapterCapacity || new Set(wave.lens_kinds).size !== wave.lens_kinds.length || wave.lens_kinds.length > wave.capacity) fail("delegated schedule: duplicate or over-capacity wave");
         waveIds.add(wave.wave_id); covered.push(...wave.lens_kinds);
-        const members = records.filter(record => record.wave_id === wave.wave_id);
-        if (members.length !== wave.lens_kinds.length || !equal(members.map(record => record.lens_kind).sort(), [...wave.lens_kinds].sort())) fail("delegated schedule: record coverage");
-        elapsedLowerBound += Math.max(0, ...members.map(record => record.search_resource_usage?.elapsed_minutes ?? 0));
+        const members = records.filter(record => record?.wave_id === wave.wave_id);
+        if (members.length !== wave.lens_kinds.length || !equal(members.map(record => record?.lens_kind).sort(), [...wave.lens_kinds].sort())) fail("delegated schedule: record coverage");
+        elapsedLowerBound += Math.max(0, ...members.map(record => record?.search_resource_usage?.elapsed_minutes ?? 0));
       }
       if (!exactLensSet(covered)) fail("delegated schedule: lenses must be exhaustive and disjoint");
     }
@@ -525,6 +525,44 @@ function highStakesRecommendationValid(response, binding, peer, retainedPackets,
   if (!basis.verified_decision_critical_urls.every(url => publicEvidenceUrls.has(url))) fail("high-stakes recommendation: public evidence binding");
   if (!Array.isArray(retainedPackets) || retainedPackets.length !== lenses.length || !retainedPackets.every(packet => Array.isArray(packet.known_context) && packet.known_context.includes(basis.user_context_basis))) fail("high-stakes recommendation: retained user context binding");
 }
+// Current v5 completion requires retained native authority with distinct fresh
+// actors bound to each assignment, handoff digest and source identity.
+// fork_turns is required only for codex facts and forbidden for other runtimes.
+const v5FactKeys = ["actor_id", "assignment_id", "handoff_digest", "source_identity", "native_invocation_id", "creation_evidence_ref", "runtime_evidence_ref", "runtime", "context_isolation"];
+const v5FactKeysFor = fact => fact?.runtime === "codex" ? [...v5FactKeys, "fork_turns"] : v5FactKeys;
+function validateV5Isolation(process, lensMode, peerMode) {
+  if (normalizedResponse.producer_version !== "5.0" || producerAuthority?.producer_version !== "5.0"
+      || lensMode !== "delegated" || peerMode !== "delegated") fail("v5 isolation: delegated current producer required");
+  const authority = producerAuthority;
+  const rows = authority?.lens_dispatches;
+  const actual = process?.lens_dispatches;
+  if (!nonblank(authority?.root_actor_id) || !nonblank(authority?.source_identity)
+      || !Array.isArray(rows) || rows.length !== 5 || !exactLensSet(rows.map(row => row?.lens_kind))) {
+    fail("v5 isolation: retained native dispatch authority required");
+    return;
+  }
+  const keysExact = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).sort().join("|") === [...keys].sort().join("|");
+  if (!keysExact(authority, ["producer_version", "root_actor_id", "source_identity", "lens_dispatches", "peer_dispatch"])
+      || !rows.every(row => keysExact(row, ["lens_kind", ...v5FactKeysFor(row)]))
+      || !keysExact(authority.peer_dispatch, v5FactKeysFor(authority.peer_dispatch))) fail("v5 isolation: unknown or missing authority key");
+  const actors = new Set([authority.root_actor_id]);
+  const checkActor = (fact, actor, assignment, sourceDigest) => {
+    if (!fact || !nonblank(fact.actor_id) || actors.has(fact.actor_id) || fact.actor_id !== actor
+        || fact.assignment_id !== assignment || fact.handoff_digest !== sourceDigest
+        || fact.source_identity !== authority.source_identity || !nonblank(fact.native_invocation_id)
+        || !nonblank(fact.creation_evidence_ref) || !nonblank(fact.runtime_evidence_ref)
+        || fact.context_isolation !== "fresh_self_contained" || fact.runtime !== "codex" && !nonblank(fact.runtime)
+        || fact.runtime === "codex" && fact.fork_turns !== "none") fail("v5 isolation: actor/context/source binding");
+    if (fact) actors.add(fact.actor_id);
+  };
+  for (const row of rows) {
+    const record = Array.isArray(actual) ? actual.find(item => item?.lens_kind === row.lens_kind) : undefined;
+    checkActor(row, record?.dispatch_identity, record?.assignment_id, record?.packet_content_digest);
+  }
+  checkActor(authority.peer_dispatch, process?.peer_reviewer_identity, process?.peer_review_assignment_id,
+             process?.peer_review_input_binding?.peer_review_input_digest);
+}
 if (!fixtureCase && requireFixture) fail("semantic context: selected fixture case required");
 const normalizedResponse = response && typeof response === "object"
   ? (Array.isArray(response) ? [...response] : {...response})
@@ -536,6 +574,12 @@ if (normalizedResponse) {
   const process = normalizedResponse.five_lens_process_evidence;
   const lensMode = process?.lens_execution_mode;
   const peerMode = process?.peer_review_execution_mode;
+  // Version is independently selected by the fixture/producer, never by a reply.
+  const version = fixtureCase?.semantic_validator === "assistant-research.five_lens_v5" ? "5.0" :
+    fixtureCase?.semantic_validator === "assistant-research.five_lens_v4" ? "4.0" : undefined;
+  if (fixtureCase && !version) fail("producer: trusted version required");
+  if (version === "5.0") validateV5Isolation(process, lensMode, peerMode);
+  if (version === "4.0" && Object.hasOwn(normalizedResponse, "producer_version") && normalizedResponse.producer_version !== "4.0") fail("producer: historical v4 cannot relabel current completion");
   if (!process || !["delegated", "sequential_fallback"].includes(lensMode) || !["delegated", "sequential_fallback"].includes(peerMode)) fail("process: supported execution modes required");
   else {
     const processKeys = ["lens_execution_mode", "peer_review_execution_mode", "subagent_policy_state", "subagent_trigger_scope", "policy_blocking_source", "tier_resolution", "frozen_packet_set", "frozen_assignment_packet_ids", "frozen_assignment_packets", "search_resource_budget", "accepted_lens_results", "lens_dispatches", "fallback_lens_passes", "wave_coverage", "root_synthesis_ownership", "peer_reviewer_identity", "peer_review_assignment_id", "peer_review_revision_disposition_id", "peer_review_fallback_pass_id", "lens_fallback_evidence", "peer_review_fallback_evidence", "reduced_independence", "overall_resource_usage", "peer_review_input_binding", "final_synthesis_digest"];
@@ -620,18 +664,70 @@ if (normalizedResponse) {
 return errors;
 }
 
-function runCli(responsePath, fixturePath, caseId) {
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
+// A live run retains its own native actors: any root/lens/peer actor, invocation,
+// creation or runtime reference shared with fixture authority is fixture-derived.
+function liveAuthorityReusesFixture(live, fixture) {
+  const facts = authority => [...(Array.isArray(authority?.lens_dispatches) ? authority.lens_dispatches : []), authority?.peer_dispatch]
+    .filter(fact => fact && typeof fact === "object");
+  const identities = authority => [authority?.root_actor_id, ...facts(authority).flatMap(fact =>
+    ["actor_id", "native_invocation_id", "creation_evidence_ref", "runtime_evidence_ref"].map(key => fact[key]))]
+    .filter(value => typeof value === "string");
+  const fixtureIds = new Set(identities(fixture));
+  return identities(live).some(value => fixtureIds.has(value));
+}
+
+// Live grading passes retained runtime authority as {"cases": {"<case_id>": authority}}.
+// Without that option the CLI grades fixture-built responses against fixture authority.
+function readRuntimeAuthority(options, caseId, errors) {
+  if (options.length === 0) return {live: false};
+  if (options.length !== 2 || options[0] !== "--research-dispatch-authority" || !options[1]) {
+    errors.push("usage: response fixture case [--research-dispatch-authority FILE]");
+    return {live: true, authority: null};
+  }
+  let file;
+  try { file = JSON.parse(require("fs").readFileSync(options[1], "utf8")); }
+  catch { errors.push("runtime authority: readable JSON file required"); return {live: true, authority: null}; }
+  const cases = file && typeof file === "object" && !Array.isArray(file) ? file.cases : undefined;
+  if (!cases || typeof cases !== "object" || Array.isArray(cases)) {
+    errors.push("runtime authority: cases object required");
+    return {live: true, authority: null};
+  }
+  const authority = Object.hasOwn(cases, caseId) ? cases[caseId] : undefined;
+  return {live: true, authority: authority && typeof authority === "object" && !Array.isArray(authority) ? authority : null};
+}
+
+function runCli(responsePath, fixturePath, caseId, ...options) {
   const fs = require("fs");
   let fixtureCase;
   let response;
   const errors = [];
+  const runtime = readRuntimeAuthority(options, caseId, errors);
   try {
     const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
     fixtureCase = Array.isArray(fixture?.cases) ? fixture.cases.find(item => item?.id === caseId) : undefined;
     if (!fixtureCase) errors.push("semantic context: selected fixture case required");
   } catch { errors.push("semantic context: readable fixture case required"); }
   try { response = JSON.parse(fs.readFileSync(responsePath, "utf8")); } catch { errors.push("response: valid JSON required"); }
-  errors.push(...validateResearchResponse(response, fixtureCase, false));
+  let producerAuthority = fixtureCase?.research_dispatch_authority;
+  if (runtime.live) {
+    // Live grading fails closed: fixture authority never stands in for retained runtime authority.
+    producerAuthority = runtime.authority;
+    if (fixtureCase?.semantic_validator === "assistant-research.five_lens_v5") {
+      if (!producerAuthority) errors.push("v5 isolation: live grading requires retained runtime dispatch authority for the selected case");
+      else if (fixtureCase.research_dispatch_authority && canonicalJson(producerAuthority) === canonicalJson(fixtureCase.research_dispatch_authority)) {
+        errors.push("v5 isolation: fixture-only authority cannot satisfy live grading");
+      } else if (liveAuthorityReusesFixture(producerAuthority, fixtureCase.research_dispatch_authority)) {
+        errors.push("v5 isolation: live authority reuses fixture actor, invocation or creation evidence");
+      }
+    }
+  }
+  errors.push(...validateResearchResponse(response, fixtureCase, false, producerAuthority));
   if (errors.length) {
     console.error(`five-lens semantic validation: ${[...new Set(errors)].slice(0, 12).join("; ")}`);
     process.exitCode = 1;
@@ -640,4 +736,4 @@ function runCli(responsePath, fixturePath, caseId) {
 
 module.exports = {validateResearchResponse};
 
-if (require.main === module) runCli(process.argv[2], process.argv[3], process.argv[4]);
+if (require.main === module) runCli(...process.argv.slice(2));

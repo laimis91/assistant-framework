@@ -7,7 +7,7 @@ description: "Review code, fix actionable findings, and run one fresh re-review.
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md).
 
 
 Find scoped defects/regressions in diff and connected callers/contracts/tests/
@@ -21,30 +21,31 @@ to selection/approval.
 
 ## Authority and scope
 
-Resolve material in order: explicit scope, uncommitted changes, carried packet/
-journal, current files. Block on unavailable/empty required material. Report-only
-selects audit; clear edit authorization permits scoped review-fix. For unresolved
-edit authority, ask report-only versus implement/verify; do not review or mutate
-until resolved. Ownership/access grants no edit authority. Standalone `review this` does not require a task journal.
+For "review this", resolve explicit scope, uncommitted work, carried state and
+current files. Missing required material blocks. Report-only selects audit; clear
+edit authority permits scoped review-fix. Ask on ambiguity before inspection or
+mutation. Ownership grants no edits. Standalone review runs without a task journal.
 
-Use local company-safe diffs/checks; external scans, reviews, and installs retain
-explicit approval. Redact secrets and private data. Preserve dirty work and return
-out-of-scope findings to the composing workflow.
+Use local company-safe checks. External operations retain approval. Redact secrets
+and private data; preserve dirty work; return out-of-scope findings to workflow.
 
 ## Review process
 
-Load `contracts/index.yaml` at the structured review boundary, then entry and
-applicable architecture inputs. For behavior or cosmetic changes, a carried
-change-impact artifact, or a locality/shared/unresolved decision, load
-`change_impact` and [change-impact.md](references/change-impact.md) before planning
-or dispatch. Keep this guidance outside Reviewer bundles.
+At structured boundaries load `contracts/index.yaml`. For behavior or cosmetic
+changes, an impact artifact, or locality/shared/unresolved claims, load
+`change_impact` and [change-impact.md](references/change-impact.md) before planning or dispatch;
+keep caller-only guidance outside Reviewer bundles.
 
-Load [review-loop.md](references/review-loop.md) before the first batch; it owns
-transitions, frozen snapshots, response barriers, aggregation and pivots under
-the authoritative v9 protocol:
+Structured batches load [review-loop.md](references/review-loop.md) before the first batch; v10 rules:
 
-- Each frozen batch plans and attempts at least two independent, sibling-blind
-  passes. Resolve `reviewer_context` for each pass, or `lifecycle_reviewer_context`
+- Formal review uses newly created independent actors and self-contained context
+  (Codex `fork_turns=none`), bound to retained native creation/handoff/source
+  authority. Missing isolation stays incomplete; no author fallback.
+- Each frozen batch attempts every expected pass: trivial/small light review
+  (controller_intensity light) uses one newly created reviewer covering both concerns
+  (another after a fix); light review records the compact result unless admission, a Pack
+  or expanded impact requires structure (plan review: persisted/executable admission only); medium+ keeps at least two
+  sibling-blind passes. Resolve `reviewer_context` for each pass, or `lifecycle_reviewer_context`
   only when assigned_scope or coverage_obligations affect lifecycle boundaries;
   synchronous/cosmetic scope alone uses ordinary context. Load the selected handoff before
   dispatch/return, and `return_validation` before aggregation. Account for every
@@ -52,27 +53,26 @@ the authoritative v9 protocol:
 - Standalone review checks the user's specification. Audit retains mismatches
   as findings and finishes one read-only batch. Review-fix repairs authorized
   mismatches and requires Spec PASS before quality review. Workflow-composed
-  review consumes carried Spec PASS and current due-check evidence.
+  review consumes current due-check evidence; acceptance review owns spec checks.
 - Review relevant spec, regression, testing, maintainability, bugfix,
   semantic/behavioral contract, loop-safety and security concerns. Apply matching
   [checklists](references/review-checklists.md) and [principles](references/review-principles.md);
   exclude unrelated sections. Medium+ retains its Design Coherence Pass.
-- Review applicable Architecture Decision Packs, including invalid ones, for
-  freshness, ownership/lifecycle, design pressures, types/primitive exceptions,
-  quality evidence, compatibility, and handoff. Preserve independent challenge
-  when `review_intensive` applies.
+- Review carried Architecture Decision Packs, including invalid ones, using the
+  matching checklist. Preserve freshness, types/lifecycle/compatibility/quality
+  evidence and `review_intensive` independent challenge.
 - Before workflow-composed mutation, preserve or refresh the canonical verification
   selection under `F_REVIEW_VERIFICATION_SELECTION`. An active TDD finding goes
   back to the Build owner with its identities, oracle, scope, IDs, and bindings;
   the review fixer cannot bypass RED. Standalone review-fix retains build/tests.
-- After a fix, verify due selected/binding checks against the new source, freeze
-  a fresh snapshot, and run a fresh complete review batch. No-build admission requires
-  no required/completed fix or due selected/executable binding check.
+- After fixes, verify due selected/binding checks, freeze the source and run a
+  fresh complete batch. No-build admission requires no required/completed fix or
+  due selected/executable binding check.
 
-The change-impact projection does not replace canonical snapshot/coverage closure. Missing/invalid
-selectors load the full named contract. Load
-[legacy-compatibility.md](references/legacy-compatibility.md) only for persisted
-pre-v9 results; do not reinterpret historical evidence as a current clean batch.
+Change-impact projection cannot replace snapshot/coverage closure. At entry, load
+`legacy_history` and [legacy-compatibility.md](references/legacy-compatibility.md)
+only for persisted pre-10.0 packets or v9 records;
+historical evidence cannot certify a current clean batch.
 
 ## QA and stopping
 
@@ -80,31 +80,40 @@ QA stays separate from code review and runs after Build and Code Reviewer eviden
 only when explicit QA/acceptance, accepted Done Contract, harness acceptance,
 domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance requires it.
 Size, delegation, source changes, and generic acceptance labels do not trigger QA.
+Carry approved preparation QA obligations and exact result/source bindings.
 Load [qa-evaluation-loop.md](references/qa-evaluation-loop.md) when required and
 [domain-rubrics.md](references/domain-rubrics.md) only for scoped domain quality.
-Carry approved preparation QA obligations and exact result/source bindings.
+Required independent acceptance judgment uses a newly created fresh-context actor;
+unavailable isolation remains incomplete. Pure check execution stays discretionary.
 
 Audit stops after its first started batch, without fixes. Review-fix runs round 1,
 authorized fixes and validation, then fresh round 2. Round 3+ requires changed
 files, unresolved findings, validation failure, regression/drift, or changed
-hypothesis; score alone is insufficient. Productive rounds can continue beyond 10 under the same shared guard.
+hypothesis; score alone is insufficient.
 Medium+ score diagnostics use [score-tracking.md](references/score-tracking.md).
 Require a recorded pivot/restart decision before another pass only for evidenced
-shared semantic guard stagnation or an applicable material change. Score labels
-alone do not require a decision, reset the evaluator, or pause productive work.
+shared semantic guard stagnation or an applicable material change. Scores alone
+never require a decision, evaluator reset or pause.
+
+## Request and plan coverage
+
+For review_subject plan or acceptance, load request_plan (`request_plan_reconciliation`).
+One fresh `plan_coverage_and_feasibility` plan-review pass checks original requirements, decisions,
+feasibility/order, oracles, completion allocation and avoidable work. Corrections receive fresh closure review before
+approval; already-running approved plans retain authority. Final acceptance review solely owns request/plan/delivery reconciliation, including task-wide
+work and spec obligations: missing criteria, extra scope, changed-files or verification mismatch.
+Missing work/findings remains `HAS_REMAINING_ITEMS`.
 
 ## Result
 
-Report findings/fixes, scope, verification and limits. No findings means
+Report scope, findings/fixes, verification and limits. No findings means
 "No material findings within the reviewed scope and available evidence";
-`CLEAN` is an enum, not proof. Consumers retain
+`CLEAN` is an enum, not proof. Retain
 `contracts/output.yaml`, canonical reviewed scope, batch/round evidence, required
 checks and QA. `CLEAN`/`ISSUES_FIXED` require complete current coverage and no
-remaining must-fix/should-fix items. Failed or blocked passes cannot claim clean.
-Omit empty checklist and internal protocol sections from the human summary.
+remaining must-fix/should-fix items; failed/blocked passes never qualify.
+Omit empty checklists and internal protocol from human summaries.
 
 Load [review-finding-permanent-rule.md](references/review-finding-permanent-rule.md)
-only for evidence of recurring process gaps or high-impact repeatable failures.
-Findings require no automatic permanent rule/framework. Retain classification
-envelopes for existing mapped all-ID distillation fixtures; omit them from
-ordinary human summaries.
+only for recurring process gaps/high-impact repeatable failures; no automatic
+permanent rule.

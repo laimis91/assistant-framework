@@ -10,7 +10,7 @@ Missing Node or checker blocks only the expanded shared/material deterministic
 gate; it is not a manual-pass exception.
 
 Every behavior change records scope, applicability reason, and causal local
-evidence. Local work keeps its selected verification and fresh self-review; it
+evidence. Local work keeps its selected verification and fresh independent review; it
 does not require Node or a common
 artifact. Discovery records the bounded base/candidate universe, unknown
 material boundaries, and the same `artifact_identity` only for shared,
@@ -22,8 +22,10 @@ The expanded path covers relevant configuration,
 registration, event, state, public, wrapper, added, and removed consumers and
 transitions.
 
-`prepare_only` keeps applicability and artifact identity without completion/review
-claims. Otherwise completion refreshes universe/context,
+`prepare_only` keeps applicability and artifact identity without implementation
+completion or post-Build review claims. Requested/required readiness plan review
+and selected research isolation remain applicable as preparation evidence.
+Otherwise completion refreshes universe/context,
 binds verification identity and assistant-review's original `scope_manifest`,
 `coverage_ledger`, review snapshot, and concern bindings, and preserves original
 ledgers and terminal coverage/CLEAN/ISSUES_FIXED checks. Shared fanout alone does

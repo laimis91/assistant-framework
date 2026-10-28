@@ -308,11 +308,11 @@
       "prompt": "Audit these changes and report findings only. Do not fix anything.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
-        "The review material is non-empty.",
+        "The review material is non-empty and medium scope, so at least two sibling-blind passes apply.",
         "The user explicitly requests an audit; report findings only and do not modify source."
       ],
       "expected_behavior": [
-        "Freezes one review snapshot and plans at least two independent narrow review passes.",
+        "For this medium+ scope, freezes one review snapshot and plans at least two independent narrow review passes.",
         "Waits for every expected pass response or terminal failure record before aggregating findings.",
         "Reports findings and residual risk without edits.",
         "Does not dispatch a second review batch."
@@ -1861,31 +1861,34 @@
     },
     {
       "id": "trivial-audit-uses-two-isolated-passes",
-      "title": "Trivial audit retains two isolated purpose-specific passes",
+      "title": "Frozen two-pass trivial audit retains both isolated passes",
       "category": "multi_pass_review_batch",
-      "purpose": "Checks that proportional trivial/small execution remains multi-pass rather than collapsing into one self-review.",
+      "purpose": "Checks that a frozen historical two-pass trivial/small batch, still valid beside the one-pass light_contract_and_runtime topology, keeps every planned isolated pass instead of collapsing into one self-review.",
       "prompt": "Audit this one-file change read-only. It is trivial scope; report only after coverage is complete.",
       "setup_context": [
         "The assistant-review skill instructions are active.",
-        "The scope is trivial and has two purpose-specific discovery obligations.",
-        "No delegated Reviewer is available, so direct fallback must retain isolation records."
+        "The scope is trivial; its batch was already frozen with the still-valid historical two-pass topology and two purpose-specific discovery obligations.",
+        "No delegated Reviewer is available; requested isolation cannot be established."
       ],
       "expected_behavior": [
-        "Runs two isolated direct-fallback passes with distinct purposes.",
-        "Records assignments and coverage for both passes.",
-        "Waits for the response barrier before the read-only audit result."
+        "Plans two purpose-specific isolated passes and reports their native creation failure without inventing actors or inspections.",
+        "Retains frozen assignments and incomplete coverage for both passes.",
+        "Reports HAS_REMAINING_ITEMS with zero responses and empty inspected scope; author fallback cannot complete review."
       ],
-      "pass_criteria": ["The response identifies two isolated passes and complete coverage."],
+      "pass_criteria": ["The response retains two planned passes, zero inspections and responses, and incomplete coverage."],
       "fail_signals": ["Uses one self-review as complete coverage.", "Omits one purpose-specific obligation."],
       "machine_expectations": {
-        "required_substrings": ["two isolated passes", "direct fallback", "coverage", "all expected responses"],
+        "required_substrings": ["two planned passes", "isolation unavailable", "coverage incomplete"],
         "forbidden_substrings": ["one self-review is sufficient", "single broad pass"],
         "structured_json_assertions": [
-          {"operator":"equals","path":["review_delegation_path","subagent_execution_mode"],"expected":"direct_fallback"},
-          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":true},
+          {"operator":"equals","path":["final_summary","reviewed_scope"],"expected":[]},
+          {"operator":"equals","path":["final_summary","result"],"expected":"HAS_REMAINING_ITEMS"},
+          {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"terminal_state","expected_values":["failed","failed","failed","failed"]},
+          {"operator":"equals","path":["review_delegation_path","subagent_execution_mode"],"expected":"not_applicable"},
+          {"operator":"equals","path":["final_summary","coverage_complete"],"expected":false},
           {"operator":"array_field_values_exact","path":["final_summary","coverage_ledger"],"field":"perspective","expected_values":["contract_and_test_oracle","contract_and_test_oracle","runtime_lifecycle_and_failure_paths","runtime_lifecycle_and_failure_paths"]},
-          {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":2,"terminal_response_count":2}]},
-          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["complete"]}
+          {"operator":"array_object_values_exact","path":["final_summary","batch_summaries"],"fields":["expected_response_count","terminal_response_count"],"expected_objects":[{"expected_response_count":2,"terminal_response_count":0}]},
+          {"operator":"array_field_values_exact","path":["final_summary","batch_summaries"],"field":"batch_status","expected_values":["incomplete"]}
         ]
       }
     },
@@ -2091,6 +2094,251 @@
       "machine_expectations": {
         "required_substrings": ["invoice", "retry", "configuration", "coverage", "gap", "HAS_REMAINING_ITEMS"],
         "forbidden_substrings": ["checkout-only coverage is sufficient", "impact projection makes this CLEAN"]
+      }
+    },
+    {
+      "id": "discovery-cross-file-producer-consumer",
+      "title": "Producer/consumer invariant violated across two files.",
+      "category": "discovery_cross_file",
+      "purpose": "Producer/consumer invariant violated across two files.",
+      "prompt": "Audit a change to a manifest producer that now emits both primary and fallback entries. The rendering consumer rejects fallback entries, while the direct producer test accepts them. Trace the original requirement that both entries render.",
+      "setup_context": [
+        "Read-only development fixture; not held-out native quality proof.",
+        "Use existing independent perspectives and the unchanged v10 return schema."
+      ],
+      "expected_behavior": [
+        "Identify the invariant, trace producer/consumer, construct a violating input/event sequence, retain supporting or rejecting evidence.",
+        "Keep original scope across repairs and explicit gaps; do not infer correctness from lexical markers."
+      ],
+      "pass_criteria": [
+        "Evidence follows the assigned responsibility and original scope.",
+        "No invented coverage, finding or semantic-quality claim."
+      ],
+      "fail_signals": [
+        "The latest repair replaces original requirements.",
+        "A carried map is treated as independent inspection."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "invariant",
+          "producer",
+          "consumer",
+          "evidence"
+        ],
+        "forbidden_substrings": [
+          "mapping proves independent inspection",
+          "latest repair is the entire scope"
+        ]
+      }
+    },
+    {
+      "id": "discovery-temporal-late-event",
+      "title": "Temporal late-event counterexample remains relevant after a repair to input parsing.",
+      "category": "discovery_temporal",
+      "purpose": "Temporal late-event counterexample remains relevant after a repair to input parsing.",
+      "prompt": "Audit a completion handler change: attempt a1 times out, a2 completes, then a1 returns late. Current code updates the active slot by reviewer identity. Preserve the requirement that only a2 closes its slot.",
+      "setup_context": [
+        "Read-only development fixture; not held-out native quality proof.",
+        "Use existing independent perspectives and the unchanged v10 return schema."
+      ],
+      "expected_behavior": [
+        "Identify the invariant, trace producer/consumer, construct a violating input/event sequence, retain supporting or rejecting evidence.",
+        "Keep original scope across repairs and explicit gaps; do not infer correctness from lexical markers."
+      ],
+      "pass_criteria": [
+        "Evidence follows the assigned responsibility and original scope.",
+        "No invented coverage, finding or semantic-quality claim."
+      ],
+      "fail_signals": [
+        "The latest repair replaces original requirements.",
+        "A carried map is treated as independent inspection."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "a1",
+          "a2",
+          "sequence",
+          "evidence"
+        ],
+        "forbidden_substrings": [
+          "mapping proves independent inspection",
+          "latest repair is the entire scope"
+        ]
+      }
+    },
+    {
+      "id": "discovery-compatibility-consumer",
+      "title": "Null/absence compatibility difference is a material consumer path.",
+      "category": "discovery_compatibility",
+      "purpose": "Null/absence compatibility difference is a material consumer path.",
+      "prompt": "Audit a CLI producer adding a nullable option. One compatibility consumer treats absent as inherit, explicit null as reset. The proposed adapter converts both to absent. Trace the original requirement through the compatibility path and its oracle.",
+      "setup_context": [
+        "Read-only development fixture; not held-out native quality proof.",
+        "Use existing independent perspectives and the unchanged v10 return schema."
+      ],
+      "expected_behavior": [
+        "Identify the invariant, trace producer/consumer, construct a violating input/event sequence, retain supporting or rejecting evidence.",
+        "Keep original scope across repairs and explicit gaps; do not infer correctness from lexical markers."
+      ],
+      "pass_criteria": [
+        "Evidence follows the assigned responsibility and original scope.",
+        "No invented coverage, finding or semantic-quality claim."
+      ],
+      "fail_signals": [
+        "The latest repair replaces original requirements.",
+        "A carried map is treated as independent inspection."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "compatibility",
+          "consumer",
+          "invariant",
+          "evidence"
+        ],
+        "forbidden_substrings": [
+          "mapping proves independent inspection",
+          "latest repair is the entire scope"
+        ]
+      }
+    },
+    {
+      "id": "discovery-authority-boundary",
+      "title": "Self-derived authority must not certify a foreign snapshot.",
+      "category": "discovery_authority_boundary",
+      "purpose": "Self-derived authority must not certify a foreign snapshot.",
+      "prompt": "Audit a validator that compares candidate dispatch IDs with authority copied from the same candidate. Independent caller context names another snapshot. Trace the claimed authority boundary and construct a violating input.",
+      "setup_context": [
+        "Read-only development fixture; not held-out native quality proof.",
+        "Use existing independent perspectives and the unchanged v10 return schema."
+      ],
+      "expected_behavior": [
+        "Identify the invariant, trace producer/consumer, construct a violating input/event sequence, retain supporting or rejecting evidence.",
+        "Keep original scope across repairs and explicit gaps; do not infer correctness from lexical markers."
+      ],
+      "pass_criteria": [
+        "Evidence follows the assigned responsibility and original scope.",
+        "No invented coverage, finding or semantic-quality claim."
+      ],
+      "fail_signals": [
+        "The latest repair replaces original requirements.",
+        "A carried map is treated as independent inspection."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "authority",
+          "snapshot",
+          "input",
+          "evidence"
+        ],
+        "forbidden_substrings": [
+          "mapping proves independent inspection",
+          "latest repair is the entire scope"
+        ]
+      }
+    },
+    {
+      "id": "discovery-clean-control-no-invented-finding",
+      "title": "Reject the plausible defect hypothesis and avoid invented findings.",
+      "category": "discovery_clean_control",
+      "purpose": "Reject the plausible defect hypothesis and avoid invented findings.",
+      "prompt": "Audit a clean producer/consumer pair: producer emits an explicit optional option, consumer preserves absent versus null, and independent tests distinguish both. Trace the invariant and retain rejecting evidence for the hypothesis that absence is collapsed. Make no source changes.",
+      "setup_context": [
+        "Read-only development fixture; not held-out native quality proof.",
+        "Use existing independent perspectives and the unchanged v10 return schema."
+      ],
+      "expected_behavior": [
+        "Identify the invariant, trace producer/consumer, construct a violating input/event sequence, retain supporting or rejecting evidence.",
+        "Keep original scope across repairs and explicit gaps; do not infer correctness from lexical markers."
+      ],
+      "pass_criteria": [
+        "Evidence follows the assigned responsibility and original scope.",
+        "No invented coverage, finding or semantic-quality claim."
+      ],
+      "fail_signals": [
+        "The latest repair replaces original requirements.",
+        "A carried map is treated as independent inspection."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "invariant",
+          "consumer",
+          "evidence",
+          "No material findings within the reviewed scope and available evidence"
+        ],
+        "forbidden_substrings": [
+          "mapping proves independent inspection",
+          "latest repair is the entire scope"
+        ]
+      }
+    },
+    {
+      "id": "light-review-records-compact-fresh-result",
+      "title": "Light trivial/small review records a compact fresh result",
+      "category": "light_review_scope",
+      "purpose": "Checks that a trivial/small review under controller_intensity light uses one newly created fresh reviewer covering both concerns and records only the compact result, without structured batch machinery.",
+      "prompt": "Review this one-file label fix and report the result. Workflow triage carried controller_intensity=light.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The scope is small; controller_intensity is light, with no persisted/executable admission, Architecture Decision Pack or expanded impact.",
+        "A newly created fresh-context reviewer is available."
+      ],
+      "expected_behavior": [
+        "Dispatches one newly created fresh reviewer covering both contract/test-oracle and runtime/failure-path concerns.",
+        "Records a compact result: reviewer actor ID, native invocation ID, lowercase runtime, PASS or findings, evidence refs and reviewed scope.",
+        "On Codex, creates the fresh reviewer with fork_turns=none so no parent turns are inherited.",
+        "Does not build a structured batch plan, ledgers or review-tools validation for this ordinary light review."
+      ],
+      "pass_criteria": [
+        "The response records one fresh reviewer identity and a compact PASS or findings result with evidence refs and reviewed scope."
+      ],
+      "fail_signals": [
+        "Uses an author self-check as the review.",
+        "Requires a structured batch plan or review-tools validation for ordinary light review."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "compact result",
+          "fresh reviewer",
+          "native invocation",
+          "reviewed scope"
+        ],
+        "forbidden_substrings": [
+          "self-review is sufficient",
+          "author self-check completes review"
+        ]
+      }
+    },
+    {
+      "id": "light-review-standard-small-keeps-two-passes",
+      "title": "Small review without light intensity keeps two passes",
+      "category": "light_review_scope",
+      "purpose": "Negative control: a small review under controller_intensity standard must not use the one-pass light topology or a compact light result.",
+      "prompt": "Review this small two-file change. Workflow triage carried controller_intensity=standard.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The scope is small and controller_intensity is standard, so light review does not apply.",
+        "Newly created fresh-context reviewers are available."
+      ],
+      "expected_behavior": [
+        "Plans at least two sibling-blind contract_and_test_oracle and runtime_lifecycle_and_failure_paths passes.",
+        "Does not set topology.light_review or record a compact light result."
+      ],
+      "pass_criteria": [
+        "The response plans two independent passes and keeps the structured batch result."
+      ],
+      "fail_signals": [
+        "Uses one light_contract_and_runtime pass for small standard scope.",
+        "Records only a compact light result."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "two independent passes",
+          "controller_intensity standard"
+        ],
+        "forbidden_substrings": [
+          "light_review true",
+          "one light pass is sufficient"
+        ]
       }
     }
   ]

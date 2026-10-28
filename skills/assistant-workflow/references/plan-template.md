@@ -6,7 +6,7 @@ Match tiers to `plan_mode` and size. `plan_mode=none` loads no template and crea
 
 Keep compact harness refs; harness-capable work loads `references/plan-harness-appendix.md`, otherwise record `N/A: [reason]`.
 
-For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits. It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests. Omit downstream handoffs. Record readiness implications, open decisions and next implementation state. `existing_system` retains the unchanged feature-preparation evidence ref; `not_applicable` records `preparation_basis=not_applicable` without that ref.
+For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits. It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests. Omit implementation handoffs. Requested/required readiness plans retain fresh independent review and fresh review after fixes; a review PASS grants no implementation approval. Selected research lenses/peer retain isolation. Record readiness implications, open decisions and next implementation state. `existing_system` retains the unchanged feature-preparation evidence ref; `not_applicable` records `preparation_basis=not_applicable` without that ref.
 
 ## Small Tasks — Inline Plan (`plan_mode=inline`, `execution_intent != prepare_only`)
 
@@ -56,7 +56,7 @@ Medium/Large/Mega authoritative packets preserve identical meaning and role evid
 - Architecture Decision Pack: [fresh pack ref, or N/A with concrete reason]
 - QA evaluation mode: [carry triage value: not_required | optional | required]
 - Harness capable: [carry triage value: true | false]
-- Build execution lane: [carry triage value: inline_direct | bounded_executor | separated_workers]
+- Build execution lane: [carry triage value: direct_main | bounded_executor | separated_workers]
 - Workflow state mode: [carry triage value: inline | journal]
 - Pack handoff binding: [discover_only only before Plan; otherwise downstream_bound | context/journal ref | plan/task-packet ref | review-scope ref]
 - Plan-mode-none Pack binding: [before Build, atomically set downstream_bound with compact inline task-packet/execution and inline review-scope refs]
@@ -128,7 +128,7 @@ Default to one coherent `implementation_steps` increment. Decompose only for acc
 
 ### Stored definition and authority
 
-New producers store `plan_schema_version: "15.0"`, `task_identity`, `plan_version`,
+New producers store `plan_schema_version: "16.0"`, `task_identity`, `plan_version`,
 `verification_decision_ref`, `implementation_steps`, `completion_allocation`, and
 `approved_plan_identity: {task_identity, plan_version, approval_ref, definition_digest}`
 matching independent current approval. Store the unchanged specialist decision
@@ -214,8 +214,8 @@ member-cycle barrier closes the lead checkpoint; partial results wait without
 checkpoints. Closed group/member replay is invalid through compaction.
 
 Before spawn retain accepted `canonical_plan`, `canonical_context` and optional
-`canonical_progress_state` together. Validate original v14 authority before fixed
-writable-v15 normalization; preserve both digests and mapping provenance without
+`canonical_progress_state` together. Validate original v14/v15 authority before fixed
+v14 → v15 → v16 normalization; preserve both digests and mapping provenance without
 business reapproval for proven-equivalent representation. Historical totals alone
 prove neither a fresh window nor a stall. Existing owners persist evidence without
 redefining work. The Orchestrator independently resolves `context`; candidates cannot
@@ -227,10 +227,20 @@ supply approval/proof. It contains:
 - `requirements: [{requirement_id, acceptance_criterion}]` for every accepted
   map entry; `required_completion_allocation` with the same four allocation keys
   fixing independently due integration/deferred obligations;
-- `readiness: {execution_intent, ready, route_clear}` projected only after existing
+- `readiness: {execution_intent, ready, route_clear, plan_review_required,
+  plan_review_ref?, plan_review_applicability_ref?}` projected only after existing
   Discover and retained progressive route-clear/consumption/readiness gates pass;
-  preparation-only and unresolved progressive discovery admit no execution;
-- `current_input_identities: {packet_id: relevant_identity_object}` and
+  preparation-only and unresolved progressive discovery admit no execution. The
+  review ref resolves `review_authorities` (subject plan); a not-required decision
+  resolves `plan_review_applicability_authority`;
+- `plan_approval_authorities` keyed by approval ref; `execution_actor_bindings`
+  per packet with `execution_stage` for direct_main; `writer_actor_ids` and
+  `builder_actor_ids` when separated workers supply Builder evidence;
+- `current_input_identities: {packet_id: {reuse_digest, ...}}` (caller-resolved;
+  default digest-mode GREEN reuse compares `reuse_digest`, defined solely by
+  assistant-tdd `contracts/output.yaml` `green.reuse_digest`; only opt-in
+  `reuse_identity_mode=detailed` adds `relevant_input_identity` and
+  `verification_reuse_authority`) and
   `packet_evidence: {packet_id: resolved_current_evidence}` and optional independently retained historical
   `recovery_counters: {packet_id: {attempt_count, no_progress_count}}`;
 - `test_applicability: {packet_id: resolved_projection}` from the existing
@@ -253,7 +263,30 @@ supply approval/proof. It contains:
 - `previous_plan`: independently retained last accepted snapshot of this definition, required on resume and every canonical Plan/dispatch/verification/completion with current or prior migration provenance. Preserve provenance presence, canonical JSON digest and scalar types; only verified legacy normalization creates it. Retain VERIFIED until helper invalidation of changed witnesses; block caller downgrades. Preserve spent counters, evidence refs and history;
 - at completion, `current_snapshot_identity`, `required_terminal_gates` (includes
   `independent_review`, plus QA/harness only when already triggered), and
-  `completion_evidence` from the existing completion/review/QA owners.
+  `completion_evidence` from the existing completion/review/QA owners. Resolve
+  each review/required-QA canonical_review_ref through review_authorities with
+  actual role, canonical source, approval/snapshot and native dispatch bindings.
+  QA retains its actual verdict and exact independently accepted
+  qa_acceptance_context (source_ref, acceptance_criteria); it cannot substitute
+  final-review ref/actor/invocation. Historical completed sources bind original
+  approval/provenance, snapshot, actor and policy; migration alone grants no
+  completion exemption. These are caller-owned projections of existing sources,
+  not another ledger or a relabelled QAEvaluator return;
+- `historical_plan_attestation: {schema_version, verified, producer_ref,
+  definition_sha256}` when a v14/v15 plan claims its original approval without
+  current plan review; a version label alone grandfathers nothing.
+
+Plan review is re-checked at dispatch, verification and completion. Plan, final
+and QA review authorities are distinct actors; a plan review's `approved_plan_ref`
+is the reviewed definition, never the later approval_ref. `separated_workers` with
+Builder evidence requires `builder_actor_ids`. Lane/actor stamps are immutable once
+the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the
+current stamp, or has old-actor evidence beyond the latest `stamp_baseline` history
+row; before then only a newly admitted dispatch may replace them, keeping the
+replaced stamp in `execution.history`.
+Caller-trust boundary: caller-resolved values such as historical attestation,
+current digests and actor ids are trusted inputs. Admission checks their shape and
+consistency; reviewer independence comes from fresh reviewers, not from the script.
 
 Results contain `status`, stable `code`, `path`, `details`. Accepted projections
 contain `canonical_plan` and deep `current_task_packet`: canonical packet, unchanged
@@ -333,8 +366,9 @@ Only admitted separated Code Writer production/refactor receives unchanged deep
 stages/lanes and stored definitions omit it; `red_phase` is not projected.
 Existing `green` with `all_tests_pass`, `production_file`, `command`, `cwd`, and
 `invocation_ref`, and `refactor` with `all_tests_pass`, `changes_made`, `command`,
-`cwd`, and a distinct `invocation_ref` remain consistency projections of actual
-owner evidence, never a substitute log or permission to fabricate phases. Preserve
+`cwd`, and `invocation_ref` (distinct when REFACTOR executed; equal to
+`green.invocation_ref` for no-change `verification_disposition=reuse_green` with
+zero new invocations and `green.reuse_digest`) remain consistency projections of actual owner evidence, never a substitute log or permission to fabricate phases. Preserve
 lane-specific RED/production/GREEN/refactor ownership. Inactive TDD creates no RED
 obligation. Existing identity, lane, input freshness, stage, and projection-equality
 guards remain required alongside this current producer proof.
@@ -372,7 +406,7 @@ conservatively. Validate dependencies/conservation; ambiguity, stale/conflicting
 identities, missing allocation, unsafe mapping, mixed forms or cycles block.
 Historical status never verifies new work: retain refs/results under reconciliation
 provenance and rebind current owner evidence before VERIFIED. Store mapping only in
-that provenance; new producers emit canonical v15. Every normalized boundary requires
+that provenance; new producers emit canonical v16. Every normalized boundary requires
 independently retained accepted `previous_plan` when either snapshot has provenance.
 Preserve presence and canonical JSON digest: no deletion, invention in fresh v14,
 or Python scalar equality as authentication.
@@ -439,7 +473,7 @@ Fill during Plan; Security/Operability stays optional. Plan approval alone does 
 - Plan mode: [approval_required]
 - QA evaluation mode: [not_required | optional | required]
 - Harness capable: [true | false]
-- Build execution lane: [inline_direct | bounded_executor | separated_workers]
+- Build execution lane: [direct_main | bounded_executor | separated_workers]
 - Workflow state mode: [inline | journal]
 - Architecture design mode: [not_applicable | lightweight | required | review_intensive]
 - Architecture trigger reasons: [concrete evidence, or N/A reason]
@@ -505,14 +539,14 @@ Fill during Plan; Security/Operability stays optional. Plan approval alone does 
 ### Risks / edge cases
 - [risk]: [mitigation]
 
-## Plan review
+## Decomposition self-check
+
+Author preparation only; the fresh independent plan review (`review_subject=plan`) is recorded separately as the compact `plan_review_result`, or as the structured plan batch when persisted/executable admission applies.
 
 - Scope understanding: [pass/fix; evidence]
-- Packet/agent count: [minimal count; extra-packet purposes]
-- Step/cost budget: [budget/direct-fallback rationale]
+- Packet count: [minimal count; extra-packet purposes]
 - Dependency order: [summary]
 - Output-plan match: [artifact/verification alignment]
-- Fallback path: [subagent path or direct equivalent]
 - Broad-split rejection: [prove layer-only, module-only, folder-only, feature-only, setup-only, contract-only, and broad component-style splits rejected unless verified deliverable artifact slices]
 - Decision: proceed | revise_decomposition | return_to_discover
 
@@ -614,7 +648,7 @@ Extend Medium with Security/Operability for auth, external inputs, infrastructur
 ## Large/Mega addenda
 - Triage result: inherit Medium `Subagent policy state`, `Subagent execution mode`, `Subagent trigger scope`, `Search mode`.
 - Architecture: include LSP and ISP in addition to SRP/OCP/DIP.
-- Decomposition Plan Review: inherit Medium, including `- Broad-split rejection:` proof.
+- Decomposition self-check: inherit Medium, including `- Broad-split rejection:` proof.
 - Harness Appendix Routing: inherit Medium refs; load `references/plan-harness-appendix.md` only when harness-capable.
 
 ## Tests to run

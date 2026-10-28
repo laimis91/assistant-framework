@@ -1,43 +1,53 @@
 # Subagent Dispatch — Roles and Rules
 
-Use specialized agents when a direct user request or applicable `AGENTS.md` or active-skill instruction triggers delegation. Each role has constrained access: code-reviewer, qa-evaluator, and reviewer cannot edit files. Code Writer may act as a bounded edit/test executor when that lane is selected. When subagents are unavailable, explicitly opted out, or policy-disallowed, keep the same selected-lane responsibilities as direct fallback evidence instead of pretending delegation happened. Delegation never bypasses parent sandbox, action/tool approvals, external-write, install, destructive-operation, or secrets safeguards.
+The main agent chooses direct execution or useful delegation for implementation,
+mapping, architecture, testing and other execution work. Size/risk labels do not
+mandate worker agents or prohibit main-agent edits. Optional roles retain their
+scope, permissions, actual identities and verification responsibilities.
 
-For full role prompts, read `references/subagent-roles.md`.
+Formal plan, code, finding-closure and acceptance reviews always use newly created
+agents with fresh context. Selected five-lens research requires five separate
+sibling-blind lens agents and a new independent peer. These are the mandatory
+isolation boundaries; author/main self-check and sequential role-play cannot
+substitute. In Codex use `fork_turns=none` and one complete self-contained handoff.
+Other providers use their supported isolation and report inability honestly.
+Unavailable required isolation leaves the work incomplete; direct fallback never applies to these roles.
 
-## Delegation Policy State
+## Execution policy
 
-Before spawning any subagent, resolve:
+`direct_main` is an ordinary lane, without a fallback exemption or child dispatch
+log. Single-pass work keeps proportional direct evidence. Persisted/executable
+consumers bind ExecutionActorBinding `{kind: main, actor_id, runtime_evidence_ref}`
+from independently retained native authority, use `execution_stage`, and return
+canonical plan/context with actual `execution_actor_id`. They omit worker-only
+`current_task_packet`, `worker_role`, `worker_stage`, builder and child-native
+fields. The executable `dispatch` boundary admits an action; it need not spawn.
 
-| Field | Values | Meaning |
-|---|---|---|
-| `subagent_policy_state` | `not_required`, `delegation_triggered`, `delegation_opted_out`, `subagents_unavailable`, `policy_disallowed` | Whether an applicable instruction triggers delegation or requires evidenced fallback |
-| `subagent_execution_mode` | `delegated`, `direct_fallback`, `not_applicable` | Whether work is executed by subagents, by direct fallback with equivalent evidence, or without any subagent role |
-| `subagent_trigger_scope` | provenance plus roles/phases/actions | Direct user, applicable `AGENTS.md`, or active skill instruction that triggers delegation and its covered work |
-| `policy_blocking_source` | exact active rule, conditional | Required only for `policy_disallowed`; names the rule and confirms no applicable user, AGENTS, or skill exception |
+Optional delegation selects `bounded_executor` or `separated_workers` when useful.
+Only actual child work records native dispatch/result evidence and writer stages.
+The same selected writer owns selected tests and production; Builder/Tester is
+execution-only when selected. Source-changing work serializes in shared/unknown
+workspaces; concurrency needs current isolated workspace and dependency evidence.
+No lane bypasses approval, sandbox, secrets, costs, selected checks, meaningful RED,
+progress history or acceptance. Required review is independent in every lane.
 
-Light small low-risk localized work uses `subagent_policy_state=not_required`
-and `subagent_execution_mode=not_applicable`; it does not ask for delegation and
-instead records direct implementation, selected checks and binding project verification, and
-a fresh self-review. Expanded impact keeps this Build policy; Review records canonical `assistant-review` final-summary and delegation-path refs. For standard/strict development/code-work roles, Assistant
-Framework policy treats a direct user request or applicable `AGENTS.md` or
-active-skill instruction as a delegation trigger. Infer `subagent_trigger_scope`
-with its provenance and covered roles/phases/actions, set
-`subagent_policy_state=delegation_triggered`, set
-`subagent_execution_mode=delegated`, and spawn the configured role agents
-without a separate permission question. An explicit user opt-out sets
-`subagent_policy_state=delegation_opted_out` and uses direct fallback. Use the
-active runtime's supported delegation mechanism and configured role. Determine
-availability from a real spawn attempt or supported runtime documentation and
-configuration. Record `subagents_unavailable`
-only after a real spawn failure or supported configuration proof of unavailability. If the user explicitly opts out or policy disallows spawning for
-standard/strict work, use `direct_fallback` and preserve the same phase gates,
-role separation, verification evidence, and review evidence.
+`subagent_policy_state=not_required` and `subagent_execution_mode=not_applicable`
+may describe direct Build at any size. `delegation_triggered`/`delegated` describes
+actual optional delegation or mandatory review/lens isolation. Historical fallback
+records retain original labels and evidence; they cannot certify a current review
+or Research v5 isolation. Trivial/small light work uses one newly created fresh-context reviewer covering
+spec obligations and quality, plus one fresh re-review after a fix, and records the
+compact result defined in `references/review-qa-router.md`; medium+ code/acceptance
+review keeps at least two sibling-blind passes.
 
-`policy_disallowed` requires a non-empty `policy_blocking_source` that names the
-exact active blocking rule and confirms no applicable direct-user, `AGENTS.md`,
-or active-skill trigger exception. A conditional policy that says not to spawn
-unless an applicable instruction asks does not make policy_disallowed when the
-active skill requires subagents.
+## QA evidence gate
+
+QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance.
+QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
+Required independent acceptance judgment follows current Build and Code Reviewer
+evidence and uses a newly created QAEvaluator with fresh context and retained
+native source/dispatch authority. It cannot substitute code-review authority or
+certify author fallback. Pure QA/check execution remains discretionary.
 
 ## Roles
 
@@ -96,86 +106,49 @@ framework definitions: use its supported native/default route and existing tier
 guidance, without inventing names or model preferences. The two-writer choice
 adds no delegation requirement to otherwise direct lightweight work.
 
-## What each role does
 
-- **Code Mapper** — Lightweight structural map: file paths, entry points, interfaces, conventions. Use only when the current boundary cannot be resolved directly; output stays compact enough to paste into the current packet.
-- **Explorer** — Deep analysis: traces execution paths, analyzes design decisions, finds hidden dependencies and coupling. Use only for an unresolved lifecycle, failure, coupling, or behavior question after a compact map.
-- **Architect** — Conditional Architecture Decision Pack/implementation blueprint work for genuine boundary, public-contract, quality-driver, or viable-alternative uncertainty. Does not write code and is not a permanent role.
-- **Code Writer / bounded executor** — Owns selected tests and implementation for the packet, following its unchanged verification decision and worker_stage. test_authoring needs no incoming RED; active production needs current RED; refactor needs current GREEN and the SAME writer. Stage-only DONE never completes Build; never performs independent review.
-- **Builder/Tester** — Conditional separated verifier for broad/noisy/environment-heavy or high-risk work. Execution-only: runs selected checks and binding suites, observes RED on writer-authored tests when TDD is active, and routes every authored source/test/fixture/snapshot/helper/build configuration fix to the same writer. Writes only designated generated outputs/evidence logs; prohibited mutations return DEVIATED with actual changes.
-- **Code Reviewer** — Canonical independent code review with confidence-based filtering. Finds bugs, security issues, architecture violations, test coverage gaps, and structural code issues. Does not edit files.
-- **Reviewer** — Compatibility route for existing handoffs that still say `Reviewer`; use only when `code-reviewer` is unavailable or a legacy prompt/handoff requires the old name.
-- **QA Evaluator** — Independent QA acceptance evaluation after build/test and code-review evidence. Checks acceptance criteria, Done Contract, verification evidence, scoped UI/visual/product/UX/docs/DX/domain quality, score progression, and final result. Does not replace Code Reviewer.
+## Dispatch and independent evidence
 
-## Phase-to-subagent requirements
+Use the configured native role when delegation is selected; do not fabricate a
+worker or silently change model/effort. Keep authorizations, verification decision,
+exact selected CheckSpecs/bindings, input identities, partial failures and one
+shared task guard through every handoff. Roles are capabilities, not a spawn chain.
+Architect decisions may be resolved directly; high-risk challenge or QA acceptance
+judgment uses a fresh review without requiring an extra execution-only worker.
 
-Standard/strict phases have declared role responsibilities. Phases without a
-subagent role are handled directly by the Orchestrator with explicit
-justification. Phases with a subagent role dispatch only when
-`subagent_execution_mode=delegated`; otherwise standard/strict direct fallback
-records equivalent evidence. The light lane is direct/not_applicable and uses
-its compact validation plus fresh-review evidence instead.
+Discovery reviewers receive original requirements, full current change, relevant
+sources and actual verification, with no implementation rationale, sibling verdicts
+or prior findings. A distinct closure reviewer receives its finding ledger. Required
+facts and adverse results remain visible. Every review pass has fresh native creation
+and source/context/handoff authority; a new task name on an old actor is insufficient.
+Reviewers are disjoint from authors and prior reviewers. QA responsibilities remain
+separate. Required plan review applies to requested/required plans before approval
+and implementation, with fresh review after material fixes; never create a plan
+solely to review planning. Already-running approved plans retain their authority.
 
-| Phase | Subagent(s) | Condition | Justification |
-|---|---|---|---|
-| **TRIAGE** | — (Orchestrator direct) | All sizes | Too lightweight for dispatch — single classification decision |
-| **DISCOVER** | Code Mapper | Current file/boundary cannot be resolved directly | Produces a compact context map only when it reduces uncertainty |
-| **DISCOVER** | Explorer | Unresolved lifecycle/failure/coupling/behavior question after mapping | Traces only the needed execution path |
-| **DECOMPOSE** | Architect | Pack or slice boundary has genuine uncertainty | Analyzes the current boundary and proposes the smallest usable canonical packet collection |
-| **PLAN** | Architect | `architecture_design_mode` is `required`/`review_intensive` or an ordinary plan cannot resolve a concrete boundary | Produces a bounded blueprint from current evidence |
-| **DESIGN** | Architect | UI tasks | Proposes design direction; Orchestrator creates mockup |
-| **BUILD** | Code Writer / bounded executor | Standard/strict | Owns implementation and selected verification; RED/GREEN/REFACTOR only when TDD is active |
-| **BUILD** | Builder/Tester | `build_execution_lane=separated_workers` | Independent selected-check verification; RED only when TDD is active |
-| **REVIEW** | Code Reviewer, or Reviewer compatibility | Standard/strict | Independent code review via `assistant-review` skill |
-| **REVIEW** | QA Evaluator | `qa_evaluation_mode=required` only | Independent acceptance QA via `assistant-review` QA loop |
-| **DOCUMENT** | — (Orchestrator direct) | All sizes | Documentation generation is orchestrator's synthesis work |
+Plan review dispatches with `review_subject=plan`. The final independent review
+uses `review_subject=acceptance` and is the single owner of request, plan and
+delivery reconciliation, including the spec obligations of
+`references/prompts/spec-review.md`; no separate Spec reviewer is dispatched.
+It reconciles original requirement IDs, approved plan, completion allocation and
+task-wide work against current outcomes and verification. Missing work, findings
+or coverage remains partial. Reuse existing ledgers/results; no second
+plan-progress ledger or completion agent is required. Medium work needs at least
+one plan reviewer plus a final batch at the canonical per-size count (medium 3) of sibling-blind passes. Plan
+review is exactly one fresh pass with perspective `plan_coverage_and_feasibility`
+(`topology.plan_review=true`); after a material plan fix, one newly created fresh
+re-review of the same perspective receives the closure ledger on the structured path. Plan review records
+the compact `plan_review_result` (`reviewer_identity`, PASS or
+`{aggregate_finding_id, file_line, description}` rows, `request_plan_reconciliation`
+coverage, `closure_results`); the compact re-reviewer receives the fixed rows as
+`{aggregate_finding_id, description}`. Persisted/executable admission instead keeps
+the structured plan batch and review-tools validation.
 
-**Rule:** If `subagent_execution_mode=delegated` and a phase's subagent column shows a dispatch, you MUST dispatch that role. If `subagent_execution_mode=direct_fallback`, you MUST NOT spawn subagents; instead record which role responsibility was handled directly and what equivalent evidence proves it.
-
-## Illustrative sizing patterns (not dispatch limits)
-
-| Size | Agents used | Flow |
-|---|---|---|
-| **Small light** | None | Direct implementation, selected verification, and fresh self-review; expanded impact records canonical review refs; promote for risk/harness/QA |
-| **Small standard/strict** | Bounded executor → Code Reviewer, or separated workers when triggered | Sequential, minimal (no Decompose); QA only when required |
-| **Medium** | Bounded executor → Code Reviewer, plus mapping/design roles only when their concrete trigger applies | Ordinary default; add Builder/Tester only when separated_workers triggers |
-| **Large** | Current-boundary mapping/analysis/design roles as needed → Code Writer/Builder-Tester when selected → Code Reviewer → QA Evaluator when required | Full evidence path is selected by risk and uncertainty, not by role count |
-| **Mega** | Source-changing Writers are sequential in shared or unknown workspaces; read-only specialists may parallel | Parallel source-changing Writers require runtime-proven isolated workspaces. Integration still requires current verification/review evidence; do not add roles as ceremony |
-
-## Dispatch guidelines
-
-- **Light lane**: small low-risk localized work may keep `required_agents`
-  empty and use direct implementation, selected checks and binding project verification, and
-  fresh self-review evidence. Expanded impact keeps Build direct but records canonical review refs. `subagent_execution_mode=not_applicable` is valid
-  for this lane. Security, high-risk, harness-capable, required-QA, or otherwise
-  promoted work cannot use this exception.
-- **Standard ordinary-medium minimum**: bounded executor → Code Reviewer.
-  **Separated-workers minimum**: Code Writer → Builder/Tester → Code Reviewer.
-  `reviewer` remains valid compatibility routing for existing
-  handoffs, but new dispatches should use `code-reviewer` for code defects,
-  security, architecture, test coverage, and structural code issues. In
-  delegated mode these are subagents; in direct fallback they are explicitly
-  recorded role-equivalent steps. Size alone does not select separated workers;
-  `not_applicable` is invalid for standard/strict Build tasks.
-- **Evidence gate for standard/strict work**: delegated mode is not complete until the
-  task journal records selected-lane dispatch/result/verification evidence and
-  Code Reviewer dispatch/result evidence. Builder/Tester evidence is required
-  only for `separated_workers`,
-  or Reviewer dispatch/result evidence when compatibility routing is used.
-  Medium+ delegated slice work also records per-slice dispatch evidence before
-  each slice is marked verified. Delegated evidence must correspond to a real
-  native dispatch/thread and result. Reference the agent id, task name, thread,
-  or tool result when the runtime exposes one; task-journal claims without a
-  matching native result do not satisfy delegated evidence. Direct fallback is
-  allowed only for explicit `delegation_opted_out`,
-  `subagents_unavailable`, or `policy_disallowed` reasons, and must record
-  equivalent role, phase, verification, and review evidence; silent fallback
-  fails the completion gates.
-- **QA evidence gate**: when QA is required, delegated mode is not complete until the task journal Agent Dispatch Log records QA Evaluator dispatch/result evidence after Builder/Tester and Code Reviewer evidence. Direct fallback must record fresh QA Evaluator direct evidence separately from Code Reviewer direct evidence. QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
-- **Architect is conditional**: use it only when a Pack/slice boundary has genuine uncertainty; in direct work the same compact decision criteria and evidence are recorded without inventing an Architect dispatch.
-- **Parallel read-only analysis remains allowed** when agents are independent (for example, Code Mapper + Explorer on different modules). Source-changing packets in a shared or unknown workspace run sequentially; parallel source-changing packets require runtime proof of isolated workspaces.
-- **Code Mapper runs only when needed** to resolve current files/boundaries; its compact output feeds the current plan/implementation packet without becoming durable global memory.
-- **Code Reviewer gets a fresh dispatch each round** during the quality review loop when delegated mode is triggered; `reviewer` is the compatibility route for older handoffs. Direct fallback must reset review context and record how stale-context risk was controlled.
-- **QA Evaluator gets a fresh dispatch each QA round** when QA is required and delegated mode is triggered. Direct fallback must reset acceptance-evaluation context and record how stale-context risk was controlled.
-- **Main session stays Orchestrator**: owns user communication, final integration, handoffs
-- **Do not dispatch agents for small inline tasks** within a larger workflow (e.g., a one-line fix during review doesn't need a Code Writer agent)
+Review result consumption uses the existing pass_attempt_ledger/response_events,
+complete raw bytes, native invocation, batch/snapshot/pass/attempt, producer version
+and occurrence bindings. Deterministic review-tools.py validates return identity,
+the terminal barrier and aggregate accounting; snapshot, frozen-manifest and exact
+byte-copy tooling is not yet provided, so those bindings stay caller-recorded
+evidence. Caller judgment owns truth, severity, coverage and completion. Identical replay is consumed once. Conflicts,
+failed attempts, provenance and unknown history remain retained. Use notifications
+and bounded waits; full inventories serve discovery/recovery, not repeated retrieval.

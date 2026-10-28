@@ -8,7 +8,7 @@ Match tiers to `plan_mode` and size. `plan_mode=none` loads no template and crea
 
 Keep compact harness refs; harness-capable work loads `references/plan-harness-appendix.md`, otherwise record `N/A: [reason]`.
 
-For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits. It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests. Omit downstream handoffs. Record readiness implications, open decisions and next implementation state. `existing_system` retains the unchanged feature-preparation evidence ref; `not_applicable` records `preparation_basis=not_applicable` without that ref.
+For `execution_intent=prepare_only`, an explicitly requested readiness Plan is inline and never waits. It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests. Omit implementation handoffs. Requested/required readiness plans retain fresh independent review and fresh review after fixes; a review PASS grants no implementation approval. Selected research lenses/peer retain isolation. Record readiness implications, open decisions and next implementation state. `existing_system` retains the unchanged feature-preparation evidence ref; `not_applicable` records `preparation_basis=not_applicable` without that ref.
 
 ## Small Tasks — Inline Plan (`plan_mode=inline`, `execution_intent != prepare_only`)
 

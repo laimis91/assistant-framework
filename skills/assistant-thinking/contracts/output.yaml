@@ -60,8 +60,8 @@ artifacts:
     required: conditional
     condition: "tool_used in [perspectives, stress_test]"
     description: "How independent roles or attack angles were executed"
-    validation: "States subagent_policy_state, subagent_execution_mode, trigger scope when relevant, conditional policy_blocking_source, and whether roles/angles were delegated or run sequentially in fallback"
-    on_fail: "Record delegated execution or sequential fallback before presenting synthesis; do not imply subagents were used when delegation was not triggered or they were unavailable"
+    validation: "States subagent_policy_state, subagent_execution_mode, trigger scope when relevant, conditional policy_blocking_source, and whether roles/angles were delegated or run sequentially in fallback; sequential fallback only for discretionary perspectives; a required independent challenge is delegated or recorded incomplete"
+    on_fail: "Record delegated execution, discretionary sequential fallback, or an incomplete required independent challenge before presenting synthesis; do not imply subagents were used when delegation was not triggered or they were unavailable"
     object_fields:
       - name: subagent_policy_state
         type: enum
