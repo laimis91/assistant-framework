@@ -31,7 +31,7 @@ if [[ -f "$installer" ]]; then
     grep -Fq -- 'CODEX_HOME' "$installer" \
         || failures+=("missing CODEX_HOME support")
 
-    route_guidance="For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent."
+    route_guidance="For ordinary repository changes, use assistant-workflow when that skill is installed; use assistant-clarify for unclear or tangled intent."
     grep -Fq -- "$route_guidance" "$FRAMEWORK_DIR/install.sh" \
         || failures+=("Bash installer guidance omits ordinary development routing")
     grep -Fq -- "$route_guidance" "$installer" \

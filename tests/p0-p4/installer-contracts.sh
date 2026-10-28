@@ -25,7 +25,7 @@ p0p4_seed_required_writer_profiles() {
 
 legacy_orchestrator_role="You are an orchestrator. You delegate ALL ""file editing, code implementation, and phase execution to specialized agents."
 stale_generated_phrase="delegate ALL ""file editing, code implementation, and phase execution"
-route_guidance="For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent."
+route_guidance="For ordinary repository changes, use assistant-workflow when that skill is installed; use assistant-clarify for unclear or tangled intent."
 
 p0p4_path_without_jq() {
     local tmpbin="$1"
@@ -68,16 +68,18 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && [[ "$agents_starts" == "1" && "$agents_ends" == "1" ]] \
             && [[ "$operating_stances" == "1" ]] \
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
-            && grep -Fq "Codex uses installed skills through native skill routing." "$agents_file" \
-            && grep -Fq "load only the references or contracts relevant to the current phase" "$agents_file" \
+            && grep -Fq "When a skill's description matches the request, read its \`SKILL.md\` and follow it through to its handoff" "$agents_file" \
+            && grep -Fq "the references and contracts the current phase needs" "$agents_file" \
             && grep -Fq "For small, low-risk, localized work, act as a hands-on worker" "$agents_file" \
             && grep -Fq "For medium+ or elevated-risk development work, remain the orchestrator" "$agents_file" \
             && grep -Fq "Keep orchestration proportional" "$agents_file" \
             && grep -Fq "including when no skill matches" "$agents_file" \
             && cmp -s "$FRAMEWORK_DIR/tools/progress/operating-guidance.md" "$INSTALL_HOME/.codex/tools/progress/operating-guidance.md" \
             && cmp -s "$FRAMEWORK_DIR/tools/progress/stagnation.py" "$INSTALL_HOME/.codex/tools/progress/stagnation.py" \
-            && grep -Fq "Get plan approval before medium+ or risky edits." "$agents_file" \
-            && grep -Fq "Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent." "$agents_file" \
+            && grep -Fq "approve a plan before medium+ or elevated-risk development edits" "$agents_file" \
+            && grep -Fq "Stop for the user only to:" "$agents_file" \
+            && grep -Fq "Use subagents when the user asks or applicable project or skill instructions require them; no separate spawn consent is needed." "$agents_file" \
+            && ! LC_ALL=C grep -q '[^ -~]' <(sed -n '/ASSISTANT_FRAMEWORK_AGENTS_MD_START/,/ASSISTANT_FRAMEWORK_AGENTS_MD_END/p' "$agents_file") \
             && ! grep -Fq "## Skills (loaded" "$agents_file" \
             && [[ -f "$INSTALL_HOME/.codex/agents/code-reviewer.toml" ]] \
             && grep -Fq 'sandbox_mode = "read-only"' "$INSTALL_HOME/.codex/agents/code-reviewer.toml" \
@@ -110,7 +112,7 @@ if HOME="$INSTALL_HOME_SKILL_TABLE" bash "$FRAMEWORK_DIR/install.sh" --agent cod
         fail "expected selected workflow install to avoid unrelated assistant-docs"
     elif [[ "$assistant_skill_rows" != "0" ]]; then
         fail "expected lean Codex AGENTS.md to avoid duplicating installed skill routing tables; found $assistant_skill_rows rows"
-    elif ! grep -Fq "Codex uses installed skills through native skill routing." "$agents_file"; then
+    elif ! grep -Fq "When a skill's description matches the request" "$agents_file"; then
         fail "expected generated Codex AGENTS.md to delegate routing to the installed SKILL.md"
     elif ! grep -Fq -- "$route_guidance" "$agents_file"; then
         fail "expected generated Codex AGENTS.md to route through assistant-workflow only when that skill is installed"
@@ -769,7 +771,7 @@ if HOME="$INSTALL_HOME_TEN" bash "$FRAMEWORK_DIR/install.sh" --agent codex --no-
         fail "expected default install to include first-class assistant skill $missing_assistant_skill"
     elif [[ "$source_assistant_skill_count" -lt "14" ]]; then
         fail "expected source inventory to contain at least 14 non-retired assistant skills including the assistant-named custom fixture; found $source_assistant_skill_count"
-    elif [[ "$agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "Codex uses installed skills through native skill routing." "$agents_file"; then
+    elif [[ "$agents_assistant_skill_rows" != "0" ]] || ! grep -Fq "When a skill's description matches the request" "$agents_file"; then
         fail "expected generated Codex AGENTS.md to stay lean and keep routing metadata in installed skills"
     elif [[ -n "$unexpected_installed_skill" ]]; then
         fail "expected default install to exclude non-assistant skill $unexpected_installed_skill"
@@ -932,6 +934,28 @@ if ! HOME="$claude_writer_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude 
 claude_writer_after="$(find "$claude_writer_home/.claude" -type f -exec shasum -a 256 {} + | LC_ALL=C sort)"
 [[ "$claude_writer_before" == "$claude_writer_after" ]] || claude_writer_ok=false
 if [[ "$claude_writer_ok" == true ]]; then pass; else fail "Claude writer migration parity/preservation/dry-run failure"; fi
+
+test_start "Claude install writes one managed CLAUDE.md block, preserves user content, and stays idempotent"
+claude_md_home="$(mktemp -d "${TMPDIR:-/tmp}/claude-md-install.XXXXXX")"
+p0p4_register_cleanup "$claude_md_home"
+mkdir -p "$claude_md_home/.claude"
+printf '%s\n' '# My own rules' 'Keep this line.' >"$claude_md_home/.claude/CLAUDE.md"
+claude_md_ok=true
+HOME="$claude_md_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks --dry-run >"$claude_md_home/dry.out" 2>&1 || claude_md_ok=false
+[[ "$(cat "$claude_md_home/.claude/CLAUDE.md")" == $'# My own rules\nKeep this line.' ]] || claude_md_ok=false
+for claude_md_pass in 1 2; do
+    HOME="$claude_md_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-workflow --no-hooks >"$claude_md_home/pass$claude_md_pass.out" 2>&1 || claude_md_ok=false
+done
+claude_md_file="$claude_md_home/.claude/CLAUDE.md"
+[[ "$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_START" "$claude_md_file")" == "1" ]] || claude_md_ok=false
+[[ "$(count_occurrences "ASSISTANT_FRAMEWORK_AGENTS_MD_END" "$claude_md_file")" == "1" ]] || claude_md_ok=false
+grep -Fq "# Assistant Framework - Claude Code Instructions" "$claude_md_file" || claude_md_ok=false
+grep -Fq 'under `~/.claude` as the common operating guidance' "$claude_md_file" || claude_md_ok=false
+grep -Fq "Stop for the user only to:" "$claude_md_file" || claude_md_ok=false
+grep -Fq "Keep this line." "$claude_md_file" || claude_md_ok=false
+! grep -Fq "CODEX_HOME" "$claude_md_file" || claude_md_ok=false
+LC_ALL=C grep -q '[^ -~]' "$claude_md_file" && claude_md_ok=false
+if [[ "$claude_md_ok" == true ]]; then pass; else fail "Claude install must write one ASCII managed block in CLAUDE.md and preserve user content"; fi
 
 # Fixed declared-protocol fixture: independent of the installer's compatibility reader.
 write_ownership_workflow_fixture() {

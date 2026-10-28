@@ -701,16 +701,20 @@ Windows Codex also mirrors progress into `~/.agents/tools/progress`, so
 both default and custom `CODEX_HOME`. Existing installer safeguards preserve
 user files; full, single-skill, repeated and dry-run installs use the same route.
 
-Codex's installer-owned AGENTS.md explicitly loads the common file independently
-of skill matching. For a Claude/Gemini session with no matching skill, use:
+The Codex and Claude installers each maintain one marker-managed, ASCII-only
+block (`~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`) that loads the common file
+independently of skill matching, directs agents to follow matched skills to their
+handoff, and limits user interruptions to open decisions, risky or external
+actions, required plan approval, a stagnation stop, and the final report.
+Content outside the markers is preserved. For a Gemini session with no matching
+skill, use:
 
-- Claude: `Read ~/.claude/tools/progress/operating-guidance.md as the operating guidance for this chat, then handle: <request>`.
 - Gemini: `Read ~/.gemini/tools/progress/operating-guidance.md as the operating guidance for this chat, then handle: <request>`.
 
-A user may place the same reference in an existing native instruction source
-for standing coverage. Installers take no new global-file ownership. Source
-references and installation parity do not prove native activation; automatic
-provider coverage is claimed only for observed standing-instruction support.
+A Gemini user may place the same reference in an existing native instruction
+source for standing coverage. Source references and installation parity do not
+prove native activation; automatic provider coverage is claimed only for observed
+standing-instruction support.
 
 Workflow v15 validates/migrates original v14 authority, retaining original and
 normalized digests, execution, actors, selected TDD and results. Review v9 and

@@ -82,7 +82,7 @@ INSTALL_HOME_QA="$(mktemp -d)"
 p0p4_register_cleanup "$INSTALL_HOME_QA"
 if HOME="$INSTALL_HOME_QA" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-qa-evaluator.out 2>/tmp/p0p4-install-qa-evaluator.err; then
     agents_file="$INSTALL_HOME_QA/.codex/AGENTS.md"
-    if grep -Fq "Codex uses installed skills through native skill routing." "$agents_file" \
+    if grep -Fq "When a skill's description matches the request" "$agents_file" \
         && ! grep -Fq "| qa-evaluator |" "$agents_file" \
         && ! grep -Fq "independent QA acceptance evaluation by qa-evaluator" "$agents_file" \
         && [[ -f "$INSTALL_HOME_QA/.codex/agents/qa-evaluator.toml" ]] \

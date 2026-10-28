@@ -1039,44 +1039,65 @@ else
     cleanup_legacy_framework_hooks "$LEGACY_HOOK_SETTINGS_FILE" "$HOOKS_TARGET" "$AGENT"
 fi
 
-# ── Generate AGENTS.md for Codex (it reads AGENTS.md, not CLAUDE.md) ────────
-# Generate the current managed AGENTS.md section after legacy cleanup.
+# ── Generate managed instructions (AGENTS.md for Codex, CLAUDE.md for Claude) ─
+# Both agents get the same ASCII guidance; only the title and guidance path differ.
+# Generate the current managed section after legacy cleanup.
 
 AGENTS_MD_MARKER_START="ASSISTANT_FRAMEWORK_AGENTS_MD_START"
 AGENTS_MD_MARKER_END="ASSISTANT_FRAMEWORK_AGENTS_MD_END"
 
-if [[ "$AGENT" == "codex" ]]; then
-    AGENTS_MD="$AGENT_HOME/AGENTS.md"
+if [[ "$AGENT" == "codex" || "$AGENT" == "claude" ]]; then
+    if [[ "$AGENT" == "codex" ]]; then
+        AGENTS_MD="$AGENT_HOME/AGENTS.md"
+        AGENTS_MD_AGENT_NAME="Codex"
+        AGENTS_MD_GUIDANCE_HOME="the configured \`CODEX_HOME\` (default \`~/.codex\`)"
+    else
+        AGENTS_MD="$AGENT_HOME/CLAUDE.md"
+        AGENTS_MD_AGENT_NAME="Claude Code"
+        AGENTS_MD_GUIDANCE_HOME="\`~/.claude\`"
+    fi
     echo ""
 
     # Keep the installer-owned standing guidance small. Installed SKILL.md files
     # are the native source of routing metadata and detailed workflow policy.
     AGENTS_MD_CONTENT="<!-- $AGENTS_MD_MARKER_START -->
-# AGENTS.md — Codex Agent Instructions
+# Assistant Framework - $AGENTS_MD_AGENT_NAME Instructions
 
-Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.
+Read \`tools/progress/operating-guidance.md\` under $AGENTS_MD_GUIDANCE_HOME as the common operating guidance for every activity, including when no skill matches.
 
-Read \`tools/progress/operating-guidance.md\` under the configured \`CODEX_HOME\` (default \`~/.codex\`) as the common operating guidance for every activity, including when no skill matches.
+## Skills
 
-For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent.
+- When a skill's description matches the request, read its \`SKILL.md\` and follow it through to its handoff, loading only the references and contracts the current phase needs.
+- For ordinary repository changes, use assistant-workflow when that skill is installed; use assistant-clarify for unclear or tangled intent.
+- Do not skip a matched skill's gates, verification, or review to save time.
+
+## Involving the user
+
+Work autonomously and resolve what you can from the repository and the request. Stop for the user only to:
+
+- decide a consequential choice about intent, scope, safety, or acceptance that is still open;
+- approve a destructive, external, or hard-to-reverse action, or one beyond the granted access or cost;
+- approve a plan before medium+ or elevated-risk development edits;
+- hear that the shared stagnation guard stopped corrective work.
+
+Do not ask for routine confirmation or repeat an approval already given for the same scope. Otherwise report once at the end: outcome, files changed and why, checks and results, material limits, and next action.
 
 ## Operating stance
 
 - For small, low-risk, localized work, act as a hands-on worker: complete it directly with proportionate validation and a fresh self-review.
 - For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when required.
-- Keep orchestration proportional—do not introduce delegation or ceremony when direct lightweight execution is sufficient.
+- Keep orchestration proportional - do not introduce delegation or ceremony when direct lightweight execution is sufficient.
 
 ## Boundaries
 
-- Get plan approval before medium+ or risky edits.
-- Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent.
+- Use subagents when the user asks or applicable project or skill instructions require them; no separate spawn consent is needed.
 - Preserve user-authored files and existing dirty work.
 - Verify changes with repository commands and review the approved scope before handoff.
 - Keep credentials, secrets, PII, and private endpoints out of code, logs, task state, and memory.
 <!-- $AGENTS_MD_MARKER_END -->"
 
     if $DRY_RUN; then
-        dry "Would generate/update $AGENTS_MD from installed skills"
+        dry "Would generate/update $AGENTS_MD with the managed installer section"
     elif [[ -f "$AGENTS_MD" ]] && grep -q "$AGENTS_MD_MARKER_START" "$AGENTS_MD" 2>/dev/null; then
         # Re-install: strip old installer block, preserve user content
         sed -i.bak "/$AGENTS_MD_MARKER_START/,/$AGENTS_MD_MARKER_END/d" "$AGENTS_MD"

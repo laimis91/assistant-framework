@@ -2230,41 +2230,57 @@ function Test-InstructionMarkerState {
     return $true
 }
 
-function Get-CodexGuidanceBlock {
-    return @'
+function Get-AgentGuidanceBlock {
+    param([string]$AgentName)
+    $displayName = if ($AgentName -eq 'codex') { 'Codex' } else { 'Claude Code' }
+    $guidanceHome = if ($AgentName -eq 'codex') { 'the configured `CODEX_HOME` (default `~/.codex`)' } else { '`~/.claude`' }
+    $template = @'
 <!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->
-# AGENTS.md — Codex Agent Instructions
+# Assistant Framework - {{AGENT_NAME}} Instructions
 
-Codex uses installed skills through native skill routing. When a skill matches, read its `SKILL.md` and load only the references or contracts relevant to the current phase.
+Read `tools/progress/operating-guidance.md` under {{GUIDANCE_HOME}} as the common operating guidance for every activity, including when no skill matches.
 
-Read `tools/progress/operating-guidance.md` under the configured `CODEX_HOME` (default `~/.codex`) as the common operating guidance for every activity, including when no skill matches.
+## Skills
 
-For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent.
+- When a skill's description matches the request, read its `SKILL.md` and follow it through to its handoff, loading only the references and contracts the current phase needs.
+- For ordinary repository changes, use assistant-workflow when that skill is installed; use assistant-clarify for unclear or tangled intent.
+- Do not skip a matched skill's gates, verification, or review to save time.
+
+## Involving the user
+
+Work autonomously and resolve what you can from the repository and the request. Stop for the user only to:
+
+- decide a consequential choice about intent, scope, safety, or acceptance that is still open;
+- approve a destructive, external, or hard-to-reverse action, or one beyond the granted access or cost;
+- approve a plan before medium+ or elevated-risk development edits;
+- hear that the shared stagnation guard stopped corrective work.
+
+Do not ask for routine confirmation or repeat an approval already given for the same scope. Otherwise report once at the end: outcome, files changed and why, checks and results, material limits, and next action.
 
 ## Operating stance
 
 - For small, low-risk, localized work, act as a hands-on worker: complete it directly with proportionate validation and a fresh self-review.
 - For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when required.
-- Keep orchestration proportional—do not introduce delegation or ceremony when direct lightweight execution is sufficient.
+- Keep orchestration proportional - do not introduce delegation or ceremony when direct lightweight execution is sufficient.
 
 ## Boundaries
 
-- Get plan approval before medium+ or risky edits.
-- Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent.
+- Use subagents when the user asks or applicable project or skill instructions require them; no separate spawn consent is needed.
 - Preserve user-authored files and existing dirty work.
 - Verify changes with repository commands and review the approved scope before handoff.
 - Keep credentials, secrets, PII, and private endpoints out of code, logs, task state, and memory.
 <!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->
 '@
+    return $template.Replace('{{AGENT_NAME}}', $displayName).Replace('{{GUIDANCE_HOME}}', $guidanceHome)
 }
 
-function Update-CodexInstructions {
-    param([string]$InstructionsFile)
+function Update-AgentInstructions {
+    param([string]$InstructionsFile, [string]$AgentName)
     if ($DryRun) { Write-DryRun "Generate or update installer guidance in $InstructionsFile"; return }
     $existing = ''
     if (Test-Path -LiteralPath $InstructionsFile -PathType Leaf) { $existing = Read-StrictUtf8Text -LiteralPath $InstructionsFile }
     $custom = Remove-InstallerMarkedBlocks -Text $existing -StartMarker 'ASSISTANT_FRAMEWORK_AGENTS_MD_START' -EndMarker 'ASSISTANT_FRAMEWORK_AGENTS_MD_END'
-    $updated = (Get-CodexGuidanceBlock).TrimEnd()
+    $updated = (Get-AgentGuidanceBlock -AgentName $AgentName).TrimEnd()
     if (-not [string]::IsNullOrWhiteSpace($custom)) { $updated += [Environment]::NewLine + [Environment]::NewLine + $custom }
     Write-AtomicText -LiteralPath $InstructionsFile -Content ($updated.TrimEnd() + [Environment]::NewLine)
     Write-Ok "Installer guidance refreshed in $InstructionsFile (user content preserved)"
@@ -2592,8 +2608,8 @@ function Invoke-AssistantFrameworkInstall {
         Retire-LegacyHooks -SettingsFile $legacySettings -HooksTarget $hooksTarget -HooksRoot $hooksRoot -AgentName $agentName
 
         if (Test-InstructionMarkerState -InstructionsFile $instructionsFile) {
-            if ($agentName -eq 'codex') {
-                Update-CodexInstructions -InstructionsFile $instructionsFile
+            if ($agentName -eq 'codex' -or $agentName -eq 'claude') {
+                Update-AgentInstructions -InstructionsFile $instructionsFile -AgentName $agentName
             }
         }
     }
